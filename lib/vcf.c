@@ -288,7 +288,7 @@ vcf_converter_alloc(vcf_converter_t *self,
     if (ret != 0) {
         goto out;
     }
-    if (tree_sequence_get_num_edgesets(tree_sequence) > 0) {
+    if (tree_sequence_get_num_edges(tree_sequence) > 0) {
         ret = vcf_converter_make_record(self, contig_id);
         if (ret != 0) {
             goto out;

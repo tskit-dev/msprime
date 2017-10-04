@@ -400,18 +400,17 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
             self.assertEqual(list(table.name_length), [0 for _ in range(num_rows)])
 
 
-class TestEdgesetTable(unittest.TestCase, CommonTestsMixin):
+class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
 
     columns = [
         DoubleColumn("left"),
         DoubleColumn("right"),
-        Int32Column("parent")]
-    ragged_list_columns = [(Int32Column("children"), UInt32Column("children_length"))]
-    equal_len_columns = [["left", "right", "parent", "children_length"]]
-    input_parameters = [
-        ("max_rows_increment", 1024),
-        ("max_children_length_increment", 1024)]
-    table_class = msprime.EdgesetTable
+        Int32Column("parent"),
+        Int32Column("child")]
+    equal_len_columns = [["left", "right", "parent", "child"]]
+    ragged_list_columns = []
+    input_parameters = [("max_rows_increment", 1024)]
+    table_class = msprime.EdgeTable
 
 
 class TestSiteTable(unittest.TestCase, CommonTestsMixin):
@@ -494,23 +493,21 @@ class TestSortTables(unittest.TestCase):
     def verify_randomise_tables(self, ts):
         tables = ts.dump_tables()
         nodes = tables.nodes
-        edgesets = tables.edgesets
+        edges = tables.edges
         sites = tables.sites
         mutations = tables.mutations
         # TODO deal with migrations.
 
         # Randomise the tables.
         random.seed(self.random_seed)
-        randomised_edgesets = list(ts.edgesets())
-        random.shuffle(randomised_edgesets)
-        new_edgesets = msprime.EdgesetTable()
-        for e in randomised_edgesets:
-            randomised_children = list(e.children)
-            random.shuffle(randomised_children)
-            new_edgesets.add_row(e.left, e.right, e.parent, tuple(randomised_children))
-        # Verify that import fails for randomised edgesets
+        randomised_edges = list(ts.edges())
+        random.shuffle(randomised_edges)
+        new_edges = msprime.EdgeTable()
+        for e in randomised_edges:
+            new_edges.add_row(e.left, e.right, e.parent, e.child)
+        # Verify that import fails for randomised edges
         self.assertRaises(
-            _msprime.LibraryError, ts.load_tables, nodes=nodes, edgesets=new_edgesets)
+            _msprime.LibraryError, ts.load_tables, nodes=nodes, edges=new_edges)
 
         randomised_sites = list(ts.sites())
         random.shuffle(randomised_sites)
@@ -526,18 +523,16 @@ class TestSortTables(unittest.TestCase):
         if ts.num_sites > 1:
             # Verify that import fails for randomised sites
             self.assertRaises(
-                _msprime.LibraryError, ts.load_tables, nodes=nodes, edgesets=edgesets,
+                _msprime.LibraryError, ts.load_tables, nodes=nodes, edges=edges,
                 sites=new_sites, mutations=new_mutations)
 
         msprime.sort_tables(
-            nodes, new_edgesets, sites=new_sites, mutations=new_mutations)
-        # Verify the new and old edgesets are equal.
-        self.assertEqual(list(edgesets.left), list(new_edgesets.left))
-        self.assertEqual(list(edgesets.right), list(new_edgesets.right))
-        self.assertEqual(list(edgesets.parent), list(new_edgesets.parent))
-        self.assertEqual(list(edgesets.children), list(new_edgesets.children))
-        self.assertEqual(
-            list(edgesets.children_length), list(new_edgesets.children_length))
+            nodes, new_edges, sites=new_sites, mutations=new_mutations)
+        # Verify the new and old edges are equal.
+        self.assertEqual(list(edges.left), list(new_edges.left))
+        self.assertEqual(list(edges.right), list(new_edges.right))
+        self.assertEqual(list(edges.parent), list(new_edges.parent))
+        self.assertEqual(list(edges.child), list(new_edges.child))
         # sites
         self.assertEqual(list(sites.position), list(new_sites.position))
         self.assertEqual(list(sites.ancestral_state), list(new_sites.ancestral_state))
@@ -552,12 +547,12 @@ class TestSortTables(unittest.TestCase):
             list(new_mutations.derived_state_length))
 
         # make sure we can import a tree sequence both with and without the sites.
-        ts_new = msprime.load_tables(nodes=nodes, edgesets=new_edgesets)
-        self.assertEqual(ts_new.num_edgesets, ts.num_edgesets)
+        ts_new = msprime.load_tables(nodes=nodes, edges=new_edges)
+        self.assertEqual(ts_new.num_edges, ts.num_edges)
         self.assertEqual(ts_new.num_trees, ts.num_trees)
         ts_new = msprime.load_tables(
-            nodes=nodes, edgesets=new_edgesets, sites=new_sites, mutations=new_mutations)
-        self.assertEqual(ts_new.num_edgesets, ts.num_edgesets)
+            nodes=nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
+        self.assertEqual(ts_new.num_edges, ts.num_edges)
         self.assertEqual(ts_new.num_trees, ts.num_trees)
         self.assertEqual(ts_new.num_sites, ts.num_sites)
         self.assertEqual(ts_new.num_mutations, ts.num_mutations)
@@ -590,9 +585,13 @@ class TestSortTables(unittest.TestCase):
                 msprime.SimpleBottleneck(time=0.5, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
-        for r in ts.edgesets():
-            if len(r.children) > 2:
-                found = True
+        for t in ts.trees():
+            for u in t.nodes():
+                if len(t.children(u)) > 2:
+                    found = True
+                    break
+            if found:
+                break
         self.assertTrue(found)
         return ts
 
@@ -613,7 +612,7 @@ class TestSortTables(unittest.TestCase):
         nodes = msprime.NodeTable()
         nodes.add_row(time=0)
         for num_mutations in [1, 10, 50, 100, 8192]:
-            edgesets = msprime.EdgesetTable()
+            edges = msprime.EdgeTable()
             sites = msprime.SiteTable()
             mutations = msprime.MutationTable()
             # Create some awkward length ancestral and derived states.
@@ -628,7 +627,7 @@ class TestSortTables(unittest.TestCase):
                 s = "".join(random.choice("ACTG") for _ in range(random.randint(0, 8)))
                 derived_states.append(s.encode())
                 mutations.add_row(site=j, node=0, derived_state=derived_states[-1])
-            msprime.sort_tables(nodes, edgesets, sites=sites, mutations=mutations)
+            msprime.sort_tables(nodes, edges, sites=sites, mutations=mutations)
 
             self.assertEqual(len(ancestral_states), sites.num_rows)
             ancestral_states.reverse()
@@ -650,14 +649,14 @@ class TestSortTables(unittest.TestCase):
                 self.assertEqual(s, derived_states[j])
                 offset += length[j]
 
-    def test_incompatible_edgesets(self):
+    def test_incompatible_edges(self):
         ts1 = msprime.simulate(10, random_seed=self.random_seed)
         ts2 = msprime.simulate(20, random_seed=self.random_seed)
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
-        # The edgesets in tables2 will refer to nodes that don't exist.
+        # The edges in tables2 will refer to nodes that don't exist.
         self.assertRaises(
-            IndexError, msprime.sort_tables, tables1.nodes, tables2.edgesets)
+            IndexError, msprime.sort_tables, tables1.nodes, tables2.edges)
 
     def test_incompatible_sites(self):
         ts1 = msprime.simulate(10, random_seed=self.random_seed)
@@ -667,7 +666,7 @@ class TestSortTables(unittest.TestCase):
         tables2 = ts2.dump_tables()
         # The mutations in tables2 will refer to sites that don't exist.
         self.assertRaises(
-            IndexError, msprime.sort_tables, tables1.nodes, tables1.edgesets,
+            IndexError, msprime.sort_tables, tables1.nodes, tables1.edges,
             sites=tables1.sites, mutations=tables2.mutations)
 
     def test_incompatible_mutation_nodes(self):
@@ -678,66 +677,66 @@ class TestSortTables(unittest.TestCase):
         tables2 = ts2.dump_tables()
         # The mutations in tables2 will refer to nodes that don't exist.
         self.assertRaises(
-            IndexError, msprime.sort_tables, tables1.nodes, tables1.edgesets,
+            IndexError, msprime.sort_tables, tables1.nodes, tables1.edges,
             sites=tables2.sites, mutations=tables2.mutations)
 
     def test_empty_tables(self):
         nodes = msprime.NodeTable()
-        edgesets = msprime.EdgesetTable()
-        msprime.sort_tables(nodes, edgesets)
+        edges = msprime.EdgeTable()
+        msprime.sort_tables(nodes, edges)
         self.assertEqual(nodes.num_rows, 0)
-        self.assertEqual(edgesets.num_rows, 0)
+        self.assertEqual(edges.num_rows, 0)
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
-        msprime.sort_tables(nodes, edgesets, sites=sites, mutations=mutations)
+        msprime.sort_tables(nodes, edges, sites=sites, mutations=mutations)
         self.assertEqual(sites.num_rows, 0)
         self.assertEqual(mutations.num_rows, 0)
         migrations = msprime.MigrationTable()
         msprime.sort_tables(
-            nodes, edgesets, sites=sites, mutations=mutations, migrations=migrations)
+            nodes, edges, sites=sites, mutations=mutations, migrations=migrations)
         self.assertEqual(migrations.num_rows, 0)
-        msprime.sort_tables(nodes, edgesets, migrations=migrations)
+        msprime.sort_tables(nodes, edges, migrations=migrations)
         self.assertEqual(migrations.num_rows, 0)
 
     def test_sort_interface(self):
         self.assertRaises(TypeError, msprime.sort_tables)
         self.assertRaises(TypeError, msprime.sort_tables, nodes=msprime.NodeTable())
         self.assertRaises(
-            TypeError, msprime.sort_tables, edgesets=msprime.EdgesetTable())
+            TypeError, msprime.sort_tables, edges=msprime.EdgeTable())
         self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=msprime.NodeTable(), edgesets=None)
+            TypeError, msprime.sort_tables, nodes=msprime.NodeTable(), edges=None)
         self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=None, edgesets=msprime.EdgesetTable())
+            TypeError, msprime.sort_tables, nodes=None, edges=msprime.EdgeTable())
         nodes = msprime.NodeTable()
-        edgesets = msprime.EdgesetTable()
-        # Verify that nodes and edgesets are OK
-        msprime.sort_tables(nodes=nodes, edgesets=edgesets)
+        edges = msprime.EdgeTable()
+        # Verify that nodes and edges are OK
+        msprime.sort_tables(nodes=nodes, edges=edges)
         for bad_type in [None, "", 1]:
             self.assertRaises(
                 TypeError, msprime.sort_tables, nodes=None,
-                edgesets=msprime.EdgesetTable(), sites=bad_type)
+                edges=msprime.EdgeTable(), sites=bad_type)
             self.assertRaises(
                 TypeError, msprime.sort_tables, nodes=None,
-                edgesets=msprime.EdgesetTable(), mutations=bad_type)
+                edges=msprime.EdgeTable(), mutations=bad_type)
             self.assertRaises(
                 TypeError, msprime.sort_tables, nodes=None,
-                edgesets=msprime.EdgesetTable(), migrations=bad_type)
+                edges=msprime.EdgeTable(), migrations=bad_type)
         # Must specify sites and mutations together.
         self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=nodes, edgesets=edgesets,
+            TypeError, msprime.sort_tables, nodes=nodes, edges=edges,
             sites=msprime.SiteTable())
         self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=nodes, edgesets=edgesets,
+            TypeError, msprime.sort_tables, nodes=nodes, edges=edges,
             mutations=msprime.MutationTable())
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
         # Verify that tables are OK.
         msprime.sort_tables(
-            nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
         for bad_type in [None, "", 1]:
             self.assertRaises(
                 TypeError, msprime.sort_tables,
-                nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+                nodes=nodes, edges=edges, sites=sites, mutations=mutations,
                 migrations=bad_type)
 
 
@@ -753,15 +752,15 @@ class TestSimplifyTables(unittest.TestCase):
                 n, recombination_rate=1, mutation_rate=1, random_seed=self.random_seed)
             tables = ts.dump_tables()
             nodes_before = tables.nodes.copy()
-            edgesets_before = tables.edgesets.copy()
+            edges_before = tables.edges.copy()
             sites_before = tables.sites.copy()
             mutations_before = tables.mutations.copy()
             msprime.simplify_tables(
                 samples=list(ts.samples()),
-                nodes=tables.nodes, edgesets=tables.edgesets, sites=tables.sites,
+                nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
                 mutations=tables.mutations)
             self.assertEqual(nodes_before, tables.nodes)
-            self.assertEqual(edgesets_before, tables.edgesets)
+            self.assertEqual(edges_before, tables.edges)
             self.assertEqual(sites_before, tables.sites)
             self.assertEqual(mutations_before, tables.mutations)
 
@@ -772,79 +771,73 @@ class TestSimplifyTables(unittest.TestCase):
         for bad_node in [-1, n, n + 1, ts.num_nodes - 1, ts.num_nodes, 2**31 - 1]:
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, bad_node], nodes=tables.nodes, edgesets=tables.edgesets)
+                samples=[0, bad_node], nodes=tables.nodes, edges=tables.edges)
 
-    def test_bad_edgeset_ordering(self):
+    def test_bad_edge_ordering(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         tables = ts.dump_tables()
-        edgesets = tables.edgesets
-        # Reversing the edgesets violates the ordering constraints.
-        edgesets.set_columns(
-            left=edgesets.left[::-1], right=edgesets.right[::-1],
-            parent=edgesets.parent[::-1], children=edgesets.children[::-1],
-            children_length=edgesets.children_length[::-1])
+        edges = tables.edges
+        # Reversing the edges violates the ordering constraints.
+        edges.set_columns(
+            left=edges.left[::-1], right=edges.right[::-1],
+            parent=edges.parent[::-1], child=edges.child[::-1])
         self.assertRaises(
             _msprime.LibraryError, msprime.simplify_tables,
-            samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+            samples=[0, 1], nodes=tables.nodes, edges=edges)
 
-    def test_bad_edgesets(self):
+    def test_bad_edges(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         for bad_node in [-1, ts.num_nodes, ts.num_nodes + 1, 2**31 - 1]:
             # Bad parent node
             tables = ts.dump_tables()
-            edgesets = tables.edgesets
-            parent = edgesets.parent
+            edges = tables.edges
+            parent = edges.parent
             parent[0] = bad_node
-            edgesets.set_columns(
-                left=edgesets.left, right=edgesets.right, parent=parent,
-                children=edgesets.children, children_length=edgesets.children_length)
+            edges.set_columns(
+                left=edges.left, right=edges.right, parent=parent, child=edges.child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+                samples=[0, 1], nodes=tables.nodes, edges=edges)
             # Bad child node
             tables = ts.dump_tables()
-            edgesets = tables.edgesets
-            children = edgesets.children
-            children[0] = bad_node
-            edgesets.set_columns(
-                left=edgesets.left, right=edgesets.right, parent=edgesets.parent,
-                children=children, children_length=edgesets.children_length)
+            edges = tables.edges
+            child = edges.child
+            child[0] = bad_node
+            edges.set_columns(
+                left=edges.left, right=edges.right, parent=edges.parent, child=child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+                samples=[0, 1], nodes=tables.nodes, edges=edges)
             # child == parent
             tables = ts.dump_tables()
-            edgesets = tables.edgesets
-            children = edgesets.children
-            children[0] = edgesets.parent[0]
-            edgesets.set_columns(
-                left=edgesets.left, right=edgesets.right, parent=edgesets.parent,
-                children=children, children_length=edgesets.children_length)
+            edges = tables.edges
+            child = edges.child
+            child[0] = edges.parent[0]
+            edges.set_columns(
+                left=edges.left, right=edges.right, parent=edges.parent, child=child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+                samples=[0, 1], nodes=tables.nodes, edges=edges)
             # left == right
             tables = ts.dump_tables()
-            edgesets = tables.edgesets
-            left = edgesets.left
-            left[0] = edgesets.right[0]
-            edgesets.set_columns(
-                left=left, right=edgesets.right, parent=edgesets.parent,
-                children=edgesets.children, children_length=edgesets.children_length)
+            edges = tables.edges
+            left = edges.left
+            left[0] = edges.right[0]
+            edges.set_columns(
+                left=left, right=edges.right, parent=edges.parent, child=edges.child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+                samples=[0, 1], nodes=tables.nodes, edges=edges)
             # left > right
             tables = ts.dump_tables()
-            edgesets = tables.edgesets
-            left = edgesets.left
-            left[0] = edgesets.right[0] + 1
-            edgesets.set_columns(
-                left=left, right=edgesets.right, parent=edgesets.parent,
-                children=edgesets.children, children_length=edgesets.children_length)
+            edges = tables.edges
+            left = edges.left
+            left[0] = edges.right[0] + 1
+            edges.set_columns(
+                left=left, right=edges.right, parent=edges.parent, child=edges.child)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=edgesets)
+                samples=[0, 1], nodes=tables.nodes, edges=edges)
 
     def test_bad_mutation_nodes(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, mutation_rate=1)
@@ -859,7 +852,7 @@ class TestSimplifyTables(unittest.TestCase):
                 derived_state_length=mutations.derived_state_length)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=tables.edgesets,
+                samples=[0, 1], nodes=tables.nodes, edges=tables.edges,
                 sites=tables.sites, mutations=mutations)
 
     def test_bad_mutation_sites(self):
@@ -875,7 +868,7 @@ class TestSimplifyTables(unittest.TestCase):
                 derived_state_length=mutations.derived_state_length)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=tables.edgesets,
+                samples=[0, 1], nodes=tables.nodes, edges=tables.edges,
                 sites=tables.sites, mutations=mutations)
 
     def test_bad_site_positions(self):
@@ -891,32 +884,32 @@ class TestSimplifyTables(unittest.TestCase):
                 ancestral_state_length=sites.ancestral_state_length)
             self.assertRaises(
                 _msprime.LibraryError, msprime.simplify_tables,
-                samples=[0, 1], nodes=tables.nodes, edgesets=tables.edgesets,
+                samples=[0, 1], nodes=tables.nodes, edges=tables.edges,
                 sites=sites, mutations=tables.mutations)
 
     def test_samples_interface(self):
         tables = msprime.simulate(50, random_seed=1).dump_tables()
         nodes = tables.nodes
-        edgesets = tables.edgesets
+        edges = tables.edges
         for good_form in [[0, 1], (0, 1), np.array([0, 1], dtype=np.int32)]:
-            msprime.simplify_tables(good_form, nodes, edgesets)
+            msprime.simplify_tables(good_form, nodes, edges)
         for short_samples in [[], (1,), [2], np.array([1], dtype=np.int32)]:
             self.assertRaises(
-                ValueError, msprime.simplify_tables, short_samples, nodes, edgesets)
+                ValueError, msprime.simplify_tables, short_samples, nodes, edges)
         for bad_type in [None, {}]:
             self.assertRaises(
-                TypeError, msprime.simplify_tables, bad_type, nodes, edgesets)
+                TypeError, msprime.simplify_tables, bad_type, nodes, edges)
         for bad_numbers in [["s"], ["abc"], [b"1234"]]:
             self.assertRaises(
-                ValueError, msprime.simplify_tables, bad_numbers, nodes, edgesets)
+                ValueError, msprime.simplify_tables, bad_numbers, nodes, edges)
         # We only accept numpy arrays of the right type
         for bad_dtype in [np.uint32, np.int64, np.float64]:
             self.assertRaises(
                 TypeError, msprime.simplify_tables,
-                np.array([0, 1], dtype=bad_dtype), nodes, edgesets)
+                np.array([0, 1], dtype=bad_dtype), nodes, edges)
         bad_samples = np.array([[0, 1], [2, 3]], dtype=np.int32)
         self.assertRaises(
-            ValueError, msprime.simplify_tables, bad_samples, nodes, edgesets)
+            ValueError, msprime.simplify_tables, bad_samples, nodes, edges)
 
     def test_tables_interface(self):
         self.assertRaises(TypeError, msprime.simplify_tables)
@@ -926,51 +919,51 @@ class TestSimplifyTables(unittest.TestCase):
             nodes=msprime.NodeTable())
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=[0, 1],
-            edgesets=msprime.EdgesetTable())
+            edges=msprime.EdgeTable())
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=[0, 1],
-            nodes=msprime.NodeTable(), edgesets=None)
+            nodes=msprime.NodeTable(), edges=None)
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=[0, 1],
-            nodes=None, edgesets=msprime.EdgesetTable())
+            nodes=None, edges=msprime.EdgeTable())
         tables = msprime.simulate(2, random_seed=1).dump_tables()
         nodes = tables.nodes
-        edgesets = tables.edgesets
+        edges = tables.edges
         samples = [0, 1]
-        # Verify that samples, nodes and edgesets are OK
-        msprime.simplify_tables(samples=samples, nodes=nodes, edgesets=edgesets)
+        # Verify that samples, nodes and edges are OK
+        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
         for bad_type in [None, "", 1]:
             self.assertRaises(
                 TypeError, msprime.simplify_tables, samples=samples, nodes=None,
-                edgesets=msprime.EdgesetTable(), sites=bad_type)
+                edges=msprime.EdgeTable(), sites=bad_type)
             self.assertRaises(
                 TypeError, msprime.simplify_tables, samples=samples, nodes=None,
-                edgesets=msprime.EdgesetTable(), mutations=bad_type)
+                edges=msprime.EdgeTable(), mutations=bad_type)
             self.assertRaises(
                 TypeError, msprime.simplify_tables, samples=samples, nodes=None,
-                edgesets=msprime.EdgesetTable(), migrations=bad_type)
+                edges=msprime.EdgeTable(), migrations=bad_type)
         # Must specify sites and mutations together.
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=samples, nodes=nodes,
-            edgesets=edgesets, sites=msprime.SiteTable())
+            edges=edges, sites=msprime.SiteTable())
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=samples, nodes=nodes,
-            edgesets=edgesets, mutations=msprime.MutationTable())
+            edges=edges, mutations=msprime.MutationTable())
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
         # Verify that tables are OK.
         msprime.simplify_tables(
-            samples=samples, nodes=nodes, edgesets=edgesets, sites=sites,
+            samples=samples, nodes=nodes, edges=edges, sites=sites,
             mutations=mutations)
         for bad_type in [None, "", 1]:
             self.assertRaises(
                 TypeError, msprime.simplify_tables,
-                nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+                nodes=nodes, edges=edges, sites=sites, mutations=mutations,
                 migrations=bad_type)
         # Trying to supply migrations fails for now.
         self.assertRaises(
             ValueError, msprime.simplify_tables, samples=samples,
-            nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             migrations=msprime.MigrationTable())
 
     def test_node_table_empty_name_bug(self):
@@ -978,8 +971,8 @@ class TestSimplifyTables(unittest.TestCase):
         ts = msprime.simulate(20, random_seed=1)
         tables = ts.dump_tables()
         nodes = tables.nodes.copy()
-        edgesets = tables.edgesets.copy()
+        edges = tables.edges.copy()
         msprime.simplify_tables(
-                samples=ts.samples(), nodes=nodes, edgesets=edgesets)
+                samples=ts.samples(), nodes=nodes, edges=edges)
         self.assertEqual(nodes, tables.nodes)
-        self.assertEqual(edgesets, tables.edgesets)
+        self.assertEqual(edges, tables.edges)

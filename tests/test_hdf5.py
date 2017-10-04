@@ -83,8 +83,8 @@ def recurrent_mutation_example():
 def general_mutation_example():
     ts = msprime.simulate(10, recombination_rate=1, length=10, random_seed=2)
     nodes = msprime.NodeTable()
-    edgesets = msprime.EdgesetTable()
-    ts.dump_tables(nodes=nodes, edgesets=edgesets)
+    edges = msprime.EdgeTable()
+    ts.dump_tables(nodes=nodes, edges=edges)
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
     sites.add_row(position=0, ancestral_state="A")
@@ -92,7 +92,7 @@ def general_mutation_example():
     mutations.add_row(site=0, node=0, derived_state="T")
     mutations.add_row(site=1, node=0, derived_state="G")
     return msprime.load_tables(
-        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
 
 
 def migration_example():
@@ -136,15 +136,15 @@ def node_name_example():
     ts = msprime.simulate(
         sample_size=100, recombination_rate=0.1, length=10, random_seed=1)
     nodes = msprime.NodeTable()
-    edgesets = msprime.EdgesetTable()
-    ts.dump_tables(nodes=nodes, edgesets=edgesets)
+    edges = msprime.EdgeTable()
+    ts.dump_tables(nodes=nodes, edges=edges)
     new_nodes = msprime.NodeTable()
     names = ["n_{}".format(u) for u in range(ts.num_nodes)]
     packed, length = msprime.pack_strings(names)
     new_nodes.set_columns(
         name=packed, name_length=length, flags=nodes.flags, time=nodes.time)
     return msprime.load_tables(
-        nodes=new_nodes, edgesets=edgesets, provenance_strings=[b"sdf"])
+        nodes=new_nodes, edges=edges, provenance_strings=[b"sdf"])
 
 
 class TestHdf5(unittest.TestCase):
@@ -166,7 +166,7 @@ class TestLoadLegacyExamples(TestHdf5):
     def verify_tree_sequence(self, ts):
         # Just some quick checks to make sure the tree sequence makes sense.
         self.assertGreater(ts.sample_size, 0)
-        self.assertGreater(ts.num_edgesets, 0)
+        self.assertGreater(ts.num_edges, 0)
         self.assertGreater(ts.num_sites, 0)
         self.assertGreater(ts.num_mutations, 0)
         self.assertGreater(ts.sequence_length, 0)
@@ -193,7 +193,6 @@ class TestRoundTrip(TestHdf5):
     through a V2 file format and a V3 format.
     """
     def verify_tree_sequences_equal(self, ts, tsp):
-        self.assertEqual(ts.num_edgesets, tsp.num_edgesets)
         self.assertEqual(ts.get_sample_size(), tsp.get_sample_size())
         self.assertEqual(ts.get_sequence_length(), tsp.get_sequence_length())
         self.assertEqual(ts.get_num_mutations(), tsp.get_num_mutations())
@@ -361,11 +360,11 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 6)
+        self.assertEqual(format_version[0], 7)
         self.assertEqual(format_version[1], 0)
         keys = set(root.keys())
         self.assertIn("nodes", keys)
-        self.assertIn("edgesets", keys)
+        self.assertIn("edges", keys)
         self.assertIn("sites", keys)
         self.assertIn("mutations", keys)
         # Not filled in yet, but the group should be present for forward compatability.
@@ -447,48 +446,41 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(population, list(nodes_group["population"]))
         self.assertEqual(flags, list(nodes_group["flags"]))
 
-        edgesets_group = root["edgesets"]
+        edges_group = root["edges"]
         self.assertEqual(
-            set(edgesets_group.keys()),
-            {"indexes", "children_length", "children", "left", "right", "parent"})
+            set(edges_group.keys()),
+            {"indexes", "child", "left", "right", "parent"})
 
-        self.assertEqual(edgesets_group["left"].dtype, float64)
-        self.assertEqual(edgesets_group["right"].dtype, float64)
-        self.assertEqual(edgesets_group["parent"].dtype, int32)
-        self.assertEqual(edgesets_group["children"].dtype, int32)
-        self.assertEqual(edgesets_group["children_length"].dtype, uint32)
-        left = list(edgesets_group["left"])
-        right = list(edgesets_group["right"])
-        parent = list(edgesets_group["parent"])
-        children_length = list(edgesets_group["children_length"])
-        flat_children = list(edgesets_group["children"])
-        children = []
-        offset = 0
-        for k in children_length:
-            children.append(tuple(flat_children[offset: offset + k]))
-            offset += k
+        self.assertEqual(edges_group["left"].dtype, float64)
+        self.assertEqual(edges_group["right"].dtype, float64)
+        self.assertEqual(edges_group["parent"].dtype, int32)
+        self.assertEqual(edges_group["child"].dtype, int32)
+        left = list(edges_group["left"])
+        right = list(edges_group["right"])
+        parent = list(edges_group["parent"])
+        child = list(edges_group["child"])
 
-        self.assertEqual(len(left), ts.num_edgesets)
-        self.assertEqual(len(right), ts.num_edgesets)
-        self.assertEqual(len(parent), ts.num_edgesets)
-        self.assertEqual(len(children_length), ts.num_edgesets)
-        for j, record in enumerate(ts.edgesets()):
+        self.assertEqual(len(left), ts.num_edges)
+        self.assertEqual(len(right), ts.num_edges)
+        self.assertEqual(len(parent), ts.num_edges)
+        self.assertEqual(len(child), ts.num_edges)
+        for j, record in enumerate(ts.edges()):
             self.assertEqual(record.left, left[j])
             self.assertEqual(record.right, right[j])
             self.assertEqual(record.parent, parent[j])
-            self.assertEqual(record.children, children[j])
+            self.assertEqual(record.child, child[j])
 
-        indexes_group = edgesets_group["indexes"]
+        indexes_group = edges_group["indexes"]
         self.assertEqual(
             set(indexes_group.keys()), {"insertion_order", "removal_order"})
         for field in indexes_group.keys():
-            self.assertEqual(indexes_group[field].dtype, int32)
+            self.assertEqual(indexes_group[field].dtype, int32, child[j])
         I = sorted(
-            range(ts.num_edgesets),
+            range(ts.num_edges),
             key=lambda j: (left[j], time[parent[j]]))
         O = sorted(
-            range(ts.num_edgesets),
-            key=lambda j: (right[j], -time[parent[j]]))
+            range(ts.num_edges),
+            key=lambda j: (right[j], -time[parent[j]], -child[j]))
         self.assertEqual(I, list(indexes_group["insertion_order"]))
         self.assertEqual(O, list(indexes_group["removal_order"]))
         root.close()

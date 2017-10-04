@@ -507,11 +507,19 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_int(config, "coalescence_record_block_size", &int_tmp)
+    if (config_lookup_int(config, "node_block_size", &int_tmp)
             == CONFIG_FALSE) {
-        fatal_error("coalescence_record_block_size is a required parameter");
+        fatal_error("node_block_size is a required parameter");
     }
-    ret = msp_set_coalescence_record_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_node_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    if (config_lookup_int(config, "edge_block_size", &int_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("edge_block_size is a required parameter");
+    }
+    ret = msp_set_edge_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -735,24 +743,32 @@ static void
 print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
-    newick_converter_t nc;
-    double length;
-    char *tree;
+    char *newick = NULL;
+    size_t precision = 8;
+    size_t newick_buffer_size = (precision + 3) * tree_sequence_get_num_nodes(ts);
+    sparse_tree_t tree;
 
-    printf("converting newick trees\n");
-    /* We're using an Ne of 0.25 here throughout to cancel 4Ne conversions */
-    ret = newick_converter_alloc(&nc, ts, 4, 0.25);
+    newick = malloc(newick_buffer_size);
+    if (newick == NULL) {
+        fatal_error("No memory\n");
+    }
+
+    ret = sparse_tree_alloc(&tree, ts, 0);
     if (ret != 0) {
-        fatal_library_error(ret, "newick alloc");
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
-    while ((ret = newick_converter_next(&nc, &length, &tree)) == 1) {
-        printf("Tree: %f: %s\n", length, tree);
-        newick_converter_print_state(&nc, stdout);
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
+        ret = sparse_tree_get_newick(&tree, precision, 1, 0, newick_buffer_size, newick);
+        if (ret != 0) {
+            fatal_library_error(ret ,"newick");
+        }
+        printf("%d:\t%s\n", (int) tree.index, newick);
     }
-    if (ret != 0) {
-        fatal_library_error(ret, "newick next");
+    if (ret < 0) {
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
-    newick_converter_free(&nc);
+    sparse_tree_free(&tree);
+    free(newick);
 }
 
 static void
@@ -797,14 +813,14 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
     const char *provenance[] = {"main.simulate"};
     node_table_t *nodes = malloc(sizeof(node_table_t));
-    edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    edge_table_t *edges = malloc(sizeof(edge_table_t));
     site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL || nodes == NULL || edgesets == NULL
+            || mutgen == NULL || nodes == NULL || edges == NULL
             || sites == NULL || mutations == NULL || migrations == NULL) {
         goto out;
     }
@@ -812,7 +828,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_alloc(edgesets, 0, 0);
+    ret = edge_table_alloc(edges, 0);
     if (ret != 0) {
         goto out;
     }
@@ -869,11 +885,11 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* Create the tree_sequence from the state of the simulator.
          * We want to use coalescent time here, so use an Ne of 1/4
          * to cancel scaling factor. */
-        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, migrations);
+        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edges, migrations);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, nodes, edgesets);
+        ret = mutgen_generate_tables_tmp(mutgen, nodes, edges);
         if (ret != 0) {
             goto out;
         }
@@ -881,7 +897,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
+        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edges, migrations,
                 sites, mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
@@ -894,7 +910,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         }
         if (verbose >= 1) {
             node_table_print_state(nodes, stdout);
-            edgeset_table_print_state(edgesets, stdout);
+            edge_table_print_state(edges, stdout);
             site_table_print_state(sites, stdout);
             mutation_table_print_state(mutations, stdout);
             migration_table_print_state(migrations, stdout);
@@ -924,9 +940,9 @@ out:
     if (rng != NULL) {
         gsl_rng_free(rng);
     }
-    if (edgesets != NULL) {
-        edgeset_table_free(edgesets);
-        free(edgesets);
+    if (edges != NULL) {
+        edge_table_free(edges);
+        free(edges);
     }
     if (nodes != NULL) {
         node_table_free(nodes);
@@ -1037,8 +1053,8 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
         bool filter_invariant_sites, int verbose)
 {
     tree_sequence_t ts, subset;
-    size_t j;
     node_id_t *samples;
+    node_id_t *sample_map;
     int flags = 0;
     int ret;
 
@@ -1056,18 +1072,19 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     } else {
         num_samples = GSL_MIN(num_samples, tree_sequence_get_sample_size(&ts));
     }
-    samples = malloc(num_samples * sizeof(node_id_t));
-    if (samples == NULL) {
-        fatal_error("out of memory");
+    ret = tree_sequence_get_samples(&ts, &samples);
+    if (ret != 0) {
+        fatal_library_error(ret, "get_samples");
     }
-    for (j = 0; j < num_samples; j++) {
-        samples[j] = (node_id_t) j;
+    sample_map = malloc(num_samples * sizeof(node_id_t));
+    if (sample_map == NULL) {
+        fatal_error("malloc sample map");
     }
     ret = tree_sequence_initialise(&subset);
     if (ret != 0) {
         fatal_library_error(ret, "init error");
     }
-    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset);
+    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset, sample_map);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }
@@ -1081,7 +1098,7 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     }
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
-    free(samples);
+    free(sample_map);
 }
 
 int

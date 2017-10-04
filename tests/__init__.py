@@ -46,16 +46,18 @@ class MsprimeTestCase(unittest.TestCase):
 
 
 class PythonSparseTree(object):
-
     """
     Presents the same interface as the SparseTree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
     the internal structures during iteration.
     """
-    def __init__(self):
-        self.parent = {}
-        self.children = {}
-        self.time = {}
+    def __init__(self, num_nodes):
+        self.num_nodes = num_nodes
+        self.parent = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.left_child = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.right_child = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.left_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.right_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
         self.left = 0
         self.right = 0
         self.root = 0
@@ -65,57 +67,56 @@ class PythonSparseTree(object):
         self.site_list = []
 
     @classmethod
-    def from_sparse_tree(self, sparse_tree):
-        ret = PythonSparseTree()
+    def from_sparse_tree(cls, sparse_tree):
+        ret = PythonSparseTree(sparse_tree.num_nodes)
         ret.root = sparse_tree.get_root()
         ret.sample_size = sparse_tree.get_sample_size()
         ret.left, ret.right = sparse_tree.get_interval()
         ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
-        # Traverse the tree and update the details as we go
-        # We don't use the traversal method here because this
-        # is used to test them.
-        stack = [sparse_tree.get_root()]
-        while len(stack) > 0:
-            u = stack.pop()
-            ret.time[u] = sparse_tree.get_time(u)
-            if sparse_tree.is_internal(u):
-                c = sparse_tree.get_children(u)
-                stack.extend(c)
-                for child in c:
-                    ret.parent[child] = u
-                ret.children[u] = c
+        for u in range(ret.num_nodes):
+            ret.parent[u] = sparse_tree.parent(u)
+            ret.left_child[u] = sparse_tree.left_child(u)
+            ret.right_child[u] = sparse_tree.right_child(u)
+            ret.left_sib[u] = sparse_tree.left_sib(u)
+            ret.right_sib[u] = sparse_tree.right_sib(u)
         assert ret == sparse_tree
+        return ret
+
+    def children(self, u):
+        v = self.left_child[u]
+        ret = []
+        while v != msprime.NULL_NODE:
+            ret.append(v)
+            v = self.right_sib[v]
         return ret
 
     def _preorder_nodes(self, u, l):
         l.append(u)
-        if u in self.children:
-            for c in self.children[u]:
-                self._preorder_nodes(c, l)
+        for c in self.children(u):
+            self._preorder_nodes(c, l)
 
     def _postorder_nodes(self, u, l):
-        if u in self.children:
-            for c in self.children[u]:
-                self._postorder_nodes(c, l)
+        for c in self.children(u):
+            self._postorder_nodes(c, l)
         l.append(u)
 
     def _inorder_nodes(self, u, l):
-        if u in self.children:
-            mid = len(self.children[u]) // 2
-            for v in self.children[u][:mid]:
+        children = self.children(u)
+        if len(children) > 0:
+            mid = len(children) // 2
+            for v in children[:mid]:
                 self._inorder_nodes(v, l)
             l.append(u)
-            for v in self.children[u][mid:]:
+            for v in children[mid:]:
                 self._inorder_nodes(v, l)
         else:
             l.append(u)
 
     def _levelorder_nodes(self, u, l, level):
         l[level].append(u) if level < len(l) else l.append([u])
-        if u in self.children:
-            for c in self.children[u]:
-                self._levelorder_nodes(c, l, level + 1)
+        for c in self.children(u):
+            self._levelorder_nodes(c, l, level + 1)
 
     def nodes(self, root=None, order="preorder"):
         u = root
@@ -151,9 +152,6 @@ class PythonSparseTree(object):
     def get_children(self, node):
         return self.children[node]
 
-    def get_time(self, node):
-        return self.time[node]
-
     def get_root(self):
         return self.root
 
@@ -161,13 +159,41 @@ class PythonSparseTree(object):
         return self.index
 
     def get_parent_dict(self):
-        return self.parent
-
-    def get_time_dict(self):
-        return self.time
+        d = {
+            u: self.parent[u] for u in range(self.num_nodes)
+            if self.parent[u] != msprime.NULL_NODE}
+        return d
 
     def sites(self):
         return iter(self.site_list)
+
+    def __eq__(self, other):
+        return (
+            self.get_sample_size() == other.get_sample_size() and
+            self.get_parent_dict() == other.get_parent_dict() and
+            self.get_interval() == other.get_interval() and
+            self.get_root() == other.get_root() and
+            self.get_index() == other.get_index() and
+            list(self.sites()) == list(other.sites()))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def newick(self, precision=0, time_scale=0):
+        # We only support 0 branch lengths here because this information isn't
+        # immediately available.
+        assert time_scale == 0 and precision == 0
+        return self._build_newick(self.root) + ";"
+
+    def _build_newick(self, node):
+        if self.left_child[node] == msprime.NULL_NODE:
+            s = "{0}".format(node + 1)
+        else:
+            s = "("
+            for child in self.children(node):
+                s += self._build_newick(child) + ":0,"
+            s = s[:-1] + ")"
+        return s
 
 
 class PythonTreeSequence(object):
@@ -192,7 +218,7 @@ class PythonTreeSequence(object):
                 mutations=[_Mutation(*mut) for mut in mutations]))
 
     def _diffs(self):
-        M = self._tree_sequence.get_num_edgesets()
+        M = self._tree_sequence.get_num_edges()
         records = [self._tree_sequence.get_record(j) for j in range(M)]
         l = [record[0] for record in records]
         r = [record[1] for record in records]
@@ -235,50 +261,97 @@ class PythonTreeSequence(object):
         else:
             return self._diffs()
 
-    def trees(self):
-        M = self._tree_sequence.get_num_edgesets()
-        records = [self._tree_sequence.get_record(j) for j in range(M)]
-        l = [record[0] for record in records]
-        r = [record[1] for record in records]
-        u = [record[2] for record in records]
-        c = [record[3] for record in records]
-        t = [record[4] for record in records]
-        I = sorted(range(M), key=lambda j: (l[j], t[j]))
-        O = sorted(range(M), key=lambda j: (r[j], -t[j]))
+    def edge_diffs(self):
+        M = self._tree_sequence.get_num_edges()
+        edges = [self._tree_sequence.get_edge(j) for j in range(M)]
+        l = [edge[0] for edge in edges]
+        r = [edge[1] for edge in edges]
+        p = [edge[2] for edge in edges]
+        c = [edge[3] for edge in edges]
+        t = [self._tree_sequence.get_node(edge[2])[1] for edge in edges]
+        I = sorted(range(M), key=lambda j: (l[j], t[j], p[j], c[j]))
+        O = sorted(range(M), key=lambda j: (r[j], -t[j], -p[j], -c[j]))
         j = 0
         k = 0
-        st = PythonSparseTree()
+        left = 0
+        while j < M:
+            e_out = []
+            e_in = []
+            while r[O[k]] == left:
+                h = O[k]
+                e_out.append(msprime.Edge(l[h], r[h], p[h], c[h]))
+                k += 1
+            while j < M and l[I[j]] == left:
+                h = I[j]
+                e_in.append(msprime.Edge(l[h], r[h], p[h], c[h]))
+                j += 1
+            right = self._tree_sequence.get_sequence_length()
+            if j < M:
+                right = min(r[O[k]], l[I[j]])
+            yield (left, right), e_out, e_in
+            left = right
+
+    def trees(self):
+        M = self._tree_sequence.get_num_edges()
+        edges = [self._tree_sequence.get_edge(j) for j in range(M)]
+        t = [
+            self._tree_sequence.get_node(j)[1]
+            for j in range(self._tree_sequence.get_num_nodes())]
+        l = [edge[0] for edge in edges]
+        r = [edge[1] for edge in edges]
+        p = [edge[2] for edge in edges]
+        c = [edge[3] for edge in edges]
+        I = sorted(range(M), key=lambda j: (l[j], t[p[j]], p[j], c[j]))
+        O = sorted(range(M), key=lambda j: (r[j], -t[p[j]], -p[j], -c[j]))
+        j = 0
+        k = 0
+        st = PythonSparseTree(self._tree_sequence.get_num_nodes())
         st.sample_size = self._tree_sequence.get_sample_size()
         st.left = 0
         while j < M:
-            x = l[I[j]]
-            while r[O[k]] == x:
-                h = O[k]
-                del st.children[u[h]]
-                for q in c[h]:
-                    del st.parent[q]
+            while r[O[k]] == st.left:
+                parent = p[O[k]]
+                child = c[O[k]]
+                lsib = st.left_sib[child]
+                rsib = st.right_sib[child]
+                if lsib == msprime.NULL_NODE:
+                    st.left_child[parent] = rsib
+                else:
+                    st.right_sib[lsib] = rsib
+                if rsib == msprime.NULL_NODE:
+                    st.right_child[parent] = lsib
+                else:
+                    st.left_sib[rsib] = lsib
+                st.parent[child] = msprime.NULL_NODE
+                st.left_sib[child] = msprime.NULL_NODE
+                st.right_sib[child] = msprime.NULL_NODE
                 k += 1
-            while j < M and l[I[j]] == x:
-                h = I[j]
-                st.children[u[h]] = c[h]
-                for q in c[h]:
-                    st.parent[q] = u[h]
+            while j < M and l[I[j]] == st.left:
+                parent = p[I[j]]
+                child = c[I[j]]
+                u = st.right_child[parent]
+                if u == msprime.NULL_NODE:
+                    st.left_child[parent] = c
+                else:
+                    st.right_sib[u] = child
+                    st.left_sib[child] = u
+                st.right_child[parent] = child
+                st.parent[child] = parent
                 j += 1
-            st.left = x
             st.right = r[O[k]]
+            if j < M:
+                st.right = min(r[O[k]], l[I[j]])
             # Insert the root
             root = 0
-            while root in st.parent:
+            while st.parent[root] != msprime.NULL_NODE:
                 root = st.parent[root]
             st.root = root
             st.index += 1
             # Add in all the sites
             st.site_list = [
                 site for site in self._sites if st.left <= site.position < st.right]
-            st.time = {
-                j: self._tree_sequence.get_node(j)[1] for j in st.parent.keys()}
-            st.time[st.root] = self._tree_sequence.get_node(st.root)[1]
             yield st
+            st.left = st.right
 
 
 class PythonRecombinationMap(object):
@@ -542,30 +615,27 @@ class Simplifier(object):
         self.A = {}
         # Output tables
         self.node_table = msprime.NodeTable(ts.num_nodes)
-        self.edgeset_table = msprime.EdgesetTable(ts.num_edgesets)
+        self.edge_table = msprime.EdgeTable(ts.num_edges)
         self.site_table = msprime.SiteTable(max(1, ts.num_sites))
         self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
-        self.last_edgeset = None
         self.num_output_nodes = 0
         self.output_sites = {}
-        # Keep track of then number of segments we alloc and free to ensure we
-        # don't leak.
-        self.num_used_segments = 0
+        self.edge_buffer = []
         self.node_id_map = {}
-        for j, sample_id in enumerate(sample):
-            # segment label (j) is the output node ID
-            x = self.alloc_segment(0, self.m, j)
-            # and the label in A is the input node ID
-            self.A[sample_id] = x
-            self.record_node(sample_id)
+        # Map all samples at time 0 to new nodes. Keep all internal samples in
+        # a list so that we can map them later as we encounter them.
+        self.unmapped_samples = set()
+        self.samples = set(sample)
+        for sample_id in sample:
+            if ts.node(sample_id).time == 0:
+                self.insert_sample(sample_id)
+            else:
+                self.unmapped_samples.add(sample_id)
         # We keep a sorted map of mutations for each input node.
         self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
         for site in self.ts.sites():
             for mut in site.mutations:
                 self.mutation_map[mut.node][site.position] = mut
-
-    def is_sample(self, output_id):
-        return output_id < self.n
 
     def get_mutations(self, input_id, left, right):
         """
@@ -587,7 +657,6 @@ class Simplifier(object):
         Allocates a new segment with the specified values.
         """
         s = Segment(left, right, node, next)
-        self.num_used_segments += 1
         return s
 
     def free_segment(self, u):
@@ -597,7 +666,6 @@ class Simplifier(object):
         Note: this method is only here to ensure that we are not leaking segments
         in the C implementation.
         """
-        self.num_used_segments -= 1
 
     def record_node(self, input_id):
         """
@@ -610,29 +678,33 @@ class Simplifier(object):
         self.node_id_map[input_id] = self.num_output_nodes
         self.num_output_nodes += 1
 
-    def record_edgeset(self, left, right, parent, children):
+    def flush_edges(self):
         """
-        Adds an edgeset to the output list. This method used the ``last_edgeset``
-        variable to check for adjacent records that may be squashed. Thus, the
-        last edgeset will not be entered in the table, which must be done manually.
+        Flush the edges to the output table after sorting and squashing
+        any redundant records.
         """
-        sorted_children = tuple(sorted(children))
-        if self.last_edgeset is None:
-            self.last_edgeset = left, right, parent, sorted_children
-        else:
-            last_left, last_right, last_parent, last_children = self.last_edgeset
-            squash_condition = (
-                last_parent == parent and
-                last_children == sorted_children and
-                last_right == left)
-            if squash_condition:
-                self.last_edgeset = last_left, right, parent, sorted_children
-            else:
-                # Flush the last edgeset
-                self.edgeset_table.add_row(
-                    left=last_left, right=last_right, parent=last_parent,
-                    children=last_children)
-                self.last_edgeset = left, right, parent, sorted_children
+        if len(self.edge_buffer) > 0:
+            self.edge_buffer.sort(key=lambda e: (e.child, e.left))
+            parent = self.edge_buffer[0].parent
+            left = self.edge_buffer[0].left
+            right = self.edge_buffer[0].right
+            child = self.edge_buffer[0].child
+            for e in self.edge_buffer[1:]:
+                assert e.parent == parent
+                if e.left != right or e.child != child:
+                    self.edge_table.add_row(left, right, parent, child)
+                    left = e.left
+                    child = e.child
+                right = e.right
+            self.edge_table.add_row(left, right, parent, child)
+            self.edge_buffer = []
+
+    def record_edge(self, left, right, parent, child):
+        """
+        Adds an edge to the output list.
+        """
+        self.edge_buffer.append(
+            msprime.Edge(left=left, right=right, parent=parent, child=child))
 
     def segment_chain_str(self, segment):
         u = segment
@@ -668,36 +740,60 @@ class Simplifier(object):
             print("\t", input_id, "->", self.node_id_map[input_id])
         print("Output nodes:")
         print(self.node_table)
-        print("Output Edgesets: ")
-        print(self.edgeset_table)
+        print("Output Edges: ")
+        print(self.edge_table)
+
+    def insert_sample(self, sample_id):
+        """
+        Inserts the specified sample ID into the algorithm state.
+        """
+        # print("INSERTING SAMPLE", sample_id)
+        self.record_node(sample_id)
+        x = self.alloc_segment(0, self.m, self.node_id_map[sample_id])
+        self.A[sample_id] = x
+
+    def process_parent_edges(self, edges):
+        """
+        Process all of the edges for a given parent.
+        """
+        assert len(set(e.parent for e in edges)) == 1
+        parent = edges[0].parent
+        # print("====================")
+        # print("Process parent edges", parent, edges)
+        # print("====================")
+        H = []
+        for edge in edges:
+            if edge.child in self.unmapped_samples:
+                self.unmapped_samples.remove(edge.child)
+                self.insert_sample(edge.child)
+            if edge.parent in self.unmapped_samples:
+                self.unmapped_samples.remove(edge.parent)
+                self.insert_sample(edge.parent)
+            if edge.child in self.A:
+                # print("Remove", edge.left, edge.right, edge.child, sep="\t")
+                self.remove_ancestry(edge.left, edge.right, edge.child, H)
+                self.check_state()
+        # print("merging for ", parent)
+        # self.print_state()
+        # self.print_heaps(H)
+        self.merge_labeled_ancestors(H, parent)
+        # self.print_state()
+        self.check_state()
 
     def simplify(self):
-        the_parents = [
-            (node.time, input_id) for input_id, node in enumerate(self.ts.nodes())]
-        # need to deal with parents in order by birth time-ago
-        the_parents.sort()
-        for time, input_id in the_parents:
-            # inefficent way to pull all edges corresponding to a given parent
-            edgesets = [x for x in self.ts.edgesets() if x.parent == input_id]
-            for edgeset in edgesets:
-                H = []
-                for edgeset in edgesets:
-                    for child in edgeset.children:
-                        if child in self.A:
-                            self.remove_ancestry(edgeset.left, edgeset.right, child, H)
-                            self.check_state()
-                # print("merging for ", input_id)
-                # self.print_heaps(H)
-                # self.print_state()
-                self.merge_labeled_ancestors(H, input_id)
-                self.check_state()
-        # Flush the last edgeset to the table and create the new tree sequence.
-        if self.last_edgeset is not None:
-            left, right, parent, children = self.last_edgeset
-            self.edgeset_table.add_row(
-                left=left, right=right, parent=parent, children=children)
+        # print("START")
+        # self.print_state()
+        all_edges = list(self.ts.edges())
+        edges = all_edges[:1]
+        for e in all_edges[1:]:
+            if e.parent != edges[0].parent:
+                self.process_parent_edges(edges)
+                edges = []
+            edges.append(e)
+        self.process_parent_edges(edges)
         # print("DONE")
         # self.print_state()
+
         # The extant segments are the roots for each interval. For every root
         # node, store the intervals over which it applies.
         roots = collections.defaultdict(list)
@@ -735,9 +831,11 @@ class Simplifier(object):
                 output_site_id += 1
         # print("DONE")
         # self.print_state()
-        return msprime.load_tables(
-            nodes=self.node_table, edgesets=self.edgeset_table,
+        sample_map = {u: self.node_id_map[u] for u in self.samples}
+        ts = msprime.load_tables(
+            nodes=self.node_table, edges=self.edge_table,
             sites=self.site_table, mutations=self.mutation_table)
+        return ts, sample_map
 
     def record_mutation(self, node, mutation):
         position = self.input_sites[mutation.site].position
@@ -749,6 +847,9 @@ class Simplifier(object):
             site = self.output_sites[position]
         site.mutations.append(
             msprime.Mutation(site=None, node=node, derived_state=mutation.derived_state))
+
+    def is_sample(self, input_id):
+        return input_id in self.samples
 
     def remove_ancestry(self, left, right, input_id, H):
         """
@@ -833,6 +934,7 @@ class Simplifier(object):
                 r = min(r, x.right)
             if len(H) > 0:
                 r = min(r, H[0][0])
+
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
@@ -847,8 +949,8 @@ class Simplifier(object):
                     alpha.next = None
                 if input_id in self.node_id_map:
                     u = self.node_id_map[input_id]
-                    if self.is_sample(u):
-                        self.record_edgeset(alpha.left, alpha.right, u, [alpha.node])
+                    if self.is_sample(input_id):
+                        self.record_edge(alpha.left, alpha.right, u, alpha.node)
                         alpha.node = u
             else:
                 if not coalescence:
@@ -858,10 +960,9 @@ class Simplifier(object):
                 # output node ID
                 u = self.node_id_map[input_id]
                 alpha = self.alloc_segment(l, r, u)
-                # Update the heaps and make the record.
-                children = []
+                # Update the heaps and add edges
                 for x in X:
-                    children.append(x.node)
+                    self.record_edge(l, r, u, x.node)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:
@@ -870,24 +971,17 @@ class Simplifier(object):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                self.record_edgeset(l, r, u, children)
 
             # loop tail; update alpha and integrate it into the state.
             if z is None:
                 if input_id in self.A:
-                    # If ancestry already exists for this input_id, we must replace
-                    # the corresponding chunk and update
-                    # print("mapping for input_id", input_id)
-                    # print(self.A[input_id])
-                    # print(alpha)
                     assert alpha.node == self.A[input_id].node
-                    # self.insert_into_chain(input_id, alpha)
                 else:
-                    # Otherwise, alpha is the head of the chain.
                     self.A[input_id] = alpha
             else:
                 z.next = alpha
             z = alpha
+        self.flush_edges()
 
     def check_state(self):
         # print("CHECK_STATE")
@@ -910,6 +1004,6 @@ if __name__ == "__main__":
     tables = tss.dump_tables()
     print("Output:")
     print(tables.nodes)
-    print(tables.edgesets)
+    print(tables.edges)
     print(tables.sites)
     print(tables.mutations)

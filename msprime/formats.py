@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 University of Oxford
+# Copyright (C) 2016-2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -113,17 +113,23 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     provenance = [
         _get_v2_provenance("generate_trees", trees_group.attrs),
     ]
-    cr_node = np.array(trees_group["node"], dtype=np.int32)
-    children = np.array(trees_group["children"], dtype=np.int32).flatten()
-    edgesets = msprime.EdgesetTable()
-    edgesets.set_columns(
-        left=trees_group["left"],
-        right=trees_group["right"],
-        parent=cr_node,
-        children=children,
-        children_length=2 * np.ones(cr_node.shape, dtype=np.uint32))
+    num_rows = trees_group["node"].shape[0]
+    index = np.arange(num_rows, dtype=int)
+    parent = np.zeros(2 * num_rows, dtype=np.int32)
+    parent[2 * index] = trees_group["node"]
+    parent[2 * index + 1] = trees_group["node"]
+    left = np.zeros(2 * num_rows, dtype=np.float64)
+    left[2 * index] = trees_group["left"]
+    left[2 * index + 1] = trees_group["left"]
+    right = np.zeros(2 * num_rows, dtype=np.float64)
+    right[2 * index] = trees_group["right"]
+    right[2 * index + 1] = trees_group["right"]
+    child = np.array(trees_group["children"], dtype=np.int32).flatten()
+    edges = msprime.EdgeTable()
+    edges.set_columns(left=left, right=right, parent=parent, child=child)
 
-    num_nodes = max(np.max(children), np.max(cr_node)) + 1
+    cr_node = np.array(trees_group["node"], dtype=np.int32)
+    num_nodes = max(np.max(child), np.max(cr_node)) + 1
     sample_size = np.min(cr_node)
     flags = np.zeros(num_nodes, dtype=np.uint32)
     population = np.zeros(num_nodes, dtype=np.int32)
@@ -151,8 +157,9 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
         provenance.append(
             _get_v2_provenance("generate_mutations", mutations_group.attrs))
     provenance.append(_get_upgrade_provenance(root))
+    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
-        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
         provenance_strings=provenance)
 
 
@@ -172,18 +179,28 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     flags = np.zeros(num_nodes, dtype=np.uint32)
     flags[:sample_size] = msprime.NODE_IS_SAMPLE
 
+    children_length = np.array(records_group["num_children"], dtype=np.uint32)
+    total_rows = np.sum(children_length)
+    left = np.zeros(total_rows, dtype=np.float64)
+    right = np.zeros(total_rows, dtype=np.float64)
+    parent = np.zeros(total_rows, dtype=np.int32)
+    record_left = breakpoints[left_indexes]
+    record_right = breakpoints[right_indexes]
+    k = 0
+    for j in range(left_indexes.shape[0]):
+        for _ in range(children_length[j]):
+            left[k] = record_left[j]
+            right[k] = record_right[j]
+            parent[k] = record_node[j]
+            k += 1
     nodes = msprime.NodeTable()
     nodes.set_columns(
         flags=flags,
         time=nodes_group["time"],
         population=nodes_group["population"])
-    edgesets = msprime.EdgesetTable()
-    edgesets.set_columns(
-        left=breakpoints[left_indexes],
-        right=breakpoints[right_indexes],
-        parent=record_node,
-        children=records_group["children"],
-        children_length=records_group["num_children"])
+    edges = msprime.EdgeTable()
+    edges.set_columns(
+        left=left, right=right, parent=parent, child=records_group["children"])
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
     if "mutations" in root:
@@ -193,8 +210,9 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     if "provenance" in root:
         provenance = list(root["provenance"])
     provenance.append(_get_upgrade_provenance(root))
+    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
-        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations,
+        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
         provenance_strings=provenance)
 
 

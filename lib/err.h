@@ -37,7 +37,7 @@
 #define MSP_ERR_BAD_STATE                                           -6
 #define MSP_ERR_BAD_PARAM_VALUE                                     -7
 #define MSP_ERR_OUT_OF_BOUNDS                                       -8
-#define MSP_ERR_NEWICK_OVERFLOW                                     -9
+#define MSP_ERR_BUFFER_OVERFLOW                                     -9
 #define MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS                         -10
 #define MSP_ERR_POPULATION_OVERFLOW                                 -11
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
@@ -55,29 +55,27 @@
 #define MSP_ERR_ASSERTION_FAILED                                    -24
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
-#define MSP_ERR_BAD_EDGESET                                         -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
-#define MSP_ERR_NONBINARY_NEWICK                                    -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_CANNOT_SIMPLIFY                                     -32
 #define MSP_ERR_BAD_MODEL                                           -33
-#define MSP_ERR_ZERO_CHILDREN                                       -34
-#define MSP_ERR_UNSORTED_CHILDREN                                   -35
-#define MSP_ERR_NULL_NODE_IN_RECORD                                 -36
-#define MSP_ERR_BAD_NODE_TIME_ORDERING                              -37
-#define MSP_ERR_RECORDS_NOT_TIME_SORTED                             -38
-#define MSP_ERR_INCONSISTENT_NODE_TIMES                             -39
-#define MSP_ERR_INCONSISTENT_POPULATION_IDS                         -40
-#define MSP_ERR_BAD_RECORD_INTERVAL                                 -41
-#define MSP_ERR_ZERO_RECORDS                                        -42
+#define MSP_ERR_NULL_PARENT                                         -34
+#define MSP_ERR_NULL_CHILD                                          -35
+#define MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME                        -36
+#define MSP_ERR_EDGES_NOT_SORTED_PARENT                             -37
+#define MSP_ERR_EDGES_NOT_SORTED_CHILD                              -38
+#define MSP_ERR_EDGES_NOT_SORTED_LEFT                               -39
+#define MSP_ERR_BAD_NODE_TIME_ORDERING                              -40
+#define MSP_ERR_BAD_EDGE_INTERVAL                                   -41
+#define MSP_ERR_DUPLICATE_EDGES                                     -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
 #define MSP_ERR_UNSORTED_MUTATION_NODES                             -45
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
 #define MSP_ERR_INSUFFICIENT_SAMPLES                                -49
-#define MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO                         -50
+#define MSP_ERR_ZERO_RECORDS                                        -50
 #define MSP_ERR_COORDINATE_NOT_FOUND                                -51
 #define MSP_ERR_BAD_NODES_ARRAY                                     -52
 #define MSP_ERR_BAD_CHILDREN_ARRAY                                  -53
@@ -94,4 +92,7 @@
 #define MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
 
+/* reuse code: -29 -50, -27 */
+
 #endif /*__ERR_H__*/
+

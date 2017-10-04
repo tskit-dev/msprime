@@ -636,44 +636,42 @@ class TreeStatCalculator(object):
         X = [[int(u in a) for a in sample_sets] for u in range(N)]
         # we will essentially construct the tree
         pi = [-1 for j in range(N)]
-        node_time = [0.0 for u in range(N)]
+        node_time = [self.tree_sequence.node(u).time for u in range(N)]
         # keep track of where we are for the windows
         chrom_pos = 0.0
         # index of *left-hand* end of the current window
         window_num = 0
-        for length, records_out, records_in in self.tree_sequence.diffs():
+        for interval, records_out, records_in in self.tree_sequence.edge_diffs():
+            length = interval[1] - interval[0]
             for sign, records in ((-1, records_out), (+1, records_in)):
-                for node, children, time in records:
+                for edge in records:
                     # print("Record (",sign,"):",node,children,time)
                     # print("\t",X, "-->", L)
-                    if sign == +1:
-                        node_time[node] = time
                     dx = [0 for k in range(num_sample_sets)]
-                    for child in children:
-                        if sign == +1:
-                            pi[child] = node
-                        for k in range(num_sample_sets):
-                            dx[k] += sign * X[child][k]
-                        w = wfn(X[child])
-                        dt = (node_time[pi[child]] - node_time[child])
-                        for j in range(n_out):
-                            L[j] += sign * dt * w[j]
-                        # print("\t\tchild:",child,"+=",sign,"*",wfn(X[child]),
-                        #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
-                        if sign == -1:
-                            pi[child] = -1
-                    old_w = wfn(X[node])
+                    if sign == +1:
+                        pi[edge.child] = edge.parent
                     for k in range(num_sample_sets):
-                        X[node][k] += dx[k]
-                    if pi[node] != -1:
-                        w = wfn(X[node])
-                        dt = (node_time[pi[node]] - node_time[node])
+                        dx[k] += sign * X[edge.child][k]
+                    w = wfn(X[edge.child])
+                    dt = (node_time[pi[edge.child]] - node_time[edge.child])
+                    for j in range(n_out):
+                        L[j] += sign * dt * w[j]
+                    # print("\t\tchild:",child,"+=",sign,"*",wfn(X[child]),
+                    #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
+                    if sign == -1:
+                        pi[edge.child] = -1
+                    old_w = wfn(X[edge.parent])
+                    for k in range(num_sample_sets):
+                        X[edge.parent][k] += dx[k]
+                    if pi[edge.parent] != -1:
+                        w = wfn(X[edge.parent])
+                        dt = (node_time[pi[edge.parent]] - node_time[edge.parent])
                         for j in range(n_out):
                             L[j] += dt * (w[j]-old_w[j])
                         # print("\t\tnode:",node,"+=",dt,"*(",wfn(X[node]),"-",
                         #   old_w,") -->",L)
                     # propagate change up the tree
-                    u = pi[node]
+                    u = pi[edge.parent]
                     if u != -1:
                         next_u = pi[u]
                         while u != -1:

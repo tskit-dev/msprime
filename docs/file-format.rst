@@ -30,6 +30,9 @@ provided to put unsorted tables in the proper order.
 
 First are those that describe genealogical relationships:
 
+.. todo::
+    Update the definitions here to change Edgeset to Edge.
+
 tree
     A "gene tree", i.e., the genealogical tree describing how each of the
     individuals at the tips of the tree are related to each other.  A "tree
@@ -329,10 +332,10 @@ NodeTable
 .. autoclass:: msprime.NodeTable
 
 
-EdgesetTable
+EdgeTable
 ============
 
-.. autoclass:: msprime.EdgesetTable
+.. autoclass:: msprime.EdgeTable
 
 
 SiteTable
@@ -356,10 +359,10 @@ immutible, often the best way to modify a ``TreeSequence`` is something along
 the lines of (for ``ts`` a ``TreeSequence``)::
 
     nodes = msprime.NodeTable()
-    edgesets = msprime.EdgesetTable()
-    ts.dump_tables(nodes=nodes, edgesets=edgesets)
-    # (modify nodes and edgesets)
-    ts.load_tables(nodes=nodes, edgesets=edgesets)
+    edges = msprime.EdgeTable()
+    ts.dump_tables(nodes=nodes, edges=edges)
+    # (modify nodes and edges)
+    ts.load_tables(nodes=nodes, edges=edges)
 
 
 .. automethod:: msprime.TreeSequence.load_tables

@@ -174,6 +174,32 @@ class SimulationRunner(object):
         """
         return self._mutation_rate
 
+    def print_trees(self, tree_sequence, output):
+        """
+        Print out the trees in ms-format from the specified tree sequence.
+        When 'invisible' recombinations occur ms prints out copies of the
+        same tree. Therefore, we must keep track of all breakpoints from the
+        simulation and write out a tree for each one.
+        """
+        breakpoints = self._simulator.get_breakpoints() + [self._num_loci]
+        time_scale = 0.25
+        if self._num_loci == 1:
+            tree = next(tree_sequence.trees())
+            newick = tree.newick(precision=self._precision, time_scale=time_scale)
+            print(newick, file=output)
+        else:
+            j = 0
+            for tree in tree_sequence.trees():
+                newick = tree.newick(precision=self._precision, time_scale=time_scale)
+                left, right = tree.interval
+                while j < len(breakpoints) and breakpoints[j] <= right:
+                    length = breakpoints[j] - left
+                    j += 1
+                    # Print these seperately to avoid the cost of creating
+                    # another string.
+                    print("[{0}]".format(int(length)), end="", file=output)
+                    print(newick, file=output)
+
     def run(self, output):
         """
         Runs the simulations and writes the output to the specified
@@ -185,21 +211,10 @@ class SimulationRunner(object):
         for j in range(self._num_replicates):
             self._simulator.run()
             tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
-            breakpoints = self._simulator.get_breakpoints()
             print(file=output)
             print("//", file=output)
             if self._print_trees:
-                iterator = tree_sequence.newick_trees(
-                    self._precision, breakpoints, 1)
-                if self._num_loci == 1:
-                    for l, ns in iterator:
-                        print(ns, file=output)
-                else:
-                    for l, ns in iterator:
-                        # Print these seperately to avoid the cost of creating
-                        # another string.
-                        print("[{0}]".format(int(l)), end="", file=output)
-                        print(ns, file=output)
+                self.print_trees(tree_sequence, output)
             if self._mutation_rate > 0:
                 hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
@@ -770,8 +785,9 @@ def run_upgrade(args):
 
 def run_dump_newick(args):
     tree_sequence = msprime.load(args.history_file)
-    for l, ns in tree_sequence.newick_trees(args.precision):
-        print(ns)
+    for tree in tree_sequence.trees():
+        newick = tree.newick(precision=args.precision)
+        print(newick)
 
 
 def run_dump_haplotypes(args):
@@ -792,9 +808,9 @@ def run_dump_nodes(args):
     tree_sequence.dump_text(nodes=sys.stdout, precision=args.precision)
 
 
-def run_dump_edgesets(args):
+def run_dump_edges(args):
     tree_sequence = msprime.load(args.history_file)
-    tree_sequence.dump_text(edgesets=sys.stdout, precision=args.precision)
+    tree_sequence.dump_text(edges=sys.stdout, precision=args.precision)
 
 
 def run_dump_sites(args):
@@ -891,11 +907,11 @@ def get_msp_parser():
     parser.set_defaults(runner=run_dump_nodes)
 
     parser = subparsers.add_parser(
-        "edgesets",
-        help="Dump edgesets in tabular format.")
+        "edges",
+        help="Dump edges in tabular format.")
     add_history_file_argument(parser)
     add_precision_argument(parser)
-    parser.set_defaults(runner=run_dump_edgesets)
+    parser.set_defaults(runner=run_dump_edges)
 
     parser = subparsers.add_parser(
         "sites",

@@ -33,18 +33,13 @@ import unittest
 import msprime
 import msprime.cli as cli
 
+import newick
+
 _h5py_available = True
 try:
     import h5py
 except ImportError:
     _h5py_available = False
-
-# We're forced to do this because dendropy doesn't support Python 3.
-_dendropy_available = True
-try:
-    import dendropy
-except ImportError:
-    _dendropy_available = False
 
 
 def div4(matrix):
@@ -908,14 +903,11 @@ class TestMspmsOutput(TestCli):
         Verifies that the specified string is a valid newick tree.
         """
         self.assertEqual(tree[-1], ";")
-        if _dendropy_available:
-            parsed_tree = dendropy.Tree.get_from_string(tree, schema="newick")
-            leaf_labels = set(
-                int(ts.label) for ts in parsed_tree.taxon_namespace)
-            self.assertEqual(leaf_labels, set(range(1, sample_size + 1)))
-            if precision > 0:
-                self.assertGreater(parsed_tree.length(), 0)
-        # TODO test the branch length precision output.
+        newick_tree = newick.loads(tree)[0]
+        leaf_names = newick_tree.get_leaf_names()
+        self.assertEqual(
+            sorted(leaf_names),
+            sorted([str(u + 1) for u in range(sample_size)]))
 
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
@@ -1165,25 +1157,25 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 5)
 
-    def test_edgesets_default_values(self):
+    def test_edges_default_values(self):
         parser = cli.get_msp_parser()
-        cmd = "edgesets"
+        cmd = "edges"
         history_file = "test.hdf5"
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 6)
 
-    def test_edgesets_short_args(self):
+    def test_edges_short_args(self):
         parser = cli.get_msp_parser()
-        cmd = "edgesets"
+        cmd = "edges"
         history_file = "test.hdf5"
         args = parser.parse_args([cmd, history_file, "-p", "8"])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 8)
 
-    def test_edgesets_long_args(self):
+    def test_edges_long_args(self):
         parser = cli.get_msp_parser()
-        cmd = "edgesets"
+        cmd = "edges"
         history_file = "test.hdf5"
         args = parser.parse_args([
             cmd, history_file, "--precision", "5"])
@@ -1391,21 +1383,21 @@ class TestMspConversionOutput(unittest.TestCase):
         output_nodes = stdout.splitlines()
         self.verify_nodes(output_nodes, precision)
 
-    def verify_edgesets(self, output_edgesets, precision):
+    def verify_edges(self, output_edges, precision):
         with tempfile.TemporaryFile("w+") as f:
-            self._tree_sequence.dump_text(edgesets=f, precision=precision)
+            self._tree_sequence.dump_text(edges=f, precision=precision)
             f.seek(0)
             output = f.read().splitlines()
-        self.assertEqual(output, output_edgesets)
+        self.assertEqual(output, output_edges)
 
-    def test_edgesets(self):
-        cmd = "edgesets"
+    def test_edges(self):
+        cmd = "edges"
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
             cmd, self._history_file, "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
-        output_edgesets = stdout.splitlines()
-        self.verify_edgesets(output_edgesets, precision)
+        output_edges = stdout.splitlines()
+        self.verify_edges(output_edges, precision)
 
     def verify_sites(self, output_sites, precision):
         with tempfile.TemporaryFile("w+") as f:
@@ -1484,15 +1476,14 @@ class TestMspConversionOutput(unittest.TestCase):
         self.verify_variants(output_variants)
 
     def verify_newick(self, output_newick):
-        newick = list(self._tree_sequence.newick_trees())
+        newick = list(tree.newick(precision=3) for tree in self._tree_sequence.trees())
         self.assertEqual(len(newick), len(output_newick))
-        for (l, tree), line in zip(newick, output_newick):
+        for tree, line in zip(newick, output_newick):
             self.assertEqual(tree, line)
 
     def test_newick(self):
         cmd = "newick"
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._history_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._history_file])
         self.assertEqual(len(stderr), 0)
         output_newick = stdout.splitlines()
         self.verify_newick(output_newick)
@@ -1554,7 +1545,7 @@ class TestUpgrade(TestCli):
             # Quick checks to ensure we have the right tree sequence.
             # More thorough checks are done elsewhere.
             self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
-            self.assertEqual(ts1.num_edgesets, ts2.num_edgesets)
+            self.assertEqual(ts1.num_edges, ts2.num_edges)
             self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
 
     def test_duplicate_positions(self):

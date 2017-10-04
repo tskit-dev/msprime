@@ -79,8 +79,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_STATE:
             ret = "Bad simulator state. Initialise or reset must be called.";
             break;
-        case MSP_ERR_NEWICK_OVERFLOW:
-            ret = "Newick string generation overflow.";
+        case MSP_ERR_BUFFER_OVERFLOW:
+            ret = "Supplied buffer if too small";
             break;
         case MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS:
             ret = "Demographic events must be time sorted.";
@@ -136,46 +136,45 @@ msp_strerror(int err)
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
             break;
-        case MSP_ERR_BAD_EDGESET:
-            ret = "Bad edgeset in file.";
-        case MSP_ERR_BAD_EDGESET_NO_LEFT_AT_ZERO:
-            ret = "Bad edgeset in file: no left coordinate starts at zero.";
-            break;
         case MSP_ERR_ZERO_RECORDS:
             ret = "At least one record must be supplied";
             break;
-        case MSP_ERR_ZERO_CHILDREN:
-            ret = "Zero children in coalescence record.";
+        case MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " time[parent] order violated";
             break;
-        case MSP_ERR_UNSORTED_CHILDREN:
-            ret = "Unsorted children in coalescence record.";
+        case MSP_ERR_EDGES_NOT_SORTED_PARENT:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " parent order violated";
             break;
-        case MSP_ERR_NULL_NODE_IN_RECORD:
-            ret = "Null node in coalescence record.";
+        case MSP_ERR_EDGES_NOT_SORTED_CHILD:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " child order violated";
+            break;
+        case MSP_ERR_EDGES_NOT_SORTED_LEFT:
+            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+                " left order violated";
+            break;
+        case MSP_ERR_NULL_PARENT:
+            ret = "Edge in parent is null.";
+            break;
+        case MSP_ERR_NULL_CHILD:
+            ret = "Edge in parent is null.";
             break;
         case MSP_ERR_BAD_NODE_TIME_ORDERING:
-            ret = "Node times must be strictly increasing within a tree.";
+            ret = "time[parent] must be greater than time[child]";
             break;
-        case MSP_ERR_RECORDS_NOT_TIME_SORTED:
-            ret = "Records must be sorted in non-decreasing time order.";
+        case MSP_ERR_BAD_EDGE_INTERVAL:
+            ret = "Bad edge interval where right <= left";
             break;
-        case MSP_ERR_INCONSISTENT_NODE_TIMES:
-            ret = "Times associated with nodes not consistent between records";
-            break;
-        case MSP_ERR_INCONSISTENT_POPULATION_IDS:
-            ret = "Population associated with nodes not consistent between records";
-            break;
-        case MSP_ERR_BAD_RECORD_INTERVAL:
-            ret = "Bad record interval where right <= left";
+        case MSP_ERR_DUPLICATE_EDGES:
+            ret = "Duplicate edges provided.";
             break;
         case MSP_ERR_CANNOT_SIMPLIFY:
             ret = "Cannot simplify the tree sequence; no output records.";
             break;
         case MSP_ERR_BAD_SAMPLES:
             ret = "Bad sample configuration provided.";
-            break;
-        case MSP_ERR_NONBINARY_NEWICK:
-            ret = "Newick export not supported for non binary trees.";
             break;
         case MSP_ERR_FILE_VERSION_TOO_OLD:
             ret = "HDF5 file version too old. Please upgrade using the "
@@ -248,14 +247,14 @@ msp_strerror(int err)
             ret = "Mutations must be provided in non-decreasing site order";
             break;
         case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
-            ret = "All edgesets for a given parent must be adjacent.";
+            ret = "All edges for a given parent must be adjacent.";
             break;
         case MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN:
-            ret = "Bad edgesets: contradictory children for a given parent over "
+            ret = "Bad edges: contradictory children for a given parent over "
                 "an interval.";
             break;
         case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
-            ret = "Bad edgesets: multiple definitions of a given parent over an interval";
+            ret = "Bad edges: multiple definitions of a given parent over an interval";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {
@@ -293,6 +292,47 @@ __msp_safe_free(void **ptr) {
 }
 
 static int
+cmp_edge_cl(const void *a, const void *b) {
+    const edge_t *ia = (const edge_t *) a;
+    const edge_t *ib = (const edge_t *) b;
+    int ret = (ia->child > ib->child) - (ia->child < ib->child);
+    if (ret == 0)  {
+        ret = (ia->left > ib->left) - (ia->left < ib->left);
+    }
+    return ret;
+}
+
+/* Squash the edges in the specified array in place. The output edges will
+ * be sorted by (child_id, left).
+ */
+int WARN_UNUSED
+squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges)
+{
+    int ret = 0;
+    size_t j, k, l;
+    edge_t e;
+
+    qsort(edges, num_edges, sizeof(edge_t), cmp_edge_cl);
+    j = 0;
+    l = 0;
+    for (k = 1; k < num_edges; k++) {
+        assert(edges[k - 1].parent == edges[k].parent);
+        if (edges[k - 1].right != edges[k].left || edges[j].child != edges[k].child) {
+            e = edges[j];
+            e.right = edges[k - 1].right;
+            edges[l] = e;
+            j = k;
+            l++;
+        }
+    }
+    e = edges[j];
+    e.right = edges[k - 1].right;
+    edges[l] = e;
+    *num_output_edges = l + 1;
+    return ret;
+}
+
+static int
 cmp_individual(const void *a, const void *b) {
     const segment_t *ia = (const segment_t *) a;
     const segment_t *ib = (const segment_t *) b;
@@ -326,13 +366,6 @@ cmp_sampling_event(const void *a, const void *b) {
     return (ia->time > ib->time) - (ia->time < ib->time);
 }
 
-static int
-cmp_node_id_t(const void *a, const void *b) {
-    const node_id_t *ia = (const node_id_t *) a;
-    const node_id_t *ib = (const node_id_t *) b;
-    return (*ia > *ib) - (*ia < *ib);
-}
-
 static void
 segment_init(void **obj, size_t id)
 {
@@ -345,13 +378,6 @@ msp_get_avl_node_mem_increment(msp_t *self)
 {
     return sizeof(void *) + self->avl_node_block_size
             * (sizeof(avl_node_t) + sizeof(void *));
-}
-
-static size_t
-msp_get_binary_children_mem_increment(msp_t *self)
-{
-    return sizeof(void *) + self->coalescence_record_block_size
-            * (2 * sizeof(uint32_t) + sizeof(void *));
 }
 
 static size_t
@@ -388,9 +414,15 @@ msp_get_num_segment_blocks(msp_t *self)
 }
 
 size_t
-msp_get_num_coalescence_record_blocks(msp_t *self)
+msp_get_num_node_blocks(msp_t *self)
 {
-    return self->num_coalescence_record_blocks;
+    return self->num_node_blocks;
+}
+
+size_t
+msp_get_num_edge_blocks(msp_t *self)
+{
+    return self->num_edge_blocks;
 }
 
 size_t
@@ -675,20 +707,6 @@ out:
 }
 
 int
-msp_set_coalescence_record_block_size(msp_t *self, size_t block_size)
-{
-    int ret = 0;
-
-    if (block_size < 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->coalescence_record_block_size = block_size;
-out:
-    return ret;
-}
-
-int
 msp_set_migration_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
@@ -702,11 +720,38 @@ out:
     return ret;
 }
 
+int
+msp_set_node_block_size(msp_t *self, size_t block_size)
+{
+    int ret = 0;
+
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->node_block_size = block_size;
+out:
+    return ret;
+}
+
+int
+msp_set_edge_block_size(msp_t *self, size_t block_size)
+{
+    int ret = 0;
+
+    if (block_size < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->edge_block_size = block_size;
+out:
+    return ret;
+}
+
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
-{
+msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
     int ret = -1;
     size_t j, k, initial_samples;
 
@@ -777,8 +822,9 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng)
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
     self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
-    self->coalescence_record_block_size = 1024;
     self->migration_block_size = 1024;
+    self->node_block_size = 1024;
+    self->edge_block_size = 1024;
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
@@ -814,11 +860,6 @@ msp_alloc_memory_blocks(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    ret = object_heap_init(&self->binary_children_heap, 2 * sizeof(node_id_t),
-           self->coalescence_record_block_size, NULL);
-    if (ret != 0) {
-        goto out;
-    }
     /* allocate the segments and Fenwick tree */
     ret = object_heap_init(&self->segment_heap, sizeof(segment_t),
            self->segment_block_size, segment_init);
@@ -829,18 +870,24 @@ msp_alloc_memory_blocks(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* Allocate the coalescence records */
-    self->coalescence_records = malloc(
-            self->coalescence_record_block_size * sizeof(coalescence_record_t));
-    self->max_coalescence_records = self->coalescence_record_block_size;
-    self->num_coalescence_record_blocks = 1;
-    if (self->coalescence_records == NULL) {
+    /* Allocate the node records */
+    self->nodes = malloc(self->node_block_size * sizeof(node_t));
+    self->max_nodes = self->node_block_size;
+    self->num_node_blocks = 1;
+    if (self->nodes == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Allocate the edge records */
+    self->edges = malloc(self->edge_block_size * sizeof(edge_t));
+    self->max_edges = self->edge_block_size;
+    self->num_edge_blocks = 1;
+    if (self->edges == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     /* Allocate the migration records */
-    self->migrations = malloc(
-            self->migration_block_size * sizeof(migration_t));
+    self->migrations = malloc(self->migration_block_size * sizeof(migration_t));
     self->max_migrations = self->migration_block_size;
     self->num_migration_blocks = 1;
     if (self->migrations == NULL) {
@@ -863,104 +910,36 @@ msp_is_completed(msp_t *self)
     return self->state == MSP_STATE_SIMULATING && n == 0;
 }
 
-static node_id_t *
-msp_alloc_children(msp_t *self, uint32_t num_children)
-{
-    node_id_t *ret = NULL;
-
-    /* Binary children are by far the most common, so we optimise for this
-     * case with a fixed memory heap. We malloc the rest directly. This
-     * means that we must always iterate through the set of coalescence
-     * records when freeing and be careful to always leave the records in
-     * a consistent state. */
-    if (num_children == 2) {
-        if (object_heap_empty(&self->binary_children_heap)) {
-            self->used_memory += msp_get_binary_children_mem_increment(self);
-            if (self->used_memory > self->max_memory) {
-                goto out;
-            }
-            if (object_heap_expand(&self->binary_children_heap) != 0) {
-                goto out;
-            }
-        }
-        ret = (node_id_t *) object_heap_alloc_object(
-                &self->binary_children_heap);
-    } else {
-        ret = malloc(num_children * sizeof(node_id_t));
-    }
-out:
-    return ret;
-}
-
-static void
-msp_free_children(msp_t *self, uint32_t num_children, node_id_t *children)
-{
-    if (num_children == 2) {
-        object_heap_free_object(&self->binary_children_heap, children);
-    } else {
-        free(children);
-    }
-}
-
 int
 msp_free(msp_t *self)
 {
     int ret = -1;
     demographic_event_t *de = self->demographic_events_head;
     demographic_event_t *tmp;
-    coalescence_record_t *cr;
-    size_t j;
 
-    /* Because we malloc the children for non-binary records
-     * directly we must free these memory blocks */
-    for (j = 0; j < self->num_coalescence_records; j++) {
-        cr = &self->coalescence_records[j];
-        if (cr->children != NULL) {
-            msp_free_children(self, cr->num_children, cr->children);
-        }
-    }
     while (de != NULL) {
         tmp = de->next;
         free(de);
         de = tmp;
     }
-    if (self->initial_migration_matrix != NULL) {
-        free(self->initial_migration_matrix);
-    }
-    if (self->migration_matrix != NULL) {
-        free(self->migration_matrix);
-    }
-    if (self->num_migration_events != NULL) {
-        free(self->num_migration_events);
-    }
-    if (self->initial_populations != NULL) {
-        free(self->initial_populations);
-    }
-    if (self->populations != NULL) {
-        free(self->populations);
-    }
-    if (self->samples != NULL) {
-        free(self->samples);
-    }
-    if (self->sampling_events != NULL) {
-        free(self->sampling_events);
-    }
+    msp_safe_free(self->initial_migration_matrix);
+    msp_safe_free(self->migration_matrix);
+    msp_safe_free(self->num_migration_events);
+    msp_safe_free(self->initial_populations);
+    msp_safe_free(self->populations);
+    msp_safe_free(self->samples);
+    msp_safe_free(self->sampling_events);
+    msp_safe_free(self->nodes);
+    msp_safe_free(self->edges);
+    msp_safe_free(self->migrations);
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->node_mapping_heap);
-    object_heap_free(&self->binary_children_heap);
     fenwick_free(&self->links);
-    if (self->coalescence_records != NULL) {
-        free(self->coalescence_records);
-    }
-    if (self->migrations != NULL) {
-        free(self->migrations);
-    }
     ret = 0;
     return ret;
 }
-
 
 static inline avl_node_t * WARN_UNUSED
 msp_alloc_avl_node(msp_t *self)
@@ -1216,11 +1195,12 @@ int
 msp_print_state(msp_t *self, FILE *out)
 {
     int ret = 0;
-    avl_node_t *node;
+    avl_node_t *a;
     node_mapping_t *nm;
     segment_t *u;
-    coalescence_record_t *cr;
     migration_t *mr;
+    edge_t *edge;
+    node_t *node;
     demographic_event_t *de;
     sampling_event_t *se;
     int64_t v;
@@ -1307,27 +1287,28 @@ msp_print_state(msp_t *self, FILE *out)
         }
     }
     fprintf(out, "Breakpoints = %d\n", avl_count(&self->breakpoints));
-    for (node = self->breakpoints.head; node != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
+    for (a = self->breakpoints.head; a != NULL; a = a->next) {
+        nm = (node_mapping_t *) a->item;
         fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
     fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
-    for (node = self->overlap_counts.head; node != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
+    for (a = self->overlap_counts.head; a != NULL; a = a->next) {
+        nm = (node_mapping_t *) a->item;
         fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
-    fprintf(out, "Coalescence records = %ld\n",
-            (long) self->num_coalescence_records);
-    for (j = 0; j < self->num_coalescence_records; j++) {
-        cr = &self->coalescence_records[j];
-        fprintf(out, "\t%f\t%f\t%d\t(", cr->left, cr->right, (int) cr->node);
-        for (k = 0; k < cr->num_children; k++) {
-            fprintf(out, "%d", (int) cr->children[k]);
-            if (k < cr->num_children - 1) {
-                fprintf(out, ", ");
-            }
+    fprintf(out, "Nodes = %ld\n", (long) self->num_nodes);
+    for (j = 0; j < self->num_nodes; j++) {
+        node = &self->nodes[j];
+        fprintf(out, "\t%f\t%d\t%d\n", node->time, node->flags, node->population);
+    }
+    fprintf(out, "Edges = %ld\n", (long) self->num_edges);
+    for (j = 0; j < self->num_edges; j++) {
+        if (j == self->edge_buffer_start) {
+            fprintf(out, "*");
         }
-        fprintf(out, ")\t%f\t%d\n", cr->time, (int) cr->population_id);
+        edge = &self->edges[j];
+        fprintf(out, "\t%f\t%f\t%d\t%d\n", edge->left, edge->right, edge->parent,
+                edge->child);
     }
     fprintf(out, "Migration records = %ld\n",
             (long) self->num_migrations);
@@ -1343,8 +1324,6 @@ msp_print_state(msp_t *self, FILE *out)
     object_heap_print_state(&self->segment_heap, out);
     fprintf(out, "node_mapping_heap:");
     object_heap_print_state(&self->node_mapping_heap, out);
-    fprintf(out, "binary_children_heap:");
-    object_heap_print_state(&self->binary_children_heap, out);
     msp_verify(self);
 out:
     if (ancestors != NULL) {
@@ -1486,59 +1465,77 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
 }
 
 static int WARN_UNUSED
-msp_record_coalescence(msp_t *self, uint32_t left, uint32_t right,
-        uint32_t num_children, node_id_t *children, node_id_t node,
-        population_id_t population_id)
+msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
 {
     int ret = 0;
-    int equal;
-    uint32_t j;
-    coalescence_record_t *cr;
-    coalescence_record_t *lcr;
+    edge_t *edge;
 
-    if (self->num_coalescence_records == self->max_coalescence_records - 1) {
+    assert(parent > child);
+    if (self->num_edges == self->max_edges - 1) {
         /* Grow the array */
-        self->max_coalescence_records += self->coalescence_record_block_size;;
-        cr = realloc(self->coalescence_records,
-                self->max_coalescence_records * sizeof(coalescence_record_t));
-        if (cr == NULL) {
+        self->max_edges += self->edge_block_size;
+        edge = realloc(self->edges, self->max_edges * sizeof(edge_t));
+        if (edge == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        self->coalescence_records = cr;
-        self->num_coalescence_record_blocks++;
+        self->edges = edge;
+        self->num_edge_blocks++;
     }
-    /* Sort the children */
-    qsort(children, num_children, sizeof(node_id_t), cmp_node_id_t);
+    edge = self->edges + self->num_edges;
+    edge->left = left;
+    edge->right = right;
+    edge->parent = parent;
+    edge->child = child;
+    self->num_edges++;
+out:
+    return ret;
+}
 
-    cr = &self->coalescence_records[self->num_coalescence_records];
-    if (self->num_coalescence_records != 0) {
-        lcr = &self->coalescence_records[self->num_coalescence_records - 1];
-        if (lcr->right == left && lcr->num_children == num_children
-                && lcr->node == node) {
-            /* Compare the children */
-            equal = 1;
-            for (j = 0; equal && j < num_children; j++) {
-                equal = equal && (children[j] == lcr->children[j]);
-            }
-            if (equal) {
-                /* squash this record into the last */
-                lcr->right = right;
-                cr = NULL;
-                msp_free_children(self, num_children, children);
-            }
+static int WARN_UNUSED
+msp_flush_edges(msp_t *self)
+{
+    int ret = 0;
+    size_t num_output_edges;
+
+    if (self->edge_buffer_start < self->num_edges) {
+        ret = squash_edges(self->edges + self->edge_buffer_start,
+                self->num_edges - self->edge_buffer_start, &num_output_edges);
+        if (ret != 0) {
+            goto out;
         }
+        self->num_edges = self->edge_buffer_start + num_output_edges;
     }
-    if (cr != NULL) {
-        cr->num_children = num_children;
-        cr->children = children;
-        cr->left = (double) left;
-        cr->right = (double) right;
-        cr->node = node;
-        cr->time = self->time;
-        cr->population_id = population_id;
-        self->num_coalescence_records++;
+    self->edge_buffer_start = self->num_edges;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id)
+{
+    int ret = 0;
+    node_t *node;
+
+    if (self->num_nodes == self->max_nodes - 1) {
+        /* Grow the array */
+        self->max_nodes += self->node_block_size;;
+        node = realloc(self->nodes, self->max_nodes * sizeof(node_t));
+        if (node == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->nodes = node;
+        self->num_node_blocks++;
     }
+    node = self->nodes + self->num_nodes;
+    node->flags = flags;
+    node->population = population_id;
+    node->time = time;
+    node->name = NULL;
+    self->num_nodes++;
+    /* Check for overflow */
+    assert(self->num_nodes < INT32_MAX);
 out:
     return ret;
 }
@@ -1713,7 +1710,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, segment_t *a
     int ret = 0;
     int coalescence = 0;
     int defrag_required = 0;
-    node_id_t v, *children;
+    node_id_t v;
     uint32_t l, r, l_min, r_max;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -1762,11 +1759,16 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, segment_t *a
                 if (!coalescence) {
                     coalescence = 1;
                     l_min = l;
-                    self->next_node++;
-                    /* Check for overflow */
-                    assert(self->next_node != 0);
+                    ret = msp_flush_edges(self);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                    ret = msp_store_node(self, 0, self->time, population_id);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
-                v = self->next_node - 1;
+                v = (node_id_t) self->num_nodes - 1;
                 /* Insert overlap counts for bounds, if necessary */
                 search.left = l;
                 node = avl_search(&self->overlap_counts, &search);
@@ -1804,22 +1806,18 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, segment_t *a
                         nm = (node_mapping_t *) node->item;
                         r = nm->left;
                     }
-                    alpha = msp_alloc_segment(self, l, r, v, population_id,
-                            NULL, NULL);
+                    alpha = msp_alloc_segment(self, l, r, v, population_id, NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
                     }
                 }
-                children = msp_alloc_children(self, 2);
-                if (children == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
+                assert(v != x->value);
+                ret = msp_store_edge(self, l, r, v, x->value);
+                if (ret != 0) {
                     goto out;
                 }
-                children[0] = x->value;
-                children[1] = y->value;
-                ret = msp_record_coalescence(self, l, r, 2, children, v,
-                        population_id);
+                ret = msp_store_edge(self, l, r, v, y->value);
                 if (ret != 0) {
                     goto out;
                 }
@@ -1904,7 +1902,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
     int ret = MSP_ERR_GENERIC;
     int coalescence = 0;
     int defrag_required = 0;
-    node_id_t v, *children;
+    node_id_t v;
     uint32_t j, l, r, h, r_max, next_l, l_min;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -1962,11 +1960,16 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
             if (!coalescence) {
                 coalescence = 1;
                 l_min = l;
-                self->next_node++;
-                /* Check for overflow */
-                assert(self->next_node != 0);
+                ret = msp_flush_edges(self);
+                if (ret != 0) {
+                    goto out;
+                }
+                ret = msp_store_node(self, 0, self->time, population_id);
+                if (ret != 0) {
+                    goto out;
+                }
             }
-            v = self->next_node - 1;
+            v = (node_id_t) self->num_nodes - 1;
             /* Insert overlap counts for bounds, if necessary */
             search.left = l;
             node = avl_search(&self->overlap_counts, &search);
@@ -2012,15 +2015,13 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
                     goto out;
                 }
             }
-            /* Create the record and update the priority queue */
-            children = msp_alloc_children(self, h);
-            if (children == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
+            /* Store the edges and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
-                children[j] = x->value;
+                ret = msp_store_edge(self, l, r, v, x->value);
+                if (ret != 0) {
+                    goto out;
+                }
                 if (x->right == r) {
                     msp_free_segment(self, x);
                     x = x->next;
@@ -2033,10 +2034,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
                         goto out;
                     }
                 }
-            }
-            ret = msp_record_coalescence(self, l, r, h, children, v, population_id);
-            if (ret != 0) {
-                goto out;
             }
         }
         /* Loop tail; integrate alpha into the global state */
@@ -2349,7 +2346,6 @@ msp_reset_memory_state(msp_t *self)
     node_mapping_t *nm;
     population_t *pop;
     segment_t *u, *v;
-    coalescence_record_t *cr;
     size_t j;
 
     for (j = 0; j < self->num_populations; j++) {
@@ -2377,13 +2373,6 @@ msp_reset_memory_state(msp_t *self)
         msp_free_avl_node(self, node);
         msp_free_node_mapping(self, nm);
     }
-    for (j = 0; j < self->num_coalescence_records; j++) {
-        cr = &self->coalescence_records[j];
-        if (cr->children != NULL) {
-            msp_free_children(self, cr->num_children, cr->children);
-        }
-        cr->children = NULL;
-    }
     return ret;
 }
 
@@ -2393,8 +2382,7 @@ msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
     int ret = MSP_ERR_GENERIC;
     segment_t *u;
 
-    u = msp_alloc_segment(self, 0, self->num_loci, sample, population,
-            NULL, NULL);
+    u = msp_alloc_segment(self, 0, self->num_loci, sample, population, NULL, NULL);
     if (u == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -2432,6 +2420,10 @@ msp_reset(msp_t *self)
         pop->start_time = 0.0;
     }
     /* Set up the sample */
+    self->num_nodes = 0;
+    self->time = 0.0;
+    self->num_edges = 0;
+    self->edge_buffer_start = 0;
     for (j = 0; j < (node_id_t) self->sample_size; j++) {
         if (self->samples[j].time == 0.0) {
             ret = msp_insert_sample(self, j, self->samples[j].population_id);
@@ -2439,8 +2431,12 @@ msp_reset(msp_t *self)
                 goto out;
             }
         }
+        ret = msp_store_node(self, MSP_NODE_IS_SAMPLE, self->samples[j].time,
+                self->samples[j].population_id);
+        if (ret != 0) {
+            goto out;
+        }
     }
-    self->next_node = (node_id_t) self->sample_size;
     self->next_demographic_event = self->demographic_events_head;
     memcpy(self->migration_matrix, self->initial_migration_matrix,
             N * N * sizeof(double));
@@ -2453,9 +2449,7 @@ msp_reset(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    self->time = 0.0;
     self->next_sampling_event = 0;
-    self->num_coalescence_records = 0;
     self->num_migrations = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
@@ -2813,6 +2807,10 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     if (ret != 0) {
         goto out;
     }
+    ret = msp_flush_edges(self);
+    if (ret != 0) {
+        goto out;
+    }
     if (msp_get_num_ancestors(self) != 0) {
         ret = 1;
         if (self->time >= max_time) {
@@ -2825,73 +2823,65 @@ out:
 
 int WARN_UNUSED
 msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
-        node_table_t *nodes, edgeset_table_t *edgesets,
+        node_table_t *nodes, edge_table_t *edges,
         migration_table_t *migrations)
 {
     int ret = 0;
-    node_id_t last_node;
     size_t j;
-    double scaled_time;
-    double left, right;
-    coalescence_record_t *cr;
-    migration_t *mr;
+    double left, right, scaled_time;
+    edge_t *edge;
+    node_t *node;
+    migration_t *migration;
 
-    /* first reset the tables */
+    /* Add the nodes */
     ret = node_table_reset(nodes);
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_reset(edgesets);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = migration_table_reset(migrations);
-    if (ret != 0) {
-        goto out;
-    }
-    /* Add the node definitions for the samples */
-    for (j = 0; j < self->sample_size; j++) {
-        scaled_time = self->samples[j].time * 4 * Ne;
-        ret = node_table_add_row(nodes, MSP_NODE_IS_SAMPLE, scaled_time,
-                self->samples[j].population_id, "");
+    for (j = 0; j < self->num_nodes; j++) {
+        node = self->nodes + j;
+        scaled_time = node->time * 4 * Ne;
+        ret = node_table_add_row(nodes, node->flags, scaled_time, node->population, "");
         if (ret != 0) {
             goto out;
         }
     }
-    /* Go through the records to add nodes and edgesets */
-    last_node = MSP_NULL_NODE;
-    for (j = 0; j < self->num_coalescence_records; j++) {
-        cr = &self->coalescence_records[j];
-        if (cr->node != last_node) {
-            assert(cr->node == (node_id_t) nodes->num_rows);
-            scaled_time = cr->time * 4 * Ne;
-            ret = node_table_add_row(nodes, 0, scaled_time, cr->population_id, "");
-            if (ret != 0) {
-                goto out;
-            }
-            last_node = cr->node;
-        }
-        left = cr->left;
-        right = cr->right;
-        if (recomb_map != NULL) {
-            left = recomb_map_genetic_to_phys(recomb_map, cr->left);
-            right = recomb_map_genetic_to_phys(recomb_map, cr->right);
-        }
-        ret = edgeset_table_add_row(edgesets, left, right, cr->node,
-                cr->children, cr->num_children);
+
+    /* Add the edges */
+    ret = edge_table_reset(edges);
+    if (ret != 0) {
+        goto out;
     }
-    /* Add in the migration records */
-    for (j = 0; j < self->num_migrations; j++) {
-        mr = &self->migrations[j];
-        left = mr->left;
-        right = mr->right;
+    for (j = 0; j < self->num_edges; j++) {
+        edge = self->edges + j;
+        left = edge->left;
+        right = edge->right;
         if (recomb_map != NULL) {
-            left = recomb_map_genetic_to_phys(recomb_map, mr->left);
-            right = recomb_map_genetic_to_phys(recomb_map, mr->right);
+            left = recomb_map_genetic_to_phys(recomb_map, left);
+            right = recomb_map_genetic_to_phys(recomb_map, right);
         }
-        scaled_time = mr->time * 4 * Ne;
-        ret = migration_table_add_row(migrations, left, right, mr->node,
-                mr->source, mr->dest, scaled_time);
+        ret = edge_table_add_row(edges, left, right, edge->parent, edge->child);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
+    /* Add in the migrations */
+    ret = migration_table_reset(migrations);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_migrations; j++) {
+        migration = &self->migrations[j];
+        left = migration->left;
+        right = migration->right;
+        if (recomb_map != NULL) {
+            left = recomb_map_genetic_to_phys(recomb_map, left);
+            right = recomb_map_genetic_to_phys(recomb_map, right);
+        }
+        scaled_time = migration->time * 4 * Ne;
+        ret = migration_table_add_row(migrations, left, right, migration->node,
+                migration->source, migration->dest, scaled_time);
         if (ret != 0) {
             goto out;
         }
@@ -3006,9 +2996,15 @@ msp_get_num_breakpoints(msp_t *self)
 }
 
 size_t
-msp_get_num_coalescence_records(msp_t *self)
+msp_get_num_nodes(msp_t *self)
 {
-    return self->num_coalescence_records;
+    return self->num_nodes;
+}
+
+size_t
+msp_get_num_edges(msp_t *self)
+{
+    return self->num_edges;
 }
 
 size_t
@@ -3073,11 +3069,19 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 }
 
 int WARN_UNUSED
-msp_get_coalescence_records(msp_t *self, coalescence_record_t **coalescence_records)
+msp_get_nodes(msp_t *self, node_t **nodes)
 {
-    *coalescence_records = self->coalescence_records;
+    *nodes = self->nodes;
     return 0;
 }
+
+int WARN_UNUSED
+msp_get_edges(msp_t *self, edge_t **edges)
+{
+    *edges = self->edges;
+    return 0;
+}
+
 
 int WARN_UNUSED
 msp_get_migrations(msp_t *self, migration_t **migrations)

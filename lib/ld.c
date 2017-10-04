@@ -162,13 +162,14 @@ static double
 ld_calc_overlap_within_tree(ld_calc_t *self, site_t sA, site_t sB)
 {
     sparse_tree_t *t = self->inner_tree;
+    tree_sequence_t *s = self->tree_sequence;
     node_id_t u, v, nAB;
 
     assert(sA.mutations_length == 1);
     assert(sB.mutations_length == 1);
     u = sA.mutations[0].node;
     v = sB.mutations[0].node;
-    if (t->time[u] > t->time[v]) {
+    if (s->nodes.time[u] > s->nodes.time[v]) {
         v = sA.mutations[0].node;
         u = sB.mutations[0].node;
     }

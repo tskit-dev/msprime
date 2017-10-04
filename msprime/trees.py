@@ -25,6 +25,7 @@ from __future__ import print_function
 import collections
 import gzip
 import json
+import itertools
 import math
 import random
 import sys
@@ -54,6 +55,8 @@ from _msprime import NODE_IS_SAMPLE
 NULL_NODE = -1
 
 NULL_POPULATION = -1
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 def check_numpy():
@@ -107,13 +110,17 @@ Sample = collections.namedtuple(
 
 TableTuple = collections.namedtuple(
     "TableTuple",
-    ["nodes", "edgesets", "migrations", "sites", "mutations"])
+    ["nodes", "edges", "migrations", "sites", "mutations"])
 
 
+# TODO this interface is rubbish. Should have much better printing options.
 class SimpleContainer(object):
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -133,12 +140,28 @@ class Node(SimpleContainer):
         return self.flags & NODE_IS_SAMPLE
 
 
+class Edge(SimpleContainer):
+    def __init__(self, left, right, parent, child):
+        self.left = left
+        self.right = right
+        self.parent = parent
+        self.child = child
+
+    def __repr__(self):
+        return "{{left={:.3f}, right={:.3f}, parent={}, child={}}}".format(
+            self.left, self.right, self.parent, self.child)
+
+
 class Edgeset(SimpleContainer):
-    def __init__(self, parent, children, left=0, right=1):
+    def __init__(self, left, right, parent, children):
         self.left = left
         self.right = right
         self.parent = parent
         self.children = children
+
+    def __repr__(self):
+        return "{{left={:.3f}, right={:.3f}, parent={}, children={}}}".format(
+            self.left, self.right, self.parent, self.children)
 
 
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
@@ -443,6 +466,18 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_parent(u)
+
+    def left_child(self, u):
+        return self._ll_sparse_tree.get_left_child(u)
+
+    def right_child(self, u):
+        return self._ll_sparse_tree.get_right_child(u)
+
+    def left_sib(self, u):
+        return self._ll_sparse_tree.get_left_sib(u)
+
+    def right_sib(self, u):
+        return self._ll_sparse_tree.get_right_sib(u)
 
     def children(self, u):
         return self.get_children(u)
@@ -901,6 +936,12 @@ class SparseTree(object):
             raise ValueError(
                 "Traversal ordering '{}' not supported".format(order))
 
+    def newick(self, precision=14, time_scale=1):
+        s = self._ll_sparse_tree.get_newick(precision=precision, time_scale=time_scale)
+        if not IS_PY2:
+            s = s.decode()
+        return s
+
     @property
     def parent_dict(self):
         return self.get_parent_dict()
@@ -911,32 +952,8 @@ class SparseTree(object):
             if self.parent(u) != NULL_NODE}
         return pi
 
-    @property
-    def time_dict(self):
-        return self.get_time_dict()
-
-    def get_time_dict(self):
-        return {
-            u: self.time(u) for u in range(self.num_nodes)
-            if len(self.children(u)) != 0 or self.parent(u) != NULL_NODE}
-
     def __str__(self):
         return str(self.get_parent_dict())
-
-    def __eq__(self, other):
-        # TODO this should really use the semantics of the C-level equality definition.
-        # This is currently only really used for testing AFAIK.
-        return (
-            self.get_sample_size() == other.get_sample_size() and
-            self.get_parent_dict() == other.get_parent_dict() and
-            self.get_time_dict() == other.get_time_dict() and
-            self.get_interval() == other.get_interval() and
-            self.get_root() == other.get_root() and
-            self.get_index() == other.get_index() and
-            list(self.sites()) == list(other.sites()))
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
 
 def _get_random_seed():
@@ -1233,22 +1250,22 @@ def parse_nodes(source):
     return table
 
 
-def parse_edgesets(source):
+def parse_edges(source):
     """
-    Parse the specified file-like object and return a EdgesetTable instance.
+    Parse the specified file-like object and return a EdgeTable instance.
     The object must contain text with whitespace delimited columns, which are
     labeled with headers and contain columns ``left``, ``right``, ``parent``,
-    and ``children``.  The ``children`` field is a comma-separated list of base
-    10 integer values.  Further requirements are described in
-    :class:`EdgesetTable`.
+    and ``child``. Several edges may specified at the same time using a single
+    line by making the ``child`` field a comma-separated list. Further
+    requirements are described in :class:`EdgeTable`.
     """
-    table = tables.EdgesetTable()
+    table = tables.EdgeTable()
     header = source.readline().split()
     left_index = header.index("left")
     right_index = header.index("right")
     parent_index = header.index("parent")
-    children_index = header.index("children")
-    table = tables.EdgesetTable()
+    children_index = header.index("child")
+    table = tables.EdgeTable()
     for line in source:
         tokens = line.split()
         if len(tokens) > 0:
@@ -1256,8 +1273,8 @@ def parse_edgesets(source):
             right = float(tokens[right_index])
             parent = int(tokens[parent_index])
             children = tuple(map(int, tokens[children_index].split(",")))
-            table.add_row(
-                left=left, right=right, parent=parent, children=children)
+            for child in children:
+                table.add_row(left=left, right=right, parent=parent, child=child)
     return table
 
 
@@ -1305,7 +1322,7 @@ def parse_mutations(source):
     return table
 
 
-def load_text(nodes, edgesets, sites=None, mutations=None):
+def load_text(nodes, edges, sites=None, mutations=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
     are in a simple whitespace delimited tabular format such as output by the
@@ -1314,10 +1331,10 @@ def load_text(nodes, edgesets, sites=None, mutations=None):
     based file format using by :meth:`msprime.load` will be many times more
     efficient that using the text based formats.
 
-    ``nodes`` and ``edgesets`` must be a file-like object containing text with
+    ``nodes`` and ``edges`` must be a file-like object containing text with
     whitespace delimited columns,  parsable by :func:`parse_nodes` and
-    :func:`parse_edgesets`, respectively.  Further requirements are described
-    in :class:`NodeTable` and :class:`EdgesetTable`.
+    :func:`parse_edges`, respectively.  Further requirements are described
+    in :class:`NodeTable` and :class:`EdgeTable`.
 
     ``sites`` and ``mutations`` are optional, but if included must be similar,
     parsable by :func:`parse_sites` and :func:`parse_mutations`, respecively.
@@ -1340,7 +1357,7 @@ def load_text(nodes, edgesets, sites=None, mutations=None):
         0           0.202   0
         0           0.253   0
 
-    edgesets::
+    edges::
 
         left    right   node    children
         2       10      4       2,3
@@ -1376,8 +1393,8 @@ def load_text(nodes, edgesets, sites=None, mutations=None):
 
 
     :param stream nodes: The file-type object containing text describing a NodeTable.
-    :param stream edgesets: The file-type object containing text
-        describing a EdgesetTable.
+    :param stream edges: The file-type object containing text
+        describing a EdgeTable.
     :param stream sites: The file-type object containing text describing a SiteTable.
     :param stream mutations: The file-type object containing text
         describing a MutationTable.
@@ -1386,16 +1403,17 @@ def load_text(nodes, edgesets, sites=None, mutations=None):
     :rtype: :class:`msprime.TreeSequence`
     """
     node_table = parse_nodes(nodes)
-    edgeset_table = parse_edgesets(edgesets)
+    edge_table = parse_edges(edges)
     site_table = tables.SiteTable()
     mutation_table = tables.MutationTable()
     if sites is not None:
         site_table = parse_sites(sites)
     if mutations is not None:
         mutation_table = parse_mutations(mutations)
+    tables.sort_tables(
+        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
-        nodes=node_table, edgesets=edgeset_table, sites=site_table,
-        mutations=mutation_table)
+        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
 
 
 class TreeSimulator(object):
@@ -1428,7 +1446,8 @@ class TreeSimulator(object):
         self._segment_block_size = max(block_size, self._sample_size)
         self._avl_node_block_size = block_size
         self._node_mapping_block_size = block_size
-        self._coalescence_record_block_size = block_size
+        self._node_block_size = block_size
+        self._edge_block_size = block_size
         self._migration_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
@@ -1437,7 +1456,7 @@ class TreeSimulator(object):
 
         # TODO document these public attributes.
         self.node_table = tables.NodeTable(block_size)
-        self.edgeset_table = tables.EdgesetTable(block_size)
+        self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
         self.mutation_type_table = tables.SiteTable(1)
         self.mutation_table = tables.MutationTable(block_size)
@@ -1524,8 +1543,11 @@ class TreeSimulator(object):
     def get_avl_node_block_size(self):
         return self._avl_node_block_size
 
-    def get_coalescence_record_block_size(self):
-        return self._coalescence_record_block_size
+    def get_node_block_size(self):
+        return self._node_block_size
+
+    def get_edge_block_size(self):
+        return self._edge_block_size
 
     def get_node_mapping_block_size(self):
         return self._node_mapping_block_size
@@ -1536,8 +1558,11 @@ class TreeSimulator(object):
     def get_num_avl_node_blocks(self):
         return self._ll_sim.get_num_avl_node_blocks()
 
-    def get_num_coalescence_record_blocks(self):
-        return self._ll_sim.get_num_coalescence_record_blocks()
+    def get_num_node_blocks(self):
+        return self._ll_sim.get_num_node_blocks()
+
+    def get_num_edge_blocks(self):
+        return self._ll_sim.get_num_edge_blocks()
 
     def get_num_node_mapping_blocks(self):
         return self._ll_sim.get_num_node_mapping_blocks()
@@ -1664,8 +1689,11 @@ class TreeSimulator(object):
     def set_node_mapping_block_size(self, node_mapping_block_size):
         self._node_mapping_block_size = node_mapping_block_size
 
-    def set_coalescence_record_block_size(self, coalescence_record_block_size):
-        self._coalescence_record_block_size = coalescence_record_block_size
+    def set_node_block_size(self, node_block_size):
+        self._node_block_size = node_block_size
+
+    def set_edge_block_size(self, edge_block_size):
+        self._edge_block_size = edge_block_size
 
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
@@ -1701,7 +1729,8 @@ class TreeSimulator(object):
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
             node_mapping_block_size=self._node_mapping_block_size,
-            coalescence_record_block_size=self._coalescence_record_block_size,
+            node_block_size=self._node_block_size,
+            edge_block_size=self._edge_block_size,
             migration_block_size=self._migration_block_size)
         return ll_sim
 
@@ -1722,15 +1751,15 @@ class TreeSimulator(object):
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
         Ne = self.get_effective_population_size()
         self._ll_sim.populate_tables(
-            self.node_table, self.edgeset_table, self.migration_table,
+            self.node_table, self.edge_table, self.migration_table,
             Ne=Ne, recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
-                self.node_table, self.edgeset_table, self.mutation_type_table,
+                self.node_table, self.edge_table, self.mutation_type_table,
                 self.mutation_table)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
-            self.node_table, self.edgeset_table, self.migration_table,
+            self.node_table, self.edge_table, self.migration_table,
             self.mutation_type_table, self.mutation_table,
             provenance_strings=provenance_strings)
         return TreeSequence(ll_tree_sequence)
@@ -1776,12 +1805,12 @@ class TreeSequence(object):
         # Experimental API. Return a copy of this tree sequence, optionally with
         # the sites set to the specified list.
         node_table = msprime.NodeTable()
-        edgeset_table = msprime.EdgesetTable()
+        edge_table = msprime.EdgeTable()
         migration_table = msprime.MigrationTable()
         site_table = msprime.SiteTable()
         mutation_table = msprime.MutationTable()
         self._ll_tree_sequence.dump_tables(
-            nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+            nodes=node_table, edges=edge_table, migrations=migration_table,
             sites=site_table, mutations=mutation_table)
         if sites is not None:
             site_table.reset()
@@ -1792,7 +1821,7 @@ class TreeSequence(object):
                     mutation_table.add_row(j, mutation.node, mutation.derived_state)
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
-            nodes=node_table, edgesets=edgeset_table, migrations=migration_table,
+            nodes=node_table, edges=edge_table, migrations=migration_table,
             sites=site_table, mutations=mutation_table)
         return TreeSequence(new_ll_ts)
 
@@ -1802,25 +1831,6 @@ class TreeSequence(object):
 
     def get_provenance(self):
         return self._ll_tree_sequence.get_provenance_strings()
-
-    def newick_trees(self, precision=3, breakpoints=None, Ne=1):
-        # TODO document this method.
-        iterator = _msprime.NewickConverter(
-            self._ll_tree_sequence, precision, Ne)
-        if breakpoints is None:
-            for length, tree in iterator:
-                yield length, tree
-        else:
-            trees_covered = 0
-            j = 0
-            # TODO this is ugly. Update the alg so we don't need this
-            # bracketing.
-            bp = [0] + breakpoints + [self.get_sequence_length()]
-            for length, tree in iterator:
-                trees_covered += length
-                while bp[j] < trees_covered:
-                    j += 1
-                    yield bp[j] - bp[j - 1], tree
 
     def dump(self, path, zlib_compression=False):
         """
@@ -1835,14 +1845,14 @@ class TreeSequence(object):
         self._ll_tree_sequence.dump(path, zlib_compression)
 
     def dump_tables(
-            self, nodes=None, edgesets=None, migrations=None, sites=None,
+            self, nodes=None, edges=None, migrations=None, sites=None,
             mutations=None):
         """
         Copy the contents of the tables underlying the tree sequence to the
         specified objects.
 
         :param NodeTable nodes: The NodeTable to load the nodes into.
-        :param EdgesetTable edgesets: The EdgesetTable to load the edgesets into.
+        :param EdgeTable edges: The EdgeTable to load the edges into.
         :param MigrationTable migrations: The MigrationTable to load the migrations into.
         :param SiteTable sites: The SiteTable to load the sites into.
         :param MutationTable mutations: The NodeTable to load the mutations into.
@@ -1854,8 +1864,8 @@ class TreeSequence(object):
         # as well as returning the updated tables.
         if nodes is None:
             nodes = tables.NodeTable()
-        if edgesets is None:
-            edgesets = tables.EdgesetTable()
+        if edges is None:
+            edges = tables.EdgeTable()
         if migrations is None:
             migrations = tables.MigrationTable()
         if sites is None:
@@ -1863,21 +1873,21 @@ class TreeSequence(object):
         if mutations is None:
             mutations = tables.MutationTable()
         self._ll_tree_sequence.dump_tables(
-            nodes=nodes, edgesets=edgesets, migrations=migrations, sites=sites,
+            nodes=nodes, edges=edges, migrations=migrations, sites=sites,
             mutations=mutations)
         return TableTuple(
-            nodes=nodes, edgesets=edgesets, migrations=migrations, sites=sites,
+            nodes=nodes, edges=edges, migrations=migrations, sites=sites,
             mutations=mutations)
 
     def dump_text(
-            self, nodes=None, edgesets=None, sites=None, mutations=None, precision=6):
+            self, nodes=None, edges=None, sites=None, mutations=None, precision=6):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
 
         :param stream nodes: The file-like object (having a .write() method) to write
             the NodeTable to.
-        :param stream edgesets: The file-like object to write the EdgesetTable to.
+        :param stream edges: The file-like object to write the EdgeTable to.
         :param stream sites: The file-like object to write the SiteTable to.
         :param stream mutations: The file-like object to write the MutationTable to.
         :param int precision: The number of digits of precision.
@@ -1894,18 +1904,17 @@ class TreeSequence(object):
                         population=node.population)
                 print(row, file=nodes)
 
-        if edgesets is not None:
-            print("left", "right", "parent", "children", sep="\t", file=edgesets)
-            for edgeset in self.edgesets():
-                children = ",".join(str(u) for u in edgeset.children)
+        if edges is not None:
+            print("left", "right", "parent", "child", sep="\t", file=edges)
+            for edge in self.edges():
                 row = (
                     "{left:.{precision}f}\t"
                     "{right:.{precision}f}\t"
                     "{parent:d}\t"
-                    "{children}").format(
-                        precision=precision, left=edgeset.left, right=edgeset.right,
-                        parent=edgeset.parent, children=children)
-                print(row, file=edgesets)
+                    "{child:d}").format(
+                        precision=precision, left=edge.left, right=edge.right,
+                        parent=edge.parent, child=edge.child)
+                print(row, file=edges)
 
         if sites is not None:
             print("position", "ancestral_state", sep="\t", file=sites)
@@ -1984,8 +1993,8 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_sequence_length()
 
     @property
-    def num_edgesets(self):
-        return self._ll_tree_sequence.get_num_edgesets()
+    def num_edges(self):
+        return self._ll_tree_sequence.get_num_edges()
 
     @property
     def num_records(self):
@@ -2001,7 +2010,7 @@ class TreeSequence(object):
             sequence.
         :rtype: int
         """
-        return self._ll_tree_sequence.get_num_edgesets()
+        return self._ll_tree_sequence.get_num_edges()
 
     @property
     def num_trees(self):
@@ -2083,8 +2092,11 @@ class TreeSequence(object):
             the coalescence records in this tree sequence.
         :rtype: iter
         """
-        for j in range(self.get_num_records()):
-            yield CoalescenceRecord(*self._ll_tree_sequence.get_record(j))
+        t = [node.time for node in self.nodes()]
+        pop = [node.population for node in self.nodes()]
+        for e in self.edgesets():
+            yield CoalescenceRecord(
+                e.left, e.right, e.parent, e.children, t[e.parent], pop[e.parent])
 
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
@@ -2094,36 +2106,48 @@ class TreeSequence(object):
         for j in range(self.num_nodes):
             yield self.node(j)
 
+    def edges(self):
+        for j in range(self.num_edges):
+            left, right, parent, child = self._ll_tree_sequence.get_edge(j)
+            yield Edge(left=left, right=right, parent=parent, child=child)
+
     def edgesets(self):
-        for j in range(self.num_edgesets):
-            left, right, parent, children = self._ll_tree_sequence.get_edgeset(j)
-            yield Edgeset(parent=parent, children=children, left=left, right=right)
+        # TODO the order that these records are returned in is not well specified.
+        # Hopefully this does not matter, and we can just state that the ordering
+        # should not be depended on.
+        children = collections.defaultdict(set)
+        active_edgesets = {}
+        for (left, right), edges_out, edges_in in self.edge_diffs():
+            # Complete and return any edgesets that are affected by this tree
+            # transition
+            parents = iter(edge.parent for edge in itertools.chain(edges_out, edges_in))
+            for parent in parents:
+                if parent in active_edgesets:
+                    edgeset = active_edgesets.pop(parent)
+                    edgeset.right = left
+                    edgeset.children = sorted(children[parent])
+                    yield edgeset
+            for edge in edges_out:
+                children[edge.parent].remove(edge.child)
+            for edge in edges_in:
+                children[edge.parent].add(edge.child)
+            # Update the active edgesets
+            for edge in itertools.chain(edges_out, edges_in):
+                if len(children[edge.parent]) > 0 and edge.parent not in active_edgesets:
+                    active_edgesets[edge.parent] = Edgeset(left, right, edge.parent, [])
 
-    def diffs(self):
-        """
-        Returns an iterator over the differences between adjacent trees in this
-        tree sequence. Each diff returned by this method is a tuple of the form
-        `(length, records_out, records_in)`. The `length` is the length of the
-        genomic interval covered by the current tree, and is equivalent to the
-        value returned by :meth:`msprime.SparseTree.get_length`. The
-        `records_out` value is list of :math:`(u, c, t)` tuples, and
-        corresponds to the coalescence records that have been invalidated by
-        moving to the current tree.  As in the :meth:`.records` method,
-        :math:`u` is a tree node, :math:`c` is a tuple containing its children,
-        and :math:`t` is the time the event occurred.  These records are
-        returned in time-decreasing order, such that the record affecting the
-        highest parts of the tree (i.e., closest to the root) are returned
-        first.  The `records_in` value is also a list of :math:`(u, c, t)`
-        tuples, and these describe the records that must be applied to create
-        the tree covering the current interval. These records are returned in
-        time-increasing order, such that the records affecting the lowest parts
-        of the tree (i.e., closest to the present day) are returned first.
+        for parent in active_edgesets.keys():
+            edgeset = active_edgesets[parent]
+            edgeset.right = self.sequence_length
+            edgeset.children = sorted(children[edgeset.parent])
+            yield edgeset
 
-        :return: An iterator over the diffs between adjacent trees in this
-            tree sequence.
-        :rtype: iter
-        """
-        return _msprime.TreeDiffIterator(self._ll_tree_sequence)
+    def edge_diffs(self):
+        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
+        for interval, edge_tuples_out, edge_tuples_in in iterator:
+            edges_out = [Edge(*e) for e in edge_tuples_out]
+            edges_in = [Edge(*e) for e in edge_tuples_in]
+            yield interval, edges_out, edges_in
 
     def sites(self):
         for j in range(self.num_sites):
@@ -2431,34 +2455,58 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_root_mutations=True):
+    def simplify(self, samples=None, filter_invariant_sites=True):
         """
-        Returns a simplified tree sequence, that retains only the history of
-        the nodes given in the list ``samples''.  This will change the ID of
-        the nodes, so that the individual ``samples[k]]`` will have ID ``k`` in
-        the result.  In the resulting TreeSequence, the first ``len(samples)``
-        nodes will be marked as samples.
+        Returns a simplified tree sequence that retains only the history of
+        the nodes given in the list ``samples`` and a dictionary mapping the
+        sample node IDs in the this tree sequence to their equivlalent IDs
+        in the simplified tree sequence.
+
+        **TODO** Document the details of how node IDs are transformed.
 
         If you wish to convert a set of tables that do not satisfy all
         requirements for building a TreeSequence, then use
         ``simplify_tables()``.
 
         :param list samples: The list of nodes for which to retain information.
-        :param bool filter_root_mutations: Whether to remove sites at which there
-            are no mutations.
+        :param bool filter_invariant_sites: If True, remove any sites that have
+            no mutations in the simplified tree sequence.
+        :return: The simplified tree sequence and a dictionary mapping source
+            sample IDs to their corresponding IDs in the new tree sequence.
+        :rtype: (.TreeSequence, dict)
         """
+        check_numpy()
+        t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        ll_ts = _msprime.TreeSequence()
-        self._ll_tree_sequence.simplify(ll_ts, samples, filter_root_mutations)
-        new_ts = msprime.TreeSequence(ll_ts)
+        sample_map = np.empty(len(samples), dtype=np.int32)
+        tables.simplify_tables(
+            samples=samples, nodes=t.nodes, edges=t.edges,
+            sites=t.sites, mutations=t.mutations, sample_map=sample_map)
+        new_ts = load_tables(
+            nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
+            mutations=t.mutations)
         # FIXME provenance
         # for provenance in self.get_provenance():
         #     new_ts.add_provenance(provenance)
         # parameters = {"TODO": "encode subset parameters"}
         # new_ts_provenance = get_provenance_dict("simplify", parameters)
         # new_ts.add_provenance(json.dumps(new_ts_provenance))
-        return new_ts
+
+        # Return a dictionary mapping the original sample IDs into the
+        # samples IDs of the new tree sequence.
+        return new_ts, {samples[j]: sample_map[j] for j in range(len(samples))}
+
+    # Unsupported old methods.
+    def diffs(self):
+        raise NotImplementedError(
+            "This method is no longer supported. Please use the "
+            "TreeSequence.edge_diffs() method instead")
+
+    def newick_trees(self, precision=3, breakpoints=None, Ne=1):
+        raise NotImplementedError(
+            "This method is no longer supported. Please use the SparseTree.newick"
+            " method instead")
 
 
 class HaplotypeGenerator(object):

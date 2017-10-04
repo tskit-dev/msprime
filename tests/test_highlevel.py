@@ -29,6 +29,7 @@ except ImportError:
     # This fails for Python 3.x, but that's fine.
     pass
 
+import collections
 import gzip
 import itertools
 import json
@@ -36,8 +37,8 @@ import math
 import os
 import random
 import shutil
-import sys
 import six
+import sys
 import tempfile
 import unittest
 
@@ -48,7 +49,74 @@ import _msprime
 import tests
 
 
+def insert_gap(ts, position, length):
+    """
+    Inserts a gap of the specified size into the specified tree sequence.
+    This involves: (1) breaking all edges that intersect with this point;
+    and (2) shifting all coordinates greater than this value up by the
+    gap length.
+    """
+    new_edges = []
+    for e in ts.edges():
+        if e.left < position < e.right:
+            new_edges.append([e.left, position, e.parent, e.child])
+            new_edges.append([position, e.right, e.parent, e.child])
+        else:
+            new_edges.append([e.left, e.right, e.parent, e.child])
+
+    # Now shift up all coordinates.
+    for e in new_edges:
+        # Left coordinates == position get shifted
+        if e[0] >= position:
+            e[0] += length
+        # Right coordinates == position do not get shifted
+        if e[1] > position:
+            e[1] += length
+    tables = ts.dump_tables()
+    edges = msprime.EdgeTable()
+    for left, right, parent, child in new_edges:
+        edges.add_row(left, right, parent, child)
+    msprime.sort_tables(nodes=tables.nodes, edges=edges)
+    # Throw in a bunch of mutations over the whole sequence on the samples.
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    num_mutations = 100
+    samples = list(ts.samples())
+    L = ts.sequence_length + length
+    for j in range(num_mutations):
+        sites.add_row(position=j * (L / num_mutations), ancestral_state='0')
+        mutations.add_row(
+            site=j, derived_state='1', node=samples[j % len(samples)])
+    return msprime.load_tables(
+            nodes=tables.nodes, edges=edges, sites=sites, mutations=mutations)
+
+
+def get_gap_examples():
+    """
+    Returns example tree sequences that contain gaps within the list of
+    edges.
+    """
+    ts = msprime.simulate(20, random_seed=56, recombination_rate=1)
+
+    assert ts.num_trees > 1
+
+    gap = 0.0125
+    for x in [0, 0.1, 0.5, 0.75]:
+        ts = insert_gap(ts, x, gap)
+        found = False
+        for t in ts.trees():
+            if t.interval[0] == x:
+                assert t.interval[1] == x + gap
+                assert len(t.parent_dict) == 0
+                found = True
+        assert found
+        yield ts
+
+
 def get_internal_samples_examples():
+    """
+    Returns example tree sequences with internal samples.
+    """
     n = 5
     ts = msprime.simulate(n, random_seed=10, mutation_rate=5)
     assert ts.num_mutations > 0
@@ -59,7 +127,7 @@ def get_internal_samples_examples():
     flags[:] = msprime.NODE_IS_SAMPLE
     nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
     ts = msprime.load_tables(
-        nodes=nodes, edgesets=tables.edgesets,
+        nodes=nodes, edges=tables.edges,
         sites=tables.sites, mutations=tables.mutations)
     yield ts
     # Set just internal nodes to be samples.
@@ -67,7 +135,7 @@ def get_internal_samples_examples():
     flags[n:] = msprime.NODE_IS_SAMPLE
     nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
     ts = msprime.load_tables(
-        nodes=nodes, edgesets=tables.edgesets,
+        nodes=nodes, edges=tables.edges,
         sites=tables.sites, mutations=tables.mutations)
     yield ts
     # Set a mixture of internal and leaf samples.
@@ -75,14 +143,18 @@ def get_internal_samples_examples():
     flags[n // 2: n + n // 2] = msprime.NODE_IS_SAMPLE
     nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
     ts = msprime.load_tables(
-        nodes=nodes, edgesets=tables.edgesets,
+        nodes=nodes, edges=tables.edges,
         sites=tables.sites, mutations=tables.mutations)
     yield ts
 
 
-def get_example_tree_sequences(back_mutations=True):
-    for ts in get_internal_samples_examples():
-        yield ts
+def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=True):
+    if gaps:
+        for ts in get_gap_examples():
+            yield ts
+    if internal_samples:
+        for ts in get_internal_samples_examples():
+            yield ts
     for n in [2, 3, 10, 100]:
         for m in [1, 2, 32]:
             for rho in [0, 0.1, 0.5]:
@@ -161,40 +233,6 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     return pi
 
 
-def sparse_tree_to_newick(st, precision, Ne):
-    """
-    Converts the specified sparse tree to an ms-compatible Newick tree.
-    """
-    branch_lengths = {}
-    root = st.get_root()
-    stack = [root]
-    while len(stack) > 0:
-        node = stack.pop()
-        if st.is_internal(node):
-            for child in st.get_children(node):
-                stack.append(child)
-                length = (st.get_time(node) - st.get_time(child)) / (4 * Ne)
-                s = "{0:.{1}f}".format(length, precision)
-                branch_lengths[child] = s
-    return _build_newick(root, root, st, branch_lengths)
-
-
-def _build_newick(node, root, tree, branch_lengths):
-    if tree.is_leaf(node):
-        s = "{0}:{1}".format(node + 1, branch_lengths[node])
-    else:
-        c1, c2 = tree.get_children(node)
-        s1 = _build_newick(c1, root, tree, branch_lengths)
-        s2 = _build_newick(c2, root, tree, branch_lengths)
-        if node == root:
-            # The root node is treated differently
-            s = "({0},{1});".format(s1, s2)
-        else:
-            s = "({0},{1}):{2}".format(
-                s1, s2, branch_lengths[node])
-    return s
-
-
 def simplify_tree_sequence(ts, samples):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
@@ -209,7 +247,7 @@ def make_alternating_back_mutations(ts):
     alternating mutations along each path in each tree.
     """
     nodes = msprime.NodeTable()
-    edgesets = msprime.EdgesetTable()
+    edges = msprime.EdgeTable()
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
 
@@ -231,9 +269,9 @@ def make_alternating_back_mutations(ts):
         for _, u in sorted(site_mutations):
             mutations.add_row(site, u, str(state[u]))
         site += 1
-    ts.dump_tables(nodes=nodes, edgesets=edgesets)
+    ts.dump_tables(nodes=nodes, edges=edges)
     return msprime.load_tables(
-        nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
 
 
 class TestHarmonicNumber(unittest.TestCase):
@@ -374,8 +412,8 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             while st1.get_parent(root) != msprime.NULL_NODE:
                 root = st1.get_parent(root)
             self.assertEqual(root, st1.get_root())
-            self.assertEqual(st1, st2)
-            self.assertFalse(st1 != st2)
+            self.assertEqual(st2, st1)
+            self.assertFalse(st2 != st1)
             l, r = st1.get_interval()
             breakpoints.append(r)
             self.assertAlmostEqual(l, length)
@@ -434,8 +472,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             for mutation in tree_mutations:
                 left, right = st.get_interval()
                 self.assertTrue(left <= mutation.position < right)
-                self.assertNotEqual(
-                    st.get_parent(mutation.node), msprime.NULL_NODE)
                 self.assertEqual(mutation.index, j)
                 j += 1
         self.assertEqual(all_tree_mutations, all_mutations)
@@ -467,7 +503,7 @@ class TestSingleLocusSimulation(HighLevelTestCase):
                 random_seed=1, population_configurations=[m1]).trees())
             st2 = next(msprime.simulate(
                 random_seed=1, population_configurations=[m2]).trees())
-            self.assertEqual(st1, st2)
+            self.assertEqual(st1.parent_dict, st2.parent_dict)
         # TODO add more tests!
 
 
@@ -513,8 +549,8 @@ class TestTreeSimulator(HighLevelTestCase):
         """
         tree_sequence.dump(self.temp_file)
         other = msprime.load(self.temp_file)
-        records = list(tree_sequence.edgesets())
-        other_records = list(other.edgesets())
+        records = list(tree_sequence.edges())
+        other_records = list(other.edges())
         self.assertEqual(records, other_records)
         haplotypes = list(tree_sequence.haplotypes())
         other_haplotypes = list(other.haplotypes())
@@ -536,7 +572,8 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-        self.assertGreater(sim.get_num_coalescence_record_blocks(), 0)
+        self.assertGreater(sim.get_num_node_blocks(), 0)
+        self.assertGreater(sim.get_num_edge_blocks(), 0)
         self.assertGreater(sim.get_max_memory(), 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
@@ -565,16 +602,19 @@ class TestTreeSimulator(HighLevelTestCase):
         self.assertGreater(sim.get_avl_node_block_size(), 0)
         self.assertGreater(sim.get_segment_block_size(), 0)
         self.assertGreater(sim.get_node_mapping_block_size(), 0)
-        self.assertGreater(sim.get_coalescence_record_block_size(), 0)
+        self.assertGreater(sim.get_node_block_size(), 0)
+        self.assertGreater(sim.get_edge_block_size(), 0)
         sim.reset()
         sim.set_avl_node_block_size(1)
         sim.set_segment_block_size(1)
         sim.set_node_mapping_block_size(1)
-        sim.set_coalescence_record_block_size(1)
+        sim.set_node_block_size(1)
+        sim.set_edge_block_size(1)
         self.assertEqual(sim.get_avl_node_block_size(), 1)
         self.assertEqual(sim.get_segment_block_size(), 1)
         self.assertEqual(sim.get_node_mapping_block_size(), 1)
-        self.assertEqual(sim.get_coalescence_record_block_size(), 1)
+        self.assertEqual(sim.get_node_block_size(), 1)
+        self.assertEqual(sim.get_edge_block_size(), 1)
 
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
@@ -763,99 +803,6 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.verify_tree_sequence(ts)
 
 
-class TestNewickConversion(HighLevelTestCase):
-    """
-    Test the newick tree generation code.
-    """
-    def verify_trees(self, tree_sequence, breakpoints, Ne):
-        """
-        Verifies that the specified tree is converted to Newick correctly.
-        """
-        def strip_tree(newick):
-            """
-            Strips all time information out of the specified newick tree.
-            """
-            s = newick.replace(":0", "")
-            s = s.replace(":1", "")
-            return s
-        # We set the precision to 0 here to avoid problems that occur when
-        # Python and C using different rounding strategies. This allows us
-        # to remove the times completely, so we're just comparing the
-        # structure of the trees.
-        precision = 0
-        old_trees = [
-            (st.get_length(), sparse_tree_to_newick(st, precision, Ne))
-            for st in tree_sequence.trees()]
-        new_trees = list(tree_sequence.newick_trees(precision, Ne=Ne))
-        self.assertEqual(len(new_trees), len(old_trees))
-        for (l1, t1), (l2, t2) in zip(new_trees, old_trees):
-            self.assertEqual(l1, l2)
-            self.assertEqual(strip_tree(t1), strip_tree(t2))
-        # TODO test the form of the trees when we're using breakpoints.
-
-    def verify_all_breakpoints(self, tree_sequence, breakpoints):
-        """
-        Verifies that we get the correct list of trees when we use
-        the all_breakpoints option for newick generation.
-        """
-        trees = list(tree_sequence.newick_trees(2, breakpoints))
-        bp = [0] + breakpoints + [tree_sequence.get_sequence_length()]
-        self.assertEqual(len(trees), len(bp) - 1)
-        j = 0
-        s = 0
-        for length, _ in trees:
-            self.assertGreater(length, 0)
-            self.assertEqual(s, bp[j])
-            s += length
-            j += 1
-        self.assertEqual(s, tree_sequence.get_sequence_length())
-        pts = tests.PythonTreeSequence(
-            tree_sequence.get_ll_tree_sequence(), bp)
-        diffs = list(pts.diffs(all_breaks=True))
-        self.assertEqual(len(diffs), len(trees))
-        for j in range(1, len(diffs)):
-            if len(diffs[j][1]) == 0:
-                # If the list of diffs is empty, we should have the
-                # same tree as the last one.
-                self.assertEqual(trees[j][1], trees[j - 1][1])
-
-    def test_simple_cases(self):
-        cases = [
-            (2, 1, 0, 0.25),
-            (2, 10, 0.1, 1),
-            (4, 10, 0.1, 100),
-            (10, 10, 0.1,  10),
-            (20, 1, 0, 1025),
-            (20, 10, 0.1, 100),
-            (10, 50, 1.0, 1e6),
-        ]
-        for n, m, r, Ne in cases:
-            recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            sim = msprime.simulator_factory(
-                n, Ne=Ne, recombination_map=recomb_map)
-            sim.run()
-            tree_sequence = sim.get_tree_sequence()
-            breakpoints = sim.get_breakpoints()
-            self.verify_trees(tree_sequence, breakpoints, Ne)
-            self.verify_all_breakpoints(tree_sequence, breakpoints)
-
-    def test_random_parameters(self):
-        num_random_sims = 10
-        for j in range(num_random_sims):
-            n = random.randint(2, 100)
-            m = random.randint(10, 100)
-            r = random.random()
-            Ne = random.uniform(1, 20)
-            recomb_map = msprime.RecombinationMap.uniform_map(m, r, m)
-            ts = msprime.simulator_factory(
-                n, Ne=Ne, recombination_map=recomb_map)
-            ts.run()
-            tree_sequence = ts.get_tree_sequence()
-            breakpoints = ts.get_breakpoints()
-            self.verify_trees(tree_sequence, breakpoints, Ne)
-            self.verify_all_breakpoints(tree_sequence, breakpoints)
-
-
 class TestTreeSequence(HighLevelTestCase):
     """
     Tests for the tree sequence object.
@@ -871,18 +818,72 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences(back_mutations=False):
             self.verify_mutations(ts)
 
-    def verify_tree_diffs(self, ts):
+    def verify_edge_diffs(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
-        iter1 = ts.diffs()
-        iter2 = pts.diffs()
-        for t1, t2 in zip(iter1, iter2):
-            self.assertEqual(t1, t2)
-        self.assertRaises(StopIteration, next, iter1)
-        self.assertRaises(StopIteration, next, iter2)
+        d1 = list(ts.edge_diffs())
+        d2 = list(pts.edge_diffs())
+        self.assertEqual(d1, d2)
 
-    def test_tree_diffs(self):
+        # check that we have the correct set of children at all nodes.
+        children = collections.defaultdict(set)
+        trees = iter(ts.trees())
+        tree = next(trees)
+        last_right = 0
+        for (left, right), edges_out, edges_in in ts.edge_diffs():
+            assert left == last_right
+            last_right = right
+            for edge in edges_out:
+                children[edge.parent].remove(edge.child)
+            for edge in edges_in:
+                children[edge.parent].add(edge.child)
+            while tree.interval[1] <= left:
+                tree = next(trees)
+            # print(left, right, tree.interval)
+            self.assertTrue(left >= tree.interval[0])
+            self.assertTrue(right <= tree.interval[1])
+            for u in tree.nodes():
+                if tree.is_internal(u):
+                    self.assertIn(u, children)
+                    self.assertEqual(children[u], set(tree.children(u)))
+
+    def test_edge_diffs(self):
         for ts in get_example_tree_sequences():
-            self.verify_tree_diffs(ts)
+            self.verify_edge_diffs(ts)
+
+    def verify_edgesets(self, ts):
+        """
+        Verifies that the edgesets we return are equivalent to the original edges.
+        """
+        new_edges = []
+        for edgeset in ts.edgesets():
+            self.assertEqual(edgeset.children, sorted(edgeset.children))
+            self.assertGreater(len(edgeset.children), 0)
+            for child in edgeset.children:
+                new_edges.append(msprime.Edge(
+                    edgeset.left, edgeset.right, edgeset.parent, child))
+        # squash the edges.
+        t = ts.dump_tables().nodes.time
+        new_edges.sort(key=lambda e: (t[e.parent], e.parent, e.child, e.left))
+
+        squashed = []
+        last_e = new_edges[0]
+        for e in new_edges[1:]:
+            condition = (
+                e.parent != last_e.parent or
+                e.child != last_e.child or
+                e.left != last_e.right)
+            if condition:
+                squashed.append(last_e)
+                last_e = e
+            last_e.right = e.right
+        squashed.append(last_e)
+        edges = list(ts.edges())
+        self.assertEqual(len(squashed), len(edges))
+        self.assertEqual(edges, squashed)
+
+    def test_edgesets(self):
+        for ts in get_example_tree_sequences():
+            self.verify_edgesets(ts)
 
     def verify_tracked_samples(self, ts):
         # Should be empty list by default.
@@ -893,6 +894,11 @@ class TestTreeSequence(HighLevelTestCase):
         samples = list(ts.samples())
         tracked_samples = samples[:2]
         for tree in ts.trees(tracked_samples):
+            if len(tree.parent_dict) == 0:
+                # This is a crude way of checking if we have multiple roots.
+                # We'll need to fix this code up properly when we support multiple
+                # roots and remove this check
+                break
             nu = [0 for j in range(ts.get_num_nodes())]
             self.assertEqual(tree.get_num_tracked_samples(), len(tracked_samples))
             for j in tracked_samples:
@@ -1033,7 +1039,10 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
             self.assertEqual(ts.get_samples(1), [])
             for t in ts.trees():
-                self.assertEqual(sorted(list(t.samples(t.root))), samples)
+                # This a crude workaround for working with trees with multiple
+                # roots. We need to fix this when updating for multiple roots.
+                if len(t.parent_dict) > 0:
+                    self.assertEqual(sorted(list(t.samples(t.root))), samples)
 
     def test_write_vcf_interface(self):
         for ts in get_example_tree_sequences():
@@ -1042,8 +1051,12 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertRaises(ValueError, ts.write_vcf, self.temp_file, bad_ploidy)
 
     def verify_simplify_topology(self, ts, sample):
-        new_ts = ts.simplify(sample)
-        sample_map = {k: j for j, k in enumerate(sample)}
+        new_ts, sample_map = ts.simplify(sample)
+        for old_id, new_id in sample_map.items():
+            old_node = ts.node(old_id)
+            new_node = new_ts.node(new_id)
+            self.assertEqual(old_node.time, new_node.time)
+            self.assertEqual(old_node.population, new_node.population)
         old_trees = ts.trees()
         old_tree = next(old_trees)
         self.assertGreaterEqual(ts.get_num_trees(), new_ts.get_num_trees())
@@ -1059,6 +1072,7 @@ class TestTreeSequence(HighLevelTestCase):
             pairs = itertools.islice(itertools.combinations(sample, 2), 500)
             for pair in pairs:
                 mapped_pair = [sample_map[u] for u in pair]
+                # print("pair", pair, "->", mapped_pair)
                 mrca1 = old_tree.get_mrca(*pair)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
                 self.assertEqual(old_tree.get_time(mrca1), new_tree.get_time(mrca2))
@@ -1068,7 +1082,7 @@ class TestTreeSequence(HighLevelTestCase):
     def verify_simplify_mutations(self, ts, sample):
         # Get the allele counts within the subset.
         allele_counts = {mut.position: 0 for mut in ts.mutations()}
-        sample_map = {k: j for j, k in enumerate(sample)}
+        new_ts, sample_map = ts.simplify(sample)
         samples = {mut.position: [] for mut in ts.mutations()}
         for tree in ts.trees(tracked_samples=sample):
             for site in tree.sites():
@@ -1078,7 +1092,6 @@ class TestTreeSequence(HighLevelTestCase):
                     for u in tree.samples(mut.node):
                         if u in sample_map:
                             samples[site.position].append(sample_map[u])
-        new_ts = ts.simplify(sample)
         self.assertLessEqual(new_ts.get_num_sites(), ts.get_num_sites())
         self.assertLessEqual(new_ts.get_num_mutations(), ts.get_num_mutations())
         for tree in new_ts.trees():
@@ -1092,18 +1105,19 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(sample_count, allele_counts[site.position])
 
     def verify_simplify_equality(self, ts, sample):
-        s1 = ts.simplify(sample)
+        s1, sample_map1 = ts.simplify(sample)
         t1 = s1.dump_tables()
-        s2 = simplify_tree_sequence(ts, sample)
+        s2, sample_map2 = simplify_tree_sequence(ts, sample)
         t2 = s2.dump_tables()
+        self.assertEqual(sample_map1, sample_map2)
         self.assertEqual(t1.nodes, t2.nodes)
-        self.assertEqual(t1.edgesets, t2.edgesets)
+        self.assertEqual(t1.edges, t2.edges)
         self.assertEqual(t1.migrations, t2.migrations)
         self.assertEqual(t1.sites, t2.sites)
         self.assertEqual(t1.mutations, t2.mutations)
 
     def verify_simplify_variants(self, ts, sample):
-        subset = ts.simplify(sample)
+        subset, sample_map = ts.simplify(sample)
         s = np.array(sample)
         full_genotypes = np.empty((ts.num_sites, ts.sample_size))
         full_positions = np.empty(ts.num_sites)
@@ -1131,11 +1145,12 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertIn(unique[0], [0, 1])
             j += 1
 
-    @unittest.skip("Skip simplify with internal sample examples")
+    # @unittest.skip("Skip simplify with internal sample examples")
     def test_simplify(self):
         num_mutations = 0
         # TODO When back-mutations are implemented correctly, enable this test fully
-        for ts in get_example_tree_sequences(back_mutations=False):
+        for ts in get_example_tree_sequences(
+                back_mutations=False, gaps=False, internal_samples=False):
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()
             if n > 2:
@@ -1155,16 +1170,15 @@ class TestTreeSequence(HighLevelTestCase):
             nodes_file = os.path.join(prefix, "{:02d}-nodes.txt".format(j))
             if not os.path.exists(nodes_file):
                 break
-            edgesets_file = os.path.join(prefix, "{:02d}-edgesets.txt".format(j))
+            edges_file = os.path.join(prefix, "{:02d}-edges.txt".format(j))
             sites_file = os.path.join(prefix, "{:02d}-sites.txt".format(j))
             mutations_file = os.path.join(prefix, "{:02d}-mutations.txt".format(j))
             with open(nodes_file) as nodes, \
-                    open(edgesets_file) as edgesets,\
+                    open(edges_file) as edges,\
                     open(sites_file) as sites,\
                     open(mutations_file) as mutations:
                 ts = msprime.load_text(
-                    nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
-            # print("nodes_file = ", nodes_file)
+                    nodes=nodes, edges=edges, sites=sites, mutations=mutations)
             samples = list(ts.samples())
             self.verify_simplify_equality(ts, samples)
             j += 1
@@ -1177,7 +1191,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(ts.get_provenance(), ts.provenance)
             self.assertEqual(ts.get_sample_size(), ts.sample_size)
             self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
-            self.assertEqual(ts.num_edgesets, ts.num_records)
+            self.assertEqual(ts.num_edges, ts.num_records)
             self.assertEqual(ts.get_num_trees(), ts.num_trees)
             self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
             self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
@@ -1197,14 +1211,14 @@ class TestTreeSequence(HighLevelTestCase):
         for ts1 in get_example_tree_sequences():
             ts2 = ts1.copy()
             self.assertNotEqual(id(ts1), id(ts2))
-            self.assertEqual(list(ts1.edgesets()), list(ts2.edgesets()))
+            self.assertEqual(list(ts1.edges()), list(ts2.edges()))
             self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
             self.assertEqual(list(ts1.mutations()), list(ts2.mutations()))
             site_lists = [[], list(ts1.sites())[:-1]]
             for sites in site_lists:
                 ts2 = ts1.copy(sites=sites)
                 self.assertNotEqual(id(ts1), id(ts2))
-                self.assertEqual(list(ts1.edgesets()), list(ts2.edgesets()))
+                self.assertEqual(list(ts1.edges()), list(ts2.edges()))
                 self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
                 self.assertEqual(sites, list(ts2.sites()))
 
@@ -1212,16 +1226,16 @@ class TestTreeSequence(HighLevelTestCase):
         some_mutations = False
         for ts in get_example_tree_sequences():
             nodes = msprime.NodeTable()
-            edgesets = msprime.EdgesetTable()
+            edges = msprime.EdgeTable()
             sites = msprime.SiteTable()
             mutations = msprime.MutationTable()
-            ts.dump_tables(nodes=nodes, edgesets=edgesets)
+            ts.dump_tables(nodes=nodes, edges=edges)
             mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
-            mutgen.generate(nodes, edgesets, sites, mutations)
+            mutgen.generate(nodes, edges, sites, mutations)
             if mutations.num_rows > 0:
                 some_mutations = True
             tsp = msprime.load_tables(
-                nodes=nodes, edgesets=edgesets, sites=sites, mutations=mutations)
+                nodes=nodes, edges=edges, sites=sites, mutations=mutations)
             self.assertEqual(tsp.num_mutations, mutations.num_rows)
         self.assertTrue(some_mutations)
 
@@ -1254,6 +1268,11 @@ class TestTreeSequence(HighLevelTestCase):
                     other_mutations.append(msprime.DeprecatedMutation(
                         position=site.position, node=mut.node, index=site.index))
             self.assertEqual(mutations, other_mutations)
+
+    def test_removed_methods(self):
+        ts = next(get_example_tree_sequences())
+        self.assertRaises(NotImplementedError, ts.diffs)
+        self.assertRaises(NotImplementedError, ts.newick_trees)
 
 
 class TestTreeSequenceTextIO(HighLevelTestCase):
@@ -1299,23 +1318,23 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             self.assertEqual(convert(node.time), splits[2])
             self.assertEqual(str(node.population), splits[3])
 
-    def verify_edgesets_format(self, ts, edgesets_file, precision):
+    def verify_edges_format(self, ts, edges_file, precision):
         """
-        Verifies that the edgesets we output have the correct form.
+        Verifies that the edges we output have the correct form.
         """
         def convert(v):
             return "{:.{}f}".format(v, precision)
-        output_edgesets = edgesets_file.read().splitlines()
-        self.assertEqual(len(output_edgesets) - 1, ts.num_edgesets)
+        output_edges = edges_file.read().splitlines()
+        self.assertEqual(len(output_edges) - 1, ts.num_edges)
         self.assertEqual(
-            list(output_edgesets[0].split()),
-            ["left", "right", "parent", "children"])
-        for edgeset, line in zip(ts.edgesets(), output_edgesets[1:]):
+            list(output_edges[0].split()),
+            ["left", "right", "parent", "child"])
+        for edge, line in zip(ts.edges(), output_edges[1:]):
             splits = line.split("\t")
-            self.assertEqual(convert(edgeset.left), splits[0])
-            self.assertEqual(convert(edgeset.right), splits[1])
-            self.assertEqual(str(edgeset.parent), splits[2])
-            self.assertEqual(",".join(map(str, edgeset.children)), splits[3])
+            self.assertEqual(convert(edge.left), splits[0])
+            self.assertEqual(convert(edge.right), splits[1])
+            self.assertEqual(str(edge.parent), splits[2])
+            self.assertEqual(str(edge.child), splits[3])
 
     def verify_sites_format(self, ts, sites_file, precision):
         """
@@ -1354,18 +1373,18 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             for precision in [2, 7]:
                 nodes_file = six.StringIO()
-                edgesets_file = six.StringIO()
+                edges_file = six.StringIO()
                 sites_file = six.StringIO()
                 mutations_file = six.StringIO()
                 ts.dump_text(
-                    nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
+                    nodes=nodes_file, edges=edges_file, sites=sites_file,
                     mutations=mutations_file, precision=precision)
                 nodes_file.seek(0)
-                edgesets_file.seek(0)
+                edges_file.seek(0)
                 sites_file.seek(0)
                 mutations_file.seek(0)
                 self.verify_nodes_format(ts, nodes_file, precision)
-                self.verify_edgesets_format(ts, edgesets_file, precision)
+                self.verify_edges_format(ts, edges_file, precision)
                 self.verify_sites_format(ts, sites_file, precision)
                 self.verify_mutations_format(ts, mutations_file, precision)
 
@@ -1385,7 +1404,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(ts1.sample_size, ts2.sample_size)
         self.assertAlmostEqual(ts1.sequence_length, ts2.sequence_length)
         self.assertEqual(ts1.num_nodes, ts2.num_nodes)
-        self.assertEqual(ts1.num_edgesets, ts2.num_edgesets)
+        self.assertEqual(ts1.num_edges, ts2.num_edges)
         self.assertEqual(ts1.num_sites, ts2.num_sites)
         self.assertEqual(ts1.num_mutations, ts2.num_mutations)
 
@@ -1398,13 +1417,13 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(checked, ts1.num_nodes)
 
         checked = 0
-        for r1, r2 in zip(ts1.edgesets(), ts2.edgesets()):
+        for r1, r2 in zip(ts1.edges(), ts2.edges()):
             checked += 1
             self.assertAlmostEqual(r1.left, r2.left)
             self.assertAlmostEqual(r1.right, r2.right)
             self.assertEqual(r1.parent, r2.parent)
-            self.assertEqual(r1.children, r2.children)
-        self.assertEqual(ts1.num_edgesets, checked)
+            self.assertEqual(r1.child, r2.child)
+        self.assertEqual(ts1.num_edges, checked)
 
         checked = 0
         for s1, s2 in zip(ts1.sites(), ts2.sites()):
@@ -1424,29 +1443,29 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
     def test_text_record_round_trip(self):
         for ts1 in get_example_tree_sequences():
             nodes_file = six.StringIO()
-            edgesets_file = six.StringIO()
+            edges_file = six.StringIO()
             sites_file = six.StringIO()
             mutations_file = six.StringIO()
             ts1.dump_text(
-                nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
+                nodes=nodes_file, edges=edges_file, sites=sites_file,
                 mutations=mutations_file, precision=9)
             nodes_file.seek(0)
-            edgesets_file.seek(0)
+            edges_file.seek(0)
             sites_file.seek(0)
             mutations_file.seek(0)
             ts2 = msprime.load_text(
-                nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
+                nodes=nodes_file, edges=edges_file, sites=sites_file,
                 mutations=mutations_file)
             self.verify_approximate_equality(ts1, ts2)
 
     def test_empty_files(self):
         nodes_file = six.StringIO("is_sample\ttime\n")
-        edgesets_file = six.StringIO("left\tright\tparent\tchildren\n")
+        edges_file = six.StringIO("left\tright\tparent\tchild\n")
         sites_file = six.StringIO("position\tancestral_state\n")
         mutations_file = six.StringIO("site\tnode\tderived_state\n")
         self.assertRaises(
             _msprime.LibraryError, msprime.load_text,
-            nodes=nodes_file, edgesets=edgesets_file, sites=sites_file,
+            nodes=nodes_file, edges=edges_file, sites=sites_file,
             mutations=mutations_file)
 
 
@@ -1489,6 +1508,20 @@ class TestSparseTree(HighLevelTestCase):
                 l2 = list(test_func(t, u))
                 self.assertEqual(l1, l2)
                 self.assertEqual(t.get_num_samples(u), len(l1))
+
+    def verify_newick(self, tree):
+        """
+        Verifies that we output the newick tree as expected.
+        """
+        py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+        newick1 = tree.newick(precision=0, time_scale=0)
+        newick2 = py_tree.newick(precision=0, time_scale=0)
+        self.assertEqual(newick1, newick2)
+
+    def test_newick(self):
+        for ts in get_example_tree_sequences():
+            for tree in ts.trees():
+                self.verify_newick(tree)
 
     def test_traversals(self):
         for ts in get_example_tree_sequences():
@@ -1545,7 +1578,6 @@ class TestSparseTree(HighLevelTestCase):
         self.assertEqual(t1.get_sample_size(), t1.sample_size)
         self.assertEqual(t1.get_num_mutations(), t1.num_mutations)
         self.assertEqual(t1.get_parent_dict(), t1.parent_dict)
-        self.assertEqual(t1.get_time_dict(), t1.time_dict)
         self.assertEqual(t1.get_total_branch_length(), t1.total_branch_length)
         # node properties
         root = t1.get_root()
@@ -2042,9 +2074,9 @@ class TestNodeOrdering(HighLevelTestCase):
         self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
         self.assertEqual(ts1.get_num_nodes(), ts2.get_num_nodes())
         j = 0
-        for r1, r2 in zip(ts1.edgesets(), ts2.edgesets()):
+        for r1, r2 in zip(ts1.edges(), ts2.edges()):
             self.assertEqual(r1.parent, r2.parent)
-            self.assertEqual(r1.children, r2.children)
+            self.assertEqual(r1.child, r2.child)
             if approx:
                 self.assertAlmostEqual(r1.left, r2.left)
                 self.assertAlmostEqual(r1.right, r2.right)
@@ -2052,7 +2084,7 @@ class TestNodeOrdering(HighLevelTestCase):
                 self.assertEqual(r1.left, r2.left)
                 self.assertEqual(r1.right, r2.right)
             j += 1
-        self.assertEqual(ts1.num_edgesets, j)
+        self.assertEqual(ts1.num_edges, j)
         j = 0
         for n1, n2 in zip(ts1.nodes(), ts2.nodes()):
             self.assertEqual(n1.name, n2.name)
@@ -2080,13 +2112,13 @@ class TestNodeOrdering(HighLevelTestCase):
             node = ts.node(inv_node_map[j])
             node_table.add_row(
                 flags=node.flags, time=node.time, population=node.population)
-        edgeset_table = msprime.EdgesetTable()
-        for e in ts.edgesets():
-            edgeset_table.add_row(
+        edge_table = msprime.EdgeTable()
+        for e in ts.edges():
+            edge_table.add_row(
                 left=e.left, right=e.right, parent=node_map[e.parent],
-                children=tuple(
-                    sorted([node_map[c] for c in e.children])))
-        other_ts = msprime.load_tables(nodes=node_table, edgesets=edgeset_table)
+                child=node_map[e.child])
+        msprime.sort_tables(nodes=node_table, edges=edge_table)
+        other_ts = msprime.load_tables(nodes=node_table, edges=edge_table)
 
         self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
         self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())
@@ -2115,12 +2147,12 @@ class TestNodeOrdering(HighLevelTestCase):
         ts3 = msprime.load(self.temp_file)
         self.verify_tree_sequences_equal(other_ts, ts3)
         nodes_file = six.StringIO()
-        edgesets_file = six.StringIO()
+        edges_file = six.StringIO()
         # Also verify we can read the text version.
-        other_ts.dump_text(nodes=nodes_file, edgesets=edgesets_file, precision=14)
+        other_ts.dump_text(nodes=nodes_file, edges=edges_file, precision=14)
         nodes_file.seek(0)
-        edgesets_file.seek(0)
-        ts3 = msprime.load_text(nodes_file, edgesets_file)
+        edges_file.seek(0)
+        ts3 = msprime.load_text(nodes_file, edges_file)
         self.verify_tree_sequences_equal(other_ts, ts3, True)
 
     def test_single_locus(self):
@@ -2140,9 +2172,13 @@ class TestNodeOrdering(HighLevelTestCase):
                 msprime.SimpleBottleneck(time=0.5, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
-        for r in ts.edgesets():
-            if len(r.children) > 2:
-                found = True
+        for t in ts.trees():
+            for u in t.nodes():
+                if len(t.children(u)) > 2:
+                    found = True
+                    break
+            if found:
+                break
         self.assertTrue(found)
         for _ in range(self.num_random_permutations):
             self.verify_random_permutation(ts)
