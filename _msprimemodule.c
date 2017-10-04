@@ -7448,7 +7448,7 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     }
     if (edge_start < 0 || edge_start > py_edges->edge_table->num_rows) {
         PyErr_SetString(PyExc_ValueError,
-                "edge_start must be between 0 and len(edges) - 1");
+                "edge_start must be between 0 and len(edges)");
     }
     err = sort_tables(nodes, edges, migrations, sites, mutations, (size_t) edge_start);
     if (err != 0) {

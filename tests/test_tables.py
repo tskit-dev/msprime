@@ -580,7 +580,7 @@ class TestSortTables(unittest.TestCase):
             self.assertRaises(
                 _msprime.LibraryError, ts.load_tables, nodes=tables.nodes,
                 edges=new_edges)
-            # If we sort only less after the start value we shoudl still fail.
+            # If we sort after the start value we should still fail.
             msprime.sort_tables(
                 tables.nodes, new_edges, sites=tables.sites, mutations=tables.mutations,
                 edge_start=start + 1)
