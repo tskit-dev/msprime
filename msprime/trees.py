@@ -567,6 +567,13 @@ class SparseTree(object):
         return self._ll_sparse_tree.get_num_nodes()
 
     @property
+    def roots(self):
+        root = self.left_root
+        while root != NULL_NODE:
+            yield root
+            root = self.right_sib(root)
+
+    @property
     def root(self):
         return self.get_root()
 
@@ -577,7 +584,14 @@ class SparseTree(object):
         :return: The root node.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_root()
+        root = self.left_root
+        if self.right_sib(root) != NULL_NODE:
+            raise ValueError("More than one root exists. Use tree.roots() instead")
+        return root
+
+    @property
+    def left_root(self):
+        return self._ll_sparse_tree.get_left_root()
 
     @property
     def index(self):
