@@ -1474,7 +1474,8 @@ make_decapitated_copy(tree_sequence_t *ts)
     mutation_table_t mutations;
     site_table_t sites;
     char **provenance_strings;
-    size_t num_provenance_strings;
+    size_t j, num_provenance_strings;
+    node_id_t oldest_node;
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1493,6 +1494,16 @@ make_decapitated_copy(tree_sequence_t *ts)
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edges.num_rows -= edges.num_rows / 4;
+    oldest_node = edges.parent[edges.num_rows - 1];
+    j = 0;
+    while (j < mutations.num_rows && mutations.node[j] < oldest_node) {
+        j++;
+    }
+    mutations.num_rows = j;
+    mutations.total_derived_state_length = j;
+    sites.num_rows = j;
+    sites.total_ancestral_state_length = j;
+
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(new_ts, &nodes, &edges, &migrations,
@@ -6206,6 +6217,7 @@ test_ld_from_examples(void)
         if (j == 4) {
             printf("\nSkipping recurrent mutation example\n");
         } else if (j == 7) {
+            /* We assume no mutations occur over roots in LD calc */
             printf("\nSkipping decapitated example\n");
         } else {
             verify_ld(examples[j]);
@@ -6300,9 +6312,7 @@ test_simplify_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 6) {
-            printf("\nFIXME simplify tree checks on gappy sequence fail\n\n");
-        } else if (j == 7) {
+        if (j == 7) {
             printf("\nFIXME simplify tree checks on decapitated sequence fail\n\n");
         } else {
             verify_simplify(examples[j]);
