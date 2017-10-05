@@ -472,7 +472,9 @@ typedef struct {
     size_t num_nodes;
     int flags;
     node_id_t *samples;
-    node_id_t root;
+    /* The left-most root in the forest. Roots are sibs and all roots are found
+     * via left_sib and right_sib */
+    node_id_t left_root;
     /* Left and right physical coordinates of the tree */
     double left;
     double right;
@@ -798,6 +800,7 @@ int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
         node_list_t *head, node_list_t *tail);
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
+size_t sparse_tree_get_num_roots(sparse_tree_t *self);
 int sparse_tree_get_parent(sparse_tree_t *self, node_id_t u, node_id_t *parent);
 int sparse_tree_get_time(sparse_tree_t *self, node_id_t u, double *t);
 int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v, node_id_t *mrca);
