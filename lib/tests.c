@@ -610,8 +610,10 @@ verify_tree_next_prev(tree_sequence_t *ts)
         CU_ASSERT_EQUAL_FATAL(j - 1, t.index);
         ret = sparse_tree_equal(&t, &trees[t.index]);
         if (ret != 0) {
-            printf("tree differ\n");
+            printf("trees differ\n");
+            printf("REVERSE tree::\n");
             sparse_tree_print_state(&t, stdout);
+            printf("FORWARD tree::\n");
             sparse_tree_print_state(&trees[t.index], stdout);
         }
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -882,10 +884,9 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     double tmrca1, tmrca2;
     size_t total_sites;
 
-    printf("FIXME add test back when sequence length added\n");
-    /* CU_ASSERT_EQUAL( */
-    /*     tree_sequence_get_sequence_length(ts), */
-    /*     tree_sequence_get_sequence_length(subset)); */
+    CU_ASSERT_EQUAL(
+        tree_sequence_get_sequence_length(ts),
+        tree_sequence_get_sequence_length(subset));
     CU_ASSERT(
         tree_sequence_get_num_nodes(ts) >= tree_sequence_get_num_nodes(subset));
     CU_ASSERT_EQUAL(tree_sequence_get_sample_size(subset), num_samples);
@@ -1491,7 +1492,7 @@ make_decapitated_copy(tree_sequence_t *ts)
             &migrations, &sites, &mutations, &num_provenance_strings,
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edges.num_rows = edges.num_rows / 2;
+    edges.num_rows -= edges.num_rows / 4;
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(new_ts, &nodes, &edges, &migrations,
@@ -5427,6 +5428,50 @@ test_left_to_right_tree_sequence_iter(void)
     tree_sequence_free(&ts);
 }
 
+static void
+test_gappy_tree_sequence_iter(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  0.090   0\n"
+        "0  0.170   0\n"
+        "0  0.253   0\n"
+        "0  0.071   0\n"
+        "0  0.202   0\n";
+    const char *edges =
+        "2 7  7 2\n"
+        "8 10 7 2\n"
+        "2 7  7 3\n"
+        "8 10 7 3\n"
+        "1 2  4 1\n"
+        "2 7  4 1\n"
+        "8 10 4 1\n"
+        "1 2  4 3\n"
+        "2 7  4 7\n"
+        "8 10 4 7\n"
+        "1 7  5 0,4\n"
+        "8 10 8 0,4\n"
+        "1 2  6 2,5\n";
+    node_id_t z = MSP_NULL_NODE;
+    node_id_t parents[] = {
+        z, z, z, z, z, z, z, z, z,
+        5, 4, 6, 4, 5, 6, z, z, z,
+        5, 4, 7, 7, 5, z, z, 4, z,
+        z, z, z, z, z, z, z, z, z,
+        8, 4, 7, 7, 8, z, z, 4, z,
+    };
+    tree_sequence_t ts;
+    uint32_t num_trees = 5;
+
+    tree_sequence_from_text(&ts, nodes, edges, NULL, NULL, NULL, NULL);
+    verify_trees(&ts, num_trees, parents);
+    verify_tree_next_prev(&ts);
+    tree_sequence_free(&ts);
+}
+
 typedef struct {
     uint32_t tree_index;
     uint32_t node;
@@ -5971,13 +6016,7 @@ test_sample_sets_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 6) {
-            printf("\n\nFIXME Skipping gappy example\n");
-        }else if (j == 7) {
-            printf("\n\nFIXME Skipping decapitated example\n");
-        } else {
-            verify_sample_sets(examples[j]);
-        }
+        verify_sample_sets(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -6008,13 +6047,7 @@ test_next_prev_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 6) {
-            printf("\nFIXME simplify tree next/prev bug on gappy tree sequence.\n\n");
-        } else if (j == 7) {
-            printf("\nFIXME simplify tree next/prev bug on decapitated sequence.\n\n");
-        } else {
-            verify_tree_next_prev(examples[j]);
-        }
+        verify_tree_next_prev(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -7524,6 +7557,7 @@ main(int argc, char **argv)
         {"test_internal_sample_simplified_tree_sequence_iter",
             test_internal_sample_simplified_tree_sequence_iter},
         {"test_left_to_right_tree_sequence_iter", test_left_to_right_tree_sequence_iter},
+        {"test_gappy_tree_sequence_iter", test_gappy_tree_sequence_iter},
         {"test_tree_sequence_bad_records", test_tree_sequence_bad_records},
         {"test_tree_sequence_diff_iter", test_tree_sequence_diff_iter},
         {"test_nonbinary_tree_sequence_diff_iter",

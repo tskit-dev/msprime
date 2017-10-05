@@ -3270,7 +3270,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     } else {
         x = self->left;
     }
-    while (out_breakpoints[out_order[out]] == x) {
+    while (out >= 0 && out < R && out_breakpoints[out_order[out]] == x) {
         assert(out < R);
         k = out_order[out];
         p = s->edges.parent[k];
@@ -3380,30 +3380,34 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
         in += direction;
     }
+
     /* Ensure that left_root is the left-most root */
     while (self->left_sib[self->left_root] != MSP_NULL_NODE) {
         self->left_root = self->left_sib[self->left_root];
     }
+
+    self->direction = direction;
+    self->index = (size_t) ((int64_t) self->index + direction);
     if (direction == MSP_DIR_FORWARD) {
         self->left = x;
         self->right = s->sequence_length;
-        if (in < R) {
-            self->right = GSL_MIN(
-                    in_breakpoints[in_order[in]], out_breakpoints[out_order[out]]);
+        if (out >= 0 && out < R) {
+            self->right = GSL_MIN(self->right, out_breakpoints[out_order[out]]);
         }
-        /* if (out < R) { */
-        /*     self->right = out_breakpoints[out_order[out]]; */
-        /* } */
+        if (in >= 0 && in < R) {
+            self->right = GSL_MIN(self->right, in_breakpoints[in_order[in]]);
+        }
     } else {
         self->right = x;
         self->left = 0;
-        if (out < R) {
-            /* TODO Don't think this is fully correct. */
-            self->left = out_breakpoints[out_order[out]];
+        if (out >= 0 && out < R) {
+            self->left = GSL_MAX(self->left, out_breakpoints[out_order[out]]);
+        }
+        if (in >= 0 && in < R) {
+            self->left = GSL_MAX(self->left, in_breakpoints[in_order[in]]);
         }
     }
-    self->direction = direction;
-    self->index = (size_t) ((int64_t) self->index + direction);
+    assert(self->left < self->right);
     *out_index = out;
     *in_index = in;
     if (s->sites.num_records > 0) {
