@@ -557,19 +557,65 @@ class TestSortTables(unittest.TestCase):
         self.assertEqual(ts_new.num_sites, ts.num_sites)
         self.assertEqual(ts_new.num_mutations, ts.num_mutations)
 
+    def verify_edge_sort_offset(self, ts):
+        """
+        Verifies the behaviour of the edge_start offset value.
+        """
+        tables = ts.dump_tables()
+        edges = tables.edges
+        starts = [0]
+        if len(edges) > 2:
+            starts = [0, 1, len(edges) // 2,  len(edges) - 2]
+        random.seed(self.random_seed)
+        for start in starts:
+            # Unsort the edges starting from index start
+            all_edges = list(ts.edges())
+            keep = all_edges[:start]
+            reversed_edges = all_edges[start:][::-1]
+            all_edges = keep + reversed_edges
+            new_edges = msprime.EdgeTable()
+            for e in all_edges:
+                new_edges.add_row(e.left, e.right, e.parent, e.child)
+            # Verify that import fails for randomised edges
+            self.assertRaises(
+                _msprime.LibraryError, ts.load_tables, nodes=tables.nodes,
+                edges=new_edges)
+            # If we sort after the start value we should still fail.
+            msprime.sort_tables(
+                tables.nodes, new_edges, sites=tables.sites, mutations=tables.mutations,
+                edge_start=start + 1)
+            self.assertRaises(
+                _msprime.LibraryError, ts.load_tables, nodes=tables.nodes,
+                edges=new_edges)
+            # Sorting from the correct index should give us back the original table.
+            new_edges.reset()
+            for e in all_edges:
+                new_edges.add_row(e.left, e.right, e.parent, e.child)
+            msprime.sort_tables(
+                tables.nodes, new_edges, sites=tables.sites, mutations=tables.mutations,
+                edge_start=start)
+            # Verify the new and old edges are equal.
+            self.assertEqual(list(edges.left), list(new_edges.left))
+            self.assertEqual(list(edges.right), list(new_edges.right))
+            self.assertEqual(list(edges.parent), list(new_edges.parent))
+            self.assertEqual(list(edges.child), list(new_edges.child))
+
     def test_single_tree_no_mutations(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         self.verify_randomise_tables(ts)
+        self.verify_edge_sort_offset(ts)
 
     def test_many_trees_no_mutations(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         self.verify_randomise_tables(ts)
+        self.verify_edge_sort_offset(ts)
 
     def test_single_tree_mutations(self):
         ts = msprime.simulate(10, mutation_rate=2, random_seed=self.random_seed)
         self.assertGreater(ts.num_sites, 2)
         self.verify_randomise_tables(ts)
+        self.verify_edge_sort_offset(ts)
 
     def test_many_trees_mutations(self):
         ts = msprime.simulate(
@@ -577,6 +623,7 @@ class TestSortTables(unittest.TestCase):
         self.assertGreater(ts.num_trees, 2)
         self.assertGreater(ts.num_sites, 2)
         self.verify_randomise_tables(ts)
+        self.verify_edge_sort_offset(ts)
 
     def get_nonbinary_example(self, mutation_rate):
         ts = msprime.simulate(
@@ -585,12 +632,9 @@ class TestSortTables(unittest.TestCase):
                 msprime.SimpleBottleneck(time=0.5, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
-        for t in ts.trees():
-            for u in t.nodes():
-                if len(t.children(u)) > 2:
-                    found = True
-                    break
-            if found:
+        for e in ts.edgesets():
+            if len(e.children) > 2:
+                found = True
                 break
         self.assertTrue(found)
         return ts
@@ -599,12 +643,14 @@ class TestSortTables(unittest.TestCase):
         ts = self.get_nonbinary_example(mutation_rate=0)
         self.assertGreater(ts.num_trees, 2)
         self.verify_randomise_tables(ts)
+        self.verify_edge_sort_offset(ts)
 
     def test_nonbinary_trees_mutations(self):
         ts = self.get_nonbinary_example(mutation_rate=2)
         self.assertGreater(ts.num_trees, 2)
         self.assertGreater(ts.num_sites, 2)
         self.verify_randomise_tables(ts)
+        self.verify_edge_sort_offset(ts)
 
     def test_nonbinary_mutations(self):
         # Test the sorting behaviour when we have ragged entries in the ancestral
