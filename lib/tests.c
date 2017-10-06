@@ -868,8 +868,6 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
     sparse_tree_free(&tree);
 }
 
-
-
 static void
 verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
         node_id_t *samples, uint32_t num_samples, node_id_t *sample_map)
@@ -5331,18 +5329,17 @@ test_unary_tree_sequence_iter(void)
 static void
 test_internal_sample_tree_sequence_iter(void)
 {
-    /* node_id_t parents[] = { */
-    /*     7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE, */
-    /*     4, 5, 4, 8, 5, 8, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE, */
-    /*     6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE, */
-    /* }; */
+    node_id_t parents[] = {
+        7, 5, 4, 4, 5, 7, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        4, 5, 4, 8, 5, 8, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+        6, 5, 4, 4, 5, 6, MSP_NULL_NODE, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
     tree_sequence_t ts;
-    /* uint32_t num_trees = 3; */
+    uint32_t num_trees = 3;
 
     tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edges, NULL,
             internal_sample_ex_sites, internal_sample_ex_mutations, NULL);
-    printf("\n\nFIXME internal sample tree sequence iter\n");
-    /* verify_trees(&ts, num_trees, parents); */
+    verify_trees(&ts, num_trees, parents);
     tree_sequence_free(&ts);
 }
 
@@ -5353,12 +5350,12 @@ test_internal_sample_simplified_tree_sequence_iter(void)
     tree_sequence_t ts, simplified;
     node_id_t samples[] = {2, 3, 5};
     node_id_t sample_map[3];
-    /* node_id_t parents[] = { */
-    /*     2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE, */
-    /*     3, 4, MSP_NULL_NODE, 4, MSP_NULL_NODE, */
-    /*     2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE, */
-    /* }; */
-    /* uint32_t num_trees = 3; */
+    node_id_t parents[] = {
+        2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE,
+        3, 4, MSP_NULL_NODE, 4, MSP_NULL_NODE,
+        2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE,
+    };
+    uint32_t num_trees = 3;
 
     tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edges, NULL,
             internal_sample_ex_sites, internal_sample_ex_mutations, NULL);
@@ -5370,8 +5367,7 @@ test_internal_sample_simplified_tree_sequence_iter(void)
     CU_ASSERT_EQUAL(sample_map[1], 1);
     CU_ASSERT_EQUAL(sample_map[2], 3);
 
-    printf("\n\nFIXME internal samples multiple roots\n");
-    /* verify_trees(&simplified, num_trees, parents); */
+    verify_trees(&simplified, num_trees, parents);
     tree_sequence_free(&simplified);
     tree_sequence_free(&ts);
 }
@@ -5790,19 +5786,17 @@ test_nonbinary_sample_sets(void)
 static void
 test_internal_sample_sample_sets(void)
 {
-    /* sample_count_test_t tests[] = { */
-    /*     {0, 0, 1}, {0, 5, 4}, {0, 4, 2}, {0, 7, 5}, */
-    /*     {1, 4, 2}, {1, 5, 4}, {1, 8, 5}, */
-    /*     {2, 5, 4}, {2, 6, 5}}; */
-    /* uint32_t num_tests = 9; */
+    sample_count_test_t tests[] = {
+        {0, 0, 1}, {0, 5, 4}, {0, 4, 2}, {0, 7, 5},
+        {1, 4, 2}, {1, 5, 4}, {1, 8, 5},
+        {2, 5, 4}, {2, 6, 5}};
+    uint32_t num_tests = 9;
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edges,
             NULL, NULL, NULL, NULL);
-
-    printf("\n\nFIXME internal sample sample sets\n");
-    /* verify_sample_counts(&ts, num_tests, tests); */
-    /* verify_sample_sets(&ts); */
+    verify_sample_counts(&ts, num_tests, tests);
+    verify_sample_sets(&ts);
 
     tree_sequence_free(&ts);
 }
@@ -5981,8 +5975,7 @@ test_internal_sample_tree_sequence_diff_iter(void)
 
     tree_sequence_from_text(&ts, internal_sample_ex_nodes, internal_sample_ex_edges, NULL,
             NULL, NULL, NULL);
-    printf("\n\nFIXME internal sample diff iter\n\n");
-    /* verify_tree_diffs(&ts); */
+    verify_tree_diffs(&ts);
 
     ret = tree_sequence_free(&ts);
     CU_ASSERT_EQUAL(ret, 0);
@@ -6313,7 +6306,7 @@ test_simplify_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         if (j == 7) {
-            printf("\nFIXME simplify tree checks on decapitated sequence fail\n\n");
+            printf("\nFIXME simplify sequence_length not handled correctly. \n\n");
         } else {
             verify_simplify(examples[j]);
             verify_simplify_errors(examples[j]);

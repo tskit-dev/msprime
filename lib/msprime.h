@@ -483,6 +483,7 @@ typedef struct {
     node_id_t *right_child;     /* rightmost child of node u */
     node_id_t *left_sib;        /* sibling to right of node u */
     node_id_t *right_sib;       /* sibling to the left of node u */
+    bool *above_sample;
     size_t index;
     /* These are involved in the optional sample tracking; num_samples counts
      * all samples below a give node, and num_tracked_samples counts those
