@@ -448,34 +448,28 @@ tree_sequence_from_text(tree_sequence_t *ts, const char *nodes, const char *edge
 }
 
 static void
-unsort_edges(edge_table_t *edges, size_t start)
+unsort_edges(edge_table_t *edges)
 {
+    /* Reverse the order of the edges */
     size_t j, k;
-    size_t n = edges->num_rows - start;
-    edge_t *buff = malloc(n * sizeof(edge_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    double left, right;
+    node_id_t parent, child;
 
-    CU_ASSERT_FATAL(edges != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    gsl_rng_set(rng, 1);
-
-    for (j = 0; j < n; j++) {
-        k = start + j;
-        buff[j].left = edges->left[k];
-        buff[j].right = edges->right[k];
-        buff[j].parent = edges->parent[k];
-        buff[j].child = edges->child[k];
+    for (j = 0; j < edges->num_rows / 2; j++) {
+        k = edges->num_rows - j - 1;
+        left = edges->left[k];
+        right = edges->right[k];
+        parent = edges->parent[k];
+        child = edges->child[k];
+        edges->left[k] = edges->left[j];
+        edges->right[k] = edges->right[j];
+        edges->parent[k] = edges->parent[j];
+        edges->child[k] = edges->child[j];
+        edges->left[j] = left;
+        edges->right[j] = right;
+        edges->parent[j] = parent;
+        edges->child[j] = child;
     }
-    gsl_ran_shuffle(rng, buff, n, sizeof(edge_t));
-    for (j = 0; j < n; j++) {
-        k = start + j;
-        edges->left[k] = buff[j].left;
-        edges->right[k] = buff[j].right;
-        edges->parent[k] = buff[j].parent;
-        edges->child[k] = buff[j].child;
-    }
-    free(buff);
-    gsl_rng_free(rng);
 }
 
 static void
@@ -1369,7 +1363,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     for (j = 0; j < mutations.num_rows; j++) {
         mutations.node[j] = node_map[mutations.node[j]];
     }
-    ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+    ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4811,7 +4805,7 @@ test_single_tree_simplify(void)
             &migrations, &sites, &mutations, &num_provenance_strings,
             &provenance_strings);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    unsort_edges(&edges, 0);
+    unsort_edges(&edges);
     ret = simplifier_alloc(&simplifier, samples, 2,
             &nodes, &edges, &migrations, &sites, &mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME);
@@ -6446,8 +6440,7 @@ test_sort_tables(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
-    size_t j, k, start, starts[3], num_provenance_strings;
-
+    size_t j, num_provenance_strings;
     char **provenance_strings;
     node_table_t nodes;
     edge_table_t edges;
@@ -6477,32 +6470,19 @@ test_sort_tables(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         /* Check the input validation */
-        ret = sort_tables(NULL, &edges, &migrations, &sites, &mutations, 0);
+        ret = sort_tables(NULL, &edges, &migrations, &sites, &mutations);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-        ret = sort_tables(&nodes, NULL, &migrations, &sites, &mutations, 0);
+        ret = sort_tables(&nodes, NULL, &migrations, &sites, &mutations);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-        ret = sort_tables(&nodes, &edges, &migrations, &sites, NULL, 0);
+        ret = sort_tables(&nodes, &edges, &migrations, &sites, NULL);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-        ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations,
-                2 * edges.num_rows);
-        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-        ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations,
-                edges.num_rows + 1);
-        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
 
-        /* Check edge sorting */
-        if (edges.num_rows == 2) {
-            starts[0] = 0;
-            starts[1] = 0;
-            starts[2] = 0;
-        } else {
-            starts[0] = 0;
-            starts[1] = edges.num_rows / 2;
-            starts[2] = edges.num_rows - 2;
-        }
-        for (k = 0; k < 3; k++) {
-            start = starts[k];
-            unsort_edges(&edges, start);
+        /* TODO Cludgy workaround here to skip problematic tree sequences where
+         * we depend on the child ordering to trigger errors. Remove this
+         * when the definitive edge ordering has been settled. */
+        if (edges.num_rows > 2) {
+            /* Check edge sorting */
+            unsort_edges(&edges);
             ret = tree_sequence_initialise(&ts2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edges,
@@ -6510,24 +6490,11 @@ test_sort_tables(void)
                     provenance_strings);
             CU_ASSERT_NOT_EQUAL_FATAL(ret, 0);
             tree_sequence_free(&ts2);
-
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, start);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-            ret = tree_sequence_initialise(&ts2);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edges,
-                    &migrations, &sites, &mutations, num_provenance_strings,
-                    provenance_strings);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_tree_sequences_equal(ts1, &ts2, true, true, true);
-            tree_sequence_free(&ts2);
         }
 
-        /* A start value of num_edges should have no effect */
-        ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations,
-                edges.num_rows);
+        ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables_tmp(&ts2, &nodes, &edges,
@@ -6548,7 +6515,7 @@ test_sort_tables(void)
             CU_ASSERT_NOT_EQUAL(ret, 0);
             tree_sequence_free(&ts2);
 
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
 
             ret = tree_sequence_initialise(&ts2);
@@ -6562,24 +6529,24 @@ test_sort_tables(void)
 
             /* Check for site bounds error */
             mutations.site[0] = sites.num_rows;
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
             mutations.site[0] = 0;
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             /* Check for edge node bounds error */
             edges.parent[0] = nodes.num_rows;
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
             edges.parent[0] = 0;
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             /* Check for mutation node bounds error */
             mutations.node[0] = nodes.num_rows;
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
             mutations.node[0] = 0;
-            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
         }
         tree_sequence_free(ts1);
