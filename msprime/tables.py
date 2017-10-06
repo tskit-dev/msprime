@@ -408,16 +408,15 @@ def sort_tables(*args, **kwargs):
 
     - time of parent, then
     - parent node ID, then
-    - child node ID, then
     - left endpoint.
+
+    For each edge, the ``children`` are sorted by increasing node ID.
 
     Sites are ordered by position, and Mutations are ordered by site.
 
-    If the ``edge_start`` parameter is provided, this specifies the index
-    in the edge table where sorting should start. Only rows with index
-    greater than or equal to ``edge_start`` are sorted; rows before this index
-    are not affected. This parameter is provided to allow for efficient sorting
-    when the user knows that the edges up to a given index are already sorted.
+    Note: for general edge tables this only defines a partial ordering, but
+    for strict tables (namely, those for which edges belonging to a given
+    parent do not overlap) this enforces a complete ordering.
 
     .. todo:: Update this documentation to describe the keyword arguments and
        combinations that are allowed.
@@ -427,7 +426,6 @@ def sort_tables(*args, **kwargs):
     :param MigrationTable migrations:
     :param SiteTable sites:
     :param MutationTable mutations:
-    :param int edge_start: The index in the edge table where sorting starts.
     """
     return _msprime.sort_tables(*args, **kwargs)
 

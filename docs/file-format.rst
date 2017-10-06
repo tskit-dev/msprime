@@ -317,7 +317,7 @@ Tables that are noncontradictory but do not satisfy all algorithmic requirements
 listed above may be converted to a TreeSequence by first sorting, then simplifying
 them (both operate on the tables **in place**):
 
-.. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations, edge_start])
+.. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations])
 
 **Note:** the following function is more general than
 ``TreeSequence.simplify()``, since it can be applied to tables not satisfying
