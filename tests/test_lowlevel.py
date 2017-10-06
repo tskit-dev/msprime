@@ -2648,6 +2648,7 @@ class TestSparseTree(LowLevelTestCase):
                         point = t.find(".")
                         self.assertEqual(precision, len(t) - point - 1)
 
+    @unittest.skip("Newick Multiroots")
     def test_newick_interface(self):
         ts = self.get_tree_sequence(num_loci=10, sample_size=10)
         st = _msprime.SparseTree(ts)

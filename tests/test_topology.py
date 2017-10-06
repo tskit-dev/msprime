@@ -1053,7 +1053,7 @@ class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.
     """
-    @unittest.skip("Multiple root simplify")
+    @unittest.skip("BUG: simplify with unary edges, many roots")
     def test_simplest_degenerate_case(self):
         # Simplest case where we have n = 2 and two unary records.
         nodes = six.StringIO("""\
@@ -1086,10 +1086,15 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 2)
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 3})
+        self.assertEqual(sorted(t.roots), [2, 3])
         self.assertEqual(list(ts.haplotypes()), ["10", "01"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)], [b"10", b"01"])
-        self.assertRaises(_msprime.LibraryError, ts.simplify)
+        simplified, _ = ts.simplify()
+        t1 = ts.dump_tables()
+        t2 = simplified.dump_tables()
+        self.assertEqual(t1.nodes, t2.nodes)
+        self.assertEqual(t1.edges, t2.edges)
 
     def test_simplest_non_degenerate_case(self):
         # Simplest case where we have n = 4 and two trees.
@@ -1992,7 +1997,6 @@ class TestWithVisuals(TopologyTestCase):
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
 
-    @unittest.skip("Multiroots. Causes hang")
     def test_internal_sampled_node(self):
         # 1.0             7
         # 0.7            / \                      8                     6

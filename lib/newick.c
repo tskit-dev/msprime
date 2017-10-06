@@ -108,13 +108,20 @@ newick_converter_run(newick_converter_t *self, size_t buffer_size, char *buffer)
                 }
             }
         }
+
+        if (s >= buffer_size) {
+            ret = MSP_ERR_BUFFER_OVERFLOW;
+            goto out;
+        }
+        buffer[s] = ',';
+        s++;
     }
-    if ((s + 1) >= buffer_size) {
+    if (s >= buffer_size) {
         ret = MSP_ERR_BUFFER_OVERFLOW;
         goto out;
     }
-    buffer[s] = ';';
-    buffer[s + 1] = '\0';
+    buffer[s - 1] = ';';
+    buffer[s] = '\0';
     ret = 0;
 out:
     return ret;

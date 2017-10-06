@@ -327,11 +327,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
 
     def verify_sparse_tree_mrcas(self, st):
         # Check the mrcas
-        oriented_forest = [st.get_parent(j) for j in range(st.get_root() + 1)]
+        oriented_forest = [st.get_parent(j) for j in range(st.num_nodes)]
         mrca_calc = tests.MRCACalculator(oriented_forest)
         # We've done exhaustive tests elsewhere, no need to go
         # through the combinations.
-        for j in range(st.get_root() + 1):
+        for j in range(st.num_nodes):
             mrca = st.get_mrca(0, j)
             self.assertEqual(mrca, mrca_calc.get_mrca(0, j))
             if mrca != msprime.NULL_NODE:
@@ -347,48 +347,50 @@ class HighLevelTestCase(tests.MsprimeTestCase):
                 u = st.get_parent(u)
 
     def verify_sparse_tree_structure(self, st):
-        used_nodes = set()
-        for u in st.leaves():
+        roots = set()
+        for u in st.samples():
             # verify the path to root
-            self.assertTrue(st.is_leaf(u))
+            self.assertTrue(st.is_sample(u))
             times = []
             while st.get_parent(u) != msprime.NULL_NODE:
-                used_nodes.add(u)
                 v = st.get_parent(u)
                 times.append(st.get_time(v))
                 self.assertGreaterEqual(st.get_time(v), 0.0)
                 self.assertIn(u, st.get_children(v))
                 u = v
-            self.assertEqual(u, st.get_root())
+            roots.add(u)
             self.assertEqual(times, sorted(times))
-        used_nodes.add(st.get_root())
-        # for every entry other than used_nodes we should have an empty row
-        for j in range(st.get_root()):
-            if j not in used_nodes:
-                self.assertEqual(st.get_parent(j), msprime.NULL_NODE)
-                for c in st.get_children(j):
-                    self.assertEqual(c, msprime.NULL_NODE)
+        self.assertEqual(sorted(list(roots)), sorted(st.roots))
+        self.assertEqual(len(st.roots), st.num_roots)
+        u = st.left_root
+        roots = []
+        while u != msprime.NULL_NODE:
+            roots.append(u)
+            u = st.right_sib(u)
+        self.assertEqual(roots, st.roots)
         # To a top-down traversal, and make sure we meet all the samples.
-        stack = [st.get_root()]
         samples = []
-        while len(stack) > 0:
-            u = stack.pop()
-            self.assertNotEqual(u, msprime.NULL_NODE)
-            if st.is_sample(u):
-                samples.append(u)
-            if st.is_leaf(u):
-                self.assertEqual(len(st.get_children(u)), 0)
-            else:
-                for c in reversed(st.get_children(u)):
-                    stack.append(c)
-            # Check that we get the correct number of samples at each
-            # node.
-            self.assertEqual(st.get_num_samples(u), len(list(st.samples(u))))
-            self.assertEqual(st.get_num_tracked_samples(u), 0)
+        for root in st.roots:
+            stack = [root]
+            while len(stack) > 0:
+                u = stack.pop()
+                self.assertNotEqual(u, msprime.NULL_NODE)
+                if st.is_sample(u):
+                    samples.append(u)
+                if st.is_leaf(u):
+                    self.assertEqual(len(st.get_children(u)), 0)
+                else:
+                    for c in reversed(st.get_children(u)):
+                        stack.append(c)
+                # Check that we get the correct number of samples at each
+                # node.
+                self.assertEqual(st.get_num_samples(u), len(list(st.samples(u))))
+                self.assertEqual(st.get_num_tracked_samples(u), 0)
+        self.assertEqual(sorted(samples), sorted(st.samples()))
         # Check the parent dict
         pi = st.get_parent_dict()
-        self.assertEqual(len(pi), len(list(st.nodes())) - 1)
-        self.assertNotIn(st.get_root(), pi)
+        for root in st.roots:
+            self.assertNotIn(root, pi)
         for k, v in pi.items():
             self.assertEqual(st.get_parent(k), v)
         self.assertEqual(st.num_samples(), len(samples))
@@ -408,10 +410,18 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         breakpoints = [0]
         for st1, st2 in zip(iter1, iter2):
             self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
-            root = 0
-            while st1.get_parent(root) != msprime.NULL_NODE:
-                root = st1.get_parent(root)
-            self.assertEqual(root, st1.get_root())
+            roots = set()
+            for u in ts.samples():
+                root = u
+                while st1.get_parent(root) != msprime.NULL_NODE:
+                    root = st1.get_parent(root)
+                roots.add(root)
+            self.assertEqual(sorted(list(roots)), sorted(st1.roots))
+            if len(roots) > 1:
+                with self.assertRaises(ValueError):
+                    st1.root
+            else:
+                self.assertEqual(st1.root, list(roots)[0])
             self.assertEqual(st2, st1)
             self.assertFalse(st2 != st1)
             l, r = st1.get_interval()
@@ -808,12 +818,10 @@ class TestTreeSequence(HighLevelTestCase):
     Tests for the tree sequence object.
     """
 
-    @unittest.skip("Multiroots")
     def test_sparse_trees(self):
         for ts in get_example_tree_sequences():
             self.verify_sparse_trees(ts)
 
-    @unittest.skip("Multiroots")
     def test_mutations(self):
         # TODO enable the back_mutations here once this has been implemented
         # for pi and variants.
@@ -848,7 +856,6 @@ class TestTreeSequence(HighLevelTestCase):
                     self.assertIn(u, children)
                     self.assertEqual(children[u], set(tree.children(u)))
 
-    @unittest.skip("Multiroots")
     def test_edge_diffs(self):
         for ts in get_example_tree_sequences():
             self.verify_edge_diffs(ts)
@@ -912,12 +919,10 @@ class TestTreeSequence(HighLevelTestCase):
             for u, count in enumerate(nu):
                 self.assertEqual(tree.get_num_tracked_samples(u), count)
 
-    @unittest.skip("Multiroots")
     def test_tracked_samples(self):
         for ts in get_example_tree_sequences():
             self.verify_tracked_samples(ts)
 
-    @unittest.skip("Multiroots")
     def test_deprecated_sample_aliases(self):
         for ts in get_example_tree_sequences():
             # Ensure that we get the same results from the various combinations
@@ -952,13 +957,12 @@ class TestTreeSequence(HighLevelTestCase):
         # sample lists or a simple traversal.
         samples1 = []
         for t in ts.trees(sample_lists=False):
-            samples1.append(list(t.samples(t.root)))
+            samples1.append(list(t.samples()))
         samples2 = []
         for t in ts.trees(sample_lists=True):
-            samples2.append(list(t.samples(t.root)))
+            samples2.append(list(t.samples()))
         self.assertEqual(samples1, samples2)
 
-    @unittest.skip("Multiroots")
     def test_samples(self):
         for ts in get_example_tree_sequences():
             self.verify_samples(ts)
@@ -1034,22 +1038,18 @@ class TestTreeSequence(HighLevelTestCase):
             for u in range(N):
                 self.assertEqual(ts.get_time(u), ts.node(u).time)
 
-    @unittest.skip("Multiroots")
     def test_get_samples(self):
         for ts in get_example_tree_sequences():
             samples = []
             for u in range(ts.num_nodes):
                 if ts.node(u).is_sample():
                     samples.append(u)
-            self.assertEqual(ts.get_samples(), samples)
-            self.assertEqual(ts.get_samples(0), samples)
-            self.assertEqual(ts.get_samples(msprime.NULL_POPULATION), [])
-            self.assertEqual(ts.get_samples(1), [])
+            self.assertEqual(ts.samples(), samples)
+            self.assertEqual(ts.samples(0), samples)
+            self.assertEqual(ts.samples(msprime.NULL_POPULATION), [])
+            self.assertEqual(ts.samples(1), [])
             for t in ts.trees():
-                # This a crude workaround for working with trees with multiple
-                # roots. We need to fix this when updating for multiple roots.
-                if len(t.parent_dict) > 0:
-                    self.assertEqual(sorted(list(t.samples(t.root))), samples)
+                self.assertEqual(sorted(list(t.samples())), samples)
 
     def test_write_vcf_interface(self):
         for ts in get_example_tree_sequences():
@@ -1447,7 +1447,6 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             check += 1
         self.assertEqual(check, ts1.get_num_trees())
 
-    @unittest.skip("Multiroots")
     def test_text_record_round_trip(self):
         for ts1 in get_example_tree_sequences():
             nodes_file = six.StringIO()
@@ -1526,13 +1525,12 @@ class TestSparseTree(HighLevelTestCase):
         newick2 = py_tree.newick(precision=0, time_scale=0)
         self.assertEqual(newick1, newick2)
 
-    @unittest.skip("Multiroots")
+    @unittest.skip("BUG: Multiroot newick broken")
     def test_newick(self):
         for ts in get_example_tree_sequences():
             for tree in ts.trees():
                 self.verify_newick(tree)
 
-    @unittest.skip("Multiroots")
     def test_traversals(self):
         for ts in get_example_tree_sequences():
             tree = next(ts.trees())
@@ -1542,31 +1540,41 @@ class TestSparseTree(HighLevelTestCase):
         t1 = tree
         t2 = tests.PythonSparseTree.from_sparse_tree(t1)
         self.assertEqual(list(t1.nodes()), list(t2.nodes()))
-        self.assertEqual(list(t1.nodes()), list(t1.nodes(t1.get_root())))
-        self.assertEqual(
-            list(t1.nodes()),
-            list(t1.nodes(t1.get_root(), "preorder")))
-        for u in t1.nodes():
-            self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
         orders = ["inorder", "postorder", "levelorder", "breadthfirst"]
-        for test_order in orders:
+        if tree.num_roots == 1:
+            self.assertRaises(ValueError, list, t1.nodes(order="bad order"))
+            self.assertEqual(list(t1.nodes()), list(t1.nodes(t1.get_root())))
             self.assertEqual(
-                sorted(list(t1.nodes())),
-                sorted(list(t1.nodes(order=test_order))))
-            self.assertEqual(
-                list(t1.nodes(order=test_order)),
-                list(t1.nodes(t1.get_root(), order=test_order)))
-            self.assertEqual(
-                list(t1.nodes(order=test_order)),
-                list(t1.nodes(t1.get_root(), test_order)))
-            self.assertEqual(
-               list(t1.nodes(order=test_order)),
-               list(t2.nodes(order=test_order)))
+                list(t1.nodes()),
+                list(t1.nodes(t1.get_root(), "preorder")))
             for u in t1.nodes():
+                self.assertEqual(list(t1.nodes(u)), list(t2.nodes(u)))
+            for test_order in orders:
                 self.assertEqual(
-                    list(t1.nodes(u, test_order)),
-                    list(t2.nodes(u, test_order)))
-        self.assertRaises(ValueError, t1.nodes, None, "bad order")
+                    sorted(list(t1.nodes())),
+                    sorted(list(t1.nodes(order=test_order))))
+                self.assertEqual(
+                    list(t1.nodes(order=test_order)),
+                    list(t1.nodes(t1.get_root(), order=test_order)))
+                self.assertEqual(
+                    list(t1.nodes(order=test_order)),
+                    list(t1.nodes(t1.get_root(), test_order)))
+                self.assertEqual(
+                   list(t1.nodes(order=test_order)),
+                   list(t2.nodes(order=test_order)))
+                for u in t1.nodes():
+                    self.assertEqual(
+                        list(t1.nodes(u, test_order)),
+                        list(t2.nodes(u, test_order)))
+        else:
+            for test_order in orders:
+                all_nodes = []
+                for root in t1.roots:
+                    self.assertEqual(
+                        list(t1.nodes(root, order=test_order)),
+                        list(t2.nodes(root, order=test_order)))
+                    all_nodes.extend(t1.nodes(root, order=test_order))
+                self.assertEqual(all_nodes, list(t1.nodes(order=test_order)))
 
     def test_total_branch_length(self):
         t1 = self.get_tree()
