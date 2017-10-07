@@ -256,6 +256,9 @@ msp_strerror(int err)
         case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
             ret = "Bad edges: multiple definitions of a given parent over an interval";
             break;
+        case MSP_ERR_MULTIROOT_NEWICK:
+            ret = "Newick output not supported for trees with > 1 roots.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

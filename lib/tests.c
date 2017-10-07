@@ -6333,25 +6333,31 @@ verify_newick(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_first(&t);
     CU_ASSERT_FATAL(ret == 1);
-    err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
-    CU_ASSERT_EQUAL_FATAL(err, 0);
-    size = strlen(newick);
-    CU_ASSERT_TRUE(size > 0);
-    CU_ASSERT_TRUE(size < buffer_size);
-    for (j = 0; j <= size; j++) {
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, j, newick);
-        CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BUFFER_OVERFLOW);
-    }
-    err = sparse_tree_get_newick(&t, precision, 1.0, 0, size + 1, newick);
-    CU_ASSERT_EQUAL_FATAL(err, 0);
-
-    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, 0, NULL);
-        CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BAD_PARAM_VALUE);
+    if (sparse_tree_get_num_roots(&t) == 1) {
         err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
         CU_ASSERT_EQUAL_FATAL(err, 0);
         size = strlen(newick);
-        CU_ASSERT_EQUAL(newick[size - 1], ';');
+        CU_ASSERT_TRUE(size > 0);
+        CU_ASSERT_TRUE(size < buffer_size);
+        for (j = 0; j <= size; j++) {
+            err = sparse_tree_get_newick(&t, precision, 1.0, 0, j, newick);
+            CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BUFFER_OVERFLOW);
+        }
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, size + 1, newick);
+        CU_ASSERT_EQUAL_FATAL(err, 0);
+    }
+
+    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, 0, NULL);
+        if (sparse_tree_get_num_roots(&t) == 1) {
+            CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BAD_PARAM_VALUE);
+            err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
+            CU_ASSERT_EQUAL_FATAL(err, 0);
+            size = strlen(newick);
+            CU_ASSERT_EQUAL(newick[size - 1], ';');
+        } else {
+            CU_ASSERT_EQUAL(err, MSP_ERR_MULTIROOT_NEWICK);
+        }
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 

@@ -70,6 +70,17 @@ class NewickTest(unittest.TestCase):
             sample_size=25, recombination_rate=5, random_seed=self.random_seed)
         return ts
 
+    def get_multiroot_example(self):
+        ts = msprime.simulate(
+            sample_size=50, recombination_rate=5, random_seed=self.random_seed)
+        tables = ts.dump_tables()
+        edges = tables.edges
+        n = len(edges) // 2
+        edges.set_columns(
+            left=edges.left[:n], right=edges.right[:n],
+            parent=edges.parent[:n], child=edges.child[:n])
+        return msprime.load_tables(nodes=tables.nodes, edges=edges)
+
     def test_nonbinary_tree(self):
         ts = self.get_nonbinary_example()
         for t in ts.trees():

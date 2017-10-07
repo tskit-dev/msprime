@@ -192,7 +192,8 @@ class PythonSparseTree(object):
         # We only support 0 branch lengths here because this information isn't
         # immediately available.
         assert time_scale == 0 and precision == 0
-        return ",".join(self._build_newick(u) for u in self.roots) + ";"
+        assert len(self.roots) == 1
+        return self._build_newick(self.left_root) + ";"
 
     def _build_newick(self, node):
         if self.left_child[node] == msprime.NULL_NODE:

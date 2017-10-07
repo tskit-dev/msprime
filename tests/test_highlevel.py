@@ -1520,12 +1520,14 @@ class TestSparseTree(HighLevelTestCase):
         """
         Verifies that we output the newick tree as expected.
         """
-        py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
-        newick1 = tree.newick(precision=0, time_scale=0)
-        newick2 = py_tree.newick(precision=0, time_scale=0)
-        self.assertEqual(newick1, newick2)
+        if tree.num_roots == 1:
+            py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+            newick1 = tree.newick(precision=0, time_scale=0)
+            newick2 = py_tree.newick(precision=0, time_scale=0)
+            self.assertEqual(newick1, newick2)
+        else:
+            self.assertRaises(_msprime.LibraryError, tree.newick)
 
-    @unittest.skip("BUG: Multiroot newick broken")
     def test_newick(self):
         for ts in get_example_tree_sequences():
             for tree in ts.trees():
