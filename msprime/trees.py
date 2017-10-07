@@ -449,9 +449,7 @@ class SparseTree(object):
             covered by this tree.
         :rtype: tuple
         """
-        return (
-            self._ll_sparse_tree.get_left(), self._ll_sparse_tree.get_right()
-        )
+        return self._ll_sparse_tree.get_left(), self._ll_sparse_tree.get_right()
 
     @property
     def length(self):
@@ -1509,7 +1507,12 @@ class TreeSequence(object):
             this tree sequence.
         :rtype: iter
         """
-        return HaplotypeGenerator(self).haplotypes()
+        hapgen = _msprime.HaplotypeGenerator(self._ll_tree_sequence)
+        j = 0
+        # Would use range here except for Python 2.
+        while j < self.sample_size:
+            yield hapgen.get_haplotype(j)
+            j += 1
 
     def variants(self, as_bytes=False):
         """
@@ -1737,21 +1740,3 @@ class TreeSequence(object):
         raise NotImplementedError(
             "This method is no longer supported. Please use the SparseTree.newick"
             " method instead")
-
-
-class HaplotypeGenerator(object):
-
-    def __init__(self, tree_sequence):
-        self._tree_sequence = tree_sequence
-        ts = self._tree_sequence.get_ll_tree_sequence()
-        self._ll_haplotype_generator = _msprime.HaplotypeGenerator(ts)
-
-    def get_haplotype(self, sample_id):
-        return self._ll_haplotype_generator.get_haplotype(sample_id)
-
-    def haplotypes(self):
-        j = 0
-        # Would use range here except for Python 2..
-        while j < self._tree_sequence.get_sample_size():
-            yield self.get_haplotype(j)
-            j += 1

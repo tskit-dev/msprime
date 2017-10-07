@@ -806,7 +806,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
                             msprime.Mutation(site=0, node=u, derived_state="1"),
                         ])]
                 ts_new = ts.copy(sites)
-                self.assertRaises(_msprime.LibraryError, ts_new.haplotypes)
+                self.assertRaises(_msprime.LibraryError, list, ts_new.haplotypes())
 
     def test_back_mutations(self):
         for ts in get_back_mutation_examples():

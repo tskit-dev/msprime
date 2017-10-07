@@ -216,7 +216,6 @@ class SimulationRunner(object):
             if self._print_trees:
                 self.print_trees(tree_sequence, output)
             if self._mutation_rate > 0:
-                hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s, file=output)
                 if s != 0:
@@ -230,7 +229,7 @@ class SimulationRunner(object):
                             "{0:.{1}f}".format(position, self._precision),
                             end=" ", file=output)
                     print(file=output)
-                    for h in hg.haplotypes():
+                    for h in tree_sequence.haplotypes():
                         print(h, file=output)
                 else:
                     print(file=output)
