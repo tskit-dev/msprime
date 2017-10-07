@@ -1166,7 +1166,7 @@ get_example_tree_sequence(uint32_t sample_size,
      * to cancel scaling factor. */
     ret = tree_sequence_initialise(tree_seq);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edges, migrations);
+    ret = msp_populate_tables(msp, recomb_map, nodes, edges, migrations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(mutgen, nodes, edges);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2008,6 +2008,7 @@ test_simulator_getters_setters(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     double migration_matrix[] = {0, 0, 0, 0};
     double matrix[4], growth_rate, initial_size;
+    double Ne = 4;
     size_t migration_events[4];
     size_t breakpoints[m];
     population_t *population;
@@ -2055,14 +2056,16 @@ test_simulator_getters_setters(void)
             msp_set_population_configuration(&msp, 3, 0, 0),
             MSP_ERR_BAD_POPULATION_ID);
 
+    ret = msp_set_simulation_model(&msp, MSP_MODEL_HUDSON, Ne);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
+    CU_ASSERT_EQUAL(msp_get_model(&msp)->population_size, Ne);
 
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(
             msp_get_population_configuration(&msp, 3, NULL, NULL),
             MSP_ERR_BAD_POPULATION_ID);
-    ret = msp_set_population_configuration(&msp, 0, 2, 0.5);
+    ret = msp_set_population_configuration(&msp, 0, 2 * Ne, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
@@ -2095,18 +2098,18 @@ test_simulator_getters_setters(void)
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
-    ret = msp_get_population_configuration(&msp, 0,
-            &initial_size, &growth_rate);
+    ret = msp_get_population_configuration(&msp, 0, &initial_size, &growth_rate);
+    /* These values are in *coalescent units */
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(initial_size, 2);
-    CU_ASSERT_EQUAL(growth_rate, 0.5);
+    CU_ASSERT_EQUAL(growth_rate, 0.5 * 4 * Ne);
     CU_ASSERT_EQUAL(
             msp_get_population(&msp, 3, NULL),
             MSP_ERR_BAD_POPULATION_ID);
     ret = msp_get_population(&msp, 0, &population);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(population->initial_size, 2);
-    CU_ASSERT_EQUAL(population->growth_rate, 0.5);
+    CU_ASSERT_EQUAL(population->growth_rate, 0.5 * 4 * Ne);
     CU_ASSERT_EQUAL(population->start_time, 0.0);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
@@ -2136,7 +2139,7 @@ test_simulator_getters_setters(void)
     ret = msp_get_migration_matrix(&msp, matrix);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < 4; j++) {
-        CU_ASSERT_EQUAL(matrix[j], migration_matrix[j]);
+        CU_ASSERT_EQUAL(matrix[j], migration_matrix[j] * 4 * Ne);
     }
     CU_ASSERT(msp_get_num_common_ancestor_events(&msp) > 0);
     CU_ASSERT(msp_get_num_recombination_events(&msp) > 0);
@@ -2175,13 +2178,13 @@ test_simulator_model_errors(void)
     CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
     CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
     CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
-    CU_ASSERT_EQUAL(msp_set_simulation_model_non_parametric(&msp, MSP_MODEL_HUDSON),
+    CU_ASSERT_EQUAL(msp_set_simulation_model(&msp, MSP_MODEL_HUDSON, 0.25),
             MSP_ERR_UNSUPPORTED_OPERATION);
     CU_ASSERT_EQUAL(msp_free(&msp), 0);
 
     for (j = 0; j < sizeof(models) / sizeof(int); j++) {
         CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
-        CU_ASSERT_EQUAL(msp_set_simulation_model_non_parametric(&msp, models[j]), 0);
+        CU_ASSERT_EQUAL(msp_set_simulation_model(&msp, models[j], 0.25), 0);
         CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), MSP_ERR_BAD_MODEL);
         CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1),
                 MSP_ERR_BAD_MODEL);
@@ -2476,7 +2479,7 @@ test_multi_locus_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_scaled_recombination_rate(msp, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_simulation_model_non_parametric(msp, models[j]);
+        ret = msp_set_simulation_model(msp, models[j], 0.25);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -2608,7 +2611,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_populate_tables(&msp, 0.25, NULL, &nodes, &edges, &migrations);
+        ret = msp_populate_tables(&msp, NULL, &nodes, &edges, &migrations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = mutgen_generate_tables_tmp(&mutgen, &nodes, &edges);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2821,9 +2824,9 @@ test_multiple_mergers_simulation(void)
         /* TODO what are good parameters here?? */
         if (j == 0) {
             // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
-            ret = msp_set_simulation_model_dirac(msp, 0.5, 1);
+            ret = msp_set_simulation_model_dirac(msp, 1, 0.5, 1);
         } else {
-            ret = msp_set_simulation_model_beta(msp, 1.0, 10.0);
+            ret = msp_set_simulation_model_beta(msp, 1, 1.0, 10.0);
         }
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_num_loci(msp, m);

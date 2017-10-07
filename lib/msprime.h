@@ -237,12 +237,16 @@ typedef struct {
     double c; // constant
 } dirac_coalescent_t;
 
-typedef struct {
+typedef struct _simulation_model_t {
     int type;
+    double population_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
     } params;
+    double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
+    double (*generations_to_model_time)(struct _simulation_model_t *model, double g);
+    double (*generation_rate_to_model_rate)(struct _simulation_model_t *model, double r);
 } simulation_model_t;
 
 typedef struct {
@@ -655,9 +659,11 @@ typedef struct {
 } simplifier_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
-int msp_set_simulation_model_non_parametric(msp_t *self, int model);
-int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
-int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
+int msp_set_simulation_model(msp_t *self, int model, double population_size);
+int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
+    double c);
+int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
+        double truncation_point);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
@@ -691,7 +697,7 @@ int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
-int msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
+int msp_populate_tables(msp_t *self, recomb_map_t *recomb_map,
         node_table_t *node_table, edge_table_t *edge_table,
         migration_table_t *migration_table);
 int msp_reset(msp_t *self);

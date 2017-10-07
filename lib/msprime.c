@@ -109,6 +109,9 @@ msp_strerror(int err)
         case MSP_ERR_BAD_POPULATION_CONFIGURATION:
             ret = "Bad population configuration provided.";
             break;
+        case MSP_ERR_BAD_POPULATION_SIZE:
+            ret = "Bad population size provided. Must be > 0.";
+            break;
         case MSP_ERR_BAD_POPULATION_ID:
             ret = "Bad population id provided.";
             break;
@@ -458,8 +461,28 @@ msp_get_num_recombination_events(msp_t *self)
     return self->num_re_events;
 }
 
+/* Time rescaling for standard coalescent models */
+static double
+coalescent_time_to_generations(simulation_model_t *model, double t)
+{
+    return 4 * model->population_size * t;
+}
+
+static double
+generations_to_coalescent_time(simulation_model_t *model, double g)
+{
+    return g / (4 * model->population_size);
+}
+
+static double
+generation_rate_to_coalescent_rate(simulation_model_t *model, double rate)
+{
+    return rate * 4 * model->population_size;
+}
+
+
 int
-msp_set_simulation_model_non_parametric(msp_t *self, int model)
+msp_set_simulation_model(msp_t *self, int model, double population_size)
 {
     int ret = 0;
 
@@ -470,23 +493,31 @@ msp_set_simulation_model_non_parametric(msp_t *self, int model)
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
+    if (population_size <= 0) {
+        ret = MSP_ERR_BAD_POPULATION_SIZE;
+        goto out;
+    }
     if (self->demographic_events_head != NULL) {
         /* We must set the model before any demographic events */
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
     self->model.type = model;
+    self->model.population_size = population_size;
+    self->model.model_time_to_generations = coalescent_time_to_generations;
+    self->model.generations_to_model_time = generations_to_coalescent_time;
+    self->model.generation_rate_to_model_rate = generation_rate_to_coalescent_rate;
 out:
     return ret;
 }
 
 int
-msp_set_simulation_model_dirac(msp_t *self, double psi, double c)
+msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi, double c)
 {
     int ret = 0;
 
     /* TODO bounds check psi: what are legal values? */
-    ret = msp_set_simulation_model_non_parametric(self, MSP_MODEL_DIRAC);
+    ret = msp_set_simulation_model(self, MSP_MODEL_DIRAC, population_size);
     if (ret != 0) {
         goto out;
     }
@@ -497,13 +528,14 @@ out:
 }
 
 int
-msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point)
+msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
+        double truncation_point)
 {
 
     int ret = 0;
 
     /* TODO bounds check alpha and truncation_point: what are legal values? */
-    ret = msp_set_simulation_model_non_parametric(self, MSP_MODEL_BETA);
+    ret = msp_set_simulation_model(self, MSP_MODEL_BETA, population_size);
     if (ret != 0) {
         goto out;
     }
@@ -590,32 +622,36 @@ out:
 }
 
 int
-msp_set_scaled_recombination_rate(msp_t *self,
-        double scaled_recombination_rate)
+msp_set_scaled_recombination_rate(msp_t *self, double scaled_recombination_rate)
 {
     int ret = 0;
+    simulation_model_t *model = &self->model;
 
     if (scaled_recombination_rate < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->scaled_recombination_rate = scaled_recombination_rate;
+    self->scaled_recombination_rate = model->generation_rate_to_model_rate(
+            model, scaled_recombination_rate);
 out:
     return ret;
 }
 
 int
-msp_set_population_configuration(msp_t *self, int population_id,
-        double initial_size, double growth_rate)
+msp_set_population_configuration(msp_t *self, int population_id, double initial_size,
+        double growth_rate)
 {
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
+    simulation_model_t *model = &self->model;
 
     if (population_id < 0 || population_id > (int) self->num_populations) {
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    self->initial_populations[population_id].initial_size = initial_size;
-    self->initial_populations[population_id].growth_rate = growth_rate;
+    self->initial_populations[population_id].initial_size =
+        initial_size / model->population_size;
+    self->initial_populations[population_id].growth_rate =
+        model->generation_rate_to_model_rate(model, growth_rate);
     ret = 0;
 out:
     return ret;
@@ -627,6 +663,7 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
     int ret = MSP_ERR_BAD_MIGRATION_MATRIX;
     size_t j, k;
     size_t N = self->num_populations;
+    simulation_model_t *model = &self->model;
 
     if (N * N != size) {
         goto out;
@@ -646,7 +683,8 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
         }
     }
     for (j = 0; j < N * N; j++) {
-        self->initial_migration_matrix[j] = migration_matrix[j];
+        self->initial_migration_matrix[j] = model->generation_rate_to_model_rate(
+                model, migration_matrix[j]);
     }
     ret = 0;
 out:
@@ -817,6 +855,12 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
     if (ret != 0) {
         goto out;
     }
+    /* Use the standard coalescent with coalescent time units by default. */
+    self->model.type = MSP_MODEL_HUDSON;
+    self->model.population_size = 0.25;
+    self->model.generations_to_model_time = generations_to_coalescent_time;
+    self->model.model_time_to_generations = coalescent_time_to_generations;
+    self->model.generation_rate_to_model_rate = generation_rate_to_coalescent_rate;
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
@@ -2466,13 +2510,14 @@ out:
 }
 
 /*
- * Sets up the memory heaps, initial population and trees.
+ * Sets up the memory heaps and rescales times and rates into simulation units.
  */
 int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
     uint32_t j;
+    simulation_model_t *model = &self->model;
 
     /* These should really be proper checks with a return value */
     assert(self->sample_size > 1);
@@ -2483,13 +2528,21 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* First check that the sample configuration makes sense */
+    /* Samples were set before the model, so we need to rescale their times */
     for (j = 0; j < self->sample_size; j++) {
+        /* Check that the sample configuration makes sense */
         if (self->samples[j].population_id >= (population_id_t) self->num_populations) {
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
+        self->samples[j].time = model->generations_to_model_time(model,
+                self->samples[j].time);
     }
+    for (j = 0; j < self->num_sampling_events; j++) {
+        self->sampling_events[j].time = model->generations_to_model_time(model,
+            self->sampling_events[j].time);
+    }
+
     ret = msp_reset(self);
     if (ret != 0) {
         goto out;
@@ -2499,8 +2552,7 @@ out:
 }
 
 static double
-msp_get_common_ancestor_waiting_time_size(msp_t *self, population_t *pop,
-        uint32_t size)
+msp_get_common_ancestor_waiting_time_size(msp_t *self, population_t *pop, uint32_t size)
 {
     double ret = DBL_MAX;
     /* Need to perform n * (n - 1) as a double due to overflow */
@@ -2825,9 +2877,8 @@ out:
 }
 
 int WARN_UNUSED
-msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
-        node_table_t *nodes, edge_table_t *edges,
-        migration_table_t *migrations)
+msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
+        edge_table_t *edges, migration_table_t *migrations)
 {
     int ret = 0;
     size_t j;
@@ -2843,7 +2894,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
     }
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
-        scaled_time = node->time * 4 * Ne;
+        scaled_time = self->model.model_time_to_generations(&self->model, node->time);
         ret = node_table_add_row(nodes, node->flags, scaled_time, node->population, "");
         if (ret != 0) {
             goto out;
@@ -2882,7 +2933,7 @@ msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
             left = recomb_map_genetic_to_phys(recomb_map, left);
             right = recomb_map_genetic_to_phys(recomb_map, right);
         }
-        scaled_time = migration->time * 4 * Ne;
+        scaled_time = self->model.model_time_to_generations(&self->model, migration->time);
         ret = migration_table_add_row(migrations, left, right, migration->node,
                 migration->source, migration->dest, scaled_time);
         if (ret != 0) {
@@ -3133,7 +3184,9 @@ out:
     return ret;
 }
 
-/* Demographic events */
+/* Demographic events. All times and input parameters are specified in units
+ * of generations. When we store these values, we must rescale them into
+ * model time, as appropriate. */
 static int WARN_UNUSED
 msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
 {
@@ -3151,7 +3204,7 @@ msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret_event->time = time;
+    ret_event->time = self->model.generations_to_model_time(&self->model, time);
     /* now insert this event at the end of the chain. */
     if (self->demographic_events_head == NULL) {
         self->demographic_events_head = ret_event;
@@ -3242,6 +3295,8 @@ msp_print_population_parameters_change(msp_t *self,
             event->params.population_parameters_change.growth_rate);
 }
 
+/* Adds a population parameter change event. Time and growth_rate are measured in
+ * units of generations, and the initial size is an absolute value. */
 int
 msp_add_population_parameters_change(msp_t *self, double time, int population_id,
         double initial_size, double growth_rate)
@@ -3249,6 +3304,7 @@ msp_add_population_parameters_change(msp_t *self, double time, int population_id
     int ret = -1;
     demographic_event_t *de;
     int N = (int) self->num_populations;
+    simulation_model_t *model = &self->model;
 
     if (population_id < -1 || population_id >= N) {
         ret = MSP_ERR_BAD_POPULATION_ID;
@@ -3267,8 +3323,10 @@ msp_add_population_parameters_change(msp_t *self, double time, int population_id
         goto out;
     }
     de->params.population_parameters_change.population_id = population_id;
-    de->params.population_parameters_change.initial_size = initial_size;
-    de->params.population_parameters_change.growth_rate = growth_rate;
+    de->params.population_parameters_change.initial_size =
+        initial_size / model->population_size;
+    de->params.population_parameters_change.growth_rate =
+        model->generation_rate_to_model_rate(model, growth_rate);
     de->change_state = msp_change_population_parameters;
     de->print_state = msp_print_population_parameters_change;
     ret = 0;
@@ -3335,6 +3393,8 @@ msp_print_migration_rate_change(msp_t *self,
             event->params.migration_rate_change.migration_rate);
 }
 
+/* Add a migration rate change event. Time and migration rate are measured in
+ * units of generations. */
 int WARN_UNUSED
 msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate)
@@ -3342,6 +3402,7 @@ msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
     int ret = -1;
     demographic_event_t *de;
     int N = (int) self->num_populations;
+    simulation_model_t *model = &self->model;
 
     if (matrix_index < -1 || matrix_index >= N * N) {
         ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
@@ -3359,7 +3420,8 @@ msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
     if (ret != 0) {
         goto out;
     }
-    de->params.migration_rate_change.migration_rate = migration_rate;
+    de->params.migration_rate_change.migration_rate =
+        model->generation_rate_to_model_rate(model, migration_rate);
     de->params.migration_rate_change.matrix_index = matrix_index;
     de->change_state = msp_change_migration_rate;
     de->print_state = msp_print_migration_rate_change;
@@ -3415,6 +3477,7 @@ msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
             event->params.mass_migration.proportion);
 }
 
+/* Adds a mass migration event. Time is measured in units of generations */
 int WARN_UNUSED
 msp_add_mass_migration(msp_t *self, double time, int source, int destination,
         double proportion)
@@ -3506,9 +3569,9 @@ msp_print_simple_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
             event->params.simple_bottleneck.proportion);
 }
 
+/* Add a simple bottleneck event. Time is measured in generations */
 int WARN_UNUSED
-msp_add_simple_bottleneck(msp_t *self, double time, int population_id,
-        double proportion)
+msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double proportion)
 {
     int ret = 0;
     demographic_event_t *de;
@@ -3678,6 +3741,8 @@ msp_print_instantaneous_bottleneck(msp_t *self, demographic_event_t *event, FILE
             event->params.instantaneous_bottleneck.strength);
 }
 
+/* Add an instantaneous bottleneck event. Time and strength are measured in generations
+ */
 int WARN_UNUSED
 msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
         double strength)
@@ -3685,6 +3750,7 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     int ret = 0;
     demographic_event_t *de;
     int N = (int) self->num_populations;
+    simulation_model_t *model = &self->model;
 
     if (population_id < 0 || population_id >= N) {
         ret = MSP_ERR_BAD_POPULATION_ID;
@@ -3703,7 +3769,8 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
         goto out;
     }
     de->params.instantaneous_bottleneck.population_id = population_id;
-    de->params.instantaneous_bottleneck.strength = strength;
+    de->params.instantaneous_bottleneck.strength =
+        model->generations_to_model_time(model, strength);
     de->change_state = msp_instantaneous_bottleneck;
     de->print_state = msp_print_instantaneous_bottleneck;
     ret = 0;

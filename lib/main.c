@@ -117,7 +117,7 @@ read_model_config(msp_t *msp, config_t *config)
     config_setting_t *setting = config_lookup(config, "model");
     config_setting_t *s;
     const char *name;
-    double psi, c, alpha, truncation_point;
+    double population_size, psi, c, alpha, truncation_point;
 
     if (setting == NULL) {
         fatal_error("model is a required parameter");
@@ -130,12 +130,18 @@ read_model_config(msp_t *msp, config_t *config)
         fatal_error("model name not specified");
     }
     name = config_setting_get_string(s);
+
+    s = config_setting_get_member(setting, "population_size");
+    if (s == NULL) {
+        fatal_error("population_size not specified");
+    }
+    population_size = config_setting_get_float(s);
     if (strcmp(name, "hudson") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_HUDSON);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_HUDSON, population_size);
     } else if (strcmp(name, "smc") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC, population_size);
     } else if (strcmp(name, "smc_prime") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC_PRIME);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC_PRIME, population_size);
     } else if (strcmp(name, "dirac") == 0) {
         s = config_setting_get_member(setting, "psi");
         if (s == NULL) {
@@ -147,7 +153,7 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("dirac model c not specified");
         }
         c = config_setting_get_float(s);
-        ret = msp_set_simulation_model_dirac(msp, psi, c);
+        ret = msp_set_simulation_model_dirac(msp, population_size, psi, c);
     } else if (strcmp(name, "beta") == 0) {
         s = config_setting_get_member(setting, "alpha");
         if (s == NULL) {
@@ -159,10 +165,15 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("beta model truncation_point not specified");
         }
         truncation_point = config_setting_get_float(s);
-        ret = msp_set_simulation_model_beta(msp, alpha, truncation_point);
+        ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
     } else {
         fatal_error("Unknown simulation model '%s'", name);
     }
+    if (ret != 0) {
+        goto out;
+    }
+
+out:
     return ret;
 }
 
@@ -882,10 +893,8 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        /* Create the tree_sequence from the state of the simulator.
-         * We want to use coalescent time here, so use an Ne of 1/4
-         * to cancel scaling factor. */
-        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edges, migrations);
+        /* Create the tree_sequence from the state of the simulator. */
+        ret = msp_populate_tables(msp, recomb_map, nodes, edges, migrations);
         if (ret != 0) {
             goto out;
         }
