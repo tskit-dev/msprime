@@ -58,22 +58,25 @@ class PythonSparseTree(object):
         self.right_child = [msprime.NULL_NODE for _ in range(num_nodes)]
         self.left_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
         self.right_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.above_sample = [False for _ in range(num_nodes)]
+        self.is_sample = [False for _ in range(num_nodes)]
         self.left = 0
         self.right = 0
         self.root = 0
         self.index = -1
         self.sample_size = 0
+        self.left_root = -1
         # We need a sites function, so this name is taken.
         self.site_list = []
 
     @classmethod
     def from_sparse_tree(cls, sparse_tree):
         ret = PythonSparseTree(sparse_tree.num_nodes)
-        ret.root = sparse_tree.get_root()
         ret.sample_size = sparse_tree.get_sample_size()
         ret.left, ret.right = sparse_tree.get_interval()
         ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
+        ret.left_root = sparse_tree.left_root
         for u in range(ret.num_nodes):
             ret.parent[u] = sparse_tree.parent(u)
             ret.left_child[u] = sparse_tree.left_child(u)
@@ -82,6 +85,15 @@ class PythonSparseTree(object):
             ret.right_sib[u] = sparse_tree.right_sib(u)
         assert ret == sparse_tree
         return ret
+
+    @property
+    def roots(self):
+        u = self.left_root
+        roots = []
+        while u != msprime.NULL_NODE:
+            roots.append(u)
+            u = self.right_sib[u]
+        return roots
 
     def children(self, u):
         v = self.left_child[u]
@@ -119,26 +131,26 @@ class PythonSparseTree(object):
             self._levelorder_nodes(c, l, level + 1)
 
     def nodes(self, root=None, order="preorder"):
-        u = root
-        l = []
+        roots = [root]
         if root is None:
-            u = self.root
-        if order == "preorder":
-            self._preorder_nodes(u, l)
-            return iter(l)
-        elif order == "inorder":
-            self._inorder_nodes(u, l)
-            return iter(l)
-        elif order == "postorder":
-            self._postorder_nodes(u, l)
-            return iter(l)
-        elif order == "levelorder" or order == "breadthfirst":
-            # Returns nodes in their respective levels
-            # Nested list comprehension flattens l in order
-            self._levelorder_nodes(u, l, 0)
-            return iter([i for level in l for i in level])
-        else:
-            raise ValueError("order not supported")
+            roots = self.roots
+        for u in roots:
+            l = []
+            if order == "preorder":
+                self._preorder_nodes(u, l)
+            elif order == "inorder":
+                self._inorder_nodes(u, l)
+            elif order == "postorder":
+                self._postorder_nodes(u, l)
+            elif order == "levelorder" or order == "breadthfirst":
+                # Returns nodes in their respective levels
+                # Nested list comprehension flattens l in order
+                self._levelorder_nodes(u, l, 0)
+                l = iter([i for level in l for i in level])
+            else:
+                raise ValueError("order not supported")
+            for v in l:
+                yield v
 
     def get_sample_size(self):
         return self.sample_size
@@ -151,9 +163,6 @@ class PythonSparseTree(object):
 
     def get_children(self, node):
         return self.children[node]
-
-    def get_root(self):
-        return self.root
 
     def get_index(self):
         return self.index
@@ -172,7 +181,7 @@ class PythonSparseTree(object):
             self.get_sample_size() == other.get_sample_size() and
             self.get_parent_dict() == other.get_parent_dict() and
             self.get_interval() == other.get_interval() and
-            self.get_root() == other.get_root() and
+            self.roots == other.roots and
             self.get_index() == other.get_index() and
             list(self.sites()) == list(other.sites()))
 
@@ -183,7 +192,8 @@ class PythonSparseTree(object):
         # We only support 0 branch lengths here because this information isn't
         # immediately available.
         assert time_scale == 0 and precision == 0
-        return self._build_newick(self.root) + ";"
+        assert len(self.roots) == 1
+        return self._build_newick(self.left_root) + ";"
 
     def _build_newick(self, node):
         if self.left_child[node] == msprime.NULL_NODE:
@@ -217,50 +227,6 @@ class PythonTreeSequence(object):
                 position=pos, ancestral_state=ancestral_state, index=index,
                 mutations=[_Mutation(*mut) for mut in mutations]))
 
-    def _diffs(self):
-        M = self._tree_sequence.get_num_edges()
-        records = [self._tree_sequence.get_record(j) for j in range(M)]
-        l = [record[0] for record in records]
-        r = [record[1] for record in records]
-        u = [record[2] for record in records]
-        c = [record[3] for record in records]
-        t = [record[4] for record in records]
-        I = sorted(range(M), key=lambda j: (l[j], t[j]))
-        O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-        j = 0
-        k = 0
-        while j < M:
-            r_out = []
-            r_in = []
-            x = l[I[j]]
-            while r[O[k]] == x:
-                h = O[k]
-                r_out.append((u[h], c[h], t[h]))
-                k += 1
-            while j < M and l[I[j]] == x:
-                h = I[j]
-                r_in.append((u[h], c[h], t[h]))
-                j += 1
-            yield r[O[k]] - x, r_out, r_in
-
-    def _diffs_with_breaks(self):
-        k = 1
-        x = 0
-        b = self._breakpoints
-        for length, records_out, records_in in self._diffs():
-            x += length
-            yield b[k] - b[k - 1], records_out, records_in
-            while self._breakpoints[k] != x:
-                k += 1
-                yield b[k] - b[k - 1], [], []
-            k += 1
-
-    def diffs(self, all_breaks=False):
-        if all_breaks:
-            return self._diffs_with_breaks()
-        else:
-            return self._diffs()
-
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
         edges = [self._tree_sequence.get_edge(j) for j in range(M)]
@@ -292,60 +258,164 @@ class PythonTreeSequence(object):
             left = right
 
     def trees(self):
+
         M = self._tree_sequence.get_num_edges()
-        edges = [self._tree_sequence.get_edge(j) for j in range(M)]
+        edges = [
+            msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
         t = [
             self._tree_sequence.get_node(j)[1]
             for j in range(self._tree_sequence.get_num_nodes())]
-        l = [edge[0] for edge in edges]
-        r = [edge[1] for edge in edges]
-        p = [edge[2] for edge in edges]
-        c = [edge[3] for edge in edges]
-        I = sorted(range(M), key=lambda j: (l[j], t[p[j]], p[j], c[j]))
-        O = sorted(range(M), key=lambda j: (r[j], -t[p[j]], -p[j], -c[j]))
+        I = sorted(
+            range(M), key=lambda j: (
+                edges[j].left, t[edges[j].parent], edges[j].parent, edges[j].child))
+        O = sorted(
+            range(M), key=lambda j: (
+                edges[j].right, -t[edges[j].parent], -edges[j].parent, -edges[j].child))
         j = 0
         k = 0
-        st = PythonSparseTree(self._tree_sequence.get_num_nodes())
+        N = self._tree_sequence.get_num_nodes()
+        st = PythonSparseTree(N)
         st.sample_size = self._tree_sequence.get_sample_size()
+        samples = list(self._tree_sequence.get_samples())
+        for l in range(len(samples)):
+            if l < len(samples) - 1:
+                st.right_sib[samples[l]] = samples[l + 1]
+            if l > 0:
+                st.left_sib[samples[l]] = samples[l - 1]
+            st.above_sample[samples[l]] = True
+            st.is_sample[samples[l]] = True
+
+        st.left_root = samples[0]
+
+        u = st.left_root
+        roots = []
+        while u != -1:
+            roots.append(u)
+            v = st.right_sib[u]
+            if v != -1:
+                assert st.left_sib[v] == u
+            u = v
+
         st.left = 0
         while j < M:
-            while r[O[k]] == st.left:
-                parent = p[O[k]]
-                child = c[O[k]]
-                lsib = st.left_sib[child]
-                rsib = st.right_sib[child]
+            while edges[O[k]].right == st.left:
+                p = edges[O[k]].parent
+                c = edges[O[k]].child
+                k += 1
+
+                lsib = st.left_sib[c]
+                rsib = st.right_sib[c]
                 if lsib == msprime.NULL_NODE:
-                    st.left_child[parent] = rsib
+                    st.left_child[p] = rsib
                 else:
                     st.right_sib[lsib] = rsib
                 if rsib == msprime.NULL_NODE:
-                    st.right_child[parent] = lsib
+                    st.right_child[p] = lsib
                 else:
                     st.left_sib[rsib] = lsib
-                st.parent[child] = msprime.NULL_NODE
-                st.left_sib[child] = msprime.NULL_NODE
-                st.right_sib[child] = msprime.NULL_NODE
-                k += 1
-            while j < M and l[I[j]] == st.left:
-                parent = p[I[j]]
-                child = c[I[j]]
-                u = st.right_child[parent]
-                if u == msprime.NULL_NODE:
-                    st.left_child[parent] = c
-                else:
-                    st.right_sib[u] = child
-                    st.left_sib[child] = u
-                st.right_child[parent] = child
-                st.parent[child] = parent
+                st.parent[c] = msprime.NULL_NODE
+                st.left_sib[c] = msprime.NULL_NODE
+                st.right_sib[c] = msprime.NULL_NODE
+
+                # If c is not above a sample then we have nothing to do as we
+                # cannot affect the status of any roots.
+                if st.above_sample[c]:
+                    # Compute the new above sample status for the nodes from
+                    # p up to root.
+                    v = p
+                    above_sample = False
+                    while v != msprime.NULL_NODE and not above_sample:
+                        above_sample = st.is_sample[v]
+                        u = st.left_child[v]
+                        while u != msprime.NULL_NODE:
+                            above_sample = above_sample or st.above_sample[u]
+                            u = st.right_sib[u]
+                        st.above_sample[v] = above_sample
+                        root = v
+                        v = st.parent[v]
+
+                    if not above_sample:
+                        # root is no longer above samples. Remove it from the root list.
+                        lroot = st.left_sib[root]
+                        rroot = st.right_sib[root]
+                        st.left_root = msprime.NULL_NODE
+                        if lroot != msprime.NULL_NODE:
+                            st.right_sib[lroot] = rroot
+                            st.left_root = lroot
+                        if rroot != msprime.NULL_NODE:
+                            st.left_sib[rroot] = lroot
+                            st.left_root = rroot
+                        st.left_sib[root] = msprime.NULL_NODE
+                        st.right_sib[root] = msprime.NULL_NODE
+
+                    # Add c to the root list.
+                    # print("Insert ", c, "into root list")
+                    if st.left_root != msprime.NULL_NODE:
+                        lroot = st.left_sib[st.left_root]
+                        if lroot != msprime.NULL_NODE:
+                            st.right_sib[lroot] = c
+                        st.left_sib[c] = lroot
+                        st.left_sib[st.left_root] = c
+                    st.right_sib[c] = st.left_root
+                    st.left_root = c
+
+            while j < M and edges[I[j]].left == st.left:
+                p = edges[I[j]].parent
+                c = edges[I[j]].child
                 j += 1
-            st.right = r[O[k]]
+
+                # print("insert ", c, "->", p)
+                st.parent[c] = p
+                u = st.right_child[p]
+                lsib = st.left_sib[c]
+                rsib = st.right_sib[c]
+                if u == msprime.NULL_NODE:
+                    st.left_child[p] = c
+                    st.left_sib[c] = msprime.NULL_NODE
+                    st.right_sib[c] = msprime.NULL_NODE
+                else:
+                    st.right_sib[u] = c
+                    st.left_sib[c] = u
+                    st.right_sib[c] = msprime.NULL_NODE
+                st.right_child[p] = c
+
+                if st.above_sample[c]:
+                    v = p
+                    above_sample = False
+                    while v != msprime.NULL_NODE and not above_sample:
+                        above_sample = st.above_sample[v]
+                        st.above_sample[v] = st.above_sample[v] or st.above_sample[c]
+                        root = v
+                        v = st.parent[v]
+                    # print("root = ", root, st.above_sample[root])
+
+                    if not above_sample:
+                        # Replace c with root in root list.
+                        # print("replacing", root, "with ", c ," in root list")
+                        if lsib != msprime.NULL_NODE:
+                            st.right_sib[lsib] = root
+                        if rsib != msprime.NULL_NODE:
+                            st.left_sib[rsib] = root
+                        st.left_sib[root] = lsib
+                        st.right_sib[root] = rsib
+                        st.left_root = root
+                    else:
+                        # Remove c from root list.
+                        # print("remove ", c ," from root list")
+                        st.left_root = msprime.NULL_NODE
+                        if lsib != msprime.NULL_NODE:
+                            st.right_sib[lsib] = rsib
+                            st.left_root = lsib
+                        if rsib != msprime.NULL_NODE:
+                            st.left_sib[rsib] = lsib
+                            st.left_root = rsib
+
+            st.right = edges[O[k]].right
             if j < M:
-                st.right = min(r[O[k]], l[I[j]])
-            # Insert the root
-            root = 0
-            while st.parent[root] != msprime.NULL_NODE:
-                root = st.parent[root]
-            st.root = root
+                st.right = min(edges[O[k]].right, edges[I[j]].left)
+            assert st.left_root != msprime.NULL_NODE
+            while st.left_sib[st.left_root] != msprime.NULL_NODE:
+                st.left_root = st.left_sib[st.left_root]
             st.index += 1
             # Add in all the sites
             st.site_list = [

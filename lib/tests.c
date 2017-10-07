@@ -610,8 +610,10 @@ verify_tree_next_prev(tree_sequence_t *ts)
         CU_ASSERT_EQUAL_FATAL(j - 1, t.index);
         ret = sparse_tree_equal(&t, &trees[t.index]);
         if (ret != 0) {
-            printf("tree differ\n");
+            printf("trees differ\n");
+            printf("REVERSE tree::\n");
             sparse_tree_print_state(&t, stdout);
+            printf("FORWARD tree::\n");
             sparse_tree_print_state(&trees[t.index], stdout);
         }
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -866,8 +868,6 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
     sparse_tree_free(&tree);
 }
 
-
-
 static void
 verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
         node_id_t *samples, uint32_t num_samples, node_id_t *sample_map)
@@ -917,13 +917,21 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
                 for (k = j + 1; k < num_samples; k++) {
                     ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k], &mrca1);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    if (mrca1 == MSP_NULL_NODE) {
+                        tmrca1 = -1.0;
+                    } else {
+                        ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
+                        CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    }
                     ret = sparse_tree_get_mrca(&subset_tree, sample_map[j], sample_map[k],
                             &mrca2);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    ret = sparse_tree_get_time(&subset_tree, mrca2, &tmrca2);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    if (mrca2 == MSP_NULL_NODE) {
+                        tmrca2 = -1.0;
+                    } else {
+                        ret = sparse_tree_get_time(&subset_tree, mrca2, &tmrca2);
+                        CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    }
                     CU_ASSERT_EQUAL(tmrca1, tmrca2);
                 }
             }
@@ -1235,7 +1243,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     mutation_table_t mutations;
     site_table_t sites;
     node_id_t *stack;
-    node_id_t u;
+    node_id_t u, root;
     site_id_t site_id;
     char *state = NULL;
     int stack_top = 0;
@@ -1262,29 +1270,31 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
         ret = site_table_add_row(&sites, tree.left, "0", 1);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         /* Traverse down the tree */
-        stack_top = 0;
-        stack[0] = tree.root;
-        state[tree.root] = 0;
-        while (stack_top >= 0) {
-            u = stack[stack_top];
-            stack_top--;
-            if (u != tree.root) {
-                state[u] = (state[u] + 1) % 2;
-                ret = mutation_table_add_row(&mutations, site_id, u,
-                        state[u] == 0? "0": "1", 1);
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
+        for (root = tree.left_root; root != MSP_NULL_NODE; root = tree.right_sib[root]) {
+            stack_top = 0;
+            stack[0] = root;
+            state[root] = 0;
+            while (stack_top >= 0) {
+                u = stack[stack_top];
+                stack_top--;
+                if (u != root) {
+                    state[u] = (state[u] + 1) % 2;
+                    ret = mutation_table_add_row(&mutations, site_id, u,
+                            state[u] == 0? "0": "1", 1);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                }
+                /* To ensure that the mutations are sorted in time order, we only
+                 * traverse down the left-most path to the sample. This means we
+                 * don't really need a stack at all, but we may extend this to a full
+                 * traversal in the future. */
+                if (tree.left_child[u] != MSP_NULL_NODE) {
+                    stack_top++;
+                    stack[stack_top] = tree.left_child[u];
+                    state[tree.left_child[u]] = state[u];
+                }
             }
-            /* To ensure that the mutations are sorted in time order, we only
-             * traverse down the left-most path to the sample. This means we
-             * don't really need a stack at all, but we may extend this to a full
-             * traversal in the future. */
-            if (tree.left_child[u] != MSP_NULL_NODE) {
-                stack_top++;
-                stack[stack_top] = tree.left_child[u];
-                state[tree.left_child[u]] = state[u];
-            }
+            site_id++;
         }
-        site_id++;
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -1449,6 +1459,63 @@ make_gappy_copy(tree_sequence_t *ts)
     return new_ts;
 }
 
+/* Return a copy of the tree sequence after deleting half of its edges.
+ */
+tree_sequence_t *
+make_decapitated_copy(tree_sequence_t *ts)
+{
+    int ret;
+    tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
+    node_table_t nodes;
+    edge_table_t edges;
+    migration_table_t migrations;
+    mutation_table_t mutations;
+    site_table_t sites;
+    char **provenance_strings;
+    size_t j, num_provenance_strings;
+    node_id_t oldest_node;
+
+    CU_ASSERT_FATAL(new_ts != NULL);
+    ret = node_table_alloc(&nodes, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edge_table_alloc(&edges, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migrations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&sites, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutations, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tree_sequence_dump_tables_tmp(ts, &nodes, &edges,
+            &migrations, &sites, &mutations, &num_provenance_strings,
+            &provenance_strings);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edges.num_rows -= edges.num_rows / 4;
+    oldest_node = edges.parent[edges.num_rows - 1];
+    j = 0;
+    while (j < mutations.num_rows && mutations.node[j] < oldest_node) {
+        j++;
+    }
+    mutations.num_rows = j;
+    mutations.total_derived_state_length = j;
+    sites.num_rows = j;
+    sites.total_ancestral_state_length = j;
+
+    ret = tree_sequence_initialise(new_ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(new_ts, &nodes, &edges, &migrations,
+            &sites, &mutations, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    node_table_free(&nodes);
+    edge_table_free(&edges);
+    migration_table_free(&migrations);
+    site_table_free(&sites);
+    mutation_table_free(&mutations);
+    return new_ts;
+}
+
 tree_sequence_t **
 get_example_tree_sequences(int include_nonbinary)
 {
@@ -1469,7 +1536,8 @@ get_example_tree_sequences(int include_nonbinary)
     ret[4] = make_recurrent_and_back_mutations_copy(ret[0]);
     ret[5] = make_permuted_nodes_copy(ret[0]);
     ret[6] = make_gappy_copy(ret[0]);
-    k = 7;
+    ret[7] = make_decapitated_copy(ret[0]);
+    k = 8;
     if (include_nonbinary) {
         nonbinary = get_example_nonbinary_tree_sequences();
         for (j = 0; nonbinary[j] != NULL; j++) {
@@ -3008,6 +3076,7 @@ test_simplest_degenerate_multiple_root_records(void)
         "0  1   2   0\n"
         "0  1   3   1\n";
     tree_sequence_t ts, simplified;
+    sparse_tree_t t;
     node_id_t sample_ids[] = {0, 1};
     node_id_t sample_map[2];
 
@@ -3017,6 +3086,15 @@ test_simplest_degenerate_multiple_root_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+
+    sparse_tree_alloc(&t, &ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&t);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&t), 2);
+    CU_ASSERT_EQUAL(t.left_root, 2);
+    CU_ASSERT_EQUAL(t.right_sib[2], 3);
+    CU_ASSERT_EQUAL(t.right_sib[3], MSP_NULL_NODE);
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3029,6 +3107,7 @@ test_simplest_degenerate_multiple_root_records(void)
 
     tree_sequence_free(&simplified);
     tree_sequence_free(&ts);
+    sparse_tree_free(&t);
 }
 
 static void
@@ -4436,9 +4515,8 @@ test_single_nonbinary_tree_iter(void)
     CU_ASSERT_EQUAL(tree.left_sib[7], 6);
     CU_ASSERT_EQUAL(tree.left_sib[6], MSP_NULL_NODE);
 
-    ret = sparse_tree_get_root(&tree, &w);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(w, 9);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&tree), 1);
+    CU_ASSERT_EQUAL(tree.left_root, 9);
 
     ret = sparse_tree_get_mrca(&tree, 0, 1, &w);
     CU_ASSERT_EQUAL(ret, 0);
@@ -5357,6 +5435,50 @@ test_left_to_right_tree_sequence_iter(void)
     tree_sequence_free(&ts);
 }
 
+static void
+test_gappy_tree_sequence_iter(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  0.090   0\n"
+        "0  0.170   0\n"
+        "0  0.253   0\n"
+        "0  0.071   0\n"
+        "0  0.202   0\n";
+    const char *edges =
+        "2 7  7 2\n"
+        "8 10 7 2\n"
+        "2 7  7 3\n"
+        "8 10 7 3\n"
+        "1 2  4 1\n"
+        "2 7  4 1\n"
+        "8 10 4 1\n"
+        "1 2  4 3\n"
+        "2 7  4 7\n"
+        "8 10 4 7\n"
+        "1 7  5 0,4\n"
+        "8 10 8 0,4\n"
+        "1 2  6 2,5\n";
+    node_id_t z = MSP_NULL_NODE;
+    node_id_t parents[] = {
+        z, z, z, z, z, z, z, z, z,
+        5, 4, 6, 4, 5, 6, z, z, z,
+        5, 4, 7, 7, 5, z, z, 4, z,
+        z, z, z, z, z, z, z, z, z,
+        8, 4, 7, 7, 8, z, z, 4, z,
+    };
+    tree_sequence_t ts;
+    uint32_t num_trees = 5;
+
+    tree_sequence_from_text(&ts, nodes, edges, NULL, NULL, NULL, NULL);
+    verify_trees(&ts, num_trees, parents);
+    verify_tree_next_prev(&ts);
+    tree_sequence_free(&ts);
+}
+
 typedef struct {
     uint32_t tree_index;
     uint32_t node;
@@ -5929,11 +6051,7 @@ test_next_prev_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 6) {
-            printf("\nFIXME simplify tree next/prev bug on gappy tree sequence.\n\n");
-        } else {
-            verify_tree_next_prev(examples[j]);
-        }
+        verify_tree_next_prev(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -6089,7 +6207,12 @@ test_ld_from_examples(void)
     for (j = 0; examples[j] != NULL; j++) {
         /* j = 4 corresponds to the recurrent mutation case where we
          * trigger an assert */
-        if (j != 4) {
+        if (j == 4) {
+            printf("\nSkipping recurrent mutation example\n");
+        } else if (j == 7) {
+            /* We assume no mutations occur over roots in LD calc */
+            printf("\nSkipping decapitated example\n");
+        } else {
             verify_ld(examples[j]);
         }
         tree_sequence_free(examples[j]);
@@ -6182,8 +6305,8 @@ test_simplify_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 6) {
-            printf("\nFIXME simplify tree checks on gappy sequence fail\n\n");
+        if (j == 7) {
+            printf("\nFIXME simplify sequence_length not handled correctly. \n\n");
         } else {
             verify_simplify(examples[j]);
             verify_simplify_errors(examples[j]);
@@ -6210,25 +6333,31 @@ verify_newick(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_first(&t);
     CU_ASSERT_FATAL(ret == 1);
-    err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
-    CU_ASSERT_EQUAL_FATAL(err, 0);
-    size = strlen(newick);
-    CU_ASSERT_TRUE(size > 0);
-    CU_ASSERT_TRUE(size < buffer_size);
-    for (j = 0; j <= size; j++) {
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, j, newick);
-        CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BUFFER_OVERFLOW);
-    }
-    err = sparse_tree_get_newick(&t, precision, 1.0, 0, size + 1, newick);
-    CU_ASSERT_EQUAL_FATAL(err, 0);
-
-    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, 0, NULL);
-        CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BAD_PARAM_VALUE);
+    if (sparse_tree_get_num_roots(&t) == 1) {
         err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
         CU_ASSERT_EQUAL_FATAL(err, 0);
         size = strlen(newick);
-        CU_ASSERT_EQUAL(newick[size - 1], ';');
+        CU_ASSERT_TRUE(size > 0);
+        CU_ASSERT_TRUE(size < buffer_size);
+        for (j = 0; j <= size; j++) {
+            err = sparse_tree_get_newick(&t, precision, 1.0, 0, j, newick);
+            CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BUFFER_OVERFLOW);
+        }
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, size + 1, newick);
+        CU_ASSERT_EQUAL_FATAL(err, 0);
+    }
+
+    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
+        err = sparse_tree_get_newick(&t, precision, 1.0, 0, 0, NULL);
+        if (sparse_tree_get_num_roots(&t) == 1) {
+            CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BAD_PARAM_VALUE);
+            err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
+            CU_ASSERT_EQUAL_FATAL(err, 0);
+            size = strlen(newick);
+            CU_ASSERT_EQUAL(newick[size - 1], ';');
+        } else {
+            CU_ASSERT_EQUAL(err, MSP_ERR_MULTIROOT_NEWICK);
+        }
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -7437,6 +7566,7 @@ main(int argc, char **argv)
         {"test_internal_sample_simplified_tree_sequence_iter",
             test_internal_sample_simplified_tree_sequence_iter},
         {"test_left_to_right_tree_sequence_iter", test_left_to_right_tree_sequence_iter},
+        {"test_gappy_tree_sequence_iter", test_gappy_tree_sequence_iter},
         {"test_tree_sequence_bad_records", test_tree_sequence_bad_records},
         {"test_tree_sequence_diff_iter", test_tree_sequence_diff_iter},
         {"test_nonbinary_tree_sequence_diff_iter",

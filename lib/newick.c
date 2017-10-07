@@ -27,8 +27,8 @@
 /* This infrastructure is left-over from an earlier more complex version
  * of this algorithm that worked over a tree sequence and cached the newick
  * subtrees, updating according to diffs. It's unclear whether this complexity
- * was of any real-world use, since newick output for large trees is not very
- * useful. */
+ * was of any real-world use, since newick output for large trees is pretty
+ * pointless. */
 
 int
 newick_converter_run(newick_converter_t *self, size_t buffer_size, char *buffer)
@@ -48,7 +48,7 @@ newick_converter_run(newick_converter_t *self, size_t buffer_size, char *buffer)
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    stack[0] = tree->root;
+    stack[0] = tree->left_root;
     u = MSP_NULL_NODE;
     while (stack_top >= 0) {
         v = stack[stack_top];
@@ -125,10 +125,15 @@ newick_converter_alloc(newick_converter_t *self, sparse_tree_t *tree,
     int ret = 0;
 
     memset(self, 0, sizeof(newick_converter_t));
+    if (sparse_tree_get_num_roots(tree) != 1) {
+        ret = MSP_ERR_MULTIROOT_NEWICK;
+        goto out;
+    }
     self->precision = precision;
     self->time_scale = time_scale;
     self->flags = flags;
     self->tree = tree;
+out:
     return ret;
 }
 

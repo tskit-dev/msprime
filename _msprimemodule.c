@@ -4043,6 +4043,19 @@ out:
 }
 
 static PyObject *
+SparseTree_get_num_roots(SparseTree *self)
+{
+    PyObject *ret = NULL;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) sparse_tree_get_num_roots(self->sparse_tree));
+out:
+    return ret;
+}
+
+static PyObject *
 SparseTree_get_index(SparseTree *self)
 {
     PyObject *ret = NULL;
@@ -4056,14 +4069,14 @@ out:
 }
 
 static PyObject *
-SparseTree_get_root(SparseTree *self)
+SparseTree_get_left_root(SparseTree *self)
 {
     PyObject *ret = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("i", (int) self->sparse_tree->root);
+    ret = Py_BuildValue("i", (int) self->sparse_tree->left_root);
 out:
     return ret;
 }
@@ -4446,11 +4459,13 @@ static PyMethodDef SparseTree_methods[] = {
             "Frees the underlying tree object." },
     {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
             "Returns the number of nodes in the sparse tree." },
+    {"get_num_roots", (PyCFunction) SparseTree_get_num_roots, METH_NOARGS,
+            "Returns the number of roots in the sparse tree." },
     {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
             "Returns the sample size" },
     {"get_index", (PyCFunction) SparseTree_get_index, METH_NOARGS,
             "Returns the index this tree occupies within the tree sequence." },
-    {"get_root", (PyCFunction) SparseTree_get_root, METH_NOARGS,
+    {"get_left_root", (PyCFunction) SparseTree_get_left_root, METH_NOARGS,
             "Returns the root of the tree." },
     {"get_left", (PyCFunction) SparseTree_get_left, METH_NOARGS,
             "Returns the left-most coordinate (inclusive)." },

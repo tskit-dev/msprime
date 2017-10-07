@@ -2562,6 +2562,7 @@ sparse_tree_clear(sparse_tree_t *self)
     memset(self->right_child, 0xff, N * sizeof(node_id_t));
     memset(self->left_sib, 0xff, N * sizeof(node_id_t));
     memset(self->right_sib, 0xff, N * sizeof(node_id_t));
+    memset(self->above_sample, 0, N * sizeof(bool));
     if (self->flags & MSP_SAMPLE_COUNTS) {
         memset(self->num_samples, 0, N * sizeof(node_id_t));
         memset(self->marked, 0, N * sizeof(uint8_t));
@@ -2579,8 +2580,12 @@ sparse_tree_clear(sparse_tree_t *self)
         memset(self->sample_list_tail, 0, N * sizeof(node_list_t *));
     }
     /* Set the sample attributes */
+    if (self->sample_size > 0) {
+        self->left_root = self->samples[0];
+    }
     for (j = 0; j < self->sample_size; j++) {
         u = self->samples[j];
+        self->above_sample[u] = true;
         if (self->flags & MSP_SAMPLE_COUNTS) {
             self->num_samples[u] = 1;
         }
@@ -2590,6 +2595,13 @@ sparse_tree_clear(sparse_tree_t *self)
             w->node = (node_id_t) u;
             self->sample_list_head[u] = w;
             self->sample_list_tail[u] = w;
+        }
+        /* Set initial roots */
+        if (j < self->sample_size - 1) {
+            self->right_sib[self->samples[j]] = self->samples[j + 1];
+        }
+        if (j > 0) {
+            self->left_sib[self->samples[j]] = self->samples[j - 1];
         }
     }
     return ret;
@@ -2619,8 +2631,10 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     self->right_child = malloc(num_nodes * sizeof(node_id_t));
     self->left_sib = malloc(num_nodes * sizeof(node_id_t));
     self->right_sib = malloc(num_nodes * sizeof(node_id_t));
+    self->above_sample = malloc(num_nodes * sizeof(bool));
     if (self->parent == NULL || self->left_child == NULL || self->right_child == NULL
-            || self->left_sib == NULL || self->right_sib == NULL) {
+            || self->left_sib == NULL || self->right_sib == NULL
+            || self->above_sample == NULL) {
         goto out;
     }
     /* the maximum possible height of the tree is num_nodes + 1, including
@@ -2661,6 +2675,7 @@ sparse_tree_free(sparse_tree_t *self)
     msp_safe_free(self->right_child);
     msp_safe_free(self->left_sib);
     msp_safe_free(self->right_sib);
+    msp_safe_free(self->above_sample);
     msp_safe_free(self->stack1);
     msp_safe_free(self->stack2);
     msp_safe_free(self->num_samples);
@@ -2778,7 +2793,7 @@ sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source)
     }
     self->left = source->left;
     self->right = source->right;
-    self->root = source->root;
+    self->left_root = source->left_root;
     self->index = source->index;
     self->sites = source->sites;
     self->sites_length = source->sites_length;
@@ -2825,7 +2840,6 @@ sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other)
     condition = self->index == other->index
         && self->left == other->left
         && self->right == other->right
-        && self->root == other->root
         && self->sites_length == other->sites_length
         && self->sites == other->sites
         && memcmp(self->parent, other->parent, N * sizeof(node_id_t)) == 0;
@@ -2985,17 +2999,23 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
-sparse_tree_get_root(sparse_tree_t *self, node_id_t *root)
-{
-    *root = self->root;
-    return 0;
-}
-
 bool
 sparse_tree_is_sample(sparse_tree_t *self, node_id_t u)
 {
     return tree_sequence_is_sample(self->tree_sequence, u);
+}
+
+size_t
+sparse_tree_get_num_roots(sparse_tree_t *self)
+{
+    size_t num_roots = 0;
+    node_id_t u = self->left_root;
+
+    while (u != MSP_NULL_NODE) {
+        u = self->right_sib[u];
+        num_roots++;
+    }
+    return num_roots;
 }
 
 int WARN_UNUSED
@@ -3059,6 +3079,7 @@ sparse_tree_check_state(sparse_tree_t *self)
     int err, c;
     site_t site;
     node_id_t *children = malloc(self->num_nodes * sizeof(node_id_t));
+    bool *is_root = calloc(self->num_nodes, sizeof(bool));
 
     assert(children != NULL);
 
@@ -3067,9 +3088,16 @@ sparse_tree_check_state(sparse_tree_t *self)
         while (self->parent[u] != MSP_NULL_NODE) {
             u = self->parent[u];
         }
-        /* assert(u == self->root); */
+        is_root[u] = true;
+    }
+    assert(self->left_sib[self->left_root] == MSP_NULL_NODE);
+    /* Iterate over the roots and make sure they are set */
+    for (u = self->left_root; u != MSP_NULL_NODE; u = self->right_sib[u]) {
+        assert(is_root[u]);
+        is_root[u] = false;
     }
     for (u = 0; u < (node_id_t) self->num_nodes; u++) {
+        assert(!is_root[u]);
         c = 0;
         for (v = self->left_child[u]; v != MSP_NULL_NODE; v = self->right_sib[v]) {
             assert(self->parent[v] == u);
@@ -3111,6 +3139,7 @@ sparse_tree_check_state(sparse_tree_t *self)
     }
 
     free(children);
+    free(is_root);
 }
 
 void
@@ -3124,7 +3153,7 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     fprintf(out, "flags = %d\n", self->flags);
     fprintf(out, "left = %f\n", self->left);
     fprintf(out, "right = %f\n", self->right);
-    fprintf(out, "root = %d\n", (int) self->root);
+    fprintf(out, "left_root = %d\n", (int) self->left_root);
     fprintf(out, "index = %d\n", (int) self->index);
     fprintf(out, "node\tparent\tlchild\trchild\tlsib\trsib\n");
 
@@ -3244,19 +3273,21 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     int direction_change = direction * (direction != self->direction);
     node_id_t in = *in_index + direction_change;
     node_id_t out = *out_index + direction_change;
-    node_id_t k, p, c, u, lsib, rsib;
+    node_id_t k, p, c, u, v, root, lsib, rsib, lroot, rroot;
     tree_sequence_t *s = self->tree_sequence;
     node_id_t R = (node_id_t) s->edges.num_records;
     double x;
+    bool above_sample;
 
     if (direction == MSP_DIR_FORWARD) {
         x = self->right;
     } else {
         x = self->left;
     }
-    while (out_breakpoints[out_order[out]] == x) {
+    while (out >= 0 && out < R && out_breakpoints[out_order[out]] == x) {
         assert(out < R);
         k = out_order[out];
+        out += direction;
         p = s->edges.parent[k];
         c = s->edges.child[k];
         lsib = self->left_sib[c];
@@ -3280,11 +3311,58 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         if (self->flags & MSP_SAMPLE_LISTS) {
             sparse_tree_update_sample_lists(self, p);
         }
-        out += direction;
+
+        /* Update the roots. If c is not above a sample then we have nothing to do
+         * as we cannot affect the status of any roots. */
+        if (self->above_sample[c]) {
+            /* Compute the new above sample status for the nodes from p up to root. */
+            v = p;
+            root = v;
+            above_sample = false;
+            while (v != MSP_NULL_NODE && !above_sample) {
+                above_sample = s->nodes.flags[v] & MSP_NODE_IS_SAMPLE;
+                u = self->left_child[v];
+                while (u != MSP_NULL_NODE) {
+                    above_sample = above_sample || self->above_sample[u];
+                    u = self->right_sib[u];
+                }
+                self->above_sample[v] = above_sample;
+                root = v;
+                v = self->parent[v];
+            }
+            if (!above_sample) {
+                /* root is no longer above samples. Remove it from the root list */
+                lroot = self->left_sib[root];
+                rroot = self->right_sib[root];
+                self->left_root = MSP_NULL_NODE;
+                if (lroot != MSP_NULL_NODE) {
+                    self->right_sib[lroot] = rroot;
+                    self->left_root = lroot;
+                }
+                if (rroot != MSP_NULL_NODE) {
+                    self->left_sib[rroot] = lroot;
+                    self->left_root = rroot;
+                }
+                self->left_sib[root] = MSP_NULL_NODE;
+                self->right_sib[root] = MSP_NULL_NODE;
+            }
+            /* Add c to the root list */
+            if (self->left_root != MSP_NULL_NODE) {
+                lroot = self->left_sib[self->left_root];
+                if (lroot != MSP_NULL_NODE) {
+                    self->right_sib[lroot] = c;
+                }
+                self->left_sib[c] = lroot;
+                self->left_sib[self->left_root] = c;
+            }
+            self->right_sib[c] = self->left_root;
+            self->left_root = c;
+        }
     }
 
     while (in >= 0 && in < R && in_breakpoints[in_order[in]] == x) {
         k = in_order[in];
+        in += direction;
         p = s->edges.parent[k];
         c = s->edges.child[k];
         if (self->parent[c] != MSP_NULL_NODE) {
@@ -3293,11 +3371,16 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
         self->parent[c] = p;
         u = self->right_child[p];
+        lsib = self->left_sib[c];
+        rsib = self->right_sib[c];
         if (u == MSP_NULL_NODE) {
             self->left_child[p] = c;
+            self->left_sib[c] = MSP_NULL_NODE;
+            self->right_sib[c] = MSP_NULL_NODE;
         } else {
             self->right_sib[u] = c;
             self->left_sib[c] = u;
+            self->right_sib[c] = MSP_NULL_NODE;
         }
         self->right_child[p] = c;
         if (self->flags & MSP_SAMPLE_COUNTS) {
@@ -3306,35 +3389,71 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         if (self->flags & MSP_SAMPLE_LISTS) {
             sparse_tree_update_sample_lists(self, p);
         }
-        in += direction;
+
+        /* Update the roots. */
+        if (self->above_sample[c]) {
+            v = p;
+            root = v;
+            above_sample = false;
+            while (v != MSP_NULL_NODE && !above_sample) {
+                above_sample = self->above_sample[v];
+                self->above_sample[v] = self->above_sample[v] || self->above_sample[c];
+                root = v;
+                v = self->parent[v];
+            }
+            if (! above_sample) {
+                /* Replace c with root in root list */
+                if (lsib != MSP_NULL_NODE) {
+                    self->right_sib[lsib] = root;
+                }
+                if (rsib != MSP_NULL_NODE) {
+                    self->left_sib[rsib] = root;
+                }
+                self->left_sib[root] = lsib;
+                self->right_sib[root] = rsib;
+                self->left_root = root;
+            } else {
+                /* Remove c from root list */
+                /* self->left_root = MSP_NULL_NODE; */
+                if (lsib != MSP_NULL_NODE) {
+                    self->right_sib[lsib] = rsib;
+                    self->left_root = lsib;
+                }
+                if (rsib != MSP_NULL_NODE) {
+                    self->left_sib[rsib] = lsib;
+                    self->left_root = rsib;
+                }
+            }
+        }
     }
 
-    /* TODO change this naive algorithm to track all roots. */
-    self->root = self->samples[0];
-    while (self->parent[self->root] != MSP_NULL_NODE) {
-        self->root = self->parent[self->root];
+    /* Ensure that left_root is the left-most root */
+    while (self->left_sib[self->left_root] != MSP_NULL_NODE) {
+        self->left_root = self->left_sib[self->left_root];
     }
 
+    self->direction = direction;
+    self->index = (size_t) ((int64_t) self->index + direction);
     if (direction == MSP_DIR_FORWARD) {
         self->left = x;
         self->right = s->sequence_length;
-        if (in < R) {
-            self->right = GSL_MIN(
-                    in_breakpoints[in_order[in]], out_breakpoints[out_order[out]]);
+        if (out >= 0 && out < R) {
+            self->right = GSL_MIN(self->right, out_breakpoints[out_order[out]]);
         }
-        /* if (out < R) { */
-        /*     self->right = out_breakpoints[out_order[out]]; */
-        /* } */
+        if (in >= 0 && in < R) {
+            self->right = GSL_MIN(self->right, in_breakpoints[in_order[in]]);
+        }
     } else {
         self->right = x;
         self->left = 0;
-        if (out < R) {
-            /* TODO Don't think this is fully correct. */
-            self->left = out_breakpoints[out_order[out]];
+        if (out >= 0 && out < R) {
+            self->left = GSL_MAX(self->left, out_breakpoints[out_order[out]]);
+        }
+        if (in >= 0 && in < R) {
+            self->left = GSL_MAX(self->left, in_breakpoints[in_order[in]]);
         }
     }
-    self->direction = direction;
-    self->index = (size_t) ((int64_t) self->index + direction);
+    assert(self->left < self->right);
     *out_index = out;
     *in_index = in;
     if (s->sites.num_records > 0) {

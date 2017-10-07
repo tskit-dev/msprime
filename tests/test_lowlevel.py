@@ -629,7 +629,10 @@ class TestSimulationState(LowLevelTestCase):
                 pi_p[u] = sparse_tree.get_parent(u)
                 u = pi_p[u]
         self.assertEqual(pi_p, pi)
-        self.assertEqual(pi_p[sparse_tree.get_root()], NULL_NODE)
+        u = sparse_tree.get_left_root()
+        while u != NULL_NODE:
+            self.assertEqual(pi_p[u], NULL_NODE)
+            u = sparse_tree.get_right_sib(u)
 
     def verify_mrcas(self, sparse_tree):
         """
@@ -2280,7 +2283,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
             root = 0
             while st.get_parent(root) != NULL_NODE:
                 root = st.get_parent(root)
-            self.assertEqual(st.get_root(), root)
+            self.assertEqual(st.get_left_root(), root)
 
 
 class TestHaplotypeGenerator(LowLevelTestCase):
@@ -2469,7 +2472,7 @@ class TestSparseTree(LowLevelTestCase):
             self.assertEqual(st.get_num_nodes(), ts.get_num_nodes())
             self.assertEqual(st.get_sample_size(), ts.get_sample_size())
             # An uninitialised sparse tree should always be zero.
-            self.assertEqual(st.get_root(), 0)
+            self.assertEqual(st.get_left_root(), 0)
             self.assertEqual(st.get_left(), 0)
             self.assertEqual(st.get_right(), 0)
             for j in range(n):
@@ -2493,7 +2496,7 @@ class TestSparseTree(LowLevelTestCase):
             del ts
             del st_iter
             # Do a quick traversal just to exercise the tree
-            stack = [st.get_root()]
+            stack = [st.get_left_root()]
             while len(stack) > 0:
                 u = stack.pop()
                 self.assertLess(u, num_nodes)
@@ -2645,6 +2648,7 @@ class TestSparseTree(LowLevelTestCase):
                         point = t.find(".")
                         self.assertEqual(precision, len(t) - point - 1)
 
+    @unittest.skip("Newick Multiroots")
     def test_newick_interface(self):
         ts = self.get_tree_sequence(num_loci=10, sample_size=10)
         st = _msprime.SparseTree(ts)
@@ -2712,7 +2716,7 @@ class TestSparseTree(LowLevelTestCase):
         t = _msprime.SparseTree(
             ts, flags=_msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS)
         no_arg_methods = [
-            t.get_root, t.get_sample_size, t.get_index, t.get_left, t.get_right,
+            t.get_left_root, t.get_sample_size, t.get_index, t.get_left, t.get_right,
             t.get_num_sites, t.get_flags, t.get_sites, t.get_num_nodes]
         node_arg_methods = [
             t.get_parent, t.get_population, t.get_children, t.get_num_samples,
@@ -3131,7 +3135,7 @@ class TestSampleListIterator(LowLevelTestCase):
         for tree in _msprime.SparseTreeIterator(tree):
             self.verify_iterator(_msprime.SampleListIterator(tree, 1))
             self.verify_iterator(
-                _msprime.SampleListIterator(tree, tree.get_root()))
+                _msprime.SampleListIterator(tree, tree.get_left_root()))
 
     def test_sample_list(self):
         examples = [
@@ -3149,13 +3153,17 @@ class TestSampleListIterator(LowLevelTestCase):
                     self.assertEqual(samples, [j])
                 # All non-tree nodes should have 0
                 for j in range(t.get_num_nodes()):
-                    if t.get_parent(j) == 0 and j != t.get_root():
+                    if t.get_parent(j) == NULL_NODE \
+                            and t.get_left_child(j) == NULL_NODE:
                         samples = list(_msprime.SampleListIterator(t, j))
                         self.assertEqual(len(samples), 0)
-                # The root should have all samples.
-                samples = list(_msprime.SampleListIterator(t, t.get_root()))
-                self.assertEqual(
-                    sorted(samples), list(range(t.get_sample_size())))
+                # The roots should have all samples.
+                u = t.get_left_root()
+                samples = []
+                while u != NULL_NODE:
+                    samples.extend(_msprime.SampleListIterator(t, u))
+                    u = t.get_right_sib(u)
+                self.assertEqual(sorted(samples), list(range(t.get_sample_size())))
 
 
 class TestRecombinationMap(LowLevelTestCase):

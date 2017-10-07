@@ -567,17 +567,67 @@ class SparseTree(object):
         return self._ll_sparse_tree.get_num_nodes()
 
     @property
-    def root(self):
-        return self.get_root()
-
-    def get_root(self):
+    def num_roots(self):
         """
-        Returns the root of this tree.
+        The number of roots in this tree, as defined in the :attr:`.roots` attribute.
+
+        Requires O(number of roots) time.
+
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_num_roots()
+
+    @property
+    def roots(self):
+        """
+        The list of roots in this tree. A root is defined as a unique endpoint of
+        the paths starting at samples. We can define the set of roots as follows:
+
+        .. code-block:: python
+
+            roots = set()
+            for u in tree_sequence.samples():
+                while tree.parent(u) != msprime.NULL_NODE:
+                    u = tree.parent(u)
+                roots.add(u)
+            # roots is now the set of all roots in this tree.
+            assert sorted(roots) == sorted(tree.roots)
+
+        The roots of the tree are returned in a list, in no particular order.
+
+        Requires O(number of roots) time.
+
+        :rtype: list
+        """
+        roots = []
+        u = self.left_root
+        while u != NULL_NODE:
+            roots.append(u)
+            u = self.right_sib(u)
+        return roots
+
+    @property
+    def root(self):
+        """
+        The root of this tree. If the tree contains multiple roots, a ValueError is
+        raised indicating that the :attr:`.roots` attribute should be used instead.
 
         :return: The root node.
         :rtype: int
+        :raises: ValueError if this tree contains more than one root.
         """
-        return self._ll_sparse_tree.get_root()
+        root = self.left_root
+        if self.right_sib(root) != NULL_NODE:
+            raise ValueError("More than one root exists. Use tree.roots instead")
+        return root
+
+    def get_root(self):
+        # Deprecated alias for self.root
+        return self.root
+
+    @property
+    def left_root(self):
+        return self._ll_sparse_tree.get_left_root()
 
     @property
     def index(self):
@@ -772,11 +822,13 @@ class SparseTree(object):
         :return: An iterator over all leaves in the subtree rooted at u.
         :rtype: iterator
         """
+        roots = [u]
         if u is None:
-            u = self.root
-        for v in self.nodes(u):
-            if self.is_leaf(v):
-                yield v
+            roots = self.roots
+        for root in roots:
+            for v in self.nodes(root):
+                if self.is_leaf(v):
+                    yield v
 
     def _sample_generator(self, u):
         for v in self.nodes(u):
@@ -797,12 +849,16 @@ class SparseTree(object):
         :return: An iterator over all samples in the subtree rooted at u.
         :rtype: iterator
         """
+        roots = [u]
         if u is None:
-            u = self.root
-        if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
-            return _msprime.SampleListIterator(self._ll_sparse_tree, u)
-        else:
-            return self._sample_generator(u)
+            roots = self.roots
+        for root in roots:
+            if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
+                for v in _msprime.SampleListIterator(self._ll_sparse_tree, root):
+                    yield v
+            else:
+                for v in self._sample_generator(root):
+                    yield v
 
     def get_num_leaves(self, u):
         # Deprecated alias for num_samples. The method name is inaccurate
@@ -834,9 +890,10 @@ class SparseTree(object):
         :return: The number of samples in the subtree rooted at u.
         :rtype: int
         """
+        roots = [u]
         if u is None:
-            u = self.root
-        return self._ll_sparse_tree.get_num_samples(u)
+            roots = self.roots
+        return sum(self._ll_sparse_tree.get_num_samples(u) for u in roots)
 
     def get_num_tracked_leaves(self, u):
         # Deprecated alias for num_tracked_samples. The method name is inaccurate
@@ -863,13 +920,14 @@ class SparseTree(object):
         :raises RuntimeError: if the :meth:`.TreeSequence.trees`
             method is not called with ``sample_counts=True``.
         """
+        roots = [u]
         if u is None:
-            u = self.root
+            roots = self.roots
         if not (self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_COUNTS):
             raise RuntimeError(
                 "The get_num_tracked_samples method is only supported "
                 "when sample_counts=True.")
-        return self._ll_sparse_tree.get_num_tracked_samples(u)
+        return sum(self._ll_sparse_tree.get_num_tracked_samples(root) for root in roots)
 
     def _preorder_traversal(self, u):
         stack = [u]
@@ -923,18 +981,23 @@ class SparseTree(object):
             are supported.
         :rtype: iterator
         """
-        u = self.get_root() if root is None else root
-        if order == "preorder":
-            return self._preorder_traversal(u)
-        elif order == "postorder":
-            return self._postorder_traversal(u)
-        elif order == "inorder":
-            return self._inorder_traversal(u)
-        elif order == "levelorder" or order == "breadthfirst":
-            return self._levelorder_traversal(u)
-        else:
-            raise ValueError(
-                "Traversal ordering '{}' not supported".format(order))
+        methods = {
+            "preorder": self._preorder_traversal,
+            "inorder": self._inorder_traversal,
+            "postorder": self._postorder_traversal,
+            "levelorder": self._levelorder_traversal,
+            "breadthfirst": self._levelorder_traversal
+        }
+        try:
+            iterator = methods[order]
+        except KeyError:
+            raise ValueError("Traversal ordering '{}' not supported".format(order))
+        roots = [root]
+        if root is None:
+            roots = self.roots
+        for u in roots:
+            for v in iterator(u):
+                yield v
 
     def newick(self, precision=14, time_scale=1):
         s = self._ll_sparse_tree.get_newick(precision=precision, time_scale=time_scale)
