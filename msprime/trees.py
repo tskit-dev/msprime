@@ -446,11 +446,7 @@ class SparseTree(object):
         root = self.left_root
         if self.right_sib(root) != NULL_NODE:
             raise ValueError("More than one root exists. Use tree.roots instead")
-        return self.get_root()
-
-    def get_root(self):
-        # Deprecated alias for self.root
-        return self.root
+        return root
 
     def get_root(self):
         # Deprecated alias for self.root
@@ -1675,11 +1671,11 @@ class TreeSequence(object):
     def copy(self, sites=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
         # the sites set to the specified list.
-        node_table = msprime.NodeTable()
-        edge_table = msprime.EdgeTable()
-        migration_table = msprime.MigrationTable()
-        site_table = msprime.SiteTable()
-        mutation_table = msprime.MutationTable()
+        node_table = tables.NodeTable()
+        edge_table = tables.EdgeTable()
+        migration_table = tables.MigrationTable()
+        site_table = tables.SiteTable()
+        mutation_table = tables.MutationTable()
         self._ll_tree_sequence.dump_tables(
             nodes=node_table, edges=edge_table, migrations=migration_table,
             sites=site_table, mutations=mutation_table)
