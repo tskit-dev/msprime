@@ -34,6 +34,8 @@ except ImportError:
 
 IS_PY2 = sys.version_info[0] < 3
 
+NULL_NODE = -1
+
 
 def draw_tree(
         tree, width=None, height=None, times=False,
@@ -132,14 +134,15 @@ class SvgTreeDrawer(TreeDrawer):
 
     def _assign_coordinates(self):
         y_padding = 20
-        t = self._tree.get_time(self._tree.get_root())
+        t = max(self._tree.time(root) for root in self._tree.roots)
         self._y_scale = (self._height - 2 * y_padding) / t
         for u in self._tree.nodes():
             scaled_t = self._tree.get_time(u) * self._y_scale
             self._y_coords[u] = self._height - scaled_t - y_padding
         self._x_scale = self._width / (self._num_leaves + 2)
         self._sample_x = 1
-        self._assign_x_coordinates(self._tree.get_root())
+        for root in self._tree.roots:
+            self._assign_x_coordinates(root)
         self._mutations = []
         node_mutations = collections.defaultdict(list)
         for site in self._tree.sites():
@@ -161,7 +164,7 @@ class SvgTreeDrawer(TreeDrawer):
         Assign x coordinates to all nodes underneath this node.
         """
         if self._tree.is_internal(node):
-            children = self._tree.get_children(node)
+            children = self._tree.children(node)
             for c in children:
                 self._assign_x_coordinates(c)
             coords = [self._x_coords[c] for c in children]
@@ -188,7 +191,7 @@ class SvgTreeDrawer(TreeDrawer):
             dy = None
             if self._tree.is_sample(u):
                 dy = [20]
-            elif u == self._tree.root:
+            elif self._tree.parent(u) == NULL_NODE:
                 dy = [-5]
             else:
                 dx = [-10]
@@ -203,7 +206,7 @@ class SvgTreeDrawer(TreeDrawer):
                 labels.add(dwg.text(
                     "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
                     dy=dy))
-            if u != self._tree.root:
+            if self._tree.parent(u) != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, (x[0], y[1])))
                 lines.add(dwg.line((x[0], y[1]), y))
@@ -245,24 +248,30 @@ class TextTreeDrawer(TreeDrawer):
         # Get the depth of every node.
         for u in self._tree.nodes():
             v = u
-            depth = 0
-            while v != self._tree.root:
+            depth = -1
+            while v != NULL_NODE:
                 v = self._tree.parent(v)
                 depth += 1
-            self._y_coords[u] = 2 * depth
+            self._y_coords[u] = 3 * depth
         self._height = max(self._y_coords.values()) + 1
         # Get the overall width and assign x coordinates.
         x = 0
-        for u in self._tree.nodes(order="postorder"):
-            if self._tree.is_leaf(u):
-                self._x_coords[u] = x
-                x += len(self._node_label_text[u]) + 1
-            else:
-                coords = [self._x_coords[c] for c in self._tree.children(u)]
-                a = min(coords)
-                b = max(coords)
-                assert b - a > 1
-                self._x_coords[u] = int(round((a + (b - a) / 2)))
+        for root in self._tree.roots:
+            for u in self._tree.nodes(root, order="postorder"):
+                if self._tree.is_leaf(u):
+                    self._x_coords[u] = x
+                    x += len(self._node_label_text[u]) + 1
+                else:
+                    coords = [self._x_coords[c] for c in self._tree.children(u)]
+                    if len(coords) == 1:
+                        self._x_coords[u] = coords[0]
+                    else:
+                        a = min(coords)
+                        b = max(coords)
+                        assert b - a > 1
+                        self._x_coords[u] = int(round((a + (b - a) / 2)))
+
+            x += 1
         self._width = x + 1
 
     def _draw(self):
@@ -287,11 +296,14 @@ class TextTreeDrawer(TreeDrawer):
                 canvas[row * w + right] = self.right_shoulder_char
                 for col in range(left + 1, right):
                     canvas[row * w + col] = self.horizontal_line_char
-                canvas[row * w + self._x_coords[u]] = self.below_node_char
+                if len(self._tree.children(u)) == 1:
+                    canvas[row * w + self._x_coords[u]] = self.vertical_line_char
+                else:
+                    canvas[row * w + self._x_coords[u]] = self.below_node_char
                 top = row + 1
                 for v in children:
                     col = self._x_coords[v]
-                    for row in range(top, self._y_coords[v] - 1):
+                    for row in range(top, self._y_coords[v]):
                         canvas[row * w + col] = self.vertical_line_char
         # Put in the EOLs last so that if we can't overwrite them.
         for row in range(h):

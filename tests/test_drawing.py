@@ -53,6 +53,37 @@ class TestTreeDraw(unittest.TestCase):
                     return t
         assert False
 
+    def get_multiroot_tree(self):
+        ts = msprime.simulate(15, random_seed=1)
+        # Take off the top quarter of edges
+        tables = ts.dump_tables()
+        edges = tables.edges
+        n = len(edges) - len(edges) // 4
+        edges.set_columns(
+            left=edges.left[:n], right=edges.right[:n],
+            parent=edges.parent[:n], child=edges.child[:n])
+        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        for t in ts.trees():
+            if t.num_roots > 1:
+                return t
+        assert False
+
+    def get_unary_node_tree(self):
+        ts = msprime.simulate(2, random_seed=1)
+        tables = ts.dump_tables()
+        edges = tables.edges
+        # Take out all the edges except 1
+        n = 1
+        edges.set_columns(
+            left=edges.left[:n], right=edges.right[:n],
+            parent=edges.parent[:n], child=edges.child[:n])
+        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        for t in ts.trees():
+            for u in t.nodes():
+                if len(t.children(u)) == 1:
+                    return t
+        assert False
+
 
 class TestFormats(TestTreeDraw):
     """
@@ -124,6 +155,16 @@ class TestDrawText(TestTreeDraw):
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
+    def test_draw_multiroot(self):
+        t = self.get_multiroot_tree()
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
+    def test_draw_unary(self):
+        t = self.get_unary_node_tree()
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
     def test_labels(self):
         t = self.get_binary_tree()
         labels = {u: self.example_label for u in t.nodes()}
@@ -174,6 +215,16 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_nonbinary(self):
         t = self.get_nonbinary_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
+    def test_draw_multiroot(self):
+        t = self.get_multiroot_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
+    def test_draw_unary(self):
+        t = self.get_unary_node_tree()
         svg = t.draw()
         self.verify_basic_svg(svg)
 
