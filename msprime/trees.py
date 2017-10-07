@@ -568,10 +568,37 @@ class SparseTree(object):
 
     @property
     def num_roots(self):
+        """
+        The number of roots in this tree, as defined in the :attr:`.roots` attribute.
+
+        Requires O(number of roots) time.
+
+        :rtype: int
+        """
         return self._ll_sparse_tree.get_num_roots()
 
     @property
     def roots(self):
+        """
+        The list of roots in this tree. A root is defined as a unique endpoint of
+        the paths starting at samples. We can define the set of roots as follows:
+
+        .. code-block:: python
+
+            roots = set()
+            for u in tree_sequence.samples():
+                while tree.parent(u) != msprime.NULL_NODE:
+                    u = tree.parent(u)
+                roots.add(u)
+            # roots is now the set of all roots in this tree.
+            assert sorted(roots) == sorted(tree.roots)
+
+        The roots of the tree are returned in a list, in no particular order.
+
+        Requires O(number of roots) time.
+
+        :rtype: list
+        """
         roots = []
         u = self.left_root
         while u != NULL_NODE:
@@ -581,19 +608,22 @@ class SparseTree(object):
 
     @property
     def root(self):
-        return self.get_root()
-
-    def get_root(self):
         """
-        Returns the root of this tree.
+        The root of this tree. If the tree contains multiple roots, a ValueError is
+        raised indicating that the :attr:`.roots` attribute should be used instead.
 
         :return: The root node.
         :rtype: int
+        :raises: ValueError if this tree contains more than one root.
         """
         root = self.left_root
         if self.right_sib(root) != NULL_NODE:
             raise ValueError("More than one root exists. Use tree.roots instead")
         return root
+
+    def get_root(self):
+        # Deprecated alias for self.root
+        return self.root
 
     @property
     def left_root(self):
