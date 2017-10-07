@@ -619,7 +619,11 @@ class SparseTree(object):
         root = self.left_root
         if self.right_sib(root) != NULL_NODE:
             raise ValueError("More than one root exists. Use tree.roots instead")
-        return root
+        return self.get_root()
+
+    def get_root(self):
+        # Deprecated alias for self.root
+        return self.root
 
     def get_root(self):
         # Deprecated alias for self.root
