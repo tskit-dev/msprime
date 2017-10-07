@@ -480,6 +480,11 @@ generation_rate_to_coalescent_rate(simulation_model_t *model, double rate)
     return rate * 4 * model->population_size;
 }
 
+static double
+coalescent_rate_to_generation_rate(simulation_model_t *model, double rate)
+{
+    return rate / (4 * model->population_size);
+}
 
 int
 msp_set_simulation_model(msp_t *self, int model, double population_size)
@@ -507,6 +512,7 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
     self->model.model_time_to_generations = coalescent_time_to_generations;
     self->model.generations_to_model_time = generations_to_coalescent_time;
     self->model.generation_rate_to_model_rate = generation_rate_to_coalescent_rate;
+    self->model.model_rate_to_generation_rate = coalescent_rate_to_generation_rate;
 out:
     return ret;
 }
@@ -861,6 +867,7 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
     self->model.generations_to_model_time = generations_to_coalescent_time;
     self->model.model_time_to_generations = coalescent_time_to_generations;
     self->model.generation_rate_to_model_rate = generation_rate_to_coalescent_rate;
+    self->model.model_rate_to_generation_rate = coalescent_rate_to_generation_rate;
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
@@ -3152,34 +3159,20 @@ msp_get_samples(msp_t *self, sample_t **samples)
 }
 
 int WARN_UNUSED
-msp_get_population_configuration(msp_t *self, size_t population_id,
-        double *initial_size, double *growth_rate)
+msp_get_population_configuration(msp_t *self, size_t population_id, double *initial_size,
+        double *growth_rate)
 {
     int ret = 0;
     population_t *pop;
+    simulation_model_t *model = &self->model;
 
     if (population_id > self->num_populations) {
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
     pop = &self->populations[population_id];
-    *initial_size = pop->initial_size;
-    *growth_rate = pop->growth_rate;
-out:
-    return ret;
-}
-
-int WARN_UNUSED
-msp_get_population(msp_t *self, size_t population_id,
-        population_t **population)
-{
-    int ret = 0;
-
-    if (population_id > self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
-        goto out;
-    }
-    *population = &self->populations[population_id];
+    *initial_size = model->population_size * pop->initial_size;
+    *growth_rate = model->model_rate_to_generation_rate(model, pop->growth_rate);
 out:
     return ret;
 }

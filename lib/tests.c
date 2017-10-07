@@ -2011,7 +2011,6 @@ test_simulator_getters_setters(void)
     double Ne = 4;
     size_t migration_events[4];
     size_t breakpoints[m];
-    population_t *population;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -2099,18 +2098,9 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_get_population_configuration(&msp, 0, &initial_size, &growth_rate);
-    /* These values are in *coalescent units */
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(initial_size, 2);
-    CU_ASSERT_EQUAL(growth_rate, 0.5 * 4 * Ne);
-    CU_ASSERT_EQUAL(
-            msp_get_population(&msp, 3, NULL),
-            MSP_ERR_BAD_POPULATION_ID);
-    ret = msp_get_population(&msp, 0, &population);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(population->initial_size, 2);
-    CU_ASSERT_EQUAL(population->growth_rate, 0.5 * 4 * Ne);
-    CU_ASSERT_EQUAL(population->start_time, 0.0);
+    CU_ASSERT_EQUAL(initial_size, 2 * Ne);
+    CU_ASSERT_EQUAL(growth_rate, 0.5);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);

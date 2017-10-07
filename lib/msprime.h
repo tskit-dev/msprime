@@ -246,7 +246,8 @@ typedef struct _simulation_model_t {
     } params;
     double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
     double (*generations_to_model_time)(struct _simulation_model_t *model, double g);
-    double (*generation_rate_to_model_rate)(struct _simulation_model_t *model, double r);
+    double (*generation_rate_to_model_rate)(struct _simulation_model_t *model, double rg);
+    double (*model_rate_to_generation_rate)(struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
 typedef struct {
@@ -715,8 +716,6 @@ int msp_get_migrations(msp_t *self, migration_t **migrations);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
-int msp_get_population(msp_t *self, size_t population_id,
-        population_t **population);
 int msp_is_completed(msp_t *self);
 
 simulation_model_t * msp_get_model(msp_t *self);

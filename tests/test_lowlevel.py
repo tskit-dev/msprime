@@ -60,11 +60,11 @@ def uniform_recombination_map(sim):
         [sim.get_scaled_recombination_rate(), 0])
 
 
-def get_simulation_model(name="hudson", **kwargs):
+def get_simulation_model(name="hudson", population_size=0.25, **kwargs):
     """
     Returns simulation model dictionary suitable for passing to the low-level API.
     """
-    d = {"name": name}
+    d = {"name": name, "population_size": population_size}
     d.update(kwargs)
     return d
 
@@ -197,7 +197,7 @@ def get_migration_matrix(num_populations, value=1.0):
 
 
 def get_example_simulator(
-        sample_size=10, random_seed=1, num_populations=1,
+        sample_size=10, Ne=0.25, random_seed=1, num_populations=1,
         store_migrations=False):
     samples = [(j % num_populations, 0) for j in range(sample_size)]
     migration_matrix = [1 for _ in range(num_populations**2)]
@@ -209,23 +209,22 @@ def get_example_simulator(
         samples, _msprime.RandomGenerator(random_seed),
         population_configuration=population_configuration,
         migration_matrix=migration_matrix,
-        store_migrations=store_migrations)
+        store_migrations=store_migrations,
+        model=get_simulation_model(population_size=Ne))
     return sim
 
 
-def populate_tree_sequence(
-        sim, Ne=0.25, mutation_generator=None, provenance_strings=[]):
+def populate_tree_sequence(sim, mutation_generator=None, provenance_strings=[]):
     nodes = _msprime.NodeTable()
     edges = _msprime.EdgeTable()
     migrations = _msprime.MigrationTable()
     sites = _msprime.SiteTable()
     mutations = _msprime.MutationTable()
     ts = _msprime.TreeSequence()
-    sim.populate_tables(nodes, edges, migrations, Ne=Ne)
+    sim.populate_tables(nodes, edges, migrations)
     if mutation_generator is not None:
         mutation_generator.generate(nodes, edges, sites, mutations)
-    ts.load_tables(
-        nodes, edges, migrations, sites, mutations, provenance_strings)
+    ts.load_tables(nodes, edges, migrations, sites, mutations, provenance_strings)
     return ts
 
 
@@ -1187,7 +1186,7 @@ class TestSimulator(LowLevelTestCase):
         for alpha in [1.0, 2.2, 1e-4]:
             for truncation_point in [0.1, 1.5, 1e9]:
                 model = get_simulation_model(
-                    "beta", alpha=alpha, truncation_point=truncation_point)
+                    "beta", 2, alpha=alpha, truncation_point=truncation_point)
                 sim = f(model=model)
                 self.assertEqual(sim.get_model(), model)
 
@@ -1269,7 +1268,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(sim.get_migration_matrix(), [0.0])
         self.assertEqual(
             sim.get_population_configuration(),
-            [get_population_configuration()])
+            [get_population_configuration(initial_size=0.25)])
 
     def test_bad_population_configurations(self):
         def f(population_configuration):
@@ -1836,8 +1835,6 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(edge_table.num_rows, sim.get_num_edges())
         kwargs["recombination_map"] = recomb_map
         sim.populate_tables(**kwargs)
-        kwargs["Ne"] = 0.25
-        sim.populate_tables(**kwargs)
         self.assertEqual(edge_table.num_rows, sim.get_num_edges())
 
 
@@ -2030,10 +2027,11 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertEqual(sim_r[j], ts_r[j])
 
     def test_record_scaling(self):
-        sim = get_example_simulator(10, num_populations=2, store_migrations=True)
-        sim.run()
         for Ne in [0.25, 1, 10, 1e6]:
-            tree_sequence = populate_tree_sequence(sim, Ne=Ne)
+            sim = get_example_simulator(
+                10, Ne=Ne, num_populations=2, store_migrations=True)
+            sim.run()
+            tree_sequence = populate_tree_sequence(sim)
             sim_times = [node[1] for node in sim.get_nodes()]
             for j in range(tree_sequence.get_num_nodes()):
                 _, generation, _, _ = tree_sequence.get_node(j)
