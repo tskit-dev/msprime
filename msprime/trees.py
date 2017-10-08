@@ -31,12 +31,6 @@ import random
 import sys
 
 try:
-    import svgwrite
-    _svgwrite_imported = True
-except ImportError:
-    _svgwrite_imported = False
-
-try:
     import numpy as np
     _numpy_imported = True
 except ImportError:
@@ -44,7 +38,8 @@ except ImportError:
 
 
 import _msprime
-import msprime.environment
+import msprime.environment as environment
+import msprime.drawing as drawing
 import msprime.tables as tables
 
 # Make the low-level generator appear like its from this module
@@ -183,180 +178,12 @@ def get_provenance_dict(command, parameters):
     """
     document = {
         "software": "msprime",
-        "version": msprime.environment.__version__,
+        "version": environment.__version__,
         "command": command,
         "parameters": parameters,
-        "environment": msprime.environment.get_environment()
+        "environment": environment.get_environment()
     }
     return document
-
-
-class TreeDrawer(object):
-    """
-    A class to draw sparse trees in SVG format.
-    """
-
-    discretise_coordinates = False
-
-    def _discretise(self, x):
-        """
-        Discetises the specified value, if necessary.
-        """
-        ret = x
-        if self.discretise_coordinates:
-            ret = int(round(x))
-        return ret
-
-    def __init__(
-            self, tree, width=200, height=200, show_times=False,
-            show_mutation_locations=True, show_mutation_labels=False,
-            show_internal_node_labels=True, show_leaf_node_labels=True,
-            node_label_text=None, x_padding=0, y_padding=0):
-        self._width = width
-        self._height = height
-        self._show_times = show_times
-        self._show_mutation_locations = show_mutation_locations
-        self._show_mutation_labels = show_mutation_labels
-        self._show_internal_node_labels = show_internal_node_labels
-        self._show_leaf_node_labels = show_leaf_node_labels
-        self._x_scale = width / (tree.get_sample_size() + 2)
-        t = tree.get_time(tree.get_root())
-        self._y_scale = (height - 2 * y_padding) / t
-        self._tree = tree
-        self._x_coords = {}
-        self._y_coords = {}
-        self._node_label_text = {}
-        for u in tree.nodes():
-            scaled_t = tree.get_time(u) * self._y_scale
-            self._y_coords[u] = self._discretise(height - scaled_t - y_padding)
-            self._node_label_text[u] = str(u)
-        if node_label_text is not None:
-            for node, label in node_label_text.items():
-                self._node_label_text[node] = label
-        self._sample_x = 1
-        self._assign_x_coordinates(self._tree.get_root())
-        self._mutations = []
-        node_mutations = collections.defaultdict(list)
-        for site in tree.sites():
-            for mutation in site.mutations:
-                node_mutations[mutation.node].append(mutation)
-        for child, mutations in node_mutations.items():
-            n = len(mutations)
-            parent = tree.parent(child)
-            x = self._x_coords[child]
-            y1 = self._y_coords[child]
-            y2 = self._y_coords[parent]
-            chunk = (y2 - y1) / (n + 1)
-            for k, mutation in enumerate(mutations):
-                z = x, self._discretise(y1 + (k + 1) * chunk)
-                self._mutations.append((z, mutation))
-
-    def _assign_x_coordinates(self, node):
-        """
-        Assign x coordinates to all nodes underneath this node.
-        """
-        if self._tree.is_internal(node):
-            children = self._tree.get_children(node)
-            for c in children:
-                self._assign_x_coordinates(c)
-            coords = [self._x_coords[c] for c in children]
-            a = min(coords)
-            b = max(coords)
-            self._x_coords[node] = self._discretise(a + (b - a) / 2)
-        else:
-            self._x_coords[node] = self._discretise(self._sample_x * self._x_scale)
-            self._sample_x += 1
-
-
-class SvgTreeDrawer(TreeDrawer):
-    """
-    Draws trees in SVG format using the svgwrite library.
-    """
-
-    def draw(self):
-        """
-        Writes the SVG description of this tree and returns the resulting XML
-        code as text.
-        """
-        dwg = svgwrite.Drawing(size=(self._width, self._height), debug=True)
-        lines = dwg.add(dwg.g(id='lines', stroke='black'))
-        labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
-        for u in self._tree.nodes():
-            v = self._tree.get_parent(u)
-            x = self._x_coords[u], self._y_coords[u]
-            dwg.add(dwg.circle(center=x, r=3))
-            dx = [0]
-            dy = None
-            if self._tree.is_sample(u):
-                dy = [20]
-            elif v == msprime.NULL_NODE:
-                dy = [-5]
-            else:
-                dx = [-10]
-                dy = [-5]
-            condition = (
-                (self._tree.is_sample(u) and self._show_leaf_node_labels) or
-                (self._tree.is_internal(u) and self._show_internal_node_labels))
-            if condition:
-                labels.add(dwg.text(self._node_label_text[u], x, dx=dx, dy=dy))
-            if self._show_times and self._tree.is_internal(u):
-                dx[0] += 25
-                labels.add(dwg.text(
-                    "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
-                    dy=dy))
-            if v != NULL_NODE:
-                y = self._x_coords[v], self._y_coords[v]
-                lines.add(dwg.line(x, (x[0], y[1])))
-                lines.add(dwg.line((x[0], y[1]), y))
-        for x, mutation in self._mutations:
-            r = 3
-            if self._show_mutation_locations:
-                dwg.add(dwg.rect(
-                    insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
-            if self._show_mutation_labels:
-                dx = [8 * r]
-                dy = [-2 * r]
-                labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
-        return dwg.tostring()
-
-
-class AsciiTreeDrawer(TreeDrawer):
-    """
-    Draws an ASCII rendering of a tree.
-    """
-    discretise_coordinates = True
-
-    def draw(self):
-        w = self._width
-        h = self._height + 1
-
-        # Create a width * height canvas of spaces.
-        canvas = bytearray(w * h)
-        for row in range(h):
-            for col in range(w - 1):
-                canvas[row * w + col] = ord(' ')
-            canvas[row * w + w - 1] = ord('\n')
-        for u in self._tree.nodes():
-            col = self._x_coords[u]
-            row = self._y_coords[u]
-            j = row * w + col
-            label = self._node_label_text[u].encode()
-            n = len(label)
-            canvas[j - n // 2: j + n // 2 + int(n % 2 == 1)] = label
-            if self._tree.is_internal(u):
-                children = self._tree.children(u)
-                row += 1
-                left = min(self._x_coords[v] for v in children)
-                right = max(self._x_coords[v] for v in children)
-                for col in range(left, right):
-                    canvas[row * w + col] = ord('-')
-                canvas[row * w + self._x_coords[u]] = ord('+')
-                top = row + 1
-                for v in children:
-                    col = self._x_coords[v]
-                    for row in range(top, self._y_coords[v] - 1):
-                        canvas[row * w + col] = ord('|')
-        return str(bytes(canvas).decode())
 
 
 # TODO:
@@ -697,7 +524,7 @@ class SparseTree(object):
         return self._ll_sparse_tree.get_sample_size()
 
     def draw(
-            self, path=None, width=200, height=200, times=False,
+            self, path=None, width=None, height=None, times=False,
             mutation_locations=True, mutation_labels=False,
             internal_node_labels=True, leaf_node_labels=True, show_times=None,
             node_label_text=None, format=None):
@@ -717,7 +544,7 @@ class SparseTree(object):
             that are present in the map. Any nodes not specified in the map will
             have have their default labels.
         :param str format: The format of the returned image. Currently supported
-            are 'svg' and 'ascii'.
+            are 'svg', 'ascii' and 'unicode'.
         :param bool show_times: Deprecated alias for ``times``.
         :return: A representation of this tree in SVG format.
         :rtype: str
@@ -725,34 +552,11 @@ class SparseTree(object):
         # show_times is a deprecated alias for times.
         if show_times is not None:
             times = show_times
-        if format is None:
-            format = "SVG"
-        fmt = format.lower()
-        supported_formats = ["svg", "ascii"]
-        if fmt not in supported_formats:
-            raise ValueError("Unknown format '{}'. Supported formats are {}".format(
-                format, supported_formats))
-        if fmt == "svg":
-            if not _svgwrite_imported:
-                raise ImportError(
-                    "svgwrite is not installed. try `pip install svgwrite`")
-            td = SvgTreeDrawer(
-                    self, width=width, height=height, show_times=times,
-                    show_mutation_locations=mutation_locations,
-                    show_mutation_labels=mutation_labels,
-                    show_internal_node_labels=internal_node_labels,
-                    show_leaf_node_labels=leaf_node_labels,
-                    node_label_text=node_label_text,
-                    y_padding=20, x_padding=0)
-        elif fmt == "ascii":
-            td = AsciiTreeDrawer(
-                    self, width=width, height=height, show_times=times,
-                    show_mutation_locations=mutation_locations,
-                    show_mutation_labels=mutation_labels,
-                    show_internal_node_labels=internal_node_labels,
-                    node_label_text=node_label_text,
-                    show_leaf_node_labels=leaf_node_labels)
-        output = td.draw()
+        output = drawing.draw_tree(
+            self, format=format, width=width, height=height, times=times,
+            mutation_locations=mutation_locations, mutation_labels=mutation_labels,
+            internal_node_labels=internal_node_labels, leaf_node_labels=leaf_node_labels,
+            node_label_text=node_label_text)
         if path is not None:
             with open(path, "w") as f:
                 f.write(output)
@@ -1867,11 +1671,11 @@ class TreeSequence(object):
     def copy(self, sites=None):
         # Experimental API. Return a copy of this tree sequence, optionally with
         # the sites set to the specified list.
-        node_table = msprime.NodeTable()
-        edge_table = msprime.EdgeTable()
-        migration_table = msprime.MigrationTable()
-        site_table = msprime.SiteTable()
-        mutation_table = msprime.MutationTable()
+        node_table = tables.NodeTable()
+        edge_table = tables.EdgeTable()
+        migration_table = tables.MigrationTable()
+        site_table = tables.SiteTable()
+        mutation_table = tables.MutationTable()
         self._ll_tree_sequence.dump_tables(
             nodes=node_table, edges=edge_table, migrations=migration_table,
             sites=site_table, mutations=mutation_table)

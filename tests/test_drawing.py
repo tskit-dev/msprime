@@ -23,11 +23,14 @@ from __future__ import print_function
 from __future__ import division
 
 import os
+import sys
 import tempfile
 import unittest
 import xml.etree
 
 import msprime
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 class TestTreeDraw(unittest.TestCase):
@@ -47,6 +50,37 @@ class TestTreeDraw(unittest.TestCase):
         for t in ts.trees():
             for u in t.nodes():
                 if len(t.children(u)) > 2:
+                    return t
+        assert False
+
+    def get_multiroot_tree(self):
+        ts = msprime.simulate(15, random_seed=1)
+        # Take off the top quarter of edges
+        tables = ts.dump_tables()
+        edges = tables.edges
+        n = len(edges) - len(edges) // 4
+        edges.set_columns(
+            left=edges.left[:n], right=edges.right[:n],
+            parent=edges.parent[:n], child=edges.child[:n])
+        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        for t in ts.trees():
+            if t.num_roots > 1:
+                return t
+        assert False
+
+    def get_unary_node_tree(self):
+        ts = msprime.simulate(2, random_seed=1)
+        tables = ts.dump_tables()
+        edges = tables.edges
+        # Take out all the edges except 1
+        n = 1
+        edges.set_columns(
+            left=edges.left[:n], right=edges.right[:n],
+            parent=edges.parent[:n], child=edges.child[:n])
+        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        for t in ts.trees():
+            for u in t.nodes():
+                if len(t.children(u)) == 1:
                     return t
         assert False
 
@@ -80,6 +114,17 @@ class TestFormats(TestTreeDraw):
                 xml.etree.ElementTree.ParseError, xml.etree.ElementTree.fromstring,
                 output)
 
+    def test_unicode_variants(self):
+        t = self.get_binary_tree()
+        for fmt in ["unicode", "UNICODE", "uniCODE"]:
+            if IS_PY2:
+                self.assertRaises(ValueError, t.draw, format=fmt)
+            else:
+                output = t.draw(format=fmt)
+                self.assertRaises(
+                    xml.etree.ElementTree.ParseError, xml.etree.ElementTree.fromstring,
+                    output)
+
     def test_bad_formats(self):
         t = self.get_binary_tree()
         for bad_format in ["", "ASC", "SV", "jpeg"]:
@@ -89,33 +134,55 @@ class TestFormats(TestTreeDraw):
 # TODO we should gather some of these tests into a superclass as they are
 # very similar for SVG and ASCII.
 
-class TestDrawAscii(TestTreeDraw):
+class TestDrawText(TestTreeDraw):
     """
     Tests the ASCII tree drawing method.
     """
+    drawing_format = "ascii"
+    example_label = "XXX"
+
     def verify_basic_text(self, text):
         self.assertTrue(isinstance(text, str))
         # TODO surely something else we can verify about this...
 
     def test_draw_defaults(self):
         t = self.get_binary_tree()
-        text = t.draw(format="ASCII")
+        text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
     def test_draw_nonbinary(self):
         t = self.get_nonbinary_tree()
-        text = t.draw(format="ASCII")
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
+    def test_draw_multiroot(self):
+        t = self.get_multiroot_tree()
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
+    def test_draw_unary(self):
+        t = self.get_unary_node_tree()
+        text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
     def test_labels(self):
         t = self.get_binary_tree()
-        labels = {u: "XXX" for u in t.nodes()}
-        text = t.draw(format="ASCII", node_label_text=labels)
+        labels = {u: self.example_label for u in t.nodes()}
+        text = t.draw(format=self.drawing_format, node_label_text=labels)
         self.verify_basic_text(text)
         j = 0
         for _ in t.nodes():
-            j = text[j:].find("XXX")
+            j = text[j:].find(self.example_label)
             self.assertNotEqual(j, -1)
+
+
+@unittest.skipIf(IS_PY2, "Unicode tree drawing not supported on Python 2")
+class TestDrawUnicode(TestDrawText):
+    """
+    Tests the Unicode tree drawing method
+    """
+    drawing_format = "unicode"
+    example_label = "\u20ac" * 10  # euro symbol
 
 
 class TestDrawSvg(TestTreeDraw):
@@ -148,6 +215,16 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_nonbinary(self):
         t = self.get_nonbinary_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
+    def test_draw_multiroot(self):
+        t = self.get_multiroot_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
+    def test_draw_unary(self):
+        t = self.get_unary_node_tree()
         svg = t.draw()
         self.verify_basic_svg(svg)
 
