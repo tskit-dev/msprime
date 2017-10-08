@@ -183,12 +183,12 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
-    sim = TreeSimulator(the_samples, recomb_map, model, Ne)
-    sim.set_store_migrations(record_migrations)
+    sim = Simulator(the_samples, recomb_map, model, Ne)
+    sim.store_migrations = record_migrations
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
-    sim.set_random_generator(rng)
+    sim.random_generator = rng
     if population_configurations is not None:
         sim.set_population_configurations(population_configurations)
     if migration_matrix is not None:
@@ -317,176 +317,134 @@ def simulate(
         return _replicate_generator(sim, mutation_generator, num_replicates, provenance)
 
 
-class TreeSimulator(object):
+class Simulator(object):
     """
-    Class to simulate trees under the standard neutral coalescent with
-    recombination.
+    Class to simulate trees under a variety of population models.
     """
     def __init__(self, samples, recombination_map, model="hudson", Ne=0.25):
         if len(samples) < 2:
             raise ValueError("Sample size must be >= 2")
         if len(samples) >= 2**32:
             raise ValueError("sample_size must be < 2**32")
-        self._sample_size = len(samples)
-        self._samples = samples
+        self.sample_size = len(samples)
+        self.samples = samples
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self.set_model(model, Ne)
-        self._recombination_map = recombination_map
-        self._random_generator = None
-        self._population_configurations = [
-            PopulationConfiguration(initial_size=self._model.population_size)]
-        self._migration_matrix = [[0]]
-        self._demographic_events = []
-        self._store_migrations = False
+        self.recombination_map = recombination_map
+        self.random_generator = None
+        self.population_configurations = [
+            PopulationConfiguration(initial_size=self.model.population_size)]
+        self.migration_matrix = [[0]]
+        self.demographic_events = []
+        self.store_migrations = False
         # Set default block sizes to 64K objects.
         # TODO does this give good performance in a range of scenarios?
         block_size = 64 * 1024
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
-        self._segment_block_size = max(block_size, self._sample_size)
-        self._avl_node_block_size = block_size
-        self._node_mapping_block_size = block_size
-        self._node_block_size = block_size
-        self._edge_block_size = block_size
-        self._migration_block_size = block_size
+        self.segment_block_size = max(block_size, self.sample_size)
+        self.avl_node_block_size = block_size
+        self.node_mapping_block_size = block_size
+        self.node_block_size = block_size
+        self.edge_block_size = block_size
+        self.migration_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
-        self._max_memory = sys.maxsize
-        self._ll_sim = None
-
-        # TODO document these public attributes.
+        self.max_memory = sys.maxsize
+        self.ll_sim = None
         self.node_table = tables.NodeTable(block_size)
         self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
         self.mutation_type_table = tables.SiteTable(1)
         self.mutation_table = tables.MutationTable(block_size)
 
-    def set_random_generator(self, random_generator):
-        """
-        Sets the random generator instance for this simulator to the specified
-        value.
-        """
-        self._random_generator = random_generator
+    @property
+    def num_loci(self):
+        return self.recombination_map.get_num_loci()
 
-    def get_random_generator(self):
-        return self._random_generator
+    @property
+    def sample_configuration(self):
+        return [conf.sample_size for conf in self.population_configurations]
 
-    def get_sample_size(self):
-        return self._sample_size
+    @property
+    def num_breakpoints(self):
+        return self.ll_sim.get_num_breakpoints()
 
-    def get_samples(self):
-        return self._samples
-
-    def get_recombinatation_map(self):
-        return self._recombination_map
-
-    def get_model(self):
-        return self._model
-
-    def get_migration_matrix(self):
-        return self._migration_matrix
-
-    def get_num_loci(self):
-        return self._recombination_map.get_num_loci()
-
-    def get_population_configurations(self):
-        return self._population_configurations
-
-    def get_sample_configuration(self):
-        return [conf.sample_size for conf in self._population_configurations]
-
-    def get_demographic_events(self):
-        return self._demographic_events
-
-    def get_num_breakpoints(self):
-        return self._ll_sim.get_num_breakpoints()
-
-    def get_breakpoints(self):
+    @property
+    def breakpoints(self):
         """
         Returns the recombination breakpoints translated into physical
         coordinates.
         """
         return [
-            self._recombination_map.genetic_to_physical(x)
-            for x in self._ll_sim.get_breakpoints()]
+            self.recombination_map.genetic_to_physical(x)
+            for x in self.ll_sim.get_breakpoints()]
 
-    def get_used_memory(self):
-        return self._ll_sim.get_used_memory()
+    @property
+    def used_memory(self):
+        return self.ll_sim.get_used_memory()
 
-    def get_time(self):
-        return self._ll_sim.get_time()
+    @property
+    def time(self):
+        return self.ll_sim.get_time()
 
-    def get_avl_node_block_size(self):
-        return self._avl_node_block_size
+    @property
+    def num_avl_node_blocks(self):
+        return self.ll_sim.get_num_avl_node_blocks()
 
-    def get_node_block_size(self):
-        return self._node_block_size
+    @property
+    def num_node_blocks(self):
+        return self.ll_sim.get_num_node_blocks()
 
-    def get_edge_block_size(self):
-        return self._edge_block_size
+    @property
+    def num_edge_blocks(self):
+        return self.ll_sim.get_num_edge_blocks()
 
-    def get_node_mapping_block_size(self):
-        return self._node_mapping_block_size
+    @property
+    def num_node_mapping_blocks(self):
+        return self.ll_sim.get_num_node_mapping_blocks()
 
-    def get_segment_block_size(self):
-        return self._segment_block_size
+    @property
+    def num_segment_blocks(self):
+        return self.ll_sim.get_num_segment_blocks()
 
-    def get_num_avl_node_blocks(self):
-        return self._ll_sim.get_num_avl_node_blocks()
+    @property
+    def num_common_ancestor_events(self):
+        return self.ll_sim.get_num_common_ancestor_events()
 
-    def get_num_node_blocks(self):
-        return self._ll_sim.get_num_node_blocks()
+    @property
+    def num_rejected_common_ancestor_events(self):
+        return self.ll_sim.get_num_rejected_common_ancestor_events()
 
-    def get_num_edge_blocks(self):
-        return self._ll_sim.get_num_edge_blocks()
+    @property
+    def num_recombination_events(self):
+        return self.ll_sim.get_num_recombination_events()
 
-    def get_num_node_mapping_blocks(self):
-        return self._ll_sim.get_num_node_mapping_blocks()
+    @property
+    def num_populations(self):
+        return len(self.population_configurations)
 
-    def get_num_segment_blocks(self):
-        return self._ll_sim.get_num_segment_blocks()
-
-    def get_num_common_ancestor_events(self):
-        return self._ll_sim.get_num_common_ancestor_events()
-
-    def get_num_rejected_common_ancestor_events(self):
-        return self._ll_sim.get_num_rejected_common_ancestor_events()
-
-    def get_num_recombination_events(self):
-        return self._ll_sim.get_num_recombination_events()
-
-    def get_num_populations(self):
-        return len(self._population_configurations)
-
-    def get_num_migration_events(self):
-        N = self.get_num_populations()
+    @property
+    def num_migration_events(self):
+        N = self.num_populations
         matrix = [[0 for j in range(N)] for k in range(N)]
-        flat = self._ll_sim.get_num_migration_events()
+        flat = self.ll_sim.get_num_migration_events()
         for j in range(N):
             for k in range(N):
                 matrix[j][k] = flat[j * N + k]
         return matrix
 
-    def get_total_num_migration_events(self):
-        return sum(self._ll_sim.get_num_migration_events())
+    @property
+    def total_num_migration_events(self):
+        return sum(self.ll_sim.get_num_migration_events())
 
-    def get_num_multiple_recombination_events(self):
-        return self._ll_sim.get_num_multiple_recombination_events()
-
-    def get_max_memory(self):
-        return self._ll_sim.get_max_memory()
+    @property
+    def num_multiple_recombination_events(self):
+        return self.ll_sim.get_num_multiple_recombination_events()
 
     def get_configuration(self):
-        return json.loads(self._ll_sim.get_configuration_json())
-
-    def set_effective_population_size(self, effective_population_size):
-        if effective_population_size <= 0:
-            raise ValueError("Cannot set Ne to a non-positive value.")
-        self._effective_population_size = effective_population_size
-
-    def set_store_migrations(self, store_migrations):
-        self._store_migrations = store_migrations
+        return json.loads(self.ll_sim.get_configuration_json())
 
     def set_migration_matrix(self, migration_matrix):
         err = (
@@ -496,11 +454,11 @@ class TreeSimulator(object):
             "elements of this matrix must be zero. For example, a "
             "valid matrix for a 3 population system is "
             "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]")
-        if self._population_configurations is None:
+        if self.population_configurations is None:
             raise ValueError(
                 "Cannot specify a migration matrix without also providing a "
                 "population_configurations argument.")
-        N = len(self._population_configurations)
+        N = len(self.population_configurations)
         if not isinstance(migration_matrix, list):
             raise TypeError(err)
         if len(migration_matrix) != N:
@@ -510,19 +468,19 @@ class TreeSimulator(object):
                 raise TypeError(err)
             if len(row) != N:
                 raise ValueError(err)
-        self._migration_matrix = migration_matrix
+        self.migration_matrix = migration_matrix
 
     def set_population_configurations(self, population_configurations):
         _check_population_configurations(population_configurations)
-        self._population_configurations = population_configurations
+        self.population_configurations = population_configurations
         # For any populations configurations in which the initial size is None,
         # set it to the population size.
-        for pop_conf in self._population_configurations:
+        for pop_conf in self.population_configurations:
             if pop_conf.initial_size is None:
-                pop_conf.initial_size = self._model.population_size
+                pop_conf.initial_size = self.model.population_size
         # Now set the default migration matrix.
-        N = len(self._population_configurations)
-        self._migration_matrix = [[0 for j in range(N)] for k in range(N)]
+        N = len(self.population_configurations)
+        self.migration_matrix = [[0 for j in range(N)] for k in range(N)]
 
     def set_demographic_events(self, demographic_events):
         err = (
@@ -533,7 +491,7 @@ class TreeSimulator(object):
         for event in demographic_events:
             if not isinstance(event, DemographicEvent):
                 raise TypeError(err)
-        self._demographic_events = demographic_events
+        self.demographic_events = demographic_events
 
     def set_model(self, model, population_size):
         """
@@ -560,73 +518,58 @@ class TreeSimulator(object):
                     "Simulation model must be a string or an instance of "
                     "SimulationModel")
             model_instance = model
-        self._model = model_instance
-
-    def set_segment_block_size(self, segment_block_size):
-        self._segment_block_size = segment_block_size
-
-    def set_avl_node_block_size(self, avl_node_block_size):
-        self._avl_node_block_size = avl_node_block_size
-
-    def set_node_mapping_block_size(self, node_mapping_block_size):
-        self._node_mapping_block_size = node_mapping_block_size
-
-    def set_node_block_size(self, node_block_size):
-        self._node_block_size = node_block_size
-
-    def set_edge_block_size(self, edge_block_size):
-        self._edge_block_size = edge_block_size
+        self.model = model_instance
 
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
         # counterparts.
-        ll_simulation_model = self._model.get_ll_representation()
-        d = len(self._population_configurations)
+        ll_simulation_model = self.model.get_ll_representation()
+        d = len(self.population_configurations)
         # The migration matrix must be flattened.
         ll_migration_matrix = [0 for j in range(d**2)]
         for j in range(d):
             for k in range(d):
-                ll_migration_matrix[j * d + k] = self._migration_matrix[j][k]
+                ll_migration_matrix[j * d + k] = self.migration_matrix[j][k]
         ll_population_configuration = [
-            conf.get_ll_representation() for conf in self._population_configurations]
+            conf.get_ll_representation() for conf in self.population_configurations]
         ll_demographic_events = [
-            event.get_ll_representation(d) for event in self._demographic_events]
-        ll_recomb_rate = self._recombination_map.get_per_locus_recombination_rate()
+            event.get_ll_representation(d) for event in self.demographic_events]
+        ll_recomb_rate = self.recombination_map.get_per_locus_recombination_rate()
         ll_sim = _msprime.Simulator(
-            samples=self._samples,
-            random_generator=self._random_generator,
+            samples=self.samples,
+            random_generator=self.random_generator,
             model=ll_simulation_model,
-            num_loci=self._recombination_map.get_num_loci(),
+            num_loci=self.recombination_map.get_num_loci(),
             recombination_rate=ll_recomb_rate,
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
-            store_migrations=self._store_migrations,
-            max_memory=self._max_memory,
-            segment_block_size=self._segment_block_size,
-            avl_node_block_size=self._avl_node_block_size,
-            node_mapping_block_size=self._node_mapping_block_size,
-            node_block_size=self._node_block_size,
-            edge_block_size=self._edge_block_size,
-            migration_block_size=self._migration_block_size)
+            store_migrations=self.store_migrations,
+            max_memory=self.max_memory,
+            segment_block_size=self.segment_block_size,
+            avl_node_block_size=self.avl_node_block_size,
+            node_mapping_block_size=self.node_mapping_block_size,
+            node_block_size=self.node_block_size,
+            edge_block_size=self.edge_block_size,
+            migration_block_size=self.migration_block_size)
         return ll_sim
 
     def run(self):
         """
         Runs the simulation until complete coalescence has occurred.
         """
-        if self._random_generator is None:
+        if self.random_generator is None:
             raise ValueError("A random generator instance must be set")
-        if self._ll_sim is None:
-            self._ll_sim = self.create_ll_instance()
-        self._ll_sim.run()
+        if self.ll_sim is None:
+            self.ll_sim = self.create_ll_instance()
+        self.ll_sim.run()
 
     def get_tree_sequence(self, mutation_generator=None, provenance_strings=[]):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        ll_recomb_map = self._recombination_map.get_ll_recombination_map()
-        self._ll_sim.populate_tables(
+        ll_recomb_map = self.recombination_map.get_ll_recombination_map()
+        self.ll_sim.populate_tables(
             self.node_table, self.edge_table, self.migration_table,
             recombination_map=ll_recomb_map)
         if mutation_generator is not None:
@@ -644,8 +587,8 @@ class TreeSimulator(object):
         """
         Resets the simulation so that we can perform another replicate.
         """
-        if self._ll_sim is not None:
-            self._ll_sim.reset()
+        if self.ll_sim is not None:
+            self.ll_sim.reset()
 
 
 class RecombinationMap(object):
@@ -1128,7 +1071,7 @@ class DemographyDebugger(object):
         """
         abs_tol = 1e-9
         ll_sim = self._simulator.create_ll_instance()
-        N = self._simulator.get_num_populations()
+        N = self._simulator.num_populations
         start_time = 0
         end_time = 0
         event_index = 0

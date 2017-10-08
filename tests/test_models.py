@@ -38,29 +38,29 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
     def test_hudson(self):
         threshold = 20
         sim = msprime.simulator_factory(sample_size=10, recombination_rate=5)
-        sim.set_random_generator(msprime.RandomGenerator(2))
+        sim.random_generator = msprime.RandomGenerator(2)
         sim.run()
-        self.assertGreater(sim.get_num_common_ancestor_events(), threshold)
-        self.assertGreater(sim.get_num_recombination_events(), threshold)
-        self.assertEqual(sim.get_num_rejected_common_ancestor_events(), 0)
+        self.assertGreater(sim.num_common_ancestor_events, threshold)
+        self.assertGreater(sim.num_recombination_events, threshold)
+        self.assertEqual(sim.num_rejected_common_ancestor_events, 0)
 
         sim = msprime.simulator_factory(
             sample_size=10, recombination_rate=5, model="hudson")
         sim.run()
-        self.assertGreater(sim.get_num_common_ancestor_events(), threshold)
-        self.assertGreater(sim.get_num_recombination_events(), threshold)
-        self.assertEqual(sim.get_num_rejected_common_ancestor_events(), 0)
+        self.assertGreater(sim.num_common_ancestor_events, threshold)
+        self.assertGreater(sim.num_recombination_events, threshold)
+        self.assertEqual(sim.num_rejected_common_ancestor_events, 0)
 
     def test_smc_variants(self):
         for model in ["smc", "smc_prime"]:
             threshold = 20
             sim = msprime.simulator_factory(
                 sample_size=10, recombination_rate=5, model=model)
-            sim.set_random_generator(msprime.RandomGenerator(3))
+            sim.random_generator = msprime.RandomGenerator(3)
             sim.run()
-            self.assertGreater(sim.get_num_common_ancestor_events(), threshold)
-            self.assertGreater(sim.get_num_recombination_events(), threshold)
-            self.assertGreater(sim.get_num_rejected_common_ancestor_events(), 0)
+            self.assertGreater(sim.num_common_ancestor_events, threshold)
+            self.assertGreater(sim.num_recombination_events, threshold)
+            self.assertGreater(sim.num_rejected_common_ancestor_events, 0)
 
 
 class TestEdges(unittest.TestCase):
@@ -119,9 +119,9 @@ class TestModelParsing(unittest.TestCase):
         ]
         for name, model in simulation_models:
             sim = msprime.simulator_factory(sample_size=10, model=name.upper())
-            self.assertIsInstance(sim.get_model(), model)
+            self.assertIsInstance(sim.model, model)
             sim = msprime.simulator_factory(sample_size=10, model=name.title())
-            self.assertIsInstance(sim.get_model(), model)
+            self.assertIsInstance(sim.model, model)
 
     def test_model_instances(self):
         for bad_type in [1234, {}]:
@@ -136,7 +136,7 @@ class TestModelParsing(unittest.TestCase):
         ]
         for model in models:
             sim = msprime.simulator_factory(sample_size=10, model=model)
-            self.assertEqual(sim.get_model(), model)
+            self.assertEqual(sim.model, model)
 
 
 class TestParametricModels(unittest.TestCase):

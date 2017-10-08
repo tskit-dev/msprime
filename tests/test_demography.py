@@ -834,7 +834,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 msprime.PopulationConfiguration(1),
                 msprime.PopulationConfiguration(1)],
             migration_matrix=m)
-        self.assertEqual(sim._migration_matrix, m)
+        self.assertEqual(sim.migration_matrix, m)
 
     def test_instantaneous_bottleneck(self):
         g = 51

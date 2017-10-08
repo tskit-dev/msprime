@@ -5676,8 +5676,7 @@ Simulator_check_sim(Simulator *self)
 }
 
 static int
-Simulator_parse_population_configuration(Simulator *self,
-        PyObject *py_pop_config)
+Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_config)
 {
     int ret = -1;
     Py_ssize_t j, num_populations;
@@ -5727,8 +5726,7 @@ out:
 }
 
 static int
-Simulator_parse_migration_matrix(Simulator *self,
-        PyObject *py_migration_matrix)
+Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
 {
     int ret = -1;
     int err;

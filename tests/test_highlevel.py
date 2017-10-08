@@ -547,9 +547,9 @@ class TestMultiLocusSimulation(HighLevelTestCase):
             self.assertRaises(TypeError, f, n, 1, 1.0)
 
 
-class TestTreeSimulator(HighLevelTestCase):
+class TestSimulator(HighLevelTestCase):
     """
-    Runs tests on the underlying TreeSimulator object.
+    Runs tests on the underlying Simulator object.
     """
 
     def verify_dump_load(self, tree_sequence):
@@ -574,27 +574,27 @@ class TestTreeSimulator(HighLevelTestCase):
         rng = msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
             n, recombination_map=recomb_map, random_generator=rng)
-        self.assertEqual(sim.get_random_generator(), rng)
+        self.assertEqual(sim.random_generator, rng)
         sim.run()
-        self.assertEqual(sim.get_num_breakpoints(), len(sim.get_breakpoints()))
-        self.assertGreater(sim.get_used_memory(), 0)
-        self.assertGreater(sim.get_time(), 0)
-        self.assertGreater(sim.get_num_avl_node_blocks(), 0)
-        self.assertGreater(sim.get_num_segment_blocks(), 0)
-        self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-        self.assertGreater(sim.get_num_node_blocks(), 0)
-        self.assertGreater(sim.get_num_edge_blocks(), 0)
-        self.assertGreater(sim.get_max_memory(), 0)
+        self.assertEqual(sim.num_breakpoints, len(sim.breakpoints))
+        self.assertGreater(sim.used_memory, 0)
+        self.assertGreater(sim.time, 0)
+        self.assertGreater(sim.num_avl_node_blocks, 0)
+        self.assertGreater(sim.num_segment_blocks, 0)
+        self.assertGreater(sim.num_node_mapping_blocks, 0)
+        self.assertGreater(sim.num_node_blocks, 0)
+        self.assertGreater(sim.num_edge_blocks, 0)
+        self.assertGreater(sim.max_memory, 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
         for record in tree_sequence.nodes():
             if record.time > t:
                 t = record.time
-        self.assertEqual(sim.get_time(), t)
-        self.assertGreater(sim.get_num_common_ancestor_events(), 0)
-        self.assertGreaterEqual(sim.get_num_recombination_events(), 0)
-        self.assertGreaterEqual(sim.get_total_num_migration_events(), 0)
-        self.assertGreaterEqual(sim.get_num_multiple_recombination_events(), 0)
+        self.assertEqual(sim.time, t)
+        self.assertGreater(sim.num_common_ancestor_events, 0)
+        self.assertGreaterEqual(sim.num_recombination_events, 0)
+        self.assertGreaterEqual(sim.total_num_migration_events, 0)
+        self.assertGreaterEqual(sim.num_multiple_recombination_events, 0)
         self.verify_sparse_trees(tree_sequence)
         self.verify_dump_load(tree_sequence)
 
@@ -609,30 +609,30 @@ class TestTreeSimulator(HighLevelTestCase):
     def test_perf_parameters(self):
         sim = msprime.simulator_factory(10)
         sim.run()
-        self.assertGreater(sim.get_avl_node_block_size(), 0)
-        self.assertGreater(sim.get_segment_block_size(), 0)
-        self.assertGreater(sim.get_node_mapping_block_size(), 0)
-        self.assertGreater(sim.get_node_block_size(), 0)
-        self.assertGreater(sim.get_edge_block_size(), 0)
+        self.assertGreater(sim.avl_node_block_size, 0)
+        self.assertGreater(sim.segment_block_size, 0)
+        self.assertGreater(sim.node_mapping_block_size, 0)
+        self.assertGreater(sim.node_block_size, 0)
+        self.assertGreater(sim.edge_block_size, 0)
         sim.reset()
-        sim.set_avl_node_block_size(1)
-        sim.set_segment_block_size(1)
-        sim.set_node_mapping_block_size(1)
-        sim.set_node_block_size(1)
-        sim.set_edge_block_size(1)
-        self.assertEqual(sim.get_avl_node_block_size(), 1)
-        self.assertEqual(sim.get_segment_block_size(), 1)
-        self.assertEqual(sim.get_node_mapping_block_size(), 1)
-        self.assertEqual(sim.get_node_block_size(), 1)
-        self.assertEqual(sim.get_edge_block_size(), 1)
+        sim.avl_node_block_size = 1
+        sim.segment_block_size = 1
+        sim.node_mapping_block_size = 1
+        sim.node_block_size = 1
+        sim.edge_block_size = 1
+        self.assertEqual(sim.avl_node_block_size, 1)
+        self.assertEqual(sim.segment_block_size, 1)
+        self.assertEqual(sim.node_mapping_block_size, 1)
+        self.assertEqual(sim.node_block_size, 1)
+        self.assertEqual(sim.edge_block_size, 1)
 
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
         for bad_type in ["xd", None, 4.4]:
             self.assertRaises(
-                TypeError, msprime.TreeSimulator, [(0, 0), (0, 0)], bad_type)
-        self.assertRaises(ValueError, msprime.TreeSimulator, [], recomb_map)
-        self.assertRaises(ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
+                TypeError, msprime.Simulator, [(0, 0), (0, 0)], bad_type)
+        self.assertRaises(ValueError, msprime.Simulator, [], recomb_map)
+        self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
 
 
 class TestVariantGenerator(HighLevelTestCase):
@@ -1766,7 +1766,7 @@ class TestSimulatorFactory(unittest.TestCase):
     """
     def test_default_random_seed(self):
         sim = msprime.simulator_factory(10)
-        rng = sim.get_random_generator()
+        rng = sim.random_generator
         self.assertIsInstance(rng, msprime.RandomGenerator)
         self.assertNotEqual(rng.get_seed(), 0)
 
@@ -1774,8 +1774,7 @@ class TestSimulatorFactory(unittest.TestCase):
         seed = 12345
         rng = msprime.RandomGenerator(seed)
         sim = msprime.simulator_factory(10, random_generator=rng)
-        rng = sim.get_random_generator()
-        self.assertEqual(rng, sim.get_random_generator())
+        self.assertEqual(rng, sim.random_generator)
         self.assertEqual(rng.get_seed(), seed)
 
     def test_sample_size(self):
@@ -1785,7 +1784,7 @@ class TestSimulatorFactory(unittest.TestCase):
             ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
-            self.assertEqual(sim.get_sample_size(), n)
+            self.assertEqual(sim.sample_size, n)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_sample_size(), n)
             samples = ll_sim.get_samples()
@@ -1801,7 +1800,7 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f(bad_value).run)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
-            self.assertEqual(sim._model.population_size, Ne)
+            self.assertEqual(sim.model.population_size, Ne)
         # Test the default.
         sim = msprime.simulator_factory(10)
 
@@ -1814,15 +1813,11 @@ class TestSimulatorFactory(unittest.TestCase):
         # Just test the basic equalities here. The actual
         # configuration options are tested elewhere.
         for N in range(1, 10):
-            pop_configs = [
-                msprime.PopulationConfiguration(5) for _ in range(N)]
+            pop_configs = [msprime.PopulationConfiguration(5) for _ in range(N)]
             sample_size = 5 * N
-            sim = msprime.simulator_factory(
-                population_configurations=pop_configs)
-            self.assertEqual(
-                sim.get_population_configurations(), pop_configs)
-            self.assertEqual(
-                sim.get_sample_size(), sample_size)
+            sim = msprime.simulator_factory(population_configurations=pop_configs)
+            self.assertEqual(sim.population_configurations, pop_configs)
+            self.assertEqual(sim.sample_size, sample_size)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(len(ll_sim.get_population_configuration()), N)
         # The default is a single population
@@ -1835,16 +1830,14 @@ class TestSimulatorFactory(unittest.TestCase):
             # Zero sample size is always an error
             configs = [msprime.PopulationConfiguration(0) for _ in range(d)]
             self.assertRaises(
-                ValueError, msprime.simulator_factory,
-                population_configurations=configs)
+                ValueError, msprime.simulator_factory, population_configurations=configs)
             configs = [msprime.PopulationConfiguration(2) for _ in range(d)]
             sim = msprime.simulator_factory(population_configurations=configs)
-            self.assertEqual(sim.get_sample_size(), 2 * d)
+            self.assertEqual(sim.sample_size, 2 * d)
             samples = []
             for j in range(d):
-                samples += [
-                    msprime.Sample(population=j, time=0) for _ in range(2)]
-            self.assertEqual(sim.get_samples(), samples)
+                samples += [msprime.Sample(population=j, time=0) for _ in range(2)]
+            self.assertEqual(sim.samples, samples)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_samples(), samples)
 
@@ -1871,7 +1864,7 @@ class TestSimulatorFactory(unittest.TestCase):
             hl_matrix = [
                 [(j + k) * int(j != k) for j in range(N)] for k in range(N)]
             sim = f(hl_matrix)
-            self.assertEqual(sim.get_migration_matrix(), hl_matrix)
+            self.assertEqual(sim.migration_matrix, hl_matrix)
             ll_sim = sim.create_ll_instance()
             ll_matrix = [v for row in hl_matrix for v in row]
             self.assertEqual(ll_sim.get_migration_matrix(), ll_matrix)
@@ -1908,7 +1901,7 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f, bad_value)
         for rate in [0, 1e-3, 10]:
             sim = f(rate)
-            recomb_map = sim.get_recombinatation_map()
+            recomb_map = sim.recombination_map
             self.assertEqual(recomb_map.get_positions(), [0, 1], [rate, 0])
             self.assertEqual(
                 recomb_map.get_num_loci(),
@@ -1942,7 +1935,7 @@ class TestSimulatorFactory(unittest.TestCase):
             rates = [0.1 * j for j in range(n - 1)] + [0.0]
             recomb_map = msprime.RecombinationMap(positions, rates)
             sim = msprime.simulator_factory(10, recombination_map=recomb_map)
-            self.assertEqual(sim.get_recombinatation_map(), recomb_map)
+            self.assertEqual(sim.recombination_map, recomb_map)
             self.assertEqual(recomb_map.get_positions(), positions)
             self.assertEqual(recomb_map.get_rates(), rates)
             ll_sim = sim.create_ll_instance()
@@ -2002,7 +1995,7 @@ class TestSimulatorFactory(unittest.TestCase):
         # Ne = 1/4 to keep in coalescence units.
         sim = msprime.simulator_factory(
             Ne=1/4, samples=samples, population_configurations=pop_configs)
-        self.assertEqual(sim.get_samples(), samples)
+        self.assertEqual(sim.samples, samples)
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)
 
