@@ -23,6 +23,7 @@ test:
     - rm .coverage
     # Run the low-level tests.
     - ./lib/tests 
+    - ./lib/simulation_tests 
     # Run gcov manually, as the one used in codecov doesn't work here.
     - gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
     - find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
