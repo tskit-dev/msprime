@@ -110,8 +110,8 @@ class SimulationVerifier(object):
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
         rng = msprime.RandomGenerator(random.randint(1, 2**32 - 1))
-        sim.set_random_generator(rng)
-        num_populations = sim.get_num_populations()
+        sim.random_generator = rng
+        num_populations = sim.num_populations
         replicates = runner.get_num_replicates()
         num_trees = [0 for j in range(replicates)]
         time = [0 for j in range(replicates)]
@@ -121,12 +121,11 @@ class SimulationVerifier(object):
         for j in range(replicates):
             sim.reset()
             sim.run()
-            num_trees[j] = sim.get_num_breakpoints() + 1
-            time[j] = sim.get_time() / 4  # Convert to coalescent units
-            ca_events[j] = sim.get_num_common_ancestor_events()
-            re_events[j] = sim.get_num_recombination_events()
-            mig_events[j] = [
-                r for row in sim.get_num_migration_events() for r in row]
+            num_trees[j] = sim.num_breakpoints + 1
+            time[j] = sim.time / 4  # Convert to coalescent units
+            ca_events[j] = sim.num_common_ancestor_events
+            re_events[j] = sim.num_recombination_events
+            mig_events[j] = [r for row in sim.num_migration_events for r in row]
         d = {
             "t": time, "num_trees": num_trees,
             "ca_events": ca_events, "re_events": re_events}
