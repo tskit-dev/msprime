@@ -575,7 +575,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error(msp_strerror(ret));
     }
     rho = recomb_map_get_per_locus_recombination_rate(recomb_map);
-    ret = msp_set_scaled_recombination_rate(msp, rho);
+    ret = msp_set_recombination_rate(msp, rho);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }

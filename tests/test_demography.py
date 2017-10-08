@@ -53,9 +53,9 @@ class TestGrowthRates(unittest.TestCase):
             demographic_events=demographic_events)
         ll_sim = simulator.create_ll_instance()
         ll_end_time = ll_sim.debug_demography()
-        self.assertEqual(end_time, ll_end_time * 4 * Ne)
+        self.assertEqual(end_time, ll_end_time)
         populations = [
-            msprime.Population(Ne=Ne, **d)
+            msprime.Population(**d)
             for d in ll_sim.get_population_configuration()]
         self.assertEqual(len(populations), 1)
         pop = populations[0]
@@ -66,8 +66,7 @@ class TestGrowthRates(unittest.TestCase):
         ll_end_time = ll_sim.debug_demography()
         self.assertTrue(math.isinf(ll_end_time))
         populations = [
-            msprime.Population(Ne=Ne, **d)
-            for d in ll_sim.get_population_configuration()]
+            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
         pop = populations[0]
         self.assertEqual(pop.growth_rate, 0)
         self.assertEqual(pop.initial_size, end_size)
@@ -84,10 +83,8 @@ class TestGrowthRates(unittest.TestCase):
             msprime.PopulationConfiguration(
                 sample_size=2, initial_size=Ne, growth_rate=growth_rate)]
         demographic_events = [
-            msprime.PopulationParametersChange(
-                time=delta_t, growth_rate=-growth_rate),
-            msprime.PopulationParametersChange(
-                time=2 * delta_t, growth_rate=0)]
+            msprime.PopulationParametersChange(time=delta_t, growth_rate=-growth_rate),
+            msprime.PopulationParametersChange(time=2 * delta_t, growth_rate=0)]
         simulator = msprime.simulator_factory(
             Ne=Ne,
             population_configurations=population_configurations,
@@ -95,10 +92,9 @@ class TestGrowthRates(unittest.TestCase):
         ll_sim = simulator.create_ll_instance()
         ll_end_time = ll_sim.debug_demography()
         t = delta_t
-        self.assertEqual(t, ll_end_time * 4 * Ne)
+        self.assertEqual(t, ll_end_time)
         populations = [
-            msprime.Population(Ne=Ne, **d)
-            for d in ll_sim.get_population_configuration()]
+            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
         pop = populations[0]
         self.assertEqual(pop.growth_rate, growth_rate)
         self.assertEqual(pop.initial_size, Ne)
@@ -106,10 +102,9 @@ class TestGrowthRates(unittest.TestCase):
         # Now fast forward to the next time slice.
         t += delta_t
         ll_end_time = ll_sim.debug_demography()
-        self.assertEqual(t, ll_end_time * 4 * Ne)
+        self.assertEqual(t, ll_end_time)
         pop = [
-            msprime.Population(Ne=Ne, **d)
-            for d in ll_sim.get_population_configuration()][0]
+            msprime.Population(**d) for d in ll_sim.get_population_configuration()][0]
         self.assertEqual(pop.growth_rate, -growth_rate)
         self.assertEqual(pop.initial_size, end_size)
         self.assertEqual(pop.get_size(delta_t), Ne)
@@ -117,8 +112,7 @@ class TestGrowthRates(unittest.TestCase):
         ll_end_time = ll_sim.debug_demography()
         self.assertTrue(math.isinf(ll_end_time))
         populations = [
-            msprime.Population(Ne=Ne, **d)
-            for d in ll_sim.get_population_configuration()]
+            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
         pop = populations[0]
         self.assertEqual(pop.growth_rate, 0)
         self.assertEqual(pop.initial_size, Ne)
@@ -142,10 +136,9 @@ class TestGrowthRates(unittest.TestCase):
             demographic_events=demographic_events)
         ll_sim = simulator.create_ll_instance()
         ll_end_time = ll_sim.debug_demography()
-        self.assertEqual(end_time, ll_end_time * 4 * Ne)
+        self.assertEqual(end_time, ll_end_time)
         populations = [
-            msprime.Population(Ne=Ne, **d)
-            for d in ll_sim.get_population_configuration()]
+            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
         self.assertEqual(len(populations), 1)
         pop = populations[0]
         self.assertEqual(pop.growth_rate, growth_rate)
@@ -155,8 +148,7 @@ class TestGrowthRates(unittest.TestCase):
         ll_end_time = ll_sim.debug_demography()
         self.assertTrue(math.isinf(ll_end_time))
         populations = [
-            msprime.Population(Ne=Ne, **d)
-            for d in ll_sim.get_population_configuration()]
+            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
         pop = populations[0]
         self.assertEqual(pop.growth_rate, 0)
         self.assertEqual(pop.initial_size, new_size)
@@ -169,37 +161,31 @@ class TestRateConversions(unittest.TestCase):
     """
     def test_size_change(self):
         g = 100
-        Ne = 1024
         new_size = 512
-        event = msprime.PopulationParametersChange(
-            time=g, initial_size=new_size)
+        event = msprime.PopulationParametersChange(time=g, initial_size=new_size)
         ll_event = {
             "type": "population_parameters_change",
-            "time": g / (4 * Ne),
+            "time": g,
             "population_id": -1,
-            "initial_size": new_size / Ne
+            "initial_size": new_size
         }
-        self.assertEqual(
-            event.get_ll_representation(1, Ne), ll_event)
+        self.assertEqual(event.get_ll_representation(1), ll_event)
 
     def test_growth_rate_change(self):
         g = 512
-        Ne = 4096
         growth_rate = 1
         event = msprime.PopulationParametersChange(
             time=g, growth_rate=growth_rate, population_id=1)
         ll_event = {
             "type": "population_parameters_change",
-            "time": g / (4 * Ne),
+            "time": g,
             "population_id": 1,
-            "growth_rate": growth_rate * (4 * Ne)
+            "growth_rate": growth_rate
         }
-        self.assertEqual(
-            event.get_ll_representation(1, Ne), ll_event)
+        self.assertEqual(event.get_ll_representation(1), ll_event)
 
     def test_growth_rate_and_size_change(self):
         g = 1024
-        Ne = 4096
         growth_rate = 2
         initial_size = 8192
         event = msprime.PopulationParametersChange(
@@ -207,63 +193,25 @@ class TestRateConversions(unittest.TestCase):
             growth_rate=growth_rate, population_id=1)
         ll_event = {
             "type": "population_parameters_change",
-            "time": g / (4 * Ne),
+            "time": g,
             "population_id": 1,
-            "initial_size": initial_size / Ne,
-            "growth_rate": growth_rate * (4 * Ne)
+            "initial_size": initial_size,
+            "growth_rate": growth_rate
         }
-        self.assertEqual(
-            event.get_ll_representation(1, Ne), ll_event)
+        self.assertEqual(event.get_ll_representation(1), ll_event)
 
     def test_migration_rate_change(self):
         g = 1024
-        Ne = 4096
         migration_rate = 0.125
         d = 2
         event = msprime.MigrationRateChange(time=g, rate=migration_rate)
         ll_event = {
             "type": "migration_rate_change",
-            "time": g / (4 * Ne),
+            "time": g,
             "matrix_index": -1,
-            "migration_rate": migration_rate * (4 * Ne)
+            "migration_rate": migration_rate
         }
-        self.assertEqual(
-            event.get_ll_representation(d, Ne), ll_event)
-
-
-class TestTimeConversion(unittest.TestCase):
-    """
-    Tests the time conversion into scaled units.
-    """
-    def check_time(self, event, g, Ne, key="time"):
-        ll_event = event.get_ll_representation(1, Ne)
-        self.assertEqual(ll_event[key], g / (4 * Ne))
-
-    def test_population_parameter_change(self):
-        g = 8192
-        Ne = 1024
-        event = msprime.PopulationParametersChange(time=g, initial_size=1)
-        self.check_time(event, g, Ne)
-
-    def test_migration_rate_change(self):
-        g = 512
-        Ne = 8192
-        event = msprime.MigrationRateChange(time=g, rate=1)
-        self.check_time(event, g, Ne)
-
-    def test_mass_migration(self):
-        g = 100
-        Ne = 100
-        event = msprime.MassMigration(time=g, source=0, destination=1)
-        self.check_time(event, g, Ne)
-
-    def test_instantaneous_bottleneck(self):
-        g = 100
-        strength = 1000
-        Ne = 100
-        event = msprime.InstantaneousBottleneck(time=g, strength=strength)
-        self.check_time(event, g, Ne)
-        self.check_time(event, strength, Ne, "strength")
+        self.assertEqual(event.get_ll_representation(d), ll_event)
 
 
 class TestDemographyDebugger(unittest.TestCase):
@@ -719,51 +667,46 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_population_configuration_defaults(self):
         conf = msprime.PopulationConfiguration()
         self.assertIsNone(conf.sample_size)
-        for Ne in [1, 10, 1e6]:
-            d = conf.get_ll_representation(Ne)
-            dp = {
-                "initial_size": 1.0,
-                "growth_rate": 0
-            }
-            self.assertEqual(d, dp)
+        d = conf.get_ll_representation()
+        dp = {
+            "initial_size": None,
+            "growth_rate": 0
+        }
+        self.assertEqual(d, dp)
 
     def test_population_configuration_initial_size(self):
         for initial_size in [1, 10, 1000]:
             conf = msprime.PopulationConfiguration(initial_size=initial_size)
             self.assertIsNone(conf.sample_size)
-            for Ne in [1, 10, 1e6]:
-                d = conf.get_ll_representation(Ne)
-                dp = {
-                    "initial_size": initial_size / Ne,
-                    "growth_rate": 0
-                }
-                self.assertEqual(d, dp)
+            d = conf.get_ll_representation()
+            dp = {
+                "initial_size": initial_size,
+                "growth_rate": 0
+            }
+            self.assertEqual(d, dp)
 
     def test_population_configuration_growth_rate(self):
         sample_size = 8
         for growth_rate in [1, 10, -10]:
-            conf = msprime.PopulationConfiguration(
-                sample_size, growth_rate=growth_rate)
+            conf = msprime.PopulationConfiguration(sample_size, growth_rate=growth_rate)
             self.assertEqual(conf.sample_size, sample_size)
-            for Ne in [1, 10, 1e6]:
-                d = conf.get_ll_representation(Ne)
-                dp = {
-                    "initial_size": 1,
-                    "growth_rate": growth_rate * 4 * Ne
-                }
-                self.assertEqual(d, dp)
+            d = conf.get_ll_representation()
+            dp = {
+                "initial_size": None,
+                "growth_rate": growth_rate
+            }
+            self.assertEqual(d, dp)
 
     def test_population_parameters_change_time(self):
         for Ne in [1, 10, 1000]:
             for g in [0.1, 1, 100, 1e6]:
-                event = msprime.PopulationParametersChange(
-                    time=g, initial_size=Ne)
-                d = event.get_ll_representation(1, Ne)
+                event = msprime.PopulationParametersChange(time=g, initial_size=Ne)
+                d = event.get_ll_representation(1)
                 dp = {
-                    "time": g / (4 * Ne),
+                    "time": g,
                     "population_id": -1,
                     "type": "population_parameters_change",
-                    "initial_size": 1.0}
+                    "initial_size": Ne}
                 self.assertEqual(d, dp)
 
     def test_population_parameters_change_initial_size(self):
@@ -772,27 +715,25 @@ class TestLowLevelConversions(unittest.TestCase):
             for initial_size in [0.01, 1, 100, 1e6]:
                 event = msprime.PopulationParametersChange(
                     time=g, initial_size=initial_size)
-                d = event.get_ll_representation(1, Ne)
+                d = event.get_ll_representation(1)
                 dp = {
-                    "time": g / (4 * Ne),
+                    "time": g,
                     "population_id": -1,
                     "type": "population_parameters_change",
-                    "initial_size": initial_size / Ne}
+                    "initial_size": initial_size}
                 self.assertEqual(d, dp)
 
     def test_population_parameters_change_growth_rate(self):
         g = 100
-        for Ne in [1, 10, 1000]:
-            for growth_rate in [0.01, 1, 100, 1e6]:
-                event = msprime.PopulationParametersChange(
-                    time=g, growth_rate=growth_rate)
-                d = event.get_ll_representation(1, Ne)
-                dp = {
-                    "time": g / (4 * Ne),
-                    "population_id": -1,
-                    "type": "population_parameters_change",
-                    "growth_rate": growth_rate * 4 * Ne}
-                self.assertEqual(d, dp)
+        for growth_rate in [0.01, 1, 100, 1e6]:
+            event = msprime.PopulationParametersChange(time=g, growth_rate=growth_rate)
+            d = event.get_ll_representation(1)
+            dp = {
+                "time": g,
+                "population_id": -1,
+                "type": "population_parameters_change",
+                "growth_rate": growth_rate}
+            self.assertEqual(d, dp)
 
     def test_population_parameters_change_population_id(self):
         g = 100
@@ -800,36 +741,33 @@ class TestLowLevelConversions(unittest.TestCase):
         for population_id in range(3):
             event = msprime.PopulationParametersChange(
                 time=g, initial_size=Ne, population_id=population_id)
-            d = event.get_ll_representation(1, Ne)
+            d = event.get_ll_representation(1)
             dp = {
-                "time": g / (4 * Ne),
+                "time": g,
                 "population_id": population_id,
                 "type": "population_parameters_change",
-                "initial_size": 1}
+                "initial_size": Ne}
             self.assertEqual(d, dp)
 
     def test_migration_rate_change_time(self):
-        for Ne in [1, 10, 1000]:
-            for g in [0.1, 1, 100, 1e6]:
-                event = msprime.MigrationRateChange(time=g, rate=0)
-                d = event.get_ll_representation(1, Ne)
-                dp = {
-                    "time": g / (4 * Ne),
-                    "type": "migration_rate_change",
-                    "migration_rate": 0,
-                    "matrix_index": -1}
-                self.assertEqual(d, dp)
+        for g in [0.1, 1, 100, 1e6]:
+            event = msprime.MigrationRateChange(time=g, rate=0)
+            d = event.get_ll_representation(1)
+            dp = {
+                "time": g,
+                "type": "migration_rate_change",
+                "migration_rate": 0,
+                "matrix_index": -1}
+            self.assertEqual(d, dp)
 
     def test_migration_rate_change_matrix_index(self):
-        Ne = 1025
         g = 51
         for N in range(1, 5):
             for index in itertools.permutations(range(N), 2):
-                event = msprime.MigrationRateChange(
-                    time=g, rate=0, matrix_index=index)
-                d = event.get_ll_representation(N, Ne)
+                event = msprime.MigrationRateChange(time=g, rate=0, matrix_index=index)
+                d = event.get_ll_representation(N)
                 dp = {
-                    "time": g / (4 * Ne),
+                    "time": g,
                     "type": "migration_rate_change",
                     "migration_rate": 0,
                     "matrix_index": index[0] * N + index[1]}
@@ -837,39 +775,35 @@ class TestLowLevelConversions(unittest.TestCase):
 
     def test_migration_rate_change_rate(self):
         g = 1234
-        for Ne in [1, 10, 1000]:
-            for rate in [0, 1e-6, 10, 1e6]:
-                event = msprime.MigrationRateChange(time=g, rate=rate)
-                d = event.get_ll_representation(1, Ne)
-                dp = {
-                    "time": g / (4 * Ne),
-                    "type": "migration_rate_change",
-                    "migration_rate": rate * 4 * Ne,
-                    "matrix_index": -1}
-                self.assertEqual(d, dp)
+        for rate in [0, 1e-6, 10, 1e6]:
+            event = msprime.MigrationRateChange(time=g, rate=rate)
+            d = event.get_ll_representation(1)
+            dp = {
+                "time": g,
+                "type": "migration_rate_change",
+                "migration_rate": rate,
+                "matrix_index": -1}
+            self.assertEqual(d, dp)
 
     def test_mass_migration_time(self):
-        for Ne in [1, 10, 1000]:
-            for g in [0.1, 1, 100, 1e6]:
-                event = msprime.MassMigration(time=g, source=0, destination=1)
-                d = event.get_ll_representation(1, Ne)
-                dp = {
-                    "time": g / (4 * Ne),
-                    "type": "mass_migration",
-                    "source": 0,
-                    "destination": 1,
-                    "proportion": 1}
-                self.assertEqual(d, dp)
+        for g in [0.1, 1, 100, 1e6]:
+            event = msprime.MassMigration(time=g, source=0, destination=1)
+            d = event.get_ll_representation(1)
+            dp = {
+                "time": g,
+                "type": "mass_migration",
+                "source": 0,
+                "destination": 1,
+                "proportion": 1}
+            self.assertEqual(d, dp)
 
     def test_mass_migration_source_dest(self):
-        Ne = 1
         g = 51
         for source, dest in itertools.permutations(range(4), 2):
-            event = msprime.MassMigration(
-                time=g, source=source, destination=dest)
-            d = event.get_ll_representation(1, Ne)
+            event = msprime.MassMigration(time=g, source=source, destination=dest)
+            d = event.get_ll_representation(1)
             dp = {
-                "time": g / (4 * Ne),
+                "time": g,
                 "type": "mass_migration",
                 "source": source,
                 "destination": dest,
@@ -877,14 +811,12 @@ class TestLowLevelConversions(unittest.TestCase):
             self.assertEqual(d, dp)
 
     def test_mass_migration_proportion(self):
-        Ne = 1
         g = 51
         for p in [0, 1e-6, 0.4, 1]:
-            event = msprime.MassMigration(
-                time=g, source=0, destination=1, proportion=p)
-            d = event.get_ll_representation(1, Ne)
+            event = msprime.MassMigration(time=g, source=0, destination=1, proportion=p)
+            d = event.get_ll_representation(1)
             dp = {
-                "time": g / (4 * Ne),
+                "time": g,
                 "type": "mass_migration",
                 "source": 0,
                 "destination": 1,
@@ -896,32 +828,26 @@ class TestLowLevelConversions(unittest.TestCase):
             [0, 1, 2],
             [3, 0, 4],
             [5, 6, 0]]
-        for Ne in [1, 10, 1e6]:
-            sim = msprime.simulator_factory(
-                Ne=Ne,
-                population_configurations=[
-                    msprime.PopulationConfiguration(1),
-                    msprime.PopulationConfiguration(1),
-                    msprime.PopulationConfiguration(1)],
-                migration_matrix=m)
-            scaled_m = sim.get_scaled_migration_matrix()
-            scaled_mp = [
-                [v * 4 * Ne for v in row] for row in m]
-            self.assertEqual(scaled_m, scaled_mp)
+        sim = msprime.simulator_factory(
+            population_configurations=[
+                msprime.PopulationConfiguration(1),
+                msprime.PopulationConfiguration(1),
+                msprime.PopulationConfiguration(1)],
+            migration_matrix=m)
+        self.assertEqual(sim._migration_matrix, m)
 
     def test_instantaneous_bottleneck(self):
-        Ne = 100
         g = 51
         for population in [0, 1, 5]:
             for strength in [0, 100, 1000, 1e9]:
                 event = msprime.InstantaneousBottleneck(
                     time=g, population_id=population, strength=strength)
-                d = event.get_ll_representation(1, Ne)
+                d = event.get_ll_representation(1)
                 dp = {
-                    "time": g / (4 * Ne),
+                    "time": g,
                     "type": "instantaneous_bottleneck",
                     "population_id": population,
-                    "strength": strength / (4 * Ne)}
+                    "strength": strength}
                 self.assertEqual(d, dp)
 
 

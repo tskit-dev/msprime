@@ -631,10 +631,8 @@ class TestTreeSimulator(HighLevelTestCase):
         for bad_type in ["xd", None, 4.4]:
             self.assertRaises(
                 TypeError, msprime.TreeSimulator, [(0, 0), (0, 0)], bad_type)
-        self.assertRaises(
-            ValueError, msprime.TreeSimulator, [], recomb_map)
-        self.assertRaises(
-            ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
+        self.assertRaises(ValueError, msprime.TreeSimulator, [], recomb_map)
+        self.assertRaises(ValueError, msprime.TreeSimulator, [(0, 0)], recomb_map)
 
 
 class TestVariantGenerator(HighLevelTestCase):
@@ -1800,10 +1798,10 @@ class TestSimulatorFactory(unittest.TestCase):
         def f(Ne):
             return msprime.simulator_factory(10, Ne=Ne)
         for bad_value in [-1, -1e16, 0]:
-            self.assertRaises(ValueError, f, bad_value)
+            self.assertRaises(ValueError, f(bad_value).run)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
-            self.assertEqual(sim.get_effective_population_size(), Ne)
+            self.assertEqual(sim._model.population_size, Ne)
         # Test the default.
         sim = msprime.simulator_factory(10)
 
@@ -1875,8 +1873,7 @@ class TestSimulatorFactory(unittest.TestCase):
             sim = f(hl_matrix)
             self.assertEqual(sim.get_migration_matrix(), hl_matrix)
             ll_sim = sim.create_ll_instance()
-            Ne = sim.get_effective_population_size()
-            ll_matrix = [4 * Ne * v for row in hl_matrix for v in row]
+            ll_matrix = [v for row in hl_matrix for v in row]
             self.assertEqual(ll_sim.get_migration_matrix(), ll_matrix)
             for bad_type in ["", {}, 234]:
                 self.assertRaises(TypeError, f, bad_type)
@@ -1917,7 +1914,7 @@ class TestSimulatorFactory(unittest.TestCase):
                 recomb_map.get_num_loci(),
                 msprime.RecombinationMap.DEFAULT_NUM_LOCI)
 
-    def test_scaled_recombination_rate(self):
+    def test_recombination_rate_scaling(self):
         values = [
             (10, 0.1, 0.1),
             (0.1, 1, 10),
@@ -1928,13 +1925,12 @@ class TestSimulatorFactory(unittest.TestCase):
             sim = msprime.simulator_factory(
                 10, Ne=Ne, recombination_rate=rate, length=length)
             num_loci = msprime.RecombinationMap.DEFAULT_NUM_LOCI
-            total_rate = 4 * Ne * length * rate
+            total_rate = length * rate
             per_locus_rate = total_rate / (num_loci - 1)
             # We expect all these rates to be positive.
             self.assertGreater(per_locus_rate, 0)
             ll_sim = sim.create_ll_instance()
-            self.assertAlmostEqual(
-                per_locus_rate, ll_sim.get_scaled_recombination_rate())
+            self.assertAlmostEqual(per_locus_rate, ll_sim.get_recombination_rate())
 
     def test_recombination_map(self):
         def f(recomb_map):

@@ -257,7 +257,7 @@ typedef struct {
     bool store_migrations;
     uint32_t sample_size;
     uint32_t num_loci;
-    double scaled_recombination_rate;
+    double recombination_rate;
     uint32_t num_populations;
     sample_t *samples;
     double *initial_migration_matrix;
@@ -668,8 +668,7 @@ int msp_set_simulation_model_beta(msp_t *self, double population_size, double al
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
-int msp_set_scaled_recombination_rate(msp_t *self,
-        double scaled_recombination_rate);
+int msp_set_recombination_rate(msp_t *self, double recombination_rate);
 int msp_set_max_memory(msp_t *self, size_t max_memory);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
@@ -721,6 +720,8 @@ int msp_is_completed(msp_t *self);
 simulation_model_t * msp_get_model(msp_t *self);
 const char * msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
+double msp_get_recombination_rate(msp_t *self);
+double msp_get_time(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);

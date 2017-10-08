@@ -628,17 +628,17 @@ out:
 }
 
 int
-msp_set_scaled_recombination_rate(msp_t *self, double scaled_recombination_rate)
+msp_set_recombination_rate(msp_t *self, double recombination_rate)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
 
-    if (scaled_recombination_rate < 0) {
+    if (recombination_rate < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->scaled_recombination_rate = model->generation_rate_to_model_rate(
-            model, scaled_recombination_rate);
+    self->recombination_rate = model->generation_rate_to_model_rate(
+            model, recombination_rate);
 out:
     return ret;
 }
@@ -810,7 +810,7 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
     self->sample_size = (uint32_t) sample_size;
     self->rng = rng;
     self->num_loci = 1;
-    self->scaled_recombination_rate = 0.0;
+    self->recombination_rate = 0.0;
     self->samples = malloc(sample_size * sizeof(sample_t));
     if (self->samples == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -2696,7 +2696,7 @@ msp_run_standard_coalescent(msp_t *self, double max_time, unsigned long max_even
             goto out;
         }
         /* Recombination */
-        lambda = (double) num_links * self->scaled_recombination_rate;
+        lambda = (double) num_links * self->recombination_rate;
         re_t_wait = DBL_MAX;
         if (lambda != 0.0) {
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
@@ -2807,7 +2807,7 @@ msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long 
         }
 
         /* Recombination */
-        lambda = (double) num_links * self->scaled_recombination_rate;
+        lambda = (double) num_links * self->recombination_rate;
         re_t_wait = DBL_MAX;
         if (lambda != 0.0) {
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
@@ -2852,7 +2852,8 @@ int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    int model_type = self->model.type;
+    simulation_model_t *model = &self->model;
+    double scaled_time = model->generations_to_model_time(model, max_time);
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
@@ -2861,10 +2862,10 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
-    if (model_type == MSP_MODEL_DIRAC || model_type == MSP_MODEL_BETA) {
-        ret = msp_run_multiple_mergers_coalescent(self, max_time, max_events);
+    if (model->type == MSP_MODEL_DIRAC || model->type == MSP_MODEL_BETA) {
+        ret = msp_run_multiple_mergers_coalescent(self, scaled_time, max_events);
     } else {
-        ret = msp_run_standard_coalescent(self, max_time, max_events);
+        ret = msp_run_standard_coalescent(self, scaled_time, max_events);
     }
     if (ret != 0) {
         goto out;
@@ -2875,7 +2876,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     if (msp_get_num_ancestors(self) != 0) {
         ret = 1;
-        if (self->time >= max_time) {
+        if (self->time >= scaled_time) {
             ret = 2;
         }
     }
@@ -2957,6 +2958,7 @@ msp_debug_demography(msp_t *self, double *end_time)
     int ret = 0;
     double t = GSL_POSINF;
     int first_call = 0;
+    simulation_model_t *model = &self->model;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_DEBUGGING;
@@ -2975,7 +2977,7 @@ msp_debug_demography(msp_t *self, double *end_time)
     if (self->next_demographic_event != NULL) {
         t = self->next_demographic_event->time;
     }
-    *end_time = t;
+    *end_time = model->model_time_to_generations(model, t);
 out:
     return ret;
 }
@@ -3115,8 +3117,13 @@ int WARN_UNUSED
 msp_get_migration_matrix(msp_t *self, double *migration_matrix)
 {
     size_t N = self->num_populations;
+    size_t j;
+    simulation_model_t *model = &self->model;
 
-    memcpy(migration_matrix, self->migration_matrix, N * N * sizeof(double));
+    for (j = 0; j < N * N; j++) {
+        migration_matrix[j] = model->model_rate_to_generation_rate(
+                model, self->migration_matrix[j]);
+    }
     return 0;
 }
 
@@ -3129,6 +3136,10 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
     return 0;
 }
 
+/* Note these getters do NOT rescale time back into generations. They are used
+ * only for testing, and it is useful to independently look at the internal
+ * state without rescaling.
+ */
 int WARN_UNUSED
 msp_get_nodes(msp_t *self, node_t **nodes)
 {
@@ -3142,7 +3153,6 @@ msp_get_edges(msp_t *self, edge_t **edges)
     *edges = self->edges;
     return 0;
 }
-
 
 int WARN_UNUSED
 msp_get_migrations(msp_t *self, migration_t **migrations)
@@ -3175,6 +3185,20 @@ msp_get_population_configuration(msp_t *self, size_t population_id, double *init
     *growth_rate = model->model_rate_to_generation_rate(model, pop->growth_rate);
 out:
     return ret;
+}
+
+double
+msp_get_time(msp_t *self)
+{
+    simulation_model_t *model = &self->model;
+    return model->model_time_to_generations(model, self->time);
+}
+
+double
+msp_get_recombination_rate(msp_t *self)
+{
+    simulation_model_t *model = &self->model;
+    return model->model_rate_to_generation_rate(model, self->recombination_rate);
 }
 
 /* Demographic events. All times and input parameters are specified in units

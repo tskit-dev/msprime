@@ -1068,7 +1068,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
 static tree_sequence_t *
 get_example_tree_sequence(uint32_t sample_size,
         uint32_t num_historical_samples, uint32_t num_loci,
-        double sequence_length, double scaled_recombination_rate,
+        double sequence_length, double recombination_rate,
         double mutation_rate, uint32_t num_bottlenecks,
         bottleneck_desc_t *bottlenecks, int alphabet)
 {
@@ -1128,7 +1128,7 @@ get_example_tree_sequence(uint32_t sample_size,
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, num_loci);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(msp, scaled_recombination_rate);
+    ret = msp_set_recombination_rate(msp, recombination_rate);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
         if (bottlenecks[j].type == SIMPLE_BOTTLENECK) {
@@ -1155,7 +1155,7 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    rates[0] = scaled_recombination_rate;
+    rates[0] = recombination_rate;
     positions[1] = sequence_length;
     ret = recomb_map_alloc(recomb_map, num_loci, sequence_length,
             positions, rates, 2);
@@ -2046,7 +2046,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_set_num_loci(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(
-            msp_set_scaled_recombination_rate(&msp, -1),
+            msp_set_recombination_rate(&msp, -1),
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(
             msp_set_population_configuration(&msp, -1, 0, 0),
@@ -2089,7 +2089,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(&msp, m);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(&msp, 1.0);
+    ret = msp_set_recombination_rate(&msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(&msp, true);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2101,6 +2101,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(initial_size, 2 * Ne);
     CU_ASSERT_EQUAL(growth_rate, 0.5);
+    CU_ASSERT_EQUAL(msp_get_recombination_rate(&msp), 1.0);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
@@ -2129,7 +2130,7 @@ test_simulator_getters_setters(void)
     ret = msp_get_migration_matrix(&msp, matrix);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < 4; j++) {
-        CU_ASSERT_EQUAL(matrix[j], migration_matrix[j] * 4 * Ne);
+        CU_ASSERT_EQUAL(matrix[j], migration_matrix[j]);
     }
     CU_ASSERT(msp_get_num_common_ancestor_events(&msp) > 0);
     CU_ASSERT(msp_get_num_recombination_events(&msp) > 0);
@@ -2217,7 +2218,7 @@ test_simulator_demographic_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(&msp, m);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(&msp, 1.0);
+    ret = msp_set_recombination_rate(&msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
@@ -2404,7 +2405,7 @@ test_simulation_memory_limit(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, 10000);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(msp, 1.0);
+    ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2467,7 +2468,7 @@ test_multi_locus_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_scaled_recombination_rate(msp, 1.0);
+        ret = msp_set_recombination_rate(msp, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model(msp, models[j], 0.25);
         CU_ASSERT_EQUAL(ret, 0);
@@ -2587,7 +2588,7 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(&msp, m);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(&msp, 0.5);
+    ret = msp_set_recombination_rate(&msp, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2669,7 +2670,7 @@ test_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(msp, 1.0);
+    ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     /* Add a bottleneck that does nothing at time t1 */
     ret = msp_add_simple_bottleneck(msp, t1, 0, 0);
@@ -2742,7 +2743,7 @@ test_large_bottleneck_simulation(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_scaled_recombination_rate(msp, 1.0);
+    ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2821,7 +2822,7 @@ test_multiple_mergers_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_scaled_recombination_rate(msp, 10.0);
+        ret = msp_set_recombination_rate(msp, 10.0);
         CU_ASSERT_EQUAL(ret, 0);
         /* TODO check for adding various complications like multiple populations etc
          * to ensure they fail.

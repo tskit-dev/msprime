@@ -85,8 +85,7 @@ def harmonic_number(n):
 
 def _check_population_configurations(population_configurations):
     err = (
-        "Population configurations must be a list of "
-        "PopulationConfiguration instances")
+        "Population configurations must be a list of PopulationConfiguration instances")
     if not isinstance(population_configurations, collections.Iterable):
         raise TypeError(err)
     for config in population_configurations:
@@ -184,10 +183,8 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
-    sim = TreeSimulator(the_samples, recomb_map)
+    sim = TreeSimulator(the_samples, recomb_map, model, Ne)
     sim.set_store_migrations(record_migrations)
-    sim.set_effective_population_size(Ne)
-    sim.set_model(model)
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -325,7 +322,7 @@ class TreeSimulator(object):
     Class to simulate trees under the standard neutral coalescent with
     recombination.
     """
-    def __init__(self, samples, recombination_map):
+    def __init__(self, samples, recombination_map, model="hudson", Ne=0.25):
         if len(samples) < 2:
             raise ValueError("Sample size must be >= 2")
         if len(samples) >= 2**32:
@@ -334,11 +331,11 @@ class TreeSimulator(object):
         self._samples = samples
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
-        self._model = "hudson"
+        self.set_model(model, Ne)
         self._recombination_map = recombination_map
         self._random_generator = None
-        self._effective_population_size = 1
-        self._population_configurations = [PopulationConfiguration()]
+        self._population_configurations = [
+            PopulationConfiguration(initial_size=self._model.population_size)]
         self._migration_matrix = [[0]]
         self._demographic_events = []
         self._store_migrations = False
@@ -384,28 +381,6 @@ class TreeSimulator(object):
     def get_recombinatation_map(self):
         return self._recombination_map
 
-    def get_effective_population_size(self):
-        return self._effective_population_size
-
-    def get_per_locus_scaled_recombination_rate(self):
-        """
-        Returns the rate of recombination between pair of adjacent
-        loci per 4 Ne generations. This is the rate at which recombination
-        occurs in the underlying simulation in genetic coordinates. This
-        is _not_ the per-base rate of recombination.
-        """
-        return (
-            4 * self.get_effective_population_size() *
-            self._recombination_map.get_per_locus_recombination_rate())
-
-    def get_scaled_migration_matrix(self):
-        """
-        Returns the migratation matrix scaled in coalescent time units.
-        """
-        return [
-            [4 * self.get_effective_population_size() * m for m in row]
-            for row in self.get_migration_matrix()]
-
     def get_model(self):
         return self._model
 
@@ -440,9 +415,7 @@ class TreeSimulator(object):
         return self._ll_sim.get_used_memory()
 
     def get_time(self):
-        # The low-level simulation returns time in coalescent units.
-        return (
-            self.get_effective_population_size() * 4 * self._ll_sim.get_time())
+        return self._ll_sim.get_time()
 
     def get_avl_node_block_size(self):
         return self._avl_node_block_size
@@ -542,6 +515,11 @@ class TreeSimulator(object):
     def set_population_configurations(self, population_configurations):
         _check_population_configurations(population_configurations)
         self._population_configurations = population_configurations
+        # For any populations configurations in which the initial size is None,
+        # set it to the population size.
+        for pop_conf in self._population_configurations:
+            if pop_conf.initial_size is None:
+                pop_conf.initial_size = self._model.population_size
         # Now set the default migration matrix.
         N = len(self._population_configurations)
         self._migration_matrix = [[0 for j in range(N)] for k in range(N)]
@@ -557,19 +535,19 @@ class TreeSimulator(object):
                 raise TypeError(err)
         self._demographic_events = demographic_events
 
-    def set_model(self, model):
+    def set_model(self, model, population_size):
         """
         Sets the simulation model to the specified value. This may be either a string
         or a SimulationModel instance. If None, the default simulation model is used
         (i.e., Hudson's algorithm).
         """
         model_map = {
-            "hudson": StandardCoalescent(),
-            "smc": SmcApproxCoalescent(),
-            "smc_prime": SmcPrimeApproxCoalescent()
+            "hudson": StandardCoalescent(population_size),
+            "smc": SmcApproxCoalescent(population_size),
+            "smc_prime": SmcPrimeApproxCoalescent(population_size)
         }
         if model is None:
-            model_instance = StandardCoalescent()
+            model_instance = StandardCoalescent(population_size)
         elif isinstance(model, str):
             lower_model = model.lower()
             if lower_model not in model_map:
@@ -602,33 +580,28 @@ class TreeSimulator(object):
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
         # counterparts.
+        ll_simulation_model = self._model.get_ll_representation()
         d = len(self._population_configurations)
-        Ne = self.get_effective_population_size()
         # The migration matrix must be flattened.
-        scaled_migration_matrix = self.get_scaled_migration_matrix()
         ll_migration_matrix = [0 for j in range(d**2)]
         for j in range(d):
             for k in range(d):
-                ll_migration_matrix[j * d + k] = scaled_migration_matrix[j][k]
+                ll_migration_matrix[j * d + k] = self._migration_matrix[j][k]
         ll_population_configuration = [
-            conf.get_ll_representation(Ne)
-            for conf in self._population_configurations]
+            conf.get_ll_representation() for conf in self._population_configurations]
         ll_demographic_events = [
-            event.get_ll_representation(d, Ne)
-            for event in self._demographic_events]
-        ll_simulation_model = self._model.get_ll_representation()
-        ll_recombination_rate = self.get_per_locus_scaled_recombination_rate()
-        ll_samples = [(pop, time / (4 * Ne)) for pop, time in self._samples]
+            event.get_ll_representation(d) for event in self._demographic_events]
+        ll_recomb_rate = self._recombination_map.get_per_locus_recombination_rate()
         ll_sim = _msprime.Simulator(
-            samples=ll_samples,
+            samples=self._samples,
             random_generator=self._random_generator,
+            model=ll_simulation_model,
             num_loci=self._recombination_map.get_num_loci(),
+            recombination_rate=ll_recomb_rate,
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
-            model=ll_simulation_model,
             store_migrations=self._store_migrations,
-            scaled_recombination_rate=ll_recombination_rate,
             max_memory=self._max_memory,
             segment_block_size=self._segment_block_size,
             avl_node_block_size=self._avl_node_block_size,
@@ -653,10 +626,9 @@ class TreeSimulator(object):
         Returns a TreeSequence representing the state of the simulation.
         """
         ll_recomb_map = self._recombination_map.get_ll_recombination_map()
-        Ne = self.get_effective_population_size()
         self._ll_sim.populate_tables(
             self.node_table, self.edge_table, self.migration_table,
-            Ne=Ne, recombination_map=ll_recomb_map)
+            recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
                 self.node_table, self.edge_table, self.mutation_type_table,
@@ -808,29 +780,23 @@ class PopulationConfiguration(object):
         self.initial_size = initial_size
         self.growth_rate = growth_rate
 
-    def get_ll_representation(self, Ne):
+    def get_ll_representation(self):
         """
         Returns the low-level representation of this PopulationConfiguration.
         """
-        initial_size = Ne if self.initial_size is None else self.initial_size
         return {
-            "initial_size": initial_size / Ne,
-            "growth_rate": self.growth_rate * 4 * Ne
+            "initial_size": self.initial_size,
+            "growth_rate": self.growth_rate
         }
 
 
-# TODO use this and its inverse throughout the code.
-def generations_to_coalescent(time, Ne):
-    return time / (4 * Ne)
-
-
 class DemographicEvent(object):
+    """
+    Superclass of demographic events that occur during simulations.
+    """
     def __init__(self, type_, time):
         self.type = type_
         self.time = time
-
-    def _get_scaled_time(self, Ne):
-        return generations_to_coalescent(self.time, Ne)
 
 
 class PopulationParametersChange(DemographicEvent):
@@ -852,29 +818,26 @@ class PopulationParametersChange(DemographicEvent):
         ``population_id`` is None, the changes affect all populations
         simultaneously.
     """
-    def __init__(
-            self, time, initial_size=None, growth_rate=None,
-            population_id=None):
+    def __init__(self, time, initial_size=None, growth_rate=None, population_id=None):
         super(PopulationParametersChange, self).__init__(
             "population_parameters_change", time)
         if growth_rate is None and initial_size is None:
-            raise ValueError(
-                "Must specify one or more of growth_rate and initial_size")
+            raise ValueError("Must specify one or more of growth_rate and initial_size")
         self.time = time
         self.growth_rate = growth_rate
         self.initial_size = initial_size
         self.population_id = -1 if population_id is None else population_id
 
-    def get_ll_representation(self, num_populations, Ne):
+    def get_ll_representation(self, num_populations):
         ret = {
             "type": self.type,
-            "time": self._get_scaled_time(Ne),
+            "time": self.time,
             "population_id": self.population_id
         }
         if self.growth_rate is not None:
-            ret["growth_rate"] = self.growth_rate * 4 * Ne
+            ret["growth_rate"] = self.growth_rate
         if self.initial_size is not None:
-            ret["initial_size"] = self.initial_size / Ne
+            ret["initial_size"] = self.initial_size
         return ret
 
     def __str__(self):
@@ -903,16 +866,14 @@ class MigrationRateChange(DemographicEvent):
         self.rate = rate
         self.matrix_index = matrix_index
 
-    def get_ll_representation(self, num_populations, Ne):
+    def get_ll_representation(self, num_populations):
         matrix_index = -1
-        scaled_rate = 4 * Ne * self.rate
         if self.matrix_index is not None:
-            matrix_index = (
-                self.matrix_index[0] * num_populations + self.matrix_index[1])
+            matrix_index = self.matrix_index[0] * num_populations + self.matrix_index[1]
         return {
             "type": self.type,
-            "time": self._get_scaled_time(Ne),
-            "migration_rate": scaled_rate,
+            "time": self.time,
+            "migration_rate": self.rate,
             "matrix_index": matrix_index
         }
 
@@ -949,10 +910,10 @@ class MassMigration(DemographicEvent):
         self.destination = destination
         self.proportion = proportion
 
-    def get_ll_representation(self, num_populations, Ne):
+    def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
-            "time": self._get_scaled_time(Ne),
+            "time": self.time,
             "source": self.source,
             "destination": self.destination,
             "proportion": self.proportion
@@ -972,10 +933,10 @@ class SimpleBottleneck(DemographicEvent):
         self.population_id = population_id
         self.proportion = proportion
 
-    def get_ll_representation(self, num_populations, Ne):
+    def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
-            "time": self._get_scaled_time(Ne),
+            "time": self.time,
             "population_id": self.population_id,
             "proportion": self.proportion
         }
@@ -990,17 +951,16 @@ class InstantaneousBottleneck(DemographicEvent):
     # TODO document
 
     def __init__(self, time, population_id=0, strength=1.0):
-        super(InstantaneousBottleneck, self).__init__(
-            "instantaneous_bottleneck", time)
+        super(InstantaneousBottleneck, self).__init__("instantaneous_bottleneck", time)
         self.population_id = population_id
         self.strength = strength
 
-    def get_ll_representation(self, num_populations, Ne):
+    def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
-            "time": self._get_scaled_time(Ne),
+            "time": self.time,
             "population_id": self.population_id,
-            "strength": generations_to_coalescent(self.strength, Ne)
+            "strength": self.strength,
         }
 
     def __str__(self):
@@ -1016,8 +976,11 @@ class SimulationModel(object):
     """
     name = None
 
+    def __init__(self, population_size=1):
+        self.population_size = population_size
+
     def get_ll_representation(self):
-        return {"name": self.name}
+        return {"name": self.name, "population_size": self.population_size}
 
 
 class StandardCoalescent(SimulationModel):
@@ -1039,7 +1002,7 @@ class SmcPrimeApproxCoalescent(SimulationModel):
 
 class ParametricSimulationModel(SimulationModel):
     """
-    The superclass of simulation models that require parameters.
+    The superclass of simulation models that require extra parameters.
     """
     def get_ll_representation(self):
         d = super(ParametricSimulationModel, self).get_ll_representation()
@@ -1053,7 +1016,8 @@ class BetaCoalescent(ParametricSimulationModel):
 
     # TODO what is a meaningful value for this parameter? Ideally, the default
     # would be the equivalent of the Kingman coalescent or something similar.
-    def __init__(self, alpha=1, truncation_point=None):
+    def __init__(self, population_size=1, alpha=1, truncation_point=None):
+        self.population_size = population_size
         self.alpha = alpha
         if truncation_point is None:
             truncation_point = sys.float_info.max
@@ -1065,7 +1029,8 @@ class DiracCoalescent(ParametricSimulationModel):
     name = "dirac"
 
     # TODO What is a meaningful default for this value? See above.
-    def __init__(self, psi=0.5, c=10.0):
+    def __init__(self, population_size=1, psi=0.5, c=10.0):
+        self.population_size = population_size
         self.psi = psi
         self.c = c
 
@@ -1073,16 +1038,11 @@ class DiracCoalescent(ParametricSimulationModel):
 class Population(object):
     """
     Simple class to represent the state of a population in terms of its
-    demographic parameters. This is intended to be initialised from the
-    corresponding low-level values so that they can be rescaled back into
-    input units.
+    demographic parameters.
     """
-    def __init__(
-            self, Ne=None, sample_size=None, initial_size=None,
-            growth_rate=None):
-        self.Ne = Ne
-        self.initial_size = initial_size * self.Ne
-        self.growth_rate = growth_rate / (4 * Ne)
+    def __init__(self, initial_size=None, growth_rate=None):
+        self.initial_size = initial_size
+        self.growth_rate = growth_rate
 
     def get_size(self, time):
         """
@@ -1104,17 +1064,12 @@ class DemographyDebugger(object):
             self, Ne=1, population_configurations=None, migration_matrix=None,
             demographic_events=[]):
         self._precision = 3
-        self._Ne = Ne
         self._simulator = simulator_factory(
             Ne=Ne,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        self._demographic_events = sorted(
-            demographic_events, key=lambda e: e.time)
-
-    def _scaled_time_to_generations(self, t):
-        return 4 * self._Ne * t
+        self._demographic_events = sorted(demographic_events, key=lambda e: e.time)
 
     def _print_populations(
             self, start_time, end_time, migration_matrix, populations, output):
@@ -1174,11 +1129,10 @@ class DemographyDebugger(object):
         abs_tol = 1e-9
         ll_sim = self._simulator.create_ll_instance()
         N = self._simulator.get_num_populations()
-        Ne = self._Ne
         start_time = 0
-        scaled_end_time = 0
+        end_time = 0
         event_index = 0
-        while not math.isinf(scaled_end_time):
+        while not math.isinf(end_time):
             events = []
             while (
                     event_index < len(self._demographic_events) and
@@ -1194,14 +1148,11 @@ class DemographyDebugger(object):
                 assert almost_equal(event.time, start_time, abs_tol=abs_tol)
                 print("   -", event, file=output)
             print(file=output)
-            scaled_end_time = ll_sim.debug_demography()
-            end_time = self._scaled_time_to_generations(scaled_end_time)
+            end_time = ll_sim.debug_demography()
             m = ll_sim.get_migration_matrix()
-            migration_matrix = [
-                [m[j * N + k] / (4 * Ne) for j in range(N)] for k in range(N)]
+            migration_matrix = [[m[j * N + k] for j in range(N)] for k in range(N)]
             populations = [
-                Population(Ne=self._Ne, **d)
-                for d in ll_sim.get_population_configuration()]
+                Population(**d) for d in ll_sim.get_population_configuration()]
             s = "Epoch: {} -- {} generations".format(start_time, end_time)
             print("=" * len(s), file=output)
             print(s, file=output)

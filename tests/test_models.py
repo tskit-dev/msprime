@@ -63,14 +63,13 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
             self.assertGreater(sim.get_num_rejected_common_ancestor_events(), 0)
 
 
-class TestCoalescenceRecords(unittest.TestCase):
+class TestEdges(unittest.TestCase):
     """
-    Tests that the coalescence records have the correct properties.
+    Tests that the edges have the correct properties.
     """
-    @unittest.skip("Diffs broken")
     def test_gaps(self):
-        # SMC simulations should never have adjacent coalescence records with
-        # a non-zero distance between them and the same time/node value.
+        # SMC simulations should never have adjacent edgesets with
+        # a non-zero distance between them and the same parent.
         # First we do a simulation with the standard model to make sure
         # we have plausible parameter values.
         sample_size = 10
@@ -80,12 +79,12 @@ class TestCoalescenceRecords(unittest.TestCase):
         ts = msprime.simulate(
             sample_size=sample_size, recombination_rate=recombination_rate,
             random_seed=random_seed)
-        records = list(ts.records())
+        edgesets = sorted(ts.edgesets(), key=lambda e: (e.parent, e.left))
         num_found = 0
-        for j in range(1, len(records)):
-            r = records[j - 1]
-            s = records[j]
-            if r.right != s.left and r.node == s.node:
+        for j in range(1, len(edgesets)):
+            r = edgesets[j - 1]
+            s = edgesets[j]
+            if r.right != s.left and r.parent == s.parent:
                 num_found += 1
         self.assertGreater(num_found, 10)  # Make a reasonable threshold
 
@@ -94,12 +93,12 @@ class TestCoalescenceRecords(unittest.TestCase):
             ts = msprime.simulate(
                 sample_size=sample_size, recombination_rate=recombination_rate,
                 random_seed=random_seed, model=model)
-            records = list(ts.records())
+            edgesets = sorted(ts.edgesets(), key=lambda e: (e.parent, e.left))
             num_found = 0
-            for j in range(1, len(records)):
-                r = records[j - 1]
-                s = records[j]
-                if r.right != s.left and r.node == s.node:
+            for j in range(1, len(edgesets)):
+                r = edgesets[j - 1]
+                s = edgesets[j]
+                if r.right != s.left and r.parent == s.parent:
                     num_found += 1
             self.assertEqual(num_found, 0)
 
@@ -145,35 +144,43 @@ class TestParametricModels(unittest.TestCase):
     Tests for the parametric simulation models.
     """
     def test_beta_coalescent_parameters(self):
+        N = 1000
         dbl_max = sys.float_info.max
         for alpha in [-1, 0, 1.1]:
-            model = msprime.BetaCoalescent(alpha)
+            model = msprime.BetaCoalescent(N, alpha)
+            self.assertEqual(model.population_size, N)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, dbl_max)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
+                "population_size": N,
                 "alpha": alpha,
                 "truncation_point": dbl_max})
         alpha = 2
         for truncation_point in [0, 3, 1e6]:
-            model = msprime.BetaCoalescent(alpha, truncation_point)
+            model = msprime.BetaCoalescent(N, alpha, truncation_point)
+            self.assertEqual(model.population_size, N)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, truncation_point)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
+                "population_size": N,
                 "alpha": alpha,
                 "truncation_point": truncation_point})
 
     def test_dirac_coalescent_parameters(self):
+        N = 10
         for psi in [0.01, 0.5, 0.99]:
             for c in [1e-6, 1.0, 1e2]:
-                model = msprime.DiracCoalescent(psi, c)
+                model = msprime.DiracCoalescent(N, psi, c)
+                self.assertEqual(model.population_size, N)
                 self.assertEqual(model.psi, psi)
                 self.assertEqual(model.c, c)
                 d = model.get_ll_representation()
-                self.assertEqual(d, {"name": "dirac", "psi": psi, "c": c})
+                self.assertEqual(d, {
+                    "name": "dirac", "population_size": N, "psi": psi, "c": c})
 
 
 class TestMultipleMergerModels(unittest.TestCase):
@@ -191,12 +198,9 @@ class TestMultipleMergerModels(unittest.TestCase):
 
     def verify_non_binary(self, ts):
         non_binary = False
-        for t in ts.trees():
-            for u in t.nodes():
-                if len(t.children(u)) > 2:
-                    non_binary = True
-                    break
-            if non_binary:
+        for e in ts.edgesets():
+            if len(e.children) > 2:
+                non_binary = True
                 break
         self.assertTrue(non_binary)
 
@@ -213,7 +217,7 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.verify_non_binary(ts)
 
     def test_dirac_coalescent(self):
-        model = msprime.DiracCoalescent(0.3, 10)
+        model = msprime.DiracCoalescent(100, 0.3, 10)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)

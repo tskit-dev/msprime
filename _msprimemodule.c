@@ -6145,7 +6145,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"samples", "random_generator",
-        "num_loci", "scaled_recombination_rate",
+        "num_loci", "recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "max_memory", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "node_block_size", "edge_block_size",
@@ -6160,7 +6160,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     unsigned long num_loci = 1;
-    double scaled_recombination_rate = 0.0;
+    double recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
@@ -6175,7 +6175,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
-            &num_loci, &scaled_recombination_rate,
+            &num_loci, &recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
@@ -6219,8 +6219,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_scaled_recombination_rate(self->sim,
-            scaled_recombination_rate);
+    sim_ret = msp_set_recombination_rate(self->sim, recombination_rate);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -6420,13 +6419,13 @@ out:
 
 
 static PyObject *
-Simulator_get_scaled_recombination_rate(Simulator  *self)
+Simulator_get_recombination_rate(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->scaled_recombination_rate);
+    ret = Py_BuildValue("d", msp_get_recombination_rate(self->sim));
 out:
     return ret;
 }
@@ -6524,7 +6523,7 @@ Simulator_get_time(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->time);
+    ret = Py_BuildValue("d", msp_get_time(self->sim));
 out:
     return ret;
 }
@@ -7255,9 +7254,9 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the sample size" },
     {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
             "Returns the number of populations." },
-    {"get_scaled_recombination_rate",
-            (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
-            "Returns the scaled recombination rate." },
+    {"get_recombination_rate",
+            (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
+            "Returns the recombination rate." },
     {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
             "Returns the maximum memory used by the simulator" },
     {"get_segment_block_size",
