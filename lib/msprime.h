@@ -237,22 +237,28 @@ typedef struct {
     double c; // constant
 } dirac_coalescent_t;
 
-typedef struct {
+typedef struct _simulation_model_t {
     int type;
+    double population_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
     } params;
+    /* Time and rate conversions */
+    double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
+    double (*generations_to_model_time)(struct _simulation_model_t *model, double g);
+    double (*generation_rate_to_model_rate)(struct _simulation_model_t *model, double rg);
+    double (*model_rate_to_generation_rate)(struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
-typedef struct {
+typedef struct _msp_t {
     gsl_rng *rng;
     /* input parameters */
     simulation_model_t model;
     bool store_migrations;
     uint32_t sample_size;
     uint32_t num_loci;
-    double scaled_recombination_rate;
+    double recombination_rate;
     uint32_t num_populations;
     sample_t *samples;
     double *initial_migration_matrix;
@@ -309,6 +315,10 @@ typedef struct {
     size_t max_migrations;
     size_t migration_block_size;
     size_t num_migration_blocks;
+    /* Methods for getting the waiting time until the next common ancestor
+     * event and the event are defined by the simulation model */
+    double (*get_common_ancestor_waiting_time)(struct _msp_t *self, population_id_t pop);
+    int (*common_ancestor_event)(struct _msp_t *selt, population_id_t pop);
 } msp_t;
 
 /* Demographic events */
@@ -655,14 +665,15 @@ typedef struct {
 } simplifier_t;
 
 int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
-int msp_set_simulation_model_non_parametric(msp_t *self, int model);
-int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
-int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
+int msp_set_simulation_model(msp_t *self, int model, double population_size);
+int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
+    double c);
+int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
+        double truncation_point);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
-int msp_set_scaled_recombination_rate(msp_t *self,
-        double scaled_recombination_rate);
+int msp_set_recombination_rate(msp_t *self, double recombination_rate);
 int msp_set_max_memory(msp_t *self, size_t max_memory);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
@@ -691,7 +702,7 @@ int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
-int msp_populate_tables(msp_t *self, double Ne, recomb_map_t *recomb_map,
+int msp_populate_tables(msp_t *self, recomb_map_t *recomb_map,
         node_table_t *node_table, edge_table_t *edge_table,
         migration_table_t *migration_table);
 int msp_reset(msp_t *self);
@@ -709,13 +720,13 @@ int msp_get_migrations(msp_t *self, migration_t **migrations);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
-int msp_get_population(msp_t *self, size_t population_id,
-        population_t **population);
 int msp_is_completed(msp_t *self);
 
 simulation_model_t * msp_get_model(msp_t *self);
 const char * msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
+double msp_get_recombination_rate(msp_t *self);
+double msp_get_time(msp_t *self);
 size_t msp_get_sample_size(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);

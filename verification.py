@@ -77,10 +77,12 @@ class SimulationVerifier(object):
         print("\t", " ".join(args))
         p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
-            ["./data/sample_stats"], stdin=p1.stdout,
-            stdout=subprocess.PIPE)
+            ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE)
         p1.stdout.close()
         output = p2.communicate()[0]
+        p1.wait()
+        if p1.returncode != 0:
+            raise ValueError("Error occured in subprocess: ", p1.returncode)
         with tempfile.TemporaryFile() as f:
             f.write(output)
             f.seek(0)
@@ -110,8 +112,8 @@ class SimulationVerifier(object):
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
         rng = msprime.RandomGenerator(random.randint(1, 2**32 - 1))
-        sim.set_random_generator(rng)
-        num_populations = sim.get_num_populations()
+        sim.random_generator = rng
+        num_populations = sim.num_populations
         replicates = runner.get_num_replicates()
         num_trees = [0 for j in range(replicates)]
         time = [0 for j in range(replicates)]
@@ -121,12 +123,11 @@ class SimulationVerifier(object):
         for j in range(replicates):
             sim.reset()
             sim.run()
-            num_trees[j] = sim.get_num_breakpoints() + 1
-            time[j] = sim.get_time() / 4  # Convert to coalescent units
-            ca_events[j] = sim.get_num_common_ancestor_events()
-            re_events[j] = sim.get_num_recombination_events()
-            mig_events[j] = [
-                r for row in sim.get_num_migration_events() for r in row]
+            num_trees[j] = sim.num_breakpoints + 1
+            time[j] = sim.time / 4  # Convert to coalescent units
+            ca_events[j] = sim.num_common_ancestor_events
+            re_events[j] = sim.num_recombination_events
+            mig_events[j] = [r for row in sim.num_migration_events for r in row]
         d = {
             "t": time, "num_trees": num_trees,
             "ca_events": ca_events, "re_events": re_events}
@@ -573,7 +574,7 @@ class SimulationVerifier(object):
                 sample_size=n, recombination_rate=r, Ne=Ne, length=L[j])
             for k in range(num_replicates):
                 exact_sim.run()
-                num_trees[k] = exact_sim.get_num_breakpoints()
+                num_trees[k] = exact_sim.num_breakpoints
                 exact_sim.reset()
             mean_exact[j] = np.mean(num_trees)
             var_exact[j] = np.var(num_trees)
@@ -583,7 +584,7 @@ class SimulationVerifier(object):
                 model="smc")
             for k in range(num_replicates):
                 smc_sim.run()
-                num_trees[k] = smc_sim.get_num_breakpoints()
+                num_trees[k] = smc_sim.num_breakpoints
                 smc_sim.reset()
             mean_smc[j] = np.mean(num_trees)
             var_smc[j] = np.var(num_trees)
@@ -593,7 +594,7 @@ class SimulationVerifier(object):
                 model="smc_prime")
             for k in range(num_replicates):
                 smc_prime_sim.run()
-                num_trees[k] = smc_prime_sim.get_num_breakpoints()
+                num_trees[k] = smc_prime_sim.num_breakpoints
                 smc_prime_sim.reset()
             mean_smc_prime[j] = np.mean(num_trees)
             var_smc_prime[j] = np.var(num_trees)
@@ -781,7 +782,7 @@ def main():
     verifier.add_ms_instance(
         "migration-matrix-change-2-pops2",
         "100 10000 -t 2.0 -I 2 50 50 -ema 1.0 2 x 0.1 0 x "
-        "-eN 1.1 0 -ema 10 2 x 0 10 x")
+        "-eN 1.1 0.001 -ema 10 2 x 0 10 x")
     verifier.add_ms_instance(
         "population-split-2-pops1",
         "100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2")

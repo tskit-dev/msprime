@@ -5676,8 +5676,7 @@ Simulator_check_sim(Simulator *self)
 }
 
 static int
-Simulator_parse_population_configuration(Simulator *self,
-        PyObject *py_pop_config)
+Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_config)
 {
     int ret = -1;
     Py_ssize_t j, num_populations;
@@ -5727,8 +5726,7 @@ out:
 }
 
 static int
-Simulator_parse_migration_matrix(Simulator *self,
-        PyObject *py_migration_matrix)
+Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
 {
     int ret = -1;
     int err;
@@ -5790,7 +5788,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *beta_s = NULL;
     PyObject *value;
     int is_hudson, is_smc, is_smc_prime, is_dirac, is_beta;
-    double psi, c, alpha, truncation_point;
+    double population_size, psi, c, alpha, truncation_point;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -5815,11 +5813,20 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     if (beta_s == NULL) {
         goto out;
     }
+
+    value = get_dict_number(py_model, "population_size");
+    if (value == NULL) {
+        goto out;
+    }
+    population_size = PyFloat_AsDouble(value);
+    if (population_size <= 0) {
+        PyErr_SetString(PyExc_ValueError, "population size must be >= 0");
+        goto out;
+    }
     py_name = get_dict_value(py_model, "name");
     if (py_name == NULL) {
         goto out;
     }
-
     /* We need to go through this tedious rigmarole because of string
      * handling in Python 3. By pushing the comparison up into Python
      * we don't need to worry about encodings, etc, etc.
@@ -5829,7 +5836,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_hudson) {
-        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_HUDSON);
+        err = msp_set_simulation_model(self->sim, MSP_MODEL_HUDSON, population_size);
     }
 
     is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
@@ -5837,7 +5844,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc) {
-        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_SMC);
+        err = msp_set_simulation_model(self->sim, MSP_MODEL_SMC, population_size);
     }
 
     is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
@@ -5845,7 +5852,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc_prime) {
-        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_SMC_PRIME);
+        err = msp_set_simulation_model(self->sim, MSP_MODEL_SMC_PRIME,
+                population_size);
     }
 
     is_dirac = PyObject_RichCompareBool(py_name, dirac_s, Py_EQ);
@@ -5871,7 +5879,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
             PyErr_SetString(PyExc_ValueError, "c >= 0");
             goto out;
         }
-        err = msp_set_simulation_model_dirac(self->sim, psi, c);
+        err = msp_set_simulation_model_dirac(self->sim, population_size, psi, c);
     }
 
     is_beta = PyObject_RichCompareBool(py_name, beta_s, Py_EQ);
@@ -5890,7 +5898,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         }
         truncation_point = PyFloat_AsDouble(value);
         /* TODO range checking on alpha and truncation_point */
-        err = msp_set_simulation_model_beta(self->sim, alpha, truncation_point);
+        err = msp_set_simulation_model_beta(self->sim, population_size,
+                alpha, truncation_point);
     }
 
     if (! (is_hudson || is_smc || is_smc_prime || is_dirac || is_beta)) {
@@ -6134,7 +6143,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"samples", "random_generator",
-        "num_loci", "scaled_recombination_rate",
+        "num_loci", "recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "max_memory", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "node_block_size", "edge_block_size",
@@ -6149,7 +6158,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     /* parameter defaults */
     Py_ssize_t sample_size = 2;
     unsigned long num_loci = 1;
-    double scaled_recombination_rate = 0.0;
+    double recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
@@ -6164,7 +6173,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnnni", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
-            &num_loci, &scaled_recombination_rate,
+            &num_loci, &recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
@@ -6208,8 +6217,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
-    sim_ret = msp_set_scaled_recombination_rate(self->sim,
-            scaled_recombination_rate);
+    sim_ret = msp_set_recombination_rate(self->sim, recombination_rate);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -6309,7 +6317,9 @@ Simulator_get_model(Simulator *self)
         goto out;
     }
     model = msp_get_model(self->sim);
-    d = Py_BuildValue("{ss}", "name", msp_get_model_name(self->sim));
+    d = Py_BuildValue("{ss,sd}",
+            "name", msp_get_model_name(self->sim),
+            "population_size", msp_get_model(self->sim)->population_size);
     if (model->type == MSP_MODEL_DIRAC) {
         value = Py_BuildValue("d", model->params.dirac_coalescent.psi);
         if (value == NULL) {
@@ -6407,13 +6417,13 @@ out:
 
 
 static PyObject *
-Simulator_get_scaled_recombination_rate(Simulator  *self)
+Simulator_get_recombination_rate(Simulator  *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->scaled_recombination_rate);
+    ret = Py_BuildValue("d", msp_get_recombination_rate(self->sim));
 out:
     return ret;
 }
@@ -6511,7 +6521,7 @@ Simulator_get_time(Simulator  *self)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->time);
+    ret = Py_BuildValue("d", msp_get_time(self->sim));
 out:
     return ret;
 }
@@ -7151,15 +7161,13 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
     MigrationTable *migrations = NULL;
     RecombinationMap *recombination_map = NULL;
     recomb_map_t *recomb_map = NULL;
-    double Ne = 0.25; /* default to coalescent time */
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "Ne", "recombination_map", NULL};
+        "recombination_map", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|dO!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!", kwlist,
             &NodeTableType, &nodes,
             &EdgeTableType, &edges,
             &MigrationTableType, &migrations,
-            &Ne,
             &RecombinationMapType, &recombination_map)) {
         goto out;
     }
@@ -7181,9 +7189,8 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
         }
         recomb_map = recombination_map->recomb_map;
     }
-    err = msp_populate_tables(self->sim, Ne, recomb_map,
-        nodes->node_table, edges->edge_table,
-        migrations->migration_table);
+    err = msp_populate_tables(self->sim, recomb_map, nodes->node_table,
+            edges->edge_table, migrations->migration_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -7245,9 +7252,9 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the sample size" },
     {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
             "Returns the number of populations." },
-    {"get_scaled_recombination_rate",
-            (PyCFunction) Simulator_get_scaled_recombination_rate, METH_NOARGS,
-            "Returns the scaled recombination rate." },
+    {"get_recombination_rate",
+            (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
+            "Returns the recombination rate." },
     {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
             "Returns the maximum memory used by the simulator" },
     {"get_segment_block_size",

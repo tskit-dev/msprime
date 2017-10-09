@@ -151,7 +151,7 @@ class SimulationRunner(object):
         seed = get_single_seed(ms_seeds)
         self._random_generator = msprime.RandomGenerator(seed)
         self._ms_random_seeds = ms_seeds
-        self._simulator.set_random_generator(self._random_generator)
+        self._simulator.random_generator = self._random_generator
         self._mutation_generator = msprime.MutationGenerator(
             self._random_generator, self._mutation_rate)
 
@@ -181,7 +181,7 @@ class SimulationRunner(object):
         same tree. Therefore, we must keep track of all breakpoints from the
         simulation and write out a tree for each one.
         """
-        breakpoints = self._simulator.get_breakpoints() + [self._num_loci]
+        breakpoints = self._simulator.breakpoints + [self._num_loci]
         time_scale = 0.25
         if self._num_loci == 1:
             tree = next(tree_sequence.trees())
@@ -216,7 +216,6 @@ class SimulationRunner(object):
             if self._print_trees:
                 self.print_trees(tree_sequence, output)
             if self._mutation_rate > 0:
-                hg = msprime.HaplotypeGenerator(tree_sequence)
                 s = tree_sequence.get_num_mutations()
                 print("segsites:", s, file=output)
                 if s != 0:
@@ -230,7 +229,7 @@ class SimulationRunner(object):
                             "{0:.{1}f}".format(position, self._precision),
                             end=" ", file=output)
                     print(file=output)
-                    for h in hg.haplotypes():
+                    for h in tree_sequence.haplotypes():
                         print(h, file=output)
                 else:
                     print(file=output)

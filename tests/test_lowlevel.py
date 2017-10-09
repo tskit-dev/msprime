@@ -57,14 +57,14 @@ def uniform_recombination_map(sim):
     return _msprime.RecombinationMap(
         sim.get_num_loci(),
         [0, sim.get_num_loci()],
-        [sim.get_scaled_recombination_rate(), 0])
+        [sim.get_recombination_rate(), 0])
 
 
-def get_simulation_model(name="hudson", **kwargs):
+def get_simulation_model(name="hudson", population_size=0.25, **kwargs):
     """
     Returns simulation model dictionary suitable for passing to the low-level API.
     """
-    d = {"name": name}
+    d = {"name": name, "population_size": population_size}
     d.update(kwargs)
     return d
 
@@ -197,7 +197,7 @@ def get_migration_matrix(num_populations, value=1.0):
 
 
 def get_example_simulator(
-        sample_size=10, random_seed=1, num_populations=1,
+        sample_size=10, Ne=0.25, random_seed=1, num_populations=1,
         store_migrations=False):
     samples = [(j % num_populations, 0) for j in range(sample_size)]
     migration_matrix = [1 for _ in range(num_populations**2)]
@@ -209,23 +209,22 @@ def get_example_simulator(
         samples, _msprime.RandomGenerator(random_seed),
         population_configuration=population_configuration,
         migration_matrix=migration_matrix,
-        store_migrations=store_migrations)
+        store_migrations=store_migrations,
+        model=get_simulation_model(population_size=Ne))
     return sim
 
 
-def populate_tree_sequence(
-        sim, Ne=0.25, mutation_generator=None, provenance_strings=[]):
+def populate_tree_sequence(sim, mutation_generator=None, provenance_strings=[]):
     nodes = _msprime.NodeTable()
     edges = _msprime.EdgeTable()
     migrations = _msprime.MigrationTable()
     sites = _msprime.SiteTable()
     mutations = _msprime.MutationTable()
     ts = _msprime.TreeSequence()
-    sim.populate_tables(nodes, edges, migrations, Ne=Ne)
+    sim.populate_tables(nodes, edges, migrations)
     if mutation_generator is not None:
         mutation_generator.generate(nodes, edges, sites, mutations)
-    ts.load_tables(
-        nodes, edges, migrations, sites, mutations, provenance_strings)
+    ts.load_tables(nodes, edges, migrations, sites, mutations, provenance_strings)
     return ts
 
 
@@ -457,7 +456,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         rng = _msprime.RandomGenerator(random_seed)
         sim = _msprime.Simulator(
             get_samples(sample_size), rng, num_loci=num_loci,
-            scaled_recombination_rate=rho,
+            recombination_rate=rho,
             demographic_events=demographic_events)
         sim.run()
         nodes = _msprime.NodeTable()
@@ -790,7 +789,7 @@ class TestSimulationState(LowLevelTestCase):
             random_generator=_msprime.RandomGenerator(random_seed),
             num_loci=m,
             store_migrations=store_migrations,
-            scaled_recombination_rate=rho,
+            recombination_rate=rho,
             population_configuration=population_configuration,
             demographic_events=demographic_events,
             migration_matrix=migration_matrix,
@@ -845,7 +844,7 @@ class TestSimulationState(LowLevelTestCase):
                 # Check the getters to ensure we've got the right values.
                 self.assertEqual(n, sim.get_sample_size())
                 self.assertEqual(m, sim.get_num_loci())
-                self.assertEqual(rho, sim.get_scaled_recombination_rate())
+                self.assertEqual(rho, sim.get_recombination_rate())
                 self.assertEqual(max_memory, sim.get_max_memory())
                 self.assertEqual(segment_block_size, sim.get_segment_block_size())
                 self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
@@ -924,7 +923,7 @@ class TestSimulationState(LowLevelTestCase):
         random_seed = random.randint(0, 2**31)
         sim = _msprime.Simulator(
             samples=get_samples(n), num_loci=m,
-            scaled_recombination_rate=r,
+            recombination_rate=r,
             random_generator=_msprime.RandomGenerator(random_seed),
             demographic_events=demographic_events,
             max_memory=10 * mb, segment_block_size=1000,
@@ -968,7 +967,7 @@ class TestSimulationState(LowLevelTestCase):
         n = 10
         m = 100
         sim = _msprime.Simulator(
-            samples=get_samples(n), num_loci=m, scaled_recombination_rate=1,
+            samples=get_samples(n), num_loci=m, recombination_rate=1,
             random_generator=_msprime.RandomGenerator(1))
         # We run until time -1 to for initialisation
         sim.run(-1)
@@ -1108,7 +1107,7 @@ class TestSimulator(LowLevelTestCase):
         for bad_type in ["1", None, {}, int]:
             self.assertRaises(TypeError, f, samples=bad_type)
             self.assertRaises(TypeError, f, random_generator=bad_type)
-            self.assertRaises(TypeError, f, scaled_recombination_rate=bad_type)
+            self.assertRaises(TypeError, f, recombination_rate=bad_type)
             self.assertRaises(TypeError, f, max_memory=bad_type)
             self.assertRaises(TypeError, f, avl_node_block_size=bad_type)
             self.assertRaises(TypeError, f, segment_block_size=bad_type)
@@ -1117,7 +1116,7 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, edge_block_size=bad_type)
         # Check for bad values.
         self.assertRaises(_msprime.InputError, f, num_loci=0)
-        self.assertRaises(_msprime.InputError, f, scaled_recombination_rate=-1)
+        self.assertRaises(_msprime.InputError, f, recombination_rate=-1)
         self.assertRaises(_msprime.InputError, f, max_memory=0)
         self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
         self.assertRaises(_msprime.InputError, f, segment_block_size=0)
@@ -1187,7 +1186,7 @@ class TestSimulator(LowLevelTestCase):
         for alpha in [1.0, 2.2, 1e-4]:
             for truncation_point in [0.1, 1.5, 1e9]:
                 model = get_simulation_model(
-                    "beta", alpha=alpha, truncation_point=truncation_point)
+                    "beta", 2, alpha=alpha, truncation_point=truncation_point)
                 sim = f(model=model)
                 self.assertEqual(sim.get_model(), model)
 
@@ -1269,7 +1268,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(sim.get_migration_matrix(), [0.0])
         self.assertEqual(
             sim.get_population_configuration(),
-            [get_population_configuration()])
+            [get_population_configuration(initial_size=0.25)])
 
     def test_bad_population_configurations(self):
         def f(population_configuration):
@@ -1295,8 +1294,10 @@ class TestSimulator(LowLevelTestCase):
                     TypeError, f,
                     [get_population_configuration(growth_rate=bad_number)])
         # Cannot have negative for initial_size
-        self.assertRaises(
-            ValueError, f, [get_population_configuration(initial_size=-1)])
+        for bad_size in [-1, 0]:
+            self.assertRaises(
+                _msprime.InputError, f,
+                [get_population_configuration(initial_size=bad_size)])
 
     def test_bad_sample_configurations(self):
         rng = _msprime.RandomGenerator(1)
@@ -1565,7 +1566,7 @@ class TestSimulator(LowLevelTestCase):
                     get_simple_bottleneck_event(0.01, 0, 1.0)],
             }, {
                 "samples": get_samples(10), "num_loci": 100,
-                "scaled_recombination_rate": 0.1,
+                "recombination_rate": 0.1,
             }, {
                 "samples": get_population_samples(3, 3, 4),
                 "population_configuration": [
@@ -1610,7 +1611,7 @@ class TestSimulator(LowLevelTestCase):
         for n in [2, 10, 20]:
             sim = _msprime.Simulator(
                 get_samples(n), _msprime.RandomGenerator(1),
-                scaled_recombination_rate=0)
+                recombination_rate=0)
             sim.run()
             self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
             self.assertEqual(0, sim.get_num_recombination_events())
@@ -1758,7 +1759,7 @@ class TestSimulator(LowLevelTestCase):
             get_samples(n), _msprime.RandomGenerator(1),
             population_configuration=population_configuration,
             migration_matrix=[0.0, 0.0, 0.0, 0.0], num_loci=10,
-            scaled_recombination_rate=10)
+            recombination_rate=10)
         sim.run()
         self.assertLessEqual(n - 1, sim.get_num_common_ancestor_events())
         self.assertLess(0, sim.get_num_recombination_events())
@@ -1836,8 +1837,6 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(edge_table.num_rows, sim.get_num_edges())
         kwargs["recombination_map"] = recomb_map
         sim.populate_tables(**kwargs)
-        kwargs["Ne"] = 0.25
-        sim.populate_tables(**kwargs)
         self.assertEqual(edge_table.num_rows, sim.get_num_edges())
 
 
@@ -1858,7 +1857,7 @@ class TestTreeSequence(LowLevelTestCase):
                 "samples": get_samples(10),
             }, {
                 "samples": get_samples(10), "num_loci": 100,
-                "scaled_recombination_rate": 0.1,
+                "recombination_rate": 0.1,
             },
         ]
         for params in simulations:
@@ -2030,10 +2029,11 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertEqual(sim_r[j], ts_r[j])
 
     def test_record_scaling(self):
-        sim = get_example_simulator(10, num_populations=2, store_migrations=True)
-        sim.run()
         for Ne in [0.25, 1, 10, 1e6]:
-            tree_sequence = populate_tree_sequence(sim, Ne=Ne)
+            sim = get_example_simulator(
+                10, Ne=Ne, num_populations=2, store_migrations=True)
+            sim.run()
+            tree_sequence = populate_tree_sequence(sim)
             sim_times = [node[1] for node in sim.get_nodes()]
             for j in range(tree_sequence.get_num_nodes()):
                 _, generation, _, _ = tree_sequence.get_node(j)
@@ -2273,7 +2273,7 @@ class TestSparseTreeIterator(LowLevelTestCase):
             "random_generator": _msprime.RandomGenerator(878638576),
             "samples": get_samples(64),
             "num_loci": 57,
-            "scaled_recombination_rate": 0.192184324155680
+            "recombination_rate": 0.192184324155680
         }
         sim = _msprime.Simulator(**params)
         sim.run()
