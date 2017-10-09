@@ -3248,7 +3248,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     parent = (node_id_t) n;
     while (j > 0) {
         rate = j + 1;
-        rate = (rate * j) / 2.0;
+        rate = rate * j;
         t += msp_get_common_ancestor_waiting_time_from_rate(self,
                 &self->populations[population_id], rate);
         if (t >= T2) {
@@ -3367,7 +3367,6 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
 out:
     return ret;
 }
-
 
 /*
  * Model specific implementations.

@@ -574,7 +574,7 @@ class SimulationVerifier(object):
                 sample_size=n, recombination_rate=r, Ne=Ne, length=L[j])
             for k in range(num_replicates):
                 exact_sim.run()
-                num_trees[k] = exact_sim.get_num_breakpoints()
+                num_trees[k] = exact_sim.num_breakpoints
                 exact_sim.reset()
             mean_exact[j] = np.mean(num_trees)
             var_exact[j] = np.var(num_trees)
@@ -584,7 +584,7 @@ class SimulationVerifier(object):
                 model="smc")
             for k in range(num_replicates):
                 smc_sim.run()
-                num_trees[k] = smc_sim.get_num_breakpoints()
+                num_trees[k] = smc_sim.num_breakpoints
                 smc_sim.reset()
             mean_smc[j] = np.mean(num_trees)
             var_smc[j] = np.var(num_trees)
@@ -594,7 +594,7 @@ class SimulationVerifier(object):
                 model="smc_prime")
             for k in range(num_replicates):
                 smc_prime_sim.run()
-                num_trees[k] = smc_prime_sim.get_num_breakpoints()
+                num_trees[k] = smc_prime_sim.num_breakpoints
                 smc_prime_sim.reset()
             mean_smc_prime[j] = np.mean(num_trees)
             var_smc_prime[j] = np.var(num_trees)
