@@ -244,13 +244,14 @@ typedef struct _simulation_model_t {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
     } params;
+    /* Time and rate conversions */
     double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
     double (*generations_to_model_time)(struct _simulation_model_t *model, double g);
     double (*generation_rate_to_model_rate)(struct _simulation_model_t *model, double rg);
     double (*model_rate_to_generation_rate)(struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
-typedef struct {
+typedef struct _msp_t {
     gsl_rng *rng;
     /* input parameters */
     simulation_model_t model;
@@ -314,6 +315,10 @@ typedef struct {
     size_t max_migrations;
     size_t migration_block_size;
     size_t num_migration_blocks;
+    /* Methods for getting the waiting time until the next common ancestor
+     * event and the event are defined by the simulation model */
+    double (*get_common_ancestor_waiting_time)(struct _msp_t *self, population_id_t pop);
+    int (*common_ancestor_event)(struct _msp_t *selt, population_id_t pop);
 } msp_t;
 
 /* Demographic events */
