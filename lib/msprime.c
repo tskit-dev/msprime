@@ -262,6 +262,9 @@ msp_strerror(int err)
         case MSP_ERR_MULTIROOT_NEWICK:
             ret = "Newick output not supported for trees with > 1 roots.";
             break;
+        case MSP_ERR_BAD_SEQUENCE_LENGTH:
+            ret = "Sequence length must be > 0.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

@@ -93,6 +93,7 @@
 #define MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT                    -63
 #define MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
+#define MSP_ERR_BAD_SEQUENCE_LENGTH                                 -66
 
 #endif /*__ERR_H__*/
 

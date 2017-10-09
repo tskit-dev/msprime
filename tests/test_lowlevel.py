@@ -1918,7 +1918,9 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertEqual(ts.get_num_edges(), 0)
         self.assertEqual(ts.get_num_mutations(), 0)
         self.assertEqual(ts.get_num_migrations(), 0)
-        self.verify_dump_equality(ts)
+        ts.dump(self.temp_file)
+        # This should raise an error because of a zero sequence length.
+        self.assertRaises(_msprime.LibraryError, ts.load, self.temp_file)
 
     def test_num_nodes(self):
         for ts in self.get_example_tree_sequences():

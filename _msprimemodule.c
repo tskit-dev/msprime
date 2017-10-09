@@ -3250,11 +3250,12 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     migration_table_t *migrations = NULL;
     mutation_table_t *mutations = NULL;
     site_table_t *sites = NULL;
+    double sequence_length = 0.0;
 
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenance_strings", NULL};
+        "sites", "mutations", "provenance_strings", "sequence_length", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
@@ -3303,7 +3304,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
         goto out;
     }
-    err = tree_sequence_load_tables_tmp(self->tree_sequence,
+    err = tree_sequence_load_tables_tmp(self->tree_sequence, sequence_length,
         nodes, edges, migrations, sites, mutations,
         num_provenance_strings, provenance_strings);
     if (err != 0) {

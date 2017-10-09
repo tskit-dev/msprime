@@ -532,13 +532,6 @@ tree_sequence_check(tree_sequence_t *self)
     size_t j;
     double left, last_left;
 
-    /* TODO there is no deep reason why we have to have at least two samples,
-     * but parts of the code do assume this at the moment. If we relax this
-     * assumption we must be careful to test thoroughly. */
-    if (self->sample_size < 2) {
-        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
-        goto out;
-    }
     for (j = 0; j < self->edges.num_records; j++) {
         parent = self->edges.parent[j];
         child = self->edges.child[j];
@@ -674,10 +667,6 @@ tree_sequence_init_nodes(tree_sequence_t *self)
             self->sample_size++;
         }
     }
-    if (self->nodes.num_records > 0 && self->sample_size < 2) {
-        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
-        goto out;
-    }
     /* We alloc the samples list here because it is a special case; we don't know
      * how big it is until we've read in the data.
      */
@@ -702,19 +691,6 @@ tree_sequence_init_nodes(tree_sequence_t *self)
     }
     assert(k == self->sample_size);
 out:
-    return ret;
-}
-
-static int
-tree_sequence_init_edges(tree_sequence_t *self)
-{
-    int ret = 0;
-    size_t j;
-
-    self->sequence_length = 0.0;
-    for (j = 0; j < self->edges.num_records; j++) {
-        self->sequence_length = GSL_MAX(self->sequence_length, self->edges.right[j]);
-    }
     return ret;
 }
 
@@ -944,21 +920,35 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_load_tables_tmp(tree_sequence_t *self,
+tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
     site_table_t *sites, mutation_table_t *mutations,
     size_t num_provenance_strings, char **provenance_strings)
 {
     int ret = 0;
+    size_t j;
 
-    /* TODO need to do a lot of input validation here. What do we allow to be
-     * null? What are the size restrictions on the tables? */
-    /* Do we allow zero nodes and edges?? */
     if (nodes == NULL || edges == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-
+    if (sequence_length < 0) {
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+        goto out;
+    }
+    if (sequence_length == 0) {
+        /* If sequence_length is 0 we infer it to be equal to the largest right
+         * value in the edges. If there are no edges, then this is an error. */
+        sequence_length = 0.0;
+        for (j = 0; j < edges->num_rows; j++) {
+            sequence_length = GSL_MAX(sequence_length, edges->right[j]);
+        }
+        if (sequence_length <= 0.0) {
+            ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+            goto out;
+        }
+    }
+    self->sequence_length = sequence_length;
     self->num_provenance_strings = num_provenance_strings;
     self->nodes.num_records = nodes->num_rows;
     /* name_mem here contains terminal NULLs, so we need more space */
@@ -1016,10 +1006,6 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self,
     memcpy(self->edges.right, edges->right, edges->num_rows * sizeof(double));
     memcpy(self->edges.parent, edges->parent, edges->num_rows * sizeof(node_id_t));
     memcpy(self->edges.child, edges->child, edges->num_rows * sizeof(node_id_t));
-    ret = tree_sequence_init_edges(self);
-    if (ret != 0) {
-        goto out;
-    }
     ret = tree_sequence_build_indexes(self);
     if (ret != 0) {
         goto out;
@@ -1192,8 +1178,7 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     hsize_t dims;
     uint32_t version[2];
 
-    attr_id = H5Aopen_by_name(file_id, "/", "format_version",
-            H5P_DEFAULT, H5P_DEFAULT);
+    attr_id = H5Aopen_by_name(file_id, "/", "format_version", H5P_DEFAULT, H5P_DEFAULT);
     if (attr_id < 0) {
         goto out;
     }
@@ -1227,6 +1212,40 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
         goto out;
     }
 
+    attr_id = H5Aopen_by_name(file_id, "/", "sequence_length", H5P_DEFAULT, H5P_DEFAULT);
+    if (attr_id < 0) {
+        goto out;
+    }
+    dataspace_id = H5Aget_space(attr_id);
+    if (dataspace_id < 0) {
+        goto out;
+    }
+    rank = H5Sget_simple_extent_ndims(dataspace_id);
+    if (rank != 1) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    status = H5Sget_simple_extent_dims(dataspace_id, &dims, NULL);
+    if (status < 0) {
+        goto out;
+    }
+    if (dims != 1) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &self->sequence_length);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Sclose(dataspace_id);
+    if (status < 0) {
+        goto out;
+    }
+    status = H5Aclose(attr_id);
+    if (status < 0) {
+        goto out;
+    }
+
     /* Sanity check */
     if (version[0] < MSP_FILE_FORMAT_VERSION_MAJOR) {
         ret = MSP_ERR_FILE_VERSION_TOO_OLD;
@@ -1234,6 +1253,10 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     }
     if (version[0] > MSP_FILE_FORMAT_VERSION_MAJOR) {
         ret = MSP_ERR_FILE_VERSION_TOO_NEW;
+        goto out;
+    }
+    if (self->sequence_length <= 0.0) {
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
         goto out;
     }
     ret = 0;
@@ -1590,10 +1613,6 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         goto out;
     }
     ret = tree_sequence_init_nodes(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_init_edges(self);
     if (ret != 0) {
         goto out;
     }
@@ -1986,16 +2005,14 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
     };
     struct _hdf5_metadata_write fields[] = {
         {"format_version", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 2, version},
-        /* These two attributes are vestigial, and are only included to allow
+        {"sequence_length", 0, H5T_IEEE_F64LE, H5T_NATIVE_DOUBLE, 1,
+            &self->sequence_length},
+        /* The sample size attribute is vestigial, and only included because
          * older versions of msprime give a better error condition when confronted
-         * with a newer file format. Due to a bug in the way that these attributes
-         * we loaded, versions of msprime pre 0.4.0 would complain about a missing
-         * attribute rather than giving a File format error. These attributes
-         * should be removed in a later version of the file format once we can be
-         * fairly sure that these old versions of msprime are no longer around.
-         */
+         * with a newer file format. Due to a bug in the way that this attribute
+         * was loaded, versions of msprime pre 0.4.0 would complain about a missing
+         * attribute rather than giving a File format error. */
         {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, &unused_value},
-        {"sequence_length", 0, H5T_IEEE_F64LE, H5T_NATIVE_UINT32, 1, &unused_value},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
     size_t j;
@@ -2380,8 +2397,8 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples, size_t num_sam
     simplifier = NULL;
 
     /* TODO fix provenance strings here...*/
-    ret = tree_sequence_load_tables_tmp(output, nodes, edges, migrations,
-            sites, mutations, 0, NULL);
+    ret = tree_sequence_load_tables_tmp(output, self->sequence_length, nodes, edges,
+            migrations, sites, mutations, 0, NULL);
 out:
     if (nodes != NULL) {
         node_table_free(nodes);

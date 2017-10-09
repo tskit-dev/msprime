@@ -360,8 +360,10 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 7)
+        self.assertEqual(format_version[0], 8)
         self.assertEqual(format_version[1], 0)
+        sequence_length = root.attrs['sequence_length']
+        self.assertGreater(sequence_length, 0)
         keys = set(root.keys())
         self.assertIn("nodes", keys)
         self.assertIn("edges", keys)
