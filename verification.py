@@ -75,7 +75,6 @@ class SimulationVerifier(object):
 
     def _run_sample_stats(self, args):
         print("\t", " ".join(args))
-        print("running sample stats")
         p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
             ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE)
@@ -783,7 +782,7 @@ def main():
     verifier.add_ms_instance(
         "migration-matrix-change-2-pops2",
         "100 10000 -t 2.0 -I 2 50 50 -ema 1.0 2 x 0.1 0 x "
-        "-eN 1.1 0 -ema 10 2 x 0 10 x")
+        "-eN 1.1 0.001 -ema 10 2 x 0 10 x")
     verifier.add_ms_instance(
         "population-split-2-pops1",
         "100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2")

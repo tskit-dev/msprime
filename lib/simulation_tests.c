@@ -499,7 +499,7 @@ test_simulator_model_errors(void)
 }
 
 static void
-test_simulator_demographic_events(void)
+test_demographic_events(void)
 {
     int ret;
     uint32_t j;
@@ -520,6 +520,12 @@ test_simulator_demographic_events(void)
     }
     ret = msp_alloc(&msp, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    /* Zero or negative population sizes are not allowed */
+    ret = msp_set_population_configuration(&msp, 0, -1, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_population_configuration(&msp, 0, 0, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, 1, 1);
@@ -1403,7 +1409,7 @@ main(int argc, char **argv)
         {"test_single_locus_historical_sample", test_single_locus_historical_sample},
         {"test_simulator_getters_setters", test_simulator_getters_setters},
         {"test_model_errors", test_simulator_model_errors},
-        {"test_demographic_events", test_simulator_demographic_events},
+        {"test_demographic_events", test_demographic_events},
         {"test_single_locus_simulation", test_single_locus_simulation},
         {"test_simulation_memory_limit", test_simulation_memory_limit},
         {"test_multi_locus_simulation", test_multi_locus_simulation},

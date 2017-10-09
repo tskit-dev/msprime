@@ -719,6 +719,10 @@ class PopulationConfiguration(object):
         constant population size. Defaults to 0.
     """
     def __init__(self, sample_size=None, initial_size=None, growth_rate=0.0):
+        if initial_size is not None and initial_size <= 0:
+            raise ValueError("Population size must be > 0")
+        if sample_size is not None and sample_size < 0:
+            raise ValueError("Sample size must be >= 0")
         self.sample_size = sample_size
         self.initial_size = initial_size
         self.growth_rate = growth_rate
@@ -766,6 +770,8 @@ class PopulationParametersChange(DemographicEvent):
             "population_parameters_change", time)
         if growth_rate is None and initial_size is None:
             raise ValueError("Must specify one or more of growth_rate and initial_size")
+        if initial_size is not None and initial_size <= 0:
+            raise ValueError("Cannot have a population size <= 0")
         self.time = time
         self.growth_rate = growth_rate
         self.initial_size = initial_size

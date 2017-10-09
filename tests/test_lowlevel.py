@@ -1294,8 +1294,10 @@ class TestSimulator(LowLevelTestCase):
                     TypeError, f,
                     [get_population_configuration(growth_rate=bad_number)])
         # Cannot have negative for initial_size
-        self.assertRaises(
-            ValueError, f, [get_population_configuration(initial_size=-1)])
+        for bad_size in [-1, 0]:
+            self.assertRaises(
+                _msprime.InputError, f,
+                [get_population_configuration(initial_size=bad_size)])
 
     def test_bad_sample_configurations(self):
         rng = _msprime.RandomGenerator(1)

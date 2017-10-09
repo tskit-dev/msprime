@@ -654,6 +654,10 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
+    if (initial_size <= 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->initial_populations[population_id].initial_size =
         initial_size / model->population_size;
     self->initial_populations[population_id].growth_rate =
@@ -3327,7 +3331,8 @@ msp_add_population_parameters_change(msp_t *self, double time, int population_id
         ret = MSP_ERR_BAD_POPULATION_ID;
         goto out;
     }
-    if (initial_size < 0) {
+    if (initial_size <= 0) {
+        assert(! gsl_isnan(initial_size));
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }

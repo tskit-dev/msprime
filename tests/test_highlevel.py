@@ -1797,7 +1797,7 @@ class TestSimulatorFactory(unittest.TestCase):
         def f(Ne):
             return msprime.simulator_factory(10, Ne=Ne)
         for bad_value in [-1, -1e16, 0]:
-            self.assertRaises(ValueError, f(bad_value).run)
+            self.assertRaises(ValueError, f, bad_value)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
             self.assertEqual(sim.model.population_size, Ne)

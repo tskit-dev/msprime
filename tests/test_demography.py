@@ -30,6 +30,24 @@ import unittest
 import msprime
 
 
+class TestBadDemographicParameters(unittest.TestCase):
+    """
+    Tests for nonsensical demographic parameters.
+    """
+
+    def test_bad_population_size(self):
+        for bad_size in [-1, 0, -1e300]:
+            self.assertRaises(
+                ValueError, msprime.PopulationParametersChange, 0, initial_size=bad_size)
+            self.assertRaises(
+                ValueError, msprime.PopulationConfiguration, initial_size=bad_size)
+
+    def test_bad_sample_size(self):
+        for bad_size in [-1, -1e300]:
+            self.assertRaises(
+                ValueError, msprime.PopulationConfiguration, sample_size=bad_size)
+
+
 class TestGrowthRates(unittest.TestCase):
     """
     Tests to see the growth rates we calculate give us the
