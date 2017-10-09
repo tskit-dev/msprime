@@ -75,12 +75,15 @@ class SimulationVerifier(object):
 
     def _run_sample_stats(self, args):
         print("\t", " ".join(args))
+        print("running sample stats")
         p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
-            ["./data/sample_stats"], stdin=p1.stdout,
-            stdout=subprocess.PIPE)
+            ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE)
         p1.stdout.close()
         output = p2.communicate()[0]
+        p1.wait()
+        if p1.returncode != 0:
+            raise ValueError("Error occured in subprocess: ", p1.returncode)
         with tempfile.TemporaryFile() as f:
             f.write(output)
             f.seek(0)
