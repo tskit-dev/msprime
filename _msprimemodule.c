@@ -3176,12 +3176,15 @@ TreeSequence_dealloc(TreeSequence* self)
 }
 
 static int
-TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
+TreeSequence_alloc(TreeSequence *self)
 {
     int ret = -1;
     int err;
 
-    self->tree_sequence = NULL;
+    if (self->tree_sequence != NULL) {
+        tree_sequence_free(self->tree_sequence);
+        PyMem_Free(self->tree_sequence);
+    }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
     if (self->tree_sequence == NULL) {
         PyErr_NoMemory();
@@ -3195,6 +3198,13 @@ TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
     ret = 0;
 out:
     return ret;
+}
+
+static int
+TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    self->tree_sequence = NULL;
+    return 0;
 }
 
 static PyObject *
@@ -3264,9 +3274,6 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &py_provenance_strings)) {
         goto out;
     }
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
@@ -3302,6 +3309,11 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     }
     if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
+        goto out;
+    }
+
+    err = TreeSequence_alloc(self);
+    if (err != 0) {
         goto out;
     }
     err = tree_sequence_load_tables_tmp(self->tree_sequence, sequence_length,
@@ -3398,15 +3410,17 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     static char *kwlist[] = {"path", NULL};
 
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+        goto out;
+    }
+
+    err = TreeSequence_alloc(self);
+    if (err != 0) {
         goto out;
     }
     err = tree_sequence_load(self->tree_sequence, path, flags);

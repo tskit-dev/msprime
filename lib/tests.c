@@ -1795,6 +1795,7 @@ test_empty_tree_sequence(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     /* Zero length TS is invalid. */
     ret = tree_sequence_load_tables_tmp(&ts, 0, &node_table, &edge_table,
             NULL, NULL, NULL, 0, NULL);

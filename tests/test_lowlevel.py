@@ -1912,15 +1912,14 @@ class TestTreeSequence(LowLevelTestCase):
     def test_initial_state(self):
         # Check the initial state to make sure that it is empty.
         ts = _msprime.TreeSequence()
-        self.assertEqual(ts.get_sample_size(), 0)
-        self.assertEqual(ts.get_sequence_length(), 0)
-        self.assertEqual(ts.get_num_trees(), 0)
-        self.assertEqual(ts.get_num_edges(), 0)
-        self.assertEqual(ts.get_num_mutations(), 0)
-        self.assertEqual(ts.get_num_migrations(), 0)
-        ts.dump(self.temp_file)
-        # This should raise an error because of a zero sequence length.
-        self.assertRaises(_msprime.LibraryError, ts.load, self.temp_file)
+        self.assertRaises(ValueError, ts.get_sample_size)
+        self.assertRaises(ValueError, ts.get_sequence_length)
+        self.assertRaises(ValueError, ts.get_num_trees)
+        self.assertRaises(ValueError, ts.get_num_edges)
+        self.assertRaises(ValueError, ts.get_num_mutations)
+        self.assertRaises(ValueError, ts.get_num_migrations)
+        self.assertRaises(ValueError, ts.get_num_migrations)
+        self.assertRaises(ValueError, ts.dump)
 
     def test_num_nodes(self):
         for ts in self.get_example_tree_sequences():
@@ -2095,13 +2094,9 @@ class TestVcfConverter(LowLevelTestCase):
     """
     Tests for the low-level vcf converter.
     """
-    def test_empty_tree_sequence(self):
+    def test_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        converter = _msprime.VcfConverter(ts)
-        header = converter.get_header()
-        self.assertGreater(len(header), 0)
-        self.assertTrue(header.startswith("##fileformat"))
-        self.assertEqual(list(converter), [])
+        self.assertRaises(ValueError, _msprime.VcfConverter, ts)
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.VcfConverter)
@@ -2196,10 +2191,9 @@ class TestTreeDiffIterator(LowLevelTestCase):
     """
     Tests for the low-level tree diff iterator.
     """
-    def test_empty_tree_sequence(self):
+    def test_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        iterator = _msprime.TreeDiffIterator(ts)
-        self.assertEqual(list(iterator), [])
+        self.assertRaises(ValueError, _msprime.TreeDiffIterator, ts)
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.TreeDiffIterator)
@@ -2223,11 +2217,9 @@ class TestSparseTreeIterator(LowLevelTestCase):
     """
     Tests for the low-level sparse tree iterator.
     """
-    def test_empty_tree_sequence(self):
+    def test_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        tree = _msprime.SparseTree(ts)
-        iterator = _msprime.SparseTreeIterator(tree)
-        self.assertEqual(list(iterator), [])
+        self.assertRaises(ValueError, _msprime.SparseTree, ts)
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.SparseTreeIterator)
@@ -2292,10 +2284,9 @@ class TestHaplotypeGenerator(LowLevelTestCase):
     """
     Tests for the low-level haplotype generator.
     """
-    def test_empty_tree_sequence(self):
+    def test_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        hg = _msprime.HaplotypeGenerator(ts)
-        self.assertRaises(IndexError, hg.get_haplotype, 0)
+        self.assertRaises(ValueError, _msprime.HaplotypeGenerator, ts)
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.HaplotypeGenerator)
@@ -2322,10 +2313,9 @@ class TestVariantGenerator(LowLevelTestCase):
     """
     Tests for the low-level variant generator.
     """
-    def test_empty_tree_sequence(self):
+    def test_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        vg = _msprime.VariantGenerator(ts, bytearray())
-        self.assertEqual(list(vg), [])
+        self.assertRaises(ValueError, _msprime.VariantGenerator, ts, bytearray())
 
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.VariantGenerator)
@@ -2406,10 +2396,6 @@ class TestSparseTree(LowLevelTestCase):
     """
     Tests on the low-level sparse tree interface.
     """
-    def test_empty_tree_sequence(self):
-        ts = _msprime.TreeSequence()
-        st = _msprime.SparseTree(ts)
-        self.assertEqual(list(_msprime.SparseTreeIterator(st)), [])
 
     def test_flags(self):
         ts = self.get_tree_sequence()
@@ -2650,7 +2636,7 @@ class TestSparseTree(LowLevelTestCase):
                         point = t.find(".")
                         self.assertEqual(precision, len(t) - point - 1)
 
-    @unittest.skip("Newick Multiroots")
+    @unittest.skip("Correct initialisation for sparse tree.")
     def test_newick_interface(self):
         ts = self.get_tree_sequence(num_loci=10, sample_size=10)
         st = _msprime.SparseTree(ts)
@@ -3338,12 +3324,9 @@ class TestLdCalculator(LowLevelTestCase):
         """
         return bytearray(8 * num_values)
 
-    def test_empty_tree_sequence(self):
+    def test_uninitialised_tree_sequence(self):
         ts = _msprime.TreeSequence()
-        ldc = _msprime.LdCalculator(ts)
-        buff = self.get_buffer(0)
-        self.assertRaises(IndexError, ldc.get_r2_array, buff, 0)
-        self.assertRaises(IndexError, ldc.get_r2, 0, 1)
+        self.assertRaises(ValueError, _msprime.LdCalculator, ts)
 
     def test_constructor(self):
         for bad_type in [None, "1", []]:
