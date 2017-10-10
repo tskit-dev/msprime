@@ -597,6 +597,10 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_BAD_EDGE_INTERVAL;
             goto out;
         }
+        if (self->edges.right[j] > self->sequence_length) {
+            ret = MSP_ERR_RIGHT_GREATER_SEQ_LENGTH;
+            goto out;
+        }
     }
     /* Check the sites */
     for (j = 0; j < self->sites.num_records; j++) {

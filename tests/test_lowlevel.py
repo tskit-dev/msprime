@@ -2986,6 +2986,48 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_mutation_table(mutations, ts)
         self.assertEqual(ts.get_num_migrations(), 0)
 
+    def test_load_tables_sequence_length(self):
+        ex_ts = self.get_example_migration_tree_sequence()
+        nodes = _msprime.NodeTable()
+        edges = _msprime.EdgeTable()
+        ex_ts.dump_tables(nodes=nodes, edges=edges)
+        L = ex_ts.get_sequence_length()
+
+        ts = _msprime.TreeSequence()
+        ts.load_tables(nodes=nodes, edges=edges)
+        self.assertEqual(ts.get_sequence_length(), L)
+        self.verify_node_table(nodes, ts)
+        self.verify_edge_table(edges, ts)
+
+        ts = _msprime.TreeSequence()
+        ts.load_tables(nodes=nodes, edges=edges, sequence_length=L + 1)
+        self.assertEqual(ts.get_sequence_length(), L + 1)
+        self.verify_node_table(nodes, ts)
+        self.verify_edge_table(edges, ts)
+
+        # Zero is used as a special value to infer the value from the edges.
+        for sequence_length in [0, L]:
+            ts = _msprime.TreeSequence()
+            ts.load_tables(
+                nodes=nodes, edges=edges, sequence_length=sequence_length)
+            self.assertEqual(ts.get_sequence_length(), L)
+            self.verify_node_table(nodes, ts)
+            self.verify_edge_table(edges, ts)
+
+        ts = _msprime.TreeSequence()
+        self.assertRaises(
+            _msprime.LibraryError, ts.load_tables,
+            nodes=nodes, edges=edges, sequence_length=L - 0.5)
+
+        for bad_type in ["", None, []]:
+            self.assertRaises(
+                TypeError, ts.load_tables,
+                nodes=nodes, edges=edges, sequence_length=bad_type)
+        for bad_value in [-1, -100]:
+            self.assertRaises(
+                _msprime.LibraryError, ts.load_tables,
+                nodes=nodes, edges=edges, sequence_length=bad_value)
+
     def test_node_table_add_row(self):
         table = _msprime.NodeTable()
         table.add_row()

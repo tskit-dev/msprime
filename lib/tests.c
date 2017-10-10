@@ -2594,6 +2594,16 @@ test_simplest_bad_records(void)
     tree_sequence_free(&ts);
     edge_table.right[0]= 1.0;
 
+    /* Right coordinate > sequence length. */
+    edge_table.right[0] = 2.0;
+    ret = tree_sequence_initialise(&ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables_tmp(&ts, 1, &node_table, &edge_table, NULL,
+            NULL, NULL, 0, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_RIGHT_GREATER_SEQ_LENGTH);
+    tree_sequence_free(&ts);
+    edge_table.right[0]= 1.0;
+
     /* Duplicate records */
     edge_table.child[0] = 1;
     ret = tree_sequence_initialise(&ts);

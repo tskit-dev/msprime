@@ -1497,7 +1497,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             mutations_file = six.StringIO()
             ts1.dump_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, precision=9)
+                mutations=mutations_file, precision=16)
             nodes_file.seek(0)
             edges_file.seek(0)
             sites_file.seek(0)
@@ -1516,6 +1516,20 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             _msprime.LibraryError, msprime.load_text,
             nodes=nodes_file, edges=edges_file, sites=sites_file,
             mutations=mutations_file)
+
+    def test_empty_files_sequence_length(self):
+        nodes_file = six.StringIO("is_sample\ttime\n")
+        edges_file = six.StringIO("left\tright\tparent\tchild\n")
+        sites_file = six.StringIO("position\tancestral_state\n")
+        mutations_file = six.StringIO("site\tnode\tderived_state\n")
+        ts = msprime.load_text(
+                nodes=nodes_file, edges=edges_file, sites=sites_file,
+                mutations=mutations_file, sequence_length=100)
+        self.assertEqual(ts.sequence_length, 100)
+        self.assertEqual(ts.num_nodes, 0)
+        self.assertEqual(ts.num_edges, 0)
+        self.assertEqual(ts.num_sites, 0)
+        self.assertEqual(ts.num_edges, 0)
 
 
 class TestSparseTree(HighLevelTestCase):

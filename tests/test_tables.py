@@ -920,7 +920,9 @@ class TestSimplifyTables(unittest.TestCase):
     def test_bad_site_positions(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, mutation_rate=1)
         self.assertGreater(ts.num_mutations, 0)
-        for bad_position in [-1, ts.sequence_length, ts.sequence_length + 0.01]:
+        # Positions > sequence_length are valid, as we can have gaps at the end of
+        # a tree sequence.
+        for bad_position in [-1, -1e-6]:
             tables = ts.dump_tables()
             sites = tables.sites
             position = sites.position
