@@ -949,6 +949,10 @@ out:
     return ret;
 }
 
+/* TODO The API of this function should be changed to accept a provenance_table_t
+ * instead of the provenance_strings, and we should also add a final 'flags'
+ * parameter. */
+
 int WARN_UNUSED
 tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,

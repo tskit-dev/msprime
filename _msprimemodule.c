@@ -3934,6 +3934,14 @@ SparseTree_dealloc(SparseTree* self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
+/* TODO this API should be updated to remove the SparseTreeIterator object
+ * and instead support the first(), last() etc methods. Until some seeking
+ * function has been called, we should be in a state that errors if any
+ * methods are called.
+ *
+ * The _free method below is also probably redundant now and should be
+ * removed.
+ */
 static int
 SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
@@ -4013,6 +4021,7 @@ out:
     return ret;
 }
 
+/* TODO this should be redundant; remove */
 static PyObject *
 SparseTree_free(SparseTree *self)
 {

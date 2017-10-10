@@ -375,6 +375,25 @@ typedef struct {
 } recomb_map_t;
 
 /* Tree sequences */
+/* TODO this struct is much more complicated than it needs to be now, especially
+ * wrt to realloc behaviour in the nodes, edges etc storage. This was put in
+ * place originally to support long-lived tree sequence representing many
+ * different simulation replicates sequentially. This is no longer done,
+ * and the tables API makes this more efficient.
+ *
+ * Similarly the 'initialise' function should be removed, and the
+ * initialised_magic member. We can only create a new tree sequence
+ * via load_tables and load. The load function should also use load_tables,
+ * and we could then delegate the HDF5 processing to another class
+ * which loads the HDF5 from disk into tables.
+ *
+ * Ultimately, we should either directly embed tables into this struct, so that
+ * we can either copy the input tables in load_tables or borrow pointers
+ * to the memory of the supplied tables to have zero copy access to the data.
+ * This could be achieved with a flag to load_tables. We should be able to
+ * do away with a lot of the extra memory handling dealing with ragged lists
+ * by adding a cumulative sum column to the tables that contain these columns.
+ */
 typedef struct {
     uint32_t initialised_magic;
     size_t num_trees;
