@@ -3271,7 +3271,8 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &PyList_Type, &py_provenance_strings)) {
+            &PyList_Type, &py_provenance_strings,
+            &sequence_length)) {
         goto out;
     }
     if (NodeTable_check_state(py_nodes) != 0) {

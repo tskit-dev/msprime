@@ -134,7 +134,9 @@ class SvgTreeDrawer(TreeDrawer):
 
     def _assign_coordinates(self):
         y_padding = 20
-        t = max(self._tree.time(root) for root in self._tree.roots)
+        t = 1
+        if self._tree.num_roots > 0:
+            t = max(self._tree.time(root) for root in self._tree.roots)
         self._y_scale = (self._height - 2 * y_padding) / t
         for u in self._tree.nodes():
             scaled_t = self._tree.get_time(u) * self._y_scale
@@ -253,7 +255,9 @@ class TextTreeDrawer(TreeDrawer):
                 v = self._tree.parent(v)
                 depth += 1
             self._y_coords[u] = 3 * depth
-        self._height = max(self._y_coords.values()) + 1
+        self._height = 0
+        if len(self._y_coords) > 0:
+            self._height = max(self._y_coords.values()) + 1
         # Get the overall width and assign x coordinates.
         x = 0
         for root in self._tree.roots:

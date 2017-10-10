@@ -221,7 +221,6 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         goto out;
     }
     assert(sA.mutations_length == 1);
-    assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE);
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     tB->mark = 1;
@@ -245,7 +244,6 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
             }
             assert(ret == 1);
         }
-        assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE);
         fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
         assert(fB > 0);
         if (sB.position < tA->right) {
@@ -307,7 +305,6 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         goto out;
     }
     assert(sA.mutations_length == 1);
-    assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE);
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     tB->mark = 1;
@@ -330,7 +327,6 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
             }
             assert(ret == 1);
         }
-        assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE);
         fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
         assert(fB > 0);
         if (sB.position >= tA->left) {
@@ -434,7 +430,7 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
         goto out;
     }
     assert(sA.mutations_length == 1);
-    assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE);
+    /* assert(tA->parent[sA.mutations[0].node] != MSP_NULL_NODE); */
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     ret = ld_calc_set_tracked_samples(self, sA);
@@ -449,7 +445,7 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
         }
         assert(ret == 1);
     }
-    assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE);
+    /* assert(tB->parent[sB.mutations[0].node] != MSP_NULL_NODE); */
     fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
     assert(fB > 0);
     nAB = (double) tB->num_tracked_samples[sB.mutations[0].node];

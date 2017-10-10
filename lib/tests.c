@@ -1390,6 +1390,12 @@ make_gappy_copy(tree_sequence_t *ts)
     for (j = 0; j < mutations.num_rows; j++) {
         sites.position[j] += gap_size;
     }
+    /* Add a site into the gap at the end. */
+    ret = site_table_add_row(&sites, ts->sequence_length + 0.5, "0", 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_add_row(&mutations, sites.num_rows - 1, 0, "1", 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables_tmp(new_ts, ts->sequence_length + 1,
@@ -5105,9 +5111,6 @@ test_ld_from_examples(void)
          * trigger an assert */
         if (j == 4) {
             printf("\nSkipping recurrent mutation example\n");
-        } else if (j == 7) {
-            /* We assume no mutations occur over roots in LD calc */
-            printf("\nSkipping decapitated example\n");
         } else {
             verify_ld(examples[j]);
         }

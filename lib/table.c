@@ -1743,8 +1743,9 @@ simplifier_check_input(simplifier_t *self)
     }
     /* Check the sites */
     for (j = 0; j < self->sites->num_rows; j++) {
-        if (self->sites->position[j] < 0
-                || self->sites->position[j] >= self->sequence_length) {
+        /* Note that we can legitimately have sites with positions greater than
+         * the sequence_length computed from the edges. */
+        if (self->sites->position[j] < 0) {
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }

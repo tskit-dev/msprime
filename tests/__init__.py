@@ -229,6 +229,7 @@ class PythonTreeSequence(object):
 
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
+        sequence_length = self._tree_sequence.get_sequence_length()
         edges = [self._tree_sequence.get_edge(j) for j in range(M)]
         l = [edge[0] for edge in edges]
         r = [edge[1] for edge in edges]
@@ -240,10 +241,10 @@ class PythonTreeSequence(object):
         j = 0
         k = 0
         left = 0
-        while j < M:
+        while j < M or left < sequence_length:
             e_out = []
             e_in = []
-            while r[O[k]] == left:
+            while k < M and r[O[k]] == left:
                 h = O[k]
                 e_out.append(msprime.Edge(l[h], r[h], p[h], c[h]))
                 k += 1
@@ -251,15 +252,17 @@ class PythonTreeSequence(object):
                 h = I[j]
                 e_in.append(msprime.Edge(l[h], r[h], p[h], c[h]))
                 j += 1
-            right = self._tree_sequence.get_sequence_length()
+            right = sequence_length
             if j < M:
-                right = min(r[O[k]], l[I[j]])
+                right = min(right, l[I[j]])
+            if k < M:
+                right = min(right, r[O[k]])
             yield (left, right), e_out, e_in
             left = right
 
     def trees(self):
-
         M = self._tree_sequence.get_num_edges()
+        sequence_length = self._tree_sequence.get_sequence_length()
         edges = [
             msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
         t = [
@@ -285,7 +288,9 @@ class PythonTreeSequence(object):
             st.above_sample[samples[l]] = True
             st.is_sample[samples[l]] = True
 
-        st.left_root = samples[0]
+        st.left_root = msprime.NULL_NODE
+        if len(samples) > 0:
+            st.left_root = samples[0]
 
         u = st.left_root
         roots = []
@@ -297,8 +302,8 @@ class PythonTreeSequence(object):
             u = v
 
         st.left = 0
-        while j < M:
-            while edges[O[k]].right == st.left:
+        while j < M or st.left < sequence_length:
+            while k < M and edges[O[k]].right == st.left:
                 p = edges[O[k]].parent
                 c = edges[O[k]].child
                 k += 1
@@ -410,9 +415,11 @@ class PythonTreeSequence(object):
                             st.left_sib[rsib] = lsib
                             st.left_root = rsib
 
-            st.right = edges[O[k]].right
+            st.right = sequence_length
             if j < M:
-                st.right = min(edges[O[k]].right, edges[I[j]].left)
+                st.right = min(st.right, edges[I[j]].left)
+            if k < M:
+                st.right = min(st.right, edges[O[k]].right)
             assert st.left_root != msprime.NULL_NODE
             while st.left_sib[st.left_root] != msprime.NULL_NODE:
                 st.left_root = st.left_sib[st.left_root]

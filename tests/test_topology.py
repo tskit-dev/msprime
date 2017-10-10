@@ -181,6 +181,161 @@ class TopologyTestCase(unittest.TestCase):
                 self.assertEqual(u, v)
 
 
+class TestEmptyTreeSequences(TopologyTestCase):
+    """
+    Tests covering tree sequences that have zero edges.
+    """
+    def test_zero_nodes(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        # Without a sequence length this should fail.
+        self.assertRaises(
+            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges)
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 0)
+        self.assertEqual(ts.num_edges, 0)
+        t = next(ts.trees())
+        self.assertEqual(t.index, 0)
+        self.assertEqual(t.left_root, msprime.NULL_NODE)
+        self.assertEqual(t.interval, (0, 1))
+        self.assertEqual(t.roots, [])
+        self.assertEqual(t.root, msprime.NULL_NODE)
+        self.assertEqual(t.parent_dict, {})
+        self.assertEqual(list(t.nodes()), [])
+        self.assertEqual(list(ts.haplotypes()), [])
+        self.assertEqual(list(ts.variants()), [])
+        methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
+        for method in methods:
+            for u in [-1, 0, 1, 100]:
+                self.assertRaises(ValueError, method, u)
+
+    def test_one_node_zero_samples(self):
+        nodes = msprime.NodeTable()
+        nodes.add_row(time=0, flags=0)
+        edges = msprime.EdgeTable()
+        # Without a sequence length this should fail.
+        self.assertRaises(
+            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges)
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 1)
+        self.assertEqual(ts.sample_size, 0)
+        self.assertEqual(ts.num_edges, 0)
+        self.assertEqual(ts.num_sites, 0)
+        self.assertEqual(ts.num_mutations, 0)
+        t = next(ts.trees())
+        self.assertEqual(t.index, 0)
+        self.assertEqual(t.left_root, msprime.NULL_NODE)
+        self.assertEqual(t.interval, (0, 1))
+        self.assertEqual(t.roots, [])
+        self.assertEqual(t.root, msprime.NULL_NODE)
+        self.assertEqual(t.parent_dict, {})
+        self.assertEqual(list(t.nodes()), [])
+        self.assertEqual(list(ts.haplotypes()), [])
+        self.assertEqual(list(ts.variants()), [])
+        methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
+        for method in methods:
+            self.assertEqual(method(0), msprime.NULL_NODE)
+            for u in [-1, 1, 100]:
+                self.assertRaises(ValueError, method, u)
+
+    def test_one_node_zero_samples_sites(self):
+        nodes = msprime.NodeTable()
+        nodes.add_row(time=0, flags=0)
+        edges = msprime.EdgeTable()
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        sites.add_row(position=0.5, ancestral_state='0')
+        mutations.add_row(site=0, derived_state='1', node=0)
+        ts = msprime.load_tables(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 1)
+        self.assertEqual(ts.sample_size, 0)
+        self.assertEqual(ts.num_edges, 0)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 1)
+        t = next(ts.trees())
+        self.assertEqual(t.index, 0)
+        self.assertEqual(t.left_root, msprime.NULL_NODE)
+        self.assertEqual(t.interval, (0, 1))
+        self.assertEqual(t.roots, [])
+        self.assertEqual(t.root, msprime.NULL_NODE)
+        self.assertEqual(t.parent_dict, {})
+        self.assertEqual(len(list(t.sites())), 1)
+        self.assertEqual(list(t.nodes()), [])
+        self.assertEqual(list(ts.haplotypes()), [])
+        self.assertEqual(len(list(ts.variants())), 1)
+
+    def test_one_node_one_sample(self):
+        nodes = msprime.NodeTable()
+        nodes.add_row(time=0, flags=msprime.NODE_IS_SAMPLE)
+        edges = msprime.EdgeTable()
+        # Without a sequence length this should fail.
+        self.assertRaises(
+            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges)
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 1)
+        self.assertEqual(ts.sample_size, 1)
+        self.assertEqual(ts.num_edges, 0)
+        t = next(ts.trees())
+        self.assertEqual(t.index, 0)
+        self.assertEqual(t.left_root, 0)
+        self.assertEqual(t.interval, (0, 1))
+        self.assertEqual(t.roots, [0])
+        self.assertEqual(t.root, 0)
+        self.assertEqual(t.parent_dict, {})
+        self.assertEqual(list(t.nodes()), [0])
+        self.assertEqual(list(ts.haplotypes()), [""])
+        self.assertEqual(list(ts.variants()), [])
+        methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
+        for method in methods:
+            self.assertEqual(method(0), msprime.NULL_NODE)
+            for u in [-1, 1, 100]:
+                self.assertRaises(ValueError, method, u)
+
+    def test_one_node_one_sample_sites(self):
+        nodes = msprime.NodeTable()
+        nodes.add_row(time=0, flags=msprime.NODE_IS_SAMPLE)
+        edges = msprime.EdgeTable()
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        sites.add_row(position=0.5, ancestral_state='0')
+        mutations.add_row(site=0, derived_state='1', node=0)
+        ts = msprime.load_tables(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 1)
+        self.assertEqual(ts.sample_size, 1)
+        self.assertEqual(ts.num_edges, 0)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 1)
+        t = next(ts.trees())
+        self.assertEqual(t.index, 0)
+        self.assertEqual(t.left_root, 0)
+        self.assertEqual(t.interval, (0, 1))
+        self.assertEqual(t.roots, [0])
+        self.assertEqual(t.root, 0)
+        self.assertEqual(t.parent_dict, {})
+        self.assertEqual(list(t.nodes()), [0])
+        self.assertEqual(list(ts.haplotypes()), ["1"])
+        self.assertEqual(len(list(ts.variants())), 1)
+        methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
+        for method in methods:
+            self.assertEqual(method(0), msprime.NULL_NODE)
+            for u in [-1, 1, 100]:
+                self.assertRaises(ValueError, method, u)
+
+
 class TestHoleyTreeSequences(TopologyTestCase):
     """
     Tests for tree sequences in which we have partial (or no) trees defined
@@ -228,6 +383,41 @@ class TestHoleyTreeSequences(TopologyTestCase):
         expected = [
             ((0, 1), {}),
             ((1, 2), {0: 2, 1: 2})]
+        self.verify_trees(ts, expected)
+
+    def test_final_gap(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       2       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edges, sequence_length=3)
+        expected = [
+            ((0, 2), {0: 2, 1: 2}),
+            ((2, 3), {})]
+        self.verify_trees(ts, expected)
+
+    def test_initial_and_final_gap(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        1       2       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edges, sequence_length=3)
+        expected = [
+            ((0, 1), {}),
+            ((1, 2), {0: 2, 1: 2}),
+            ((2, 3), {})]
         self.verify_trees(ts, expected)
 
 
