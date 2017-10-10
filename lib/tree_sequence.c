@@ -434,7 +434,7 @@ out:
 static int
 tree_sequence_alloc(tree_sequence_t *self)
 {
-    int ret = MSP_ERR_NO_MEMORY;
+    int ret = MSP_ERR_GENERIC;
 
     ret = tree_sequence_alloc_trees(self);
     if (ret != 0) {
@@ -458,6 +458,11 @@ out:
     return ret;
 }
 
+/* TODO remove this method and make load_tables zero out the struct instead.
+ * This initialisation logic is only needed for the long-lived tree sequence
+ * structure being reused for different simulation replicates, which should
+ * be removed.
+ */
 int WARN_UNUSED
 tree_sequence_initialise(tree_sequence_t *self)
 {
@@ -772,7 +777,51 @@ tree_sequence_init_trees(tree_sequence_t *self)
     node_id_t *O = self->edges.indexes.removal_order;
 
     tree_left = 0;
+    tree_right = self->sequence_length;
     self->num_trees = 0;
+    j = 0;
+    k = 0;
+    while (j < self->edges.num_records) {
+        while (k < self->edges.num_records && self->edges.right[O[k]] == tree_left) {
+            k++;
+        }
+        while (j < self->edges.num_records && self->edges.left[I[j]] == tree_left) {
+            j++;
+        }
+        tree_right = self->sequence_length;
+        if (j < self->edges.num_records) {
+            tree_right = GSL_MIN(tree_right, self->edges.left[I[j]]);
+        }
+        if (k < self->edges.num_records) {
+             tree_right = GSL_MIN(tree_right, self->edges.right[O[k]]);
+        }
+        tree_left = tree_right;
+        self->num_trees++;
+    }
+    if (tree_right != self->sequence_length || self->edges.num_records == 0) {
+        self->num_trees++;
+    }
+    assert(self->num_trees > 0);
+
+    /* TODO this is an ugly departure from the other patterns of
+     * mallocing and using high-water mark memory semantics. Do we really need
+     * to have these?
+     */
+    msp_safe_free(self->sites.tree_sites);
+    msp_safe_free(self->sites.tree_sites_length);
+    self->sites.tree_sites_length = malloc(self->num_trees * sizeof(list_len_t));
+    self->sites.tree_sites = malloc(self->num_trees * sizeof(site_t *));
+    if (self->sites.tree_sites == NULL || self->sites.tree_sites_length == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memset(self->sites.tree_sites_length, 0, self->num_trees * sizeof(list_len_t));
+    memset(self->sites.tree_sites, 0, self->num_trees * sizeof(site_t *));
+
+    tree_left = 0;
+    tree_right = self->sequence_length;
+    tree_index = 0;
+    site = 0;
     j = 0;
     k = 0;
     while (j < self->edges.num_records) {
@@ -784,56 +833,33 @@ tree_sequence_init_trees(tree_sequence_t *self)
         }
         tree_right = self->sequence_length;
         if (j < self->edges.num_records) {
-            tree_right = GSL_MIN(self->edges.left[I[j]], self->edges.right[O[k]]);
+            tree_right = GSL_MIN(tree_right, self->edges.left[I[j]]);
+        }
+        if (k < self->edges.num_records) {
+             tree_right = GSL_MIN(tree_right, self->edges.right[O[k]]);
+        }
+        self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
+        while (site < (site_id_t) self->sites.num_records
+                && self->sites.position[site] < tree_right) {
+            self->sites.tree_sites_length[tree_index]++;
+            site++;
         }
         tree_left = tree_right;
-        self->num_trees++;
+        tree_index++;
     }
-
-    if (self->num_trees > 0) {
-        /* TODO this is an ugly departure from the other patterns of
-         * mallocing and using high-water mark memory semantics. Do we really need
-         * to have these?
-         */
-        msp_safe_free(self->sites.tree_sites);
-        msp_safe_free(self->sites.tree_sites_length);
-        self->sites.tree_sites_length = malloc(self->num_trees * sizeof(list_len_t));
-        self->sites.tree_sites = malloc(self->num_trees * sizeof(site_t *));
-        if (self->sites.tree_sites == NULL || self->sites.tree_sites_length == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
+    if (tree_right != self->sequence_length || self->edges.num_records == 0) {
+        /* Add in the sites for the last, empty, tree. */
+        self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
+        tree_right = self->sequence_length;
+        while (site < (site_id_t) self->sites.num_records
+                && self->sites.position[site] < tree_right) {
+            self->sites.tree_sites_length[tree_index]++;
+            site++;
         }
-        memset(self->sites.tree_sites_length, 0, self->num_trees * sizeof(list_len_t));
-        memset(self->sites.tree_sites, 0, self->num_trees * sizeof(site_t *));
-
-        tree_left = 0;
-        tree_index = 0;
-        site = 0;
-        j = 0;
-        k = 0;
-        while (j < self->edges.num_records) {
-            while (self->edges.right[O[k]] == tree_left) {
-                k++;
-            }
-            while (j < self->edges.num_records && self->edges.left[I[j]] == tree_left) {
-                j++;
-            }
-            tree_right = self->sequence_length;
-            if (j < self->edges.num_records) {
-                tree_right = GSL_MIN(self->edges.left[I[j]], self->edges.right[O[k]]);
-            }
-            self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
-            while (site < (site_id_t) self->sites.num_records
-                    && self->sites.position[site] < tree_right) {
-                self->sites.tree_sites_length[tree_index]++;
-                site++;
-            }
-            tree_left = tree_right;
-            tree_index++;
-        }
-        assert(site == (site_id_t) self->sites.num_records);
-        assert(tree_index == self->num_trees);
+        tree_index++;
     }
+    assert(site == (site_id_t) self->sites.num_records);
+    assert(tree_index == self->num_trees);
     ret = 0;
 out:
     return ret;
@@ -1006,10 +1032,6 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     memcpy(self->edges.right, edges->right, edges->num_rows * sizeof(double));
     memcpy(self->edges.parent, edges->parent, edges->num_rows * sizeof(node_id_t));
     memcpy(self->edges.child, edges->child, edges->num_rows * sizeof(node_id_t));
-    ret = tree_sequence_build_indexes(self);
-    if (ret != 0) {
-        goto out;
-    }
     if (sites != NULL) {
         memcpy(self->sites.position, sites->position, sites->num_rows * sizeof(double));
         memcpy(self->sites.ancestral_state_length,
@@ -1052,6 +1074,10 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
         memcpy(self->migrations.time, migrations->time, migrations->num_rows * sizeof(double));
     }
     ret = tree_sequence_check(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_build_indexes(self);
     if (ret != 0) {
         goto out;
     }
@@ -2495,8 +2521,9 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *ret_left, double *re
 
     if (self->tree_index + 1 < num_trees) {
         /* First we remove the stale records */
-        while (left == s->edges.right[
-                s->edges.indexes.removal_order[self->removal_index]]) {
+        while (self->removal_index < self->num_edges &&
+                left == s->edges.right[
+                    s->edges.indexes.removal_order[self->removal_index]]) {
             k = s->edges.indexes.removal_order[self->removal_index];
             assert(next_edge_list_node < self->num_edges);
             w = &self->edge_list_nodes[next_edge_list_node];
@@ -2538,10 +2565,14 @@ tree_diff_iterator_next(tree_diff_iterator_t *self, double *ret_left, double *re
             }
             self->insertion_index++;
         }
+        right = s->sequence_length;
         if (self->insertion_index < self->num_edges) {
-            right = GSL_MIN(
-                s->edges.left[s->edges.indexes.insertion_order[self->insertion_index]],
-                s->edges.right[s->edges.indexes.removal_order[self->removal_index]]);
+            right = GSL_MIN(right, s->edges.left[
+                    s->edges.indexes.insertion_order[self->insertion_index]]);
+        }
+        if (self->removal_index < self->num_edges) {
+            right = GSL_MIN(right, s->edges.right[
+                    s->edges.indexes.removal_order[self->removal_index]]);
         }
         self->tree_index++;
         ret = 1;
@@ -2597,6 +2628,7 @@ sparse_tree_clear(sparse_tree_t *self)
         memset(self->sample_list_tail, 0, N * sizeof(node_list_t *));
     }
     /* Set the sample attributes */
+    self->left_root = MSP_NULL_NODE;
     if (self->sample_size > 0) {
         self->left_root = self->samples[0];
     }
@@ -3107,7 +3139,11 @@ sparse_tree_check_state(sparse_tree_t *self)
         }
         is_root[u] = true;
     }
-    assert(self->left_sib[self->left_root] == MSP_NULL_NODE);
+    if (self->sample_size == 0) {
+        assert(self->left_root == MSP_NULL_NODE);
+    } else {
+        assert(self->left_sib[self->left_root] == MSP_NULL_NODE);
+    }
     /* Iterate over the roots and make sure they are set */
     for (u = self->left_root; u != MSP_NULL_NODE; u = self->right_sib[u]) {
         assert(is_root[u]);
@@ -3485,8 +3521,14 @@ out:
 int WARN_UNUSED
 sparse_tree_first(sparse_tree_t *self)
 {
-    int ret = 0;
+    int ret = 1;
     tree_sequence_t *s = self->tree_sequence;
+
+    self->left = 0;
+    self->index = 0;
+    self->right = s->sequence_length;
+    self->sites = s->sites.tree_sites[0];
+    self->sites_length = s->sites.tree_sites_length[0];
 
     if (s->edges.num_records > 0) {
         /* TODO this is redundant if this is the first usage of the tree. We
@@ -3497,6 +3539,7 @@ sparse_tree_first(sparse_tree_t *self)
         if (ret != 0) {
             goto out;
         }
+        self->index = (size_t) -1;
         self->left_index = 0;
         self->right_index = 0;
         self->direction = MSP_DIR_FORWARD;
@@ -3514,8 +3557,14 @@ out:
 int WARN_UNUSED
 sparse_tree_last(sparse_tree_t *self)
 {
-    int ret = 0;
+    int ret = 1;
     tree_sequence_t *s = self->tree_sequence;
+
+    self->left = 0;
+    self->right = s->sequence_length;
+    self->index = 0;
+    self->sites = s->sites.tree_sites[0];
+    self->sites_length = s->sites.tree_sites_length[0];
 
     if (s->edges.num_records > 0) {
         /* TODO this is redundant if this is the first usage of the tree. We
@@ -3526,11 +3575,12 @@ sparse_tree_last(sparse_tree_t *self)
         if (ret != 0) {
             goto out;
         }
+        self->index = tree_sequence_get_num_trees(s);
         self->left_index = (node_id_t) s->edges.num_records - 1;
         self->right_index = (node_id_t) s->edges.num_records - 1;
         self->direction = MSP_DIR_REVERSE;
-        self->index = tree_sequence_get_num_trees(s);
         self->left = s->sequence_length;
+        self->right = 0;
 
         ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
                 s->edges.left, s->edges.indexes.insertion_order,
