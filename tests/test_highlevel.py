@@ -1652,6 +1652,7 @@ class TestSparseTree(HighLevelTestCase):
         self.assertEqual(t1.get_interval(), t1.interval)
         self.assertEqual(t1.get_length(), t1.length)
         self.assertEqual(t1.get_sample_size(), t1.sample_size)
+        self.assertEqual(t1.get_sample_size(), t1.num_samples)
         self.assertEqual(t1.get_num_mutations(), t1.num_mutations)
         self.assertEqual(t1.get_parent_dict(), t1.parent_dict)
         self.assertEqual(t1.get_total_branch_length(), t1.total_branch_length)
@@ -1844,7 +1845,7 @@ class TestSimulatorFactory(unittest.TestCase):
             sim = msprime.simulator_factory(n)
             self.assertEqual(sim.sample_size, n)
             ll_sim = sim.create_ll_instance()
-            self.assertEqual(ll_sim.get_sample_size(), n)
+            self.assertEqual(ll_sim.get_num_samples(), n)
             samples = ll_sim.get_samples()
             self.assertEqual(len(samples), n)
             for sample in samples:
