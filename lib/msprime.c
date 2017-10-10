@@ -718,26 +718,26 @@ out:
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
+msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng) {
     int ret = -1;
     size_t j, k, initial_samples;
 
     memset(self, 0, sizeof(msp_t));
-    if (sample_size < 2 || samples == NULL || rng == NULL) {
+    if (num_samples < 2 || samples == NULL || rng == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->sample_size = (uint32_t) sample_size;
+    self->num_samples = (uint32_t) num_samples;
     self->rng = rng;
     self->num_loci = 1;
     self->recombination_rate = 0.0;
-    self->samples = malloc(sample_size * sizeof(sample_t));
+    self->samples = malloc(num_samples * sizeof(sample_t));
     if (self->samples == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     initial_samples = 0;
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         self->samples[j].population_id = samples[j].population_id;
         self->samples[j].time = samples[j].time;
         if (self->samples[j].time < 0) {
@@ -753,7 +753,7 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
         goto out;
     }
     /* Set up the historical sampling events */
-    self->num_sampling_events = self->sample_size - initial_samples;
+    self->num_sampling_events = self->num_samples - initial_samples;
     self->sampling_events = NULL;
     if (self->num_sampling_events > 0) {
         self->sampling_events = malloc(self->num_sampling_events *
@@ -762,7 +762,7 @@ msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng) {
             goto out;
         }
         k = 0;
-        for (j = 0; j < self->sample_size; j++) {
+        for (j = 0; j < self->num_samples; j++) {
             if (self->samples[j].time > 0) {
                 self->sampling_events[k].sample = (node_id_t) j;
                 self->sampling_events[k].time = self->samples[j].time;
@@ -1122,7 +1122,7 @@ msp_verify_overlaps(msp_t *self)
     /* Add in the counts for any historical samples that haven't been
      * included yet.
      */
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < self->num_samples; j++) {
         if (self->samples[j].time > self->time) {
             for (k = 0; k < self->num_loci; k++) {
                 overlaps[k]++;
@@ -1199,10 +1199,10 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
     fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
-    fprintf(out, "n = %d\n", self->sample_size);
+    fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "m = %d\n", self->num_loci);
     fprintf(out, "Samples = \n");
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < self->num_samples; j++) {
         fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, (int) self->samples[j].population_id,
                 self->samples[j].time);
     }
@@ -2151,7 +2151,7 @@ msp_reset(msp_t *self)
     self->time = 0.0;
     self->num_edges = 0;
     self->edge_buffer_start = 0;
-    for (j = 0; j < (node_id_t) self->sample_size; j++) {
+    for (j = 0; j < (node_id_t) self->num_samples; j++) {
         if (self->samples[j].time == 0.0) {
             ret = msp_insert_sample(self, j, self->samples[j].population_id);
             if (ret != 0) {
@@ -2167,12 +2167,12 @@ msp_reset(msp_t *self)
     self->next_demographic_event = self->demographic_events_head;
     memcpy(self->migration_matrix, self->initial_migration_matrix,
             N * N * sizeof(double));
-    ret = msp_insert_overlap_count(self, 0, self->sample_size);
+    ret = msp_insert_overlap_count(self, 0, self->num_samples);
     if (ret != 0) {
         goto out;
     }
     ret = msp_insert_overlap_count(self, self->num_loci,
-            self->sample_size + 1);
+            self->num_samples + 1);
     if (ret != 0) {
         goto out;
     }
@@ -2200,7 +2200,7 @@ msp_initialise(msp_t *self)
     simulation_model_t *model = &self->model;
 
     /* These should really be proper checks with a return value */
-    assert(self->sample_size > 1);
+    assert(self->num_samples > 1);
     assert(self->num_loci >= 1);
     assert(self->num_populations >= 1);
 
@@ -2209,7 +2209,7 @@ msp_initialise(msp_t *self)
         goto out;
     }
     /* Samples were set before the model, so we need to rescale their times */
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < self->num_samples; j++) {
         /* Check that the sample configuration makes sense */
         if (self->samples[j].population_id >= (population_id_t) self->num_populations) {
             ret = MSP_ERR_BAD_SAMPLES;
@@ -2593,9 +2593,9 @@ msp_get_model_name(msp_t *self)
 }
 
 size_t
-msp_get_sample_size(msp_t *self)
+msp_get_num_samples(msp_t *self)
 {
-    return (size_t) self->sample_size;
+    return (size_t) self->num_samples;
 }
 
 size_t

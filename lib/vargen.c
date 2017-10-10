@@ -64,7 +64,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
         ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
         goto out;
     }
-    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
+    self->num_samples = tree_sequence_get_num_samples(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
@@ -107,7 +107,7 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
     char derived;
     char ancestral = (char) (site->ancestral_state[0] - state_offset);
 
-    memset(genotypes, ancestral, self->sample_size);
+    memset(genotypes, ancestral, self->num_samples);
     for (j = 0; j < site->mutations_length; j++) {
         derived = (char) (site->mutations[j].derived_state[0] - state_offset);
         ret = sparse_tree_get_sample_list(&self->tree, site->mutations[j].node, &w, &tail);

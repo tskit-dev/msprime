@@ -716,7 +716,7 @@ verify_hapgen(tree_sequence_t *ts)
     int ret;
     hapgen_t hapgen;
     char *haplotype;
-    size_t sample_size = tree_sequence_get_sample_size(ts);
+    size_t num_samples = tree_sequence_get_num_samples(ts);
     size_t num_sites = tree_sequence_get_num_sites(ts);
     size_t j;
 
@@ -724,12 +724,12 @@ verify_hapgen(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     hapgen_print_state(&hapgen, _devnull);
 
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(strlen(haplotype), num_sites);
     }
-    for (j = sample_size; j < sample_size + 10; j++) {
+    for (j = num_samples; j < num_samples + 10; j++) {
         ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     }
@@ -743,9 +743,9 @@ verify_vargen(tree_sequence_t *ts)
     int ret;
     vargen_t vargen;
     site_t *site;
-    size_t sample_size = tree_sequence_get_sample_size(ts);
+    size_t num_samples = tree_sequence_get_num_samples(ts);
     size_t num_sites = tree_sequence_get_num_sites(ts);
-    char *genotypes = malloc((sample_size + 1) * sizeof(char));
+    char *genotypes = malloc((num_samples + 1) * sizeof(char));
     size_t j, k;
 
     CU_ASSERT_FATAL(genotypes != NULL);
@@ -755,7 +755,7 @@ verify_vargen(tree_sequence_t *ts)
     j = 0;
     while ((ret = vargen_next(&vargen, &site, genotypes)) == 1) {
         CU_ASSERT_EQUAL(site->id, j);
-        for (k = 0; k < sample_size; k++) {
+        for (k = 0; k < num_samples; k++) {
             CU_ASSERT(genotypes[k] == 0 || genotypes[k] == 1);
         }
         j++;
@@ -773,13 +773,13 @@ verify_vargen(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
     j = 0;
-    genotypes[sample_size] = '\0';
+    genotypes[num_samples] = '\0';
     while ((ret = vargen_next(&vargen, &site, genotypes)) == 1) {
         CU_ASSERT_EQUAL(site->id, j);
-        for (k = 0; k < sample_size; k++) {
+        for (k = 0; k < num_samples; k++) {
             CU_ASSERT(genotypes[k] == '0' || genotypes[k] == '1');
         }
-        CU_ASSERT_EQUAL_FATAL(genotypes[sample_size], '\0');
+        CU_ASSERT_EQUAL_FATAL(genotypes[num_samples], '\0');
         j++;
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -795,7 +795,7 @@ static void
 verify_stats(tree_sequence_t *ts)
 {
     int ret;
-    uint32_t sample_size = tree_sequence_get_sample_size(ts);
+    uint32_t num_samples = tree_sequence_get_num_samples(ts);
     node_id_t *samples;
     uint32_t j;
     double pi;
@@ -804,13 +804,13 @@ verify_stats(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = tree_sequence_get_pairwise_diversity(ts, NULL, 1, &pi);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = tree_sequence_get_pairwise_diversity(ts, NULL, sample_size + 1, &pi);
+    ret = tree_sequence_get_pairwise_diversity(ts, NULL, num_samples + 1, &pi);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     ret = tree_sequence_get_samples(ts, &samples);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 2; j < sample_size; j++) {
+    for (j = 2; j < num_samples; j++) {
         ret = tree_sequence_get_pairwise_diversity(ts, samples, j, &pi);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_TRUE_FATAL(pi >= 0);
@@ -888,7 +888,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
         tree_sequence_get_sequence_length(subset));
     CU_ASSERT(
         tree_sequence_get_num_nodes(ts) >= tree_sequence_get_num_nodes(subset));
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(subset), num_samples);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(subset), num_samples);
 
     /* Check the sample properties */
     for (j = 0; j < num_samples; j++) {
@@ -983,8 +983,8 @@ static void
 verify_simplify(tree_sequence_t *ts)
 {
     int ret;
-    uint32_t n = tree_sequence_get_sample_size(ts);
-    uint32_t sample_sizes[] = {2, 3, n / 2, n - 1, n};
+    uint32_t n = tree_sequence_get_num_samples(ts);
+    uint32_t num_sampless[] = {2, 3, n / 2, n - 1, n};
     size_t j;
     node_id_t *sample;
     node_id_t *sample_map = malloc(n * sizeof(node_id_t));
@@ -996,13 +996,13 @@ verify_simplify(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(&subset);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < sizeof(sample_sizes) / sizeof(uint32_t); j++) {
-        if (sample_sizes[j] > 1 && sample_sizes[j] <= n) {
-            ret = tree_sequence_simplify(ts, sample, sample_sizes[j], flags,
+    for (j = 0; j < sizeof(num_sampless) / sizeof(uint32_t); j++) {
+        if (num_sampless[j] > 1 && num_sampless[j] <= n) {
+            ret = tree_sequence_simplify(ts, sample, num_sampless[j], flags,
                     &subset, sample_map);
             /* printf("ret = %s\n", msp_strerror(ret)); */
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_simplify_properties(ts, &subset, sample, sample_sizes[j], sample_map);
+            verify_simplify_properties(ts, &subset, sample, num_sampless[j], sample_map);
         }
     }
     tree_sequence_free(&subset);
@@ -1013,7 +1013,7 @@ verify_simplify(tree_sequence_t *ts)
  * callers responsilibility to free all memory.
  */
 static tree_sequence_t *
-get_example_tree_sequence(uint32_t sample_size,
+get_example_tree_sequence(uint32_t num_samples,
         uint32_t num_historical_samples, uint32_t num_loci,
         double sequence_length, double recombination_rate,
         double mutation_rate, uint32_t num_bottlenecks,
@@ -1021,7 +1021,7 @@ get_example_tree_sequence(uint32_t sample_size,
 {
     int ret;
     msp_t *msp = malloc(sizeof(msp_t));
-    sample_t *samples = malloc(sample_size * sizeof(sample_t));
+    sample_t *samples = malloc(num_samples * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tree_sequence_t *tree_seq = malloc(sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = malloc(sizeof(recomb_map_t));
@@ -1067,11 +1067,11 @@ get_example_tree_sequence(uint32_t sample_size,
     ret = mutgen_alloc(mutgen, mutation_rate, rng, alphabet, 10);
     CU_ASSERT_EQUAL(ret, 0);
     /* initialise the samples to zero for the default configuration */
-    memset(samples, 0, sample_size * sizeof(sample_t));
+    memset(samples, 0, num_samples * sizeof(sample_t));
     for (j = 0; j < num_historical_samples; j++) {
         samples[j].time = 0.1 * (j + 1);
     }
-    ret = msp_alloc(msp, sample_size, samples, rng);
+    ret = msp_alloc(msp, num_samples, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, num_loci);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1596,7 +1596,7 @@ test_node_names(void)
     node_t node;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
 
     ret = tree_sequence_get_node(&ts, 0, &node);
@@ -1774,7 +1774,7 @@ verify_empty_tree_sequence(tree_sequence_t *ts, double sequence_length)
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_migrations(ts), 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(ts), sequence_length);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(ts), 1);
     verify_trees_consistent(ts);
@@ -1863,7 +1863,7 @@ test_zero_edges(void)
     int ret;
 
     tree_sequence_from_text(&ts, 2, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 2.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 2);
@@ -1925,7 +1925,7 @@ test_simplest_records(void)
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -1947,7 +1947,7 @@ test_simplest_nonbinary_records(void)
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -1974,7 +1974,7 @@ test_simplest_unary_records(void)
     node_id_t sample_map[2];
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -1984,7 +1984,7 @@ test_simplest_unary_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
@@ -2025,7 +2025,7 @@ test_simplest_non_sample_leaf_records(void)
     site_t *site;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 4);
@@ -2065,7 +2065,7 @@ test_simplest_non_sample_leaf_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 2);
@@ -2094,7 +2094,7 @@ test_simplest_degenerate_multiple_root_records(void)
     node_id_t sample_map[2];
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -2113,7 +2113,7 @@ test_simplest_degenerate_multiple_root_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 2);
 
@@ -2141,7 +2141,7 @@ test_simplest_multiple_root_records(void)
     node_id_t sample_map[4];
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 6);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -2151,7 +2151,7 @@ test_simplest_multiple_root_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 4, 0, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 6);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
@@ -2163,7 +2163,7 @@ test_simplest_multiple_root_records(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 3, 0, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&simplified), 0);
@@ -2195,7 +2195,7 @@ test_simplest_root_mutations(void)
     tree_sequence_t ts, simplified;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
@@ -2216,7 +2216,7 @@ test_simplest_root_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&simplified), 1);
@@ -2229,7 +2229,7 @@ test_simplest_root_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified, sample_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&simplified), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&simplified), 0);
@@ -2268,7 +2268,7 @@ test_simplest_back_mutations(void)
     site_t *site;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
@@ -2326,7 +2326,7 @@ test_simplest_general_samples(void)
     hapgen_t hapgen;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 2);
@@ -2403,7 +2403,7 @@ test_simplest_holey_tree_sequence(void)
 
     tree_sequence_from_text(&ts, 0, nodes_txt, edges_txt, NULL, sites_txt,
             mutations_txt, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
@@ -2454,7 +2454,7 @@ test_simplest_initial_gap_tree_sequence(void)
     uint32_t num_trees = 2;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
@@ -2506,7 +2506,7 @@ test_simplest_final_gap_tree_sequence(void)
     uint32_t num_trees = 2;
 
     tree_sequence_from_text(&ts, 3, nodes, edges, NULL, sites, mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
@@ -3075,7 +3075,7 @@ test_alphabet_detection(void)
     /* Default to binary */
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_BINARY);
@@ -3084,7 +3084,7 @@ test_alphabet_detection(void)
     /* All 0->1 mutations are binary */
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             "0  0", "0 0 1", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
     CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_BINARY);
@@ -3093,7 +3093,7 @@ test_alphabet_detection(void)
     /* A non-zero ancestral state means ASCII */
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             "0  1", "0 0 0", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
     CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_ASCII);
@@ -3102,7 +3102,7 @@ test_alphabet_detection(void)
     /* Back mutations are still binary */
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             "0  0", "0 0 1\n0 1 0", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_BINARY);
@@ -3111,7 +3111,7 @@ test_alphabet_detection(void)
     /* Any non-0 or 1 chars make it ASCII */
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             "0  0", "0 0 1\n0 1 A", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_ASCII);
@@ -3126,7 +3126,7 @@ test_single_tree_good_records(void)
 
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges,
             NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 7);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -3156,7 +3156,7 @@ test_single_nonbinary_tree_good_records(void)
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 7);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 7);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 10);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
@@ -3228,7 +3228,7 @@ test_single_tree_good_mutations(void)
 
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges,
             NULL, single_tree_ex_sites, single_tree_ex_mutations, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_sample_size(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 7);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
@@ -4298,7 +4298,7 @@ test_sparse_tree_errors(void)
     }
 
     tracked_samples[0] = 0;
-    tracked_samples[1] = tree_sequence_get_sample_size(&ts);
+    tracked_samples[1] = tree_sequence_get_num_samples(&ts);
     ret = sparse_tree_set_tracked_samples(&t, 2, tracked_samples);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SAMPLES);
     tracked_samples[1] = tree_sequence_get_num_nodes(&ts);
@@ -4529,7 +4529,7 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
     node_list_t *u, *head, *tail;
     node_id_t *samples;
 
-    n = tree_sequence_get_sample_size(ts);
+    n = tree_sequence_get_num_samples(ts);
     ret = tree_sequence_get_samples(ts, &samples);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -4657,7 +4657,7 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     node_list_t *z, *head, *tail;
     tree_sequence_t *ts = tree->tree_sequence;
 
-    n = tree_sequence_get_sample_size(ts);
+    n = tree_sequence_get_num_samples(ts);
     num_nodes = tree_sequence_get_num_nodes(ts);
     stack = malloc(n * sizeof(node_id_t));
     samples = malloc(n * sizeof(node_id_t));
@@ -5305,8 +5305,8 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     /* tree_sequence_print_state(ts2, stdout); */
 
     CU_ASSERT_EQUAL(
-        tree_sequence_get_sample_size(ts1),
-        tree_sequence_get_sample_size(ts2));
+        tree_sequence_get_num_samples(ts1),
+        tree_sequence_get_num_samples(ts2));
     CU_ASSERT_EQUAL(
         tree_sequence_get_sequence_length(ts1),
         tree_sequence_get_sequence_length(ts2));

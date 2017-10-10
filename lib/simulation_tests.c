@@ -57,7 +57,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
         mutgen_t *mutgen, double scale)
 {
     int ret;
-    uint32_t sample_size = msp_get_sample_size(msp);
+    uint32_t num_samples = msp_get_num_samples(msp);
     migration_t *sim_mig_records, ts_mig_record;
     uint32_t j;
     size_t num_migrations;
@@ -66,8 +66,8 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
     node_id_t *sample_ids;
 
     CU_ASSERT_EQUAL_FATAL(
-            tree_sequence_get_sample_size(tree_seq),
-            msp_get_sample_size(msp));
+            tree_sequence_get_num_samples(tree_seq),
+            msp_get_num_samples(msp));
     CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_edges(tree_seq),
             msp_get_num_edges(msp));
@@ -76,7 +76,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
             msp_get_num_migrations(msp));
     ret = msp_get_samples(msp, &samples);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_FATAL(tree_sequence_get_num_nodes(tree_seq) >= sample_size);
+    CU_ASSERT_FATAL(tree_sequence_get_num_nodes(tree_seq) >= num_samples);
     ret = msp_get_migrations(msp, &sim_mig_records);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     num_migrations = msp_get_num_migrations(msp);
@@ -90,7 +90,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
         ret = tree_sequence_get_migration(tree_seq, j, &ts_mig_record);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     }
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         ret = tree_sequence_get_node(tree_seq, j, &node);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(node.population, samples[j].population_id);
@@ -99,7 +99,7 @@ verify_simulator_tree_sequence_equality(msp_t *msp, tree_sequence_t *tree_seq,
     /* Samples should always be 0..n - 1 here for simulations */
     ret = tree_sequence_get_samples(tree_seq, &sample_ids);
     CU_ASSERT_FATAL(sample_ids != NULL);
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         CU_ASSERT_EQUAL(j, sample_ids[j]);
     }
     mutgen_print_state(mutgen, _devnull);

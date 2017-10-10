@@ -65,7 +65,7 @@ fatal_library_error(int err, const char *msg, ...)
 }
 
 static int
-read_samples(config_t *config, size_t *sample_size, sample_t **samples)
+read_samples(config_t *config, size_t *num_samples, sample_t **samples)
 {
     int ret = 0;
     size_t j, n;
@@ -105,7 +105,7 @@ read_samples(config_t *config, size_t *sample_size, sample_t **samples)
         ret_samples[j].time = config_setting_get_float(t);
     }
     *samples = ret_samples;
-    *sample_size = n;
+    *num_samples = n;
 out:
     return ret;
 }
@@ -453,7 +453,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int err;
     int int_tmp;
     double rho;
-    size_t sample_size;
+    size_t num_samples;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -472,11 +472,11 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("random_seed is a required parameter");
     }
     gsl_rng_set(rng,  (unsigned long) int_tmp);
-    ret = read_samples(config, &sample_size, &samples);
+    ret = read_samples(config, &num_samples, &samples);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_alloc(msp, sample_size, samples, rng);
+    ret = msp_alloc(msp, num_samples, samples, rng);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
@@ -592,7 +592,7 @@ print_variants(tree_sequence_t *ts)
     vargen_t vg;
     uint32_t j, k;
     site_t *site;
-    char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
+    char *genotypes = malloc(tree_sequence_get_num_samples(ts) * sizeof(char));
 
     if (genotypes == NULL) {
         fatal_error("no memory");
@@ -607,7 +607,7 @@ print_variants(tree_sequence_t *ts)
         assert(site->mutations_length == 1);
         printf("%d\t%f\t%s\t%s\t", j, site->position, site->ancestral_state,
                 site->mutations[0].derived_state);
-        for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
+        for (k = 0; k < tree_sequence_get_num_samples(ts); k++) {
             printf("%d", genotypes[k]);
         }
         printf("\n");
@@ -642,7 +642,7 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         fatal_library_error(ret, "hapgen_alloc");
     }
-    for (j = 0; j < ts->sample_size; j++) {
+    for (j = 0; j < ts->num_samples; j++) {
         ret = hapgen_get_haplotype(&hg, (node_id_t) j, &haplotype);
         if (ret < 0) {
             fatal_library_error(ret, "hapgen_get_haplotype");
@@ -702,17 +702,17 @@ print_stats(tree_sequence_t *ts)
 {
     int ret = 0;
     uint32_t j;
-    size_t sample_size = tree_sequence_get_sample_size(ts) / 2;
-    node_id_t *sample = malloc(sample_size * sizeof(node_id_t));
+    size_t num_samples = tree_sequence_get_num_samples(ts) / 2;
+    node_id_t *sample = malloc(num_samples * sizeof(node_id_t));
     double pi;
 
     if (sample == NULL) {
         fatal_error("no memory");
     }
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         sample[j] = (node_id_t) j;
     }
-    ret = tree_sequence_get_pairwise_diversity(ts, sample, sample_size, &pi);
+    ret = tree_sequence_get_pairwise_diversity(ts, sample, num_samples, &pi);
     if (ret != 0) {
         fatal_library_error(ret, "get_pairwise_diversity");
     }
@@ -1078,9 +1078,9 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
         tree_sequence_print_state(&ts, stdout);
     }
     if (num_samples == 0) {
-        num_samples = tree_sequence_get_sample_size(&ts);
+        num_samples = tree_sequence_get_num_samples(&ts);
     } else {
-        num_samples = GSL_MIN(num_samples, tree_sequence_get_sample_size(&ts));
+        num_samples = GSL_MIN(num_samples, tree_sequence_get_num_samples(&ts));
     }
     ret = tree_sequence_get_samples(&ts, &samples);
     if (ret != 0) {
@@ -1189,14 +1189,14 @@ main(int argc, char** argv)
     /* SYNTAX 9: simplify [-vi] [-s] <input-file> <output-file> */
     struct arg_rex *cmd9 = arg_rex1(NULL, NULL, "simplify", NULL, REG_ICASE, NULL);
     struct arg_lit *verbose9 = arg_lit0("v", "verbose", NULL);
-    struct arg_int *sample_size9 = arg_int0("s", "sample-size", "<sample-size>",
+    struct arg_int *num_samples9 = arg_int0("s", "sample-size", "<sample-size>",
             "Number of samples to keep in the simplified tree sequence.");
     struct arg_lit *filter_invariant_sites9 = arg_lit0("i",
             "filter-invariant-sites", "<filter-invariant-sites>");
     struct arg_file *infiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *outfiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_end *end9 = arg_end(20);
-    void* argtable9[] = {cmd9, verbose9, filter_invariant_sites9, sample_size9,
+    void* argtable9[] = {cmd9, verbose9, filter_invariant_sites9, num_samples9,
         infiles9, outfiles9, end9};
     int nerrors9;
 
@@ -1208,7 +1208,7 @@ main(int argc, char** argv)
     output1->filename[0] = NULL;
     ploidy5->ival[0] = 1;
     chrom5->sval[0] = "1";
-    sample_size9->ival[0] = 0;
+    num_samples9->ival[0] = 0;
 
     nerrors1 = arg_parse(argc, argv, argtable1);
     nerrors2 = arg_parse(argc, argv, argtable2);
@@ -1239,7 +1239,7 @@ main(int argc, char** argv)
         run_stats(infiles8->filename[0], verbose8->count);
     } else if (nerrors9 == 0) {
         run_simplify(infiles9->filename[0], outfiles9->filename[0],
-                (size_t) sample_size9->ival[0], (bool) filter_invariant_sites9->count,
+                (size_t) num_samples9->ival[0], (bool) filter_invariant_sites9->count,
                 verbose9->count);
     } else {
         /* We get here if the command line matched none of the possible syntaxes */

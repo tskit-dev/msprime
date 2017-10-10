@@ -138,8 +138,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     fprintf(out, "num_trees = %d\n", (int) self->num_trees);
     fprintf(out, "alphabet = %d\n", (int) self->alphabet);
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
-    fprintf(out, "samples = (%d)\n", (int) self->sample_size);
-    for (j = 0; j < self->sample_size; j++) {
+    fprintf(out, "samples = (%d)\n", (int) self->num_samples);
+    for (j = 0; j < self->num_samples; j++) {
         fprintf(out, "\t%d\n", (int) self->samples[j]);
     }
     fprintf(out, "provenance = (%d)\n", (int) self->num_provenance_strings);
@@ -204,8 +204,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
 
     fprintf(out, "memory\n");
-    fprintf(out, "\tsample_size = %d\n", (int) self->sample_size);
-    fprintf(out, "\tmax_sample_size = %d\n", (int) self->max_sample_size);
+    fprintf(out, "\tnum_samples = %d\n", (int) self->num_samples);
+    fprintf(out, "\tmax_num_samples = %d\n", (int) self->max_num_samples);
     fprintf(out, "\tnodes.num_records = %d\n", (int) self->nodes.num_records);
     fprintf(out, "\tnodes.max_num_records = %d\n", (int) self->nodes.max_num_records);
     fprintf(out, "\tedges.num_records = %d\n", (int) self->edges.num_records);
@@ -670,24 +670,24 @@ tree_sequence_init_nodes(tree_sequence_t *self)
     int ret = 0;
 
     /* Determine the sample size */
-    self->sample_size = 0;
+    self->num_samples = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
         if (self->nodes.flags[j] & MSP_NODE_IS_SAMPLE) {
-            self->sample_size++;
+            self->num_samples++;
         }
     }
     /* We alloc the samples list here because it is a special case; we don't know
      * how big it is until we've read in the data.
      */
-    if (self->sample_size > self->max_sample_size) {
-        size = self->sample_size;
+    if (self->num_samples > self->max_num_samples) {
+        size = self->num_samples;
         msp_safe_free(self->samples);
         self->samples = malloc(size * sizeof(node_id_t));
         if (self->samples == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        self->max_sample_size = size;
+        self->max_num_samples = size;
     }
     k = 0;
     for (j = 0; j < self->nodes.num_records; j++) {
@@ -698,7 +698,7 @@ tree_sequence_init_nodes(tree_sequence_t *self)
             k++;
         }
     }
-    assert(k == self->sample_size);
+    assert(k == self->num_samples);
 out:
     return ret;
 }
@@ -2046,7 +2046,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
          * with a newer file format. Due to a bug in the way that this attribute
          * was loaded, versions of msprime pre 0.4.0 would complain about a missing
          * attribute rather than giving a File format error. */
-        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, &unused_value},
+        {"num_samples", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, &unused_value},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
     size_t j;
@@ -2126,9 +2126,9 @@ tree_sequence_get_alphabet(tree_sequence_t *self)
 }
 
 size_t
-tree_sequence_get_sample_size(tree_sequence_t *self)
+tree_sequence_get_num_samples(tree_sequence_t *self)
 {
-    return self->sample_size;
+    return self->num_samples;
 }
 
 size_t
@@ -2190,7 +2190,7 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     site_t *sites;
     list_len_t j, k, num_sites;
 
-    if (num_samples < 2 || num_samples > self->sample_size) {
+    if (num_samples < 2 || num_samples > self->num_samples) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -2603,6 +2603,7 @@ sparse_tree_clear(sparse_tree_t *self)
 {
     int ret = 0;
     size_t N = self->num_nodes;
+    size_t num_samples = self->tree_sequence->num_samples;
     size_t j;
     node_id_t u;
     node_list_t *w;
@@ -2637,10 +2638,10 @@ sparse_tree_clear(sparse_tree_t *self)
     }
     /* Set the sample attributes */
     self->left_root = MSP_NULL_NODE;
-    if (self->sample_size > 0) {
+    if (num_samples > 0) {
         self->left_root = self->samples[0];
     }
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         u = self->samples[j];
         self->above_sample[u] = true;
         if (self->flags & MSP_SAMPLE_COUNTS) {
@@ -2654,7 +2655,7 @@ sparse_tree_clear(sparse_tree_t *self)
             self->sample_list_tail[u] = w;
         }
         /* Set initial roots */
-        if (j < self->sample_size - 1) {
+        if (j < num_samples - 1) {
             self->right_sib[self->samples[j]] = self->samples[j + 1];
         }
         if (j > 0) {
@@ -2668,7 +2669,7 @@ int WARN_UNUSED
 sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags)
 {
     int ret = MSP_ERR_NO_MEMORY;
-    size_t sample_size;
+    size_t num_samples;
     size_t num_nodes;
 
     memset(self, 0, sizeof(sparse_tree_t));
@@ -2677,9 +2678,8 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
         goto out;
     }
     num_nodes = tree_sequence->nodes.num_records;
-    sample_size = tree_sequence->sample_size;
+    num_samples = tree_sequence->num_samples;
     self->num_nodes = num_nodes;
-    self->sample_size = sample_size;
     self->tree_sequence = tree_sequence;
     self->samples = tree_sequence->samples;
     self->flags = flags;
@@ -2713,7 +2713,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->flags & MSP_SAMPLE_LISTS) {
         self->sample_list_head = calloc(num_nodes, sizeof(node_list_t *));
         self->sample_list_tail = calloc(num_nodes, sizeof(node_list_t *));
-        self->sample_list_node_mem = calloc(sample_size, sizeof(node_list_t));
+        self->sample_list_node_mem = calloc(num_samples, sizeof(node_list_t));
         if (self->sample_list_head == NULL || self->sample_list_tail == NULL
                 || self->sample_list_node_mem == NULL) {
             goto out;
@@ -3140,14 +3140,14 @@ sparse_tree_check_state(sparse_tree_t *self)
 
     assert(children != NULL);
 
-    for (j = 0; j < self->sample_size; j++) {
+    for (j = 0; j < self->tree_sequence->num_samples; j++) {
         u = self->samples[j];
         while (self->parent[u] != MSP_NULL_NODE) {
             u = self->parent[u];
         }
         is_root[u] = true;
     }
-    if (self->sample_size == 0) {
+    if (self->tree_sequence->num_samples == 0) {
         assert(self->left_root == MSP_NULL_NODE);
     } else {
         assert(self->left_sib[self->left_root] == MSP_NULL_NODE);
