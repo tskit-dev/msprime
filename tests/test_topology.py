@@ -210,6 +210,9 @@ class TestEmptyTreeSequences(TopologyTestCase):
         for method in methods:
             for u in [-1, 0, 1, 100]:
                 self.assertRaises(ValueError, method, u)
+        tsp = ts.simplify()
+        self.assertEqual(tsp.num_nodes, 0)
+        self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_zero_samples(self):
         nodes = msprime.NodeTable()
@@ -271,6 +274,9 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(list(t.nodes()), [])
         self.assertEqual(list(ts.haplotypes()), [])
         self.assertEqual(len(list(ts.variants())), 1)
+        tsp = ts.simplify()
+        self.assertEqual(tsp.num_nodes, 0)
+        self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_one_sample(self):
         nodes = msprime.NodeTable()
@@ -300,7 +306,11 @@ class TestEmptyTreeSequences(TopologyTestCase):
             self.assertEqual(method(0), msprime.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
+        tsp = ts.simplify()
+        self.assertEqual(tsp.num_nodes, 1)
+        self.assertEqual(tsp.num_edges, 0)
 
+    @unittest.skip("Simplify invariant sites")
     def test_one_node_one_sample_sites(self):
         nodes = msprime.NodeTable()
         nodes.add_row(time=0, flags=msprime.NODE_IS_SAMPLE)
@@ -334,6 +344,14 @@ class TestEmptyTreeSequences(TopologyTestCase):
             self.assertEqual(method(0), msprime.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
+        tsp = ts.simplify()
+        self.assertEqual(tsp.num_nodes, 1)
+        self.assertEqual(tsp.num_edges, 0)
+        self.assertEqual(tsp.num_sites, 0)
+        tsp = ts.simplify(filter_invariant_sites=False)
+        self.assertEqual(tsp.num_nodes, 1)
+        self.assertEqual(tsp.num_edges, 0)
+        self.assertEqual(tsp.num_sites, 1)
 
 
 class TestHoleyTreeSequences(TopologyTestCase):

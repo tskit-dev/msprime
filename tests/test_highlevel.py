@@ -1100,6 +1100,14 @@ class TestTreeSequence(HighLevelTestCase):
 
     def verify_simplify_topology(self, ts, sample):
         new_ts, sample_map = ts.simplify(sample, map_samples=True)
+        if len(sample) == 0:
+            self.assertEqual(new_ts.num_nodes, 0)
+            self.assertEqual(new_ts.num_edges, 0)
+            self.assertEqual(new_ts.num_sites, 0)
+            self.assertEqual(new_ts.num_mutations, 0)
+        elif len(sample) == 1:
+            self.assertEqual(new_ts.num_nodes, 1)
+            self.assertEqual(new_ts.num_edges, 0)
         for old_id, new_id in sample_map.items():
             old_node = ts.node(old_id)
             new_node = new_ts.node(new_id)
@@ -1187,11 +1195,12 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(full_positions[j], sp)
             self.assertTrue(np.all(sg == full_genotypes[j][s]))
             j += 1
-        while j < ts.num_sites:
-            unique = np.unique(full_genotypes[j][s])
-            self.assertEqual(unique.shape[0], 1)
-            self.assertIn(unique[0], [0, 1])
-            j += 1
+        if len(sample) > 0:
+            while j < ts.num_sites:
+                unique = np.unique(full_genotypes[j][s])
+                self.assertEqual(unique.shape[0], 1)
+                self.assertIn(unique[0], [0, 1])
+                j += 1
 
     # @unittest.skip("Skip simplify with internal sample examples")
     def test_simplify(self):
@@ -1201,14 +1210,15 @@ class TestTreeSequence(HighLevelTestCase):
                 back_mutations=False, gaps=False, internal_samples=False):
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()
+            sample_sizes = {0, 1}
             if n > 2:
-                sample_sizes = set([2, max(2, n // 2), n - 1])
-                for k in sample_sizes:
-                    subset = random.sample(list(ts.samples()), k)
-                    self.verify_simplify_topology(ts, subset)
-                    self.verify_simplify_mutations(ts, subset)
-                    self.verify_simplify_equality(ts, subset)
-                    self.verify_simplify_variants(ts, subset)
+                sample_sizes |= set([2, max(2, n // 2), n - 1])
+            for k in sample_sizes:
+                subset = random.sample(list(ts.samples()), k)
+                self.verify_simplify_topology(ts, subset)
+                self.verify_simplify_mutations(ts, subset)
+                self.verify_simplify_equality(ts, subset)
+                self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
     def test_simplify_bugs(self):

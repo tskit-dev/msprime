@@ -1795,7 +1795,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         size_t max_buffered_edges, int flags)
 {
     int ret = 0;
-    size_t j, offset;
+    size_t j, offset, num_nodes_alloc, num_edges_alloc;
 
     memset(self, 0, sizeof(simplifier_t));
     self->samples = samples;
@@ -1812,11 +1812,10 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    /* TODO: Remove these  */
-    if (nodes->num_rows == 0 || edges->num_rows == 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
+    /* Use these values to avoid malloc(0) */
+    num_nodes_alloc = 1 + nodes->num_rows;
+    num_edges_alloc = 1 + edges->num_rows;
+
     /* Compute the sequence length */
     for (j = 0; j < edges->num_rows; j++) {
         self->sequence_length = GSL_MAX(edges->right[j], self->sequence_length);
@@ -1843,7 +1842,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
     /* Build the offset table so we can map node names */
-    self->node_name_offset = malloc(self->input_nodes.num_rows * sizeof(size_t));
+    self->node_name_offset = malloc(num_nodes_alloc * sizeof(size_t));
     if (self->node_name_offset == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -1882,21 +1881,21 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     /* Allocate the heaps used for small objects. */
     /* TODO assuming that the number of edges is a good guess here. */
     ret = object_heap_init(&self->segment_heap, sizeof(simplify_segment_t),
-            self->input_edges.num_rows, NULL);
+            num_edges_alloc, NULL);
     if (ret != 0) {
         goto out;
     }
     ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
-            self->input_edges.num_rows, NULL);
+            num_edges_alloc, NULL);
     if (ret != 0) {
         goto out;
     }
     /* Make the maps and set the intial state */
-    self->ancestor_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
-    self->root_map = calloc(self->input_nodes.num_rows, sizeof(simplify_segment_t *));
-    self->node_id_map = malloc(self->input_nodes.num_rows * sizeof(node_id_t));
-    self->unmapped_sample = calloc(self->input_nodes.num_rows, sizeof(bool));
-    self->is_sample = calloc(self->input_nodes.num_rows, sizeof(bool));
+    self->ancestor_map = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
+    self->root_map = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
+    self->node_id_map = malloc(num_nodes_alloc * sizeof(node_id_t));
+    self->unmapped_sample = calloc(num_nodes_alloc, sizeof(bool));
+    self->is_sample = calloc(num_nodes_alloc, sizeof(bool));
     if (self->ancestor_map == NULL || self->root_map == NULL
             || self->node_id_map == NULL || self->unmapped_sample == NULL
             || self->is_sample == NULL) {

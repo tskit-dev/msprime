@@ -679,7 +679,7 @@ class Simplifier(object):
     def __init__(self, ts, sample):
         self.ts = ts
         self.n = len(sample)
-        self.m = ts.sequence_length
+        self.sequence_length = ts.sequence_length
         self.input_sites = list(ts.sites())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
@@ -820,7 +820,7 @@ class Simplifier(object):
         """
         # print("INSERTING SAMPLE", sample_id)
         self.record_node(sample_id)
-        x = self.alloc_segment(0, self.m, self.node_id_map[sample_id])
+        x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
         self.A[sample_id] = x
 
     def process_parent_edges(self, edges):
@@ -905,7 +905,8 @@ class Simplifier(object):
         sample_map = {u: self.node_id_map[u] for u in self.samples}
         ts = msprime.load_tables(
             nodes=self.node_table, edges=self.edge_table,
-            sites=self.site_table, mutations=self.mutation_table)
+            sites=self.site_table, mutations=self.mutation_table,
+            sequence_length=self.sequence_length)
         return ts, sample_map
 
     def record_mutation(self, node, mutation):
@@ -998,7 +999,7 @@ class Simplifier(object):
             alpha = None
             l = H[0][0]
             X = []
-            r = self.m + 1
+            r = self.sequence_length + 1
             while len(H) > 0 and H[0][0] == l:
                 x = heapq.heappop(H)[1]
                 X.append(x)

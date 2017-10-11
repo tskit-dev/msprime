@@ -1857,12 +1857,13 @@ test_zero_edges(void)
     const char *mutations =
         "0    0     1\n"
         "1    1     1\n";
-    tree_sequence_t ts;
+    tree_sequence_t ts, tss;
     sparse_tree_t t;
     const char *haplotypes[] = {"10", "01"};
     char *haplotype;
     hapgen_t hapgen;
     unsigned int j;
+    node_id_t samples, sample_map;
     const node_id_t z = MSP_NULL_NODE;
     node_id_t parents[] = {
         z, z,
@@ -1908,6 +1909,19 @@ test_zero_edges(void)
     sparse_tree_print_state(&t, _devnull);
     sparse_tree_free(&t);
 
+    ret = tree_sequence_initialise(&tss);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* We give pointers ot samples and sample_map here as they must be non null */
+    ret = tree_sequence_simplify(&ts, &samples, 0, 0, &tss, &sample_map);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&tss), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&tss), 2.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&tss), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&tss), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&tss), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&tss), 1);
+    tree_sequence_print_state(&ts, _devnull);
+
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     hapgen_print_state(&hapgen, _devnull);
@@ -1918,6 +1932,7 @@ test_zero_edges(void)
     }
     hapgen_free(&hapgen);
     tree_sequence_free(&ts);
+    tree_sequence_free(&tss);
 }
 
 static void

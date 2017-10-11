@@ -937,19 +937,15 @@ class TestSimplifyTables(unittest.TestCase):
 
     def test_samples_interface(self):
         tables = msprime.simulate(50, random_seed=1).dump_tables()
-        nodes = tables.nodes
-        edges = tables.edges
-        for good_form in [[0, 1], (0, 1), np.array([0, 1], dtype=np.int32)]:
+        for good_form in [[], [0, 1], (0, 1), np.array([0, 1], dtype=np.int32)]:
+            nodes = tables.nodes.copy()
+            edges = tables.edges.copy()
             msprime.simplify_tables(good_form, nodes, edges)
-        for short_samples in [[], (1,), [2], np.array([1], dtype=np.int32)]:
-            self.assertRaises(
-                ValueError, msprime.simplify_tables, short_samples, nodes, edges)
+        nodes = tables.nodes.copy()
+        edges = tables.edges.copy()
         for bad_type in [None, {}]:
             self.assertRaises(
                 TypeError, msprime.simplify_tables, bad_type, nodes, edges)
-        for bad_numbers in [["s"], ["abc"], [b"1234"]]:
-            self.assertRaises(
-                ValueError, msprime.simplify_tables, bad_numbers, nodes, edges)
         # We only accept numpy arrays of the right type
         for bad_dtype in [np.uint32, np.int64, np.float64]:
             self.assertRaises(
