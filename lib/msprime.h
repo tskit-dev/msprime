@@ -256,7 +256,7 @@ typedef struct _msp_t {
     /* input parameters */
     simulation_model_t model;
     bool store_migrations;
-    uint32_t sample_size;
+    uint32_t num_samples;
     uint32_t num_loci;
     double recombination_rate;
     uint32_t num_populations;
@@ -375,13 +375,32 @@ typedef struct {
 } recomb_map_t;
 
 /* Tree sequences */
+/* TODO this struct is much more complicated than it needs to be now, especially
+ * wrt to realloc behaviour in the nodes, edges etc storage. This was put in
+ * place originally to support long-lived tree sequence representing many
+ * different simulation replicates sequentially. This is no longer done,
+ * and the tables API makes this more efficient.
+ *
+ * Similarly the 'initialise' function should be removed, and the
+ * initialised_magic member. We can only create a new tree sequence
+ * via load_tables and load. The load function should also use load_tables,
+ * and we could then delegate the HDF5 processing to another class
+ * which loads the HDF5 from disk into tables.
+ *
+ * Ultimately, we should either directly embed tables into this struct, so that
+ * we can either copy the input tables in load_tables or borrow pointers
+ * to the memory of the supplied tables to have zero copy access to the data.
+ * This could be achieved with a flag to load_tables. We should be able to
+ * do away with a lot of the extra memory handling dealing with ragged lists
+ * by adding a cumulative sum column to the tables that contain these columns.
+ */
 typedef struct {
     uint32_t initialised_magic;
     size_t num_trees;
     double sequence_length;
     int alphabet;
-    size_t sample_size;
-    size_t max_sample_size;
+    size_t num_samples;
+    size_t max_num_samples;
     node_id_t *samples;
     struct {
         size_t num_records;
@@ -478,7 +497,6 @@ typedef struct {
 
 typedef struct {
     tree_sequence_t *tree_sequence;
-    size_t sample_size;
     size_t num_nodes;
     int flags;
     node_id_t *samples;
@@ -529,7 +547,7 @@ typedef struct {
 } newick_converter_t;
 
 typedef struct {
-    size_t sample_size;
+    size_t num_samples;
     double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
@@ -545,7 +563,7 @@ typedef struct {
 } hapgen_t;
 
 typedef struct {
-    size_t sample_size;
+    size_t num_samples;
     double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
@@ -557,7 +575,7 @@ typedef struct {
 } vargen_t;
 
 typedef struct {
-    size_t sample_size;
+    size_t num_samples;
     size_t num_vcf_samples;
     unsigned int ploidy;
     char *genotypes;
@@ -664,7 +682,7 @@ typedef struct {
     char *derived_state_mem;
 } simplifier_t;
 
-int msp_alloc(msp_t *self, size_t sample_size, sample_t *samples, gsl_rng *rng);
+int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model(msp_t *self, int model, double population_size);
 int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
     double c);
@@ -727,7 +745,7 @@ const char * msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
 double msp_get_recombination_rate(msp_t *self);
 double msp_get_time(msp_t *self);
-size_t msp_get_sample_size(msp_t *self);
+size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
@@ -769,7 +787,7 @@ size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_sites(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
-size_t tree_sequence_get_sample_size(tree_sequence_t *self);
+size_t tree_sequence_get_num_samples(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 int tree_sequence_get_alphabet(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);

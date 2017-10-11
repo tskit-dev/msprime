@@ -210,7 +210,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     double fA, fB, fAB, D;
     int tracked_samples_set = 0;
     sparse_tree_t *tA, *tB;
-    double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
+    double n = (double) tree_sequence_get_num_samples(self->tree_sequence);
     size_t j;
     double nAB;
 
@@ -293,7 +293,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     double fA, fB, fAB, D;
     int tracked_samples_set = 0;
     sparse_tree_t *tA, *tB;
-    double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
+    double n = (double) tree_sequence_get_num_samples(self->tree_sequence);
     size_t j;
     double nAB;
     int64_t site_index;
@@ -401,7 +401,7 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     site_t sA, sB;
     double fA, fB, fAB, D;
     sparse_tree_t *tA, *tB;
-    double n = (double) tree_sequence_get_sample_size(self->tree_sequence);
+    double n = (double) tree_sequence_get_num_samples(self->tree_sequence);
     double nAB;
     size_t tmp;
 

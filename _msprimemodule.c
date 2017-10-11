@@ -218,7 +218,7 @@ out:
 }
 
 static int
-parse_samples(PyObject *py_samples, Py_ssize_t *sample_size, sample_t **samples)
+parse_samples(PyObject *py_samples, Py_ssize_t *num_samples, sample_t **samples)
 {
     int ret = -1;
     long tmp_long;
@@ -266,7 +266,7 @@ parse_samples(PyObject *py_samples, Py_ssize_t *sample_size, sample_t **samples)
         }
     }
     *samples = ret_samples;
-    *sample_size = n;
+    *num_samples = n;
     ret = 0;
     ret_samples = NULL;
 out:
@@ -3668,16 +3668,16 @@ out:
 }
 
 static PyObject *
-TreeSequence_get_sample_size(TreeSequence  *self)
+TreeSequence_get_num_samples(TreeSequence  *self)
 {
     PyObject *ret = NULL;
-    size_t sample_size;
+    size_t num_samples;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    sample_size = tree_sequence_get_sample_size(self->tree_sequence);
-    ret = Py_BuildValue("n", (Py_ssize_t) sample_size);
+    num_samples = tree_sequence_get_num_samples(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_samples);
 out:
     return ret;
 }
@@ -3710,7 +3710,7 @@ TreeSequence_get_samples(TreeSequence *self)
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    n = tree_sequence_get_sample_size(self->tree_sequence);
+    n = tree_sequence_get_num_samples(self->tree_sequence);
     err = tree_sequence_get_samples(self->tree_sequence, &samples);
     if (err != 0) {
         handle_library_error(err);
@@ -3846,7 +3846,7 @@ static PyMethodDef TreeSequence_methods[] = {
         "Returns the number of mutations" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
         "Returns the number of unique nodes in the tree sequence." },
-    {"get_sample_size", (PyCFunction) TreeSequence_get_sample_size, METH_NOARGS,
+    {"get_num_samples", (PyCFunction) TreeSequence_get_num_samples, METH_NOARGS,
         "Returns the sample size" },
     {"get_samples", (PyCFunction) TreeSequence_get_samples, METH_NOARGS,
         "Returns the samples." },
@@ -3934,6 +3934,14 @@ SparseTree_dealloc(SparseTree* self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
+/* TODO this API should be updated to remove the SparseTreeIterator object
+ * and instead support the first(), last() etc methods. Until some seeking
+ * function has been called, we should be in a state that errors if any
+ * methods are called.
+ *
+ * The _free method below is also probably redundant now and should be
+ * removed.
+ */
 static int
 SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
 {
@@ -4013,6 +4021,7 @@ out:
     return ret;
 }
 
+/* TODO this should be redundant; remove */
 static PyObject *
 SparseTree_free(SparseTree *self)
 {
@@ -4040,7 +4049,7 @@ SparseTree_get_sample_size(SparseTree *self)
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->sample_size);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->tree_sequence->num_samples);
 out:
     return ret;
 }
@@ -4473,12 +4482,12 @@ static PyMemberDef SparseTree_members[] = {
 static PyMethodDef SparseTree_methods[] = {
     {"free", (PyCFunction) SparseTree_free, METH_NOARGS,
             "Frees the underlying tree object." },
+    {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
+            "Returns the number of samples in this tree." },
     {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
             "Returns the number of nodes in the sparse tree." },
     {"get_num_roots", (PyCFunction) SparseTree_get_num_roots, METH_NOARGS,
             "Returns the number of roots in the sparse tree." },
-    {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
-            "Returns the sample size" },
     {"get_index", (PyCFunction) SparseTree_get_index, METH_NOARGS,
             "Returns the index this tree occupies within the tree sequence." },
     {"get_left_root", (PyCFunction) SparseTree_get_left_root, METH_NOARGS,
@@ -5343,7 +5352,7 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     PyObject *genotypes_buffer = NULL;
     int as_char = 0;
     int flags = 0;
-    size_t sample_size;
+    size_t num_samples;
 
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
@@ -5361,7 +5370,7 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
-    sample_size = tree_sequence_get_sample_size(
+    num_samples = tree_sequence_get_num_samples(
             self->tree_sequence->tree_sequence);
     if (!PyObject_CheckBuffer(genotypes_buffer)) {
         PyErr_SetString(PyExc_TypeError,
@@ -5373,7 +5382,7 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     self->buffer_acquired = 1;
-    if (sample_size * sizeof(uint8_t) > self->buffer.len) {
+    if (num_samples * sizeof(uint8_t) > self->buffer.len) {
         PyErr_SetString(PyExc_BufferError, "genotypes buffer is too small");
         goto out;
     }
@@ -6172,7 +6181,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     RandomGenerator *random_generator = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
-    Py_ssize_t sample_size = 2;
+    Py_ssize_t num_samples = 2;
     unsigned long num_loci = 1;
     double recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
@@ -6204,7 +6213,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
-    if (parse_samples(py_samples, &sample_size, &samples) != 0) {
+    if (parse_samples(py_samples, &num_samples, &samples) != 0) {
         goto out;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
@@ -6212,7 +6221,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, (size_t) sample_size, samples,
+    sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -6408,13 +6417,13 @@ out:
 }
 
 static PyObject *
-Simulator_get_sample_size(Simulator *self)
+Simulator_get_num_samples(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_sample_size(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_samples(self->sim));
 out:
     return ret;
 }
@@ -7074,24 +7083,24 @@ Simulator_get_samples(Simulator *self)
     PyObject *t = NULL;
     sample_t *samples = NULL;
     size_t j = 0;
-    size_t sample_size;
+    size_t num_samples;
     int population;
     int sim_ret = 0;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    sample_size = msp_get_sample_size(self->sim);
+    num_samples = msp_get_num_samples(self->sim);
     sim_ret = msp_get_samples(self->sim, &samples);
     if (sim_ret != 0) {
         handle_library_error(sim_ret);
         goto out;
     }
-    l = PyList_New(sample_size);
+    l = PyList_New(num_samples);
     if (l == NULL) {
         goto out;
     }
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         population = samples[j].population_id == MSP_NULL_POPULATION_ID? -1:
             samples[j].population_id;
         t = Py_BuildValue("id", population, samples[j].time);
@@ -7264,7 +7273,7 @@ static PyMethodDef Simulator_methods[] = {
     {"get_store_migrations",
             (PyCFunction) Simulator_get_store_migrations, METH_NOARGS,
             "Returns True if the simulator should store migration records." },
-    {"get_sample_size", (PyCFunction) Simulator_get_sample_size, METH_NOARGS,
+    {"get_num_samples", (PyCFunction) Simulator_get_num_samples, METH_NOARGS,
             "Returns the sample size" },
     {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
             "Returns the number of populations." },

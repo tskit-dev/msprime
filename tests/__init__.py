@@ -64,7 +64,6 @@ class PythonSparseTree(object):
         self.right = 0
         self.root = 0
         self.index = -1
-        self.sample_size = 0
         self.left_root = -1
         # We need a sites function, so this name is taken.
         self.site_list = []
@@ -72,7 +71,6 @@ class PythonSparseTree(object):
     @classmethod
     def from_sparse_tree(cls, sparse_tree):
         ret = PythonSparseTree(sparse_tree.num_nodes)
-        ret.sample_size = sparse_tree.get_sample_size()
         ret.left, ret.right = sparse_tree.get_interval()
         ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
@@ -152,9 +150,6 @@ class PythonSparseTree(object):
             for v in l:
                 yield v
 
-    def get_sample_size(self):
-        return self.sample_size
-
     def get_interval(self):
         return self.left, self.right
 
@@ -178,7 +173,6 @@ class PythonSparseTree(object):
 
     def __eq__(self, other):
         return (
-            self.get_sample_size() == other.get_sample_size() and
             self.get_parent_dict() == other.get_parent_dict() and
             self.get_interval() == other.get_interval() and
             self.roots == other.roots and
@@ -212,7 +206,7 @@ class PythonTreeSequence(object):
     """
     def __init__(self, tree_sequence, breakpoints=None):
         self._tree_sequence = tree_sequence
-        self._sample_size = tree_sequence.get_sample_size()
+        self._num_samples = tree_sequence.get_num_samples()
         self._breakpoints = breakpoints
         self._sites = []
         _Site = collections.namedtuple(
@@ -278,7 +272,7 @@ class PythonTreeSequence(object):
         k = 0
         N = self._tree_sequence.get_num_nodes()
         st = PythonSparseTree(N)
-        st.sample_size = self._tree_sequence.get_sample_size()
+
         samples = list(self._tree_sequence.get_samples())
         for l in range(len(samples)):
             if l < len(samples) - 1:

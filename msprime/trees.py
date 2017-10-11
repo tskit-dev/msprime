@@ -467,6 +467,15 @@ class SparseTree(object):
         l, r = self.get_interval()
         return r - l
 
+    # The sample_size (or num_samples) is really a property of the tree sequence,
+    # and so we should provide access to this via a tree.tree_sequence.num_samples
+    # property access. However, we can't just remove the method as a lot of code
+    # may depend on it. To complicate things a bit more, sample_size has been
+    # changed to num_samples elsewhere for consistency. We can't do this here
+    # because there is already a num_samples method which returns the number of
+    # samples below a particular node. The best thing to do is probably to
+    # undocument the sample_size property, but keep it around for ever.
+
     @property
     def sample_size(self):
         return self.get_sample_size()
@@ -1192,19 +1201,27 @@ class TreeSequence(object):
                     population=node.population, node_id=node_id)
             print(row, file=samples)
 
+    # num_samples was originally called sample_size, and so we must keep sample_size
+    # around as a deprecated alias.
     @property
-    def sample_size(self):
-        return self.get_sample_size()
-
-    def get_sample_size(self):
+    def num_samples(self):
         """
-        Returns the sample size for this tree sequence. This is the number
+        Returns the number of samples in this tree sequence. This is the number
         of sample nodes in each tree.
 
-        :return: The number of sample nodes in the tree sequence.
+        :return: The number of sample nodes in this tree sequence.
         :rtype: int
         """
-        return self._ll_tree_sequence.get_sample_size()
+        return self._ll_tree_sequence.get_num_samples()
+
+    @property
+    def sample_size(self):
+        # Deprecated alias for num_samples
+        return self.num_samples
+
+    def get_sample_size(self):
+        # Deprecated alias for num_samples
+        return self.num_samples
 
     @property
     def sequence_length(self):
@@ -1514,7 +1531,7 @@ class TreeSequence(object):
         hapgen = _msprime.HaplotypeGenerator(self._ll_tree_sequence)
         j = 0
         # Would use range here except for Python 2.
-        while j < self.sample_size:
+        while j < self.num_samples:
             yield hapgen.get_haplotype(j)
             j += 1
 
@@ -1558,7 +1575,7 @@ class TreeSequence(object):
         """
         # TODO finalise API and documnent. See comments for the Variant type
         # for discussion on why the present form was chosen.
-        n = self.get_sample_size()
+        n = self.num_samples
         genotypes_buffer = bytearray(n)
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
