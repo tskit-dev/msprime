@@ -7566,10 +7566,6 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     }
     shape = PyArray_DIMS(samples_array);
     num_samples = shape[0];
-    if (num_samples < 2) {
-        PyErr_SetString(PyExc_ValueError, "num_samples must >= 2");
-        goto out;
-    }
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }

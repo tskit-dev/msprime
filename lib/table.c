@@ -1812,7 +1812,8 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (num_samples < 2 || nodes->num_rows == 0 || edges->num_rows == 0) {
+    /* TODO: Remove these  */
+    if (nodes->num_rows == 0 || edges->num_rows == 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }

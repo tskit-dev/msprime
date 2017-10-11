@@ -421,7 +421,6 @@ class TestHoleyTreeSequences(TopologyTestCase):
         self.verify_trees(ts, expected)
 
 
-@unittest.skip("Record squashing broken")
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
@@ -430,17 +429,17 @@ class TestRecordSquashing(TopologyTestCase):
         nodes = six.StringIO("""\
         id  is_sample   time
         0   1           0
-        1   1           0
-        2   0           1
+        1   1           1
         """)
         edges = six.StringIO("""\
         left    right   parent  child
-        0       1       2       0,1
-        1       2       2       0,1
+        0       1       1       0
+        1       2       1       0
         """)
         ts = msprime.load_text(nodes, edges)
-        tss = ts.simplify()
-        self.assertEqual(list(tss.nodes()), list(ts.nodes()))
+        tss, sample_map = ts.simplify()
+        self.assertEqual(sample_map, {j: j for j in range(2)})
+        self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
         simplified_edges = list(tss.edges())
         self.assertEqual(len(simplified_edges), 1)
         e = simplified_edges[0]
@@ -450,17 +449,18 @@ class TestRecordSquashing(TopologyTestCase):
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         ts_redundant = insert_redundant_breakpoints(ts)
-        tss = ts_redundant.simplify()
-        self.assertEqual(list(tss.records()), list(ts.records()))
+        tss = ts_redundant.simplify()[0]
+        self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
+        self.assertEqual(tss.dump_tables().edges, ts.dump_tables().edges)
 
     def test_many_trees(self):
         ts = msprime.simulate(
-                20, recombination_rate=5,
-                random_seed=self.random_seed)
+                20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = insert_redundant_breakpoints(ts)
-        tss = ts_redundant.simplify()
-        self.assertEqual(list(tss.records()), list(ts.records()))
+        tss = ts_redundant.simplify()[0]
+        self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
+        self.assertEqual(tss.dump_tables().edges, ts.dump_tables().edges)
 
 
 class TestRedundantBreakpoints(TopologyTestCase):
