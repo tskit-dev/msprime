@@ -5430,6 +5430,8 @@ test_save_empty_hdf5(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_empty_tree_sequence(&ts2, sequence_length);
 
+    tree_sequence_free(&ts1);
+    tree_sequence_free(&ts2);
     node_table_free(&node_table);
     edge_table_free(&edge_table);
 }
