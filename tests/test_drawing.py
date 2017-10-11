@@ -84,6 +84,12 @@ class TestTreeDraw(unittest.TestCase):
                     return t
         assert False
 
+    def get_empty_tree(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        return next(ts.trees())
+
 
 class TestFormats(TestTreeDraw):
     """
@@ -165,6 +171,11 @@ class TestDrawText(TestTreeDraw):
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
+    def test_draw_empty_tree(self):
+        t = self.get_empty_tree()
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
     def test_labels(self):
         t = self.get_binary_tree()
         labels = {u: self.example_label for u in t.nodes()}
@@ -225,6 +236,11 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_unary(self):
         t = self.get_unary_node_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
+    def test_draw_empty(self):
+        t = self.get_empty_tree()
         svg = t.draw()
         self.verify_basic_svg(svg)
 

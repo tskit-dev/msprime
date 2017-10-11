@@ -3176,12 +3176,15 @@ TreeSequence_dealloc(TreeSequence* self)
 }
 
 static int
-TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
+TreeSequence_alloc(TreeSequence *self)
 {
     int ret = -1;
     int err;
 
-    self->tree_sequence = NULL;
+    if (self->tree_sequence != NULL) {
+        tree_sequence_free(self->tree_sequence);
+        PyMem_Free(self->tree_sequence);
+    }
     self->tree_sequence = PyMem_Malloc(sizeof(tree_sequence_t));
     if (self->tree_sequence == NULL) {
         PyErr_NoMemory();
@@ -3195,6 +3198,13 @@ TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
     ret = 0;
 out:
     return ret;
+}
+
+static int
+TreeSequence_init(TreeSequence *self, PyObject *args, PyObject *kwds)
+{
+    self->tree_sequence = NULL;
+    return 0;
 }
 
 static PyObject *
@@ -3250,20 +3260,19 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     migration_table_t *migrations = NULL;
     mutation_table_t *mutations = NULL;
     site_table_t *sites = NULL;
+    double sequence_length = 0.0;
 
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenance_strings", NULL};
+        "sites", "mutations", "provenance_strings", "sequence_length", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &PyList_Type, &py_provenance_strings)) {
-        goto out;
-    }
-    if (TreeSequence_check_tree_sequence(self) != 0) {
+            &PyList_Type, &py_provenance_strings,
+            &sequence_length)) {
         goto out;
     }
     if (NodeTable_check_state(py_nodes) != 0) {
@@ -3303,7 +3312,12 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
         goto out;
     }
-    err = tree_sequence_load_tables_tmp(self->tree_sequence,
+
+    err = TreeSequence_alloc(self);
+    if (err != 0) {
+        goto out;
+    }
+    err = tree_sequence_load_tables_tmp(self->tree_sequence, sequence_length,
         nodes, edges, migrations, sites, mutations,
         num_provenance_strings, provenance_strings);
     if (err != 0) {
@@ -3397,15 +3411,17 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     static char *kwlist[] = {"path", NULL};
 
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
     /* Silence the low-level error reporting HDF5 */
     if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+        goto out;
+    }
+
+    err = TreeSequence_alloc(self);
+    if (err != 0) {
         goto out;
     }
     err = tree_sequence_load(self->tree_sequence, path, flags);

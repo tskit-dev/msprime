@@ -49,6 +49,19 @@ import _msprime
 import tests
 
 
+def get_uniform_mutations(num_mutations, sequence_length, nodes):
+    """
+    Returns n evenly mutations over the specified list of nodes.
+    """
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    for j in range(num_mutations):
+        sites.add_row(
+            position=j * (sequence_length / num_mutations), ancestral_state='0')
+        mutations.add_row(site=j, derived_state='1', node=nodes[j % len(nodes)])
+    return sites, mutations
+
+
 def insert_gap(ts, position, length):
     """
     Inserts a gap of the specified size into the specified tree sequence.
@@ -78,15 +91,8 @@ def insert_gap(ts, position, length):
         edges.add_row(left, right, parent, child)
     msprime.sort_tables(nodes=tables.nodes, edges=edges)
     # Throw in a bunch of mutations over the whole sequence on the samples.
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
-    num_mutations = 100
-    samples = list(ts.samples())
     L = ts.sequence_length + length
-    for j in range(num_mutations):
-        sites.add_row(position=j * (L / num_mutations), ancestral_state='0')
-        mutations.add_row(
-            site=j, derived_state='1', node=samples[j % len(samples)])
+    sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
     return msprime.load_tables(
             nodes=tables.nodes, edges=edges, sites=sites, mutations=mutations)
 
@@ -111,6 +117,15 @@ def get_gap_examples():
                 found = True
         assert found
         yield ts
+    # Give an example with a gap at the end.
+    ts = msprime.simulate(10, random_seed=5, recombination_rate=1)
+    t = ts.dump_tables()
+    L = 2
+    sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
+    ts_new = ts.load_tables(
+        nodes=t.nodes, edges=t.edges, sites=sites, mutations=mutations,
+        sequence_length=L)
+    yield ts_new
 
 
 def get_internal_samples_examples():
@@ -148,8 +163,36 @@ def get_internal_samples_examples():
     yield ts
 
 
+def decapitate(ts, num_edges):
+    """
+    Returns a copy of the specified tree sequence in which the specified number of
+    edges have been retained.
+    """
+    t = ts.dump_tables()
+    t.edges.set_columns(
+        left=t.edges.left[:num_edges], right=t.edges.right[:num_edges],
+        parent=t.edges.parent[:num_edges], child=t.edges.child[:num_edges])
+    return msprime.load_tables(
+        nodes=t.nodes, edges=t.edges, sites=t.sites, mutations=t.mutations,
+        sequence_length=ts.sequence_length)
+
+
+def get_decapitated_examples():
+    """
+    Returns example tree sequences in which the oldest edges have been removed.
+    """
+    ts = msprime.simulate(10, random_seed=1234)
+    yield decapitate(ts, ts.num_edges // 2)
+
+    ts = msprime.simulate(20, recombination_rate=1, random_seed=1234)
+    assert ts.num_trees > 2
+    yield decapitate(ts, ts.num_edges // 4)
+
+
 def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=True):
     if gaps:
+        for ts in get_decapitated_examples():
+            yield ts
         for ts in get_gap_examples():
             yield ts
     if internal_samples:
@@ -433,11 +476,11 @@ class HighLevelTestCase(tests.MsprimeTestCase):
             length += r - l
             self.verify_sparse_tree(st1)
             num_trees += 1
-        self.assertEqual(breakpoints, list(ts.breakpoints()))
-        self.assertAlmostEqual(length, ts.get_sequence_length())
-        self.assertEqual(ts.get_num_trees(), num_trees)
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
+        self.assertEqual(ts.get_num_trees(), num_trees)
+        self.assertEqual(breakpoints, list(ts.breakpoints()))
+        self.assertAlmostEqual(length, ts.get_sequence_length())
 
     def verify_haplotype_statistics(self, ts):
         """
@@ -1216,6 +1259,7 @@ class TestTreeSequence(HighLevelTestCase):
         for ts1 in get_example_tree_sequences():
             ts2 = ts1.copy()
             self.assertNotEqual(id(ts1), id(ts2))
+            self.assertEqual(ts1.sequence_length, ts2.sequence_length)
             self.assertEqual(list(ts1.edges()), list(ts2.edges()))
             self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
             self.assertEqual(list(ts1.mutations()), list(ts2.mutations()))
@@ -1453,14 +1497,14 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             mutations_file = six.StringIO()
             ts1.dump_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, precision=9)
+                mutations=mutations_file, precision=16)
             nodes_file.seek(0)
             edges_file.seek(0)
             sites_file.seek(0)
             mutations_file.seek(0)
             ts2 = msprime.load_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file)
+                mutations=mutations_file, sequence_length=ts1.sequence_length)
             self.verify_approximate_equality(ts1, ts2)
 
     def test_empty_files(self):
@@ -1472,6 +1516,20 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             _msprime.LibraryError, msprime.load_text,
             nodes=nodes_file, edges=edges_file, sites=sites_file,
             mutations=mutations_file)
+
+    def test_empty_files_sequence_length(self):
+        nodes_file = six.StringIO("is_sample\ttime\n")
+        edges_file = six.StringIO("left\tright\tparent\tchild\n")
+        sites_file = six.StringIO("position\tancestral_state\n")
+        mutations_file = six.StringIO("site\tnode\tderived_state\n")
+        ts = msprime.load_text(
+                nodes=nodes_file, edges=edges_file, sites=sites_file,
+                mutations=mutations_file, sequence_length=100)
+        self.assertEqual(ts.sequence_length, 100)
+        self.assertEqual(ts.num_nodes, 0)
+        self.assertEqual(ts.num_edges, 0)
+        self.assertEqual(ts.num_sites, 0)
+        self.assertEqual(ts.num_edges, 0)
 
 
 class TestSparseTree(HighLevelTestCase):

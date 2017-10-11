@@ -404,7 +404,7 @@ class SparseTree(object):
         :raises: ValueError if this tree contains more than one root.
         """
         root = self.left_root
-        if self.right_sib(root) != NULL_NODE:
+        if root != NULL_NODE and self.right_sib(root) != NULL_NODE:
             raise ValueError("More than one root exists. Use tree.roots instead")
         return root
 
@@ -906,7 +906,7 @@ def parse_mutations(source):
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None):
+def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0):
     """
     Loads a tree sequence from the specified file paths. The files input here
     are in a simple whitespace delimited tabular format such as output by the
@@ -982,6 +982,8 @@ def load_text(nodes, edges, sites=None, mutations=None):
     :param stream sites: The file-type object containing text describing a SiteTable.
     :param stream mutations: The file-type object containing text
         describing a MutationTable.
+    :param float sequence_length: The sequence length of the returned tree sequence. If
+        not supplied or zero this will be inferred from the set of edges.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
@@ -997,7 +999,8 @@ def load_text(nodes, edges, sites=None, mutations=None):
     tables.sort_tables(
         nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
-        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
+        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table,
+        sequence_length=sequence_length)
 
 
 class TreeSequence(object):
@@ -1050,7 +1053,8 @@ class TreeSequence(object):
         new_ll_ts = _msprime.TreeSequence()
         new_ll_ts.load_tables(
             nodes=node_table, edges=edge_table, migrations=migration_table,
-            sites=site_table, mutations=mutation_table)
+            sites=site_table, mutations=mutation_table,
+            sequence_length=self.sequence_length)
         return TreeSequence(new_ll_ts)
 
     @property
@@ -1718,7 +1722,7 @@ class TreeSequence(object):
             sites=t.sites, mutations=t.mutations, sample_map=sample_map)
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
-            mutations=t.mutations)
+            mutations=t.mutations, sequence_length=self.sequence_length)
         # FIXME provenance
         # for provenance in self.get_provenance():
         #     new_ts.add_provenance(provenance)

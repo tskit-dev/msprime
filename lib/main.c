@@ -829,7 +829,6 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
-
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL || nodes == NULL || edges == NULL
             || sites == NULL || mutations == NULL || migrations == NULL) {
@@ -872,6 +871,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
+
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
             printf("=====================\n");
@@ -906,8 +906,9 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edges, migrations,
-                sites, mutations, 1, (char **) &provenance);
+        ret = tree_sequence_load_tables_tmp(tree_seq,
+                recomb_map_get_sequence_length(recomb_map),
+                nodes, edges, migrations, sites, mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
         }

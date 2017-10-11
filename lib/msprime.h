@@ -37,7 +37,7 @@
 #define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 7
+#define MSP_FILE_FORMAT_VERSION_MAJOR 8
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
@@ -750,7 +750,7 @@ void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_initialise(tree_sequence_t *self);
 /* Marking the x_tables API as tmp until we figure out what to do
  * with provenance. */
-int tree_sequence_load_tables_tmp(tree_sequence_t *self,
+int tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations,
         size_t num_provenance_strings, char **provenance_strings);
