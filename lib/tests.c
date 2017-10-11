@@ -901,6 +901,13 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
         CU_ASSERT_EQUAL_FATAL(n1.flags, n2.flags);
         /* TODO compare name */
     }
+    if (num_samples == 0) {
+        CU_ASSERT_EQUAL(tree_sequence_get_num_edges(subset), 0);
+        CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(subset), 0);
+    } else if (num_samples == 1) {
+        CU_ASSERT_EQUAL(tree_sequence_get_num_edges(subset), 0);
+        CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(subset), 1);
+    }
     /* Check the pairwise MRCAs */
     ret = sparse_tree_alloc(&full_tree, ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -984,7 +991,7 @@ verify_simplify(tree_sequence_t *ts)
 {
     int ret;
     uint32_t n = tree_sequence_get_num_samples(ts);
-    uint32_t num_sampless[] = {2, 3, n / 2, n - 1, n};
+    uint32_t num_samples[] = {0, 1, 2, 3, n / 2, n - 1, n};
     size_t j;
     node_id_t *sample;
     node_id_t *sample_map = malloc(n * sizeof(node_id_t));
@@ -996,13 +1003,13 @@ verify_simplify(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(&subset);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < sizeof(num_sampless) / sizeof(uint32_t); j++) {
-        if (num_sampless[j] > 1 && num_sampless[j] <= n) {
-            ret = tree_sequence_simplify(ts, sample, num_sampless[j], flags,
+    for (j = 0; j < sizeof(num_samples) / sizeof(uint32_t); j++) {
+        if (num_samples[j] <= n) {
+            ret = tree_sequence_simplify(ts, sample, num_samples[j], flags,
                     &subset, sample_map);
             /* printf("ret = %s\n", msp_strerror(ret)); */
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_simplify_properties(ts, &subset, sample, num_sampless[j], sample_map);
+            verify_simplify_properties(ts, &subset, sample, num_samples[j], sample_map);
         }
     }
     tree_sequence_free(&subset);
@@ -5186,10 +5193,6 @@ verify_simplify_errors(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     memcpy(sample, s, 2 * sizeof(node_id_t));
 
-    ret = tree_sequence_simplify(ts, sample, 0, 0, &subset, sample_map);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = tree_sequence_simplify(ts, sample, 1, 0, &subset, sample_map);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     for (u = 0; u < (node_id_t) tree_sequence_get_num_nodes(ts); u++) {
         if (! tree_sequence_is_sample(ts, u)) {
             sample[1] = u;
