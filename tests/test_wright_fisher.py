@@ -319,7 +319,7 @@ class TestSimplify(unittest.TestCase):
         for ts in self.get_wf_sims(seed=seed):
             s = tests.Simplifier(ts, ts.samples())
             py_full_ts, py_full_map = s.simplify()
-            full_ts, full_map = ts.simplify(ts.samples())
+            full_ts, full_map = ts.simplify(ts.samples(), map_samples=True)
             self.assertEqual(py_full_map, full_map)
             self.assertTreeSequencesEqual(full_ts, py_full_ts)
 
@@ -327,7 +327,7 @@ class TestSimplify(unittest.TestCase):
                 sub_samples = random.sample(ts.samples(), min(nsamples, ts.sample_size))
                 s = tests.Simplifier(ts, sub_samples)
                 py_small_ts, py_small_map = s.simplify()
-                small_ts, small_map = ts.simplify(samples=sub_samples)
+                small_ts, small_map = ts.simplify(samples=sub_samples, map_samples=True)
                 self.assertTreeSequencesEqual(small_ts, py_small_ts)
                 self.verify_simplify(ts, small_ts, small_map)
 

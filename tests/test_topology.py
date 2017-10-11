@@ -437,7 +437,7 @@ class TestRecordSquashing(TopologyTestCase):
         1       2       1       0
         """)
         ts = msprime.load_text(nodes, edges)
-        tss, sample_map = ts.simplify()
+        tss, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {j: j for j in range(2)})
         self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
         simplified_edges = list(tss.edges())
@@ -449,7 +449,7 @@ class TestRecordSquashing(TopologyTestCase):
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         ts_redundant = insert_redundant_breakpoints(ts)
-        tss = ts_redundant.simplify()[0]
+        tss = ts_redundant.simplify()
         self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
         self.assertEqual(tss.dump_tables().edges, ts.dump_tables().edges)
 
@@ -458,7 +458,7 @@ class TestRecordSquashing(TopologyTestCase):
                 20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = insert_redundant_breakpoints(ts)
-        tss = ts_redundant.simplify()[0]
+        tss = ts_redundant.simplify()
         self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
         self.assertEqual(tss.dump_tables().edges, ts.dump_tables().edges)
 
@@ -573,7 +573,7 @@ class TestUnaryNodes(TopologyTestCase):
         t = next(ts.trees())
         self.assertEqual(t.mrca(0, 1), root)
         self.assertEqual(t.tmrca(0, 1), root_time)
-        ts_simplified, sample_map = ts.simplify()
+        ts_simplified, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {j: j for j in range(2)})
         self.assertEqual(ts_simplified.num_edges, 2)
         t = next(ts_simplified.trees())
@@ -610,7 +610,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.assertGreater(ts_new.num_edges, ts.num_edges)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
-        ts_simplified, sample_map = ts_new.simplify()
+        ts_simplified, sample_map = ts_new.simplify(map_samples=True)
         self.assertEqual(list(ts_simplified.records()), list(ts.records()))
         self.assert_haplotypes_equal(ts, ts_simplified)
         self.assert_variants_equal(ts, ts_simplified)
@@ -687,7 +687,7 @@ class TestGeneralSamples(TopologyTestCase):
         self.assertEqual(H[1], "0101")
         self.assertEqual(H[2], "0010")
 
-        tss, sample_map = ts.simplify()
+        tss, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {2: 0, 3: 1, 4: 2})
         # We should have the same tree sequence just with canonicalised nodes.
         self.assertEqual(tss.sample_size, 3)
@@ -740,7 +740,7 @@ class TestGeneralSamples(TopologyTestCase):
 
         # The simplified version of the permuted tree sequence should be in canonical
         # form, and identical to the original.
-        simplified, sample_map = permuted.simplify()
+        simplified, sample_map = permuted.simplify(map_samples=True)
         self.assertEqual(sample_map, {samples[j]: j for j in range(len(samples))})
         self.assertEqual(simplified.samples(), ts.samples())
         self.assertEqual(list(simplified.nodes()), list(ts.nodes()))
@@ -1196,7 +1196,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         t = next(ts.trees())
         self.assertEqual(t.parent_dict, {0: 2, 1: 2, 3: 2, 4: 2})
         self.assertEqual(t.root, 2)
-        ts_simplified, sample_map = ts.simplify()
+        ts_simplified, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {0: 0, 1: 1})
         self.assertEqual(ts_simplified.num_nodes, 3)
         self.assertEqual(ts_simplified.num_trees, 1)
@@ -1231,7 +1231,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assertEqual(ts_new.sample_size, ts.sample_size)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
-        ts_simplified, _ = ts_new.simplify()
+        ts_simplified, _ = ts_new.simplify(map_samples=True)
         self.assertEqual(ts_simplified.num_nodes, ts.num_nodes)
         self.assertEqual(ts_simplified.sample_size, ts.sample_size)
         self.assertEqual(list(ts_simplified.records()), list(ts.records()))
@@ -1280,7 +1280,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(list(ts.haplotypes()), ["10", "01"])
         self.assertEqual(
             [v.genotypes for v in ts.variants(as_bytes=True)], [b"10", b"01"])
-        simplified, _ = ts.simplify()
+        simplified = ts.simplify()
         t1 = ts.dump_tables()
         t2 = simplified.dump_tables()
         self.assertEqual(t1.nodes, t2.nodes)
@@ -1334,7 +1334,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
         self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
         self.assertEqual(t.mrca(2, 4), msprime.NULL_NODE)
-        ts_simplified, sample_map = ts.simplify()
+        ts_simplified, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {j: j for j in range(4)})
         self.assertEqual(ts_simplified.num_nodes, 6)
         self.assertEqual(ts_simplified.num_trees, 1)
@@ -1398,7 +1398,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
         self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
         self.assertEqual(t.mrca(0, 8), msprime.NULL_NODE)
-        ts_simplified, sample_map = ts.simplify()
+        ts_simplified, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {j: j for j in range(4)})
         self.assertEqual(ts_simplified.num_nodes, 6)
         self.assertEqual(ts_simplified.num_trees, 1)
@@ -1445,7 +1445,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
         self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
         self.assertEqual(t.mrca(0, 8), msprime.NULL_NODE)
-        ts_simplified, sample_map = ts.simplify()
+        ts_simplified, sample_map = ts.simplify(map_samples=True)
         self.assertEqual(sample_map, {j: j for j in range(4)})
         self.assertEqual(ts_simplified.num_nodes, 6)
         self.assertEqual(ts_simplified.num_trees, 1)
@@ -1551,7 +1551,7 @@ class TestWithVisuals(TopologyTestCase):
 
     def verify_simplify_topology(self, ts, sample, haplotypes=False):
         # copies from test_highlevel.py
-        new_ts, sample_map = ts.simplify(sample)
+        new_ts, sample_map = ts.simplify(sample, map_samples=True)
         old_trees = ts.trees()
         old_tree = next(old_trees)
         self.assertGreaterEqual(ts.get_num_trees(), new_ts.get_num_trees())
@@ -2030,7 +2030,7 @@ class TestWithVisuals(TopologyTestCase):
         big_ts = msprime.load_text(nodes, edges)
         self.assertEqual(big_ts.num_trees, 1 + len(true_trees))
         self.assertEqual(big_ts.num_nodes, 16)
-        ts, sample_map = big_ts.simplify()
+        ts, sample_map = big_ts.simplify(map_samples=True)
         self.assertEqual(sample_map, dict(zip(range(6), range(6))))
         self.assertEqual(ts.sample_size, 6)
         self.assertEqual(ts.num_nodes, 13)
@@ -2089,7 +2089,7 @@ class TestWithVisuals(TopologyTestCase):
         0.0     0.2     7       0,5
         """)
         first_ts = msprime.load_text(nodes=nodes, edges=edges)
-        ts, sample_map = first_ts.simplify()
+        ts, sample_map = first_ts.simplify(map_samples=True)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: 8, 4: 5, 5: 8, 6: -1, 7: -1},

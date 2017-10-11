@@ -1709,12 +1709,12 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_invariant_sites=True):
+    def simplify(self, samples=None, filter_invariant_sites=True, map_samples=False):
         """
         Returns a simplified tree sequence that retains only the history of
-        the nodes given in the list ``samples`` and a dictionary mapping the
-        sample node IDs in the this tree sequence to their equivlalent IDs
-        in the simplified tree sequence.
+        the nodes given in the list ``samples``. If ``map_samples`` is true,
+        also return a dictionary mapping the sample node IDs in the this tree
+        sequence to their equivlalent IDs in the simplified tree sequence.
 
         **TODO** Document the details of how node IDs are transformed.
 
@@ -1725,9 +1725,14 @@ class TreeSequence(object):
         :param list samples: The list of nodes for which to retain information.
         :param bool filter_invariant_sites: If True, remove any sites that have
             no mutations in the simplified tree sequence.
-        :return: The simplified tree sequence and a dictionary mapping source
-            sample IDs to their corresponding IDs in the new tree sequence.
-        :rtype: (.TreeSequence, dict)
+        :param bool map_samples: If True, return a tuple containing the resulting
+            tree sequence and a dictionary mapping sample IDs. If False (the
+            default) return only the tree sequence object itself.
+        :return: The simplified tree sequence, or (if ``map_samples`` is True)
+            a tuple containing the simplified tree sequence and a dictionary
+            mapping source sample IDs to their corresponding IDs in the new tree
+            sequence.
+        :rtype: .TreeSequence or a (.TreeSequence, dict) tuple
         """
         check_numpy()
         t = self.dump_tables()
@@ -1749,7 +1754,10 @@ class TreeSequence(object):
 
         # Return a dictionary mapping the original sample IDs into the
         # samples IDs of the new tree sequence.
-        return new_ts, {samples[j]: sample_map[j] for j in range(len(samples))}
+        if map_samples:
+            return new_ts, {samples[j]: sample_map[j] for j in range(len(samples))}
+        else:
+            return new_ts
 
     # Unsupported old methods.
     def diffs(self):

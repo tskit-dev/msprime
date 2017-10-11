@@ -1099,7 +1099,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertRaises(ValueError, ts.write_vcf, self.temp_file, bad_ploidy)
 
     def verify_simplify_topology(self, ts, sample):
-        new_ts, sample_map = ts.simplify(sample)
+        new_ts, sample_map = ts.simplify(sample, map_samples=True)
         for old_id, new_id in sample_map.items():
             old_node = ts.node(old_id)
             new_node = new_ts.node(new_id)
@@ -1130,7 +1130,7 @@ class TestTreeSequence(HighLevelTestCase):
     def verify_simplify_mutations(self, ts, sample):
         # Get the allele counts within the subset.
         allele_counts = {mut.position: 0 for mut in ts.mutations()}
-        new_ts, sample_map = ts.simplify(sample)
+        new_ts, sample_map = ts.simplify(sample, map_samples=True)
         samples = {mut.position: [] for mut in ts.mutations()}
         for tree in ts.trees(tracked_samples=sample):
             for site in tree.sites():
@@ -1153,7 +1153,7 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertEqual(sample_count, allele_counts[site.position])
 
     def verify_simplify_equality(self, ts, sample):
-        s1, sample_map1 = ts.simplify(sample)
+        s1, sample_map1 = ts.simplify(sample, map_samples=True)
         t1 = s1.dump_tables()
         s2, sample_map2 = simplify_tree_sequence(ts, sample)
         t2 = s2.dump_tables()
@@ -1165,7 +1165,7 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertEqual(t1.mutations, t2.mutations)
 
     def verify_simplify_variants(self, ts, sample):
-        subset, sample_map = ts.simplify(sample)
+        subset, sample_map = ts.simplify(sample, map_samples=True)
         s = np.array(sample)
         full_genotypes = np.empty((ts.num_sites, ts.sample_size))
         full_positions = np.empty(ts.num_sites)
