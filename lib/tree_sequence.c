@@ -2046,7 +2046,7 @@ tree_sequence_write_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
          * with a newer file format. Due to a bug in the way that this attribute
          * was loaded, versions of msprime pre 0.4.0 would complain about a missing
          * attribute rather than giving a File format error. */
-        {"num_samples", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, &unused_value},
+        {"sample_size", 0, H5T_STD_U32LE, H5T_NATIVE_UINT32, 1, &unused_value},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_metadata_write);
     size_t j;
