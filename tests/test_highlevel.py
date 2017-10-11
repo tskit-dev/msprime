@@ -1232,28 +1232,28 @@ class TestTreeSequence(HighLevelTestCase):
             j += 1
         self.assertGreater(j, 1)
 
-    @unittest.skip("pi on recurrent mutations")
     def test_apis(self):
-        for ts in get_example_tree_sequences():
-            self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
-            self.assertEqual(ts.get_provenance(), ts.provenance)
-            self.assertEqual(ts.get_sample_size(), ts.sample_size)
-            self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
-            self.assertEqual(ts.num_edges, ts.num_records)
-            self.assertEqual(ts.get_num_trees(), ts.num_trees)
-            self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
-            self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
-            self.assertEqual(
-                ts.get_pairwise_diversity(), ts.pairwise_diversity())
-            samples = range(ts.get_sample_size() // 2 + 1)
-            self.assertEqual(
-                ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
-            for s in samples:
-                self.assertEqual(ts.get_time(s), ts.time(s))
-                p = ts.get_population(s)
-                self.assertEqual(p, ts.population(s))
-                self.assertEqual(ts.get_samples(p), ts.samples(p))
-            self.assertEqual(ts.get_samples(), ts.samples())
+        ts = msprime.simulate(10, random_seed=1)
+        self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
+        self.assertEqual(ts.get_provenance(), ts.provenance)
+        self.assertEqual(ts.get_sample_size(), ts.sample_size)
+        self.assertEqual(ts.get_sample_size(), ts.num_samples)
+        self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
+        self.assertEqual(ts.num_edges, ts.num_records)
+        self.assertEqual(ts.get_num_trees(), ts.num_trees)
+        self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
+        self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
+        self.assertEqual(
+            ts.get_pairwise_diversity(), ts.pairwise_diversity())
+        samples = ts.samples()
+        self.assertEqual(
+            ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
+        for s in samples:
+            self.assertEqual(ts.get_time(s), ts.time(s))
+            p = ts.get_population(s)
+            self.assertEqual(p, ts.population(s))
+            self.assertEqual(ts.get_samples(p), ts.samples(p))
+        self.assertEqual(ts.get_samples(), ts.samples())
 
     def test_copy(self):
         for ts1 in get_example_tree_sequences():
@@ -1652,7 +1652,6 @@ class TestSparseTree(HighLevelTestCase):
         self.assertEqual(t1.get_interval(), t1.interval)
         self.assertEqual(t1.get_length(), t1.length)
         self.assertEqual(t1.get_sample_size(), t1.sample_size)
-        self.assertEqual(t1.get_sample_size(), t1.num_samples)
         self.assertEqual(t1.get_num_mutations(), t1.num_mutations)
         self.assertEqual(t1.get_parent_dict(), t1.parent_dict)
         self.assertEqual(t1.get_total_branch_length(), t1.total_branch_length)
