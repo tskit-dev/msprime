@@ -807,7 +807,7 @@ int tree_sequence_get_provenance_strings(tree_sequence_t *self,
         size_t *num_provenance_strings, char ***provenance_strings);
 int tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         size_t num_samples, int flags, tree_sequence_t *output,
-        node_id_t *sample_map);
+        node_id_t *node_map);
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     node_id_t *samples, size_t num_samples, double *pi);
 
@@ -984,7 +984,7 @@ int simplifier_alloc(simplifier_t *self,
         site_table_t *sites, mutation_table_t *mutations,
         size_t max_buffered_edges, int flags);
 int simplifier_free(simplifier_t *self);
-int simplifier_run(simplifier_t *self, node_id_t *sample_map);
+int simplifier_run(simplifier_t *self, node_id_t *node_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);
 
 int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);

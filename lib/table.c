@@ -2411,7 +2411,7 @@ out:
 }
 
 int WARN_UNUSED
-simplifier_run(simplifier_t *self, node_id_t *sample_map)
+simplifier_run(simplifier_t *self, node_id_t *node_map)
 {
     int ret = 0;
     size_t j;
@@ -2466,11 +2466,9 @@ simplifier_run(simplifier_t *self, node_id_t *sample_map)
     if (ret != 0) {
         goto out;
     }
-    if (sample_map != NULL) {
-        /* Finally, output the new IDs for the samples, if required. */
-        for (j = 0; j < self->num_samples; j++) {
-            sample_map[j] = self->node_id_map[self->samples[j]];
-        }
+    if (node_map != NULL) {
+        /* Finally, output the new IDs for the nodes, if required. */
+        memcpy(node_map, self->node_id_map, self->input_nodes.num_rows * sizeof(node_id_t));
     }
 out:
     return ret;
