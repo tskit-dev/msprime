@@ -1709,12 +1709,14 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_invariant_sites=True, map_samples=False):
+    def simplify(self, samples=None, filter_invariant_sites=True, map_nodes=False):
         """
         Returns a simplified tree sequence that retains only the history of
-        the nodes given in the list ``samples``. If ``map_samples`` is true,
-        also return a dictionary mapping the sample node IDs in the this tree
-        sequence to their equivlalent IDs in the simplified tree sequence.
+        the nodes given in the list ``samples``. If ``map_nodes`` is true,
+        also return a numpy array mapping the node IDs in this tree sequence to
+        their node IDs in the simplified tree tree sequence. If a node u is not
+        present in the new tree sequence, the value of this mapping will be
+        NULL_NODE (-1).
 
         **TODO** Document the details of how node IDs are transformed.
 
@@ -1725,23 +1727,29 @@ class TreeSequence(object):
         :param list samples: The list of nodes for which to retain information.
         :param bool filter_invariant_sites: If True, remove any sites that have
             no mutations in the simplified tree sequence.
-        :param bool map_samples: If True, return a tuple containing the resulting
-            tree sequence and a dictionary mapping sample IDs. If False (the
-            default) return only the tree sequence object itself.
-        :return: The simplified tree sequence, or (if ``map_samples`` is True)
-            a tuple containing the simplified tree sequence and a dictionary
-            mapping source sample IDs to their corresponding IDs in the new tree
+        :param bool map_nodes: If True, return a tuple containing the resulting
+            tree sequence and a numpy array mapping node IDs in the current tree
+            sequence to their corresponding node IDs in the returned tree sequence.
+            If False (the default), return only the tree sequence object itself.
+        :return: The simplified tree sequence, or (if ``map_nodes`` is True)
+            a tuple containing the simplified tree sequence and a numpy array
+            mapping source node IDs to their corresponding IDs in the new tree
             sequence.
-        :rtype: .TreeSequence or a (.TreeSequence, dict) tuple
+        :rtype: .TreeSequence or a (.TreeSequence, numpy.array) tuple
         """
         check_numpy()
         t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        sample_map = np.empty(len(samples), dtype=np.int32)
-        tables.simplify_tables(
-            samples=samples, nodes=t.nodes, edges=t.edges,
-            sites=t.sites, mutations=t.mutations, sample_map=sample_map)
+        if map_nodes:
+            node_map = np.empty(self.num_nodes, dtype=np.int32)
+            tables.simplify_tables(
+                samples=samples, nodes=t.nodes, edges=t.edges,
+                sites=t.sites, mutations=t.mutations, node_map=node_map)
+        else:
+            tables.simplify_tables(
+                samples=samples, nodes=t.nodes, edges=t.edges,
+                sites=t.sites, mutations=t.mutations)
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
             mutations=t.mutations, sequence_length=self.sequence_length)
@@ -1752,10 +1760,8 @@ class TreeSequence(object):
         # new_ts_provenance = get_provenance_dict("simplify", parameters)
         # new_ts.add_provenance(json.dumps(new_ts_provenance))
 
-        # Return a dictionary mapping the original sample IDs into the
-        # samples IDs of the new tree sequence.
-        if map_samples:
-            return new_ts, {samples[j]: sample_map[j] for j in range(len(samples))}
+        if map_nodes:
+            return new_ts, node_map
         else:
             return new_ts
 

@@ -29,6 +29,8 @@ import random
 import sys
 import unittest
 
+import numpy as np
+
 import msprime
 
 NULL_NODE = -1
@@ -832,17 +834,24 @@ class Simplifier(object):
         # print("====================")
         # print("Process parent edges", parent, edges)
         # print("====================")
-        H = []
+        # self.print_state()
         for edge in edges:
             if edge.child in self.unmapped_samples:
                 self.unmapped_samples.remove(edge.child)
                 self.insert_sample(edge.child)
-            if edge.parent in self.unmapped_samples:
-                self.unmapped_samples.remove(edge.parent)
-                self.insert_sample(edge.parent)
+            # TODO this should really be outside this loop to give a
+            # consistent node ordering. Putting it in here for consistency
+            # with the C code for now.
+            if parent in self.unmapped_samples:
+                # print("inserting sample for parent:", parent)
+                self.unmapped_samples.remove(parent)
+                self.insert_sample(parent)
+        H = []
+        for edge in edges:
             if edge.child in self.A:
                 # print("Remove", edge.left, edge.right, edge.child, sep="\t")
                 self.remove_ancestry(edge.left, edge.right, edge.child, H)
+                # self.print_state()
                 self.check_state()
         # print("merging for ", parent)
         # self.print_state()
@@ -902,12 +911,15 @@ class Simplifier(object):
                 output_site_id += 1
         # print("DONE")
         # self.print_state()
-        sample_map = {u: self.node_id_map[u] for u in self.samples}
+        node_map = np.zeros(self.ts.num_nodes, np.int32) - 1
+        for input_id, output_id in self.node_id_map.items():
+            node_map[input_id] = output_id
         ts = msprime.load_tables(
             nodes=self.node_table, edges=self.edge_table,
             sites=self.site_table, mutations=self.mutation_table,
             sequence_length=self.sequence_length)
-        return ts, sample_map
+
+        return ts, node_map
 
     def record_mutation(self, node, mutation):
         position = self.input_sites[mutation.site].position
@@ -1046,7 +1058,9 @@ class Simplifier(object):
 
             # loop tail; update alpha and integrate it into the state.
             if z is None:
+                # print("LOOP Tail. Head = ", alpha)
                 if input_id in self.A:
+                    # print("Already in A", self.A[input_id])
                     assert alpha.node == self.A[input_id].node
                 else:
                     self.A[input_id] = alpha

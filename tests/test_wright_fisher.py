@@ -274,9 +274,9 @@ class TestSimplify(unittest.TestCase):
                 for k in range(len(lefts) - 1):
                     self.assertEqual(lefts[k + 1], rights[k])
 
-    def verify_simplify(self, ts, new_ts, sample_map):
+    def verify_simplify(self, ts, new_ts, samples, node_map):
         """
-        Check that trees in `ts` match `new_ts` using the specified sample_map.
+        Check that trees in `ts` match `new_ts` using the specified node_map.
         Modified from `verify_simplify_topology`.
         """
         # check trees agree at these points
@@ -301,16 +301,14 @@ class TestSimplify(unittest.TestCase):
             # print(old_tree.draw(format="unicode"))
             # print("interval:", new_tree.interval)
             # print(new_tree.draw(format="unicode"))
-            pairs = itertools.islice(itertools.combinations(sample_map.keys(), 2), 500)
+            pairs = itertools.islice(itertools.combinations(samples, 2), 500)
             for pair in pairs:
-                mapped_pair = [sample_map[u] for u in pair]
+                mapped_pair = [node_map[u] for u in pair]
                 mrca1 = old_tree.get_mrca(*pair)
-                self.assertTrue(mrca1 != -1)
-                tmrca1 = old_tree.get_time(mrca1)
+                self.assertNotEqual(mrca1, msprime.NULL_NODE)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
-                self.assertTrue(mrca2 != -1)
-                tmrca2 = new_tree.get_time(mrca2)
-                self.assertEqual(tmrca1, tmrca2)
+                self.assertNotEqual(mrca2, msprime.NULL_NODE)
+                self.assertEqual(node_map[mrca1], mrca2)
 
     def test_simplify(self):
         #  check that simplify(big set) -> simplify(subset) equals simplify(subset)
@@ -319,17 +317,22 @@ class TestSimplify(unittest.TestCase):
         for ts in self.get_wf_sims(seed=seed):
             s = tests.Simplifier(ts, ts.samples())
             py_full_ts, py_full_map = s.simplify()
-            full_ts, full_map = ts.simplify(ts.samples(), map_samples=True)
-            self.assertEqual(py_full_map, full_map)
+            full_ts, full_map = ts.simplify(ts.samples(), map_nodes=True)
+            if not all(py_full_map == full_map):
+                print("ERROR")
+                print(full_map)
+                print(py_full_map)
+
+            self.assertTrue(all(py_full_map == full_map))
             self.assertTreeSequencesEqual(full_ts, py_full_ts)
 
             for nsamples in [2, 5, 10]:
                 sub_samples = random.sample(ts.samples(), min(nsamples, ts.sample_size))
                 s = tests.Simplifier(ts, sub_samples)
                 py_small_ts, py_small_map = s.simplify()
-                small_ts, small_map = ts.simplify(samples=sub_samples, map_samples=True)
+                small_ts, small_map = ts.simplify(samples=sub_samples, map_nodes=True)
                 self.assertTreeSequencesEqual(small_ts, py_small_ts)
-                self.verify_simplify(ts, small_ts, small_map)
+                self.verify_simplify(ts, small_ts, sub_samples, small_map)
 
     def test_simplify_tables(self):
         seed = 71
@@ -342,11 +345,10 @@ class TestSimplify(unittest.TestCase):
                 mutations = tables.mutations.copy()
                 sub_samples = random.sample(ts.samples(), min(nsamples, ts.num_samples))
 
-                new_sample_ids = np.zeros(len(sub_samples), dtype=np.int32)
+                node_map = np.zeros(ts.num_nodes, dtype=np.int32)
                 msprime.simplify_tables(
                     samples=sub_samples, nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations, sample_map=new_sample_ids)
-                sample_map = dict(zip(sub_samples, new_sample_ids))
+                    sites=sites, mutations=mutations, node_map=node_map)
                 small_ts = msprime.load_tables(
                     nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-                self.verify_simplify(ts, small_ts, sample_map)
+                self.verify_simplify(ts, small_ts, sub_samples, node_map)
