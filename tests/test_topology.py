@@ -2419,40 +2419,24 @@ class TestPythonSimplifier(unittest.TestCase):
     def verify_multiroot_internal_samples(self, ts):
         ts_multiroot = decapitate(ts)
         ts1 = jiggle_samples(ts_multiroot)
-        ts2, sample_map = self.do_simplify(ts1)
-        # self.assertEqual({samples[j]: j for j in range(ts_is.num_samples)}, sample_map)
-
+        ts2, node_map = self.do_simplify(ts1)
         self.assertGreaterEqual(ts1.num_trees, ts2.num_trees)
         trees2 = ts2.trees()
         t2 = next(trees2)
-        # print(sample_map)
-        print("\n\nFIXME!!!!")
         for t1 in ts1.trees():
             self.assertTrue(t2.interval[0] <= t1.interval[0])
             self.assertTrue(t2.interval[1] >= t1.interval[1])
-
-            # node_labels = {u: "*{}*".format(u) for u in ts1.samples()}
-            # print(t1.draw(format="unicode", node_label_text=node_labels))
-
-            # node_labels = {u: "*{}*".format(v) for v, u in sample_map.items()}
-            # print(t2.draw(format="unicode", node_label_text=node_labels))
-            # print("====")
-
+            pairs = itertools.combinations(ts1.samples(), 2)
+            for pair in pairs:
+                mapped_pair = [node_map[u] for u in pair]
+                mrca1 = t1.get_mrca(*pair)
+                mrca2 = t2.get_mrca(*mapped_pair)
+                if mrca1 == msprime.NULL_NODE:
+                    assert mrca2 == msprime.NULL_NODE
+                else:
+                    self.assertEqual(node_map[mrca1], mrca2)
             if t2.interval[1] == t1.interval[1]:
                 t2 = next(trees2, None)
-#         # self.assertEqual(ts_is.num_trees, tss.num_trees)
-#         print("sample_map = ", sample_map)
-#         for t1, t2 in zip(ts_is.trees(), tss.trees()):
-#             # assert t1.interval == t2.interval
-#             print(t1.draw(format="unicode"))
-#             print(t2.draw(format="unicode"))
-#             print("====")
-
-#         for node, mapped_node in sample_map.items():
-#             # Verify the path to root is identical.
-#             path = []
-#             u = node
-#             while
 
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
@@ -2713,7 +2697,12 @@ class TestPythonSimplifier(unittest.TestCase):
 
         ts = msprime.load_text(nodes, edges)
         tss, node_map = self.do_simplify(ts, compare_lib=True)
-        self.assertEqual(list(node_map), [2, -1, 1, 3, 4, 0])
+        self.assertEqual(node_map[5], 0)
+        self.assertEqual(node_map[2], 1)
+        self.assertEqual(node_map[0], 2)
+        self.assertEqual(node_map[1], -1)
+        self.assertEqual(node_map[3], 3)
+        self.assertEqual(node_map[4], 4)
         self.assertEqual(tss.sample_size, 3)
         self.assertEqual(tss.num_trees, 2)
         trees = [{0: 1, 1: 3, 2: 3}, {0: 4, 1: 3, 2: 3, 3: 4}]

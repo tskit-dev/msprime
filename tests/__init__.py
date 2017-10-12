@@ -790,7 +790,7 @@ class Simplifier(object):
     def print_heaps(self, L):
         copy = list(L)
         ordered = [heapq.heappop(copy) for _ in L]
-        print("H = ")
+
         for l, x in ordered:
             print("\t", l, ":", self.segment_chain_str(x))
 
@@ -820,8 +820,20 @@ class Simplifier(object):
         """
         Inserts the specified sample ID into the algorithm state.
         """
-        # print("INSERTING SAMPLE", sample_id)
+        assert sample_id not in self.A
         self.record_node(sample_id)
+        x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
+        self.A[sample_id] = x
+
+    def insert_internal_sample(self, sample_id):
+        """
+        Insert a new internal sample, clearing up any existing segments.
+        """
+        if sample_id in self.A:
+            x = self.A[sample_id]
+            while x is not None:
+                assert x.node == self.node_id_map[sample_id]
+                x = x.next
         x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
         self.A[sample_id] = x
 
@@ -831,34 +843,35 @@ class Simplifier(object):
         """
         assert len(set(e.parent for e in edges)) == 1
         parent = edges[0].parent
-        # print("====================")
-        # print("Process parent edges", parent, edges)
-        # print("====================")
         # self.print_state()
+        # For any children that are samples, insert them directly into the state.
         for edge in edges:
             if edge.child in self.unmapped_samples:
                 self.unmapped_samples.remove(edge.child)
                 self.insert_sample(edge.child)
-            # TODO this should really be outside this loop to give a
-            # consistent node ordering. Putting it in here for consistency
-            # with the C code for now.
-            if parent in self.unmapped_samples:
-                # print("inserting sample for parent:", parent)
-                self.unmapped_samples.remove(parent)
-                self.insert_sample(parent)
+        # If the parent is an unmapped sample, record a node for it. This ordering
+        # gaurantees that we allocate node IDs are we see then going up the tree
+        # sequence.
+        if parent in self.unmapped_samples:
+            self.record_node(parent)
+
         H = []
         for edge in edges:
             if edge.child in self.A:
-                # print("Remove", edge.left, edge.right, edge.child, sep="\t")
                 self.remove_ancestry(edge.left, edge.right, edge.child, H)
                 # self.print_state()
                 self.check_state()
         # print("merging for ", parent)
-        # self.print_state()
         # self.print_heaps(H)
+        # self.print_state()
         self.merge_labeled_ancestors(H, parent)
         # self.print_state()
         self.check_state()
+        # If the parent was newly added, we need to make sure it has ancestral material
+        # mapped over the full interval.
+        if parent in self.unmapped_samples:
+            self.unmapped_samples.remove(parent)
+            self.insert_internal_sample(parent)
 
     def simplify(self):
         # print("START")
@@ -1007,6 +1020,7 @@ class Simplifier(object):
         alpha = None
         z = None
         while len(H) > 0:
+            # print("LOOP HEAD")
             # self.print_heaps(H)
             alpha = None
             l = H[0][0]
@@ -1031,11 +1045,10 @@ class Simplifier(object):
                         heapq.heappush(H, (y.left, y))
                     alpha = x
                     alpha.next = None
-                if input_id in self.node_id_map:
+                if self.is_sample(input_id):
                     u = self.node_id_map[input_id]
-                    if self.is_sample(input_id):
-                        self.record_edge(alpha.left, alpha.right, u, alpha.node)
-                        alpha.node = u
+                    self.record_edge(alpha.left, alpha.right, u, alpha.node)
+                    alpha.node = u
             else:
                 if not coalescence:
                     coalescence = True
@@ -1058,12 +1071,7 @@ class Simplifier(object):
 
             # loop tail; update alpha and integrate it into the state.
             if z is None:
-                # print("LOOP Tail. Head = ", alpha)
-                if input_id in self.A:
-                    # print("Already in A", self.A[input_id])
-                    assert alpha.node == self.A[input_id].node
-                else:
-                    self.A[input_id] = alpha
+                self.A[input_id] = alpha
             else:
                 z.next = alpha
             z = alpha
@@ -1071,9 +1079,11 @@ class Simplifier(object):
 
     def check_state(self):
         # print("CHECK_STATE")
-        # self.print_state()
+        # # self.print_state()
         for input_id, x in self.A.items():
+            # print("input id = ", input_id)
             while x is not None:
+                # print("\tx = ", x)
                 assert x.left < x.right
                 if x.next is not None:
                     assert x.right <= x.next.left

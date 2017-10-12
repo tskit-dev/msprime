@@ -318,11 +318,6 @@ class TestSimplify(unittest.TestCase):
             s = tests.Simplifier(ts, ts.samples())
             py_full_ts, py_full_map = s.simplify()
             full_ts, full_map = ts.simplify(ts.samples(), map_nodes=True)
-            if not all(py_full_map == full_map):
-                print("ERROR")
-                print(full_map)
-                print(py_full_map)
-
             self.assertTrue(all(py_full_map == full_map))
             self.assertTreeSequencesEqual(full_ts, py_full_ts)
 

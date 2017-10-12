@@ -1233,10 +1233,10 @@ class TestTreeSequence(HighLevelTestCase):
             sample_sizes = {0, 1}
             if n > 2:
                 sample_sizes |= set([2, max(2, n // 2), n - 1])
+            print("SKIP MUTATIONS")
             for k in sample_sizes:
                 subset = random.sample(list(ts.samples()), k)
                 self.verify_simplify_topology(ts, subset)
-                print("SKIP MUTATIONS")
                 # self.verify_simplify_mutations(ts, subset)
                 self.verify_simplify_equality(ts, subset)
                 self.verify_simplify_variants(ts, subset)
