@@ -3034,9 +3034,8 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_run(&simplifier, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    printf("\n\nFIXME leaking segment!!!\n");
     /* simplifier_print_state(&simplifier, stdout); */
-    /* simplifier_print_state(&simplifier, _devnull); */
+    simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 

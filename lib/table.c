@@ -1788,6 +1788,35 @@ out:
     return ret;
 }
 
+/* Insert ancestral material for a new internal sample. There may already
+ * be ancestral segments extant for this ancestor, so free them. */
+static int WARN_UNUSED
+simplifier_insert_internal_sample(simplifier_t *self, node_id_t sample_id)
+{
+    int ret = 0;
+    simplify_segment_t *x, *next;
+    node_id_t u = self->node_id_map[sample_id];
+
+    assert(u != MSP_NULL_NODE);
+    if (self->ancestor_map[sample_id] != NULL) {
+        x = self->ancestor_map[sample_id];
+        while (x != NULL) {
+            assert(x->node == u);
+            next = x->next;
+            simplifier_free_segment(self, x);
+            x = next;
+        }
+    }
+    self->ancestor_map[sample_id] = simplifier_alloc_segment(self, 0,
+            self->sequence_length, u, NULL);
+    if (self->ancestor_map[sample_id] == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int
 simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
@@ -2250,20 +2279,8 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         /* Loop tail; integrate alpha into the global state */
         assert(alpha != NULL);
         if (z == NULL) {
-            x = self->ancestor_map[input_id];
-            /* Sometimes when we have internal samples there is already some
-             * ancestral material mapped. This approach seems to work, but we are
-             * leaking segments somewhere. I'm not at all happy with this approach
-             * and it should be changed. There are surely more subtle bugs here
-             * when we look at larger examples. */
-            /* TODO */
-            if (x != NULL) {
-                assert(x->next == NULL);
-                assert(x->node == alpha->node);
-                simplifier_free_segment(self, alpha);
-            } else {
-                self->ancestor_map[input_id] = alpha;
-            }
+            assert(self->ancestor_map[input_id] == NULL);
+            self->ancestor_map[input_id] = alpha;
         } else {
             defrag_required |= z->right == alpha->left && z->node == alpha->node;
             z->next = alpha;
@@ -2410,28 +2427,20 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
-simplifier_run(simplifier_t *self, node_id_t *node_map)
+static int WARN_UNUSED
+simplifier_process_parent_edges(simplifier_t *self, node_id_t parent, size_t start,
+        size_t end)
 {
     int ret = 0;
     size_t j;
-    node_id_t parent, current_parent, child;
+    node_id_t child;
     double left, right;
+    bool parent_internal_sample = false;
 
-    current_parent = self->input_edges.parent[0];
-    for (j = 0; j < self->input_edges.num_rows; j++) {
-        parent = self->input_edges.parent[j];
-        left = self->input_edges.left[j];
-        right = self->input_edges.right[j];
+    /* Make a first pass through the edges to find any child nodes that are
+     * unmapped samples. Insert segments for each of them. */
+    for (j = start; j < end; j++) {
         child = self->input_edges.child[j];
-        if (parent != current_parent) {
-            ret = simplifier_merge_ancestors(self, current_parent);
-            if (ret != 0) {
-                goto out;
-            }
-            assert(avl_count(&self->merge_queue) == 0);
-            current_parent = parent;
-        }
         if (self->unmapped_sample[child]) {
             self->unmapped_sample[child] = false;
             ret = simplifier_insert_sample(self, child);
@@ -2439,29 +2448,81 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
                 goto out;
             }
         }
-        if (self->unmapped_sample[parent]) {
-            self->unmapped_sample[parent] = false;
-            ret = simplifier_insert_sample(self, parent);
-            if (ret != 0) {
-                goto out;
-            }
+    }
+    /* If the parent is an unmapped sample, allocate a node for it but wait until
+     * after we've processed all the segments to insert an ancestral segment. */
+    if (self->unmapped_sample[parent]) {
+        parent_internal_sample = true;
+        self->unmapped_sample[parent] = false;
+        ret = simplifier_record_node(self, parent);
+        if (ret != 0) {
+            goto out;
         }
+    }
+
+    /* Now go through the edges and remove ancestry */
+    for (j = start; j < end; j++) {
+        assert(parent == self->input_edges.parent[j]);
+        child = self->input_edges.child[j];
         if (self->ancestor_map[child] != NULL) {
             ret = simplifier_record_mutations(self, child);
             if (ret != 0) {
                 goto out;
             }
+            left = self->input_edges.left[j];
+            right = self->input_edges.right[j];
             ret = simplifier_remove_ancestry(self, left, right, child);
             if (ret != 0) {
                 goto out;
             }
         }
     }
-    ret = simplifier_merge_ancestors(self, current_parent);
+
+    /* We can now merge the ancestral segments for the parent */
+    ret = simplifier_merge_ancestors(self, parent);
     if (ret != 0) {
         goto out;
     }
     assert(avl_count(&self->merge_queue) == 0);
+
+    if (parent_internal_sample) {
+        ret = simplifier_insert_internal_sample(self, parent);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+simplifier_run(simplifier_t *self, node_id_t *node_map)
+{
+    int ret = 0;
+    size_t j, start;
+    node_id_t parent, current_parent;
+    size_t num_edges = self->input_edges.num_rows;
+
+    if (num_edges > 0) {
+        start = 0;
+        current_parent = self->input_edges.parent[0];
+        for (j = 0; j < num_edges; j++) {
+            parent = self->input_edges.parent[j];
+            if (parent != current_parent) {
+                ret = simplifier_process_parent_edges(self, current_parent, start, j);
+                if (ret != 0) {
+                    goto out;
+                }
+                current_parent = parent;
+                start = j;
+            }
+        }
+        ret = simplifier_process_parent_edges(self, current_parent, start, num_edges);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
     ret = simplifier_output_sites(self);
     if (ret != 0) {
         goto out;
