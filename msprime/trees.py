@@ -90,11 +90,6 @@ Variant = collections.namedtuple(
     ["position", "site", "index", "genotypes"])
 
 
-TableTuple = collections.namedtuple(
-    "TableTuple",
-    ["nodes", "edges", "migrations", "sites", "mutations"])
-
-
 # TODO this interface is rubbish. Should have much better printing options.
 class SimpleContainer(object):
 
@@ -1085,6 +1080,18 @@ class TreeSequence(object):
         """
         self._ll_tree_sequence.dump(path, zlib_compression)
 
+    @property
+    def tables(self):
+        """
+        A copy of the tables underlying this tree sequence. See also
+        :meth:`.dump_tables`.
+
+        :return: A :class:`.TableCollection` containing all a copy of the
+            tables underlying this tree sequence.
+        :rtype: TableCollection
+        """
+        return self.dump_tables()
+
     def dump_tables(
             self, nodes=None, edges=None, migrations=None, sites=None,
             mutations=None):
@@ -1098,8 +1105,9 @@ class TreeSequence(object):
         :param SiteTable sites: The SiteTable to load the sites into.
         :param MutationTable mutations: The NodeTable to load the mutations into.
 
-        :return: A TableTuple containing all tables underlying the tree sequence.
-        :rtype: TableTuple
+        :return: A :class:`.TableCollection` containing all tables underlying
+            the tree sequence.
+        :rtype: TableCollection
         """
         # TODO document this and test the semantics to passing in new tables
         # as well as returning the updated tables.
@@ -1116,7 +1124,7 @@ class TreeSequence(object):
         self._ll_tree_sequence.dump_tables(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
             mutations=mutations)
-        return TableTuple(
+        return tables.TableCollection(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
             mutations=mutations)
 

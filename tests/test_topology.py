@@ -89,7 +89,7 @@ def insert_redundant_breakpoints(ts):
             left=r.left, right=x, child=r.child, parent=r.parent)
         tables.edges.add_row(
             left=x, right=r.right, child=r.child, parent=r.parent)
-    new_ts = msprime.load_tables(**tables._asdict())
+    new_ts = msprime.load_tables(**tables.asdict())
     assert new_ts.num_edges == 2 * ts.num_edges
     return new_ts
 
@@ -657,7 +657,7 @@ class TestUnaryNodes(TopologyTestCase):
         for e in edges:
             tables.edges.add_row(
                 left=e.left, right=e.right, child=e.child, parent=e.parent)
-        ts_new = msprime.load_tables(**tables._asdict())
+        ts_new = msprime.load_tables(**tables.asdict())
         self.assertGreater(ts_new.num_edges, ts.num_edges)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
@@ -1547,7 +1547,7 @@ class TestMultipleRoots(TopologyTestCase):
             right=tables.edges.right[:-1],
             parent=tables.edges.parent[:-1],
             child=tables.edges.child[:-1])
-        ts_new = msprime.load_tables(**tables._asdict())
+        ts_new = msprime.load_tables(**tables.asdict())
         self.assertEqual(ts.sample_size, ts_new.sample_size)
         self.assertEqual(ts.num_edges, ts_new.num_edges + 1)
         self.assertEqual(ts.num_trees, ts_new.num_trees)

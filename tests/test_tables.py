@@ -1020,3 +1020,34 @@ class TestSimplifyTables(unittest.TestCase):
                 samples=ts.samples(), nodes=nodes, edges=edges)
         self.assertEqual(nodes, tables.nodes)
         self.assertEqual(edges, tables.edges)
+
+
+class TestTableCollection(unittest.TestCase):
+    """
+    Tests for the convenience wrapper around a collection of related tables.
+    """
+    def test_str(self):
+        ts = msprime.simulate(10, random_seed=1)
+        tables = ts.tables
+        s = str(tables)
+        self.assertGreater(len(s), 0)
+
+    def test_asdict(self):
+        ts = msprime.simulate(10, random_seed=1)
+        t = ts.tables
+        self.assertEqual(
+            t.asdict(),
+            {
+                "nodes": t.nodes,
+                "edges": t.edges,
+                "sites": t.sites,
+                "mutations": t.mutations,
+                "migrations": t.migrations})
+        d = t.asdict()
+        self.assertEqual(id(t.nodes), id(d["nodes"]))
+        self.assertEqual(id(t.edges), id(d["edges"]))
+        self.assertEqual(id(t.migrations), id(d["migrations"]))
+        self.assertEqual(id(t.sites), id(d["sites"]))
+        self.assertEqual(id(t.mutations), id(d["mutations"]))
+
+    # TODO tests for equality.

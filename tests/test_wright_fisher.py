@@ -127,7 +127,7 @@ def wf_sim(
         # print("Migrations:")
         # print(tables.migrations)
 
-    return msprime.TableTuple(nodes, edges, migrations, sites, mutations)
+    return msprime.TableCollection(nodes, edges, migrations, sites, mutations)
 
 
 class TestSimulation(unittest.TestCase):
