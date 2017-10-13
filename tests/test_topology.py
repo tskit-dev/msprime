@@ -2552,6 +2552,7 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 4)
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
 
+    @unittest.skip("Simplify sites")
     def test_small_tree_fixed_sites(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
@@ -2576,6 +2577,7 @@ class TestPythonSimplifier(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 0)
         self.assertEqual(list(tss.haplotypes()), ["", ""])
 
+    @unittest.skip("Simplify sites")
     def test_small_tree_recurrent_mutations(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),

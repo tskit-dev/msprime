@@ -685,10 +685,11 @@ class Simplifier(object):
     Simplifies a tree sequence to its minimal representation given a subset
     of the leaves.
     """
-    def __init__(self, ts, sample):
+    def __init__(self, ts, sample, filter_invariant_sites=True):
         self.ts = ts
         self.n = len(sample)
         self.sequence_length = ts.sequence_length
+        self.filter_invariant_sites = filter_invariant_sites
         self.input_sites = list(ts.sites())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
@@ -699,7 +700,10 @@ class Simplifier(object):
         self.site_table = msprime.SiteTable(max(1, ts.num_sites))
         self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
         self.num_output_nodes = 0
-        self.output_sites = {}
+        self.output_sites = [
+            msprime.Site(
+                position=site.position, ancestral_state=site.ancestral_state,
+                mutations=[], index=site.index) for site in ts.sites()]
         self.edge_buffer = []
         self.node_id_map = {}
         # Map all samples at time 0 to new nodes. Keep all internal samples in
@@ -813,7 +817,7 @@ class Simplifier(object):
             if len(v) > 0:
                 print("\t", u, "->", v)
         print("Output sites:")
-        for site in self.output_sites.values():
+        for site in self.output_sites:
             print("\t", site)
         print("Node ID map: (input->output)")
         for input_id in sorted(self.node_id_map.keys()):
@@ -850,7 +854,7 @@ class Simplifier(object):
         """
         assert len(set(e.parent for e in edges)) == 1
         parent = edges[0].parent
-        # self.print_state()
+
         # For any children that are samples, insert them directly into the state.
         for edge in edges:
             if edge.child in self.unmapped_samples:
@@ -862,23 +866,60 @@ class Simplifier(object):
         if parent in self.unmapped_samples:
             self.record_node(parent)
 
+        # Now snip out the ancestry from the state corresponding to each of the
+        # edges, and queue this up for merging.
         H = []
         for edge in edges:
             if edge.child in self.A:
                 self.remove_ancestry(edge.left, edge.right, edge.child, H)
-                # self.print_state()
                 self.check_state()
-        # print("merging for ", parent)
-        # self.print_heaps(H)
-        # self.print_state()
         self.merge_labeled_ancestors(H, parent)
-        # self.print_state()
         self.check_state()
+
         # If the parent was newly added, we need to make sure it has ancestral material
         # mapped over the full interval.
         if parent in self.unmapped_samples:
             self.unmapped_samples.remove(parent)
             self.insert_internal_sample(parent)
+
+    def finalise_sites(self):
+        # The extant segments are the roots for each interval. For every root
+        # node, store the intervals over which it applies.
+        roots = collections.defaultdict(list)
+        for seg in self.A.values():
+            while seg is not None:
+                roots[seg.node].append(seg)
+                seg = seg.next
+        output_site_id = 0
+        # This is partially done. Want to fix the root determination and
+        # mutation-parent first before finalising this.
+        for site in self.output_sites:
+            ancestral_state = site.ancestral_state
+            # Reverse the mutations to get the correct order.
+            # site.mutations.reverse()
+            # # This is an ugly hack to see if the mutation is over a root. We will
+            # # need a better algorithm in general, and this will certainly fail for
+            # # more complex mutations.
+            # root = False
+            # if site.mutations[0].node in roots:
+            #     for seg in roots[site.mutations[0].node]:
+            #         if seg.left <= site.position < seg.right:
+            #             root = True
+            # # if not root or not self.filter_invariant_sites:
+
+            # Hack to get correct ancestral state for binary mutations. In general
+            # we'll need something better.
+            # if site.mutations[0].derived_state == '0':
+            #     ancestral_state = '1'
+            if not self.filter_invariant_sites or len(site.mutations) > 0:
+
+                self.site_table.add_row(
+                    position=site.position, ancestral_state=ancestral_state)
+                for mutation in site.mutations:
+                    self.mutation_table.add_row(
+                        site=output_site_id, node=mutation.node,
+                        derived_state=mutation.derived_state)
+                output_site_id += 1
 
     def simplify(self):
         # print("START")
@@ -894,43 +935,7 @@ class Simplifier(object):
         # print("DONE")
         # self.print_state()
 
-        # The extant segments are the roots for each interval. For every root
-        # node, store the intervals over which it applies.
-        roots = collections.defaultdict(list)
-        for seg in self.A.values():
-            while seg is not None:
-                roots[seg.node].append(seg)
-                seg = seg.next
-
-        # Add in the sites and mutations.
-        output_site_id = 0
-        for position in sorted(self.output_sites.keys()):
-            site = self.output_sites[position]
-            ancestral_state = site.ancestral_state
-            # Reverse the mutations to get the correct order.
-            site.mutations.reverse()
-            # This is an ugly hack to see if the mutation is over a root. We will
-            # need a better algorithm in general, and this will certainly fail for
-            # more complex mutations.
-            root = False
-            if site.mutations[0].node in roots:
-                for seg in roots[site.mutations[0].node]:
-                    if seg.left <= site.position < seg.right:
-                        root = True
-            if not root:
-                # Hack to get correct ancestral state for binary mutations. In general
-                # we'll need something better.
-                if site.mutations[0].derived_state == '0':
-                    ancestral_state = '1'
-                self.site_table.add_row(
-                    position=site.position, ancestral_state=ancestral_state)
-                for mutation in site.mutations:
-                    self.mutation_table.add_row(
-                        site=output_site_id, node=mutation.node,
-                        derived_state=mutation.derived_state)
-                output_site_id += 1
-        # print("DONE")
-        # self.print_state()
+        self.finalise_sites()
         node_map = np.zeros(self.ts.num_nodes, np.int32) - 1
         for input_id, output_id in self.node_id_map.items():
             node_map[input_id] = output_id
@@ -938,19 +943,13 @@ class Simplifier(object):
             nodes=self.node_table, edges=self.edge_table,
             sites=self.site_table, mutations=self.mutation_table,
             sequence_length=self.sequence_length)
-
         return ts, node_map
 
     def record_mutation(self, node, mutation):
-        position = self.input_sites[mutation.site].position
-        if position not in self.output_sites:
-            site = msprime.Site(
-                position=position, ancestral_state="0", mutations=[], index=None)
-            self.output_sites[position] = site
-        else:
-            site = self.output_sites[position]
+        site = self.output_sites[mutation.site]
         site.mutations.append(
-            msprime.Mutation(site=None, node=node, derived_state=mutation.derived_state))
+            msprime.Mutation(
+                site=site.index, node=node, derived_state=mutation.derived_state))
 
     def is_sample(self, input_id):
         return input_id in self.samples
