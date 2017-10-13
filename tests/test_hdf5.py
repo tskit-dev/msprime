@@ -259,6 +259,7 @@ class TestRoundTrip(TestHdf5):
     def test_bottleneck_example(self):
         self.verify_round_trip(migration_example(), 3)
 
+    @unittest.skip("Recurrent mutations")
     def test_recurrent_mutation_example(self):
         ts = recurrent_mutation_example()
         for version in [2, 3]:
@@ -360,7 +361,7 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 8)
+        self.assertEqual(format_version[0], 9)
         self.assertEqual(format_version[1], 0)
         sequence_length = root.attrs['sequence_length']
         self.assertGreater(sequence_length, 0)
@@ -394,7 +395,7 @@ class TestHdf5Format(TestHdf5):
 
         g = root["mutations"]
         fields = [
-            ("site", int32), ("node", int32),
+            ("site", int32), ("node", int32), ("parent", int32),
             ("derived_state", int8), ("derived_state_length", uint32)]
         if ts.num_mutations > 0:
             for name, dtype in fields:
@@ -405,6 +406,7 @@ class TestHdf5Format(TestHdf5):
             self.assertEqual(derived_state_length.shape[0], ts.num_mutations)
             site = g["site"]
             node = g["node"]
+            parent = g["parent"]
             derived_state = msprime.unpack_strings(
                 g["derived_state"], derived_state_length)
             j = 0
@@ -413,6 +415,7 @@ class TestHdf5Format(TestHdf5):
                     self.assertEqual(site[j], s.index)
                     self.assertEqual(mutation.site, site[j])
                     self.assertEqual(mutation.node, node[j])
+                    self.assertEqual(mutation.parent, parent[j])
                     self.assertEqual(mutation.derived_state, derived_state[j])
                     j += 1
         else:

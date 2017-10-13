@@ -37,7 +37,7 @@
 #define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 8
+#define MSP_FILE_FORMAT_VERSION_MAJOR 9
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
@@ -166,10 +166,11 @@ typedef struct {
     double right;
 } edge_t;
 
-typedef struct {
+typedef struct _mutation_t {
     mutation_id_t id;
     site_id_t site;
     node_id_t node;
+    mutation_id_t parent;
     const char *derived_state;
     list_len_t derived_state_length;
     // TODO remove this and change to ID?
@@ -456,6 +457,7 @@ typedef struct {
         size_t max_total_derived_state_length;
         node_id_t *node;
         site_id_t *site;
+        mutation_id_t *parent;
         char **derived_state;
         char *derived_state_mem;
         list_len_t *derived_state_length;

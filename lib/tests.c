@@ -5347,6 +5347,7 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
             CU_ASSERT_EQUAL(mutation_1.index, mutation_2.index);
             CU_ASSERT_EQUAL(mutation_1.site, mutation_2.site);
             CU_ASSERT_EQUAL(mutation_1.node, mutation_2.node);
+            CU_ASSERT_EQUAL_FATAL(mutation_1.parent, mutation_2.parent);
             CU_ASSERT_STRING_EQUAL(mutation_1.derived_state, mutation_2.derived_state);
         }
     }

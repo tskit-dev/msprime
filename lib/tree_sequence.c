@@ -174,8 +174,9 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
     fprintf(out, "mutations = (%d records)\n", (int) self->mutations.num_records);
     for (j = 0; j < self->mutations.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%d\t%s\n", (int) j, self->mutations.site[j],
-                self->mutations.node[j], self->mutations.derived_state[j]);
+        fprintf(out, "\t%d\t%d\t%d\t%d\t%s\n", (int) j, self->mutations.site[j],
+                self->mutations.node[j], self->mutations.parent[j],
+                self->mutations.derived_state[j]);
     }
     fprintf(out, "migrations.records = (%d records)\n",
             (int) self->migrations.num_records);
@@ -281,17 +282,20 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         self->mutations.max_num_records = self->mutations.num_records;
         size = self->mutations.max_num_records;
         msp_safe_free(self->mutations.node);
+        msp_safe_free(self->mutations.parent);
         msp_safe_free(self->mutations.site);
         msp_safe_free(self->mutations.derived_state);
         msp_safe_free(self->mutations.derived_state_length);
         msp_safe_free(self->sites.site_mutations_mem);
         self->mutations.node = malloc(size * sizeof(node_id_t));
+        self->mutations.parent = malloc(size * sizeof(mutation_id_t));
         self->mutations.derived_state = malloc(size * sizeof(char *));
         self->mutations.derived_state_length = malloc(size * sizeof(list_len_t));
         self->mutations.site = malloc(size * sizeof(site_id_t));
         self->sites.site_mutations_mem = malloc(size * sizeof(mutation_t));
         if (self->mutations.site == NULL
                 || self->mutations.node == NULL
+                || self->mutations.parent == NULL
                 || self->mutations.derived_state == NULL
                 || self->mutations.derived_state_length == NULL
                 || self->sites.site_mutations_mem == NULL) {
@@ -508,6 +512,7 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->sites.site_mutations);
     msp_safe_free(self->mutations.node);
     msp_safe_free(self->mutations.site);
+    msp_safe_free(self->mutations.parent);
     msp_safe_free(self->mutations.derived_state);
     msp_safe_free(self->mutations.derived_state_length);
     msp_safe_free(self->mutations.derived_state_mem);
@@ -1056,6 +1061,8 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     if (mutations != NULL) {
         memcpy(self->mutations.site, mutations->site, mutations->num_rows * sizeof(site_id_t));
         memcpy(self->mutations.node, mutations->node, mutations->num_rows * sizeof(node_id_t));
+        memcpy(self->mutations.parent, mutations->parent,
+                mutations->num_rows * sizeof(mutation_id_t));
         memcpy(self->mutations.derived_state_length,
                 mutations->derived_state_length,
                 mutations->num_rows * sizeof(uint32_t));
@@ -1318,6 +1325,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/sites/ancestral_state_length", 1, self->sites.num_records},
         {"/mutations/site", 1, self->mutations.num_records},
         {"/mutations/node", 1, self->mutations.num_records},
+        {"/mutations/parent", 1, self->mutations.num_records},
         {"/mutations/derived_state_length", 1, self->mutations.num_records},
         {"/nodes/flags", 1, self->nodes.num_records},
         {"/nodes/population", 1, self->nodes.num_records},
@@ -1532,6 +1540,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             self->sites.ancestral_state_length},
         {"/mutations/site", H5T_NATIVE_INT32, self->mutations.site},
         {"/mutations/node", H5T_NATIVE_INT32, self->mutations.node},
+        {"/mutations/parent", H5T_NATIVE_INT32, self->mutations.parent},
         {"/mutations/derived_state_length", H5T_NATIVE_UINT32,
             self->mutations.derived_state_length},
         {"/edges/left", H5T_NATIVE_DOUBLE, self->edges.left},
@@ -1798,6 +1807,9 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/node",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->mutations.num_records, self->mutations.node},
+        {"/mutations/parent",
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
+            self->mutations.num_records, self->mutations.parent},
         {"/mutations/derived_state_length",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->mutations.num_records, self->mutations.derived_state_length},
@@ -2306,6 +2318,7 @@ tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id, mutation_t *
     record->index = (size_t) id; // TODO what is this for?
     record->site = self->mutations.site[id];
     record->node = self->mutations.node[id];
+    record->parent = self->mutations.parent[id];
     record->derived_state = self->mutations.derived_state[id];
     record->derived_state_length = self->mutations.derived_state_length[id];
 out:

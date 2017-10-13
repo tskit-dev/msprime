@@ -223,7 +223,7 @@ class PythonTreeSequence(object):
             ["position", "ancestral_state", "index", "mutations"])
         _Mutation = collections.namedtuple(
             "Mutation",
-            ["site", "node", "derived_state"])
+            ["site", "node", "derived_state", "parent"])
         for j in range(tree_sequence.get_num_sites()):
             pos, ancestral_state, mutations, index = tree_sequence.get_site(j)
             self._sites.append(_Site(
@@ -949,7 +949,8 @@ class Simplifier(object):
         site = self.output_sites[mutation.site]
         site.mutations.append(
             msprime.Mutation(
-                site=site.index, node=node, derived_state=mutation.derived_state))
+                site=site.index, node=node, derived_state=mutation.derived_state,
+                parent=msprime.NULL_MUTATION))
 
     def is_sample(self, input_id):
         return input_id in self.samples

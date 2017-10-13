@@ -43,6 +43,8 @@ NULL_NODE = -1
 
 NULL_POPULATION = -1
 
+NULL_MUTATION = -1
+
 IS_PY2 = sys.version_info[0] < 3
 
 
@@ -68,7 +70,7 @@ Site = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "derived_state"])
+    ["site", "node", "derived_state", "parent"])
 
 
 # This is provided for backwards compatibility with the deprecated mutations()
