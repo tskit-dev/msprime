@@ -539,8 +539,10 @@ tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     node_id_t child, parent, last_parent, last_child;
+    mutation_id_t parent_mut;
     size_t j;
-    double left, last_left;
+    double left, last_left, t1, t2;
+    double *time = self->nodes.time;
 
     for (j = 0; j < self->edges.num_records; j++) {
         parent = self->edges.parent[j];
@@ -559,11 +561,11 @@ tree_sequence_check(tree_sequence_t *self)
             last_child = self->edges.child[j - 1];
             last_left = self->edges.left[j - 1];
             /* Input data must sorted by (time[parent], parent, child, left). */
-            if (self->nodes.time[parent] < self->nodes.time[last_parent]) {
+            if (time[parent] < time[last_parent]) {
                 ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
                 goto out;
             }
-            if (self->nodes.time[parent] == self->nodes.time[last_parent]) {
+            if (time[parent] == time[last_parent]) {
                 if (parent < last_parent) {
                     ret = MSP_ERR_EDGES_NOT_SORTED_PARENT;
                     goto out;
@@ -594,7 +596,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
         /* time[child] must be < time[parent] */
-        if (self->nodes.time[child] >= self->nodes.time[parent]) {
+        if (time[child] >= time[parent]) {
             ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
             goto out;
         }
@@ -636,30 +638,40 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
+        parent_mut = self->mutations.parent[j];
+        if (parent_mut < MSP_NULL_MUTATION
+                || parent_mut >= (mutation_id_t) self->mutations.num_records) {
+            ret = MSP_ERR_MUTATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (parent_mut == (mutation_id_t) j) {
+            ret = MSP_ERR_MUTATION_PARENT_EQUAL;
+            goto out;
+        }
+        if (parent_mut != MSP_NULL_MUTATION) {
+            /* Mutations are listed in non-increasing time order per site. Therefore,
+             * parent mutations _must_ have ID < than child mutations */
+            if (parent_mut > (mutation_id_t) j) {
+                ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
+                goto out;
+            }
+            if (self->mutations.site[parent_mut] != self->mutations.site[j]) {
+                ret = MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE;
+                goto out;
+            }
+        }
         if (j > 0) {
             if (self->mutations.site[j - 1] > self->mutations.site[j]) {
                 ret = MSP_ERR_UNSORTED_MUTATIONS;
                 goto out;
             }
             if (self->mutations.site[j - 1] == self->mutations.site[j]) {
-                /* Also relaxing this assumption because it's too difficult to
-                 * enforce after simplify() has been called.
-                 */
-                /* t1 = self->nodes.time[self->mutations.parent[j - 1]]; */
-                /* t2 = self->nodes.time[self->mutations.parent[j]]; */
-                /* if (t1 < t2) { */
-                /*     ret = MSP_ERR_UNSORTED_MUTATION_NODES; */
-                /*     goto out; */
-                /* } */
-                /* We are relaxing this condition for now, but might want to
-                 * reinstate it later. The issue arises in simplify, where we
-                 * can't easily derive the correct mutations when there are
-                 * lots of them along a path. */
-                /* Within a site, nodes must be unique */
-                /* if (self->mutations.parent[j - 1] == self->mutations.parent[j]) { */
-                /*     ret = MSP_ERR_DUPLICATE_MUTATION_NODES; */
-                /*     goto out; */
-                /* } */
+                t1 = time[self->mutations.node[j - 1]];
+                t2 = time[self->mutations.node[j]];
+                if (t1 < t2) {
+                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
+                    goto out;
+                }
             }
         }
     }

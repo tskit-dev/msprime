@@ -95,6 +95,10 @@
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
 #define MSP_ERR_BAD_SEQUENCE_LENGTH                                 -66
 #define MSP_ERR_RIGHT_GREATER_SEQ_LENGTH                            -67
+#define MSP_ERR_MUTATION_OUT_OF_BOUNDS                              -68
+#define MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -69
+#define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
+#define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 
 #endif /*__ERR_H__*/
 

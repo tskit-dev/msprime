@@ -142,6 +142,7 @@ class TestLdCalculator(unittest.TestCase):
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
+    @unittest.skip("recurrent mutations")
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
         sites = [
@@ -161,7 +162,8 @@ class TestLdCalculator(unittest.TestCase):
         sites = [
             msprime.Site(
                 position=j, index=j, ancestral_state="0",
-                mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
+                mutations=[msprime.Mutation(
+                    site=j, node=j, derived_state="1", parent=msprime.NULL_MUTATION)])
             for j in range(self.num_test_sites)]
         ts = ts.copy(sites)
         self.verify_matrix(ts)

@@ -268,6 +268,18 @@ msp_strerror(int err)
         case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
             ret = "Right coordinate > sequence length.";
             break;
+        case MSP_ERR_MUTATION_OUT_OF_BOUNDS:
+            ret = "mutation ID out of bounds";
+            break;
+        case MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE:
+            ret = "Specified parent mutation is at a different site.";
+            break;
+        case MSP_ERR_MUTATION_PARENT_EQUAL:
+            ret = "Parent mutation refers to itself.";
+            break;
+        case MSP_ERR_MUTATION_PARENT_AFTER_CHILD:
+            ret = "Parent mutation ID must be < current ID.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
