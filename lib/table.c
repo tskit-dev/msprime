@@ -2540,6 +2540,15 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
             goto out;
         }
     }
+    /* If we have any unmapped remaining unmapped samples, we need to add them in */
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        if (self->unmapped_sample[j]) {
+            ret = simplifier_record_node(self, (node_id_t) j);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
 
     ret = simplifier_output_sites(self);
     if (ret != 0) {

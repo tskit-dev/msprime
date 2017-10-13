@@ -924,16 +924,21 @@ class Simplifier(object):
     def simplify(self):
         # print("START")
         # self.print_state()
-        all_edges = list(self.ts.edges())
-        edges = all_edges[:1]
-        for e in all_edges[1:]:
-            if e.parent != edges[0].parent:
-                self.process_parent_edges(edges)
-                edges = []
-            edges.append(e)
-        self.process_parent_edges(edges)
+        if self.ts.num_edges > 0:
+            all_edges = list(self.ts.edges())
+            edges = all_edges[:1]
+            for e in all_edges[1:]:
+                if e.parent != edges[0].parent:
+                    self.process_parent_edges(edges)
+                    edges = []
+                edges.append(e)
+            self.process_parent_edges(edges)
         # print("DONE")
         # self.print_state()
+
+        # Record any remaining unmapped samples.
+        for node in sorted(self.unmapped_samples):
+            self.record_node(node)
 
         self.finalise_sites()
         node_map = np.zeros(self.ts.num_nodes, np.int32) - 1

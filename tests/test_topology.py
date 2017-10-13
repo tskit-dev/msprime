@@ -2678,6 +2678,25 @@ class TestPythonSimplifier(unittest.TestCase):
         tss, node_map = self.do_simplify(ts)
         self.assertEqual(list(node_map), [0, 1, 2])
 
+    def test_isolated_samples(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           1
+        2       1           2
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        """)
+        ts = msprime.load_text(nodes, edges, sequence_length=1)
+        self.assertEqual(ts.num_samples, 3)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_nodes, 3)
+        tss, node_map = self.do_simplify(ts, compare_lib=True)
+        self.assertEqual(ts.tables.nodes, tss.tables.nodes)
+        self.assertEqual(ts.tables.edges, tss.tables.edges)
+        self.assertEqual(list(node_map), [0, 1, 2])
+
     def test_internal_samples(self):
         nodes = six.StringIO("""\
         id      is_sample   population      time
