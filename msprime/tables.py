@@ -333,11 +333,13 @@ class MutationTable(_msprime.MutationTable):
     def __str__(self):
         site = self.site
         node = self.node
+        parent = self.parent
         derived_state = unpack_strings(
             self.derived_state, self.derived_state_length)
-        ret = "id\tsite\tnode\tderived_state\n"
+        ret = "id\tsite\tnode\tderived_state\tparent\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\t{}\n".format(j, site[j], node[j], derived_state[j])
+            ret += "{}\t{}\t{}\t{}\t{}\n".format(
+                j, site[j], node[j], derived_state[j], parent[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -346,6 +348,7 @@ class MutationTable(_msprime.MutationTable):
             ret = (
                 np.array_equal(self.site, other.site) and
                 np.array_equal(self.node, other.node) and
+                np.array_equal(self.parent, other.parent) and
                 np.array_equal(self.derived_state, other.derived_state) and
                 np.array_equal(
                     self.derived_state_length, other.derived_state_length))
@@ -358,7 +361,7 @@ class MutationTable(_msprime.MutationTable):
     def __setstate__(self, state):
         self.__init__()
         self.set_columns(
-            site=state["site"], node=state["node"],
+            site=state["site"], node=state["node"], parent=state["parent"],
             derived_state=state["derived_state"],
             derived_state_length=state["derived_state_length"])
 
@@ -368,7 +371,8 @@ class MutationTable(_msprime.MutationTable):
         """
         copy = MutationTable()
         copy.set_columns(
-            site=self.site, node=self.node, derived_state=self.derived_state,
+            site=self.site, node=self.node, parent=self.parent,
+            derived_state=self.derived_state,
             derived_state_length=self.derived_state_length)
         return copy
 
@@ -378,6 +382,7 @@ def _mutation_table_pickle(table):
     state = {
         "site": table.site,
         "node": table.node,
+        "parent": table.parent,
         "derived_state": table.derived_state,
         "derived_state_length": table.derived_state_length,
     }

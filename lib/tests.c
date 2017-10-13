@@ -392,8 +392,8 @@ parse_mutations(const char *text, mutation_table_t *mutation_table)
         p = strtok(NULL, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         strncpy(derived_state, p, MAX_LINE);
-        ret = mutation_table_add_row(mutation_table, site, node, derived_state,
-                strlen(derived_state));
+        ret = mutation_table_add_row(mutation_table, site, node, MSP_NULL_MUTATION,
+                derived_state, strlen(derived_state));
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
@@ -1236,7 +1236,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
                 if (u != root) {
                     state[u] = (state[u] + 1) % 2;
                     ret = mutation_table_add_row(&mutations, site_id, u,
-                            state[u] == 0? "0": "1", 1);
+                            MSP_NULL_MUTATION, state[u] == 0? "0": "1", 1);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
                 }
                 /* To ensure that the mutations are sorted in time order, we only
@@ -1404,7 +1404,8 @@ make_gappy_copy(tree_sequence_t *ts)
     /* Add a site into the gap at the end. */
     ret = site_table_add_row(&sites, ts->sequence_length + 0.5, "0", 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_add_row(&mutations, sites.num_rows - 1, 0, "1", 1);
+    ret = mutation_table_add_row(&mutations, sites.num_rows - 1, 0, MSP_NULL_MUTATION,
+            "1", 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_initialise(new_ts);
@@ -6135,6 +6136,7 @@ test_mutation_table(void)
     size_t max_len = 20;
     size_t j, k, len;
     node_id_t *node;
+    mutation_id_t *parent;
     site_id_t *site;
     char *derived_state;
     char c[max_len + 1];
@@ -6152,10 +6154,11 @@ test_mutation_table(void)
     for (j = 0; j < num_rows; j++) {
         k = GSL_MIN(j + 1, max_len);
         len += k;
-        ret = mutation_table_add_row(&table, j, j, c, k);
+        ret = mutation_table_add_row(&table, j, j, j, c, k);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(table.site[j], j);
         CU_ASSERT_EQUAL(table.node[j], j);
+        CU_ASSERT_EQUAL(table.parent[j], j);
         CU_ASSERT_EQUAL(table.derived_state_length[j], k);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
         CU_ASSERT_EQUAL(table.total_derived_state_length, len);
@@ -6167,6 +6170,8 @@ test_mutation_table(void)
     CU_ASSERT_FATAL(site != NULL);
     node = malloc(num_rows * sizeof(node_id_t));
     CU_ASSERT_FATAL(node != NULL);
+    parent = malloc(num_rows * sizeof(mutation_id_t));
+    CU_ASSERT_FATAL(node != NULL);
     derived_state = malloc(num_rows * sizeof(char));
     CU_ASSERT_FATAL(derived_state != NULL);
     derived_state_length = malloc(num_rows * sizeof(uint32_t));
@@ -6175,14 +6180,16 @@ test_mutation_table(void)
     for (j = 0; j < num_rows; j++) {
         node[j] = j;
         site[j] = j + 1;
+        parent[j] = j + 2;
         derived_state[j] = j;
         derived_state_length[j] = 1;
     }
-    ret = mutation_table_set_columns(&table, num_rows, site, node, derived_state,
-            derived_state_length);
-    CU_ASSERT_EQUAL(ret, 0);
+    ret = mutation_table_set_columns(&table, num_rows, site, node, parent,
+            derived_state, derived_state_length);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.site, site, num_rows * sizeof(site_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(mutation_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
                 num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.derived_state_length, derived_state_length,
@@ -6191,13 +6198,16 @@ test_mutation_table(void)
     CU_ASSERT_EQUAL(table.total_derived_state_length, num_rows);
 
     /* Append another num_rows */
-    ret = mutation_table_append_columns(&table, num_rows, site, node, derived_state,
+    ret = mutation_table_append_columns(&table, num_rows, site, node, parent, derived_state,
             derived_state_length);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.site, site, num_rows * sizeof(site_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.site + num_rows, site, num_rows * sizeof(site_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.node + num_rows, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(mutation_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent + num_rows, parent,
+                num_rows * sizeof(mutation_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
                 num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
@@ -6207,18 +6217,69 @@ test_mutation_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.total_derived_state_length, 2 * num_rows);
 
-    /* Inputs cannot be NULL */
-    ret = mutation_table_set_columns(&table, num_rows, NULL, node, derived_state,
-            derived_state_length);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = mutation_table_set_columns(&table, num_rows, site, NULL, derived_state,
-            derived_state_length);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    /* Check all this again, except with parent == NULL. */
+    memset(parent, 0xff, num_rows * sizeof(mutation_id_t));
     ret = mutation_table_set_columns(&table, num_rows, site, node, NULL,
+            derived_state, derived_state_length);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.site, site, num_rows * sizeof(site_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(mutation_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state_length, derived_state_length,
+                num_rows * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.total_derived_state_length, num_rows);
+
+    /* Append another num_rows */
+    ret = mutation_table_append_columns(&table, num_rows, site, node, NULL, derived_state,
             derived_state_length);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.site, site, num_rows * sizeof(site_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.site + num_rows, site, num_rows * sizeof(site_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node + num_rows, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(mutation_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent + num_rows, parent,
+                num_rows * sizeof(mutation_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state_length + num_rows, derived_state_length,
+                num_rows * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.total_derived_state_length, 2 * num_rows);
+
+    /* Inputs except parent cannot be NULL */
+    ret = mutation_table_set_columns(&table, num_rows, NULL, node, parent,
+            derived_state, derived_state_length);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = mutation_table_set_columns(&table, num_rows, site, node, derived_state,
-            NULL);
+    ret = mutation_table_set_columns(&table, num_rows, site, NULL, parent,
+            derived_state, derived_state_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, site, node, parent,
+            NULL, derived_state_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, site, node, parent,
+            derived_state, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+
+
+    /* Inputs except parent cannot be NULL */
+    ret = mutation_table_set_columns(&table, num_rows, NULL, node, parent,
+            derived_state, derived_state_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, site, NULL, parent,
+            derived_state, derived_state_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, site, node, parent,
+            NULL, derived_state_length);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = mutation_table_set_columns(&table, num_rows, site, node, parent,
+            derived_state, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     mutation_table_reset(&table);
@@ -6228,6 +6289,7 @@ test_mutation_table(void)
     mutation_table_free(&table);
     free(site);
     free(node);
+    free(parent);
     free(derived_state);
     free(derived_state_length);
 }

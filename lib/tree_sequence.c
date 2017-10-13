@@ -1184,7 +1184,8 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         for (j = 0; j < self->mutations.num_records; j++) {
             ret = mutation_table_add_row(mutations,
                     self->mutations.site[j], self->mutations.node[j],
-                    self->mutations.derived_state[j], self->mutations.derived_state_length[j]);
+                    MSP_NULL_MUTATION, self->mutations.derived_state[j],
+                    self->mutations.derived_state_length[j]);
             if (ret != 0) {
                 goto out;
             }

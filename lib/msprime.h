@@ -68,6 +68,8 @@
 #define MSP_NULL_NODE (-1)
 /* Indicates the that the population ID has not been set. */
 #define MSP_NULL_POPULATION_ID (-1)
+/* There is no parent for a given mutation */
+#define MSP_NULL_MUTATION (-1)
 
 #define MSP_INITIALISED_MAGIC 0x1234567
 
@@ -98,6 +100,7 @@ typedef struct {
     size_t max_total_derived_state_length_increment;
     node_id_t *node;
     site_id_t *site;
+    mutation_id_t *parent;
     char *derived_state;
     list_len_t *derived_state_length;
 } mutation_table_t;
@@ -953,13 +956,13 @@ void mutation_table_print_state(mutation_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         size_t max_total_derived_state_length_increment);
 int mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
-        const char *derived_state, list_len_t derived_state_length);
+        mutation_id_t parent, const char *derived_state, list_len_t derived_state_length);
 int mutation_table_set_columns(mutation_table_t *self, size_t num_rows,
-        site_id_t *site, node_id_t *node, const char *derived_state,
-        list_len_t *derived_state_length);
+        site_id_t *site, node_id_t *node, mutation_id_t *parent,
+        const char *derived_state, list_len_t *derived_state_length);
 int mutation_table_append_columns(mutation_table_t *self, size_t num_rows,
-        site_id_t *site, node_id_t *node, const char *derived_state,
-        list_len_t *derived_state_length);
+        site_id_t *site, node_id_t *node, mutation_id_t *parent,
+        const char *derived_state, list_len_t *derived_state_length);
 bool mutation_table_equal(mutation_table_t *self, mutation_table_t *other);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);

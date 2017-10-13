@@ -2319,19 +2319,21 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     int err;
     int site;
     int node;
+    int parent = MSP_NULL_MUTATION;
     char *derived_state;
     Py_ssize_t derived_state_length;
-    static char *kwlist[] = {"site", "node", "derived_state", NULL};
+    static char *kwlist[] = {"site", "node", "derived_state", "parent", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "iis#", kwlist,
-                &site, &node, &derived_state, &derived_state_length)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "iis#|i", kwlist,
+                &site, &node, &derived_state, &derived_state_length, &parent)) {
         goto out;
     }
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
     err = mutation_table_add_row(self->mutation_table, (site_id_t) site,
-            (node_id_t) node, derived_state, derived_state_length);
+            (node_id_t) node, (mutation_id_t) parent,
+            derived_state, derived_state_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2360,11 +2362,16 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     PyArrayObject *derived_state_length_array = NULL;
     PyObject *node_input = NULL;
     PyArrayObject *node_array = NULL;
+    PyObject *parent_input = NULL;
+    PyArrayObject *parent_array = NULL;
+    mutation_id_t *parent_data;
 
-    static char *kwlist[] = {"site", "node", "derived_state", "derived_state_length", NULL};
+    static char *kwlist[] = {"site", "node", "derived_state",
+        "derived_state_length", "parent", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
-                &site_input, &node_input, &derived_state_input, &derived_state_length_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O", kwlist,
+                &site_input, &node_input, &derived_state_input,
+                &derived_state_length_input, &parent_input)) {
         goto out;
     }
     site_array = table_read_column_array(site_input, NPY_INT32, &num_rows, false);
@@ -2385,14 +2392,24 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     if (node_array == NULL) {
         goto out;
     }
+    parent_data = NULL;
+    if (parent_input != NULL) {
+        parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
+        if (parent_array == NULL) {
+            goto out;
+        }
+        parent_data = PyArray_DATA(parent_array);
+    }
     if (method == SET_COLS) {
         err = mutation_table_set_columns(self->mutation_table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
-                PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+                parent_data, PyArray_DATA(derived_state_array),
+                PyArray_DATA(derived_state_length_array));
     } else if (method == APPEND_COLS) {
         err = mutation_table_append_columns(self->mutation_table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
-                PyArray_DATA(derived_state_array), PyArray_DATA(derived_state_length_array));
+                parent_data, PyArray_DATA(derived_state_array),
+                PyArray_DATA(derived_state_length_array));
     } else {
         assert(0);
     }
@@ -2406,6 +2423,7 @@ out:
     Py_XDECREF(derived_state_array);
     Py_XDECREF(derived_state_length_array);
     Py_XDECREF(node_array);
+    Py_XDECREF(parent_array);
     return ret;
 }
 
@@ -2524,6 +2542,21 @@ out:
 }
 
 static PyObject *
+MutationTable_get_parent(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->num_rows, self->mutation_table->parent, NPY_INT32,
+            sizeof(int32_t));
+out:
+    return ret;
+}
+
+static PyObject *
 MutationTable_get_derived_state(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -2570,6 +2603,7 @@ static PyGetSetDef MutationTable_getsetters[] = {
 #ifdef HAVE_NUMPY
     {"site", (getter) MutationTable_get_site, NULL, "The site array"},
     {"node", (getter) MutationTable_get_node, NULL, "The node array"},
+    {"parent", (getter) MutationTable_get_parent, NULL, "The parent array"},
     {"derived_state", (getter) MutationTable_get_derived_state, NULL,
         "The derived_state array"},
     {"derived_state_length", (getter) MutationTable_get_derived_state_length, NULL,

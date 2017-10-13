@@ -427,7 +427,8 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin):
 class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         Int32Column("site"),
-        Int32Column("node")]
+        Int32Column("node"),
+        Int32Column("parent")]
     ragged_list_columns = [
         (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
     equal_len_columns = [["site", "node", "derived_state_length"]]
