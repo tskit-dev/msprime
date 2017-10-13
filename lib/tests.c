@@ -871,7 +871,7 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
 
 static void
 verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
-        node_id_t *samples, uint32_t num_samples, node_id_t *sample_map)
+        node_id_t *samples, uint32_t num_samples, node_id_t *node_map)
 {
     int ret;
     node_t n1, n2;
@@ -880,7 +880,6 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     list_len_t tree_sites_length;
     uint32_t j, k;
     node_id_t u, mrca1, mrca2;
-    double tmrca1, tmrca2;
     size_t total_sites;
 
     CU_ASSERT_EQUAL(
@@ -894,12 +893,32 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     for (j = 0; j < num_samples; j++) {
         ret = tree_sequence_get_node(ts, samples[j], &n1);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tree_sequence_get_node(subset, sample_map[j], &n2);
+        ret = tree_sequence_get_node(subset, node_map[samples[j]], &n2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(n1.population, n2.population);
         CU_ASSERT_EQUAL_FATAL(n1.time, n2.time);
         CU_ASSERT_EQUAL_FATAL(n1.flags, n2.flags);
         /* TODO compare name */
+    }
+    /* Check that node mappings are correct */
+    for (j = 0; j < tree_sequence_get_num_nodes(ts); j++) {
+        ret = tree_sequence_get_node(ts, j, &n1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        if (node_map[j] != MSP_NULL_NODE) {
+            ret = tree_sequence_get_node(subset, node_map[j], &n2);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(n1.population, n2.population);
+            CU_ASSERT_EQUAL_FATAL(n1.time, n2.time);
+            CU_ASSERT_EQUAL_FATAL(n1.flags, n2.flags);
+        }
+        /* TODO compare name */
+    }
+    if (num_samples == 0) {
+        CU_ASSERT_EQUAL(tree_sequence_get_num_edges(subset), 0);
+        CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(subset), 0);
+    } else if (num_samples == 1) {
+        CU_ASSERT_EQUAL(tree_sequence_get_num_edges(subset), 0);
+        CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(subset), 1);
     }
     /* Check the pairwise MRCAs */
     ret = sparse_tree_alloc(&full_tree, ts, 0);
@@ -918,22 +937,14 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
                 for (k = j + 1; k < num_samples; k++) {
                     ret = sparse_tree_get_mrca(&full_tree, samples[j], samples[k], &mrca1);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    if (mrca1 == MSP_NULL_NODE) {
-                        tmrca1 = -1.0;
-                    } else {
-                        ret = sparse_tree_get_time(&full_tree, mrca1, &tmrca1);
-                        CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    }
-                    ret = sparse_tree_get_mrca(&subset_tree, sample_map[j], sample_map[k],
-                            &mrca2);
+                    ret = sparse_tree_get_mrca(&subset_tree,
+                            node_map[samples[j]], node_map[samples[k]], &mrca2);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    if (mrca2 == MSP_NULL_NODE) {
-                        tmrca2 = -1.0;
+                    if (mrca1 == MSP_NULL_NODE) {
+                        CU_ASSERT_EQUAL_FATAL(mrca2, MSP_NULL_NODE);
                     } else {
-                        ret = sparse_tree_get_time(&subset_tree, mrca2, &tmrca2);
-                        CU_ASSERT_EQUAL_FATAL(ret, 0);
+                        CU_ASSERT_EQUAL(node_map[mrca1], mrca2);
                     }
-                    CU_ASSERT_EQUAL(tmrca1, tmrca2);
                 }
             }
             ret = sparse_tree_next(&full_tree);
@@ -984,29 +995,29 @@ verify_simplify(tree_sequence_t *ts)
 {
     int ret;
     uint32_t n = tree_sequence_get_num_samples(ts);
-    uint32_t num_sampless[] = {2, 3, n / 2, n - 1, n};
+    uint32_t num_samples[] = {0, 1, 2, 3, n / 2, n - 1, n};
     size_t j;
     node_id_t *sample;
-    node_id_t *sample_map = malloc(n * sizeof(node_id_t));
+    node_id_t *node_map = malloc(tree_sequence_get_num_nodes(ts) * sizeof(node_id_t));
     tree_sequence_t subset;
     int flags = MSP_FILTER_INVARIANT_SITES;
 
-    CU_ASSERT_FATAL(sample_map != NULL);
+    CU_ASSERT_FATAL(node_map != NULL);
     ret = tree_sequence_get_samples(ts, &sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(&subset);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < sizeof(num_sampless) / sizeof(uint32_t); j++) {
-        if (num_sampless[j] > 1 && num_sampless[j] <= n) {
-            ret = tree_sequence_simplify(ts, sample, num_sampless[j], flags,
-                    &subset, sample_map);
+    for (j = 0; j < sizeof(num_samples) / sizeof(uint32_t); j++) {
+        if (num_samples[j] <= n) {
+            ret = tree_sequence_simplify(ts, sample, num_samples[j], flags, &subset,
+                    node_map);
             /* printf("ret = %s\n", msp_strerror(ret)); */
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_simplify_properties(ts, &subset, sample, num_sampless[j], sample_map);
+            verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
         }
     }
     tree_sequence_free(&subset);
-    free(sample_map);
+    free(node_map);
 }
 
 /* Utility function to return a tree sequence for testing. It is the
@@ -1850,12 +1861,13 @@ test_zero_edges(void)
     const char *mutations =
         "0    0     1\n"
         "1    1     1\n";
-    tree_sequence_t ts;
+    tree_sequence_t ts, tss;
     sparse_tree_t t;
     const char *haplotypes[] = {"10", "01"};
     char *haplotype;
     hapgen_t hapgen;
     unsigned int j;
+    node_id_t samples, node_map;
     const node_id_t z = MSP_NULL_NODE;
     node_id_t parents[] = {
         z, z,
@@ -1901,6 +1913,19 @@ test_zero_edges(void)
     sparse_tree_print_state(&t, _devnull);
     sparse_tree_free(&t);
 
+    ret = tree_sequence_initialise(&tss);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* We give pointers ot samples and node_map here as they must be non null */
+    ret = tree_sequence_simplify(&ts, &samples, 0, 0, &tss, &node_map);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&tss), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&tss), 2.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&tss), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&tss), 2);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&tss), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&tss), 1);
+    tree_sequence_print_state(&ts, _devnull);
+
     ret = hapgen_alloc(&hapgen, &ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     hapgen_print_state(&hapgen, _devnull);
@@ -1911,6 +1936,7 @@ test_zero_edges(void)
     }
     hapgen_free(&hapgen);
     tree_sequence_free(&ts);
+    tree_sequence_free(&tss);
 }
 
 static void
@@ -1971,7 +1997,6 @@ test_simplest_unary_records(void)
         "0  1   4   2,3\n";
     tree_sequence_t ts, simplified;
     node_id_t sample_ids[] = {0, 1};
-    node_id_t sample_map[2];
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
@@ -1982,7 +2007,7 @@ test_simplest_unary_records(void)
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2018,7 +2043,6 @@ test_simplest_non_sample_leaf_records(void)
         "3    4     1";
     tree_sequence_t ts, simplified;
     node_id_t sample_ids[] = {0, 1};
-    node_id_t sample_map[2];
     hapgen_t hapgen;
     vargen_t vargen;
     char *haplotype, genotypes[64];
@@ -2063,7 +2087,7 @@ test_simplest_non_sample_leaf_records(void)
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2091,7 +2115,6 @@ test_simplest_degenerate_multiple_root_records(void)
     tree_sequence_t ts, simplified;
     sparse_tree_t t;
     node_id_t sample_ids[] = {0, 1};
-    node_id_t sample_map[2];
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
@@ -2111,7 +2134,7 @@ test_simplest_degenerate_multiple_root_records(void)
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2138,7 +2161,6 @@ test_simplest_multiple_root_records(void)
         "0  1   5   2,3\n";
     tree_sequence_t ts, simplified;
     node_id_t sample_ids[] = {0, 1, 2, 3};
-    node_id_t sample_map[4];
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
@@ -2149,7 +2171,7 @@ test_simplest_multiple_root_records(void)
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 4, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 4, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 4);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2161,7 +2183,7 @@ test_simplest_multiple_root_records(void)
     /* Make one tree degenerate */
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 3, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 3, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2191,7 +2213,6 @@ test_simplest_root_mutations(void)
     char *haplotype;
     int flags = 0;
     node_id_t sample_ids[] = {0, 1};
-    node_id_t sample_map[2];
     tree_sequence_t ts, simplified;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
@@ -2214,7 +2235,7 @@ test_simplest_root_mutations(void)
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2227,7 +2248,7 @@ test_simplest_root_mutations(void)
     flags = MSP_FILTER_INVARIANT_SITES;
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, sample_ids, 2, flags, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&simplified), 2);
     CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&simplified), 1.0);
@@ -2318,7 +2339,6 @@ test_simplest_general_samples(void)
     char *haplotype;
     unsigned int j;
     node_id_t samples[2] = {0, 2};
-    node_id_t sample_map[2];
     node_id_t *s;
     int ret;
 
@@ -2351,7 +2371,7 @@ test_simplest_general_samples(void)
 
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, samples, 2, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, samples, 2, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_get_samples(&simplified, &s);
@@ -2835,10 +2855,85 @@ test_simplest_overlapping_edges_simplify(void)
         "1  0   0\n"
         "0  1   0";
     const char *edges =
-        "0  2   3   0,2\n"
-        "1  3   3   1,2\n";
+        "0  2   3   0\n"
+        "1  3   3   1\n"
+        "0  3   3   2\n";
     node_id_t samples[] = {0, 1, 2};
-    node_id_t sample_map[3];
+    node_table_t node_table;
+    edge_table_t edge_table;
+    migration_table_t migration_table;
+    site_table_t site_table;
+    mutation_table_t mutation_table;
+    simplifier_t simplifier;
+    int ret;
+
+    ret = node_table_alloc(&node_table, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edge_table_alloc(&edge_table, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migration_table, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&site_table, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutation_table, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(nodes, &node_table);
+    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 4);
+    parse_edges(edges, &edge_table);
+    CU_ASSERT_EQUAL_FATAL(edge_table.num_rows, 3);
+
+    ret = simplifier_alloc(&simplifier, samples, 3,
+            &node_table, &edge_table, &migration_table,
+            &site_table, &mutation_table, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_run(&simplifier, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_free(&simplifier);
+
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(node_table.num_rows, 4);
+    CU_ASSERT_EQUAL(edge_table.num_rows, 3);
+
+    /* Identical to the input.
+    0  2   3   0
+    1  3   3   1
+    0  3   3   2
+    */
+    CU_ASSERT_EQUAL(edge_table.left[0], 0);
+    CU_ASSERT_EQUAL(edge_table.left[1], 1);
+    CU_ASSERT_EQUAL(edge_table.left[2], 0);
+    CU_ASSERT_EQUAL(edge_table.right[0], 2);
+    CU_ASSERT_EQUAL(edge_table.right[1], 3);
+    CU_ASSERT_EQUAL(edge_table.right[2], 3);
+    CU_ASSERT_EQUAL(edge_table.parent[0], 3);
+    CU_ASSERT_EQUAL(edge_table.parent[1], 3);
+    CU_ASSERT_EQUAL(edge_table.parent[2], 3);
+    CU_ASSERT_EQUAL(edge_table.child[0], 0);
+    CU_ASSERT_EQUAL(edge_table.child[1], 1);
+    CU_ASSERT_EQUAL(edge_table.child[2], 2);
+
+    node_table_free(&node_table);
+    edge_table_free(&edge_table);
+    migration_table_free(&migration_table);
+    site_table_free(&site_table);
+    mutation_table_free(&mutation_table);
+}
+
+static void
+test_simplest_overlapping_unary_edges_simplify(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edges =
+        "0  2   2   0\n"
+        "1  3   2   1\n";
+    node_id_t samples[] = {0, 1};
     node_table_t node_table;
     edge_table_t edge_table;
     migration_table_t migration_table;
@@ -2859,119 +2954,36 @@ test_simplest_overlapping_edges_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, &node_table);
-    CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 4);
-    parse_edges(edges, &edge_table);
-    CU_ASSERT_EQUAL_FATAL(edge_table.num_rows, 4);
-
-    ret = simplifier_alloc(&simplifier, samples, 3,
-            &node_table, &edge_table, &migration_table,
-            &site_table, &mutation_table, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    simplifier_print_state(&simplifier, _devnull);
-    ret = simplifier_run(&simplifier, sample_map);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    simplifier_print_state(&simplifier, _devnull);
-    ret = simplifier_free(&simplifier);
-
-    printf("\n\nBROKEN simplify edge children test\n");
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(node_table.num_rows, 4);
-    /* CU_ASSERT_EQUAL(edge_table.num_rows, 3); */
-
-    /*
-     0       1       3       0,2
-     1       2       3       0,1,2
-     2       3       3       1,2
-     */
-    /* CU_ASSERT_EQUAL(edge_table.left[0], 0); */
-    /* CU_ASSERT_EQUAL(edge_table.left[1], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.left[2], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.right[0], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.right[1], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.right[2], 3); */
-    /* CU_ASSERT_EQUAL(edge_table.parent[0], 3); */
-    /* CU_ASSERT_EQUAL(edge_table.parent[1], 3); */
-    /* CU_ASSERT_EQUAL(edge_table.parent[2], 3); */
-    /* CU_ASSERT_EQUAL(edge_table.children_length[0], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.children_length[1], 3); */
-    /* CU_ASSERT_EQUAL(edge_table.children_length[2], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.children[0], 0); */
-    /* CU_ASSERT_EQUAL(edge_table.children[1], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.children[2], 0); */
-    /* CU_ASSERT_EQUAL(edge_table.children[3], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.children[4], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.children[5], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.children[6], 2); */
-
-    node_table_free(&node_table);
-    edge_table_free(&edge_table);
-    migration_table_free(&migration_table);
-    site_table_free(&site_table);
-    mutation_table_free(&mutation_table);
-}
-
-static void
-test_simplest_overlapping_unary_edges_simplify(void)
-{
-    const char *nodes =
-        "1  0   0\n"
-        "1  0   0\n"
-        "0  1   0";
-    const char *edges =
-        "0  2   2   0\n"
-        "1  3   2   1\n";
-    /* node_id_t samples[] = {0, 1}; */
-    /* node_id_t sample_map[2]; */
-    node_table_t node_table;
-    edge_table_t edge_table;
-    migration_table_t migration_table;
-    site_table_t site_table;
-    mutation_table_t mutation_table;
-    /* simplifier_t simplifier; */
-    int ret;
-
-    ret = node_table_alloc(&node_table, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edge_table_alloc(&edge_table, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migration_table, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutation_table, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    parse_nodes(nodes, &node_table);
     CU_ASSERT_EQUAL_FATAL(node_table.num_rows, 3);
     parse_edges(edges, &edge_table);
     CU_ASSERT_EQUAL_FATAL(edge_table.num_rows, 2);
 
-    /* NOTE this is causing valgrind errors */
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &node_table, &edge_table, &migration_table,
+            &site_table, &mutation_table, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_run(&simplifier, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-/*     ret = simplifier_alloc(&simplifier, samples, 2, */
-/*             &node_table, &edge_table, &migration_table, */
-/*             &site_table, &mutation_table, 0, 0); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*     simplifier_print_state(&simplifier, _devnull); */
-/*     ret = simplifier_run(&simplifier, sample_map); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
-/*     simplifier_print_state(&simplifier, _devnull); */
-/*     ret = simplifier_free(&simplifier); */
-/*     CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    CU_ASSERT_EQUAL(node_table.num_rows, 3);
+    CU_ASSERT_EQUAL(edge_table.num_rows, 2);
 
-/*     CU_ASSERT_EQUAL(node_table.num_rows, 3); */
-    printf("\n\nBROKEN simplify edge test 2\n");
-/*     /1* CU_ASSERT_EQUAL(edge_table.num_rows, 1); *1/ */
-
-/*     /1* Because we only sample 0 and 1, the flanking unary edges are removed */
-/*      1       2       2       0,1 */
-/*      *1/ */
-/*     CU_ASSERT_EQUAL(edge_table.left[0], 1); */
-/*     CU_ASSERT_EQUAL(edge_table.right[0], 2); */
-/*     CU_ASSERT_EQUAL(edge_table.parent[0], 2); */
-/*     /1* CU_ASSERT_EQUAL(edge_table.children_length[0], 2); *1/ */
-/*     /1* CU_ASSERT_EQUAL(edge_table.children[0], 0); *1/ */
-/*     /1* CU_ASSERT_EQUAL(edge_table.children[1], 1); *1/ */
+    /* Because we only sample 0 and 1, the flanking unary edges are removed
+     1       2       2       0
+     1       2       2       1
+     */
+    CU_ASSERT_EQUAL(edge_table.left[0], 1);
+    CU_ASSERT_EQUAL(edge_table.right[0], 2);
+    CU_ASSERT_EQUAL(edge_table.parent[0], 2);
+    CU_ASSERT_EQUAL(edge_table.child[0], 0);
+    CU_ASSERT_EQUAL(edge_table.left[1], 1);
+    CU_ASSERT_EQUAL(edge_table.right[1], 2);
+    CU_ASSERT_EQUAL(edge_table.parent[1], 2);
+    CU_ASSERT_EQUAL(edge_table.child[1], 1);
 
     node_table_free(&node_table);
     edge_table_free(&edge_table);
@@ -2979,7 +2991,6 @@ test_simplest_overlapping_unary_edges_simplify(void)
     site_table_free(&site_table);
     mutation_table_free(&mutation_table);
 }
-
 
 static void
 test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
@@ -2991,13 +3002,7 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     const char *edges =
         "0  2   2   0\n"
         "1  3   2   1\n";
-
-    /* There is a real problem with semantics here, because we've defined the
-     * edges such that 0 and 1 only cover the partial area, but there're
-     * defined covering the entire interval as samples. We're leaking segments
-     * because of this most likely. */
     node_id_t samples[] = {0, 1, 2};
-    node_id_t sample_map[3];
     node_table_t node_table;
     edge_table_t edge_table;
     migration_table_t migration_table;
@@ -3027,38 +3032,27 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
             &site_table, &mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     simplifier_print_state(&simplifier, _devnull);
-    ret = simplifier_run(&simplifier, sample_map);
+    ret = simplifier_run(&simplifier, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* Disabling these as it triggers an assert */
     /* simplifier_print_state(&simplifier, stdout); */
-    /* simplifier_print_state(&simplifier, _devnull); */
+    simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_EQUAL(node_table.num_rows, 3);
-    printf("\n\nBROKEN simplify edge test 3\n");
-    /* CU_ASSERT_EQUAL(edge_table.num_rows, 3); */
-    /*
-     0       1       2       0
-     1       2       2       0,1
-     2       3       2       1
+    CU_ASSERT_EQUAL(edge_table.num_rows, 2);
+    /* Identical to the input.
+        0  2   2   0
+        1  3   2   1
      */
-    /* CU_ASSERT_EQUAL(edge_table.left[0], 0); */
-    /* CU_ASSERT_EQUAL(edge_table.left[1], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.left[2], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.right[0], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.right[1], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.right[2], 3); */
-    /* CU_ASSERT_EQUAL(edge_table.parent[0], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.parent[1], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.parent[2], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.children_length[0], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.children_length[1], 2); */
-    /* CU_ASSERT_EQUAL(edge_table.children_length[2], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.children[0], 0); */
-    /* CU_ASSERT_EQUAL(edge_table.children[1], 0); */
-    /* CU_ASSERT_EQUAL(edge_table.children[2], 1); */
-    /* CU_ASSERT_EQUAL(edge_table.children[3], 1); */
+    CU_ASSERT_EQUAL(edge_table.left[0], 0);
+    CU_ASSERT_EQUAL(edge_table.left[1], 1);
+    CU_ASSERT_EQUAL(edge_table.right[0], 2);
+    CU_ASSERT_EQUAL(edge_table.right[1], 3);
+    CU_ASSERT_EQUAL(edge_table.parent[0], 2);
+    CU_ASSERT_EQUAL(edge_table.parent[1], 2);
+    CU_ASSERT_EQUAL(edge_table.child[0], 0);
+    CU_ASSERT_EQUAL(edge_table.child[1], 1);
 
     node_table_free(&node_table);
     edge_table_free(&edge_table);
@@ -3902,7 +3896,6 @@ test_single_tree_simplify(void)
     int ret;
     simplifier_t simplifier;
     node_id_t samples[] = {0, 1};
-    node_id_t sample_map[2];
 
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             single_tree_ex_sites, single_tree_ex_mutations, NULL);
@@ -3930,15 +3923,13 @@ test_single_tree_simplify(void)
             &nodes, &edges, &migrations, &sites, &mutations, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     simplifier_print_state(&simplifier, _devnull);
-    ret = simplifier_run(&simplifier, sample_map);
+    ret = simplifier_run(&simplifier, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     simplifier_print_state(&simplifier, _devnull);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(nodes.num_rows, 3);
-    printf("\n\nBROKEN simplify edge test 4\n");
-
-    /* CU_ASSERT_EQUAL(edges.num_rows, 1); */
+    CU_ASSERT_EQUAL(edges.num_rows, 2);
 
     /* Make sure we detect unsorted edges */
     ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
@@ -3965,28 +3956,28 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad children */
-    /* ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges, */
-    /*         &migrations, &sites, &mutations, &num_provenance_strings, */
-    /*         &provenance_strings); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* edges.children[0] = -1; */
-    /* ret = simplifier_alloc(&simplifier, samples, 2, */
-    /*         &nodes, &edges, &migrations, &sites, &mutations, 0); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS); */
-    /* ret = simplifier_free(&simplifier); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, &num_provenance_strings,
+            &provenance_strings);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edges.child[0] = -1;
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edges, &migrations, &sites, &mutations, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect loops */
-    /* ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges, */
-    /*         &migrations, &sites, &mutations, &num_provenance_strings, */
-    /*         &provenance_strings); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* edges.children[0] = edges.parent[0]; */
-    /* ret = simplifier_alloc(&simplifier, samples, 2, */
-    /*         &nodes, &edges, &migrations, &sites, &mutations, 0); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING); */
-    /* ret = simplifier_free(&simplifier); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, &num_provenance_strings,
+            &provenance_strings);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    edges.child[0] = edges.parent[0];
+    ret = simplifier_alloc(&simplifier, samples, 2,
+            &nodes, &edges, &migrations, &sites, &mutations, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad sites */
     ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
@@ -4383,7 +4374,7 @@ test_internal_sample_simplified_tree_sequence_iter(void)
     int ret;
     tree_sequence_t ts, simplified;
     node_id_t samples[] = {2, 3, 5};
-    node_id_t sample_map[3];
+    node_id_t node_map[9];
     node_id_t parents[] = {
         2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE,
         3, 4, MSP_NULL_NODE, 4, MSP_NULL_NODE,
@@ -4395,11 +4386,11 @@ test_internal_sample_simplified_tree_sequence_iter(void)
             internal_sample_ex_sites, internal_sample_ex_mutations, NULL);
     ret = tree_sequence_initialise(&simplified);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_simplify(&ts, samples, 3, 0, &simplified, sample_map);
+    ret = tree_sequence_simplify(&ts, samples, 3, 0, &simplified, node_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(sample_map[0], 0);
-    CU_ASSERT_EQUAL(sample_map[1], 1);
-    CU_ASSERT_EQUAL(sample_map[2], 3);
+    CU_ASSERT_EQUAL(node_map[2], 0);
+    CU_ASSERT_EQUAL(node_map[3], 1);
+    CU_ASSERT_EQUAL(node_map[5], 3);
 
     verify_trees(&simplified, num_trees, parents);
     tree_sequence_free(&simplified);
@@ -5180,29 +5171,24 @@ verify_simplify_errors(tree_sequence_t *ts)
     node_id_t u;
     tree_sequence_t subset;
     node_id_t sample[2];
-    node_id_t sample_map[2];
 
     ret = tree_sequence_get_samples(ts, &s);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     memcpy(sample, s, 2 * sizeof(node_id_t));
 
-    ret = tree_sequence_simplify(ts, sample, 0, 0, &subset, sample_map);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = tree_sequence_simplify(ts, sample, 1, 0, &subset, sample_map);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     for (u = 0; u < (node_id_t) tree_sequence_get_num_nodes(ts); u++) {
         if (! tree_sequence_is_sample(ts, u)) {
             sample[1] = u;
-            ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, sample_map);
+            ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, NULL);
             CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SAMPLES);
         }
     }
     sample[0] = -1;
-    ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, sample_map);
+    ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     sample[0] = s[0];
     sample[1] = s[0];
-    ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, sample_map);
+    ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SAMPLE);
 }
 
@@ -5436,6 +5422,8 @@ test_save_empty_hdf5(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_empty_tree_sequence(&ts2, sequence_length);
 
+    tree_sequence_free(&ts1);
+    tree_sequence_free(&ts2);
     node_table_free(&node_table);
     edge_table_free(&edge_table);
 }

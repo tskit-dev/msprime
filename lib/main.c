@@ -1064,7 +1064,6 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
 {
     tree_sequence_t ts, subset;
     node_id_t *samples;
-    node_id_t *sample_map;
     int flags = 0;
     int ret;
 
@@ -1086,15 +1085,11 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     if (ret != 0) {
         fatal_library_error(ret, "get_samples");
     }
-    sample_map = malloc(num_samples * sizeof(node_id_t));
-    if (sample_map == NULL) {
-        fatal_error("malloc sample map");
-    }
     ret = tree_sequence_initialise(&subset);
     if (ret != 0) {
         fatal_library_error(ret, "init error");
     }
-    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset, sample_map);
+    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset, NULL);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }
@@ -1108,7 +1103,6 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     }
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
-    free(sample_map);
 }
 
 int

@@ -395,6 +395,56 @@ copyreg.pickle(SiteTable, _site_table_pickle)
 copyreg.pickle(MutationTable, _mutation_table_pickle)
 
 
+class TableCollection(object):
+    """
+    A collection of tables. This is a convenience class allowing for convenient
+    printing and comparisons of a collection of related tables.
+    """
+    def __init__(
+            self, nodes=None, edges=None, migrations=None, sites=None, mutations=None):
+        self.nodes = nodes
+        self.edges = edges
+        self.migrations = migrations
+        self.sites = sites
+        self.mutations = mutations
+
+    def asdict(self):
+        """
+        Returns this TableCollection as a dictionary mapping the keys "nodes",
+        "edges", etc to their respective table objects.
+        """
+        return {
+            "nodes": self.nodes,
+            "edges": self.edges,
+            "migrations": self.migrations,
+            "sites": self.sites,
+            "mutations": self.mutations
+        }
+
+    def __banner(self, title):
+        width = 60
+        line = "#" * width
+        title_line = "#   {}".format(title)
+        title_line += " " * (width - len(title_line) - 1)
+        title_line += "#"
+        return line + "\n" + title_line + "\n" + line + "\n"
+
+    def __str__(self):
+        s = self.__banner("Nodes")
+        s += str(self.nodes) + "\n"
+        s += self.__banner("Edges")
+        s += str(self.edges) + "\n"
+        s += self.__banner("Sites")
+        s += str(self.sites) + "\n"
+        s += self.__banner("Mutations")
+        s += str(self.mutations) + "\n"
+        s += self.__banner("Migrations")
+        s += str(self.migrations)
+        return s
+
+    # TODO add support for __eq__ and __ne__
+
+
 #############################################
 # Table functions.
 #############################################

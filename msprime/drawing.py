@@ -247,14 +247,11 @@ class TextTreeDrawer(TreeDrawer):
         raise NotImplementedError()
 
     def _assign_coordinates(self):
-        # Get the depth of every node.
+        # Get the age of each node and rank them.
+        times = set(self._tree.time(u) for u in self._tree.nodes())
+        depth = {t: 2 * j for j, t in enumerate(sorted(times, reverse=True))}
         for u in self._tree.nodes():
-            v = u
-            depth = -1
-            while v != NULL_NODE:
-                v = self._tree.parent(v)
-                depth += 1
-            self._y_coords[u] = 3 * depth
+            self._y_coords[u] = depth[self._tree.time(u)]
         self._height = 0
         if len(self._y_coords) > 0:
             self._height = max(self._y_coords.values()) + 1
@@ -263,8 +260,9 @@ class TextTreeDrawer(TreeDrawer):
         for root in self._tree.roots:
             for u in self._tree.nodes(root, order="postorder"):
                 if self._tree.is_leaf(u):
+                    label_size = len(self._node_label_text[u])
                     self._x_coords[u] = x
-                    x += len(self._node_label_text[u]) + 1
+                    x += label_size + 1
                 else:
                     coords = [self._x_coords[c] for c in self._tree.children(u)]
                     if len(coords) == 1:
@@ -274,7 +272,6 @@ class TextTreeDrawer(TreeDrawer):
                         b = max(coords)
                         assert b - a > 1
                         self._x_coords[u] = int(round((a + (b - a) / 2)))
-
             x += 1
         self._width = x + 1
 
