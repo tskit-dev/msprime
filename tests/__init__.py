@@ -29,7 +29,14 @@ import random
 import sys
 import unittest
 
-import numpy as np
+try:
+    # We run some tests on the CLI to make sure that we can work in a minimal
+    # sense without numpy. We should extract the PythonSimplifier (and other
+    # algorithms) out into their own module so we don't pull in numpy for
+    # all tests.
+    import numpy as np
+except ImportError:
+    pass
 
 import msprime
 
