@@ -154,6 +154,35 @@ def jiggle_samples(ts):
     return msprime.load_tables(nodes=nodes, edges=tables.edges)
 
 
+def insert_branch_mutations(ts):
+    """
+    Returns a copy of the specified tree sequence with a mutation on every branch
+    in every tree.
+    """
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    for tree in ts.trees():
+        site = len(sites)
+        sites.add_row(position=tree.interval[0], ancestral_state='0')
+        for root in tree.roots:
+            state = {root: 0}
+            mutation = {root: -1}
+            stack = [root]
+            while len(stack) > 0:
+                u = stack.pop()
+                stack.extend(tree.children(u))
+                v = tree.parent(u)
+                if v != msprime.NULL_NODE:
+                    state[u] = (state[v] + 1) % 2
+                    mutation[u] = len(mutations)
+                    mutations.add_row(
+                        site=site, node=u, derived_state=str(state[u]),
+                        parent=mutation[v])
+    tables = ts.tables
+    return msprime.load_tables(
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+
+
 class TopologyTestCase(unittest.TestCase):
     """
     Superclass of test cases containing common utilities.
@@ -2372,13 +2401,14 @@ class TestPythonSimplifier(unittest.TestCase):
     3       0.00000000      1.00000000      8       6,7
     """
 
-    def do_simplify(self, ts, samples=None, compare_lib=True):
+    def do_simplify(
+            self, ts, samples=None, compare_lib=True, filter_invariant_sites=True):
         """
         Runs the Python test implementation of simplify.
         """
         if samples is None:
             samples = ts.samples()
-        s = tests.Simplifier(ts, samples)
+        s = tests.Simplifier(ts, samples, filter_invariant_sites=filter_invariant_sites)
         new_ts, node_map = s.simplify()
         if compare_lib:
             lib_tables = ts.dump_tables()
@@ -2386,7 +2416,7 @@ class TestPythonSimplifier(unittest.TestCase):
             msprime.simplify_tables(
                 samples=samples, nodes=lib_tables.nodes, edges=lib_tables.edges,
                 sites=lib_tables.sites, mutations=lib_tables.mutations,
-                node_map=lib_node_map)
+                node_map=lib_node_map, filter_invariant_sites=filter_invariant_sites)
             py_tables = new_ts.dump_tables()
             self.assertEqual(lib_tables.nodes, py_tables.nodes)
             self.assertEqual(lib_tables.edges, py_tables.edges)
@@ -2729,3 +2759,33 @@ class TestPythonSimplifier(unittest.TestCase):
         trees = [{0: 1, 1: 3, 2: 3}, {0: 4, 1: 3, 2: 3, 3: 4}]
         for t in tss.trees():
             self.assertEqual(t.parent_dict, trees[t.index])
+
+    def verify_simplify_haplotypes(self, ts, samples):
+        sub_ts, node_map = self.do_simplify(
+            # TODO enable compare_lib
+            ts, samples, filter_invariant_sites=False, compare_lib=False)
+        self.assertEqual(ts.num_sites, sub_ts.num_sites)
+        sub_haplotypes = list(sub_ts.haplotypes())
+        k = 0
+        for j, h in enumerate(ts.haplotypes()):
+            if k == len(samples):
+                break
+            if samples[k] == j:
+                self.assertEqual(h, sub_haplotypes[k])
+                k += 1
+
+    def test_single_tree_recurrent_mutations(self):
+        ts = msprime.simulate(10, random_seed=10)
+        ts = insert_branch_mutations(ts)
+        for num_samples in range(1, ts.num_samples):
+            for samples in itertools.combinations(ts.samples(), num_samples):
+                self.verify_simplify_haplotypes(ts, samples)
+
+    def test_many_trees_recurrent_mutations(self):
+        ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
+        self.assertGreater(ts.num_trees, 3)
+        ts = insert_branch_mutations(ts)
+        for num_samples in range(1, ts.num_samples):
+            for samples in itertools.combinations(ts.samples(), num_samples):
+                self.verify_simplify_haplotypes(ts, samples)
+

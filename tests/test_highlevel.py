@@ -290,32 +290,28 @@ def make_alternating_back_mutations(ts):
     Returns a copy of the specified tree sequence with a sequence of
     alternating mutations along each path in each tree.
     """
-    nodes = msprime.NodeTable()
-    edges = msprime.EdgeTable()
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
-
-    site = 0
     for tree in ts.trees():
-        sites.add_row(position=tree.interval[0], ancestral_state="0")
-        state = {tree.root: 0}
-        for u in tree.nodes():
-            if u != tree.root:
-                state[u] = (state[u] + 1) % 2
-            for v in tree.children(u):
-                state[v] = state[u]
-        del state[tree.root]
-        # Ensure we have some variation in our samples.
-        s = sum(state[u] for u in tree.samples(tree.root))
-        if s == 0 or s == tree.sample_size:
-            del state[next(tree.samples(tree.root))]
-        site_mutations = sorted([(-tree.time(u), u) for u in state.keys()])
-        for _, u in sorted(site_mutations):
-            mutations.add_row(site, u, str(state[u]))
-        site += 1
-    ts.dump_tables(nodes=nodes, edges=edges)
+        site = len(sites)
+        sites.add_row(position=tree.interval[0], ancestral_state='0')
+        for root in tree.roots:
+            state = {root: 0}
+            mutation = {root: -1}
+            stack = [root]
+            while len(stack) > 0:
+                u = stack.pop()
+                stack.extend(tree.children(u))
+                v = tree.parent(u)
+                if v != msprime.NULL_NODE:
+                    state[u] = (state[v] + 1) % 2
+                    mutation[u] = len(mutations)
+                    mutations.add_row(
+                        site=site, node=u, derived_state=str(state[u]),
+                        parent=mutation[v])
+    tables = ts.tables
     return msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
 
 
 class TestHarmonicNumber(unittest.TestCase):

@@ -541,7 +541,7 @@ tree_sequence_check(tree_sequence_t *self)
     node_id_t child, parent, last_parent, last_child;
     mutation_id_t parent_mut;
     size_t j;
-    double left, last_left, t1, t2;
+    double left, last_left;
     double *time = self->nodes.time;
 
     for (j = 0; j < self->edges.num_records; j++) {
@@ -649,8 +649,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
         if (parent_mut != MSP_NULL_MUTATION) {
-            /* Mutations are listed in non-increasing time order per site. Therefore,
-             * parent mutations _must_ have ID < than child mutations */
+            /* Parents must be listed before their children */
             if (parent_mut > (mutation_id_t) j) {
                 ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
                 goto out;
@@ -664,14 +663,6 @@ tree_sequence_check(tree_sequence_t *self)
             if (self->mutations.site[j - 1] > self->mutations.site[j]) {
                 ret = MSP_ERR_UNSORTED_MUTATIONS;
                 goto out;
-            }
-            if (self->mutations.site[j - 1] == self->mutations.site[j]) {
-                t1 = time[self->mutations.node[j - 1]];
-                t2 = time[self->mutations.node[j]];
-                if (t1 < t2) {
-                    ret = MSP_ERR_UNSORTED_MUTATION_NODES;
-                    goto out;
-                }
             }
         }
     }
@@ -1203,7 +1194,7 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         for (j = 0; j < self->mutations.num_records; j++) {
             ret = mutation_table_add_row(mutations,
                     self->mutations.site[j], self->mutations.node[j],
-                    MSP_NULL_MUTATION, self->mutations.derived_state[j],
+                    self->mutations.parent[j], self->mutations.derived_state[j],
                     self->mutations.derived_state_length[j]);
             if (ret != 0) {
                 goto out;

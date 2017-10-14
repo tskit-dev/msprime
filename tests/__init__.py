@@ -655,31 +655,6 @@ class Segment(object):
         return (self.left, self.right, self.node) < (other.left, other.right, self.node)
 
 
-class SortedMap(dict):
-    """
-    Simple implementation of a sorted mapping. Based on the API for bintrees.AVLTree.
-    We don't use bintrees here because it is not available on Windows.
-    """
-    def floor_key(self, k):
-        ret = None
-        for key in sorted(self.keys()):
-            if key <= k:
-                ret = key
-            if key > k:
-                break
-            ret = key
-        return ret
-
-    def succ_key(self, k):
-        ret = None
-        for key in sorted(self.keys()):
-            if key >= k:
-                ret = key
-            if key > k:
-                break
-        return ret
-
-
 class Simplifier(object):
     """
     Simplifies a tree sequence to its minimal representation given a subset
@@ -690,22 +665,19 @@ class Simplifier(object):
         self.n = len(sample)
         self.sequence_length = ts.sequence_length
         self.filter_invariant_sites = filter_invariant_sites
+        self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
         # has processed the ancestors, they are are removed from the map.
         self.A = {}
-        # Output tables
+        self.mutation_table = msprime.MutationTable(ts.num_mutations)
         self.node_table = msprime.NodeTable(ts.num_nodes)
         self.edge_table = msprime.EdgeTable(ts.num_edges)
-        self.site_table = msprime.SiteTable(max(1, ts.num_sites))
-        self.mutation_table = msprime.MutationTable(max(1, ts.num_mutations))
-        self.num_output_nodes = 0
-        self.output_sites = [
-            msprime.Site(
-                position=site.position, ancestral_state=site.ancestral_state,
-                mutations=[], index=site.index) for site in ts.sites()]
+        self.site_table = msprime.SiteTable(ts.num_sites)
+        self.mutation_table = msprime.MutationTable(ts.num_mutations)
         self.edge_buffer = []
         self.node_id_map = {}
+        self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
         # Map all samples at time 0 to new nodes. Keep all internal samples in
         # a list so that we can map them later as we encounter them.
         self.unmapped_samples = set()
@@ -715,26 +687,23 @@ class Simplifier(object):
                 self.insert_sample(sample_id)
             else:
                 self.unmapped_samples.add(sample_id)
-        # We keep a sorted map of mutations for each input node.
-        self.mutation_map = [SortedMap() for _ in range(ts.num_nodes)]
-        for site in self.ts.sites():
-            for mut in site.mutations:
-                self.mutation_map[mut.node][site.position] = mut
+        # We keep a map of input nodes to mutations.
+        self.mutation_map = [[] for _ in range(ts.num_nodes)]
+        position = ts.tables.sites.position
+        site = ts.tables.mutations.site
+        node = ts.tables.mutations.node
+        for mutation_id in range(ts.num_mutations):
+            site_position = position[site[mutation_id]]
+            self.mutation_map[node[mutation_id]].append((site_position, mutation_id))
 
     def get_mutations(self, input_id, left, right):
         """
         Returns all mutations for the specified input ID over the specified
         interval.
         """
-        mutations = self.mutation_map[input_id]
-        ret = SortedMap()
-        pos = mutations.succ_key(left)
-        while pos is not None and pos < right:
-            mut = mutations.pop(pos)
-            ret[pos] = mut
-            assert left <= pos < right
-            pos = mutations.succ_key(pos)
-        return ret
+        for pos, mutation_id in self.mutation_map[input_id]:
+            if left <= pos < right:
+                yield mutation_id
 
     def alloc_segment(self, left, right, node, next=None):
         """
@@ -757,10 +726,9 @@ class Simplifier(object):
         node ID.
         """
         node = self.ts.node(input_id)
+        self.node_id_map[input_id] = len(self.node_table)
         self.node_table.add_row(
             flags=node.flags, time=node.time, population=node.population)
-        self.node_id_map[input_id] = self.num_output_nodes
-        self.num_output_nodes += 1
 
     def flush_edges(self):
         """
@@ -816,12 +784,12 @@ class Simplifier(object):
             v = self.mutation_map[u]
             if len(v) > 0:
                 print("\t", u, "->", v)
-        print("Output sites:")
-        for site in self.output_sites:
-            print("\t", site)
         print("Node ID map: (input->output)")
         for input_id in sorted(self.node_id_map.keys()):
             print("\t", input_id, "->", self.node_id_map[input_id])
+        print("Mutation node map")
+        for j in range(self.num_mutations):
+            print("\t", j, "->", self.mutation_node_map[j])
         print("Output nodes:")
         print(self.node_table)
         print("Output Edges: ")
@@ -854,7 +822,6 @@ class Simplifier(object):
         """
         assert len(set(e.parent for e in edges)) == 1
         parent = edges[0].parent
-
         # For any children that are samples, insert them directly into the state.
         for edge in edges:
             if edge.child in self.unmapped_samples:
@@ -890,11 +857,98 @@ class Simplifier(object):
             while seg is not None:
                 roots[seg.node].append(seg)
                 seg = seg.next
-        output_site_id = 0
-        # This is partially done. Want to fix the root determination and
-        # mutation-parent first before finalising this.
-        for site in self.output_sites:
-            ancestral_state = site.ancestral_state
+
+
+        # Build a map from the old mutation IDs to new IDs. Any mutation that
+        # has not been mapped to a node in the new tree sequence will be removed.
+        mutation_id_map = [-1 for _ in range(self.num_mutations)]
+        num_output_mutations = 0
+        old_mutations = self.ts.tables.mutations
+        for j in range(self.num_mutations):
+            ancestral_state = list(self.ts.sites())[old_mutations.site[j]].ancestral_state
+            derived_state = chr(old_mutations.derived_state[j])
+            mapped_node = self.mutation_node_map[j]
+            old_parent = old_mutations.parent[j]
+            new_parent = -1
+            if old_parent != -1:
+                new_parent = mutation_id_map[old_parent]
+            # print("Mapping mutation", j, "site", old_mutations.site[j],
+            #         "; old_parent = ", old_parent,
+            #         "new_Praent= ", new_parent,
+            #         "old_node = ", old_mutations.node[j],
+            #         "mapped_node = ", mapped_node,
+            #         "ancestral_state = ", ancestral_state,
+            #         "derived_state = ", derived_state)
+
+
+
+            # TODO check if these are happeng over roots as well, and determine
+            # the new ancestral states for the sites.
+            if mapped_node != -1:
+                keep = True
+                if new_parent == -1 and ancestral_state == derived_state:
+                    keep = False
+                if keep:
+                    mutation_id_map[j] = num_output_mutations
+                    num_output_mutations += 1
+        # print("Mutation ID map = ", mutation_id_map)
+
+        for site in self.ts.sites():
+            self.site_table.add_row(
+                position=site.position, ancestral_state=site.ancestral_state)
+
+        # print("Old Mutations:")
+        # print(old_mutations)
+        # print("New mutaions:")
+        for j in range(self.num_mutations):
+            if mutation_id_map[j] != -1:
+                assert mutation_id_map[j] == len(self.mutation_table)
+                mapped_parent = -1
+                if old_mutations.parent[j] != -1:
+                    mapped_parent = mutation_id_map[old_mutations.parent[j]]
+                mapped_node = self.mutation_node_map[j]
+                assert  mapped_node != -1
+                old_node = old_mutations.node[j]
+                derived_state = chr(old_mutations.derived_state[j])
+                # position = list(self.ts.sites())[old_mutations.site[j]].position
+                # ancestral_state = list(self.ts.sites())[old_mutations.site[j]].ancestral_state
+                # is_root = False
+                # if old_node in roots:
+                #     for seg in roots[old_node]:
+                #         if seg.left <= position < seg.right:
+                #             is_root = True
+                # print("mutation", j, old_node, "root = ", is_root, ancestral_state, derived_state,
+                #         parentkkkkkkkk)
+                # # If the mutation node is a root and the derived state is equal to
+                # # the site's ancestral state, remove it.
+                # if not (is_root and derived_state == ancestral_state):
+                self.mutation_table.add_row(
+                    site=old_mutations.site[j],
+                    node=mapped_node,
+                    parent=mapped_parent,
+                    derived_state=derived_state)
+
+        # print(self.site_table)
+        # print(self.mutation_table)
+
+
+
+
+#         output_site_id = 0
+#         # This is partially done. Want to fix the root determination and
+#         # mutation-parent first before finalising this.
+#         for site in self.output_sites:
+#             ancestral_state = site.ancestral_state
+#             for new_node, mutation in site.mutations:
+#                 print("mutation", new_node, mutation)
+#                 self.mutation_table.add_row(
+#                     site=len(self.site_table), node=new_node,
+#                     derived_state=mutation.derived_state)
+
+
+#             self.site_table.add_row(
+#                 position=site.position, ancestral_state=ancestral_state)
+
             # Reverse the mutations to get the correct order.
             # site.mutations.reverse()
             # # This is an ugly hack to see if the mutation is over a root. We will
@@ -911,15 +965,14 @@ class Simplifier(object):
             # we'll need something better.
             # if site.mutations[0].derived_state == '0':
             #     ancestral_state = '1'
-            if not self.filter_invariant_sites or len(site.mutations) > 0:
-
-                self.site_table.add_row(
-                    position=site.position, ancestral_state=ancestral_state)
-                for mutation in site.mutations:
-                    self.mutation_table.add_row(
-                        site=output_site_id, node=mutation.node,
-                        derived_state=mutation.derived_state)
-                output_site_id += 1
+            # if not self.filter_invariant_sites or len(site.mutations) > 0:
+            #     self.site_table.add_row(
+            #         position=site.position, ancestral_state=ancestral_state)
+            #     for mutation in site.mutations:
+            #         self.mutation_table.add_row(
+            #             site=output_site_id, node=mutation.node,
+            #             derived_state=mutation.derived_state)
+            #     output_site_id += 1
 
     def simplify(self):
         # print("START")
@@ -933,8 +986,19 @@ class Simplifier(object):
                     edges = []
                 edges.append(e)
             self.process_parent_edges(edges)
+
         # print("DONE")
         # self.print_state()
+
+        # Record any final mutations over the roots.
+        for input_id in list(self.A.keys()):
+            x = self.A[input_id]
+            while x is not None:
+                mutations = self.get_mutations(input_id, x.left, x.right)
+                for mutation_id in mutations:
+                    # print("Recording mutation over root", x.node, mutation_id)
+                    self.record_mutation(x.node, mutation_id)
+                x = x.next
 
         # Record any remaining unmapped samples.
         for node in sorted(self.unmapped_samples):
@@ -951,11 +1015,7 @@ class Simplifier(object):
         return ts, node_map
 
     def record_mutation(self, node, mutation):
-        site = self.output_sites[mutation.site]
-        site.mutations.append(
-            msprime.Mutation(
-                site=site.index, node=node, derived_state=mutation.derived_state,
-                parent=msprime.NULL_MUTATION))
+        self.mutation_node_map[mutation] = node
 
     def is_sample(self, input_id):
         return input_id in self.samples
@@ -973,8 +1033,8 @@ class Simplifier(object):
         x = head
         while x is not None:
             mutations = self.get_mutations(input_id, x.left, x.right)
-            for pos, mut in mutations.items():
-                self.record_mutation(x.node, mut)
+            for mutation_id in mutations:
+                self.record_mutation(x.node, mutation_id)
             x = x.next
 
         x = head

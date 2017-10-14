@@ -201,12 +201,6 @@ msp_strerror(int err)
         case MSP_ERR_NOT_INITIALISED:
             ret = "object not initialised. Please file a bug report.";
             break;
-        /* case MSP_ERR_MUTATIONS_NOT_POSITION_SORTED: */
-        /*     ret = "Mutations must be sorted by position"; */
-        /*     break; */
-        case MSP_ERR_UNSORTED_MUTATION_NODES:
-            ret = "Mutations within a site must be sorted in non-increasing time order.";
-            break;
         case MSP_ERR_DUPLICATE_MUTATION_NODES:
             ret = "Cannot have more than one mutation at a node for a given site.";
             break;
