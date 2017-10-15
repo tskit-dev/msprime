@@ -308,6 +308,8 @@ class CommonTestsMixin(object):
             t2 = self.table_class()
             self.assertEqual(t1, t1)
             self.assertEqual(t1, t2)
+            self.assertTrue(t1 == t2)
+            self.assertFalse(t1 != t2)
             t1.set_columns(**input_data)
             self.assertEqual(t1, t1)
             self.assertNotEqual(t1, t2)
@@ -325,6 +327,7 @@ class CommonTestsMixin(object):
                 input_data_copy[col.name] = col_copy
                 t2.set_columns(**input_data_copy)
                 self.assertEqual(t1, t2)
+                self.assertFalse(t1 != t2)
                 col_copy += 1
                 t2.set_columns(**input_data_copy)
                 self.assertNotEqual(t1, t2)

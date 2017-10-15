@@ -75,6 +75,9 @@ class NodeTable(_msprime.NodeTable):
                 np.array_equal(self.name_length, other.name_length))
         return ret
 
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def __len__(self):
         return self.num_rows
 
@@ -161,6 +164,9 @@ class EdgeTable(_msprime.EdgeTable):
                 np.array_equal(self.child, other.child))
         return ret
 
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def __len__(self):
         return self.num_rows
 
@@ -217,6 +223,9 @@ class MigrationTable(_msprime.MigrationTable):
                 np.array_equal(self.dest, other.dest) and
                 np.array_equal(self.time, other.time))
         return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __len__(self):
         return self.num_rows
@@ -282,6 +291,9 @@ class SiteTable(_msprime.SiteTable):
                 np.array_equal(
                     self.ancestral_state_length, other.ancestral_state_length))
         return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __len__(self):
         return self.num_rows
@@ -353,6 +365,9 @@ class MutationTable(_msprime.MutationTable):
                 np.array_equal(
                     self.derived_state_length, other.derived_state_length))
         return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __len__(self):
         return self.num_rows
