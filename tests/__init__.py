@@ -871,7 +871,7 @@ class Simplifier(object):
                         num_output_mutations += 1
                         num_output_site_mutations += 1
             output_site = True
-            if self.filter_invariant_sites and num_output_mutations == 0:
+            if self.filter_invariant_sites and num_output_site_mutations == 0:
                 output_site = False
 
             if output_site:

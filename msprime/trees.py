@@ -1042,31 +1042,6 @@ class TreeSequence(object):
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
 
-    def copy(self, sites=None):
-        # Experimental API. Return a copy of this tree sequence, optionally with
-        # the sites set to the specified list.
-        node_table = tables.NodeTable()
-        edge_table = tables.EdgeTable()
-        migration_table = tables.MigrationTable()
-        site_table = tables.SiteTable()
-        mutation_table = tables.MutationTable()
-        self._ll_tree_sequence.dump_tables(
-            nodes=node_table, edges=edge_table, migrations=migration_table,
-            sites=site_table, mutations=mutation_table)
-        if sites is not None:
-            site_table.reset()
-            mutation_table.reset()
-            for j, site in enumerate(sites):
-                site_table.add_row(site.position, site.ancestral_state)
-                for mutation in site.mutations:
-                    mutation_table.add_row(j, mutation.node, mutation.derived_state)
-        new_ll_ts = _msprime.TreeSequence()
-        new_ll_ts.load_tables(
-            nodes=node_table, edges=edge_table, migrations=migration_table,
-            sites=site_table, mutations=mutation_table,
-            sequence_length=self.sequence_length)
-        return TreeSequence(new_ll_ts)
-
     @property
     def provenance(self):
         return self.get_provenance()
@@ -1758,12 +1733,16 @@ class TreeSequence(object):
         if map_nodes:
             node_map = np.empty(self.num_nodes, dtype=np.int32)
             tables.simplify_tables(
-                samples=samples, nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations, node_map=node_map)
+                samples=samples, sequence_length=self.sequence_length,
+                nodes=t.nodes, edges=t.edges,
+                sites=t.sites, mutations=t.mutations, node_map=node_map,
+                filter_invariant_sites=filter_invariant_sites)
         else:
             tables.simplify_tables(
-                samples=samples, nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations)
+                samples=samples, sequence_length=self.sequence_length,
+                nodes=t.nodes, edges=t.edges,
+                sites=t.sites, mutations=t.mutations,
+                filter_invariant_sites=filter_invariant_sites)
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
             mutations=t.mutations, sequence_length=self.sequence_length)

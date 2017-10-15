@@ -1780,9 +1780,8 @@ simplifier_check_input(simplifier_t *self)
     }
     /* Check the sites */
     for (j = 0; j < self->sites->num_rows; j++) {
-        /* Note that we can legitimately have sites with positions greater than
-         * the sequence_length computed from the edges. */
-        if (self->sites->position[j] < 0) {
+        if (self->sites->position[j] < 0
+                || self->sites->position[j] >= self->sequence_length) {
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }
@@ -1890,7 +1889,8 @@ out:
 }
 
 int
-simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
+simplifier_alloc(simplifier_t *self, double sequence_length,
+        node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations,
         size_t max_buffered_edges, int flags)
@@ -1906,21 +1906,30 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     self->edges = edges;
     self->sites = sites;
     self->mutations = mutations;
-    self->sequence_length = 0;
+
 
     if (nodes == NULL || edges == NULL || samples == NULL
             || sites == NULL || mutations == NULL || migrations == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    if (sequence_length == 0) {
+        /* infer sequence length from the edges */
+        sequence_length = 0.0;
+        for (j = 0; j < edges->num_rows; j++) {
+            sequence_length = GSL_MAX(sequence_length, edges->right[j]);
+        }
+        if (sequence_length <= 0.0) {
+            ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+            goto out;
+        }
+    }
+    self->sequence_length = sequence_length;
+
     /* Use these values to avoid malloc(0) */
     num_nodes_alloc = 1 + nodes->num_rows;
     num_edges_alloc = 1 + edges->num_rows;
 
-    /* Compute the sequence length */
-    for (j = 0; j < edges->num_rows; j++) {
-        self->sequence_length = GSL_MAX(edges->right[j], self->sequence_length);
-    }
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
     ret = simplifier_check_input(self);
@@ -2052,6 +2061,8 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
     ret = simplifier_init_samples(self, samples);
+
+    /* simplifier_print_state(self, stdout); */
 out:
     return ret;
 }
@@ -2155,6 +2166,8 @@ simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
      * the ancestry segments and the list of positions. This will be more efficient
      * unless we have huge numbers of mutations per node */
 
+    /* simplifier_print_state(self, stdout); */
+
     if (avl_count(avl_tree) > 0) {
         while (seg != NULL) {
             search.position = seg->left;
@@ -2167,6 +2180,7 @@ simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
             while (a != NULL
                     && ((mutation_position_map_t *) a->item)->position < seg->right) {
                 mpm = (mutation_position_map_t *) a->item;
+                assert(mpm->position >= seg->left && mpm->position < seg->right);
                 for (mnl = mpm->head; mnl != NULL; mnl = mnl->next) {
                     /* Set the output node for this mutation to the segment's node */
                     self->mutation_node_map[mnl->mutation_id] = seg->node;
@@ -2471,6 +2485,7 @@ simplifier_output_sites(simplifier_t *self)
     bool keep_mutation, keep_site;
     bool filter_zero_mutation_sites = (self->flags & MSP_FILTER_INVARIANT_SITES);
 
+
     /* TODO Implement the checks below for ancestral state and derived state properly when
      * we've added the _offset columns to the tables. */
     assert(self->input_sites.total_ancestral_state_length
@@ -2512,9 +2527,8 @@ simplifier_output_sites(simplifier_t *self)
         site_end = input_mutation;
 
         keep_site = true;
-        if (filter_zero_mutation_sites && num_output_mutations == 0) {
+        if (filter_zero_mutation_sites && num_output_site_mutations == 0) {
             keep_site = false;
-
         }
         if (keep_site) {
             for (input_mutation = site_start; input_mutation < site_end; input_mutation++) {
@@ -2553,6 +2567,7 @@ simplifier_output_sites(simplifier_t *self)
         input_mutation = site_end;
     }
     assert(input_mutation == num_input_mutations);
+    /* simplifier_print_state(self, stdout); */
 out:
     return ret;
 }
@@ -2652,6 +2667,16 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
             goto out;
         }
     }
+    /* Record any remaining mutations over the roots */
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        if (self->ancestor_map[j] != NULL) {
+            ret = simplifier_record_mutations(self, (node_id_t) j);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+
     /* If we have any unmapped remaining unmapped samples, we need to add them in */
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         if (self->unmapped_sample[j]) {
@@ -2670,6 +2695,7 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
         /* Finally, output the new IDs for the nodes, if required. */
         memcpy(node_map, self->node_id_map, self->input_nodes.num_rows * sizeof(node_id_t));
     }
+    /* simplifier_print_state(self, stdout); */
 out:
     return ret;
 }

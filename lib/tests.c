@@ -875,6 +875,63 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
     sparse_tree_free(&tree);
 }
 
+/* When we keep all sites in simplify, the haplotypes for the subset of the
+ * samples should be the same as the original */
+static void
+verify_simplify_haplotypes(tree_sequence_t *ts, tree_sequence_t *subset,
+        node_id_t *samples, uint32_t num_samples, node_id_t *node_map)
+{
+    int ret;
+    size_t m = tree_sequence_get_num_sites(ts);
+    size_t n = tree_sequence_get_num_samples(ts);
+    hapgen_t hapgen, subset_hapgen;
+    char *h;
+    char **haplotypes;
+    size_t j;
+    node_id_t *all_samples;
+
+    ret = hapgen_alloc(&hapgen, ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = hapgen_alloc(&subset_hapgen, subset);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(m, tree_sequence_get_num_sites(subset));
+    tree_sequence_get_samples(ts, &all_samples);
+
+    printf("n = %d m = %d\n", (int) n, (int) m);
+    tree_sequence_print_state(ts, stdout);
+    printf("SUBSET\n");
+    tree_sequence_print_state(subset, stdout);
+
+    haplotypes = calloc(tree_sequence_get_num_nodes(ts),  sizeof(char *));
+    CU_ASSERT_FATAL(haplotypes != NULL);
+    for (j = 0; j < n; j++) {
+        ret = hapgen_get_haplotype(&hapgen, j, &h);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        haplotypes[all_samples[j]] = malloc((m + 1) * sizeof(char));
+        CU_ASSERT_FATAL(haplotypes[all_samples[j]] != NULL);
+        strcpy(haplotypes[all_samples[j]], h);
+        /* printf("%d: %s\n", j, haplotypes[j]); */
+    }
+    for (j = 0; j < num_samples; j++) {
+        /* CU_ASSERT_EQUAL_FATAL(node_map[samples[j]], all_samples[j]); */
+        ret = hapgen_get_haplotype(&subset_hapgen, j, &h);
+        printf("new: %s\n", h);
+        printf("old: %s\n", haplotypes[samples[j]]);
+
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_STRING_EQUAL_FATAL(h, haplotypes[samples[j]]);
+    }
+    for (j = 0; j < tree_sequence_get_num_nodes(ts); j++) {
+        if (haplotypes[j] != NULL) {
+            free(haplotypes[j]);
+        }
+    }
+    free(haplotypes);
+    hapgen_free(&hapgen);
+    hapgen_free(&subset_hapgen);
+}
+
+
 static void
 verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
         node_id_t *samples, uint32_t num_samples, node_id_t *node_map)
@@ -970,7 +1027,6 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
                 ret = sparse_tree_get_parent(&subset_tree,
                         tree_sites[j].mutations[k].node, &u);
                 CU_ASSERT_EQUAL(ret, 0);
-                CU_ASSERT_FATAL(u != MSP_NULL_NODE);
             }
             total_sites++;
         }
@@ -1020,6 +1076,13 @@ verify_simplify(tree_sequence_t *ts)
             /* printf("ret = %s\n", msp_strerror(ret)); */
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
+
+            /* Keep all sites */
+            ret = tree_sequence_simplify(ts, sample, num_samples[j], 0, &subset,
+                    node_map);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
+            verify_simplify_haplotypes(ts, &subset, sample, num_samples[j], node_map);
         }
     }
     tree_sequence_free(&subset);
@@ -1205,7 +1268,8 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     mutation_table_t mutations;
     site_table_t sites;
     node_id_t *stack;
-    node_id_t u, root;
+    mutation_id_t *mutation;
+    node_id_t u, v, root;
     site_id_t site_id;
     char *state = NULL;
     int stack_top = 0;
@@ -1225,34 +1289,35 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     state = malloc(tree_sequence_get_num_nodes(ts) * sizeof(char));
     CU_ASSERT_FATAL(state != NULL);
+    mutation = malloc(tree_sequence_get_num_nodes(ts) * sizeof(mutation_id_t));
+    CU_ASSERT_FATAL(mutation != NULL);
+
 
     stack = tree.stack1;
     site_id = 0;
     for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
         ret = site_table_add_row(&sites, tree.left, "0", 1);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        /* Traverse down the tree */
         for (root = tree.left_root; root != MSP_NULL_NODE; root = tree.right_sib[root]) {
+            /* Traverse down the tree and put a mutation on every branch. */
+            memset(mutation, 0xff, tree_sequence_get_num_nodes(ts) * sizeof(mutation_id_t));
             stack_top = 0;
             stack[0] = root;
             state[root] = 0;
             while (stack_top >= 0) {
                 u = stack[stack_top];
                 stack_top--;
-                if (u != root) {
-                    state[u] = (state[u] + 1) % 2;
-                    ret = mutation_table_add_row(&mutations, site_id, u,
-                            MSP_NULL_MUTATION, state[u] == 0? "0": "1", 1);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                }
-                /* To ensure that the mutations are sorted in time order, we only
-                 * traverse down the left-most path to the sample. This means we
-                 * don't really need a stack at all, but we may extend this to a full
-                 * traversal in the future. */
-                if (tree.left_child[u] != MSP_NULL_NODE) {
+                for (v = tree.left_child[u]; v != MSP_NULL_NODE; v = tree.right_sib[v]) {
                     stack_top++;
-                    stack[stack_top] = tree.left_child[u];
-                    state[tree.left_child[u]] = state[u];
+                    stack[stack_top] = v;
+                }
+                v = tree.parent[u];
+                if (v != MSP_NULL_NODE) {
+                    state[u] = (state[v] + 1) % 2;
+                    mutation[u] = mutations.num_rows;
+                    ret = mutation_table_add_row(&mutations, site_id, u,
+                            mutation[v], state[u] == 0? "0": "1", 1);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
                 }
             }
             site_id++;
@@ -1277,6 +1342,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     mutation_table_free(&mutations);
     sparse_tree_free(&tree);
     free(state);
+    free(mutation);
     return new_ts;
 }
 

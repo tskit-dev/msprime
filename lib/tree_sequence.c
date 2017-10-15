@@ -2433,8 +2433,9 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples, size_t num_sam
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = simplifier_alloc(simplifier, samples, num_samples,
-            nodes, edges, migrations, sites, mutations, 0, flags);
+    ret = simplifier_alloc(simplifier, self->sequence_length,
+            samples, num_samples, nodes, edges, migrations, sites, mutations,
+            0, flags);
     if (ret != 0) {
         goto out;
     }

@@ -1456,6 +1456,7 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(ts_simplified.num_nodes, 6)
         self.assertEqual(ts_simplified.num_trees, 1)
         t = next(ts_simplified.trees())
+        # print(ts_simplified.tables)
         self.assertEqual(
             list(ts_simplified.haplotypes()), ["1000", "0100", "0010", "0001"])
         self.assertEqual(
@@ -2370,9 +2371,9 @@ class TestBadTrees(unittest.TestCase):
         self.assertRaises(_msprime.LibraryError, list, ts.trees())
 
 
-class TestPythonSimplifier(unittest.TestCase):
+class TestSimplify(unittest.TestCase):
     """
-    Tests that the test implementation of simplify() does what it's supposed to.
+    Tests that the implementations of simplify() does what they are supposed to.
     """
     random_seed = 23
     #
@@ -2769,11 +2770,12 @@ class TestPythonSimplifier(unittest.TestCase):
             ts, samples, filter_invariant_sites=False)
         self.assertEqual(ts.num_sites, sub_ts.num_sites)
         sub_haplotypes = list(sub_ts.haplotypes())
+        all_samples = list(ts.samples())
         k = 0
         for j, h in enumerate(ts.haplotypes()):
             if k == len(samples):
                 break
-            if samples[k] == j:
+            if samples[k] == all_samples[j]:
                 self.assertEqual(h, sub_haplotypes[k])
                 k += 1
 
@@ -2812,3 +2814,24 @@ class TestPythonSimplifier(unittest.TestCase):
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
+
+    def test_single_tree_recurrent_mutations_internal_samples(self):
+        ts = msprime.simulate(6, random_seed=10)
+        ts = jiggle_samples(ts)
+        for mutations_per_branch in [1, 2, 3]:
+            ts = insert_branch_mutations(ts, mutations_per_branch)
+            for num_samples in range(1, ts.num_samples):
+                for samples in itertools.combinations(ts.samples(), num_samples):
+                    self.verify_simplify_haplotypes(ts, samples)
+
+    def test_many_trees_recurrent_mutations_internal_samples(self):
+        ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
+        ts = jiggle_samples(ts)
+        self.assertGreater(ts.num_trees, 3)
+        for mutations_per_branch in [1, 2, 3]:
+            ts = insert_branch_mutations(ts, mutations_per_branch)
+            for num_samples in range(1, ts.num_samples):
+                for samples in itertools.combinations(ts.samples(), num_samples):
+                    self.verify_simplify_haplotypes(ts, samples)
+
+
