@@ -7574,20 +7574,21 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     bool migrations_allocated = false;
     bool sites_allocated = false;
     bool mutations_allocated = false;
-    double sequence_length;
+    double sequence_length = 0;
     node_id_t *node_map_data;
 
     static char *kwlist[] = {
-        "samples", "sequence_length", "nodes", "edges", "migrations",
-        "sites", "mutations", "node_map", "filter_invariant_sites", NULL};
+        "samples", "nodes", "edges", "migrations",
+        "sites", "mutations", "sequence_length", "node_map", "filter_invariant_sites", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OdO!O!|O!O!O!Oi", kwlist,
-            &samples, &sequence_length,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!dOi", kwlist,
+            &samples,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
+            &sequence_length,
             &node_map, &filter_invariant_sites)) {
         goto out;
     }
