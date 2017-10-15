@@ -223,7 +223,7 @@ class PythonTreeSequence(object):
             ["position", "ancestral_state", "index", "mutations"])
         _Mutation = collections.namedtuple(
             "Mutation",
-            ["site", "node", "derived_state", "parent"])
+            ["site", "node", "derived_state", "parent", "id"])
         for j in range(tree_sequence.get_num_sites()):
             pos, ancestral_state, mutations, index = tree_sequence.get_site(j)
             self._sites.append(_Site(
@@ -850,129 +850,43 @@ class Simplifier(object):
             self.insert_internal_sample(parent)
 
     def finalise_sites(self):
-        # The extant segments are the roots for each interval. For every root
-        # node, store the intervals over which it applies.
-        roots = collections.defaultdict(list)
-        for seg in self.A.values():
-            while seg is not None:
-                roots[seg.node].append(seg)
-                seg = seg.next
-
-
         # Build a map from the old mutation IDs to new IDs. Any mutation that
         # has not been mapped to a node in the new tree sequence will be removed.
         mutation_id_map = [-1 for _ in range(self.num_mutations)]
         num_output_mutations = 0
-        old_mutations = self.ts.tables.mutations
-        for j in range(self.num_mutations):
-            ancestral_state = list(self.ts.sites())[old_mutations.site[j]].ancestral_state
-            derived_state = chr(old_mutations.derived_state[j])
-            mapped_node = self.mutation_node_map[j]
-            old_parent = old_mutations.parent[j]
-            new_parent = -1
-            if old_parent != -1:
-                new_parent = mutation_id_map[old_parent]
-            # print("Mapping mutation", j, "site", old_mutations.site[j],
-            #         "; old_parent = ", old_parent,
-            #         "new_Praent= ", new_parent,
-            #         "old_node = ", old_mutations.node[j],
-            #         "mapped_node = ", mapped_node,
-            #         "ancestral_state = ", ancestral_state,
-            #         "derived_state = ", derived_state)
-
-
-
-            # TODO check if these are happeng over roots as well, and determine
-            # the new ancestral states for the sites.
-            if mapped_node != -1:
-                keep = True
-                if new_parent == -1 and ancestral_state == derived_state:
-                    keep = False
-                if keep:
-                    mutation_id_map[j] = num_output_mutations
-                    num_output_mutations += 1
-        # print("Mutation ID map = ", mutation_id_map)
 
         for site in self.ts.sites():
-            self.site_table.add_row(
-                position=site.position, ancestral_state=site.ancestral_state)
+            num_output_site_mutations = 0
+            for mut in site.mutations:
+                mapped_node = self.mutation_node_map[mut.id]
+                new_parent = -1
+                if mut.parent != -1:
+                    new_parent = mutation_id_map[mut.parent]
+                if mapped_node != -1:
+                    keep = True
+                    if new_parent == -1 and site.ancestral_state == mut.derived_state:
+                        keep = False
+                    if keep:
+                        mutation_id_map[mut.id] = num_output_mutations
+                        num_output_mutations += 1
+                        num_output_site_mutations += 1
+            output_site = True
+            if self.filter_invariant_sites and num_output_mutations == 0:
+                output_site = False
 
-        # print("Old Mutations:")
-        # print(old_mutations)
-        # print("New mutaions:")
-        for j in range(self.num_mutations):
-            if mutation_id_map[j] != -1:
-                assert mutation_id_map[j] == len(self.mutation_table)
-                mapped_parent = -1
-                if old_mutations.parent[j] != -1:
-                    mapped_parent = mutation_id_map[old_mutations.parent[j]]
-                mapped_node = self.mutation_node_map[j]
-                assert  mapped_node != -1
-                old_node = old_mutations.node[j]
-                derived_state = chr(old_mutations.derived_state[j])
-                # position = list(self.ts.sites())[old_mutations.site[j]].position
-                # ancestral_state = list(self.ts.sites())[old_mutations.site[j]].ancestral_state
-                # is_root = False
-                # if old_node in roots:
-                #     for seg in roots[old_node]:
-                #         if seg.left <= position < seg.right:
-                #             is_root = True
-                # print("mutation", j, old_node, "root = ", is_root, ancestral_state, derived_state,
-                #         parentkkkkkkkk)
-                # # If the mutation node is a root and the derived state is equal to
-                # # the site's ancestral state, remove it.
-                # if not (is_root and derived_state == ancestral_state):
-                self.mutation_table.add_row(
-                    site=old_mutations.site[j],
-                    node=mapped_node,
-                    parent=mapped_parent,
-                    derived_state=derived_state)
-
-        # print(self.site_table)
-        # print(self.mutation_table)
-
-
-
-
-#         output_site_id = 0
-#         # This is partially done. Want to fix the root determination and
-#         # mutation-parent first before finalising this.
-#         for site in self.output_sites:
-#             ancestral_state = site.ancestral_state
-#             for new_node, mutation in site.mutations:
-#                 print("mutation", new_node, mutation)
-#                 self.mutation_table.add_row(
-#                     site=len(self.site_table), node=new_node,
-#                     derived_state=mutation.derived_state)
-
-
-#             self.site_table.add_row(
-#                 position=site.position, ancestral_state=ancestral_state)
-
-            # Reverse the mutations to get the correct order.
-            # site.mutations.reverse()
-            # # This is an ugly hack to see if the mutation is over a root. We will
-            # # need a better algorithm in general, and this will certainly fail for
-            # # more complex mutations.
-            # root = False
-            # if site.mutations[0].node in roots:
-            #     for seg in roots[site.mutations[0].node]:
-            #         if seg.left <= site.position < seg.right:
-            #             root = True
-            # # if not root or not self.filter_invariant_sites:
-
-            # Hack to get correct ancestral state for binary mutations. In general
-            # we'll need something better.
-            # if site.mutations[0].derived_state == '0':
-            #     ancestral_state = '1'
-            # if not self.filter_invariant_sites or len(site.mutations) > 0:
-            #     self.site_table.add_row(
-            #         position=site.position, ancestral_state=ancestral_state)
-            #     for mutation in site.mutations:
-            #         self.mutation_table.add_row(
-            #             site=output_site_id, node=mutation.node,
-            #             derived_state=mutation.derived_state)
-            #     output_site_id += 1
+            if output_site:
+                for mut in site.mutations:
+                    if mutation_id_map[mut.id] != -1:
+                        mapped_parent = -1
+                        if mut.parent != -1:
+                            mapped_parent = mutation_id_map[mut.parent]
+                        self.mutation_table.add_row(
+                            site=len(self.site_table),
+                            node=self.mutation_node_map[mut.id],
+                            parent=mapped_parent,
+                            derived_state=mut.derived_state)
+                self.site_table.add_row(
+                    position=site.position, ancestral_state=site.ancestral_state)
 
     def simplify(self):
         # print("START")
@@ -986,7 +900,6 @@ class Simplifier(object):
                     edges = []
                 edges.append(e)
             self.process_parent_edges(edges)
-
         # print("DONE")
         # self.print_state()
 

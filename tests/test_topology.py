@@ -154,7 +154,7 @@ def jiggle_samples(ts):
     return msprime.load_tables(nodes=nodes, edges=tables.edges)
 
 
-def insert_branch_mutations(ts):
+def insert_branch_mutations(ts, mutations_per_branch=1):
     """
     Returns a copy of the specified tree sequence with a mutation on every branch
     in every tree.
@@ -173,11 +173,15 @@ def insert_branch_mutations(ts):
                 stack.extend(tree.children(u))
                 v = tree.parent(u)
                 if v != msprime.NULL_NODE:
-                    state[u] = (state[v] + 1) % 2
-                    mutation[u] = len(mutations)
-                    mutations.add_row(
-                        site=site, node=u, derived_state=str(state[u]),
-                        parent=mutation[v])
+                    state[u] = state[v]
+                    parent = mutation[v]
+                    for j in range(mutations_per_branch):
+                        state[u] = (state[u] + 1) % 2
+                        mutation[u] = len(mutations)
+                        mutations.add_row(
+                            site=site, node=u, derived_state=str(state[u]),
+                            parent=parent)
+                        parent = mutation[u]
     tables = ts.tables
     return msprime.load_tables(
         nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
@@ -2762,8 +2766,7 @@ class TestPythonSimplifier(unittest.TestCase):
 
     def verify_simplify_haplotypes(self, ts, samples):
         sub_ts, node_map = self.do_simplify(
-            # TODO enable compare_lib
-            ts, samples, filter_invariant_sites=False, compare_lib=False)
+            ts, samples, filter_invariant_sites=False)
         self.assertEqual(ts.num_sites, sub_ts.num_sites)
         sub_haplotypes = list(sub_ts.haplotypes())
         k = 0
@@ -2775,17 +2778,37 @@ class TestPythonSimplifier(unittest.TestCase):
                 k += 1
 
     def test_single_tree_recurrent_mutations(self):
-        ts = msprime.simulate(10, random_seed=10)
-        ts = insert_branch_mutations(ts)
-        for num_samples in range(1, ts.num_samples):
-            for samples in itertools.combinations(ts.samples(), num_samples):
-                self.verify_simplify_haplotypes(ts, samples)
+        ts = msprime.simulate(6, random_seed=10)
+        for mutations_per_branch in [1, 2, 3]:
+            ts = insert_branch_mutations(ts, mutations_per_branch)
+            for num_samples in range(1, ts.num_samples):
+                for samples in itertools.combinations(ts.samples(), num_samples):
+                    self.verify_simplify_haplotypes(ts, samples)
 
     def test_many_trees_recurrent_mutations(self):
         ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
         self.assertGreater(ts.num_trees, 3)
-        ts = insert_branch_mutations(ts)
-        for num_samples in range(1, ts.num_samples):
-            for samples in itertools.combinations(ts.samples(), num_samples):
-                self.verify_simplify_haplotypes(ts, samples)
+        for mutations_per_branch in [1, 2, 3]:
+            ts = insert_branch_mutations(ts, mutations_per_branch)
+            for num_samples in range(1, ts.num_samples):
+                for samples in itertools.combinations(ts.samples(), num_samples):
+                    self.verify_simplify_haplotypes(ts, samples)
 
+    def test_single_multiroot_tree_recurrent_mutations(self):
+        ts = msprime.simulate(6, random_seed=10)
+        ts = decapitate(ts)
+        for mutations_per_branch in [1, 2, 3]:
+            ts = insert_branch_mutations(ts, mutations_per_branch)
+            for num_samples in range(1, ts.num_samples):
+                for samples in itertools.combinations(ts.samples(), num_samples):
+                    self.verify_simplify_haplotypes(ts, samples)
+
+    def test_many_multiroot_trees_recurrent_mutations(self):
+        ts = msprime.simulate(7, recombination_rate=1, random_seed=10)
+        self.assertGreater(ts.num_trees, 3)
+        ts = decapitate(ts)
+        for mutations_per_branch in [1, 2, 3]:
+            ts = insert_branch_mutations(ts, mutations_per_branch)
+            for num_samples in range(1, ts.num_samples):
+                for samples in itertools.combinations(ts.samples(), num_samples):
+                    self.verify_simplify_haplotypes(ts, samples)

@@ -850,6 +850,7 @@ class TestHaplotypeGenerator(HighLevelTestCase):
                 ts_new = ts.copy(sites)
                 self.assertRaises(_msprime.LibraryError, list, ts_new.haplotypes())
 
+    @unittest.skip("back mutations")
     def test_back_mutations(self):
         for ts in get_back_mutation_examples():
             self.verify_tree_sequence(ts)

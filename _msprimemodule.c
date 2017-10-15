@@ -464,8 +464,8 @@ make_mutation(mutation_t *mutation)
 {
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("iisi", mutation->site, mutation->node, mutation->derived_state,
-            mutation->parent);
+    ret = Py_BuildValue("iisii", mutation->site, mutation->node, mutation->derived_state,
+            mutation->parent, mutation->id);
     return ret;
 }
 

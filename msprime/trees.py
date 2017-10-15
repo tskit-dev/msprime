@@ -63,6 +63,10 @@ Migration = collections.namedtuple(
     ["left", "right", "node", "source", "dest", "time"])
 
 
+# TODO We need to get rid of the these namedtuples where possible and
+# make proper classes where possible. Also, need to standardise on 'id'
+# rather than index throughout.
+
 Site = collections.namedtuple(
     "Site",
     ["position", "ancestral_state", "index", "mutations"])
@@ -70,7 +74,7 @@ Site = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "derived_state", "parent"])
+    ["site", "node", "derived_state", "parent", "id"])
 
 
 # This is provided for backwards compatibility with the deprecated mutations()

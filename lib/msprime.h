@@ -633,21 +633,15 @@ typedef struct _simplify_segment_t {
     node_id_t node;
 } simplify_segment_t;
 
-typedef struct _simplify_mutation_t {
-    double position;
-    site_id_t site_id;
-    node_id_t node;
-    char *derived_state;
-    list_len_t derived_state_length;
-    struct _simplify_mutation_t *next;
-} simplify_mutation_t;
+typedef struct _mutation_node_list_t {
+    mutation_id_t mutation_id;
+    struct _mutation_node_list_t *next;
+} mutation_node_list_t;
 
 typedef struct {
     double position;
-    char *ancestral_state;
-    list_len_t ancestral_state_length;
-    simplify_mutation_t *mutations;
-} simplify_site_t;
+    mutation_node_list_t *head;
+} mutation_position_map_t;
 
 typedef struct {
     node_id_t *samples;
@@ -656,13 +650,16 @@ typedef struct {
     double sequence_length;
     /* Keep a copy of the input nodes simplify mapping */
     node_table_t input_nodes;
+    /* TODO remove this field when name_offset has been added to node_table. */
     size_t *node_name_offset;
-    size_t num_input_sites;
     /* Also keep a copy of the input edges and a buffer to store unsorted edges */
     edge_table_t input_edges;
     edge_t *edge_buffer;
     size_t num_buffered_edges;
     size_t max_buffered_edges;
+    /* Input copy of the sites and mutations */
+    site_table_t input_sites;
+    mutation_table_t input_mutations;
     /* Input/output tables. */
     node_table_t *nodes;
     edge_table_t *edges;
@@ -679,12 +676,14 @@ typedef struct {
     object_heap_t avl_node_heap;
     size_t segment_buffer_size;
     simplify_segment_t **segment_buffer;
-    /* State for sites/mutations */
-    avl_tree_t *mutation_map;
-    simplify_mutation_t *mutation_mem;
-    simplify_site_t *output_sites;
-    char *ancestral_state_mem;
-    char *derived_state_mem;
+    /* For each mutation, map its output node. */
+    node_id_t *mutation_node_map;
+    /* Map of input mutation IDs to output mutation IDs. */
+    mutation_id_t *mutation_id_map;
+    /* For each input node, map position -> list of mutation IDs */
+    avl_tree_t *mutation_position_map;
+    mutation_node_list_t *mutation_node_list_mem;
+    mutation_position_map_t *mutation_position_map_mem;
 } simplifier_t;
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
