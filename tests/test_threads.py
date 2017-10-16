@@ -24,11 +24,11 @@ from __future__ import division
 
 import unittest
 import threading
-import random
 
 import numpy as np
 
 import msprime
+import tests.tsutil as tsutil
 
 
 def run_threads(worker, num_threads):
@@ -88,10 +88,8 @@ class TestLdCalculatorReplicates(unittest.TestCase):
     num_test_sites = 25
 
     def get_tree_sequence(self):
-        ts = msprime.simulate(
-            20, mutation_rate=10, recombination_rate=10, random_seed=10)
-        sites = sorted(random.sample(list(ts.sites()), self.num_test_sites))
-        return ts.copy(sites)
+        ts = msprime.simulate(20, mutation_rate=10, recombination_rate=10, random_seed=8)
+        return tsutil.subsample_sites(ts, self.num_test_sites)
 
     def test_get_r2_multiple_instances(self):
         # This is the nominal case where we have a separate LdCalculator

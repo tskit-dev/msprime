@@ -39,152 +39,7 @@ import numpy as np
 import msprime
 import _msprime
 import tests
-
-
-def permute_nodes(ts, node_map):
-    """
-    Returns a copy of the specified tree sequence such that the nodes are
-    permuted according to the specified map.
-    """
-    # Mapping from nodes in the new tree sequence back to nodes in the original
-    reverse_map = [0 for _ in node_map]
-    for j in range(ts.num_nodes):
-        reverse_map[node_map[j]] = j
-    old_nodes = list(ts.nodes())
-    new_nodes = msprime.NodeTable()
-    for j in range(ts.num_nodes):
-        old_node = old_nodes[reverse_map[j]]
-        new_nodes.add_row(
-            flags=old_node.flags, name=old_node.name,
-            population=old_node.population, time=old_node.time)
-    new_edges = msprime.EdgeTable()
-    for edge in ts.edges():
-        new_edges.add_row(
-            left=edge.left, right=edge.right, parent=node_map[edge.parent],
-            child=node_map[edge.child])
-    new_sites = msprime.SiteTable()
-    new_mutations = msprime.MutationTable()
-    for site in ts.sites():
-        new_sites.add_row(
-            position=site.position, ancestral_state=site.ancestral_state)
-        for mutation in site.mutations:
-            new_mutations.add_row(
-                site=site.index, derived_state=mutation.derived_state,
-                node=node_map[mutation.node])
-    msprime.sort_tables(
-        nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
-    return msprime.load_tables(
-        nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
-
-
-def insert_redundant_breakpoints(ts):
-    """
-    Builds a new tree sequence containing redundant breakpoints.
-    """
-    tables = ts.dump_tables()
-    tables.edges.reset()
-    for r in ts.edges():
-        x = r.left + (r.right - r.left) / 2
-        tables.edges.add_row(
-            left=r.left, right=x, child=r.child, parent=r.parent)
-        tables.edges.add_row(
-            left=x, right=r.right, child=r.child, parent=r.parent)
-    new_ts = msprime.load_tables(**tables.asdict())
-    assert new_ts.num_edges == 2 * ts.num_edges
-    return new_ts
-
-
-def single_childify(ts):
-    """
-    Builds a new equivalent tree sequence which contains an extra node in the
-    middle of all exising branches.
-    """
-    tables = ts.dump_tables()
-    edges = tables.edges
-    nodes = tables.nodes
-    sites = tables.sites
-    mutations = tables.mutations
-
-    time = nodes.time[:]
-    edges.reset()
-    for edge in ts.edges():
-        # Insert a new node in between the parent and child.
-        u = len(nodes)
-        t = time[edge.child] + (time[edge.parent] - time[edge.child]) / 2
-        nodes.add_row(time=t)
-        edges.add_row(
-            left=edge.left, right=edge.right, parent=u, child=edge.child)
-        edges.add_row(
-            left=edge.left, right=edge.right, parent=edge.parent, child=u)
-    msprime.sort_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-    new_ts = msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-    return new_ts
-
-
-def decapitate(ts):
-    """
-    Returns the specified tree sequence with the top half of its edges removed.
-    """
-    tables = ts.dump_tables()
-    edges = tables.edges
-    edges.reset()
-    for j, e in enumerate(ts.edges()):
-        if j >= ts.num_edges / 2:
-            break
-        edges.add_row(e.left, e.right, e.parent, e.child)
-    return msprime.load_tables(nodes=tables.nodes, edges=edges)
-
-
-def jiggle_samples(ts):
-    """
-    Returns a copy of the specified tree sequence with the sample nodes switched
-    around. The first n / 2 existing samples become non samples, and the last
-    n / 2 node become samples.
-    """
-    tables = ts.dump_tables()
-    nodes = tables.nodes
-    flags = nodes.flags
-    oldest_parent = tables.edges.parent[-1]
-    n = ts.sample_size
-    flags[:n // 2] = 0
-    flags[oldest_parent - n // 2: oldest_parent] = 1
-    nodes.set_columns(flags, nodes.time)
-    return msprime.load_tables(nodes=nodes, edges=tables.edges)
-
-
-def insert_branch_mutations(ts, mutations_per_branch=1):
-    """
-    Returns a copy of the specified tree sequence with a mutation on every branch
-    in every tree.
-    """
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
-    for tree in ts.trees():
-        site = len(sites)
-        sites.add_row(position=tree.interval[0], ancestral_state='0')
-        for root in tree.roots:
-            state = {root: 0}
-            mutation = {root: -1}
-            stack = [root]
-            while len(stack) > 0:
-                u = stack.pop()
-                stack.extend(tree.children(u))
-                v = tree.parent(u)
-                if v != msprime.NULL_NODE:
-                    state[u] = state[v]
-                    parent = mutation[v]
-                    for j in range(mutations_per_branch):
-                        state[u] = (state[u] + 1) % 2
-                        mutation[u] = len(mutations)
-                        mutations.add_row(
-                            site=site, node=u, derived_state=str(state[u]),
-                            parent=parent)
-                        parent = mutation[u]
-    tables = ts.tables
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+import tests.tsutil as tsutil
 
 
 class TopologyTestCase(unittest.TestCase):
@@ -528,7 +383,7 @@ class TestRecordSquashing(TopologyTestCase):
 
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
-        ts_redundant = insert_redundant_breakpoints(ts)
+        ts_redundant = tsutil.insert_redundant_breakpoints(ts)
         tss = ts_redundant.simplify()
         self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
         self.assertEqual(tss.dump_tables().edges, ts.dump_tables().edges)
@@ -537,7 +392,7 @@ class TestRecordSquashing(TopologyTestCase):
         ts = msprime.simulate(
                 20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
-        ts_redundant = insert_redundant_breakpoints(ts)
+        ts_redundant = tsutil.insert_redundant_breakpoints(ts)
         tss = ts_redundant.simplify()
         self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
         self.assertEqual(tss.dump_tables().edges, ts.dump_tables().edges)
@@ -550,7 +405,7 @@ class TestRedundantBreakpoints(TopologyTestCase):
     """
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
-        ts_redundant = insert_redundant_breakpoints(ts)
+        ts_redundant = tsutil.insert_redundant_breakpoints(ts)
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
         self.assertEqual(ts.sequence_length, ts_redundant.sequence_length)
         self.assertEqual(ts_redundant.num_trees, 2)
@@ -563,7 +418,7 @@ class TestRedundantBreakpoints(TopologyTestCase):
         ts = msprime.simulate(
                 20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
-        ts_redundant = insert_redundant_breakpoints(ts)
+        ts_redundant = tsutil.insert_redundant_breakpoints(ts)
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
         self.assertEqual(ts.sequence_length, ts_redundant.sequence_length)
         self.assertGreater(ts_redundant.num_trees, ts.num_trees)
@@ -802,7 +657,7 @@ class TestGeneralSamples(TopologyTestCase):
         # and haplotypes and variants are also equal.
         samples = sorted(node_map[:ts.sample_size])
         node_map = samples + node_map[ts.sample_size:]
-        permuted = permute_nodes(ts, node_map)
+        permuted = tsutil.permute_nodes(ts, node_map)
         self.assertEqual(permuted.samples(), samples)
         self.assertEqual(list(permuted.haplotypes()), list(ts.haplotypes()))
         self.assertEqual(
@@ -2438,7 +2293,7 @@ class TestSimplify(unittest.TestCase):
         Modify the specified tree sequence so that it has lots of unary
         nodes. Run simplify and verify we get the same tree sequence back.
         """
-        ts_single = single_childify(ts)
+        ts_single = tsutil.single_childify(ts)
         tss, node_map = self.do_simplify(ts_single)
         # All original nodes should still be present.
         for u in range(ts.num_samples):
@@ -2454,8 +2309,8 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(t1.mutations, t2.mutations)
 
     def verify_multiroot_internal_samples(self, ts):
-        ts_multiroot = decapitate(ts)
-        ts1 = jiggle_samples(ts_multiroot)
+        ts_multiroot = tsutil.decapitate(ts, ts.num_edges // 2)
+        ts1 = tsutil.jiggle_samples(ts_multiroot)
         ts2, node_map = self.do_simplify(ts1)
         self.assertGreaterEqual(ts1.num_trees, ts2.num_trees)
         trees2 = ts2.trees()
@@ -2784,7 +2639,7 @@ class TestSimplify(unittest.TestCase):
     def test_single_tree_recurrent_mutations(self):
         ts = msprime.simulate(6, random_seed=10)
         for mutations_per_branch in [1, 2, 3]:
-            ts = insert_branch_mutations(ts, mutations_per_branch)
+            ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
@@ -2793,16 +2648,16 @@ class TestSimplify(unittest.TestCase):
         ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
         self.assertGreater(ts.num_trees, 3)
         for mutations_per_branch in [1, 2, 3]:
-            ts = insert_branch_mutations(ts, mutations_per_branch)
+            ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
 
     def test_single_multiroot_tree_recurrent_mutations(self):
         ts = msprime.simulate(6, random_seed=10)
-        ts = decapitate(ts)
+        ts = tsutil.decapitate(ts, ts.num_edges // 2)
         for mutations_per_branch in [1, 2, 3]:
-            ts = insert_branch_mutations(ts, mutations_per_branch)
+            ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
@@ -2810,28 +2665,28 @@ class TestSimplify(unittest.TestCase):
     def test_many_multiroot_trees_recurrent_mutations(self):
         ts = msprime.simulate(7, recombination_rate=1, random_seed=10)
         self.assertGreater(ts.num_trees, 3)
-        ts = decapitate(ts)
+        ts = tsutil.decapitate(ts, ts.num_edges // 2)
         for mutations_per_branch in [1, 2, 3]:
-            ts = insert_branch_mutations(ts, mutations_per_branch)
+            ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
 
     def test_single_tree_recurrent_mutations_internal_samples(self):
         ts = msprime.simulate(6, random_seed=10)
-        ts = jiggle_samples(ts)
+        ts = tsutil.jiggle_samples(ts)
         for mutations_per_branch in [1, 2, 3]:
-            ts = insert_branch_mutations(ts, mutations_per_branch)
+            ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
 
     def test_many_trees_recurrent_mutations_internal_samples(self):
         ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
-        ts = jiggle_samples(ts)
+        ts = tsutil.jiggle_samples(ts)
         self.assertGreater(ts.num_trees, 3)
         for mutations_per_branch in [1, 2, 3]:
-            ts = insert_branch_mutations(ts, mutations_per_branch)
+            ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)

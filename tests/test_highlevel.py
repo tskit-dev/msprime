@@ -47,7 +47,7 @@ import numpy as np
 import msprime
 import _msprime
 import tests
-import tests.test_topology
+import tests.tsutil as tsutil
 
 
 def get_uniform_mutations(num_mutations, sequence_length, nodes):
@@ -164,30 +164,16 @@ def get_internal_samples_examples():
     yield ts
 
 
-def decapitate(ts, num_edges):
-    """
-    Returns a copy of the specified tree sequence in which the specified number of
-    edges have been retained.
-    """
-    t = ts.dump_tables()
-    t.edges.set_columns(
-        left=t.edges.left[:num_edges], right=t.edges.right[:num_edges],
-        parent=t.edges.parent[:num_edges], child=t.edges.child[:num_edges])
-    return msprime.load_tables(
-        nodes=t.nodes, edges=t.edges, sites=t.sites, mutations=t.mutations,
-        sequence_length=ts.sequence_length)
-
-
 def get_decapitated_examples():
     """
     Returns example tree sequences in which the oldest edges have been removed.
     """
     ts = msprime.simulate(10, random_seed=1234)
-    yield decapitate(ts, ts.num_edges // 2)
+    yield tsutil.decapitate(ts, ts.num_edges // 2)
 
     ts = msprime.simulate(20, recombination_rate=1, random_seed=1234)
     assert ts.num_trees > 2
-    yield decapitate(ts, ts.num_edges // 4)
+    yield tsutil.decapitate(ts, ts.num_edges // 4)
 
 
 def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=True):
@@ -211,7 +197,7 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
     ts = msprime.simulate(15, length=4, recombination_rate=1)
     assert ts.num_trees > 1
     if back_mutations:
-        yield make_alternating_back_mutations(ts)
+        yield tsutil.insert_branch_mutations(ts)
 
 
 def get_bottleneck_examples():
@@ -237,9 +223,9 @@ def get_back_mutation_examples():
     trees.
     """
     ts = msprime.simulate(10, random_seed=1)
-    yield make_alternating_back_mutations(ts)
+    yield tsutil.insert_branch_mutations(ts)
     for ts in get_bottleneck_examples():
-        yield make_alternating_back_mutations(ts)
+        yield tsutil.insert_branch_mutations(ts)
 
 
 def simple_get_pairwise_diversity(haplotypes):
@@ -283,14 +269,6 @@ def simplify_tree_sequence(ts, samples, filter_invariant_sites=True):
     """
     s = tests.Simplifier(ts, samples, filter_invariant_sites=filter_invariant_sites)
     return s.simplify()
-
-
-def make_alternating_back_mutations(ts):
-    """
-    Returns a copy of the specified tree sequence with a sequence of
-    alternating mutations along each path in each tree.
-    """
-    return tests.test_topology.insert_branch_mutations(ts)
 
 
 class TestHarmonicNumber(unittest.TestCase):
