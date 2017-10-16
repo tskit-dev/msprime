@@ -227,7 +227,6 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_nodes, 1)
         self.assertEqual(tsp.num_edges, 0)
 
-    @unittest.skip("Simplify invariant sites")
     def test_one_node_one_sample_sites(self):
         nodes = msprime.NodeTable()
         nodes.add_row(time=0, flags=msprime.NODE_IS_SAMPLE)
@@ -261,10 +260,6 @@ class TestEmptyTreeSequences(TopologyTestCase):
             self.assertEqual(method(0), msprime.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
-        tsp = ts.simplify()
-        self.assertEqual(tsp.num_nodes, 1)
-        self.assertEqual(tsp.num_edges, 0)
-        self.assertEqual(tsp.num_sites, 0)
         tsp = ts.simplify(filter_invariant_sites=False)
         self.assertEqual(tsp.num_nodes, 1)
         self.assertEqual(tsp.num_edges, 0)
@@ -1067,7 +1062,6 @@ class TestNonSampleExternalNodes(TopologyTestCase):
     """
     Tests for situations in which we have tips that are not samples.
     """
-    @unittest.skip("Update test for simplify semantics")
     def test_simple_case(self):
         # Simplest case where we have n = 2 and external non-sample nodes.
         nodes = six.StringIO("""\
@@ -1093,8 +1087,8 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         site    node    derived_state
         0       0       1
         1       1       1
-        2       2       1
-        3       3       1
+        2       3       1
+        3       4       1
         """)
         ts = msprime.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations)
@@ -1361,7 +1355,6 @@ class TestMultipleRoots(TopologyTestCase):
         t = next(ts_simplified.trees())
         self.assertEqual(t.parent_dict, {0: 4, 1: 4, 2: 5, 3: 5})
 
-    @unittest.skip("Simplify with root mutations")
     # NOTE: This test has not been checked since updating to the text representation
     # so there might be other problems with it.
     def test_mutations_over_roots(self):
@@ -1411,20 +1404,10 @@ class TestMultipleRoots(TopologyTestCase):
         variants = [b"100", b"010", b"110", b"110", b"001", b"001"]
         self.assertEqual(list(ts.haplotypes()), haplotypes)
         self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], variants)
-        ts_simplified = ts.simplify(filter_root_mutations=False)
-
-        tables = ts_simplified.dump_tables()
-        print()
-        print(tables.sites)
-        print(tables.mutations)
+        ts_simplified = ts.simplify(filter_invariant_sites=False)
         self.assertEqual(list(ts_simplified.haplotypes()), haplotypes)
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
-        ts_simplified = ts.simplify(filter_root_mutations=True)
-        self.assertEqual(list(ts_simplified.haplotypes()), ["10", "01", "00"])
-        self.assertEqual(
-            [v.genotypes for v in ts_simplified.variants(as_bytes=True)],
-            [b"100", b"010"])
 
     def test_break_single_tree(self):
         # Take a single largish tree from msprime, and remove the oldest record.
@@ -1654,7 +1637,6 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(a[k], msprime.NULL_NODE)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
-    @unittest.skip("Complex mutations for simplify")
     def test_many_single_offspring(self):
         # a more complex test with single offspring
         # With `(i,j,x)->k` denoting that individual `k` inherits from `i` on `[0,x)`
@@ -1754,17 +1736,17 @@ class TestWithVisuals(TopologyTestCase):
         0.4         0
         """)
         mutations = six.StringIO("""\
-        site    node    derived_state
-        0       7       1
-        0      10       0
-        0       2       1
-        1       0       1
-        1      10       1
-        2       8       1
-        2       9       0
-        2      10       0
-        2       2       1
-        3       8       1
+        site    node    derived_state   parent
+        0       7       1               -1
+        0      10       0               0
+        0       2       1               1
+        1       0       1               -1
+        1      10       1               -1
+        2       8       1               -1
+        2       9       0               5
+        2      10       0               5
+        2       2       1               7
+        3       8       1               -1
         """)
         ts = msprime.load_text(nodes, edges, sites, mutations)
         tree_dicts = [t.parent_dict for t in ts.trees()]
@@ -2444,7 +2426,6 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 4)
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
 
-    @unittest.skip("Simplify sites")
     def test_small_tree_fixed_sites(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
@@ -2454,22 +2435,19 @@ class TestSimplify(unittest.TestCase):
         tables.sites.add_row(position=0.25, ancestral_state="0")
         tables.sites.add_row(position=0.5, ancestral_state="0")
         tables.sites.add_row(position=0.75, ancestral_state="0")
-        tables.sites.add_row(position=0.8, ancestral_state="0")
-        tables.mutations.add_row(site=0, node=7, derived_state="1")
-        tables.mutations.add_row(site=1, node=2, derived_state="1")
-        tables.mutations.add_row(site=2, node=3, derived_state="1")
-        tables.mutations.add_row(site=3, node=6, derived_state="1")
+        tables.mutations.add_row(site=0, node=2, derived_state="1")
+        tables.mutations.add_row(site=1, node=3, derived_state="1")
+        tables.mutations.add_row(site=2, node=6, derived_state="1")
         ts = msprime.load_tables(
             nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
             mutations=tables.mutations)
-        self.assertEqual(ts.num_sites, 4)
-        self.assertEqual(ts.num_mutations, 4)
+        self.assertEqual(ts.num_sites, 3)
+        self.assertEqual(ts.num_mutations, 3)
         tss, _ = self.do_simplify(ts, [4, 1])
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_mutations, 0)
         self.assertEqual(list(tss.haplotypes()), ["", ""])
 
-    @unittest.skip("Simplify sites")
     def test_small_tree_recurrent_mutations(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
