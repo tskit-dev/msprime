@@ -566,10 +566,10 @@ tree_sequence_check(tree_sequence_t *self)
                 goto out;
             }
             if (time[parent] == time[last_parent]) {
-                if (parent < last_parent) {
-                    ret = MSP_ERR_EDGES_NOT_SORTED_PARENT;
-                    goto out;
-                }
+                /* if (parent < last_parent) { */
+                /*     ret = MSP_ERR_EDGES_NOT_SORTED_PARENT; */
+                /*     goto out; */
+                /* } */
                 if (parent == last_parent) {
                     if (child < last_child) {
                         ret = MSP_ERR_EDGES_NOT_SORTED_CHILD;

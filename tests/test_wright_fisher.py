@@ -159,7 +159,6 @@ class TestSimulation(unittest.TestCase):
                 if tree.is_internal(u):
                     self.assertGreater(len(tree.children(u)), 1)
 
-    @unittest.skip("Simplify outputs 0..n or we remove parent sorting requirement")
     def test_overlapping_generations(self):
         tables = wf_sim(N=30, ngens=10, survival=0.85, seed=self.random_seed)
         self.assertGreater(tables.nodes.num_rows, 0)
@@ -231,6 +230,9 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(ts1.sequence_length, ts2.sequence_length)
         ts1_tables = ts1.dump_tables()
         ts2_tables = ts2.dump_tables()
+        # print("compare")
+        # print(ts1_tables.nodes)
+        # print(ts2_tables.nodes)
         self.assertEqual(ts1_tables.nodes, ts2_tables.nodes)
         self.assertEqual(ts1_tables.edges, ts2_tables.edges)
         self.assertEqual(ts1_tables.sites, ts2_tables.sites)
@@ -311,7 +313,6 @@ class TestSimplify(unittest.TestCase):
                 self.assertNotEqual(mrca2, msprime.NULL_NODE)
                 self.assertEqual(node_map[mrca1], mrca2)
 
-    @unittest.skip("Simplify outputs 0..n or we remove parent sorting requirement")
     def test_simplify(self):
         #  check that simplify(big set) -> simplify(subset) equals simplify(subset)
         seed = 23
@@ -320,8 +321,8 @@ class TestSimplify(unittest.TestCase):
             s = tests.Simplifier(ts, ts.samples())
             py_full_ts, py_full_map = s.simplify()
             full_ts, full_map = ts.simplify(ts.samples(), map_nodes=True)
-            # self.assertTrue(all(py_full_map == full_map))
-            # self.assertTreeSequencesEqual(full_ts, py_full_ts)
+            self.assertTrue(all(py_full_map == full_map))
+            self.assertTreeSequencesEqual(full_ts, py_full_ts)
 
             for nsamples in [2, 5, 10]:
                 sub_samples = random.sample(ts.samples(), min(nsamples, ts.sample_size))
@@ -331,7 +332,6 @@ class TestSimplify(unittest.TestCase):
                 self.assertTreeSequencesEqual(small_ts, py_small_ts)
                 self.verify_simplify(ts, small_ts, sub_samples, small_map)
 
-    @unittest.skip("Simplify outputs 0..n or we remove parent sorting requirement")
     def test_simplify_tables(self):
         seed = 71
         for ts in self.get_wf_sims(seed=seed):
