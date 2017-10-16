@@ -1569,13 +1569,19 @@ simplifier_free_avl_node(simplifier_t *self, avl_node_t *node)
 
 /* Add a new node to the output node table corresponding to the specified input id */
 static int WARN_UNUSED
-simplifier_record_node(simplifier_t *self, node_id_t input_id)
+simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
 {
     int ret = 0;
     const char *name = self->input_nodes.name + self->node_name_offset[input_id];
+    uint32_t flags = self->input_nodes.flags[input_id];
 
+    /* Zero out the sample bit */
+    flags &= (uint32_t) ~MSP_NODE_IS_SAMPLE;
+    if (is_sample) {
+        flags |= MSP_NODE_IS_SAMPLE;
+    }
     self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
-    ret = node_table_add_row_internal(self->nodes, self->input_nodes.flags[input_id],
+    ret = node_table_add_row_internal(self->nodes, flags,
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
             self->input_nodes.name_length[input_id], name);
     if (ret != 0) {
@@ -1816,7 +1822,7 @@ simplifier_insert_sample(simplifier_t *self, node_id_t sample_id)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = simplifier_record_node(self, sample_id);
+    ret = simplifier_record_node(self, sample_id, true);
     if (ret != 0) {
         goto out;
     }
@@ -2304,7 +2310,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             if (!coalescence) {
                 coalescence = true;
                 if (self->node_id_map[input_id] == MSP_NULL_NODE) {
-                    ret = simplifier_record_node(self, input_id);
+                    ret = simplifier_record_node(self, input_id, false);
                     if (ret != 0) {
                         goto out;
                     }

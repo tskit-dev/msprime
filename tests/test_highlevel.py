@@ -1064,6 +1064,11 @@ class TestTreeSequence(HighLevelTestCase):
         elif len(sample) == 1:
             self.assertEqual(new_ts.num_nodes, 1)
             self.assertEqual(new_ts.num_edges, 0)
+        # The output samples should be 0...n
+        self.assertEqual(new_ts.num_samples, len(sample))
+        self.assertEqual(list(range(len(sample))), list(new_ts.samples()))
+        for j in range(new_ts.num_samples):
+            self.assertEqual(node_map[sample[j]], j)
         for u in range(ts.num_nodes):
             old_node = ts.node(u)
             if node_map[u] != msprime.NULL_NODE:
@@ -1126,6 +1131,8 @@ class TestTreeSequence(HighLevelTestCase):
             s2, node_map2 = simplify_tree_sequence(
                 ts, sample, filter_invariant_sites=filter_invariant_sites)
             t2 = s2.dump_tables()
+            self.assertEqual(s1.num_samples,  len(sample))
+            self.assertEqual(s2.num_samples,  len(sample))
             self.assertTrue(all(node_map1 == node_map2))
             self.assertEqual(t1.nodes, t2.nodes)
             self.assertEqual(t1.edges, t2.edges)
@@ -1135,38 +1142,22 @@ class TestTreeSequence(HighLevelTestCase):
 
     def verify_simplify_variants(self, ts, sample):
         subset = ts.simplify(sample)
-        s = np.array(sample)
-        full_genotypes = np.empty((ts.num_sites, ts.sample_size))
-        full_positions = np.empty(ts.num_sites)
+        sample_map = {u: j for j, u in enumerate(ts.samples())}
+        # Need to map IDs back to their sample indexes
+        s = np.array([sample_map[u] for u in sample])
+        # Build a map of genotypes by position
+        full_genotypes = {}
         for variant in ts.variants():
-            full_positions[variant.index] = variant.position
-            full_genotypes[variant.index] = variant.genotypes
-        subset_genotypes = np.empty((subset.num_sites, subset.sample_size))
-        subset_positions = np.empty(subset.num_sites)
+            full_genotypes[variant.position] = np.array(variant.genotypes)
         for variant in subset.variants():
-            subset_positions[variant.index] = variant.position
-            subset_genotypes[variant.index] = variant.genotypes
-        j = 0
-        for sg, sp in zip(subset_genotypes, subset_positions):
-            while full_positions[j] < sp:
-                unique = np.unique(full_genotypes[j][s])
-                self.assertEqual(unique.shape[0], 1)
-                self.assertIn(unique[0], [0, 1])
-                j += 1
-            self.assertEqual(full_positions[j], sp)
-            self.assertTrue(np.all(sg == full_genotypes[j][s]))
-            j += 1
-        if len(sample) > 0:
-            while j < ts.num_sites:
-                unique = np.unique(full_genotypes[j][s])
-                self.assertEqual(unique.shape[0], 1)
-                self.assertIn(unique[0], [0, 1])
-                j += 1
+            if variant.position in full_genotypes:
+                g1 = full_genotypes[variant.position]
+                g2 = variant.genotypes
+                self.assertTrue(np.array_equal(g1[s], g2))
 
     def test_simplify(self):
         num_mutations = 0
-        print("\n\nFIXME\n\nenable internal samples once 1..n property is restored")
-        for ts in get_example_tree_sequences(internal_samples=False):
+        for ts in get_example_tree_sequences():
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()
             sample_sizes = {0, 1}
@@ -1223,23 +1214,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(p, ts.population(s))
             self.assertEqual(ts.get_samples(p), ts.samples(p))
         self.assertEqual(ts.get_samples(), ts.samples())
-
-    @unittest.skip("Copy is broken for back mutations??")
-    def test_copy(self):
-        for ts1 in get_example_tree_sequences():
-            ts2 = ts1.copy()
-            self.assertNotEqual(id(ts1), id(ts2))
-            self.assertEqual(ts1.sequence_length, ts2.sequence_length)
-            self.assertEqual(list(ts1.edges()), list(ts2.edges()))
-            self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
-            self.assertEqual(list(ts1.mutations()), list(ts2.mutations()))
-            site_lists = [[], list(ts1.sites())[:-1]]
-            for sites in site_lists:
-                ts2 = ts1.copy(sites=sites)
-                self.assertNotEqual(id(ts1), id(ts2))
-                self.assertEqual(list(ts1.edges()), list(ts2.edges()))
-                self.assertEqual(list(ts1.nodes()), list(ts2.nodes()))
-                self.assertEqual(sites, list(ts2.sites()))
 
     def test_generate_mutations_on_tree_sequence(self):
         some_mutations = False

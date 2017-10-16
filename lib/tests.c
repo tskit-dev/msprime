@@ -986,6 +986,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     CU_ASSERT_EQUAL(
         tree_sequence_get_sequence_length(ts),
         tree_sequence_get_sequence_length(subset));
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(subset), num_samples);
     CU_ASSERT(
         tree_sequence_get_num_nodes(ts) >= tree_sequence_get_num_nodes(subset));
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(subset), num_samples);

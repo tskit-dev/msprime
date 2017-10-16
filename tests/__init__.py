@@ -714,15 +714,20 @@ class Simplifier(object):
         in the C implementation.
         """
 
-    def record_node(self, input_id):
+    def record_node(self, input_id, is_sample=False):
         """
         Adds a new node to the output table corresponding to the specified input
         node ID.
         """
         node = self.ts.node(input_id)
+        flags = node.flags
+        # Need to zero out the sample flag
+        flags &= ~msprime.NODE_IS_SAMPLE
+        if is_sample:
+            flags |= msprime.NODE_IS_SAMPLE
         self.node_id_map[input_id] = len(self.node_table)
         self.node_table.add_row(
-            flags=node.flags, time=node.time, population=node.population)
+            flags=flags, time=node.time, population=node.population)
 
     def flush_edges(self):
         """
@@ -794,7 +799,7 @@ class Simplifier(object):
         Inserts the specified sample ID into the algorithm state.
         """
         assert sample_id not in self.A
-        self.record_node(sample_id)
+        self.record_node(sample_id, is_sample=True)
         x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
         self.A[sample_id] = x
 
