@@ -871,9 +871,6 @@ class Simplifier(object):
                     edges = []
                 edges.append(e)
             self.process_parent_edges(edges)
-        # print("DONE")
-        # self.print_state()
-
         # Record any final mutations over the roots.
         for input_id in list(self.A.keys()):
             x = self.A[input_id]
