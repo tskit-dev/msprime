@@ -2414,11 +2414,11 @@ class TestSimplify(unittest.TestCase):
         tss, node_map = self.do_simplify(ts, [0, 1, 7])
         self.assertEqual(node_map[0], 0)
         self.assertEqual(node_map[1], 1)
-        self.assertEqual(node_map[7], 3)
+        self.assertEqual(node_map[7], 2)
         self.assertEqual(tss.num_nodes, 4)
         self.assertEqual(tss.num_edges, 3)
         t = next(tss.trees())
-        self.assertEqual(t.parent_dict, {0: 2, 1: 2, 2: 3})
+        self.assertEqual(t.parent_dict, {0: 3, 1: 3, 3: 2})
 
     def test_small_tree_mutations(self):
         ts = msprime.load_text(
@@ -2609,7 +2609,7 @@ class TestSimplify(unittest.TestCase):
         """)
 
         ts = msprime.load_text(nodes, edges)
-        tss, node_map = self.do_simplify(ts, compare_lib=True)
+        tss, node_map = self.do_simplify(ts, [5, 2, 0], compare_lib=True)
         self.assertEqual(node_map[5], 0)
         self.assertEqual(node_map[2], 1)
         self.assertEqual(node_map[0], 2)

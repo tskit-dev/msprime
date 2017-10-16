@@ -1824,35 +1824,6 @@ out:
     return ret;
 }
 
-/* Insert ancestral material for a new internal sample. There may already
- * be ancestral segments extant for this ancestor, so free them. */
-static int WARN_UNUSED
-simplifier_insert_internal_sample(simplifier_t *self, node_id_t sample_id)
-{
-    int ret = 0;
-    simplify_segment_t *x, *next;
-    node_id_t u = self->node_id_map[sample_id];
-
-    assert(u != MSP_NULL_NODE);
-    if (self->ancestor_map[sample_id] != NULL) {
-        x = self->ancestor_map[sample_id];
-        while (x != NULL) {
-            assert(x->node == u);
-            next = x->next;
-            simplifier_free_segment(self, x);
-            x = next;
-        }
-    }
-    self->ancestor_map[sample_id] = simplifier_alloc_segment(self, 0,
-            self->sequence_length, u, NULL);
-    if (self->ancestor_map[sample_id] == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-out:
-    return ret;
-}
-
 static int
 simplifier_init_samples(simplifier_t *self, node_id_t *samples)
 {
@@ -1870,18 +1841,9 @@ simplifier_init_samples(simplifier_t *self, node_id_t *samples)
             goto out;
         }
         self->is_sample[samples[j]] = true;
-    }
-
-    /* Now set up the time-zero samples. */
-    memset(self->unmapped_sample, 0, self->input_nodes.num_rows * sizeof(bool));
-    for (j = 0; j < self->num_samples; j++) {
-        if (self->input_nodes.time[samples[j]] == 0.0) {
-            ret = simplifier_insert_sample(self, samples[j]);
-            if (ret != 0) {
-                goto out;
-            }
-        } else {
-            self->unmapped_sample[samples[j]] = true;
+        ret = simplifier_insert_sample(self, samples[j]);
+        if (ret != 0) {
+            goto out;
         }
     }
 out:
@@ -2037,11 +1999,9 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     self->ancestor_map = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
     self->root_map = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
     self->node_id_map = malloc(num_nodes_alloc * sizeof(node_id_t));
-    self->unmapped_sample = calloc(num_nodes_alloc, sizeof(bool));
     self->is_sample = calloc(num_nodes_alloc, sizeof(bool));
     if (self->ancestor_map == NULL || self->root_map == NULL
-            || self->node_id_map == NULL || self->unmapped_sample == NULL
-            || self->is_sample == NULL) {
+            || self->node_id_map == NULL || self->is_sample == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -2082,7 +2042,6 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->root_map);
     msp_safe_free(self->segment_buffer);
     msp_safe_free(self->edge_buffer);
-    msp_safe_free(self->unmapped_sample);
     msp_safe_free(self->is_sample);
     msp_safe_free(self->mutation_id_map);
     msp_safe_free(self->mutation_node_map);
@@ -2200,13 +2159,6 @@ simplifier_remove_ancestry(simplifier_t *self, double left, double right,
     int ret = 0;
     simplify_segment_t *x, *y, *head, *last, *x_prev;
 
-    /* There is a problem here when we have internal samples. We seem
-     * to be leaking segments within remove_ancestry, possibly because
-     * we are overwriting the ancestry segment that was already inserted.
-     * This may be harmless, or it may signify a deeper problem. We
-     * should resolve this problem one way or another though.
-     */
-
     head = self->ancestor_map[input_id];
     x = head;
     last = NULL;
@@ -2280,7 +2232,8 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
     double l, r, next_l;
     uint32_t j, h;
     avl_node_t *node;
-    simplify_segment_t *x, *z, *alpha;
+    simplify_segment_t head_sentinel;
+    simplify_segment_t *x, *z, *alpha, *head;
     simplify_segment_t **H = NULL;
     avl_tree_t *Q = &self->merge_queue;
 
@@ -2289,7 +2242,13 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    z = NULL;
+
+    head_sentinel.left = 0.0;
+    head_sentinel.right = 0.0;
+    head_sentinel.node = MSP_NULL_NODE;
+    head_sentinel.next = NULL;
+    head = &head_sentinel;
+    z = head;
     while (avl_count(Q) > 0) {
         h = 0;
         node = Q->head;
@@ -2378,16 +2337,34 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                 }
             }
         }
+
         /* Loop tail; integrate alpha into the global state */
         assert(alpha != NULL);
         if (z == NULL) {
-            assert(self->ancestor_map[input_id] == NULL);
             self->ancestor_map[input_id] = alpha;
         } else {
-            defrag_required |= z->right == alpha->left && z->node == alpha->node;
-            z->next = alpha;
         }
+        defrag_required |= z->right == alpha->left && z->node == alpha->node;
+        z->next = alpha;
         z = alpha;
+    }
+    if (self->ancestor_map[input_id] == NULL) {
+        self->ancestor_map[input_id] = head->next;
+    } else {
+        /* There is already ancestral material present for this node, which
+         * is a sample. We can free the segments computed here because the
+         * existing mapping covers the full region */
+        x = head->next;
+        while (x != NULL) {
+            assert(x->node == self->node_id_map[input_id]);
+            simplifier_free_segment(self ,x);
+            x = x->next;
+        }
+        x = self->ancestor_map[input_id];
+        assert(self->is_sample[input_id]);
+        assert(x->left == 0.0);
+        assert(x->right == self->sequence_length);
+        assert(x->node == self->node_id_map[input_id]);
     }
     if (defrag_required) {
         ret = simplifier_defrag_segment_chain(self, input_id);
@@ -2580,32 +2557,8 @@ simplifier_process_parent_edges(simplifier_t *self, node_id_t parent, size_t sta
     size_t j;
     node_id_t child;
     double left, right;
-    bool parent_internal_sample = false;
 
-    /* Make a first pass through the edges to find any child nodes that are
-     * unmapped samples. Insert segments for each of them. */
-    for (j = start; j < end; j++) {
-        child = self->input_edges.child[j];
-        if (self->unmapped_sample[child]) {
-            self->unmapped_sample[child] = false;
-            ret = simplifier_insert_sample(self, child);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    }
-    /* If the parent is an unmapped sample, allocate a node for it but wait until
-     * after we've processed all the segments to insert an ancestral segment. */
-    if (self->unmapped_sample[parent]) {
-        parent_internal_sample = true;
-        self->unmapped_sample[parent] = false;
-        ret = simplifier_record_node(self, parent);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-
-    /* Now go through the edges and remove ancestry */
+    /* Go through the edges and remove ancestry */
     for (j = start; j < end; j++) {
         assert(parent == self->input_edges.parent[j]);
         child = self->input_edges.child[j];
@@ -2622,20 +2575,12 @@ simplifier_process_parent_edges(simplifier_t *self, node_id_t parent, size_t sta
             }
         }
     }
-
     /* We can now merge the ancestral segments for the parent */
     ret = simplifier_merge_ancestors(self, parent);
     if (ret != 0) {
         goto out;
     }
     assert(avl_count(&self->merge_queue) == 0);
-
-    if (parent_internal_sample) {
-        ret = simplifier_insert_internal_sample(self, parent);
-        if (ret != 0) {
-            goto out;
-        }
-    }
 out:
     return ret;
 }
@@ -2676,17 +2621,6 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
             }
         }
     }
-
-    /* If we have any unmapped remaining unmapped samples, we need to add them in */
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
-        if (self->unmapped_sample[j]) {
-            ret = simplifier_record_node(self, (node_id_t) j);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    }
-
     ret = simplifier_output_sites(self);
     if (ret != 0) {
         goto out;

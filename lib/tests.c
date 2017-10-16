@@ -20,7 +20,6 @@
 /*
  * Unit tests for the low-level msprime API.
  */
-
 #include "msprime.h"
 
 #include <float.h>
@@ -174,6 +173,45 @@ const char *unary_ex_mutations =
     "2    5   1\n";
 
 /* An example of a tree sequence with internally sampled nodes. */
+
+/* TODO: find a way to draw these side-by-side */
+/*
+  7
++-+-+
+|   5
+| +-++
+| |  4
+| | +++
+| | | 3
+| | |
+| 1 2
+|
+0
+
+  8
++-+-+
+|   5
+| +-++
+| |  4
+| | +++
+3 | | |
+  | | |
+  1 2 |
+      |
+      0
+
+  6
++-+-+
+|   5
+| +-++
+| |  4
+| | +++
+| | | 3
+| | |
+| 1 2
+|
+0
+*/
 
 const char *internal_sample_ex_nodes =
     "1  0.0   0\n"
@@ -956,6 +994,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     for (j = 0; j < num_samples; j++) {
         ret = tree_sequence_get_node(ts, samples[j], &n1);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(node_map[samples[j]], j);
         ret = tree_sequence_get_node(subset, node_map[samples[j]], &n2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(n1.population, n2.population);
@@ -4468,10 +4507,12 @@ test_internal_sample_simplified_tree_sequence_iter(void)
     tree_sequence_t ts, simplified;
     node_id_t samples[] = {2, 3, 5};
     node_id_t node_map[9];
+    node_id_t z = MSP_NULL_NODE;
     node_id_t parents[] = {
-        2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE,
-        3, 4, MSP_NULL_NODE, 4, MSP_NULL_NODE,
-        2, 2, 3, MSP_NULL_NODE, MSP_NULL_NODE,
+    /*  0  1  2  3  4 */
+        3, 3, z, 2, z,
+        2, 4, 4, z, z,
+        3, 3, z, 2, z,
     };
     uint32_t num_trees = 3;
 
@@ -4483,7 +4524,7 @@ test_internal_sample_simplified_tree_sequence_iter(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(node_map[2], 0);
     CU_ASSERT_EQUAL(node_map[3], 1);
-    CU_ASSERT_EQUAL(node_map[5], 3);
+    CU_ASSERT_EQUAL(node_map[5], 2);
 
     verify_trees(&simplified, num_trees, parents);
     tree_sequence_free(&simplified);
@@ -5293,12 +5334,8 @@ test_simplify_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j < 9) {
-            verify_simplify(examples[j]);
-            verify_simplify_errors(examples[j]);
-        } else {
-            printf("\n\nSKIPPING TS %d until 1..n property restored\n", j);
-        }
+        verify_simplify(examples[j]);
+        verify_simplify_errors(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }

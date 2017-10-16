@@ -678,15 +678,9 @@ class Simplifier(object):
         self.edge_buffer = []
         self.node_id_map = {}
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
-        # Map all samples at time 0 to new nodes. Keep all internal samples in
-        # a list so that we can map them later as we encounter them.
-        self.unmapped_samples = set()
         self.samples = set(sample)
         for sample_id in sample:
-            if ts.node(sample_id).time == 0:
-                self.insert_sample(sample_id)
-            else:
-                self.unmapped_samples.add(sample_id)
+            self.insert_sample(sample_id)
         # We keep a map of input nodes to mutations.
         self.mutation_map = [[] for _ in range(ts.num_nodes)]
         position = ts.tables.sites.position
@@ -804,36 +798,14 @@ class Simplifier(object):
         x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
         self.A[sample_id] = x
 
-    def insert_internal_sample(self, sample_id):
-        """
-        Insert a new internal sample, clearing up any existing segments.
-        """
-        if sample_id in self.A:
-            x = self.A[sample_id]
-            while x is not None:
-                assert x.node == self.node_id_map[sample_id]
-                x = x.next
-        x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
-        self.A[sample_id] = x
-
     def process_parent_edges(self, edges):
         """
         Process all of the edges for a given parent.
         """
         assert len(set(e.parent for e in edges)) == 1
         parent = edges[0].parent
-        # For any children that are samples, insert them directly into the state.
-        for edge in edges:
-            if edge.child in self.unmapped_samples:
-                self.unmapped_samples.remove(edge.child)
-                self.insert_sample(edge.child)
-        # If the parent is an unmapped sample, record a node for it. This ordering
-        # gaurantees that we allocate node IDs are we see then going up the tree
-        # sequence.
-        if parent in self.unmapped_samples:
-            self.record_node(parent)
 
-        # Now snip out the ancestry from the state corresponding to each of the
+        # Snip out the ancestry from the state corresponding to each of the
         # edges, and queue this up for merging.
         H = []
         for edge in edges:
@@ -842,12 +814,6 @@ class Simplifier(object):
                 self.check_state()
         self.merge_labeled_ancestors(H, parent)
         self.check_state()
-
-        # If the parent was newly added, we need to make sure it has ancestral material
-        # mapped over the full interval.
-        if parent in self.unmapped_samples:
-            self.unmapped_samples.remove(parent)
-            self.insert_internal_sample(parent)
 
     def finalise_sites(self):
         # Build a map from the old mutation IDs to new IDs. Any mutation that
@@ -912,10 +878,6 @@ class Simplifier(object):
                     # print("Recording mutation over root", x.node, mutation_id)
                     self.record_mutation(x.node, mutation_id)
                 x = x.next
-
-        # Record any remaining unmapped samples.
-        for node in sorted(self.unmapped_samples):
-            self.record_node(node)
 
         self.finalise_sites()
         node_map = np.zeros(self.ts.num_nodes, np.int32) - 1
@@ -1003,7 +965,8 @@ class Simplifier(object):
         # with x an ancestor, i.e., a list of segments.
         coalescence = False
         alpha = None
-        z = None
+        head = Segment()
+        z = head
         while len(H) > 0:
             # print("LOOP HEAD")
             # self.print_heaps(H)
@@ -1053,13 +1016,18 @@ class Simplifier(object):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-
             # loop tail; update alpha and integrate it into the state.
-            if z is None:
-                self.A[input_id] = alpha
-            else:
-                z.next = alpha
+            z.next = alpha
             z = alpha
+        if input_id in self.A:
+            # Free the allocated segments.
+            x = head.next
+            while x is not None:
+                assert x.node == self.node_id_map[input_id]
+                x = x.next
+        else:
+            z = head.next
+            self.A[input_id] = z
         self.flush_edges()
 
     def check_state(self):
