@@ -1354,7 +1354,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_mutations) - 1, ts.num_mutations)
         self.assertEqual(
             list(output_mutations[0].split()),
-            ["site", "node", "derived_state"])
+            ["site", "node", "derived_state", "parent"])
         mutations = [mut for site in ts.sites() for mut in site.mutations]
         for mutation, line in zip(mutations, output_mutations[1:]):
             splits = line.split("\t")
@@ -1433,7 +1433,6 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             check += 1
         self.assertEqual(check, ts1.get_num_trees())
 
-    @unittest.skip("Add parent column to mutation text format")
     def test_text_record_round_trip(self):
         for ts1 in get_example_tree_sequences():
             nodes_file = six.StringIO()

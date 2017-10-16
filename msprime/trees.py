@@ -898,13 +898,19 @@ def parse_mutations(source):
     Parse the specified file-like object and return a MutationTable instance.
     The object must contain text with whitespace delimited columns, which are
     labeled with headers and contain columns ``site``, ``node``, and
-    ``derived_state``.  Further requirements are described in
-    :class:`MutationTable`.
+    ``derived_state``. An optional ``parent`` column may also be supplied.
+    Further requirements are described in :class:`MutationTable`.
     """
     header = source.readline().split()
     site_index = header.index("site")
     node_index = header.index("node")
     derived_state_index = header.index("derived_state")
+    parent_index = None
+    parent = NULL_MUTATION
+    try:
+        parent_index = header.index("parent")
+    except ValueError:
+        pass
     table = tables.MutationTable()
     for line in source:
         tokens = line.split()
@@ -912,7 +918,10 @@ def parse_mutations(source):
             site = int(tokens[site_index])
             node = int(tokens[node_index])
             derived_state = tokens[derived_state_index]
-            table.add_row(site=site, node=node, derived_state=derived_state)
+            if parent_index is not None:
+                parent = int(tokens[parent_index])
+            table.add_row(
+                site=site, node=node, derived_state=derived_state, parent=parent)
     return table
 
 
@@ -1157,15 +1166,17 @@ class TreeSequence(object):
                 print(row, file=sites)
 
         if mutations is not None:
-            print("site", "node", "derived_state", sep="\t", file=mutations)
+            print("site", "node", "derived_state", "parent", sep="\t", file=mutations)
             for site in self.sites():
                 for mutation in site.mutations:
                     row = (
                         "{site}\t"
                         "{node}\t"
-                        "{derived_state}").format(
+                        "{derived_state}\t"
+                        "{parent}").format(
                             site=mutation.site, node=mutation.node,
-                            derived_state=mutation.derived_state)
+                            derived_state=mutation.derived_state,
+                            parent=mutation.parent)
                     print(row, file=mutations)
 
     def dump_samples_text(self, samples, precision=6):
