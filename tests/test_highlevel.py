@@ -263,11 +263,12 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     return pi
 
 
-def simplify_tree_sequence(ts, samples, filter_invariant_sites=True):
+def simplify_tree_sequence(ts, samples, filter_zero_mutation_sites=True):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
     """
-    s = tests.Simplifier(ts, samples, filter_invariant_sites=filter_invariant_sites)
+    s = tests.Simplifier(
+        ts, samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
     return s.simplify()
 
 
@@ -1110,7 +1111,7 @@ class TestTreeSequence(HighLevelTestCase):
 
     def verify_simplify_haplotypes(self, ts, samples):
         sub_ts, node_map = ts.simplify(
-                samples, map_nodes=True, filter_invariant_sites=False)
+                samples, map_nodes=True, filter_zero_mutation_sites=False)
         # Sites tables should be equal
         self.assertEqual(ts.tables.sites, sub_ts.tables.sites)
         sub_haplotypes = dict(zip(sub_ts.samples(), sub_ts.haplotypes()))
@@ -1124,12 +1125,13 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertEqual(sorted(mapped_ids), sorted(sub_ts.samples()))
 
     def verify_simplify_equality(self, ts, sample):
-        for filter_invariant_sites in [False, True]:
+        for filter_zero_mutation_sites in [False, True]:
             s1, node_map1 = ts.simplify(
-                sample, map_nodes=True, filter_invariant_sites=filter_invariant_sites)
+                sample, map_nodes=True,
+                filter_zero_mutation_sites=filter_zero_mutation_sites)
             t1 = s1.dump_tables()
             s2, node_map2 = simplify_tree_sequence(
-                ts, sample, filter_invariant_sites=filter_invariant_sites)
+                ts, sample, filter_zero_mutation_sites=filter_zero_mutation_sites)
             t2 = s2.dump_tables()
             self.assertEqual(s1.num_samples,  len(sample))
             self.assertEqual(s2.num_samples,  len(sample))

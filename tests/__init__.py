@@ -660,11 +660,11 @@ class Simplifier(object):
     Simplifies a tree sequence to its minimal representation given a subset
     of the leaves.
     """
-    def __init__(self, ts, sample, filter_invariant_sites=True):
+    def __init__(self, ts, sample, filter_zero_mutation_sites=True):
         self.ts = ts
         self.n = len(sample)
         self.sequence_length = ts.sequence_length
-        self.filter_invariant_sites = filter_invariant_sites
+        self.filter_zero_mutation_sites = filter_zero_mutation_sites
         self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
         # A maps input node IDs to the extant ancestor chain. Once the algorithm
@@ -842,7 +842,7 @@ class Simplifier(object):
                         num_output_mutations += 1
                         num_output_site_mutations += 1
             output_site = True
-            if self.filter_invariant_sites and num_output_site_mutations == 0:
+            if self.filter_zero_mutation_sites and num_output_site_mutations == 0:
                 output_site = False
 
             if output_site:

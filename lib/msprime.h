@@ -41,7 +41,7 @@
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
-#define MSP_FILTER_INVARIANT_SITES 1
+#define MSP_FILTER_ZERO_MUTATION_SITES 1
 
 #define MSP_SAMPLE_COUNTS  1
 #define MSP_SAMPLE_LISTS   2

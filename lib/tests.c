@@ -1102,7 +1102,7 @@ verify_simplify(tree_sequence_t *ts)
     node_id_t *sample;
     node_id_t *node_map = malloc(tree_sequence_get_num_nodes(ts) * sizeof(node_id_t));
     tree_sequence_t subset;
-    int flags = MSP_FILTER_INVARIANT_SITES;
+    int flags = MSP_FILTER_ZERO_MUTATION_SITES;
 
     CU_ASSERT_FATAL(node_map != NULL);
     ret = tree_sequence_get_samples(ts, &sample);

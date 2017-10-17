@@ -366,7 +366,7 @@ class TestSimplify(unittest.TestCase):
         Check that haplotypes are unchanged by simplify.
         """
         sub_ts, node_map = ts.simplify(
-            samples, map_nodes=True, filter_invariant_sites=False)
+            samples, map_nodes=True, filter_zero_mutation_sites=False)
         # Sites tables should be equal
         self.assertEqual(ts.tables.sites, sub_ts.tables.sites)
         sub_haplotypes = dict(zip(sub_ts.samples(), sub_ts.haplotypes()))

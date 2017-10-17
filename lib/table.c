@@ -2466,8 +2466,7 @@ simplifier_output_sites(simplifier_t *self)
     mutation_id_t num_output_mutations, num_output_site_mutations;
     node_id_t mapped_node;
     bool keep_mutation, keep_site;
-    bool filter_zero_mutation_sites = (self->flags & MSP_FILTER_INVARIANT_SITES);
-
+    bool filter_zero_mutation_sites = (self->flags & MSP_FILTER_ZERO_MUTATION_SITES);
 
     /* TODO Implement the checks below for ancestral state and derived state properly when
      * we've added the _offset columns to the tables. */

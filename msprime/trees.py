@@ -1709,7 +1709,7 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_invariant_sites=True, map_nodes=False):
+    def simplify(self, samples=None, filter_zero_mutation_sites=True, map_nodes=False):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -1725,8 +1725,8 @@ class TreeSequence(object):
         ``simplify_tables()``.
 
         :param list samples: The list of nodes for which to retain information.
-        :param bool filter_invariant_sites: If True, remove any sites that have
-            no mutations in the simplified tree sequence.
+        :param bool filter_zero_mutation_sites: If True, remove any sites that have
+            no mutations in the simplified tree sequence. Defaults to True.
         :param bool map_nodes: If True, return a tuple containing the resulting
             tree sequence and a numpy array mapping node IDs in the current tree
             sequence to their corresponding node IDs in the returned tree sequence.
@@ -1747,13 +1747,13 @@ class TreeSequence(object):
                 samples=samples, sequence_length=self.sequence_length,
                 nodes=t.nodes, edges=t.edges,
                 sites=t.sites, mutations=t.mutations, node_map=node_map,
-                filter_invariant_sites=filter_invariant_sites)
+                filter_zero_mutation_sites=filter_zero_mutation_sites)
         else:
             tables.simplify_tables(
                 samples=samples, sequence_length=self.sequence_length,
                 nodes=t.nodes, edges=t.edges,
                 sites=t.sites, mutations=t.mutations,
-                filter_invariant_sites=filter_invariant_sites)
+                filter_zero_mutation_sites=filter_zero_mutation_sites)
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
             mutations=t.mutations, sequence_length=self.sequence_length)

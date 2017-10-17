@@ -7570,16 +7570,16 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     size_t num_samples;
     simplifier_t *simplifier = NULL;
     int flags = 0;
-    int filter_invariant_sites = true;
+    int filter_zero_mutation_sites = true;
     bool migrations_allocated = false;
     bool sites_allocated = false;
     bool mutations_allocated = false;
     double sequence_length = 0;
     node_id_t *node_map_data;
-
     static char *kwlist[] = {
         "samples", "nodes", "edges", "migrations",
-        "sites", "mutations", "sequence_length", "node_map", "filter_invariant_sites", NULL};
+        "sites", "mutations", "sequence_length", "node_map",
+        "filter_zero_mutation_sites", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!dOi", kwlist,
             &samples,
@@ -7589,7 +7589,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
             &sequence_length,
-            &node_map, &filter_invariant_sites)) {
+            &node_map, &filter_zero_mutation_sites)) {
         goto out;
     }
     samples_array = (PyArrayObject *) PyArray_FROM_OTF(samples, NPY_INT32,
@@ -7632,8 +7632,8 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
         goto out;
     }
-    if (filter_invariant_sites) {
-        flags |= MSP_FILTER_INVARIANT_SITES;
+    if (filter_zero_mutation_sites) {
+        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
     }
     node_map_data = NULL;
     if (node_map != NULL) {
