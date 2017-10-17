@@ -27,111 +27,123 @@ import random
 import unittest
 
 import numpy as np
-import math
 
 import msprime
 import tests
 
 
-def random_breakpoint():
-    return min(1.0, max(0.0, 2 * random.random() - 0.5))
-
-
-def random_mutations(rate, infinite_sites=True):
-    nmuts = np.random.poisson(lam=rate)
-    if not infinite_sites:
-        muts = [math.floor(100*random.random())/100 for _ in range(nmuts)]
-    else:
-        muts = [random.random() for _ in range(nmuts)]
-    return muts
-
-
-def random_allele():
-    return random.choice(['A', 'C', 'G', 'T'])
-
-
-def wf_sim(
-        N, ngens, survival=0.0, mutation_rate=0.0, deep_history=True, debug=False,
-        seed=None):
+class WrightFisherSimulator(object):
     """
     SIMPLE simulation of a bisexual, haploid Wright-Fisher population of size N
     for ngens generations, in which each individual survives with probability
     survival and only those who die are replaced.  The chromosome is 1.0
     Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
     """
-    if seed is not None:
-        random.seed(seed)
-    nodes = msprime.NodeTable()
-    edges = msprime.EdgeTable()
-    migrations = msprime.MigrationTable()
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
-    mut_positions = {}
-    if deep_history:
-        # initial population
-        init_ts = msprime.simulate(N, recombination_rate=1.0)
-        init_ts.dump_tables(nodes=nodes, edges=edges)
-        nodes.set_columns(time=nodes.time + ngens, flags=nodes.flags)
-    else:
-        for _ in range(N):
-            nodes.add_row(time=ngens)
+    def __init__(
+            self, N, survival=0.0, mutation_rate=0.0, seed=None, deep_history=True,
+            debug=False):
+        self.N = N
+        self.survival = survival
+        self.mutation_rate = mutation_rate
+        self.deep_history = deep_history
+        self.debug = debug
+        if seed is not None:
+            random.seed(seed)
 
-    pop = list(range(N))
-    for t in range(ngens - 1, -1, -1):
-        if debug:
-            print("t:", t)
-            print("pop:", pop)
+    def random_breakpoint(self):
+        return min(1.0, max(0.0, 2 * random.random() - 0.5))
 
-        dead = [random.random() > survival for k in pop]
-        # sample these first so that all parents are from the previous gen
-        new_parents = [
-            (random.choice(pop), random.choice(pop)) for k in range(sum(dead))]
-        k = 0
-        if debug:
-            print("Replacing", sum(dead), "individuals.")
-        for j in range(N):
-            if dead[j]:
-                # this is: offspring ID, lparent, rparent, breakpoint
-                offspring = nodes.num_rows
-                nodes.add_row(time=t)
-                lparent, rparent = new_parents[k]
-                k += 1
-                bp = random_breakpoint()
-                muts = random_mutations(mutation_rate)
-                if debug:
-                    print("--->", offspring, lparent, rparent, bp)
-                pop[j] = offspring
-                if bp > 0.0:
-                    edges.add_row(left=0.0, right=bp, parent=lparent, child=offspring)
-                if bp < 1.0:
-                    edges.add_row(left=bp, right=1.0, parent=rparent, child=offspring)
-                for mut in muts:
-                    if mut not in mut_positions:
+    def random_mutations(self):
+        nmuts = np.random.poisson(lam=self.mutation_rate)
+        return [random.random() for _ in range(nmuts)]
+
+    def random_allele(self):
+        return random.choice(['A', 'C', 'G', 'T'])
+
+    def run(self, ngens):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        migrations = msprime.MigrationTable()
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        mut_positions = {}
+        if self.deep_history:
+            # initial population
+            init_ts = msprime.simulate(self.N, recombination_rate=1.0)
+            init_ts.dump_tables(nodes=nodes, edges=edges)
+            nodes.set_columns(time=nodes.time + ngens, flags=nodes.flags)
+        else:
+            for _ in range(self.N):
+                nodes.add_row(time=ngens)
+
+        pop = list(range(self.N))
+        for t in range(ngens - 1, -1, -1):
+            if self.debug:
+                print("t:", t)
+                print("pop:", pop)
+
+            dead = [random.random() > self.survival for k in pop]
+            # sample these first so that all parents are from the previous gen
+            new_parents = [
+                (random.choice(pop), random.choice(pop)) for k in range(sum(dead))]
+            k = 0
+            if self.debug:
+                print("Replacing", sum(dead), "individuals.")
+            for j in range(self.N):
+                if dead[j]:
+                    # this is: offspring ID, lparent, rparent, breakpoint
+                    offspring = nodes.num_rows
+                    nodes.add_row(time=t)
+                    lparent, rparent = new_parents[k]
+                    k += 1
+                    bp = self.random_breakpoint()
+                    muts = self.random_mutations()
+                    if self.debug:
+                        print("--->", offspring, lparent, rparent, bp)
+                    pop[j] = offspring
+                    if bp > 0.0:
+                        edges.add_row(
+                            left=0.0, right=bp, parent=lparent, child=offspring)
+                    if bp < 1.0:
+                        edges.add_row(
+                            left=bp, right=1.0, parent=rparent, child=offspring)
+                    for mut in muts:
+                        assert mut not in mut_positions
                         mut_positions[mut] = sites.num_rows
-                        sites.add_row(position=mut, ancestral_state=random_allele())
-                    mutations.add_row(
+                        sites.add_row(
+                            position=mut, ancestral_state=self.random_allele())
+                        mutations.add_row(
                             site=mut_positions[mut], node=offspring,
-                            derived_state=random_allele())
+                            derived_state=self.random_allele())
 
-    if debug:
-        print("Done! Final pop:")
-        print(pop)
-    flags = [
-        (msprime.NODE_IS_SAMPLE if u in pop else 0) for u in range(nodes.num_rows)]
-    nodes.set_columns(time=nodes.time, flags=flags)
-    if debug:
-        print("Done.")
-        print("Nodes:")
-        print(nodes)
-        print("Edges:")
-        print(edges)
-        print("Sites:")
-        print(sites)
-        print("Mutations:")
-        print(mutations)
-        print("Migrations:")
-        print(migrations)
-    return msprime.TableCollection(nodes, edges, migrations, sites, mutations)
+        if self.debug:
+            print("Done! Final pop:")
+            print(pop)
+        flags = [
+            (msprime.NODE_IS_SAMPLE if u in pop else 0) for u in range(nodes.num_rows)]
+        nodes.set_columns(time=nodes.time, flags=flags)
+        if self.debug:
+            print("Done.")
+            print("Nodes:")
+            print(nodes)
+            print("Edges:")
+            print(edges)
+            print("Sites:")
+            print(sites)
+            print("Mutations:")
+            print(mutations)
+            print("Migrations:")
+            print(migrations)
+        return msprime.TableCollection(nodes, edges, migrations, sites, mutations)
+
+
+def wf_sim(
+        N, ngens, survival=0.0, mutation_rate=0.0, deep_history=True, debug=False,
+        seed=None):
+    sim = WrightFisherSimulator(
+        N, survival=survival, mutation_rate=mutation_rate, deep_history=deep_history,
+        debug=debug, seed=seed)
+    return sim.run(ngens)
 
 
 class TestSimulation(unittest.TestCase):
@@ -246,6 +258,13 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(ts.sample_size, N)
         for hap in ts.haplotypes():
             self.assertEqual(len(hap), ts.num_sites)
+
+
+class TestIncrementalBuild(unittest.TestCase):
+    """
+    Tests for incrementally building a tree sequence from forward time
+    simulations.
+    """
 
 
 class TestSimplify(unittest.TestCase):
