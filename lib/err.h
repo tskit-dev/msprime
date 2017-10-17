@@ -65,7 +65,7 @@
 #define MSP_ERR_NULL_PARENT                                         -34
 #define MSP_ERR_NULL_CHILD                                          -35
 #define MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME                        -36
-#define MSP_ERR_EDGES_NOT_SORTED_PARENT                             -37
+#define MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS                         -37
 #define MSP_ERR_EDGES_NOT_SORTED_CHILD                              -38
 #define MSP_ERR_EDGES_NOT_SORTED_LEFT                               -39
 #define MSP_ERR_BAD_NODE_TIME_ORDERING                              -40

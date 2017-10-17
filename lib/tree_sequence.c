@@ -543,6 +543,12 @@ tree_sequence_check(tree_sequence_t *self)
     size_t j;
     double left, last_left;
     double *time = self->nodes.time;
+    bool *parent_seen = calloc(self->nodes.num_records, sizeof(bool));
+
+    if (parent_seen == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 
     for (j = 0; j < self->edges.num_records; j++) {
         parent = self->edges.parent[j];
@@ -554,6 +560,10 @@ tree_sequence_check(tree_sequence_t *self)
         }
         if (parent < 0 || parent >= (node_id_t) self->nodes.num_records) {
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (parent_seen[parent]) {
+            ret = MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS;
             goto out;
         }
         if (j > 0) {
@@ -584,6 +594,8 @@ tree_sequence_check(tree_sequence_t *self)
                             goto out;
                         }
                     }
+                } else {
+                    parent_seen[last_parent] = true;
                 }
             }
         }
@@ -609,6 +621,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
     }
+
     /* Check the sites */
     for (j = 0; j < self->sites.num_records; j++) {
         if (self->sites.ancestral_state_length[j] != 1) {
@@ -668,6 +681,7 @@ tree_sequence_check(tree_sequence_t *self)
     }
     ret = 0;
 out:
+    msp_safe_free(parent_seen);
     return ret;
 }
 

@@ -143,12 +143,11 @@ msp_strerror(int err)
             ret = "At least one record must be supplied";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME:
-            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+            ret = "Edges must be listed in (time[parent], child, left) order;"
                 " time[parent] order violated";
             break;
-        case MSP_ERR_EDGES_NOT_SORTED_PARENT:
-            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
-                " parent order violated";
+        case MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS:
+            ret = "All edges for a given parent must be contiguous";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_CHILD:
             ret = "Edges must be listed in (time[parent], parent, child, left) order;"
