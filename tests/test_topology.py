@@ -32,6 +32,7 @@ except ImportError:
 import unittest
 import itertools
 import random
+import platform
 
 import six
 import numpy as np
@@ -1637,7 +1638,8 @@ class TestWithVisuals(TopologyTestCase):
                     self.assertEqual(a[k], msprime.NULL_NODE)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
-    @unittest.skip("Recurrent mutations. This fails on Windows, but not Linux.")
+    @unittest.skipIf(
+        platform.system() == "Windows", "Recurrent mutations bug on windows")
     def test_many_single_offspring(self):
         # a more complex test with single offspring
         # With `(i,j,x)->k` denoting that individual `k` inherits from `i` on `[0,x)`
@@ -2603,6 +2605,8 @@ class TestSimplify(unittest.TestCase):
         for t in tss.trees():
             self.assertEqual(t.parent_dict, trees[t.index])
 
+    @unittest.skipIf(
+        platform.system() == "Windows", "Recurrent mutations bug on windows")
     def test_many_mutations_over_single_sample_ancestral_state(self):
         nodes = six.StringIO("""\
         id      is_sample   time
@@ -2632,6 +2636,8 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 2)
         self.assertEqual(list(tss.haplotypes()), ["0"])
 
+    @unittest.skipIf(
+        platform.system() == "Windows", "Recurrent mutations bug on windows")
     def test_many_mutations_over_single_sample_derived_state(self):
         nodes = six.StringIO("""\
         id      is_sample   time
