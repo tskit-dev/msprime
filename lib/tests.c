@@ -5752,6 +5752,11 @@ test_sort_tables(void)
             ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
             CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
             mutations.node[0] = 0;
+            /* Check for mutation parent bounds error */
+            mutations.parent[0] = mutations.num_rows;
+            ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_OUT_OF_BOUNDS);
+            mutations.parent[0] = MSP_NULL_MUTATION;
             ret = sort_tables(&nodes, &edges, &migrations, &sites, &mutations, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
         }
