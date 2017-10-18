@@ -197,7 +197,7 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
     ts = msprime.simulate(15, length=4, recombination_rate=1)
     assert ts.num_trees > 1
     if back_mutations:
-        yield tsutil.insert_branch_mutations(ts)
+        yield tsutil.insert_branch_mutations(ts, mutations_per_branch=2)
 
 
 def get_bottleneck_examples():
@@ -223,7 +223,8 @@ def get_back_mutation_examples():
     trees.
     """
     ts = msprime.simulate(10, random_seed=1)
-    yield tsutil.insert_branch_mutations(ts)
+    for j in [1, 2, 3]:
+        yield tsutil.insert_branch_mutations(ts, mutations_per_branch=j)
     for ts in get_bottleneck_examples():
         yield tsutil.insert_branch_mutations(ts)
 

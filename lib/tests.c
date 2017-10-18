@@ -1308,11 +1308,13 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     mutation_table_t mutations;
     site_table_t sites;
     node_id_t *stack;
-    mutation_id_t *mutation;
+    mutation_id_t *mutation, parent;;
     node_id_t u, v, root;
     site_id_t site_id;
     char *state = NULL;
     int stack_top = 0;
+    size_t j;
+    size_t num_mutations_per_branch = 2;
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1331,7 +1333,6 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_FATAL(state != NULL);
     mutation = malloc(tree_sequence_get_num_nodes(ts) * sizeof(mutation_id_t));
     CU_ASSERT_FATAL(mutation != NULL);
-
 
     stack = tree.stack1;
     site_id = 0;
@@ -1353,11 +1354,16 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
                 }
                 v = tree.parent[u];
                 if (v != MSP_NULL_NODE) {
-                    state[u] = (state[v] + 1) % 2;
-                    mutation[u] = mutations.num_rows;
-                    ret = mutation_table_add_row(&mutations, site_id, u,
-                            mutation[v], state[u] == 0? "0": "1", 1);
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    state[u] = state[v];
+                    parent = mutation[v];
+                    for (j = 0; j < num_mutations_per_branch; j++) {
+                        state[u] = (state[u] + 1) % 2;
+                        mutation[u] = mutations.num_rows;
+                        ret = mutation_table_add_row(&mutations, site_id, u,
+                                parent, state[u] == 0? "0": "1", 1);
+                        parent = mutation[u];
+                        CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    }
                 }
             }
             site_id++;

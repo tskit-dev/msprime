@@ -39,6 +39,7 @@ import numpy as np
 
 import msprime
 import _msprime
+import tests.tsutil as tsutil
 
 
 @contextlib.contextmanager
@@ -71,13 +72,8 @@ def multi_locus_with_mutation_example():
 
 
 def recurrent_mutation_example():
-    ts = msprime.simulate(
-        10, recombination_rate=1, length=10, random_seed=2)
-    sites = [msprime.Site(
-        position=j, index=j, ancestral_state="0", mutations=[
-            msprime.Mutation(site=j, node=k, derived_state="1") for k in range(j + 1)])
-        for j in range(ts.sample_size)]
-    return ts.copy(sites)
+    ts = msprime.simulate(10, recombination_rate=1, length=10, random_seed=2)
+    return tsutil.insert_branch_mutations(ts)
 
 
 def general_mutation_example():
@@ -259,7 +255,6 @@ class TestRoundTrip(TestHdf5):
     def test_bottleneck_example(self):
         self.verify_round_trip(migration_example(), 3)
 
-    @unittest.skip("Recurrent mutations")
     def test_recurrent_mutation_example(self):
         ts = recurrent_mutation_example()
         for version in [2, 3]:

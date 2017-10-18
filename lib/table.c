@@ -2131,8 +2131,6 @@ simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
      * the ancestry segments and the list of positions. This will be more efficient
      * unless we have huge numbers of mutations per node */
 
-    /* simplifier_print_state(self, stdout); */
-
     if (avl_count(avl_tree) > 0) {
         while (seg != NULL) {
             search.position = seg->left;
@@ -2463,7 +2461,7 @@ simplifier_output_sites(simplifier_t *self)
     mutation_id_t input_mutation, mapped_parent ,site_start, site_end;
     site_id_t num_input_sites = (site_id_t) self->input_sites.num_rows;
     mutation_id_t num_input_mutations = (mutation_id_t) self->input_mutations.num_rows;
-    mutation_id_t num_output_mutations, num_output_site_mutations;
+    mutation_id_t input_parent, num_output_mutations, num_output_site_mutations;
     node_id_t mapped_node;
     bool keep_mutation, keep_site;
     bool filter_zero_mutation_sites = (self->flags & MSP_FILTER_ZERO_MUTATION_SITES);
@@ -2484,9 +2482,10 @@ simplifier_output_sites(simplifier_t *self)
                 && self->input_mutations.site[input_mutation] == input_site) {
             mapped_node = self->mutation_node_map[input_mutation];
             if (mapped_node != MSP_NULL_NODE) {
-                mapped_parent = self->input_mutations.parent[input_mutation];
-                if (mapped_parent != MSP_NULL_MUTATION) {
-                    mapped_parent = self->mutation_id_map[mapped_parent];
+                input_parent = self->input_mutations.parent[input_mutation];
+                mapped_parent = MSP_NULL_MUTATION;
+                if (input_parent != MSP_NULL_MUTATION) {
+                    mapped_parent = self->mutation_id_map[input_parent];
                 }
                 keep_mutation = true;
                 if (mapped_parent == MSP_NULL_MUTATION) {

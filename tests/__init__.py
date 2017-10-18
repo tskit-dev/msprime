@@ -793,6 +793,10 @@ class Simplifier(object):
         print(self.node_table)
         print("Output Edges: ")
         print(self.edge_table)
+        print("Output sites:")
+        print(self.site_table)
+        print("Output mutations: ")
+        print(self.mutation_table)
 
     def insert_sample(self, sample_id):
         """
@@ -830,12 +834,12 @@ class Simplifier(object):
             num_output_site_mutations = 0
             for mut in site.mutations:
                 mapped_node = self.mutation_node_map[mut.id]
-                new_parent = -1
+                mapped_parent = -1
                 if mut.parent != -1:
-                    new_parent = mutation_id_map[mut.parent]
+                    mapped_parent = mutation_id_map[mut.parent]
                 if mapped_node != -1:
                     keep = True
-                    if new_parent == -1 and site.ancestral_state == mut.derived_state:
+                    if mapped_parent == -1 and site.ancestral_state == mut.derived_state:
                         keep = False
                     if keep:
                         mutation_id_map[mut.id] = num_output_mutations

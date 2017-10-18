@@ -2603,6 +2603,65 @@ class TestSimplify(unittest.TestCase):
         for t in tss.trees():
             self.assertEqual(t.parent_dict, trees[t.index])
 
+    def test_many_mutations_over_single_sample_ancestral_state(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       1       0
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0           0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        0       0       1               -1
+        0       0       0               0
+        """)
+        ts = msprime.load_text(nodes, edges, sites=sites, mutations=mutations)
+        self.assertEqual(ts.sample_size, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 2)
+        tss, node_map = self.do_simplify(ts)
+        self.assertEqual(tss.num_sites, 1)
+        self.assertEqual(tss.num_mutations, 2)
+        self.assertEqual(list(tss.haplotypes()), ["0"])
+
+    def test_many_mutations_over_single_sample_derived_state(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       1       0
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0           0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        0       0       1               -1
+        0       0       0               0
+        0       0       1               1
+        """)
+        ts = msprime.load_text(nodes, edges, sites=sites, mutations=mutations)
+        self.assertEqual(ts.sample_size, 1)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 3)
+        tss, node_map = self.do_simplify(ts)
+        self.assertEqual(tss.num_sites, 1)
+        self.assertEqual(tss.num_mutations, 3)
+        self.assertEqual(list(tss.haplotypes()), ["1"])
+
     def verify_simplify_haplotypes(self, ts, samples):
         sub_ts, node_map = self.do_simplify(
             ts, samples, filter_zero_mutation_sites=False)
