@@ -174,8 +174,9 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
     fprintf(out, "mutations = (%d records)\n", (int) self->mutations.num_records);
     for (j = 0; j < self->mutations.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%d\t%s\n", (int) j, self->mutations.site[j],
-                self->mutations.node[j], self->mutations.derived_state[j]);
+        fprintf(out, "\t%d\t%d\t%d\t%d\t%s\n", (int) j, self->mutations.site[j],
+                self->mutations.node[j], self->mutations.parent[j],
+                self->mutations.derived_state[j]);
     }
     fprintf(out, "migrations.records = (%d records)\n",
             (int) self->migrations.num_records);
@@ -281,17 +282,20 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         self->mutations.max_num_records = self->mutations.num_records;
         size = self->mutations.max_num_records;
         msp_safe_free(self->mutations.node);
+        msp_safe_free(self->mutations.parent);
         msp_safe_free(self->mutations.site);
         msp_safe_free(self->mutations.derived_state);
         msp_safe_free(self->mutations.derived_state_length);
         msp_safe_free(self->sites.site_mutations_mem);
         self->mutations.node = malloc(size * sizeof(node_id_t));
+        self->mutations.parent = malloc(size * sizeof(mutation_id_t));
         self->mutations.derived_state = malloc(size * sizeof(char *));
         self->mutations.derived_state_length = malloc(size * sizeof(list_len_t));
         self->mutations.site = malloc(size * sizeof(site_id_t));
         self->sites.site_mutations_mem = malloc(size * sizeof(mutation_t));
         if (self->mutations.site == NULL
                 || self->mutations.node == NULL
+                || self->mutations.parent == NULL
                 || self->mutations.derived_state == NULL
                 || self->mutations.derived_state_length == NULL
                 || self->sites.site_mutations_mem == NULL) {
@@ -508,6 +512,7 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->sites.site_mutations);
     msp_safe_free(self->mutations.node);
     msp_safe_free(self->mutations.site);
+    msp_safe_free(self->mutations.parent);
     msp_safe_free(self->mutations.derived_state);
     msp_safe_free(self->mutations.derived_state_length);
     msp_safe_free(self->mutations.derived_state_mem);
@@ -534,8 +539,16 @@ tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
     node_id_t child, parent, last_parent, last_child;
+    mutation_id_t parent_mut;
     size_t j;
     double left, last_left;
+    double *time = self->nodes.time;
+    bool *parent_seen = calloc(self->nodes.num_records, sizeof(bool));
+
+    if (parent_seen == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 
     for (j = 0; j < self->edges.num_records; j++) {
         parent = self->edges.parent[j];
@@ -549,20 +562,24 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
+        if (parent_seen[parent]) {
+            ret = MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS;
+            goto out;
+        }
         if (j > 0) {
             last_parent = self->edges.parent[j - 1];
             last_child = self->edges.child[j - 1];
             last_left = self->edges.left[j - 1];
             /* Input data must sorted by (time[parent], parent, child, left). */
-            if (self->nodes.time[parent] < self->nodes.time[last_parent]) {
+            if (time[parent] < time[last_parent]) {
                 ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
                 goto out;
             }
-            if (self->nodes.time[parent] == self->nodes.time[last_parent]) {
-                if (parent < last_parent) {
-                    ret = MSP_ERR_EDGES_NOT_SORTED_PARENT;
-                    goto out;
-                }
+            if (time[parent] == time[last_parent]) {
+                /* if (parent < last_parent) { */
+                /*     ret = MSP_ERR_EDGES_NOT_SORTED_PARENT; */
+                /*     goto out; */
+                /* } */
                 if (parent == last_parent) {
                     if (child < last_child) {
                         ret = MSP_ERR_EDGES_NOT_SORTED_CHILD;
@@ -577,6 +594,8 @@ tree_sequence_check(tree_sequence_t *self)
                             goto out;
                         }
                     }
+                } else {
+                    parent_seen[last_parent] = true;
                 }
             }
         }
@@ -589,7 +608,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
         /* time[child] must be < time[parent] */
-        if (self->nodes.time[child] >= self->nodes.time[parent]) {
+        if (time[child] >= time[parent]) {
             ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
             goto out;
         }
@@ -602,6 +621,7 @@ tree_sequence_check(tree_sequence_t *self)
             goto out;
         }
     }
+
     /* Check the sites */
     for (j = 0; j < self->sites.num_records; j++) {
         if (self->sites.ancestral_state_length[j] != 1) {
@@ -631,35 +651,37 @@ tree_sequence_check(tree_sequence_t *self)
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
+        parent_mut = self->mutations.parent[j];
+        if (parent_mut < MSP_NULL_MUTATION
+                || parent_mut >= (mutation_id_t) self->mutations.num_records) {
+            ret = MSP_ERR_MUTATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (parent_mut == (mutation_id_t) j) {
+            ret = MSP_ERR_MUTATION_PARENT_EQUAL;
+            goto out;
+        }
+        if (parent_mut != MSP_NULL_MUTATION) {
+            /* Parents must be listed before their children */
+            if (parent_mut > (mutation_id_t) j) {
+                ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
+                goto out;
+            }
+            if (self->mutations.site[parent_mut] != self->mutations.site[j]) {
+                ret = MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE;
+                goto out;
+            }
+        }
         if (j > 0) {
             if (self->mutations.site[j - 1] > self->mutations.site[j]) {
                 ret = MSP_ERR_UNSORTED_MUTATIONS;
                 goto out;
             }
-            if (self->mutations.site[j - 1] == self->mutations.site[j]) {
-                /* Also relaxing this assumption because it's too difficult to
-                 * enforce after simplify() has been called.
-                 */
-                /* t1 = self->nodes.time[self->mutations.parent[j - 1]]; */
-                /* t2 = self->nodes.time[self->mutations.parent[j]]; */
-                /* if (t1 < t2) { */
-                /*     ret = MSP_ERR_UNSORTED_MUTATION_NODES; */
-                /*     goto out; */
-                /* } */
-                /* We are relaxing this condition for now, but might want to
-                 * reinstate it later. The issue arises in simplify, where we
-                 * can't easily derive the correct mutations when there are
-                 * lots of them along a path. */
-                /* Within a site, nodes must be unique */
-                /* if (self->mutations.parent[j - 1] == self->mutations.parent[j]) { */
-                /*     ret = MSP_ERR_DUPLICATE_MUTATION_NODES; */
-                /*     goto out; */
-                /* } */
-            }
         }
     }
     ret = 0;
 out:
+    msp_safe_free(parent_seen);
     return ret;
 }
 
@@ -1056,6 +1078,8 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     if (mutations != NULL) {
         memcpy(self->mutations.site, mutations->site, mutations->num_rows * sizeof(site_id_t));
         memcpy(self->mutations.node, mutations->node, mutations->num_rows * sizeof(node_id_t));
+        memcpy(self->mutations.parent, mutations->parent,
+                mutations->num_rows * sizeof(mutation_id_t));
         memcpy(self->mutations.derived_state_length,
                 mutations->derived_state_length,
                 mutations->num_rows * sizeof(uint32_t));
@@ -1184,7 +1208,8 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         for (j = 0; j < self->mutations.num_records; j++) {
             ret = mutation_table_add_row(mutations,
                     self->mutations.site[j], self->mutations.node[j],
-                    self->mutations.derived_state[j], self->mutations.derived_state_length[j]);
+                    self->mutations.parent[j], self->mutations.derived_state[j],
+                    self->mutations.derived_state_length[j]);
             if (ret != 0) {
                 goto out;
             }
@@ -1317,6 +1342,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/sites/ancestral_state_length", 1, self->sites.num_records},
         {"/mutations/site", 1, self->mutations.num_records},
         {"/mutations/node", 1, self->mutations.num_records},
+        {"/mutations/parent", 1, self->mutations.num_records},
         {"/mutations/derived_state_length", 1, self->mutations.num_records},
         {"/nodes/flags", 1, self->nodes.num_records},
         {"/nodes/population", 1, self->nodes.num_records},
@@ -1531,6 +1557,7 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
             self->sites.ancestral_state_length},
         {"/mutations/site", H5T_NATIVE_INT32, self->mutations.site},
         {"/mutations/node", H5T_NATIVE_INT32, self->mutations.node},
+        {"/mutations/parent", H5T_NATIVE_INT32, self->mutations.parent},
         {"/mutations/derived_state_length", H5T_NATIVE_UINT32,
             self->mutations.derived_state_length},
         {"/edges/left", H5T_NATIVE_DOUBLE, self->edges.left},
@@ -1797,6 +1824,9 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/mutations/node",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->mutations.num_records, self->mutations.node},
+        {"/mutations/parent",
+            H5T_STD_I32LE, H5T_NATIVE_INT32,
+            self->mutations.num_records, self->mutations.parent},
         {"/mutations/derived_state_length",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->mutations.num_records, self->mutations.derived_state_length},
@@ -2305,6 +2335,7 @@ tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id, mutation_t *
     record->index = (size_t) id; // TODO what is this for?
     record->site = self->mutations.site[id];
     record->node = self->mutations.node[id];
+    record->parent = self->mutations.parent[id];
     record->derived_state = self->mutations.derived_state[id];
     record->derived_state_length = self->mutations.derived_state_length[id];
 out:
@@ -2416,8 +2447,9 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples, size_t num_sam
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = simplifier_alloc(simplifier, samples, num_samples,
-            nodes, edges, migrations, sites, mutations, 0, flags);
+    ret = simplifier_alloc(simplifier, self->sequence_length,
+            samples, num_samples, nodes, edges, migrations, sites, mutations,
+            0, flags);
     if (ret != 0) {
         goto out;
     }

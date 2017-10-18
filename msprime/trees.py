@@ -43,6 +43,8 @@ NULL_NODE = -1
 
 NULL_POPULATION = -1
 
+NULL_MUTATION = -1
+
 IS_PY2 = sys.version_info[0] < 3
 
 
@@ -61,6 +63,10 @@ Migration = collections.namedtuple(
     ["left", "right", "node", "source", "dest", "time"])
 
 
+# TODO We need to get rid of the these namedtuples where possible and
+# make proper classes where possible. Also, need to standardise on 'id'
+# rather than index throughout.
+
 Site = collections.namedtuple(
     "Site",
     ["position", "ancestral_state", "index", "mutations"])
@@ -68,7 +74,7 @@ Site = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "derived_state"])
+    ["site", "node", "derived_state", "parent", "id"])
 
 
 # This is provided for backwards compatibility with the deprecated mutations()
@@ -892,13 +898,19 @@ def parse_mutations(source):
     Parse the specified file-like object and return a MutationTable instance.
     The object must contain text with whitespace delimited columns, which are
     labeled with headers and contain columns ``site``, ``node``, and
-    ``derived_state``.  Further requirements are described in
-    :class:`MutationTable`.
+    ``derived_state``. An optional ``parent`` column may also be supplied.
+    Further requirements are described in :class:`MutationTable`.
     """
     header = source.readline().split()
     site_index = header.index("site")
     node_index = header.index("node")
     derived_state_index = header.index("derived_state")
+    parent_index = None
+    parent = NULL_MUTATION
+    try:
+        parent_index = header.index("parent")
+    except ValueError:
+        pass
     table = tables.MutationTable()
     for line in source:
         tokens = line.split()
@@ -906,7 +918,10 @@ def parse_mutations(source):
             site = int(tokens[site_index])
             node = int(tokens[node_index])
             derived_state = tokens[derived_state_index]
-            table.add_row(site=site, node=node, derived_state=derived_state)
+            if parent_index is not None:
+                parent = int(tokens[parent_index])
+            table.add_row(
+                site=site, node=node, derived_state=derived_state, parent=parent)
     return table
 
 
@@ -1036,31 +1051,6 @@ class TreeSequence(object):
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
 
-    def copy(self, sites=None):
-        # Experimental API. Return a copy of this tree sequence, optionally with
-        # the sites set to the specified list.
-        node_table = tables.NodeTable()
-        edge_table = tables.EdgeTable()
-        migration_table = tables.MigrationTable()
-        site_table = tables.SiteTable()
-        mutation_table = tables.MutationTable()
-        self._ll_tree_sequence.dump_tables(
-            nodes=node_table, edges=edge_table, migrations=migration_table,
-            sites=site_table, mutations=mutation_table)
-        if sites is not None:
-            site_table.reset()
-            mutation_table.reset()
-            for j, site in enumerate(sites):
-                site_table.add_row(site.position, site.ancestral_state)
-                for mutation in site.mutations:
-                    mutation_table.add_row(j, mutation.node, mutation.derived_state)
-        new_ll_ts = _msprime.TreeSequence()
-        new_ll_ts.load_tables(
-            nodes=node_table, edges=edge_table, migrations=migration_table,
-            sites=site_table, mutations=mutation_table,
-            sequence_length=self.sequence_length)
-        return TreeSequence(new_ll_ts)
-
     @property
     def provenance(self):
         return self.get_provenance()
@@ -1176,15 +1166,17 @@ class TreeSequence(object):
                 print(row, file=sites)
 
         if mutations is not None:
-            print("site", "node", "derived_state", sep="\t", file=mutations)
+            print("site", "node", "derived_state", "parent", sep="\t", file=mutations)
             for site in self.sites():
                 for mutation in site.mutations:
                     row = (
                         "{site}\t"
                         "{node}\t"
-                        "{derived_state}").format(
+                        "{derived_state}\t"
+                        "{parent}").format(
                             site=mutation.site, node=mutation.node,
-                            derived_state=mutation.derived_state)
+                            derived_state=mutation.derived_state,
+                            parent=mutation.parent)
                     print(row, file=mutations)
 
     def dump_samples_text(self, samples, precision=6):
@@ -1717,7 +1709,7 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_invariant_sites=True, map_nodes=False):
+    def simplify(self, samples=None, filter_zero_mutation_sites=True, map_nodes=False):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -1733,8 +1725,8 @@ class TreeSequence(object):
         ``simplify_tables()``.
 
         :param list samples: The list of nodes for which to retain information.
-        :param bool filter_invariant_sites: If True, remove any sites that have
-            no mutations in the simplified tree sequence.
+        :param bool filter_zero_mutation_sites: If True, remove any sites that have
+            no mutations in the simplified tree sequence. Defaults to True.
         :param bool map_nodes: If True, return a tuple containing the resulting
             tree sequence and a numpy array mapping node IDs in the current tree
             sequence to their corresponding node IDs in the returned tree sequence.
@@ -1752,12 +1744,16 @@ class TreeSequence(object):
         if map_nodes:
             node_map = np.empty(self.num_nodes, dtype=np.int32)
             tables.simplify_tables(
-                samples=samples, nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations, node_map=node_map)
+                samples=samples, sequence_length=self.sequence_length,
+                nodes=t.nodes, edges=t.edges,
+                sites=t.sites, mutations=t.mutations, node_map=node_map,
+                filter_zero_mutation_sites=filter_zero_mutation_sites)
         else:
             tables.simplify_tables(
-                samples=samples, nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations)
+                samples=samples, sequence_length=self.sequence_length,
+                nodes=t.nodes, edges=t.edges,
+                sites=t.sites, mutations=t.mutations,
+                filter_zero_mutation_sites=filter_zero_mutation_sites)
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
             mutations=t.mutations, sequence_length=self.sequence_length)

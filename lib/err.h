@@ -65,14 +65,14 @@
 #define MSP_ERR_NULL_PARENT                                         -34
 #define MSP_ERR_NULL_CHILD                                          -35
 #define MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME                        -36
-#define MSP_ERR_EDGES_NOT_SORTED_PARENT                             -37
+#define MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS                         -37
 #define MSP_ERR_EDGES_NOT_SORTED_CHILD                              -38
 #define MSP_ERR_EDGES_NOT_SORTED_LEFT                               -39
 #define MSP_ERR_BAD_NODE_TIME_ORDERING                              -40
 #define MSP_ERR_BAD_EDGE_INTERVAL                                   -41
 #define MSP_ERR_DUPLICATE_EDGES                                     -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
-#define MSP_ERR_UNSORTED_MUTATION_NODES                             -45
+
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
@@ -95,6 +95,11 @@
 #define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
 #define MSP_ERR_BAD_SEQUENCE_LENGTH                                 -66
 #define MSP_ERR_RIGHT_GREATER_SEQ_LENGTH                            -67
+#define MSP_ERR_MUTATION_OUT_OF_BOUNDS                              -68
+#define MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -69
+#define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
+#define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 
 #endif /*__ERR_H__*/
 
+/* #define MSP_ERR_UNSORTED_MUTATION_NODES                             -45 */

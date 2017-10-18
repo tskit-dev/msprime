@@ -143,12 +143,11 @@ msp_strerror(int err)
             ret = "At least one record must be supplied";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME:
-            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+            ret = "Edges must be listed in (time[parent], child, left) order;"
                 " time[parent] order violated";
             break;
-        case MSP_ERR_EDGES_NOT_SORTED_PARENT:
-            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
-                " parent order violated";
+        case MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS:
+            ret = "All edges for a given parent must be contiguous";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_CHILD:
             ret = "Edges must be listed in (time[parent], parent, child, left) order;"
@@ -200,12 +199,6 @@ msp_strerror(int err)
             break;
         case MSP_ERR_NOT_INITIALISED:
             ret = "object not initialised. Please file a bug report.";
-            break;
-        /* case MSP_ERR_MUTATIONS_NOT_POSITION_SORTED: */
-        /*     ret = "Mutations must be sorted by position"; */
-        /*     break; */
-        case MSP_ERR_UNSORTED_MUTATION_NODES:
-            ret = "Mutations within a site must be sorted in non-increasing time order.";
             break;
         case MSP_ERR_DUPLICATE_MUTATION_NODES:
             ret = "Cannot have more than one mutation at a node for a given site.";
@@ -267,6 +260,18 @@ msp_strerror(int err)
             break;
         case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
             ret = "Right coordinate > sequence length.";
+            break;
+        case MSP_ERR_MUTATION_OUT_OF_BOUNDS:
+            ret = "mutation ID out of bounds";
+            break;
+        case MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE:
+            ret = "Specified parent mutation is at a different site.";
+            break;
+        case MSP_ERR_MUTATION_PARENT_EQUAL:
+            ret = "Parent mutation refers to itself.";
+            break;
+        case MSP_ERR_MUTATION_PARENT_AFTER_CHILD:
+            ret = "Parent mutation ID must be < current ID.";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {

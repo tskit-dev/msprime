@@ -308,6 +308,8 @@ class CommonTestsMixin(object):
             t2 = self.table_class()
             self.assertEqual(t1, t1)
             self.assertEqual(t1, t2)
+            self.assertTrue(t1 == t2)
+            self.assertFalse(t1 != t2)
             t1.set_columns(**input_data)
             self.assertEqual(t1, t1)
             self.assertNotEqual(t1, t2)
@@ -325,6 +327,7 @@ class CommonTestsMixin(object):
                 input_data_copy[col.name] = col_copy
                 t2.set_columns(**input_data_copy)
                 self.assertEqual(t1, t2)
+                self.assertFalse(t1 != t2)
                 col_copy += 1
                 t2.set_columns(**input_data_copy)
                 self.assertNotEqual(t1, t2)
@@ -427,7 +430,8 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin):
 class TestMutationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         Int32Column("site"),
-        Int32Column("node")]
+        Int32Column("node"),
+        Int32Column("parent")]
     ragged_list_columns = [
         (CharColumn("derived_state"), UInt32Column("derived_state_length"))]
     equal_len_columns = [["site", "node", "derived_state_length"]]

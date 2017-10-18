@@ -39,6 +39,7 @@ import numpy as np
 
 import msprime
 import _msprime
+import tests.tsutil as tsutil
 
 
 @contextlib.contextmanager
@@ -71,13 +72,8 @@ def multi_locus_with_mutation_example():
 
 
 def recurrent_mutation_example():
-    ts = msprime.simulate(
-        10, recombination_rate=1, length=10, random_seed=2)
-    sites = [msprime.Site(
-        position=j, index=j, ancestral_state="0", mutations=[
-            msprime.Mutation(site=j, node=k, derived_state="1") for k in range(j + 1)])
-        for j in range(ts.sample_size)]
-    return ts.copy(sites)
+    ts = msprime.simulate(10, recombination_rate=1, length=10, random_seed=2)
+    return tsutil.insert_branch_mutations(ts)
 
 
 def general_mutation_example():
@@ -360,7 +356,7 @@ class TestHdf5Format(TestHdf5):
         root = h5py.File(self.temp_file, "r")
         # Check the basic root attributes
         format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 8)
+        self.assertEqual(format_version[0], 9)
         self.assertEqual(format_version[1], 0)
         sequence_length = root.attrs['sequence_length']
         self.assertGreater(sequence_length, 0)
@@ -394,7 +390,7 @@ class TestHdf5Format(TestHdf5):
 
         g = root["mutations"]
         fields = [
-            ("site", int32), ("node", int32),
+            ("site", int32), ("node", int32), ("parent", int32),
             ("derived_state", int8), ("derived_state_length", uint32)]
         if ts.num_mutations > 0:
             for name, dtype in fields:
@@ -405,6 +401,7 @@ class TestHdf5Format(TestHdf5):
             self.assertEqual(derived_state_length.shape[0], ts.num_mutations)
             site = g["site"]
             node = g["node"]
+            parent = g["parent"]
             derived_state = msprime.unpack_strings(
                 g["derived_state"], derived_state_length)
             j = 0
@@ -413,6 +410,7 @@ class TestHdf5Format(TestHdf5):
                     self.assertEqual(site[j], s.index)
                     self.assertEqual(mutation.site, site[j])
                     self.assertEqual(mutation.node, node[j])
+                    self.assertEqual(mutation.parent, parent[j])
                     self.assertEqual(mutation.derived_state, derived_state[j])
                     j += 1
         else:
