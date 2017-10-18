@@ -667,7 +667,6 @@ typedef struct {
     mutation_table_t *mutations;
     /* State for topology */
     simplify_segment_t **ancestor_map;
-    simplify_segment_t **root_map;
     node_id_t *node_id_map;
     bool *is_sample;
     avl_tree_t merge_queue;

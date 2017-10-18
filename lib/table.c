@@ -1389,14 +1389,6 @@ simplifier_check_state(simplifier_t *self)
             }
             total_segments++;
         }
-        for (u = self->root_map[j]; u != NULL; u = u->next) {
-            assert(u->left < u->right);
-            if (u->next != NULL) {
-                assert(u->right <= u->next->left);
-                assert(u->node == (node_id_t) j);
-            }
-            total_segments++;
-        }
         for (a = self->mutation_position_map[j].head; a != NULL; a = a->next) {
             mpm = (mutation_position_map_t *) a->item;
             assert(mpm->head != NULL);
@@ -1465,14 +1457,6 @@ simplifier_print_state(simplifier_t *self, FILE *out)
         if (self->ancestor_map[j] != NULL) {
             fprintf(out, "%d:\t", (int) j);
             print_segment_chain(self->ancestor_map[j], out);
-            fprintf(out, "\n");
-        }
-    }
-    fprintf(out, "===\nroots\n==\n");
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
-        if (self->root_map[j] != NULL) {
-            fprintf(out, "%d:\t", (int) j);
-            print_segment_chain(self->root_map[j], out);
             fprintf(out, "\n");
         }
     }
@@ -1864,7 +1848,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         size_t max_buffered_edges, int flags)
 {
     int ret = 0;
-    size_t j, offset, num_nodes_alloc, num_edges_alloc;
+    size_t j, offset, max_alloc_block, num_nodes_alloc, num_edges_alloc;
 
     memset(self, 0, sizeof(simplifier_t));
     self->samples = samples;
@@ -1894,9 +1878,11 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
     self->sequence_length = sequence_length;
 
-    /* Use these values to avoid malloc(0) */
-    num_nodes_alloc = 1 + nodes->num_rows;
-    num_edges_alloc = 1 + edges->num_rows;
+    /* If we have more then 256K blocks or edges just allocate this much */
+    max_alloc_block = 256 * 1024;
+    /* Need to avoid malloc(0) so make sure we have at least 1. */
+    num_nodes_alloc = GSL_MAX(max_alloc_block, 1 + nodes->num_rows);
+    num_edges_alloc = GSL_MAX(max_alloc_block, 1 + edges->num_rows);
 
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
@@ -2003,11 +1989,10 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
     /* Make the maps and set the intial state */
     self->ancestor_map = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
-    self->root_map = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
     self->node_id_map = malloc(num_nodes_alloc * sizeof(node_id_t));
     self->is_sample = calloc(num_nodes_alloc, sizeof(bool));
-    if (self->ancestor_map == NULL || self->root_map == NULL
-            || self->node_id_map == NULL || self->is_sample == NULL) {
+    if (self->ancestor_map == NULL || self->node_id_map == NULL
+            || self->is_sample == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -2027,8 +2012,6 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         goto out;
     }
     ret = simplifier_init_samples(self, samples);
-
-    /* simplifier_print_state(self, stdout); */
 out:
     return ret;
 }
@@ -2045,7 +2028,6 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->node_name_offset);
     msp_safe_free(self->ancestor_map);
     msp_safe_free(self->node_id_map);
-    msp_safe_free(self->root_map);
     msp_safe_free(self->segment_buffer);
     msp_safe_free(self->edge_buffer);
     msp_safe_free(self->is_sample);
@@ -2381,78 +2363,6 @@ out:
     return ret;
 }
 
-/* After we have completed processing all the edges, the remaining segments
- * in the ancestor map will point to roots in the trees of the intervals in
- * question. Go through the ancestor map, and build a map of the these nodes to
- * the intervals that they cover.
- *
- * TODO if we keep this data structure and approach, then we should do segment
- * squashing in the algorithm below. There will be adjacent segments that
- * can be merged, and removing these will be significant later when we
- * are searching through the root mutations.
- *
- * However, it seems likely that a more sophisticated approach might be needed
- * here.
- */
-/* static int WARN_UNUSED */
-/* simplifier_build_root_map(simplifier_t *self) */
-/* { */
-/*     node_id_t root; */
-/*     simplify_segment_t *x, *y, *y_prev, *x_next; */
-/*     size_t j; */
-
-/*     for (j = 0; j < self->input_nodes.num_rows; j++) { */
-/*         x = self->ancestor_map[j]; */
-/*         self->ancestor_map[j] = NULL; */
-/*         while (x != NULL) { */
-/*             x_next = x->next; */
-/*             root = x->node; */
-/*             /1* Insert x into the chain for root *1/ */
-/*             x->next = NULL; */
-/*             y = self->root_map[root]; */
-/*             if (y == NULL) { */
-/*                 self->root_map[root] = x; */
-/*             } else { */
-/*                 y_prev = NULL; */
-/*                 while (y != NULL && y->right <= x->left) { */
-/*                     assert(y->node == root); */
-/*                     y_prev = y; */
-/*                     y = y->next; */
-/*                 } */
-/*                 if (y_prev == NULL) { */
-/*                     /1* We are splicing into the first element of the chain *1/ */
-/*                     self->root_map[root] = x; */
-/*                 } else { */
-/*                     /1* Insert x into the middle of the chain *1/ */
-/*                     assert(y_prev->right <= x->left); */
-/*                     y_prev->next = x; */
-/*                 } */
-/*                 x->next = y; */
-/*             } */
-/*             x = x_next; */
-/*         } */
-/*     } */
-/*     return 0; */
-/* } */
-
-/* Returns true if the specified node is a root at the specified position.
- * Note: simplifier_build_root_map must be called before this function will
- * work.
- */
-/* static bool */
-/* simplifier_node_is_root(simplifier_t *self, node_id_t node, double position) */
-/* { */
-/*     bool ret = false; */
-/*     simplify_segment_t *x; */
-
-/*     x = self->root_map[node]; */
-/*     while (x != NULL && !ret) { */
-/*         ret = x->left <= position && position < x->right; */
-/*         x = x->next; */
-/*     } */
-/*     return ret; */
-/* } */
-
 static int WARN_UNUSED
 simplifier_output_sites(simplifier_t *self)
 {
@@ -2548,7 +2458,6 @@ simplifier_output_sites(simplifier_t *self)
         input_mutation = site_end;
     }
     assert(input_mutation == num_input_mutations);
-    /* simplifier_print_state(self, stdout); */
 out:
     return ret;
 }
@@ -2633,7 +2542,6 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
         /* Finally, output the new IDs for the nodes, if required. */
         memcpy(node_map, self->node_id_map, self->input_nodes.num_rows * sizeof(node_id_t));
     }
-    /* simplifier_print_state(self, stdout); */
 out:
     return ret;
 }
