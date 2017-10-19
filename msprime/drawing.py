@@ -233,11 +233,13 @@ class TextTreeDrawer(TreeDrawer):
     array_type = None  # the type used for the array.array canvas
     background_char = None  # The fill char
     eol_char = None  # End of line
-    left_shoulder_char = None  # left corner of a horizontal line
-    right_shoulder_char = None  # right corner of a horizontal line
+    left_down_char = None  # left corner of a horizontal line
+    right_down_char = None  # right corner of a horizontal line
     horizontal_line_char = None  # horizontal line fill
     vertical_line_char = None  # vertial line fill
-    below_node_char = None  # char just below centre of node label
+    mid_up_char = None  # char in a horizontal line going up
+    mid_down_char = None  # char in a horizontal line going down
+    mid_up_down_char = None  # char in a horizontal line going down and up
 
     def _convert_text(self, text):
         """
@@ -293,19 +295,22 @@ class TextTreeDrawer(TreeDrawer):
                 row += 1
                 left = min(self._x_coords[v] for v in children)
                 right = max(self._x_coords[v] for v in children)
-                canvas[row * w + left] = self.left_shoulder_char
-                canvas[row * w + right] = self.right_shoulder_char
                 for col in range(left + 1, right):
                     canvas[row * w + col] = self.horizontal_line_char
                 if len(self._tree.children(u)) == 1:
                     canvas[row * w + self._x_coords[u]] = self.vertical_line_char
                 else:
-                    canvas[row * w + self._x_coords[u]] = self.below_node_char
-                top = row + 1
+                    canvas[row * w + self._x_coords[u]] = self.mid_up_char
                 for v in children:
                     col = self._x_coords[v]
-                    for row in range(top, self._y_coords[v]):
-                        canvas[row * w + col] = self.vertical_line_char
+                    canvas[row * w + col] = self.mid_down_char
+                    if col == self._x_coords[u]:
+                        canvas[row * w + col] = self.mid_up_down_char
+                    for j in range(row + 1, self._y_coords[v]):
+                        canvas[j * w + col] = self.vertical_line_char
+                canvas[row * w + left] = self.left_down_char
+                canvas[row * w + right] = self.right_down_char
+
         # Put in the EOLs last so that if we can't overwrite them.
         for row in range(h):
             canvas[row * w + w - 1] = self.eol_char
@@ -319,11 +324,13 @@ class AsciiTreeDrawer(TextTreeDrawer):
     array_type = 'b'
     background_char = ord(' ')
     eol_char = ord('\n')
-    left_shoulder_char = ord('+')
-    right_shoulder_char = ord('+')
+    left_down_char = ord('+')
+    right_down_char = ord('+')
     horizontal_line_char = ord('-')
     vertical_line_char = ord('|')
-    below_node_char = ord('+')
+    mid_up_char = ord('+')
+    mid_down_char = ord('+')
+    mid_up_down_char = ord('+')
 
     def _convert_text(self, text):
         return array.array(self.array_type, text.encode())
@@ -342,11 +349,13 @@ class UnicodeTreeDrawer(TextTreeDrawer):
     array_type = 'u'
     background_char = ' '
     eol_char = '\n'
-    left_shoulder_char = "\u250F"
-    right_shoulder_char = "\u2513"
+    left_down_char = "\u250F"
+    right_down_char = "\u2513"
     horizontal_line_char = "\u2501"
     vertical_line_char = "\u2503"
-    below_node_char = "\u2537"
+    mid_up_char = "\u253b"
+    mid_down_char = "\u2533"
+    mid_up_down_char = "\u254b"
 
     def _convert_text(self, text):
         return array.array(self.array_type, text)
