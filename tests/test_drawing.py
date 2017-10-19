@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2017 University of Oxford
 #
@@ -28,6 +29,7 @@ import tempfile
 import unittest
 import xml.etree
 
+import six
 import msprime
 
 IS_PY2 = sys.version_info[0] < 3
@@ -176,6 +178,54 @@ class TestDrawText(TestTreeDraw):
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
+    def test_even_num_children_tree(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           1
+        2   1           2
+        3   1           1
+        4   1           4
+        5   1           5
+        6   1           7
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       6       0
+        0       1       6       1
+        0       1       6       2
+        0       1       6       3
+        0       1       6       4
+        0       1       6       5
+        """)
+        ts = msprime.load_text(nodes, edges)
+        t = next(ts.trees())
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
+    def test_odd_num_children_tree(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           1
+        2   1           2
+        3   1           1
+        4   1           4
+        5   1           5
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       5       0
+        0       1       5       1
+        0       1       5       2
+        0       1       5       3
+        0       1       5       4
+        """)
+        ts = msprime.load_text(nodes, edges)
+        t = next(ts.trees())
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
     def test_labels(self):
         t = self.get_binary_tree()
         labels = {u: self.example_label for u in t.nodes()}
@@ -194,6 +244,81 @@ class TestDrawUnicode(TestDrawText):
     """
     drawing_format = "unicode"
     example_label = "\u20ac" * 10  # euro symbol
+
+    def verify_text_rendering(self, tree, drawn_tree):
+        drawn = tree.draw(format="unicode")
+        tree_lines = drawn_tree.splitlines()
+        drawn_lines = drawn.splitlines()
+        self.assertEqual(len(tree_lines), len(drawn_lines))
+        for l1, l2 in zip(tree_lines, drawn_lines):
+            # Trailing white space isn't significant.
+            self.assertEqual(l1.rstrip(), l2.rstrip())
+
+    def test_simple_tree(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   1           2
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       2       0
+        0       1       2       1
+        """)
+        tree = (
+            " 2 \n"
+            "┏┻┓\n"
+            "0 1")
+        ts = msprime.load_text(nodes, edges)
+        t = next(ts.trees())
+        self.verify_text_rendering(t, tree)
+
+    def test_trident_tree(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   1           0
+        3   1           2
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       3       0
+        0       1       3       1
+        0       1       3       2
+        """)
+        tree = (
+            "  3  \n"
+            "┏━╋━┓\n"
+            "0 1 2\n")
+        ts = msprime.load_text(nodes, edges)
+        t = next(ts.trees())
+        self.verify_text_rendering(t, tree)
+
+    def test_pitchfork_tree(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           0
+        2   1           0
+        3   1           0
+        4   1           2
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       4       0
+        0       1       4       1
+        0       1       4       2
+        0       1       4       3
+        """)
+        tree = (
+            "   4   \n"
+            "┏━┳┻┳━┓\n"
+            "0 1 2 3\n")
+        ts = msprime.load_text(nodes, edges)
+        t = next(ts.trees())
+        self.verify_text_rendering(t, tree)
 
 
 class TestDrawSvg(TestTreeDraw):
