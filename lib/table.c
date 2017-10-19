@@ -1095,7 +1095,13 @@ cmp_mutation(const void *a, const void *b) {
     const mutation_t *ia = (const mutation_t *) a;
     const mutation_t *ib = (const mutation_t *) b;
     /* Compare mutations by site */
-    return (ia->site > ib->site) - (ia->site < ib->site);
+    int ret = (ia->site > ib->site) - (ia->site < ib->site);
+    if (ret == 0) {
+        /* Within a particular site sort by ID. This ensures that relative ordering
+         * within a site is maintained */
+        ret = (ia->id > ib->id) - (ia->id < ib->id);
+    }
+    return ret;
 }
 
 static int
@@ -1240,6 +1246,9 @@ table_sorter_sort_mutations(table_sorter_t *self)
     size_t j, derived_state_offset;
     site_id_t site;
     node_id_t node;
+    mutation_id_t parent, mapped_parent;
+    mutation_id_t *mutation_id_map = malloc(self->mutations->num_rows
+            * sizeof(mutation_id_t));
 
     memcpy(self->derived_state_mem, self->mutations->derived_state,
             self->mutations->total_derived_state_length * sizeof(char));
@@ -1255,21 +1264,42 @@ table_sorter_sort_mutations(table_sorter_t *self)
             ret = MSP_ERR_OUT_OF_BOUNDS;
             goto out;
         }
+        parent = self->mutations->parent[j];
+        if (parent != MSP_NULL_MUTATION) {
+            if (parent < 0 || parent >= (mutation_id_t) self->mutations->num_rows) {
+                ret = MSP_ERR_MUTATION_OUT_OF_BOUNDS;
+                goto out;
+            }
+        }
+        self->sorted_mutations[j].id = (mutation_id_t) j;
         self->sorted_mutations[j].site = self->site_id_map[site];
         self->sorted_mutations[j].node = node;
+        self->sorted_mutations[j].parent = self->mutations->parent[j];
         self->sorted_mutations[j].derived_state_length =
             self->mutations->derived_state_length[j];
         self->sorted_mutations[j].derived_state = self->derived_state_mem
             + derived_state_offset;
         derived_state_offset += self->mutations->derived_state_length[j];
     }
+
     qsort(self->sorted_mutations, self->mutations->num_rows, sizeof(mutation_t),
         cmp_mutation);
+    /* Make a first pass through the sorted mutations to build the ID map. */
+    for (j = 0; j < self->mutations->num_rows; j++) {
+        mutation_id_map[self->sorted_mutations[j].id] = (mutation_id_t) j;
+    }
+
     /* Copy the sorted mutations back into the table */
     derived_state_offset = 0;
     for (j = 0; j < self->mutations->num_rows; j++) {
         self->mutations->site[j] = self->sorted_mutations[j].site;
         self->mutations->node[j] = self->sorted_mutations[j].node;
+        mapped_parent = MSP_NULL_MUTATION;
+        parent = self->sorted_mutations[j].parent;
+        if (parent != MSP_NULL_MUTATION) {
+            mapped_parent = mutation_id_map[parent];
+        }
+        self->mutations->parent[j] = mapped_parent;
         self->mutations->derived_state_length[j] =
             self->sorted_mutations[j].derived_state_length;
         memcpy(self->mutations->derived_state + derived_state_offset,
@@ -1278,6 +1308,7 @@ table_sorter_sort_mutations(table_sorter_t *self)
         derived_state_offset += self->sorted_mutations[j].derived_state_length;
     }
 out:
+    msp_safe_free(mutation_id_map);
     return ret;
 }
 

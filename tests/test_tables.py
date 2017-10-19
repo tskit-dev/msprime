@@ -29,6 +29,7 @@ import string
 import unittest
 
 import numpy as np
+import six
 
 import msprime
 import _msprime
@@ -788,6 +789,101 @@ class TestSortTables(unittest.TestCase):
                 TypeError, msprime.sort_tables,
                 nodes=nodes, edges=edges, sites=sites, mutations=mutations,
                 migrations=bad_type)
+
+
+class TestSortMutations(unittest.TestCase):
+    """
+    Tests that mutations are correctly sorted by sort_tables.
+    """
+
+    def test_sort_mutations_stability(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0.1     0
+        0.2     0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        1       0       1               -1
+        1       1       1               -1
+        0       1       1               -1
+        0       0       1               -1
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
+        # Load text automatically calls sort tables, so we can test the
+        # output directly.
+        sites = ts.tables.sites
+        mutations = ts.tables.mutations
+        self.assertEqual(len(sites), 2)
+        self.assertEqual(len(mutations), 4)
+        self.assertEqual(list(mutations.site), [0, 0, 1, 1])
+        self.assertEqual(list(mutations.node), [1, 0, 0, 1])
+
+    def test_sort_mutations_remap_parent_id(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0.1     0
+        0.2     0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        1       0       1               -1
+        1       0       0               0
+        1       0       1               1
+        0       0       1               -1
+        0       0       0               3
+        0       0       1               4
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
+        # Load text automatically calls sort tables, so we can test the
+        # output directly.
+        sites = ts.tables.sites
+        mutations = ts.tables.mutations
+        self.assertEqual(len(sites), 2)
+        self.assertEqual(len(mutations), 6)
+        self.assertEqual(list(mutations.site), [0, 0, 0, 1, 1, 1])
+        self.assertEqual(list(mutations.node), [0, 0, 0, 0, 0, 0])
+        self.assertEqual(list(mutations.parent), [-1, 0, 1, -1, 3, 4])
+
+    def test_sort_mutations_bad_parent_id(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0.1     0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        1       0       1               -2
+        """)
+        self.assertRaises(
+            IndexError, msprime.load_text,
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
 
 
 class TestSimplifyTables(unittest.TestCase):
