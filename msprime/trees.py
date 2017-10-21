@@ -1813,17 +1813,18 @@ def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
         if right < cur_pos:
             next
         while (mut_start < mutations.num_rows) and (cur_pos < right):
-            # this assumes no two mutations occur at the same site AND node
-            mut_nodes = [mutations.node[mut_start + u] for u in range(num_muts)]
-            # this effectively finds the subtree corresponding to mut_nodes
-            for u in range(num_muts):
-                n = t.parent(mut_nodes[u])
-                while (n != NULL_NODE) and not (n in mut_nodes):
-                    n = t.parent(n)
-                if n != -1:
-                    new_parent[mut_start + u] = mut_start + mut_nodes.index(n)
-                ## for checking, we would
-                # assert n == mutations.parent[mut_start + u]
+            if num_muts > 1:
+                # this assumes no two mutations occur at the same site AND node
+                mut_nodes = [mutations.node[mut_start + u] for u in range(num_muts)]
+                # this effectively finds the subtree corresponding to mut_nodes
+                for u in range(num_muts):
+                    n = t.parent(mut_nodes[u])
+                    while (n != NULL_NODE) and not (n in mut_nodes):
+                        n = t.parent(n)
+                    if n != -1:
+                        new_parent[mut_start + u] = mut_start + mut_nodes.index(n)
+                    ## for checking, we would
+                    # assert n == mutations.parent[mut_start + u]
             # ok, on to the next position
             mut_start = mut_start + num_muts
             if mut_start >= mutations.num_rows:
