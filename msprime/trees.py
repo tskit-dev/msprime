@@ -1779,3 +1779,59 @@ class TreeSequence(object):
         raise NotImplementedError(
             "This method is no longer supported. Please use the SparseTree.newick"
             " method instead")
+
+
+def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
+    """
+    (Re-)compute the `parent` column of a MutationTable.
+
+    :param SiteTable sites: The SiteTable for the tree sequence.
+    :param MutationTable mutations: The MutationTable to compute the parent
+        column for.
+    :param NodeTable nodes: The NodeTable for the tree sequence.
+    :param EdgeTable edges: The EdgeTable for the tree sequence.
+    :param TreeSequence ts: If provided, this contains the Node and Edge
+        relationships that SiteTable refers to.  If it is not provided,
+        `nodes` and `edges` will be loaded (internally) into a TreeSequence.
+    """
+    if mutations.num_rows == 0:
+        return []
+    if ts is None:
+        ts = load_tables(nodes=nodes, edges=edges)
+    new_parent = np.repeat(-1, [mutations.num_rows])
+    # sites are ordered by position,
+    #  and mutations by site.
+    mut_start = 0
+    cur_site = mutations.site[mut_start]
+    cur_pos = sites.position[cur_site]
+    num_muts = 1
+    while ((mut_start + num_muts < mutations.num_rows) 
+           and (mutations.site[mut_start + num_muts] == cur_site)):
+        num_muts += 1
+    for t in ts.trees():
+        left, right = t.interval
+        if right < cur_pos:
+            next
+        while (mut_start < mutations.num_rows) and (cur_pos < right):
+            # this assumes no two mutations occur at the same site AND node
+            mut_nodes = [mutations.node[mut_start + u] for u in range(num_muts)]
+            # this effectively finds the subtree corresponding to mut_nodes
+            for u in range(num_muts):
+                n = t.parent(mut_nodes[u])
+                while (n != NULL_NODE) and not (n in mut_nodes):
+                    n = t.parent(n)
+                if n != -1:
+                    new_parent[mut_start + u] = mut_start + mut_nodes.index(n)
+                ## for checking, we would
+                # assert n == mutations.parent[mut_start + u]
+            # ok, on to the next position
+            mut_start = mut_start + num_muts
+            if mut_start >= mutations.num_rows:
+                break
+            cur_site = mutations.site[mut_start]
+            cur_pos = sites.position[cur_site]
+            num_muts = 1
+            while ((mut_start + num_muts < mutations.num_rows) 
+                   and (mutations.site[mut_start + num_muts] == cur_site)):
+                num_muts += 1
+    return new_parent

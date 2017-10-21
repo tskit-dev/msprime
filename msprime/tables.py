@@ -518,7 +518,7 @@ def simplify_tables(*args, **kwargs):
 
     :param list samples: A list of Node IDs of individuals to retain as samples.
     :param NodeTable nodes: The NodeTable to be simplified.
-    :param EdgeTable edges: The NodeTable to be simplified.
+    :param EdgeTable edges: The EdgeTable to be simplified.
     :param MigrationTable migrations: The MigrationTable to be simplified.
     :param SiteTable sites: The SiteTable to be simplified.
     :param MutationTable mutations: The MutationTable to be simplified.
