@@ -2197,6 +2197,7 @@ class TestNodeOrdering(HighLevelTestCase):
         for _ in range(self.num_random_permutations):
             self.verify_random_permutation(ts)
 
+
 class TestMutationParent(unittest.TestCase):
     """
     Tests for the compute_mutation_parent function.
@@ -2240,26 +2241,27 @@ class TestMutationParent(unittest.TestCase):
     2       2       1               8
     2       4       1               8
     """)
-    ts = msprime.load_text(nodes=nodes, edges=edges, 
+    ts = msprime.load_text(nodes=nodes, edges=edges,
                            sites=sites, mutations=mutations)
     tabs = ts.dump_tables()
 
     def test_tables_interface(self):
-        mp = msprime.compute_mutation_parent(sites=self.tabs.sites, 
-                                              mutations=self.tabs.mutations,
-                                              nodes=self.tabs.nodes, edges=self.tabs.edges)
+        mp = msprime.compute_mutation_parent(sites=self.tabs.sites,
+                                             mutations=self.tabs.mutations,
+                                             nodes=self.tabs.nodes,
+                                             edges=self.tabs.edges)
         self.assertTrue(np.all(mp == self.tabs.mutations.parent))
 
     def test_ts_interface(self):
-        mp = msprime.compute_mutation_parent(sites=self.tabs.sites, 
-                                     mutations=self.tabs.mutations, ts=self.ts)
+        mp = msprime.compute_mutation_parent(sites=self.tabs.sites,
+                                             mutations=self.tabs.mutations,
+                                             ts=self.ts)
         self.assertTrue(np.all(mp == self.tabs.mutations.parent))
 
     def test_single_muts(self):
         ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=3.0,
                               recombination_rate=1.0)
         tabs = ts.dump_tables()
-        mp = msprime.compute_mutation_parent(sites=tabs.sites, 
-                                     mutations=tabs.mutations, ts=ts)
+        mp = msprime.compute_mutation_parent(sites=tabs.sites,
+                                             mutations=tabs.mutations, ts=ts)
         self.assertTrue(np.all(mp == -1))
-

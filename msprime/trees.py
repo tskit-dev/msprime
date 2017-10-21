@@ -1805,7 +1805,7 @@ def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
     cur_site = mutations.site[mut_start]
     cur_pos = sites.position[cur_site]
     num_muts = 1
-    while ((mut_start + num_muts < mutations.num_rows) 
+    while ((mut_start + num_muts < mutations.num_rows)
            and (mutations.site[mut_start + num_muts] == cur_site)):
         num_muts += 1
     for t in ts.trees():
@@ -1823,7 +1823,7 @@ def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
                         n = t.parent(n)
                     if n != -1:
                         new_parent[mut_start + u] = mut_start + mut_nodes.index(n)
-                    ## for checking, we would
+                    # # for checking, we would
                     # assert n == mutations.parent[mut_start + u]
             # ok, on to the next position
             mut_start = mut_start + num_muts
@@ -1832,7 +1832,7 @@ def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
             cur_site = mutations.site[mut_start]
             cur_pos = sites.position[cur_site]
             num_muts = 1
-            while ((mut_start + num_muts < mutations.num_rows) 
+            while ((mut_start + num_muts < mutations.num_rows)
                    and (mutations.site[mut_start + num_muts] == cur_site)):
                 num_muts += 1
     return new_parent

@@ -291,7 +291,6 @@ class TestSimulation(unittest.TestCase):
             self.assertEqual(len(hap), ts.num_sites)
 
 
-
 class TestIncrementalBuild(unittest.TestCase):
     """
     Tests for incrementally building a tree sequence from forward time
@@ -399,7 +398,7 @@ class TestSimplify(unittest.TestCase):
                 self.assertEqual(node_map[mrca1], mrca2)
         mut_parent = msprime.compute_mutation_parent(sites=ts.tables.sites,
                                                      mutations=ts.tables.mutations,
-                                                     nodes=ts.tables.nodes, 
+                                                     nodes=ts.tables.nodes,
                                                      edges=ts.tables.edges)
         self.assertArrayEqual(mut_parent, ts.tables.mutations.parent)
 
