@@ -38,15 +38,17 @@ class WrightFisherSimulator(object):
     for ngens generations, in which each individual survives with probability
     survival and only those who die are replaced.  The chromosome is 1.0
     Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
+    Setting `nloci` to something finite allows recurrent mutations.
     """
     def __init__(
             self, N, survival=0.0, mutation_rate=0.0, seed=None, deep_history=True,
-            debug=False):
+            nloci=np.Inf, debug=False):
         self.N = N
         self.survival = survival
         self.mutation_rate = mutation_rate
         self.deep_history = deep_history
         self.debug = debug
+        self.nloci = nloci
         if seed is not None:
             random.seed(seed)
 
@@ -55,7 +57,10 @@ class WrightFisherSimulator(object):
 
     def random_mutations(self):
         nmuts = np.random.poisson(lam=self.mutation_rate)
-        return [random.random() for _ in range(nmuts)]
+        muts = [random.random() for _ in range(nmuts)]
+        if np.isfinite(self.nloci):
+            muts = [np.floor(x * self.nloci)/self.nloci for x in muts]
+        return muts
 
     def random_allele(self):
         return random.choice(['A', 'C', 'G', 'T'])
@@ -108,10 +113,10 @@ class WrightFisherSimulator(object):
                         edges.add_row(
                             left=bp, right=1.0, parent=rparent, child=offspring)
                     for mut in muts:
-                        assert mut not in mut_positions
-                        mut_positions[mut] = sites.num_rows
-                        sites.add_row(
-                            position=mut, ancestral_state=self.random_allele())
+                        if mut not in mut_positions:
+                            mut_positions[mut] = sites.num_rows
+                            sites.add_row(
+                                position=mut, ancestral_state=self.random_allele())
                         mutations.add_row(
                             site=mut_positions[mut], node=offspring,
                             derived_state=self.random_allele())
@@ -139,10 +144,10 @@ class WrightFisherSimulator(object):
 
 def wf_sim(
         N, ngens, survival=0.0, mutation_rate=0.0, deep_history=True, debug=False,
-        seed=None):
+        nloci=np.Inf, seed=None):
     sim = WrightFisherSimulator(
         N, survival=survival, mutation_rate=mutation_rate, deep_history=deep_history,
-        debug=debug, seed=seed)
+        debug=debug, nloci=nloci, seed=seed)
     return sim.run(ngens)
 
 
@@ -259,6 +264,32 @@ class TestSimulation(unittest.TestCase):
         for hap in ts.haplotypes():
             self.assertEqual(len(hap), ts.num_sites)
 
+    def test_with_recurrent_mutations(self):
+        # actually with only ONE site, at 0.0
+        N = 10
+        ngens = 100
+        tables = wf_sim(
+            N=N, ngens=ngens, mutation_rate=10.0, deep_history=False,
+            nloci=1, seed=self.random_seed)
+        self.assertEqual(tables.sites.num_rows, 1)
+        self.assertEqual(tables.sites.position, 0.0)
+        self.assertGreater(tables.mutations.num_rows, 0)
+        nodes = tables.nodes
+        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+        msprime.sort_tables(**tables.asdict())
+        msprime.simplify_tables(
+            samples=samples, nodes=tables.nodes, edges=tables.edges,
+            sites=tables.sites, mutations=tables.mutations)
+        self.assertGreater(tables.nodes.num_rows, 0)
+        self.assertGreater(tables.edges.num_rows, 0)
+        self.assertEqual(tables.sites.num_rows, 1)
+        self.assertGreater(tables.mutations.num_rows, 0)
+        ts = msprime.load_tables(**tables.asdict())
+        self.assertEqual(ts.sample_size, N)
+        for hap in ts.haplotypes():
+            self.assertEqual(len(hap), ts.num_sites)
+
+
 
 class TestIncrementalBuild(unittest.TestCase):
     """
@@ -291,16 +322,17 @@ class TestSimplify(unittest.TestCase):
         for N in [5, 10, 20]:
             for surv in [0.0, 0.5, 0.9]:
                 for mut in [0.0, 0.5]:
-                    tables = wf_sim(
-                        N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
-                    msprime.sort_tables(
-                        nodes=tables.nodes, edges=tables.edges,
-                        sites=tables.sites, mutations=tables.mutations)
-                    ts = msprime.load_tables(
-                        nodes=tables.nodes, edges=tables.edges,
-                        sites=tables.sites, mutations=tables.mutations)
-                    self.verify_simulation(ts, ngens=N)
-                    yield ts
+                    for nloci in [np.inf, 3]:
+                        tables = wf_sim(
+                            N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
+                        msprime.sort_tables(
+                            nodes=tables.nodes, edges=tables.edges,
+                            sites=tables.sites, mutations=tables.mutations)
+                        ts = msprime.load_tables(
+                            nodes=tables.nodes, edges=tables.edges,
+                            sites=tables.sites, mutations=tables.mutations)
+                        self.verify_simulation(ts, ngens=N)
+                        yield ts
 
     def verify_simulation(self, ts, ngens):
         """
