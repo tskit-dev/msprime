@@ -711,3 +711,153 @@ class TreeStatCalculator(object):
                     S[window_num][j] += L[j] * length
                 chrom_pos += length
         return S
+
+
+class SiteStatCalculator(object):
+    """
+    Class for calculating a broad class of single-site statistics.  These are
+    all calculated using :meth:``SiteStatCalculator.site_stat_vector`` as the
+    underlying engine.  This class requires the `numpy
+    <http://www.numpy.org/>`_ library.
+
+    :param TreeSequence tree_sequence: The tree sequence mutations we are
+        interested in.
+    """
+
+    def __init__(self, tree_sequence):
+        check_numpy()
+        self.tree_sequence = tree_sequence
+
+    def site_stat_vector(self, sample_sets, weight_fun, windows=None):
+        '''
+        Here sample_sets is a list of lists of samples, and weight_fun is a
+        function whose argument is a list of pairs of integers of the same
+        length as sample_sets that returns a list of numbers.  Each mutation is
+        weighted by weight_fun(x), where x[i] is the number of samples in
+        sample_sets[i] below that branch.  This finds the sum of this weight
+        for all mutations in each tree, and divides by the total sequence length.
+
+        It does this separately for each window [windows[i], windows[i+1]) and
+        returns the values in a list.  Note that windows cannot be overlapping,
+        but overlapping windows can be achieved by (a) computing staistics on a
+        small window size and (b) averaging neighboring windows, by additivity
+        of the statistics.
+        '''
+        if windows is None:
+            windows = (0, self.tree_sequence.sequence_length)
+        for U in sample_sets:
+            if len(U) != len(set(U)):
+                raise ValueError(
+                    "elements of sample_sets cannot contain repeated elements.")
+            for u in U:
+                if not self.tree_sequence.node(u).is_sample():
+                    raise ValueError("Not all elements of sample_sets are samples.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.tree_sequence.sequence_length:
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
+        num_sample_sets = len(sample_sets)
+        n = [len(x) for x in sample_sets]
+        n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
+
+        # get the mutation stuff
+        sites = msprime.MutationTable()
+        mutations = msprime.SiteTable()
+        ts.dump_tables(sites=sites, mutations=mutations)
+        nsites = sites.num_rows
+        nmuts = mutations.num_rows
+
+        # we store the final answers here
+        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
+        # print("sample_sets:", sample_sets)
+        # print("n_out:",n_out)
+        N = self.tree_sequence.num_nodes
+        # initialize: with no tree, each node is either in a sample set or not
+        X = [[int(u in a) for a in sample_sets] for u in range(N)]
+        # we will construct the tree here
+        pi = [-1 for j in range(N)]
+        # keep track of where we are for the windows
+        chrom_pos = 0.0
+        # keep track of which site we're looking at
+        site_num = 0
+        next_mut = 0
+        assert mutations.site[0] == 0
+        # index of *left-hand* end of the current window
+        window_num = 0
+        for interval, records_out, records_in in self.tree_sequence.edge_diffs():
+            if site_num == nsites:
+                break
+            for sign, records in ((-1, records_out), (+1, records_in)):
+                for edge in records:
+                    # print("Record (",sign,"):",node,children,time)
+                    # print("\t",X, "-->", L)
+                    dx = [0 for k in range(num_sample_sets)]
+                    if sign == +1:
+                        pi[edge.child] = edge.parent
+                    for k in range(num_sample_sets):
+                        dx[k] += sign * X[edge.child][k]
+                    if sign == -1:
+                        pi[edge.child] = -1
+                    for k in range(num_sample_sets):
+                        X[edge.parent][k] += dx[k]
+                    # propagate change up the tree
+                    u = pi[edge.parent]
+                    if u != -1:
+                        next_u = pi[u]
+                        while u != -1:
+                            for k in range(num_sample_sets):
+                                X[u][k] += dx[k]
+                            u = next_u
+                            next_u = pi[next_u]
+                    # print("\t",X, "-->", L)
+            # print("next tree:",L,length)
+            site_pos = sites.position[site_num]
+            start_mut = next_mut
+            assert mutations.site[start_mut] == site_num
+            while site_pos < interval[1]:
+                if site_pos > windows[window_num + 1]:
+                    window_length = windows[window_num + 1] - windows[window_num]
+                    for j in range(n_out):
+                        S[window_num][j] /= window_length
+                    window_num += 1
+                mut_nodes = [-1] # -1 will stand in for the root
+                U = [n]  # number of nonmutated samples below node
+                alleles = [sites.ancestral_state[site_num]]
+                parent_muts = [-1] # index in mut_nodes of the parent mut
+                while ((next_mut < nmuts) and
+                       (mutations.site[next_mut] == site_num)):
+                    m = mutations.node[next_mut]
+                    mut_nodes.append(m)
+                    U.append(X[m])
+                    alleles.append(mutations.derived_state[next_mut])
+                    p = mutations.parent[next_mut]
+                    if p != -1:
+                        parent_muts.append(p - start_mut + 1)
+                    else:
+                        parent_muts.append(0)
+                    next_mut += 1
+                nm = next_mut - start_mut
+                for j in range(nm):
+                    if parent_muts[j] != -1:
+                        for k in range(num_sample_sets):
+                            U[parent_muts[j]][k] -= X[mut_nodes[j]][k]
+                V = {}
+                for j in range(nm):
+                    if alleles[j] not in V:
+                        V[alleles[j]] = 0
+                    V[alleles[j]] += U[j]
+                for a in V:
+                    w = weight_fun(V[a])
+                    for j in range(n_out):
+                        S[window_num][j] += w[j]
+                site_num += 1
+        # wrap up the final window
+        window_length = windows[window_num + 1] - windows[window_num]
+        for j in range(n_out):
+            S[window_num][j] /= window_length
+        return S
