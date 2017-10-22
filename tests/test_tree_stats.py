@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Test cases for branch length statistic computation.
+Test cases for generalized statistic computation.
 """
 from __future__ import print_function
 from __future__ import division
@@ -33,13 +33,6 @@ import six
 
 import msprime
 
-##
-# This tests implementation of the algorithm described in branch-lengths-methods.md
-#
-# The tests for many special cases - f{2,3,4}, Y - should be unified, somehow -
-# currently they are separate and haphazard but all do about the same thing.
-##
-
 
 def path_length(tr, x, y):
     L = 0
@@ -51,7 +44,7 @@ def path_length(tr, x, y):
     return L
 
 
-def branch_length_diversity(ts, X, Y, begin=0.0, end=None):
+def tree_length_diversity(ts, X, Y, begin=0.0, end=None):
     '''
     Computes average pairwise diversity between a random choice from x
     and a random choice from y over the window specified.
@@ -72,13 +65,13 @@ def branch_length_diversity(ts, X, Y, begin=0.0, end=None):
     return S/((end-begin)*len(X)*len(Y))
 
 
-def branch_length_diversity_window(ts, X, Y, windows):
-    out = [branch_length_diversity(ts, X, Y, windows[k], windows[k+1])
+def tree_length_diversity_window(ts, X, Y, windows):
+    out = [tree_length_diversity(ts, X, Y, windows[k], windows[k+1])
            for k in range(len(windows)-1)]
     return out
 
 
-def branch_length_Y3(ts, X, Y, Z, begin=0.0, end=None):
+def tree_length_Y3(ts, X, Y, Z, begin=0.0, end=None):
     if end is None:
         end = ts.sequence_length
     S = 0
@@ -112,7 +105,7 @@ def branch_length_Y3(ts, X, Y, Z, begin=0.0, end=None):
     return S/((end - begin) * len(X) * len(Y) * len(Z))
 
 
-def branch_length_Y2(ts, X, Y, begin=0.0, end=None):
+def tree_length_Y2(ts, X, Y, begin=0.0, end=None):
     if end is None:
         end = ts.sequence_length
     S = 0
@@ -146,7 +139,7 @@ def branch_length_Y2(ts, X, Y, begin=0.0, end=None):
     return S/((end - begin) * len(X) * len(Y) * (len(Y)-1))
 
 
-def branch_length_Y1(ts, X, begin=0.0, end=None):
+def tree_length_Y1(ts, X, begin=0.0, end=None):
     if end is None:
         end = ts.sequence_length
     S = 0
@@ -180,7 +173,7 @@ def branch_length_Y1(ts, X, begin=0.0, end=None):
     return S/((end - begin) * len(X) * (len(X)-1) * (len(X)-2))
 
 
-def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
+def tree_length_f4(ts, A, B, C, D, begin=0.0, end=None):
     if end is None:
         end = ts.sequence_length
     for U in A, B, C, D:
@@ -204,7 +197,7 @@ def branch_length_f4(ts, A, B, C, D, begin=0.0, end=None):
     return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
 
 
-def branch_length_f3(ts, A, B, C, begin=0.0, end=None):
+def tree_length_f3(ts, A, B, C, begin=0.0, end=None):
     # this is f4(A,B;A,C) but drawing distinct samples from A
     if end is None:
         end = ts.sequence_length
@@ -230,7 +223,7 @@ def branch_length_f3(ts, A, B, C, begin=0.0, end=None):
     return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * len(C))
 
 
-def branch_length_f2(ts, A, B, begin=0.0, end=None):
+def tree_length_f2(ts, A, B, begin=0.0, end=None):
     # this is f4(A,B;A,B) but drawing distinct samples from A and B
     if end is None:
         end = ts.sequence_length
@@ -306,7 +299,8 @@ def tree_stat_vector_node_iter(ts, sample_sets, weight_fun):
                 for j in range(n_out):
                     S[j] += w[j] * trs[0].branch_length(node) * tr_len
     for j in range(n_out):
-        S[j] /= ts.get_sequence_length()
+        # the notorious factor of 2
+        S[j] *= (2.0/ts.get_sequence_length())
     return S
 
 
@@ -322,44 +316,34 @@ def site_stat_vector_node_iter(ts, sample_sets, weight_fun):
 
     This version is inefficient as it works directly with haplotypes.
     '''
-    # TODO IMPLMEMENT THIS
     for U in sample_sets:
         if max([U.count(x) for x in set(U)]) > 1:
             raise ValueError("elements of sample_sets cannot contain repeated elements.")
-    tr_its = [ts.trees(
-        tracked_samples=x,
-        sample_counts=True,
-        sample_lists=True) for x in sample_sets]
+    haps = list(ts.haplotypes())
     n_out = len(weight_fun([0 for a in sample_sets]))
     S = [0.0 for j in range(n_out)]
-    for k in range(ts.num_trees):
-        trs = [next(x) for x in tr_its]
-        root = trs[0].root
-        tr_len = trs[0].length
-        if method == 'length':
-            for node in trs[0].nodes():
-                if node != root:
-                    x = [tr.num_tracked_samples(node) for tr in trs]
-                    w = weight_fun(x)
-                    for j in range(n_out):
-                        S[j] += w[j] * trs[0].branch_length(node) * tr_len
-        elif method == 'mutations':
-            count_nodes = dict(
-                [(node, weight_fun([tr.num_tracked_samples(node) for tr in trs]))
-                    for node in trs[0].nodes() if node != root])
-            # print(count_nodes)
-            # TODO update this to use sites rather than mutations.
-            for mut in trs[0].mutations():
-                # print(mut)
-                for j in range(n_out):
-                    # TODO: this is the theoretical method
-                    # that assumes we can distinguish recurrent mutations
-                    S[j] += count_nodes[mut.node][j]
-        else:
-            raise(TypeError("Unknown method "+method))
+    for k in range(ts.num_sites):
+        all_g = [haps[j][k] for j in range(ts.num_samples)]
+        g = [[haps[j][k] for j in u] for u in sample_sets]
+        for a in set(all_g):
+            x = [h.count(a) for h in g]
+            w = weight_fun(x)
+            for j in range(n_out):
+                S[j] += w[j]
     for j in range(n_out):
         S[j] /= ts.get_sequence_length()
     return S
+
+
+def site_stat_node_iter(ts, sample_sets, weight_fun):
+    '''
+    This provides a non-vectorized interface to `site_stat_vector_node_iter()`.
+    '''
+    out = site_stat_vector_node_iter(
+        ts, sample_sets, lambda x: [weight_fun(x)])
+    if len(out) > 1:
+        raise ValueError("Expecting output of length 1.")
+    return out[0]
 
 
 def upper_tri_to_matrix(x):
@@ -378,9 +362,9 @@ def upper_tri_to_matrix(x):
     return out
 
 
-class BranchStatsTestCase(unittest.TestCase):
+class GeneralStatsTestCase(unittest.TestCase):
     """
-    Tests of branch statistic computation.
+    Tests of statistic computation.
     """
     random_seed = 123456
 
@@ -447,26 +431,26 @@ class BranchStatsTestCase(unittest.TestCase):
         A = [[samples[0]], [samples[1]], [samples[2]]]
 
         def f(x):
-            return [float((x[0] > 0) != (x[1] > 0)),
-                    float((x[0] > 0) != (x[2] > 0)),
-                    float((x[1] > 0) != (x[2] > 0))]
+            return [float((x[0] > 0) != (x[1] > 0))/2.0,
+                    float((x[0] > 0) != (x[2] > 0))/2.0,
+                    float((x[1] > 0) != (x[2] > 0))/2.0]
 
-        # TODO implement with SiteStat
+        # TODO fixup factor of 2
         # self.assertListAlmostEqual(
-        #         tree_stat_vector_node_iter(ts, A, f, method='mutations'),
+        #         site_stat_vector_node_iter(ts, A, f),
         #         [ts.pairwise_diversity(samples=[samples[0], samples[1]]),
         #          ts.pairwise_diversity(samples=[samples[0], samples[2]]),
         #          ts.pairwise_diversity(samples=[samples[1], samples[2]])])
         self.assertListAlmostEqual(
                 tree_stat_vector_node_iter(ts, A, f),
-                [branch_length_diversity(ts, A[0], A[1]),
-                 branch_length_diversity(ts, A[0], A[2]),
-                 branch_length_diversity(ts, A[1], A[2])])
+                [tree_length_diversity(ts, A[0], A[1]),
+                 tree_length_diversity(ts, A[0], A[2]),
+                 tree_length_diversity(ts, A[1], A[2])])
         self.assertListAlmostEqual(
                 tsc.tree_stat_vector(A, f)[0],
-                [branch_length_diversity(ts, A[0], A[1]),
-                 branch_length_diversity(ts, A[0], A[2]),
-                 branch_length_diversity(ts, A[1], A[2])])
+                [tree_length_diversity(ts, A[0], A[1]),
+                 tree_length_diversity(ts, A[0], A[2]),
+                 tree_length_diversity(ts, A[1], A[2])])
 
     def check_windowization(self, ts):
         samples = random.sample(ts.samples(), 2)
@@ -493,7 +477,7 @@ class BranchStatsTestCase(unittest.TestCase):
                 n = [len(a) for a in A]
 
                 def f(x):
-                    return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
+                    return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
                 def g(x):
                     return [f(x)]
@@ -501,7 +485,7 @@ class BranchStatsTestCase(unittest.TestCase):
                 tsdiv_v = tsc.tree_stat_vector(A, g, windows)
                 tsdiv_vx = [x[0] for x in tsdiv_v]
                 tsdiv = tsc.tree_stat_windowed(A, f, windows)
-                pydiv = branch_length_diversity_window(ts, A[0], A[1], windows)
+                pydiv = tree_length_diversity_window(ts, A[0], A[1], windows)
                 self.assertEqual(len(tsdiv), len(windows)-1)
                 self.assertListAlmostEqual(tsdiv, pydiv)
                 self.assertListEqual(tsdiv, tsdiv_vx)
@@ -516,14 +500,14 @@ class BranchStatsTestCase(unittest.TestCase):
             n = [len(a) for a in A]
 
             def f(x):
-                return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
+                return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
             self.assertAlmostEqual(
                     tree_stat_node_iter(ts, A, f),
-                    branch_length_diversity(ts, A[0], A[1]))
+                    tree_length_diversity(ts, A[0], A[1]))
             self.assertAlmostEqual(
                     tsc.tree_stat(A, f),
-                    branch_length_diversity(ts, A[0], A[1]))
+                    tree_length_diversity(ts, A[0], A[1]))
 
     def check_tmrca_matrix(self, ts):
         # nonoverlapping samples
@@ -541,7 +525,7 @@ class BranchStatsTestCase(unittest.TestCase):
             self.assertArrayEqual(
                     ts_matrix_values[w, :, :],
                     upper_tri_to_matrix(ts_values[w]))
-        here_values = np.array([[[branch_length_diversity(ts, A[i], A[j],
+        here_values = np.array([[[tree_length_diversity(ts, A[i], A[j],
                                                           begin=windows[k],
                                                           end=windows[k+1])
                                   for i in range(len(A))]
@@ -570,9 +554,9 @@ class BranchStatsTestCase(unittest.TestCase):
         ts_vector_values = tsc.f2_vector(A, windows, [(0, 1), (1, 2)])
         self.assertListEqual([len(x) for x in ts_values],
                              [1 for _ in range(len(windows)-1)])
-        here_values = [[branch_length_f2(ts, A[0], A[1], begin=windows[k],
+        here_values = [[tree_length_f2(ts, A[0], A[1], begin=windows[k],
                                          end=windows[k+1]),
-                        branch_length_f2(ts, A[1], A[2], begin=windows[k],
+                        tree_length_f2(ts, A[1], A[2], begin=windows[k],
                                          end=windows[k+1])]
                        for k in range(len(windows)-1)]
         self.assertListAlmostEqual([y[0] for y in here_values],
@@ -592,9 +576,9 @@ class BranchStatsTestCase(unittest.TestCase):
         ts_vector_values = tsc.f3_vector(A, windows, [(0, 1, 2), (1, 0, 2)])
         self.assertListEqual([len(x) for x in ts_values],
                              [1 for _ in range(len(windows)-1)])
-        here_values = [[branch_length_f3(ts, A[0], A[1], A[2], begin=windows[k],
+        here_values = [[tree_length_f3(ts, A[0], A[1], A[2], begin=windows[k],
                                          end=windows[k+1]),
-                        branch_length_f3(ts, A[1], A[0], A[2], begin=windows[k],
+                        tree_length_f3(ts, A[1], A[0], A[2], begin=windows[k],
                                          end=windows[k+1])]
                        for k in range(len(windows)-1)]
         self.assertListAlmostEqual([y[0] for y in here_values],
@@ -604,17 +588,16 @@ class BranchStatsTestCase(unittest.TestCase):
         self.assertListAlmostEqual([y[1] for y in here_values],
                                    [x[1] for x in ts_vector_values])
 
-    @unittest.skip("implement with SiteStat")
     def check_pairwise_diversity_mutations(self, ts):
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
         n = [len(a) for a in A]
 
         def f(x):
-            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
         self.assertAlmostEqual(
-                tree_stat_node_iter(ts, A, f, method='mutations'),
+                site_stat_node_iter(ts, A, f),
                 ts.pairwise_diversity(samples=samples))
 
     def check_Y_stat(self, ts):
@@ -624,11 +607,11 @@ class BranchStatsTestCase(unittest.TestCase):
              [samples[4], samples[5], samples[8]],
              [samples[9], samples[10], samples[11]]]
         tsc = msprime.TreeStatCalculator(ts)
-        self.compare_stats(ts, branch_length_Y3, A, 3,
+        self.compare_stats(ts, tree_length_Y3, A, 3,
                            tsc_fn=tsc.Y3, tsc_vector_fn=tsc.Y3_vector)
-        self.compare_stats(ts, branch_length_Y2, A, 2,
+        self.compare_stats(ts, tree_length_Y2, A, 2,
                            tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
-        self.compare_stats(ts, branch_length_Y1, A, 0,
+        self.compare_stats(ts, tree_length_Y1, A, 0,
                            tsc_vector_fn=tsc.Y1_vector)
 
     def check_f4_stat(self, ts):
@@ -648,9 +631,9 @@ class BranchStatsTestCase(unittest.TestCase):
 
             def f(x):
                 return ((float(x[0])/len(A[0])-float(x[1])/len(A[1]))
-                        * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))
+                        * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))/2.0
 
-            here_values = [branch_length_f4(ts, A[0], A[1], A[2], A[3],
+            here_values = [tree_length_f4(ts, A[0], A[1], A[2], A[3],
                                             begin=windows[i], end=windows[i+1])
                            for i in range(len(windows)-1)]
 
@@ -662,7 +645,13 @@ class BranchStatsTestCase(unittest.TestCase):
                     here_values)
             self.assertAlmostEqual(
                     tree_stat_node_iter(ts, A, f),
-                    branch_length_f4(ts, A[0], A[1], A[2], A[3]))
+                    tree_length_f4(ts, A[0], A[1], A[2], A[3]))
+
+
+class TreeStatsTestCase(GeneralStatsTestCase):
+    """
+    Tests of tree statistic computation.
+    """
 
     def test_errors(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
@@ -792,10 +781,10 @@ class BranchStatsTestCase(unittest.TestCase):
         A = [[0], [1]]
 
         def f(x):
-            return float((x[0] > 0) != (x[1] > 0))
+            return float((x[0] > 0) != (x[1] > 0))/2.0
 
-        # branch lengths:
-        self.assertAlmostEqual(branch_length_diversity(ts, [0], [1]),
+        # tree lengths:
+        self.assertAlmostEqual(tree_length_diversity(ts, [0], [1]),
                                true_diversity_01)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_diversity_01)
@@ -809,10 +798,10 @@ class BranchStatsTestCase(unittest.TestCase):
         n = [len(a) for a in A]
 
         def f(x):
-            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/4.0
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
 
-        # branch lengths:
-        self.assertAlmostEqual(branch_length_diversity(ts, A[0], A[1]),
+        # tree lengths:
+        self.assertAlmostEqual(tree_length_diversity(ts, A[0], A[1]),
                                true_mean_diversity)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_mean_diversity)
@@ -823,11 +812,12 @@ class BranchStatsTestCase(unittest.TestCase):
         A = [[0], [1, 2]]
 
         def f(x):
-            return ((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2))
+            return float(((x[0] == 1) and (x[1] == 0)) 
+                         or ((x[0] == 0) and (x[1] == 2)))/2.0
 
-        # branch lengths:
+        # tree lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(branch_length_Y3(ts, [0], [1], [2]), true_Y)
+        self.assertAlmostEqual(tree_length_Y3(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
         self.assertAlmostEqual(tree_stat_node_iter(ts, A, f), true_Y)
 
@@ -923,10 +913,10 @@ class BranchStatsTestCase(unittest.TestCase):
         A = [[0], [1]]
 
         def f(x):
-            return (x[0] > 0) != (x[1] > 0)
+            return float((x[0] > 0) != (x[1] > 0))/2.0
 
-        # branch lengths:
-        self.assertAlmostEqual(branch_length_diversity(ts, [0], [1]),
+        # tree lengths:
+        self.assertAlmostEqual(tree_length_diversity(ts, [0], [1]),
                                true_diversity_01)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_diversity_01)
@@ -938,10 +928,10 @@ class BranchStatsTestCase(unittest.TestCase):
         n = [len(a) for a in A]
 
         def f(x):
-            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/4.0
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
 
-        # branch lengths:
-        self.assertAlmostEqual(branch_length_diversity(ts, A[0], A[1]),
+        # tree lengths:
+        self.assertAlmostEqual(tree_length_diversity(ts, A[0], A[1]),
                                true_mean_diversity)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_mean_diversity)
@@ -952,10 +942,11 @@ class BranchStatsTestCase(unittest.TestCase):
         A = [[0], [1, 2]]
 
         def f(x):
-            return ((x[0] == 1) and (x[1] == 0)) or ((x[0] == 0) and (x[1] == 2))
+            return float(((x[0] == 1) and (x[1] == 0)) 
+                         or ((x[0] == 0) and (x[1] == 2)))/2.0
 
-        # branch lengths:
-        self.assertAlmostEqual(branch_length_Y3(ts, [0], [1], [2]), true_Y)
+        # tree lengths:
+        self.assertAlmostEqual(tree_length_Y3(ts, [0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
         self.assertAlmostEqual(tree_stat_node_iter(ts, A, f), true_Y)
 
@@ -983,3 +974,10 @@ class BranchStatsTestCase(unittest.TestCase):
         # Windows must be increasing.
         self.assertRaises(
             ValueError, tsc.tree_stat_vector, [[1, 2]], f, [0, 1, 1])
+
+
+class SiteStatsTestCase(GeneralStatsTestCase):
+    """
+    Tests of site statistic computation.
+    """
+

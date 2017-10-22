@@ -214,9 +214,9 @@ class GeneralStatCalculator(object):
                         if n[i] == 1:
                             out[w][k] = np.nan
                         else:
-                            out[w][k] /= float(2 * n[i] * (n[i] - 1))
+                            out[w][k] /= float(4 * n[i] * (n[i] - 1))
                     else:
-                        out[w][k] /= float(2 * n[i] * n[j])
+                        out[w][k] /= float(4 * n[i] * n[j])
                     k += 1
 
         return out
@@ -289,7 +289,7 @@ class GeneralStatCalculator(object):
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
+                out[w][u] /= float(2 * n[indices[u][0]] * n[indices[u][1]]
                                    * n[indices[u][2]])
 
         return out
@@ -326,7 +326,7 @@ class GeneralStatCalculator(object):
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
+                out[w][u] /= float(2 * n[indices[u][0]] * n[indices[u][1]]
                                    * (n[indices[u][1]]-1))
 
         return out
@@ -362,7 +362,7 @@ class GeneralStatCalculator(object):
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         for w in range(len(windows)-1):
             for u in range(len(sample_sets)):
-                out[w][u] /= float(n[u] * (n[u]-1) * (n[u]-2))
+                out[w][u] /= float(2 * n[u] * (n[u]-1) * (n[u]-2))
 
         return out
 
@@ -414,7 +414,7 @@ class GeneralStatCalculator(object):
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
+                out[w][u] /= float(2 * n[indices[u][0]] * n[indices[u][1]]
                                    * n[indices[u][2]] * n[indices[u][3]])
 
         return out
@@ -470,7 +470,7 @@ class GeneralStatCalculator(object):
                 if n[indices[u][0]] == 1:
                     out[w][u] = np.nan
                 else:
-                    out[w][u] /= float(n[indices[u][0]] * (n[indices[u][0]]-1)
+                    out[w][u] /= float(2 * n[indices[u][0]] * (n[indices[u][0]]-1)
                                        * n[indices[u][1]] * n[indices[u][2]])
 
         return out
@@ -528,7 +528,7 @@ class GeneralStatCalculator(object):
         # move this division outside of f(x) so it only has to happen once
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(n[indices[u][0]] * (n[indices[u][0]]-1)
+                out[w][u] /= float(2 * n[indices[u][0]] * (n[indices[u][0]]-1)
                                    * n[indices[u][1]] * (n[indices[u][1]] - 1))
 
         return out
@@ -594,10 +594,13 @@ class TreeStatCalculator(GeneralStatCalculator):
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
         that returns a list of numbers.  A branch in a tree is weighted by
-        weight_fun(x), where x[i] is the number of samples in
-        sample_sets[i] below that branch.  This finds the sum of this weight for
-        all branches in each tree, and averages this across the tree sequence,
-        weighted by genomic length.
+        2*weight_fun(x), where x[i] is the number of samples in sample_sets[i]
+        below that branch.  This finds the sum of this weight for all branches
+        in each tree, and averages this across the tree sequence, weighted by
+        genomic length.  The factor of 2 is included to make this strictly
+        analogous to the behavior of `SiteStatCalculator`, and comes because we
+        evaluate `weight_fun()` only on one of the two sides of the split
+        induced by each branch.
 
         It does this separately for each window [windows[i], windows[i+1]) and
         returns the values in a list.  Note that windows cannot be overlapping,
@@ -701,7 +704,8 @@ class TreeStatCalculator(GeneralStatCalculator):
                 window_length = windows[window_num + 1] - windows[window_num]
                 for j in range(n_out):
                     S[window_num][j] += L[j] * this_length
-                    S[window_num][j] /= window_length
+                    # the notorious factor of two appears here:
+                    S[window_num][j] *= (2.0/window_length)
                 length -= this_length
                 # start the next
                 if window_num < num_windows - 1:
