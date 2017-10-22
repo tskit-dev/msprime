@@ -157,15 +157,11 @@ class LdCalculator(object):
         return A
 
 
-class TreeStatCalculator(object):
+class GeneralStatCalculator(object):
     """
-    Class for calculating a broad class of tree statistics.  These are all
-    calculated using :meth:``TreeStatCalculator.tree_stat_vector`` as the
-    underlying engine.  This class requires the `numpy
-    <http://www.numpy.org/>`_ library.
-
-    :param TreeSequence tree_sequence: The tree sequence mutations we are
-        interested in.
+    A common class for TreeStatCalculator and SiteStatCalculator -- those
+    implemment different `tree_stat_vector()` methods, but given that
+    general-purpose function, many statistics are computed in the same way.
     """
 
     def __init__(self, tree_sequence):
@@ -581,6 +577,18 @@ class TreeStatCalculator(object):
         assert len(out[0]) == 1
         return [x[0] for x in out]
 
+
+class TreeStatCalculator(GeneralStatCalculator):
+    """
+    Class for calculating a broad class of tree statistics.  These are all
+    calculated using :meth:``TreeStatCalculator.tree_stat_vector`` as the
+    underlying engine.  This class requires the `numpy
+    <http://www.numpy.org/>`_ library.
+
+    :param TreeSequence tree_sequence: The tree sequence mutations we are
+        interested in.
+    """
+
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
@@ -713,10 +721,10 @@ class TreeStatCalculator(object):
         return S
 
 
-class SiteStatCalculator(object):
+class SiteStatCalculator(GeneralStatCalculator):
     """
     Class for calculating a broad class of single-site statistics.  These are
-    all calculated using :meth:``SiteStatCalculator.site_stat_vector`` as the
+    all calculated using :meth:``SiteStatCalculator.tree_stat_vector`` as the
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
 
@@ -728,7 +736,7 @@ class SiteStatCalculator(object):
         check_numpy()
         self.tree_sequence = tree_sequence
 
-    def site_stat_vector(self, sample_sets, weight_fun, windows=None):
+    def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a
         function whose argument is a list of pairs of integers of the same
