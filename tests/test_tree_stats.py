@@ -44,306 +44,314 @@ def path_length(tr, x, y):
     return L
 
 
-def tree_length_diversity(ts, X, Y, begin=0.0, end=None):
-    '''
-    Computes average pairwise diversity between a random choice from x
-    and a random choice from y over the window specified.
-    '''
-    if end is None:
-        end = ts.sequence_length
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        SS = 0
-        for x in X:
-            for y in Y:
-                SS += path_length(tr, x, y)
-        S += SS*(min(end, tr.interval[1]) - max(begin, tr.interval[0]))
-    return S/((end-begin)*len(X)*len(Y))
+class PythonTreeStatCalculator(object):
+    """
+    Python implementations of various ("tree") branch-length statistics -
+    inefficient but more clear what they are doing.  
+    """
+
+    def __init__(self, tree_sequence):
+        self.tree_sequence = tree_sequence
+
+    def tree_length_diversity(self, X, Y, begin=0.0, end=None):
+        '''
+        Computes average pairwise diversity between a random choice from x
+        and a random choice from y over the window specified.
+        '''
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            SS = 0
+            for x in X:
+                for y in Y:
+                    SS += path_length(tr, x, y)
+            S += SS*(min(end, tr.interval[1]) - max(begin, tr.interval[0]))
+        return S/((end-begin)*len(X)*len(Y))
+
+    def tree_length_diversity_window(self, X, Y, windows):
+        out = [self.tree_length_diversity(X, Y, windows[k], windows[k+1])
+               for k in range(len(windows)-1)]
+        return out
+
+    def tree_length_Y3(self, X, Y, Z, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+            for x in X:
+                for y in Y:
+                    for z in Z:
+                        xy_mrca = tr.mrca(x, y)
+                        xz_mrca = tr.mrca(x, z)
+                        yz_mrca = tr.mrca(y, z)
+                        if xy_mrca == xz_mrca:
+                            #   /\
+                            #  / /\
+                            # x y  z
+                            S += path_length(tr, x, yz_mrca) * this_length
+                        elif xy_mrca == yz_mrca:
+                            #   /\
+                            #  / /\
+                            # y x  z
+                            S += path_length(tr, x, xz_mrca) * this_length
+                        elif xz_mrca == yz_mrca:
+                            #   /\
+                            #  / /\
+                            # z x  y
+                            S += path_length(tr, x, xy_mrca) * this_length
+        return S/((end - begin) * len(X) * len(Y) * len(Z))
+
+    def tree_length_Y2(self, X, Y, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+            for x in X:
+                for y in Y:
+                    for z in set(Y) - set([y]):
+                        xy_mrca = tr.mrca(x, y)
+                        xz_mrca = tr.mrca(x, z)
+                        yz_mrca = tr.mrca(y, z)
+                        if xy_mrca == xz_mrca:
+                            #   /\
+                            #  / /\
+                            # x y  z
+                            S += path_length(tr, x, yz_mrca) * this_length
+                        elif xy_mrca == yz_mrca:
+                            #   /\
+                            #  / /\
+                            # y x  z
+                            S += path_length(tr, x, xz_mrca) * this_length
+                        elif xz_mrca == yz_mrca:
+                            #   /\
+                            #  / /\
+                            # z x  y
+                            S += path_length(tr, x, xy_mrca) * this_length
+        return S/((end - begin) * len(X) * len(Y) * (len(Y)-1))
+
+    def tree_length_Y1(self, X, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+            for x in X:
+                for y in set(X) - set([x]):
+                    for z in set(X) - set([x, y]):
+                        xy_mrca = tr.mrca(x, y)
+                        xz_mrca = tr.mrca(x, z)
+                        yz_mrca = tr.mrca(y, z)
+                        if xy_mrca == xz_mrca:
+                            #   /\
+                            #  / /\
+                            # x y  z
+                            S += path_length(tr, x, yz_mrca) * this_length
+                        elif xy_mrca == yz_mrca:
+                            #   /\
+                            #  / /\
+                            # y x  z
+                            S += path_length(tr, x, xz_mrca) * this_length
+                        elif xz_mrca == yz_mrca:
+                            #   /\
+                            #  / /\
+                            # z x  y
+                            S += path_length(tr, x, xy_mrca) * this_length
+        return S/((end - begin) * len(X) * (len(X)-1) * (len(X)-2))
+
+    def tree_length_f4(self, A, B, C, D, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        for U in A, B, C, D:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("A,B,C, and D cannot contain repeated elements.")
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+            SS = 0
+            for a in A:
+                for b in B:
+                    for c in C:
+                        for d in D:
+                            SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
+                            SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
+            S += SS * this_length
+        return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
+
+    def tree_length_f3(self, A, B, C, begin=0.0, end=None):
+        # this is f4(A,B;A,C) but drawing distinct samples from A
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        assert(len(A) > 1)
+        for U in A, B, C:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("A, B and C cannot contain repeated elements.")
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+            SS = 0
+            for a in A:
+                for b in B:
+                    for c in set(A) - set([a]):
+                        for d in C:
+                            SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
+                            SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
+            S += SS * this_length
+        return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * len(C))
+
+    def tree_length_f2(self, A, B, begin=0.0, end=None):
+        # this is f4(A,B;A,B) but drawing distinct samples from A and B
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        assert(len(A) > 1)
+        for U in A, B:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("A and B cannot contain repeated elements.")
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
+            SS = 0
+            for a in A:
+                for b in B:
+                    for c in set(A) - set([a]):
+                        for d in set(B) - set([b]):
+                            SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
+                            SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
+            S += SS * this_length
+        return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * (len(B) - 1))
+
+    def tree_stat_node_iter(self, sample_sets, weight_fun):
+        '''
+        Here sample_sets is a list of lists of samples, and weight_fun is a function
+        whose argument is a list of integers of the same length as sample_sets
+        that returns a number.  Each branch in a tree is weighted by weight_fun(x),
+        where x[i] is the number of samples in sample_sets[i] below that
+        branch.  This finds the sum of all counted branches for each tree,
+        and averages this across the tree sequence ts, weighted by genomic length.
+
+        This version is inefficient as it iterates over all nodes in each tree.
+        '''
+        out = self.tree_stat_vector_node_iter(sample_sets, 
+                                              lambda x: [weight_fun(x)])
+        if len(out) > 1:
+            raise ValueError("Expecting output of length 1.")
+        return out[0]
+
+    def tree_stat_vector_node_iter(self, sample_sets, weight_fun):
+        '''
+        Here sample_sets is a list of lists of samples, and weight_fun is a function
+        whose argument is a list of integers of the same length as sample_sets
+        that returns a list of numbers; there will be one output for each element.
+        For each value, each branch in a tree is weighted by weight_fun(x),
+        where x[i] is the number of samples in sample_sets[i] below that
+        branch.  This finds the sum of all counted branches for each tree,
+        and averages this across the tree sequence ts, weighted by genomic length.
+
+        This version is inefficient as it iterates over all nodes in each tree.
+        '''
+        for U in sample_sets:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("elements of sample_sets cannot contain repeated elements.")
+        tr_its = [self.tree_sequence.trees(
+            tracked_samples=x,
+            sample_counts=True,
+            sample_lists=True) for x in sample_sets]
+        n_out = len(weight_fun([0 for a in sample_sets]))
+        S = [0.0 for j in range(n_out)]
+        for k in range(self.tree_sequence.num_trees):
+            trs = [next(x) for x in tr_its]
+            root = trs[0].root
+            tr_len = trs[0].length
+            for node in trs[0].nodes():
+                if node != root:
+                    x = [tr.num_tracked_samples(node) for tr in trs]
+                    w = weight_fun(x)
+                    for j in range(n_out):
+                        S[j] += w[j] * trs[0].branch_length(node) * tr_len
+        for j in range(n_out):
+            # the notorious factor of 2
+            S[j] *= (2.0/self.tree_sequence.get_sequence_length())
+        return S
 
 
-def tree_length_diversity_window(ts, X, Y, windows):
-    out = [tree_length_diversity(ts, X, Y, windows[k], windows[k+1])
-           for k in range(len(windows)-1)]
-    return out
+class PythonSiteStatCalculator(object):
+    """
+    Python implementations of various single-site statistics -
+    inefficient but more clear what they are doing.  
+    """
 
+    def __init__(self, tree_sequence):
+        self.tree_sequence = tree_sequence
 
-def tree_length_Y3(ts, X, Y, Z, begin=0.0, end=None):
-    if end is None:
-        end = ts.sequence_length
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        for x in X:
-            for y in Y:
-                for z in Z:
-                    xy_mrca = tr.mrca(x, y)
-                    xz_mrca = tr.mrca(x, z)
-                    yz_mrca = tr.mrca(y, z)
-                    if xy_mrca == xz_mrca:
-                        #   /\
-                        #  / /\
-                        # x y  z
-                        S += path_length(tr, x, yz_mrca) * this_length
-                    elif xy_mrca == yz_mrca:
-                        #   /\
-                        #  / /\
-                        # y x  z
-                        S += path_length(tr, x, xz_mrca) * this_length
-                    elif xz_mrca == yz_mrca:
-                        #   /\
-                        #  / /\
-                        # z x  y
-                        S += path_length(tr, x, xy_mrca) * this_length
-    return S/((end - begin) * len(X) * len(Y) * len(Z))
+    def site_stat_vector_node_iter(self, sample_sets, weight_fun):
+        '''
+        Here sample_sets is a list of lists of samples, and weight_fun is a function
+        whose argument is a list of integers of the same length as sample_sets
+        that returns a list of numbers; there will be one output for each element.
+        For each value, each allele in a tree is weighted by weight_fun(x), where
+        x[i] is the number of samples in sample_sets[i] that inherit that allele.
+        This finds the sum of this value for all alleles at all polymorphic sites,
+        and across the tree sequence ts, weighted by genomic length.
 
-
-def tree_length_Y2(ts, X, Y, begin=0.0, end=None):
-    if end is None:
-        end = ts.sequence_length
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        for x in X:
-            for y in Y:
-                for z in set(Y) - set([y]):
-                    xy_mrca = tr.mrca(x, y)
-                    xz_mrca = tr.mrca(x, z)
-                    yz_mrca = tr.mrca(y, z)
-                    if xy_mrca == xz_mrca:
-                        #   /\
-                        #  / /\
-                        # x y  z
-                        S += path_length(tr, x, yz_mrca) * this_length
-                    elif xy_mrca == yz_mrca:
-                        #   /\
-                        #  / /\
-                        # y x  z
-                        S += path_length(tr, x, xz_mrca) * this_length
-                    elif xz_mrca == yz_mrca:
-                        #   /\
-                        #  / /\
-                        # z x  y
-                        S += path_length(tr, x, xy_mrca) * this_length
-    return S/((end - begin) * len(X) * len(Y) * (len(Y)-1))
-
-
-def tree_length_Y1(ts, X, begin=0.0, end=None):
-    if end is None:
-        end = ts.sequence_length
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        for x in X:
-            for y in set(X) - set([x]):
-                for z in set(X) - set([x, y]):
-                    xy_mrca = tr.mrca(x, y)
-                    xz_mrca = tr.mrca(x, z)
-                    yz_mrca = tr.mrca(y, z)
-                    if xy_mrca == xz_mrca:
-                        #   /\
-                        #  / /\
-                        # x y  z
-                        S += path_length(tr, x, yz_mrca) * this_length
-                    elif xy_mrca == yz_mrca:
-                        #   /\
-                        #  / /\
-                        # y x  z
-                        S += path_length(tr, x, xz_mrca) * this_length
-                    elif xz_mrca == yz_mrca:
-                        #   /\
-                        #  / /\
-                        # z x  y
-                        S += path_length(tr, x, xy_mrca) * this_length
-    return S/((end - begin) * len(X) * (len(X)-1) * (len(X)-2))
-
-
-def tree_length_f4(ts, A, B, C, D, begin=0.0, end=None):
-    if end is None:
-        end = ts.sequence_length
-    for U in A, B, C, D:
-        if max([U.count(x) for x in set(U)]) > 1:
-            raise ValueError("A,B,C, and D cannot contain repeated elements.")
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        SS = 0
-        for a in A:
-            for b in B:
-                for c in C:
-                    for d in D:
-                        SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
-                        SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
-        S += SS * this_length
-    return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
-
-
-def tree_length_f3(ts, A, B, C, begin=0.0, end=None):
-    # this is f4(A,B;A,C) but drawing distinct samples from A
-    if end is None:
-        end = ts.sequence_length
-    assert(len(A) > 1)
-    for U in A, B, C:
-        if max([U.count(x) for x in set(U)]) > 1:
-            raise ValueError("A, B and C cannot contain repeated elements.")
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        SS = 0
-        for a in A:
-            for b in B:
-                for c in set(A) - set([a]):
-                    for d in C:
-                        SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
-                        SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
-        S += SS * this_length
-    return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * len(C))
-
-
-def tree_length_f2(ts, A, B, begin=0.0, end=None):
-    # this is f4(A,B;A,B) but drawing distinct samples from A and B
-    if end is None:
-        end = ts.sequence_length
-    assert(len(A) > 1)
-    for U in A, B:
-        if max([U.count(x) for x in set(U)]) > 1:
-            raise ValueError("A and B cannot contain repeated elements.")
-    S = 0
-    for tr in ts.trees():
-        if tr.interval[1] <= begin:
-            continue
-        if tr.interval[0] >= end:
-            break
-        this_length = min(end, tr.interval[1]) - max(begin, tr.interval[0])
-        SS = 0
-        for a in A:
-            for b in B:
-                for c in set(A) - set([a]):
-                    for d in set(B) - set([b]):
-                        SS += path_length(tr, tr.mrca(a, c), tr.mrca(b, d))
-                        SS -= path_length(tr, tr.mrca(a, d), tr.mrca(b, c))
-        S += SS * this_length
-    return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * (len(B) - 1))
-
-
-def tree_stat_node_iter(ts, sample_sets, weight_fun):
-    '''
-    Here sample_sets is a list of lists of samples, and weight_fun is a function
-    whose argument is a list of integers of the same length as sample_sets
-    that returns a number.  Each branch in a tree is weighted by weight_fun(x),
-    where x[i] is the number of samples in sample_sets[i] below that
-    branch.  This finds the sum of all counted branches for each tree,
-    and averages this across the tree sequence ts, weighted by genomic length.
-
-    This version is inefficient as it iterates over all nodes in each tree.
-    '''
-    out = tree_stat_vector_node_iter(
-        ts, sample_sets, lambda x: [weight_fun(x)])
-    if len(out) > 1:
-        raise ValueError("Expecting output of length 1.")
-    return out[0]
-
-
-def tree_stat_vector_node_iter(ts, sample_sets, weight_fun):
-    '''
-    Here sample_sets is a list of lists of samples, and weight_fun is a function
-    whose argument is a list of integers of the same length as sample_sets
-    that returns a list of numbers; there will be one output for each element.
-    For each value, each branch in a tree is weighted by weight_fun(x),
-    where x[i] is the number of samples in sample_sets[i] below that
-    branch.  This finds the sum of all counted branches for each tree,
-    and averages this across the tree sequence ts, weighted by genomic length.
-
-    This version is inefficient as it iterates over all nodes in each tree.
-    '''
-    for U in sample_sets:
-        if max([U.count(x) for x in set(U)]) > 1:
-            raise ValueError("elements of sample_sets cannot contain repeated elements.")
-    tr_its = [ts.trees(
-        tracked_samples=x,
-        sample_counts=True,
-        sample_lists=True) for x in sample_sets]
-    n_out = len(weight_fun([0 for a in sample_sets]))
-    S = [0.0 for j in range(n_out)]
-    for k in range(ts.num_trees):
-        trs = [next(x) for x in tr_its]
-        root = trs[0].root
-        tr_len = trs[0].length
-        for node in trs[0].nodes():
-            if node != root:
-                x = [tr.num_tracked_samples(node) for tr in trs]
+        This version is inefficient as it works directly with haplotypes.
+        '''
+        for U in sample_sets:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("elements of sample_sets cannot contain repeated elements.")
+        haps = list(self.tree_sequence.haplotypes())
+        n_out = len(weight_fun([0 for a in sample_sets]))
+        S = [0.0 for j in range(n_out)]
+        for k in range(self.tree_sequence.num_sites):
+            all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
+            g = [[haps[j][k] for j in u] for u in sample_sets]
+            for a in set(all_g):
+                x = [h.count(a) for h in g]
                 w = weight_fun(x)
                 for j in range(n_out):
-                    S[j] += w[j] * trs[0].branch_length(node) * tr_len
-    for j in range(n_out):
-        # the notorious factor of 2
-        S[j] *= (2.0/ts.get_sequence_length())
-    return S
+                    S[j] += w[j]
+        for j in range(n_out):
+            S[j] /= self.tree_sequence.get_sequence_length()
+        return S
 
-
-def site_stat_vector_node_iter(ts, sample_sets, weight_fun):
-    '''
-    Here sample_sets is a list of lists of samples, and weight_fun is a function
-    whose argument is a list of integers of the same length as sample_sets
-    that returns a list of numbers; there will be one output for each element.
-    For each value, each allele in a tree is weighted by weight_fun(x), where
-    x[i] is the number of samples in sample_sets[i] that inherit that allele.
-    This finds the sum of this value for all alleles at all polymorphic sites,
-    and across the tree sequence ts, weighted by genomic length.
-
-    This version is inefficient as it works directly with haplotypes.
-    '''
-    for U in sample_sets:
-        if max([U.count(x) for x in set(U)]) > 1:
-            raise ValueError("elements of sample_sets cannot contain repeated elements.")
-    haps = list(ts.haplotypes())
-    n_out = len(weight_fun([0 for a in sample_sets]))
-    S = [0.0 for j in range(n_out)]
-    for k in range(ts.num_sites):
-        all_g = [haps[j][k] for j in range(ts.num_samples)]
-        g = [[haps[j][k] for j in u] for u in sample_sets]
-        for a in set(all_g):
-            x = [h.count(a) for h in g]
-            w = weight_fun(x)
-            for j in range(n_out):
-                S[j] += w[j]
-    for j in range(n_out):
-        S[j] /= ts.get_sequence_length()
-    return S
-
-
-def site_stat_node_iter(ts, sample_sets, weight_fun):
-    '''
-    This provides a non-vectorized interface to `site_stat_vector_node_iter()`.
-    '''
-    out = site_stat_vector_node_iter(
-        ts, sample_sets, lambda x: [weight_fun(x)])
-    if len(out) > 1:
-        raise ValueError("Expecting output of length 1.")
-    return out[0]
+    def site_stat_node_iter(self, sample_sets, weight_fun):
+        '''
+        This provides a non-vectorized interface to `site_stat_vector_node_iter()`.
+        '''
+        out = self.site_stat_vector_node_iter(sample_sets, 
+                                              lambda x: [weight_fun(x)])
+        if len(out) > 1:
+            raise ValueError("Expecting output of length 1.")
+        return out[0]
 
 
 def upper_tri_to_matrix(x):
@@ -393,7 +401,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                    [0] + sorted(random.sample(range(1, 20), 4)) + [20]]
         indices = [random.sample(range(nl), max(1, index_length)) for _ in range(5)]
         leafset_args = [[leaf_sets[i] for i in ii] for ii in indices]
-        tree_args = [[ts] + x for x in leafset_args]
+        tree_args = [x for x in leafset_args]
         win_args = [{'begin': windows[i], 'end': windows[i+1]}
                     for i in range(len(windows)-1)]
         tree_vals = [[tree_fn(*a, **b) for a in tree_args] for b in win_args]
@@ -428,6 +436,7 @@ class GeneralStatsTestCase(unittest.TestCase):
     def check_vectorization(self, ts):
         samples = random.sample(ts.samples(), 3)
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         A = [[samples[0]], [samples[1]], [samples[2]]]
 
         def f(x):
@@ -442,19 +451,20 @@ class GeneralStatsTestCase(unittest.TestCase):
         #          ts.pairwise_diversity(samples=[samples[0], samples[2]]),
         #          ts.pairwise_diversity(samples=[samples[1], samples[2]])])
         self.assertListAlmostEqual(
-                tree_stat_vector_node_iter(ts, A, f),
-                [tree_length_diversity(ts, A[0], A[1]),
-                 tree_length_diversity(ts, A[0], A[2]),
-                 tree_length_diversity(ts, A[1], A[2])])
+                py_tsc.tree_stat_vector_node_iter(A, f),
+                [py_tsc.tree_length_diversity(A[0], A[1]),
+                 py_tsc.tree_length_diversity(A[0], A[2]),
+                 py_tsc.tree_length_diversity(A[1], A[2])])
         self.assertListAlmostEqual(
                 tsc.tree_stat_vector(A, f)[0],
-                [tree_length_diversity(ts, A[0], A[1]),
-                 tree_length_diversity(ts, A[0], A[2]),
-                 tree_length_diversity(ts, A[1], A[2])])
+                [py_tsc.tree_length_diversity(A[0], A[1]),
+                 py_tsc.tree_length_diversity(A[0], A[2]),
+                 py_tsc.tree_length_diversity(A[1], A[2])])
 
     def check_windowization(self, ts):
         samples = random.sample(ts.samples(), 2)
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         A_one = [[samples[0]], [samples[1]]]
         A_many = [random.sample(ts.samples(), 2),
                   random.sample(ts.samples(), 2)]
@@ -485,7 +495,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                 tsdiv_v = tsc.tree_stat_vector(A, g, windows)
                 tsdiv_vx = [x[0] for x in tsdiv_v]
                 tsdiv = tsc.tree_stat_windowed(A, f, windows)
-                pydiv = tree_length_diversity_window(ts, A[0], A[1], windows)
+                pydiv = py_tsc.tree_length_diversity_window(A[0], A[1], windows)
                 self.assertEqual(len(tsdiv), len(windows)-1)
                 self.assertListAlmostEqual(tsdiv, pydiv)
                 self.assertListEqual(tsdiv, tsdiv_vx)
@@ -493,6 +503,7 @@ class GeneralStatsTestCase(unittest.TestCase):
     def check_pairwise_diversity(self, ts):
         samples = random.sample(ts.samples(), 2)
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         A_one = [[samples[0]], [samples[1]]]
         A_many = [random.sample(ts.samples(), 2),
                   random.sample(ts.samples(), 2)]
@@ -503,16 +514,17 @@ class GeneralStatsTestCase(unittest.TestCase):
                 return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
             self.assertAlmostEqual(
-                    tree_stat_node_iter(ts, A, f),
-                    tree_length_diversity(ts, A[0], A[1]))
+                    py_tsc.tree_stat_node_iter(A, f),
+                    py_tsc.tree_length_diversity(A[0], A[1]))
             self.assertAlmostEqual(
                     tsc.tree_stat(A, f),
-                    tree_length_diversity(ts, A[0], A[1]))
+                    py_tsc.tree_length_diversity(A[0], A[1]))
 
     def check_tmrca_matrix(self, ts):
         # nonoverlapping samples
         samples = random.sample(ts.samples(), 6)
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         A = [samples[0:3], samples[3:5], samples[5:6]]
         windows = [0.0, ts.sequence_length/2, ts.sequence_length]
         ts_values = tsc.mean_pairwise_tmrca(A, windows)
@@ -525,9 +537,9 @@ class GeneralStatsTestCase(unittest.TestCase):
             self.assertArrayEqual(
                     ts_matrix_values[w, :, :],
                     upper_tri_to_matrix(ts_values[w]))
-        here_values = np.array([[[tree_length_diversity(ts, A[i], A[j],
-                                                          begin=windows[k],
-                                                          end=windows[k+1])
+        here_values = np.array([[[py_tsc.tree_length_diversity(A[i], A[j],
+                                                               begin=windows[k],
+                                                               end=windows[k+1])
                                   for i in range(len(A))]
                                  for j in range(len(A))]
                                 for k in range(len(windows)-1)])
@@ -549,15 +561,16 @@ class GeneralStatsTestCase(unittest.TestCase):
              random.sample(ts.samples(), 2),
              random.sample(ts.samples(), 2)]
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
         ts_values = tsc.f2(A[0:2], windows)
         ts_vector_values = tsc.f2_vector(A, windows, [(0, 1), (1, 2)])
         self.assertListEqual([len(x) for x in ts_values],
                              [1 for _ in range(len(windows)-1)])
-        here_values = [[tree_length_f2(ts, A[0], A[1], begin=windows[k],
-                                         end=windows[k+1]),
-                        tree_length_f2(ts, A[1], A[2], begin=windows[k],
-                                         end=windows[k+1])]
+        here_values = [[py_tsc.tree_length_f2(A[0], A[1], begin=windows[k],
+                                              end=windows[k+1]),
+                        py_tsc.tree_length_f2(A[1], A[2], begin=windows[k],
+                                              end=windows[k+1])]
                        for k in range(len(windows)-1)]
         self.assertListAlmostEqual([y[0] for y in here_values],
                                    [x[0] for x in ts_values])
@@ -571,15 +584,16 @@ class GeneralStatsTestCase(unittest.TestCase):
              random.sample(ts.samples(), 2),
              random.sample(ts.samples(), 1)]
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
         ts_values = tsc.f3(A, windows)
         ts_vector_values = tsc.f3_vector(A, windows, [(0, 1, 2), (1, 0, 2)])
         self.assertListEqual([len(x) for x in ts_values],
                              [1 for _ in range(len(windows)-1)])
-        here_values = [[tree_length_f3(ts, A[0], A[1], A[2], begin=windows[k],
-                                         end=windows[k+1]),
-                        tree_length_f3(ts, A[1], A[0], A[2], begin=windows[k],
-                                         end=windows[k+1])]
+        here_values = [[py_tsc.tree_length_f3(A[0], A[1], A[2], begin=windows[k],
+                                              end=windows[k+1]),
+                        py_tsc.tree_length_f3(A[1], A[0], A[2], begin=windows[k],
+                                              end=windows[k+1])]
                        for k in range(len(windows)-1)]
         self.assertListAlmostEqual([y[0] for y in here_values],
                                    [x[0] for x in ts_values])
@@ -589,6 +603,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                                    [x[1] for x in ts_vector_values])
 
     def check_pairwise_diversity_mutations(self, ts):
+        py_tsc = PythonSiteStatCalculator(ts)
         samples = random.sample(ts.samples(), 2)
         A = [[samples[0]], [samples[1]]]
         n = [len(a) for a in A]
@@ -597,7 +612,7 @@ class GeneralStatsTestCase(unittest.TestCase):
             return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
         self.assertAlmostEqual(
-                site_stat_node_iter(ts, A, f),
+                py_tsc.site_stat_node_iter(A, f),
                 ts.pairwise_diversity(samples=samples))
 
     def check_Y_stat(self, ts):
@@ -607,11 +622,12 @@ class GeneralStatsTestCase(unittest.TestCase):
              [samples[4], samples[5], samples[8]],
              [samples[9], samples[10], samples[11]]]
         tsc = msprime.TreeStatCalculator(ts)
-        self.compare_stats(ts, tree_length_Y3, A, 3,
+        py_tsc = PythonTreeStatCalculator(ts)
+        self.compare_stats(ts, py_tsc.tree_length_Y3, A, 3,
                            tsc_fn=tsc.Y3, tsc_vector_fn=tsc.Y3_vector)
-        self.compare_stats(ts, tree_length_Y2, A, 2,
+        self.compare_stats(ts, py_tsc.tree_length_Y2, A, 2,
                            tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
-        self.compare_stats(ts, tree_length_Y1, A, 0,
+        self.compare_stats(ts, py_tsc.tree_length_Y1, A, 0,
                            tsc_vector_fn=tsc.Y1_vector)
 
     def check_f4_stat(self, ts):
@@ -622,6 +638,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                   random.sample(ts.samples(), 3)]
         A_list = A_zero + A_many
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         windows = [0.0, ts.sequence_length/2.0, ts.sequence_length]
         indices = [(0, 1, 2, 3), (0, 1, 4, 5), (4, 5, 6, 7)]
         ts_vector = tsc.f4_vector(A_list, windows, indices)
@@ -633,8 +650,8 @@ class GeneralStatsTestCase(unittest.TestCase):
                 return ((float(x[0])/len(A[0])-float(x[1])/len(A[1]))
                         * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))/2.0
 
-            here_values = [tree_length_f4(ts, A[0], A[1], A[2], A[3],
-                                            begin=windows[i], end=windows[i+1])
+            here_values = [py_tsc.tree_length_f4(A[0], A[1], A[2], A[3],
+                                                 begin=windows[i], end=windows[i+1])
                            for i in range(len(windows)-1)]
 
             self.assertListAlmostEqual(
@@ -644,8 +661,8 @@ class GeneralStatsTestCase(unittest.TestCase):
                     [x[k] for x in ts_vector],
                     here_values)
             self.assertAlmostEqual(
-                    tree_stat_node_iter(ts, A, f),
-                    tree_length_f4(ts, A[0], A[1], A[2], A[3]))
+                    py_tsc.tree_stat_node_iter(A, f),
+                    py_tsc.tree_length_f4(A[0], A[1], A[2], A[3]))
 
 
 class TreeStatsTestCase(GeneralStatsTestCase):
@@ -773,6 +790,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
         ts = msprime.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations)
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
         self.check_vectorization(ts)
@@ -784,11 +802,11 @@ class TreeStatsTestCase(GeneralStatsTestCase):
             return float((x[0] > 0) != (x[1] > 0))/2.0
 
         # tree lengths:
-        self.assertAlmostEqual(tree_length_diversity(ts, [0], [1]),
+        self.assertAlmostEqual(py_tsc.tree_length_diversity([0], [1]),
                                true_diversity_01)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_diversity_01)
-        self.assertAlmostEqual(tree_stat_node_iter(ts, A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
                                true_diversity_01)
 
         # mean diversity between [0, 1] and [0, 2]:
@@ -801,11 +819,11 @@ class TreeStatsTestCase(GeneralStatsTestCase):
             return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
 
         # tree lengths:
-        self.assertAlmostEqual(tree_length_diversity(ts, A[0], A[1]),
+        self.assertAlmostEqual(py_tsc.tree_length_diversity(A[0], A[1]),
                                true_mean_diversity)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_mean_diversity)
-        self.assertAlmostEqual(tree_stat_node_iter(ts, A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
                                true_mean_diversity)
 
         # Y-statistic for (0/12)
@@ -817,9 +835,9 @@ class TreeStatsTestCase(GeneralStatsTestCase):
 
         # tree lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(tree_length_Y3(ts, [0], [1], [2]), true_Y)
+        self.assertAlmostEqual(py_tsc.tree_length_Y3([0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
-        self.assertAlmostEqual(tree_stat_node_iter(ts, A, f), true_Y)
+        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f), true_Y)
 
     def test_case_2(self):
         # Here are the trees:
@@ -904,6 +922,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
         """)
         ts = msprime.load_text(nodes=nodes, edges=edges)
         tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
 
         self.check_pairwise_diversity(ts)
         self.check_pairwise_diversity_mutations(ts)
@@ -916,11 +935,11 @@ class TreeStatsTestCase(GeneralStatsTestCase):
             return float((x[0] > 0) != (x[1] > 0))/2.0
 
         # tree lengths:
-        self.assertAlmostEqual(tree_length_diversity(ts, [0], [1]),
+        self.assertAlmostEqual(py_tsc.tree_length_diversity([0], [1]),
                                true_diversity_01)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_diversity_01)
-        self.assertAlmostEqual(tree_stat_node_iter(ts, A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
                                true_diversity_01)
 
         # mean divergence between 0, 1 and 0, 2
@@ -931,11 +950,11 @@ class TreeStatsTestCase(GeneralStatsTestCase):
             return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
 
         # tree lengths:
-        self.assertAlmostEqual(tree_length_diversity(ts, A[0], A[1]),
+        self.assertAlmostEqual(py_tsc.tree_length_diversity(A[0], A[1]),
                                true_mean_diversity)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_mean_diversity)
-        self.assertAlmostEqual(tree_stat_node_iter(ts, A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
                                true_mean_diversity)
 
         # Y-statistic for (0/12)
@@ -946,9 +965,9 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                          or ((x[0] == 0) and (x[1] == 2)))/2.0
 
         # tree lengths:
-        self.assertAlmostEqual(tree_length_Y3(ts, [0], [1], [2]), true_Y)
+        self.assertAlmostEqual(py_tsc.tree_length_Y3([0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
-        self.assertAlmostEqual(tree_stat_node_iter(ts, A, f), true_Y)
+        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f), true_Y)
 
     def test_tree_stat_vector_interface(self):
         ts = msprime.simulate(10)
