@@ -73,12 +73,7 @@ class PythonTreeStatCalculator(object):
             S += SS*(min(end, tr.interval[1]) - max(begin, tr.interval[0]))
         return S/((end-begin)*len(X)*len(Y))
 
-    def tree_length_diversity_window(self, X, Y, windows):
-        out = [self.tree_length_diversity(X, Y, windows[k], windows[k+1])
-               for k in range(len(windows)-1)]
-        return out
-
-    def tree_length_Y3(self, X, Y, Z, begin=0.0, end=None):
+    def Y3(self, X, Y, Z, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         S = 0
@@ -111,7 +106,7 @@ class PythonTreeStatCalculator(object):
                             S += path_length(tr, x, xy_mrca) * this_length
         return S/((end - begin) * len(X) * len(Y) * len(Z))
 
-    def tree_length_Y2(self, X, Y, begin=0.0, end=None):
+    def Y2(self, X, Y, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         S = 0
@@ -144,7 +139,7 @@ class PythonTreeStatCalculator(object):
                             S += path_length(tr, x, xy_mrca) * this_length
         return S/((end - begin) * len(X) * len(Y) * (len(Y)-1))
 
-    def tree_length_Y1(self, X, begin=0.0, end=None):
+    def Y1(self, X, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         S = 0
@@ -177,7 +172,7 @@ class PythonTreeStatCalculator(object):
                             S += path_length(tr, x, xy_mrca) * this_length
         return S/((end - begin) * len(X) * (len(X)-1) * (len(X)-2))
 
-    def tree_length_f4(self, A, B, C, D, begin=0.0, end=None):
+    def f4(self, A, B, C, D, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         for U in A, B, C, D:
@@ -200,7 +195,7 @@ class PythonTreeStatCalculator(object):
             S += SS * this_length
         return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
 
-    def tree_length_f3(self, A, B, C, begin=0.0, end=None):
+    def f3(self, A, B, C, begin=0.0, end=None):
         # this is f4(A,B;A,C) but drawing distinct samples from A
         if end is None:
             end = self.tree_sequence.sequence_length
@@ -225,7 +220,7 @@ class PythonTreeStatCalculator(object):
             S += SS * this_length
         return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * len(C))
 
-    def tree_length_f2(self, A, B, begin=0.0, end=None):
+    def f2(self, A, B, begin=0.0, end=None):
         # this is f4(A,B;A,B) but drawing distinct samples from A and B
         if end is None:
             end = self.tree_sequence.sequence_length
@@ -317,6 +312,138 @@ class PythonSiteStatCalculator(object):
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
 
+    def Y3(self, X, Y, Z, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for x in X:
+                    for y in Y:
+                        for z in Z:
+                            if ((haps[x][k] != haps[y][k]) 
+                                and (haps[y][k] == haps[z][k])):
+                                # x|yz
+                                S += 1
+        return S/((end - begin) * len(X) * len(Y) * len(Z))
+
+    def Y2(self, X, Y, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for x in X:
+                    for y in Y:
+                        for z in set(Y) - set(y):
+                            if ((haps[x][k] != haps[y][k]) 
+                                and (haps[y][k] == haps[z][k])):
+                                # x|yz
+                                S += 1
+        return S/((end - begin) * len(X) * len(Y) * (len(Y) - 1))
+
+    def Y1(self, X, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for x in X:
+                    for y in set(X) - set(x):
+                        for z in set(X) - set([x,y]):
+                            if ((haps[x][k] != haps[y][k]) 
+                                and (haps[y][k] == haps[z][k])):
+                                # x|yz
+                                S += 1
+        return S/((end - begin) * len(X) * (len(X) - 1) * (len(Y) - 2))
+
+    def f4(self, A, B, C, D, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        for U in A, B, C, D:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("A,B,C, and D cannot contain repeated elements.")
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for a in A:
+                    for b in B:
+                        for c in C:
+                            for d in D:
+                                if ((haps[a][k] == haps[c][k]) 
+                                    and (haps[b][k] == haps[d][k])
+                                    and (haps[a][k] != haps[b][k])):
+                                    # ac|bd
+                                    S += 1
+                                elif ((haps[a][k] == haps[d][k]) 
+                                      and (haps[b][k] == haps[c][k])
+                                      and (haps[a][k] != haps[b][k])):
+                                    # ad|bc
+                                    S -= 1
+        return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
+
+    def f3(self, A, B, C, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        for U in A, B, C:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("A,B,and C cannot contain repeated elements.")
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for a in A:
+                    for b in B:
+                        for c in set(A) - set([a]):
+                            for d in C:
+                                if ((haps[a][k] == haps[c][k]) 
+                                    and (haps[b][k] == haps[d][k])
+                                    and (haps[a][k] != haps[b][k])):
+                                    # ac|bd
+                                    S += 1
+                                elif ((haps[a][k] == haps[d][k]) 
+                                      and (haps[b][k] == haps[c][k])
+                                      and (haps[a][k] != haps[b][k])):
+                                    # ad|bc
+                                    S -= 1
+        return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
+
+    def f2(self, A, B, C, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        for U in A, B:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("A,and B cannot contain repeated elements.")
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for a in A:
+                    for b in B:
+                        for c in set(A) - set([a]):
+                            for d in set(B) - set([b]):
+                                if ((haps[a][k] == haps[c][k]) 
+                                    and (haps[b][k] == haps[d][k])
+                                    and (haps[a][k] != haps[b][k])):
+                                    # ac|bd
+                                    S += 1
+                                elif ((haps[a][k] == haps[d][k]) 
+                                      and (haps[b][k] == haps[c][k])
+                                      and (haps[a][k] != haps[b][k])):
+                                    # ad|bc
+                                    S -= 1
+        return S / ((end - begin) * len(A) * len(B) * len(C) * len(D))
+
     def tree_stat_vector(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
@@ -336,8 +463,8 @@ class PythonSiteStatCalculator(object):
             end = self.tree_sequence.sequence_length
         haps = list(self.tree_sequence.haplotypes())
         n_out = len(weight_fun([0 for a in sample_sets]))
-        S = [0.0 for j in range(n_out)]
         site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = [0.0 for j in range(n_out)]
         for k in range(self.tree_sequence.num_sites):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
                 all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
@@ -480,11 +607,11 @@ class GeneralStatsTestCase(unittest.TestCase):
              [samples[9], samples[10], samples[11]]]
         tsc = msprime.TreeStatCalculator(ts)
         py_tsc = PythonTreeStatCalculator(ts)
-        self.compare_stats(ts, py_tsc.tree_length_f2, A, 2,
+        self.compare_stats(ts, py_tsc.f2, A, 2,
                            tsc_fn=tsc.f2, tsc_vector_fn=tsc.f2_vector)
-        self.compare_stats(ts, py_tsc.tree_length_f3, A, 3,
+        self.compare_stats(ts, py_tsc.f3, A, 3,
                            tsc_fn=tsc.f3, tsc_vector_fn=tsc.f3_vector)
-        self.compare_stats(ts, py_tsc.tree_length_f4, A, 4,
+        self.compare_stats(ts, py_tsc.f4, A, 4,
                            tsc_fn=tsc.f4, tsc_vector_fn=tsc.f4_vector)
 
     def check_Y_stat(self, ts):
@@ -495,11 +622,11 @@ class GeneralStatsTestCase(unittest.TestCase):
              [samples[9], samples[10], samples[11]]]
         tsc = msprime.TreeStatCalculator(ts)
         py_tsc = PythonTreeStatCalculator(ts)
-        self.compare_stats(ts, py_tsc.tree_length_Y3, A, 3,
+        self.compare_stats(ts, py_tsc.Y3, A, 3,
                            tsc_fn=tsc.Y3, tsc_vector_fn=tsc.Y3_vector)
-        self.compare_stats(ts, py_tsc.tree_length_Y2, A, 2,
+        self.compare_stats(ts, py_tsc.Y2, A, 2,
                            tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
-        self.compare_stats(ts, py_tsc.tree_length_Y1, A, 0,
+        self.compare_stats(ts, py_tsc.Y1, A, 0,
                            tsc_vector_fn=tsc.Y1_vector)
 
 
@@ -637,7 +764,8 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                 tsdiv_v = tsc.tree_stat_vector(A, g, windows)
                 tsdiv_vx = [x[0] for x in tsdiv_v]
                 tsdiv = tsc.tree_stat_windowed(A, f, windows)
-                pydiv = py_tsc.tree_length_diversity_window(A[0], A[1], windows)
+                pydiv = [py_tsc.tree_length_diversity(A[0], A[1], windows[k], windows[k+1])
+                         for k in range(len(windows)-1)]
                 self.assertEqual(len(tsdiv), len(windows)-1)
                 self.assertListAlmostEqual(tsdiv, pydiv)
                 self.assertListEqual(tsdiv, tsdiv_vx)
@@ -760,7 +888,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
 
         # tree lengths:
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(py_tsc.tree_length_Y3([0], [1], [2]), true_Y)
+        self.assertAlmostEqual(py_tsc.Y3([0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
         self.assertAlmostEqual(py_tsc.tree_stat(A, f), true_Y)
 
@@ -888,7 +1016,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                          or ((x[0] == 0) and (x[1] == 2)))/2.0
 
         # tree lengths:
-        self.assertAlmostEqual(py_tsc.tree_length_Y3([0], [1], [2]), true_Y)
+        self.assertAlmostEqual(py_tsc.Y3([0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
         self.assertAlmostEqual(py_tsc.tree_stat(A, f), true_Y)
 
@@ -950,6 +1078,6 @@ class SiteStatsTestCase(GeneralStatsTestCase):
         self.check_tree_stat_vector(ts)
         # self.check_pairwise_diversity(ts)
         # self.check_tmrca_matrix(ts)
-        # self.check_f_stats(ts)
-        # self.check_Y_stat(ts)
+        self.check_f_stats(ts)
+        self.check_Y_stat(ts)
 
