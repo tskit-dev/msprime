@@ -250,7 +250,7 @@ class PythonTreeStatCalculator(object):
             S += SS * this_length
         return S / ((end - begin) * len(A) * (len(A) - 1) * len(B) * (len(B) - 1))
 
-    def tree_stat_node_iter(self, sample_sets, weight_fun):
+    def tree_stat(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
@@ -261,13 +261,14 @@ class PythonTreeStatCalculator(object):
 
         This version is inefficient as it iterates over all nodes in each tree.
         '''
-        out = self.tree_stat_vector_node_iter(sample_sets, 
-                                              lambda x: [weight_fun(x)])
+        out = self.tree_stat_vector(sample_sets, 
+                                    lambda x: [weight_fun(x)],
+                                    begin=begin, end=end)
         if len(out) > 1:
             raise ValueError("Expecting output of length 1.")
         return out[0]
 
-    def tree_stat_vector_node_iter(self, sample_sets, weight_fun):
+    def tree_stat_vector(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
@@ -282,25 +283,28 @@ class PythonTreeStatCalculator(object):
         for U in sample_sets:
             if max([U.count(x) for x in set(U)]) > 1:
                 raise ValueError("elements of sample_sets cannot contain repeated elements.")
+        if end is None:
+            end = self.tree_sequence.sequence_length
         tr_its = [self.tree_sequence.trees(
-            tracked_samples=x,
-            sample_counts=True,
-            sample_lists=True) for x in sample_sets]
+                        tracked_samples=x,
+                        sample_counts=True,
+                        sample_lists=True) for x in sample_sets]
         n_out = len(weight_fun([0 for a in sample_sets]))
         S = [0.0 for j in range(n_out)]
         for k in range(self.tree_sequence.num_trees):
             trs = [next(x) for x in tr_its]
             root = trs[0].root
-            tr_len = trs[0].length
-            for node in trs[0].nodes():
-                if node != root:
-                    x = [tr.num_tracked_samples(node) for tr in trs]
-                    w = weight_fun(x)
-                    for j in range(n_out):
-                        S[j] += w[j] * trs[0].branch_length(node) * tr_len
+            tr_len = min(end, trs[0].interval[1]) - max(begin, trs[0].interval[0])
+            if tr_len > 0:
+                for node in trs[0].nodes():
+                    if node != root:
+                        x = [tr.num_tracked_samples(node) for tr in trs]
+                        w = weight_fun(x)
+                        for j in range(n_out):
+                            S[j] += w[j] * trs[0].branch_length(node) * tr_len
         for j in range(n_out):
             # the notorious factor of 2
-            S[j] *= (2.0/self.tree_sequence.get_sequence_length())
+            S[j] *= (2.0/(end-begin))
         return S
 
 
@@ -313,7 +317,7 @@ class PythonSiteStatCalculator(object):
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
 
-    def site_stat_vector_node_iter(self, sample_sets, weight_fun):
+    def site_stat_vector(self, sample_sets, weight_fun):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
@@ -343,11 +347,11 @@ class PythonSiteStatCalculator(object):
             S[j] /= self.tree_sequence.get_sequence_length()
         return S
 
-    def site_stat_node_iter(self, sample_sets, weight_fun):
+    def site_stat(self, sample_sets, weight_fun):
         '''
-        This provides a non-vectorized interface to `site_stat_vector_node_iter()`.
+        This provides a non-vectorized interface to `site_stat_vector()`.
         '''
-        out = self.site_stat_vector_node_iter(sample_sets, 
+        out = self.site_stat_vector(sample_sets, 
                                               lambda x: [weight_fun(x)])
         if len(out) > 1:
             raise ValueError("Expecting output of length 1.")
@@ -394,6 +398,12 @@ class GeneralStatsTestCase(unittest.TestCase):
         implementation tree_fn that takes index_length leaf sets at once.  Pass
         index_length=0 to signal that tsc_fn does not take an 'indices' argument;
         otherwise, gives the length of each of the tuples.
+
+        Here are the arguments these functions will get:
+            tree_fn(leaf_set[i], ... , leaf_set[k], begin=left, end=right)
+            tsc_vector_fn(leaf_sets, windows, indices)
+            ... or tsc_vector_fn(leaf_sets, windows)
+            tsc_fn(leaf_sets, windows)
         """
         assert(len(leaf_sets) > index_length)
         nl = len(leaf_sets)
@@ -413,9 +423,9 @@ class GeneralStatsTestCase(unittest.TestCase):
                 tsc_vector_vals = tsc_vector_fn([leaf_sets[i[0]] for i in indices],
                                                 windows)
             self.assertEqual(len(tsc_vector_vals), len(windows)-1)
-            # print("vector:")
-            # print(tsc_vector_vals)
-            # print(tree_vals)
+            print("vector:")
+            print(tsc_vector_vals)
+            print(tree_vals)
             for x in tsc_vector_vals:
                 self.assertEqual(len(x), len(indices))
             for i in range(len(windows)-1):
@@ -425,9 +435,9 @@ class GeneralStatsTestCase(unittest.TestCase):
             tsc_vals_orig = [tsc_fn(*([ls] + [windows])) for ls in leafset_args]
             tsc_vals = [[x[k][0] for x in tsc_vals_orig] for k in range(len(windows)-1)]
             self.assertEqual(len(tsc_vals), len(windows)-1)
-            # print("not:")
-            # print(tsc_vals)
-            # print(tree_vals)
+            print("not:")
+            print(tsc_vals)
+            print(tree_vals)
             for x in tsc_vals:
                 self.assertAlmostEqual(len(x), len(indices))
             for i in range(len(windows)-1):
@@ -446,12 +456,12 @@ class GeneralStatsTestCase(unittest.TestCase):
 
         # TODO fixup factor of 2
         # self.assertListAlmostEqual(
-        #         site_stat_vector_node_iter(ts, A, f),
+        #         site_stat_vector(ts, A, f),
         #         [ts.pairwise_diversity(samples=[samples[0], samples[1]]),
         #          ts.pairwise_diversity(samples=[samples[0], samples[2]]),
         #          ts.pairwise_diversity(samples=[samples[1], samples[2]])])
         self.assertListAlmostEqual(
-                py_tsc.tree_stat_vector_node_iter(A, f),
+                py_tsc.tree_stat_vector(A, f),
                 [py_tsc.tree_length_diversity(A[0], A[1]),
                  py_tsc.tree_length_diversity(A[0], A[2]),
                  py_tsc.tree_length_diversity(A[1], A[2])])
@@ -500,6 +510,29 @@ class GeneralStatsTestCase(unittest.TestCase):
                 self.assertListAlmostEqual(tsdiv, pydiv)
                 self.assertListEqual(tsdiv, tsdiv_vx)
 
+    def check_tree_stat_vector(self, ts):
+        samples = random.sample(ts.samples(), 12)
+        A = [[samples[0], samples[1], samples[6]],
+             [samples[2], samples[3], samples[7]],
+             [samples[4], samples[5], samples[8]],
+             [samples[9], samples[10], samples[11]]]
+        tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
+
+        # a made-up example
+        def tsf(sample_sets, windows, indices):
+            def f(x):
+                return [x[i] + 2.0 * x[j] + 3.5 * x[k] for i, j, k in indices]
+            return tsc.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
+
+        def py_tsf(X, Y, Z, begin, end):
+            def f(x):
+                return x[0] + 2.0 * x[1] + 3.5 * x[2]
+            return py_tsc.tree_stat([X, Y, Z], weight_fun=f, 
+                                    begin=begin, end=end)
+
+        self.compare_stats(ts, py_tsf, A, 3, tsc_vector_fn=tsf)
+
     def check_pairwise_diversity(self, ts):
         samples = random.sample(ts.samples(), 2)
         tsc = msprime.TreeStatCalculator(ts)
@@ -514,7 +547,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                 return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
             self.assertAlmostEqual(
-                    py_tsc.tree_stat_node_iter(A, f),
+                    py_tsc.tree_stat(A, f),
                     py_tsc.tree_length_diversity(A[0], A[1]))
             self.assertAlmostEqual(
                     tsc.tree_stat(A, f),
@@ -612,7 +645,7 @@ class GeneralStatsTestCase(unittest.TestCase):
             return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
         self.assertAlmostEqual(
-                py_tsc.site_stat_node_iter(A, f),
+                py_tsc.site_stat(A, f),
                 ts.pairwise_diversity(samples=samples))
 
     def check_Y_stat(self, ts):
@@ -661,7 +694,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                     [x[k] for x in ts_vector],
                     here_values)
             self.assertAlmostEqual(
-                    py_tsc.tree_stat_node_iter(A, f),
+                    py_tsc.tree_stat(A, f),
                     py_tsc.tree_length_f4(A[0], A[1], A[2], A[3]))
 
 
@@ -720,6 +753,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
     def test_derived_functions(self):
         # Test implementation of statistics using these functions.
         ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
+        self.check_tree_stat_vector(ts)
         self.check_tmrca_matrix(ts)
         self.check_f2_stat(ts)
         self.check_f3_stat(ts)
@@ -806,7 +840,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                                true_diversity_01)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_diversity_01)
-        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
                                true_diversity_01)
 
         # mean diversity between [0, 1] and [0, 2]:
@@ -823,7 +857,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                                true_mean_diversity)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_mean_diversity)
-        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
                                true_mean_diversity)
 
         # Y-statistic for (0/12)
@@ -837,7 +871,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
         true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
         self.assertAlmostEqual(py_tsc.tree_length_Y3([0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
-        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f), true_Y)
+        self.assertAlmostEqual(py_tsc.tree_stat(A, f), true_Y)
 
     def test_case_2(self):
         # Here are the trees:
@@ -939,7 +973,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                                true_diversity_01)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_diversity_01)
-        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
                                true_diversity_01)
 
         # mean divergence between 0, 1 and 0, 2
@@ -954,7 +988,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                                true_mean_diversity)
         self.assertAlmostEqual(tsc.tree_stat(A, f),
                                true_mean_diversity)
-        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f),
+        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
                                true_mean_diversity)
 
         # Y-statistic for (0/12)
@@ -967,7 +1001,7 @@ class TreeStatsTestCase(GeneralStatsTestCase):
         # tree lengths:
         self.assertAlmostEqual(py_tsc.tree_length_Y3([0], [1], [2]), true_Y)
         self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
-        self.assertAlmostEqual(py_tsc.tree_stat_node_iter(A, f), true_Y)
+        self.assertAlmostEqual(py_tsc.tree_stat(A, f), true_Y)
 
     def test_tree_stat_vector_interface(self):
         ts = msprime.simulate(10)
