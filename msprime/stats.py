@@ -33,6 +33,7 @@ except ImportError:
     _numpy_imported = False
 
 import _msprime
+import msprime.tables as tables
 
 
 def check_numpy():
@@ -774,14 +775,16 @@ class SiteStatCalculator(GeneralStatCalculator):
         n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
 
         # get the mutation stuff
-        sites = msprime.MutationTable()
-        mutations = msprime.SiteTable()
-        ts.dump_tables(sites=sites, mutations=mutations)
+        sites = tables.SiteTable()
+        mutations = tables.MutationTable()
+        self.tree_sequence.dump_tables(sites=sites, mutations=mutations)
         nsites = sites.num_rows
         nmuts = mutations.num_rows
 
         # we store the final answers here
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
+        if nmuts == 0:
+            return S
         # print("sample_sets:", sample_sets)
         # print("n_out:",n_out)
         N = self.tree_sequence.num_nodes

@@ -317,7 +317,7 @@ class PythonSiteStatCalculator(object):
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
 
-    def site_stat_vector(self, sample_sets, weight_fun):
+    def tree_stat_vector(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
@@ -332,27 +332,31 @@ class PythonSiteStatCalculator(object):
         for U in sample_sets:
             if max([U.count(x) for x in set(U)]) > 1:
                 raise ValueError("elements of sample_sets cannot contain repeated elements.")
+        if end is None:
+            end = self.tree_sequence.sequence_length
         haps = list(self.tree_sequence.haplotypes())
         n_out = len(weight_fun([0 for a in sample_sets]))
         S = [0.0 for j in range(n_out)]
+        site_positions = [x.position for x in self.tree_sequence.sites()]
         for k in range(self.tree_sequence.num_sites):
-            all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
-            g = [[haps[j][k] for j in u] for u in sample_sets]
-            for a in set(all_g):
-                x = [h.count(a) for h in g]
-                w = weight_fun(x)
-                for j in range(n_out):
-                    S[j] += w[j]
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
+                g = [[haps[j][k] for j in u] for u in sample_sets]
+                for a in set(all_g):
+                    x = [h.count(a) for h in g]
+                    w = weight_fun(x)
+                    for j in range(n_out):
+                        S[j] += w[j]
         for j in range(n_out):
-            S[j] /= self.tree_sequence.get_sequence_length()
+            S[j] /= (end - begin)
         return S
 
-    def site_stat(self, sample_sets, weight_fun):
+    def tree_stat(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
-        This provides a non-vectorized interface to `site_stat_vector()`.
+        This provides a non-vectorized interface to `tree_stat_vector()`.
         '''
-        out = self.site_stat_vector(sample_sets, 
-                                              lambda x: [weight_fun(x)])
+        out = self.tree_stat_vector(sample_sets, lambda x: [weight_fun(x)],
+                                    begin=begin, end=end)
         if len(out) > 1:
             raise ValueError("Expecting output of length 1.")
         return out[0]
@@ -443,15 +447,15 @@ class GeneralStatsTestCase(unittest.TestCase):
             for i in range(len(windows)-1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
-    def check_tree_stat_vector(self, ts):
+    def check_tree_stat_vector(self, ts, calc1, calc2):
         # test the general tree_stat_vector() machinery
         samples = random.sample(ts.samples(), 12)
         A = [[samples[0], samples[1], samples[6]],
              [samples[2], samples[3], samples[7]],
              [samples[4], samples[5], samples[8]],
              [samples[9], samples[10], samples[11]]]
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
+        tsc = calc1(ts)
+        py_tsc = calc2(ts)
 
         # a made-up example
         def tsf(sample_sets, windows, indices):
@@ -466,6 +470,47 @@ class GeneralStatsTestCase(unittest.TestCase):
                                     begin=begin, end=end)
 
         self.compare_stats(ts, py_tsf, A, 3, tsc_vector_fn=tsf)
+
+    def check_f_stats(self, ts):
+        samples = random.sample(ts.samples(), 12)
+        A = [[samples[0], samples[1], samples[2]],
+             [samples[3], samples[4]],
+             [samples[5], samples[6]],
+             [samples[7], samples[8]],
+             [samples[9], samples[10], samples[11]]]
+        tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
+        self.compare_stats(ts, py_tsc.tree_length_f2, A, 2,
+                           tsc_fn=tsc.f2, tsc_vector_fn=tsc.f2_vector)
+        self.compare_stats(ts, py_tsc.tree_length_f3, A, 3,
+                           tsc_fn=tsc.f3, tsc_vector_fn=tsc.f3_vector)
+        self.compare_stats(ts, py_tsc.tree_length_f4, A, 4,
+                           tsc_fn=tsc.f4, tsc_vector_fn=tsc.f4_vector)
+
+    def check_Y_stat(self, ts):
+        samples = random.sample(ts.samples(), 12)
+        A = [[samples[0], samples[1], samples[6]],
+             [samples[2], samples[3], samples[7]],
+             [samples[4], samples[5], samples[8]],
+             [samples[9], samples[10], samples[11]]]
+        tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
+        self.compare_stats(ts, py_tsc.tree_length_Y3, A, 3,
+                           tsc_fn=tsc.Y3, tsc_vector_fn=tsc.Y3_vector)
+        self.compare_stats(ts, py_tsc.tree_length_Y2, A, 2,
+                           tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
+        self.compare_stats(ts, py_tsc.tree_length_Y1, A, 0,
+                           tsc_vector_fn=tsc.Y1_vector)
+
+
+class TreeStatsTestCase(GeneralStatsTestCase):
+    """
+    Tests of tree statistic computation.
+    """
+
+    def check_tree_stat_vector(self, ts):
+        super().check_tree_stat_vector(ts, calc1=msprime.TreeStatCalculator,
+                                       calc2=PythonTreeStatCalculator)
 
     def check_pairwise_diversity(self, ts):
         samples = random.sample(ts.samples(), 2)
@@ -522,43 +567,6 @@ class GeneralStatsTestCase(unittest.TestCase):
                         here_values[k, j, i] /= 2.0
         for k in range(len(windows)-1):
             self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
-
-    def check_f_stats(self, ts):
-        samples = random.sample(ts.samples(), 12)
-        A = [[samples[0], samples[1], samples[2]],
-             [samples[3], samples[4]],
-             [samples[5], samples[6]],
-             [samples[7], samples[8]],
-             [samples[9], samples[10], samples[11]]]
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
-        self.compare_stats(ts, py_tsc.tree_length_f2, A, 2,
-                           tsc_fn=tsc.f2, tsc_vector_fn=tsc.f2_vector)
-        self.compare_stats(ts, py_tsc.tree_length_f3, A, 3,
-                           tsc_fn=tsc.f3, tsc_vector_fn=tsc.f3_vector)
-        self.compare_stats(ts, py_tsc.tree_length_f4, A, 4,
-                           tsc_fn=tsc.f4, tsc_vector_fn=tsc.f4_vector)
-
-    def check_Y_stat(self, ts):
-        samples = random.sample(ts.samples(), 12)
-        A = [[samples[0], samples[1], samples[6]],
-             [samples[2], samples[3], samples[7]],
-             [samples[4], samples[5], samples[8]],
-             [samples[9], samples[10], samples[11]]]
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
-        self.compare_stats(ts, py_tsc.tree_length_Y3, A, 3,
-                           tsc_fn=tsc.Y3, tsc_vector_fn=tsc.Y3_vector)
-        self.compare_stats(ts, py_tsc.tree_length_Y2, A, 2,
-                           tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
-        self.compare_stats(ts, py_tsc.tree_length_Y1, A, 0,
-                           tsc_vector_fn=tsc.Y1_vector)
-
-
-class TreeStatsTestCase(GeneralStatsTestCase):
-    """
-    Tests of tree statistic computation.
-    """
 
     def test_errors(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
@@ -915,6 +923,10 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     Tests of site statistic computation.
     """
 
+    def check_tree_stat_vector(self, ts):
+        super().check_tree_stat_vector(ts, calc1=msprime.SiteStatCalculator,
+                                       calc2=PythonSiteStatCalculator)
+
     def check_pairwise_diversity_mutations(self, ts):
         py_tsc = PythonSiteStatCalculator(ts)
         samples = random.sample(ts.samples(), 2)
@@ -925,10 +937,19 @@ class SiteStatsTestCase(GeneralStatsTestCase):
             return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
         self.assertAlmostEqual(
-                py_tsc.site_stat(A, f),
+                py_tsc.tree_stat(A, f),
                 ts.pairwise_diversity(samples=samples))
 
-    @unittest.skip("not yet")
     def test_pairwise_diversity(self):
         ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity_mutations(ts)
+
+    def test_derived_functions(self):
+        # Test implementation of statistics using these functions.
+        ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
+        self.check_tree_stat_vector(ts)
+        # self.check_pairwise_diversity(ts)
+        # self.check_tmrca_matrix(ts)
+        # self.check_f_stats(ts)
+        # self.check_Y_stat(ts)
+
