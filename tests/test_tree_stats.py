@@ -443,74 +443,8 @@ class GeneralStatsTestCase(unittest.TestCase):
             for i in range(len(windows)-1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
-    def check_vectorization(self, ts):
-        samples = random.sample(ts.samples(), 3)
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
-        A = [[samples[0]], [samples[1]], [samples[2]]]
-
-        def f(x):
-            return [float((x[0] > 0) != (x[1] > 0))/2.0,
-                    float((x[0] > 0) != (x[2] > 0))/2.0,
-                    float((x[1] > 0) != (x[2] > 0))/2.0]
-
-        # TODO fixup factor of 2
-        # self.assertListAlmostEqual(
-        #         site_stat_vector(ts, A, f),
-        #         [ts.pairwise_diversity(samples=[samples[0], samples[1]]),
-        #          ts.pairwise_diversity(samples=[samples[0], samples[2]]),
-        #          ts.pairwise_diversity(samples=[samples[1], samples[2]])])
-        self.assertListAlmostEqual(
-                py_tsc.tree_stat_vector(A, f),
-                [py_tsc.tree_length_diversity(A[0], A[1]),
-                 py_tsc.tree_length_diversity(A[0], A[2]),
-                 py_tsc.tree_length_diversity(A[1], A[2])])
-        self.assertListAlmostEqual(
-                tsc.tree_stat_vector(A, f)[0],
-                [py_tsc.tree_length_diversity(A[0], A[1]),
-                 py_tsc.tree_length_diversity(A[0], A[2]),
-                 py_tsc.tree_length_diversity(A[1], A[2])])
-
-    def check_windowization(self, ts):
-        samples = random.sample(ts.samples(), 2)
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
-        A_one = [[samples[0]], [samples[1]]]
-        A_many = [random.sample(ts.samples(), 2),
-                  random.sample(ts.samples(), 2)]
-        some_breaks = list(set([0.0, ts.sequence_length/2, ts.sequence_length] +
-                               random.sample(list(ts.breakpoints()), 5)))
-        some_breaks.sort()
-        tiny_breaks = ([(k / 4) * list(ts.breakpoints())[1] for k in range(4)] +
-                       [ts.sequence_length])
-        wins = [[0.0, ts.sequence_length],
-                [0.0, ts.sequence_length/2, ts.sequence_length],
-                tiny_breaks,
-                some_breaks]
-
-        with self.assertRaises(ValueError):
-            tsc.tree_stat_vector(A_one, lambda x: 1.0,
-                                 windows=[0.0, 1.0, ts.sequence_length+1.1])
-
-        for A in (A_one, A_many):
-            for windows in wins:
-                n = [len(a) for a in A]
-
-                def f(x):
-                    return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
-
-                def g(x):
-                    return [f(x)]
-
-                tsdiv_v = tsc.tree_stat_vector(A, g, windows)
-                tsdiv_vx = [x[0] for x in tsdiv_v]
-                tsdiv = tsc.tree_stat_windowed(A, f, windows)
-                pydiv = py_tsc.tree_length_diversity_window(A[0], A[1], windows)
-                self.assertEqual(len(tsdiv), len(windows)-1)
-                self.assertListAlmostEqual(tsdiv, pydiv)
-                self.assertListEqual(tsdiv, tsdiv_vx)
-
     def check_tree_stat_vector(self, ts):
+        # test the general tree_stat_vector() machinery
         samples = random.sample(ts.samples(), 12)
         A = [[samples[0], samples[1], samples[6]],
              [samples[2], samples[3], samples[7]],
@@ -589,64 +523,21 @@ class GeneralStatsTestCase(unittest.TestCase):
         for k in range(len(windows)-1):
             self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
 
-    def check_f2_stat(self, ts):
-        A = [random.sample(ts.samples(), 3),
-             random.sample(ts.samples(), 2),
-             random.sample(ts.samples(), 2)]
+    def check_f_stats(self, ts):
+        samples = random.sample(ts.samples(), 12)
+        A = [[samples[0], samples[1], samples[2]],
+             [samples[3], samples[4]],
+             [samples[5], samples[6]],
+             [samples[7], samples[8]],
+             [samples[9], samples[10], samples[11]]]
         tsc = msprime.TreeStatCalculator(ts)
         py_tsc = PythonTreeStatCalculator(ts)
-        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
-        ts_values = tsc.f2(A[0:2], windows)
-        ts_vector_values = tsc.f2_vector(A, windows, [(0, 1), (1, 2)])
-        self.assertListEqual([len(x) for x in ts_values],
-                             [1 for _ in range(len(windows)-1)])
-        here_values = [[py_tsc.tree_length_f2(A[0], A[1], begin=windows[k],
-                                              end=windows[k+1]),
-                        py_tsc.tree_length_f2(A[1], A[2], begin=windows[k],
-                                              end=windows[k+1])]
-                       for k in range(len(windows)-1)]
-        self.assertListAlmostEqual([y[0] for y in here_values],
-                                   [x[0] for x in ts_values])
-        self.assertListAlmostEqual([y[0] for y in here_values],
-                                   [x[0] for x in ts_vector_values])
-        self.assertListAlmostEqual([y[1] for y in here_values],
-                                   [x[1] for x in ts_vector_values])
-
-    def check_f3_stat(self, ts):
-        A = [random.sample(ts.samples(), 3),
-             random.sample(ts.samples(), 2),
-             random.sample(ts.samples(), 1)]
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
-        windows = [0.0, ts.sequence_length/20, ts.sequence_length/2, ts.sequence_length]
-        ts_values = tsc.f3(A, windows)
-        ts_vector_values = tsc.f3_vector(A, windows, [(0, 1, 2), (1, 0, 2)])
-        self.assertListEqual([len(x) for x in ts_values],
-                             [1 for _ in range(len(windows)-1)])
-        here_values = [[py_tsc.tree_length_f3(A[0], A[1], A[2], begin=windows[k],
-                                              end=windows[k+1]),
-                        py_tsc.tree_length_f3(A[1], A[0], A[2], begin=windows[k],
-                                              end=windows[k+1])]
-                       for k in range(len(windows)-1)]
-        self.assertListAlmostEqual([y[0] for y in here_values],
-                                   [x[0] for x in ts_values])
-        self.assertListAlmostEqual([y[0] for y in here_values],
-                                   [x[0] for x in ts_vector_values])
-        self.assertListAlmostEqual([y[1] for y in here_values],
-                                   [x[1] for x in ts_vector_values])
-
-    def check_pairwise_diversity_mutations(self, ts):
-        py_tsc = PythonSiteStatCalculator(ts)
-        samples = random.sample(ts.samples(), 2)
-        A = [[samples[0]], [samples[1]]]
-        n = [len(a) for a in A]
-
-        def f(x):
-            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
-
-        self.assertAlmostEqual(
-                py_tsc.site_stat(A, f),
-                ts.pairwise_diversity(samples=samples))
+        self.compare_stats(ts, py_tsc.tree_length_f2, A, 2,
+                           tsc_fn=tsc.f2, tsc_vector_fn=tsc.f2_vector)
+        self.compare_stats(ts, py_tsc.tree_length_f3, A, 3,
+                           tsc_fn=tsc.f3, tsc_vector_fn=tsc.f3_vector)
+        self.compare_stats(ts, py_tsc.tree_length_f4, A, 4,
+                           tsc_fn=tsc.f4, tsc_vector_fn=tsc.f4_vector)
 
     def check_Y_stat(self, ts):
         samples = random.sample(ts.samples(), 12)
@@ -662,40 +553,6 @@ class GeneralStatsTestCase(unittest.TestCase):
                            tsc_fn=tsc.Y2, tsc_vector_fn=tsc.Y2_vector)
         self.compare_stats(ts, py_tsc.tree_length_Y1, A, 0,
                            tsc_vector_fn=tsc.Y1_vector)
-
-    def check_f4_stat(self, ts):
-        A_zero = [[x] for x in random.sample(ts.samples(), 4)]
-        A_many = [random.sample(ts.samples(), 3),
-                  random.sample(ts.samples(), 3),
-                  random.sample(ts.samples(), 3),
-                  random.sample(ts.samples(), 3)]
-        A_list = A_zero + A_many
-        tsc = msprime.TreeStatCalculator(ts)
-        py_tsc = PythonTreeStatCalculator(ts)
-        windows = [0.0, ts.sequence_length/2.0, ts.sequence_length]
-        indices = [(0, 1, 2, 3), (0, 1, 4, 5), (4, 5, 6, 7)]
-        ts_vector = tsc.f4_vector(A_list, windows, indices)
-        for k in range(len(indices)):
-            index_list = indices[k]
-            A = [A_list[i] for i in index_list]
-
-            def f(x):
-                return ((float(x[0])/len(A[0])-float(x[1])/len(A[1]))
-                        * (float(x[2])/len(A[2])-float(x[3])/len(A[3])))/2.0
-
-            here_values = [py_tsc.tree_length_f4(A[0], A[1], A[2], A[3],
-                                                 begin=windows[i], end=windows[i+1])
-                           for i in range(len(windows)-1)]
-
-            self.assertListAlmostEqual(
-                    [x[0] for x in tsc.f4(A, windows)],
-                    here_values)
-            self.assertListAlmostEqual(
-                    [x[k] for x in ts_vector],
-                    here_values)
-            self.assertAlmostEqual(
-                    py_tsc.tree_stat(A, f),
-                    py_tsc.tree_length_f4(A[0], A[1], A[2], A[3]))
 
 
 class TreeStatsTestCase(GeneralStatsTestCase):
@@ -737,27 +594,53 @@ class TreeStatsTestCase(GeneralStatsTestCase):
                           tsc.f2_vector, [[0], [1], [2], [3]], [0, ts.sequence_length],
                           [[0, 1, 2]])
 
-    def test_pairwise_diversity(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_pairwise_diversity(ts)
-        self.check_pairwise_diversity_mutations(ts)
-
-    def test_vectorization(self):
-        ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_vectorization(ts)
-
     def test_windowization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        self.check_windowization(ts)
+        samples = random.sample(ts.samples(), 2)
+        tsc = msprime.TreeStatCalculator(ts)
+        py_tsc = PythonTreeStatCalculator(ts)
+        A_one = [[samples[0]], [samples[1]]]
+        A_many = [random.sample(ts.samples(), 2),
+                  random.sample(ts.samples(), 2)]
+        some_breaks = list(set([0.0, ts.sequence_length/2, ts.sequence_length] +
+                               random.sample(list(ts.breakpoints()), 5)))
+        some_breaks.sort()
+        tiny_breaks = ([(k / 4) * list(ts.breakpoints())[1] for k in range(4)] +
+                       [ts.sequence_length])
+        wins = [[0.0, ts.sequence_length],
+                [0.0, ts.sequence_length/2, ts.sequence_length],
+                tiny_breaks,
+                some_breaks]
+
+        with self.assertRaises(ValueError):
+            tsc.tree_stat_vector(A_one, lambda x: 1.0,
+                                 windows=[0.0, 1.0, ts.sequence_length+1.1])
+
+        for A in (A_one, A_many):
+            for windows in wins:
+                n = [len(a) for a in A]
+
+                def f(x):
+                    return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
+
+                def g(x):
+                    return [f(x)]
+
+                tsdiv_v = tsc.tree_stat_vector(A, g, windows)
+                tsdiv_vx = [x[0] for x in tsdiv_v]
+                tsdiv = tsc.tree_stat_windowed(A, f, windows)
+                pydiv = py_tsc.tree_length_diversity_window(A[0], A[1], windows)
+                self.assertEqual(len(tsdiv), len(windows)-1)
+                self.assertListAlmostEqual(tsdiv, pydiv)
+                self.assertListEqual(tsdiv, tsdiv_vx)
 
     def test_derived_functions(self):
         # Test implementation of statistics using these functions.
         ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
         self.check_tree_stat_vector(ts)
+        self.check_pairwise_diversity(ts)
         self.check_tmrca_matrix(ts)
-        self.check_f2_stat(ts)
-        self.check_f3_stat(ts)
-        self.check_f4_stat(ts)
+        self.check_f_stats(ts)
         self.check_Y_stat(ts)
 
     def test_case_1(self):
@@ -826,8 +709,8 @@ class TreeStatsTestCase(GeneralStatsTestCase):
         tsc = msprime.TreeStatCalculator(ts)
         py_tsc = PythonTreeStatCalculator(ts)
         self.check_pairwise_diversity(ts)
-        self.check_pairwise_diversity_mutations(ts)
-        self.check_vectorization(ts)
+        # TODO check this:
+        # self.check_pairwise_diversity_mutations(ts)
 
         # diversity between 0 and 1
         A = [[0], [1]]
@@ -959,8 +842,6 @@ class TreeStatsTestCase(GeneralStatsTestCase):
         py_tsc = PythonTreeStatCalculator(ts)
 
         self.check_pairwise_diversity(ts)
-        self.check_pairwise_diversity_mutations(ts)
-        self.check_vectorization(ts)
 
         # divergence between 0 and 1
         A = [[0], [1]]
@@ -1034,3 +915,20 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     Tests of site statistic computation.
     """
 
+    def check_pairwise_diversity_mutations(self, ts):
+        py_tsc = PythonSiteStatCalculator(ts)
+        samples = random.sample(ts.samples(), 2)
+        A = [[samples[0]], [samples[1]]]
+        n = [len(a) for a in A]
+
+        def f(x):
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
+
+        self.assertAlmostEqual(
+                py_tsc.site_stat(A, f),
+                ts.pairwise_diversity(samples=samples))
+
+    @unittest.skip("not yet")
+    def test_pairwise_diversity(self):
+        ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
+        self.check_pairwise_diversity_mutations(ts)
