@@ -1811,7 +1811,7 @@ def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
     for t in ts.trees():
         left, right = t.interval
         if right < cur_pos:
-            next
+            continue
         while (mut_start < mutations.num_rows) and (cur_pos < right):
             if num_muts > 1:
                 # this assumes no two mutations occur at the same site AND node
