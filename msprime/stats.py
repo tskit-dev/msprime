@@ -160,7 +160,7 @@ class LdCalculator(object):
 
 class GeneralStatCalculator(object):
     """
-    A common class for TreeStatCalculator and SiteStatCalculator -- those
+    A common class for BranchLengthStatCalculator and SiteStatCalculator -- those
     implemment different `tree_stat_vector()` methods, but given that
     general-purpose function, many statistics are computed in the same way.
     """
@@ -552,11 +552,69 @@ class GeneralStatCalculator(object):
             raise ValueError("sample_sets should be of length 2.")
         return self.f2_vector(sample_sets, windows, indices=[(0, 1)])
 
+    def site_frequency_spectrum(self, sample_sets, windows):
+        """
+        Find the (single) site frequency spectrum in each of the sets in
+        sample_sets.  These are strung together after each other, so that 
+        the first `len(sample_sets[0])+1` entries give the SFS for the first
+        sample set, and so on.
+
+        :param list sample_set: A list of lists of IDs of samples.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of lists of floats, one list per window.
+        """
+        n = [len(x) for x in sample_sets]
+        nout = sum([k + 1 for k in n])
+
+        def f(x):
+            out = []
+            for k in range(len(n)):
+                out += [1 if u == x else 0 for u in range(n[k]+1)]
+            return out
+
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        for w in range(len(windows)-1):
+            for u in range(nout):
+                out[w][u] /= (windows[w+1] - windows[w])
+
+        return out
+
+    def joint_site_frequency_spectrum(self, sample_sets, windows):
+        """
+        Find the joint site frequency spectrum in the samples of `sample_sets`,
+        separately in each window.
+
+        :param list sample_sets: A list of lists of IDs of samples.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of lists of floats, each of length equal to the product
+            of the lengths of `sample_set`, which is the matrix of the joint 
+            frequency spectrum, unfolded.
+        """
+        n = [len(x) for x in sample_sets]
+        bases = np.array([np.product(n[:k]) for k in range(len(n))])
+        nout = np.product(n)
+
+        def f(x):
+            # this uses numpy broadcasting
+            p = sum(x * bases)
+            return [1 if u == p else 0 for u in range(nout)]
+
+        out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
+        # move this division outside of f(x) so it only has to happen once
+        for w in range(len(windows)-1):
+            for u in range(nout):
+                out[w][u] /= (windows[w+1] - windows[w])
+
+        return out
+
     def tree_stat(self, sample_sets, weight_fun):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
-        that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
+        that returns a weight.  A branch in a tree is weighted by weight_fun(x),
         where x[i] is the number of samples in sample_sets[i] below that
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
@@ -579,10 +637,10 @@ class GeneralStatCalculator(object):
         return [x[0] for x in out]
 
 
-class TreeStatCalculator(GeneralStatCalculator):
+class BranchLengthStatCalculator(GeneralStatCalculator):
     """
     Class for calculating a broad class of tree statistics.  These are all
-    calculated using :meth:``TreeStatCalculator.tree_stat_vector`` as the
+    calculated using :meth:``BranchLengthStatCalculator.tree_stat_vector`` as the
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
 
