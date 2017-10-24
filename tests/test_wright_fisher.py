@@ -324,7 +324,7 @@ class TestSimplify(unittest.TestCase):
         """
         for N in [5, 10, 20]:
             for surv in [0.0, 0.5, 0.9]:
-                for mut in [0.0, 0.5]:
+                for mut in [0.0, 5.0]:
                     for nloci in [np.inf, 3]:
                         tables = wf_sim(
                             N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)

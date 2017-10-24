@@ -193,3 +193,63 @@ def jiggle_samples(ts):
     flags[oldest_parent - n // 2: oldest_parent] = 1
     nodes.set_columns(flags, nodes.time)
     return msprime.load_tables(nodes=nodes, edges=tables.edges)
+
+
+def generate_site_mutations(tree, position, mu, site_table, mutation_table,
+                            multiple_per_node=True):
+    """
+    Generates mutations for the site at the specified position on the specified
+    tree. Mutations happen at rate mu along each branch. The site and mutation
+    information are recorded in the specified tables.  Note that this records
+    more than one mutation per edge.
+    """
+    assert tree.interval[0] <= position < tree.interval[1]
+    states = {"A", "C", "G", "T"}
+    state = random.choice(list(states))
+    site_table.add_row(position, state)
+    site = site_table.num_rows - 1
+    stack = [(tree.root, state, msprime.NULL_MUTATION)]
+    while len(stack) != 0:
+        u, state, parent = stack.pop()
+        if u != tree.root:
+            branch_length = tree.branch_length(u)
+            x = random.expovariate(mu)
+            new_state = state
+            while x < branch_length:
+                new_state = random.choice(list(states - set(state)))
+                if multiple_per_node and (state != new_state):
+                    mutation_table.add_row(site, u, new_state, parent)
+                    parent = mutation_table.num_rows - 1
+                    state = new_state
+                x += random.expovariate(mu)
+            else:
+                if (not multiple_per_node) and (state != new_state):
+                    mutation_table.add_row(site, u, new_state, parent)
+                    parent = mutation_table.num_rows - 1
+                    state = new_state
+        stack.extend(reversed([(v, state, parent) for v in tree.children(u)]))
+
+
+def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
+    """
+    Returns a copy of the specified tree sequence with Jukes-Cantor mutations
+    applied at the specfied rate at the specifed number of sites. Site positions
+    are chosen uniformly.
+    """
+    random.seed(seed)
+    positions = [ts.sequence_length * random.random() for _ in range(num_sites)]
+    positions.sort()
+    sites = msprime.SiteTable(num_sites)
+    mutations = msprime.MutationTable(num_sites)
+    trees = ts.trees()
+    t = next(trees)
+    for position in positions:
+        while position >= t.interval[1]:
+            t = next(trees)
+        generate_site_mutations(t, position, mu, sites, mutations,
+                                multiple_per_node=multiple_per_node)
+    tables = ts.dump_tables()
+    new_ts = msprime.load_tables(
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+    return new_ts
+

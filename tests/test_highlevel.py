@@ -2265,3 +2265,31 @@ class TestMutationParent(unittest.TestCase):
         mp = msprime.compute_mutation_parent(sites=tabs.sites,
                                              mutations=tabs.mutations, ts=ts)
         self.assertTrue(np.all(mp == -1))
+
+    def test_with_jukes_cantor(self):
+        ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
+                              recombination_rate=1.0)
+        # make *lots* of recurrent mutations
+        mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
+                                     multiple_per_node=False, seed=self.seed)
+        tabs = mut_ts.dump_tables()
+        mp = msprime.compute_mutation_parent(sites=tabs.sites,
+                                             mutations=tabs.mutations, ts=ts)
+        print(tabs)
+        print("mp:", mp)
+        self.assertTrue(np.all(mp == tabs.mutations.parent))
+
+    @unittest.skip("more than one mutation per node")
+    def test_with_jukes_cantor_multiple_per_node(self):
+        ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
+                              recombination_rate=1.0)
+        # make *lots* of recurrent mutations
+        mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
+                                     multiple_per_node=True, seed=self.seed)
+        tabs = mut_ts.dump_tables()
+        mp = msprime.compute_mutation_parent(sites=tabs.sites,
+                                             mutations=tabs.mutations, ts=ts)
+        print(tabs)
+        print("mp:", mp)
+        self.assertTrue(np.all(mp == tabs.mutations.parent))
+
