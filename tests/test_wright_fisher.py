@@ -27,9 +27,11 @@ import random
 import unittest
 
 import numpy as np
+import numpy.testing as nt
 
 import msprime
 import tests
+import tests.tsutil as tsutil
 
 
 class WrightFisherSimulator(object):
@@ -38,15 +40,19 @@ class WrightFisherSimulator(object):
     for ngens generations, in which each individual survives with probability
     survival and only those who die are replaced.  The chromosome is 1.0
     Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
+    Setting `nloci` to something finite allows recurrent mutations.
+
+    Note that this does *not* compute the mutation parent column.
     """
     def __init__(
             self, N, survival=0.0, mutation_rate=0.0, seed=None, deep_history=True,
-            debug=False):
+            nloci=np.Inf, debug=False):
         self.N = N
         self.survival = survival
         self.mutation_rate = mutation_rate
         self.deep_history = deep_history
         self.debug = debug
+        self.nloci = nloci
         if seed is not None:
             random.seed(seed)
 
@@ -55,7 +61,10 @@ class WrightFisherSimulator(object):
 
     def random_mutations(self):
         nmuts = np.random.poisson(lam=self.mutation_rate)
-        return [random.random() for _ in range(nmuts)]
+        muts = [random.random() for _ in range(nmuts)]
+        if np.isfinite(self.nloci):
+            muts = [np.floor(x * self.nloci)/self.nloci for x in muts]
+        return muts
 
     def random_allele(self):
         return random.choice(['A', 'C', 'G', 'T'])
@@ -108,10 +117,10 @@ class WrightFisherSimulator(object):
                         edges.add_row(
                             left=bp, right=1.0, parent=rparent, child=offspring)
                     for mut in muts:
-                        assert mut not in mut_positions
-                        mut_positions[mut] = sites.num_rows
-                        sites.add_row(
-                            position=mut, ancestral_state=self.random_allele())
+                        if mut not in mut_positions:
+                            mut_positions[mut] = sites.num_rows
+                            sites.add_row(
+                                position=mut, ancestral_state=self.random_allele())
                         mutations.add_row(
                             site=mut_positions[mut], node=offspring,
                             derived_state=self.random_allele())
@@ -139,11 +148,27 @@ class WrightFisherSimulator(object):
 
 def wf_sim(
         N, ngens, survival=0.0, mutation_rate=0.0, deep_history=True, debug=False,
-        seed=None):
+        nloci=np.Inf, seed=None):
     sim = WrightFisherSimulator(
         N, survival=survival, mutation_rate=mutation_rate, deep_history=deep_history,
-        debug=debug, seed=seed)
+        debug=debug, nloci=nloci, seed=seed)
     return sim.run(ngens)
+
+
+def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
+                        migrations=None):
+    """
+    Before loading the tables into a tree sequence, we need to add the mutation
+    parent column.  Note that these must be sorted.
+    """
+    ts = msprime.load_tables(nodes=nodes, edges=edges, sites=sites,
+                             mutations=mutations, migrations=migrations)
+    mp = tsutil.compute_mutation_parent(ts)
+    mutations.set_columns(
+        site=mutations.site,
+        derived_state=mutations.derived_state,
+        derived_state_length=mutations.derived_state_length,
+        node=mutations.node, parent=mp)
 
 
 class TestSimulation(unittest.TestCase):
@@ -247,12 +272,44 @@ class TestSimulation(unittest.TestCase):
         nodes = tables.nodes
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         msprime.sort_tables(**tables.asdict())
+        add_mutation_parent(**tables.asdict())
         msprime.simplify_tables(
             samples=samples, nodes=tables.nodes, edges=tables.edges,
             sites=tables.sites, mutations=tables.mutations)
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
         self.assertGreater(tables.sites.num_rows, 0)
+        self.assertGreater(tables.mutations.num_rows, 0)
+        ts = msprime.load_tables(**tables.asdict())
+        self.assertEqual(ts.sample_size, N)
+        for hap in ts.haplotypes():
+            self.assertEqual(len(hap), ts.num_sites)
+
+    def test_with_recurrent_mutations(self):
+        # actually with only ONE site, at 0.0
+        N = 10
+        ngens = 100
+        tables = wf_sim(
+            N=N, ngens=ngens, mutation_rate=10.0, deep_history=False,
+            nloci=1, seed=self.random_seed)
+        self.assertEqual(tables.sites.num_rows, 1)
+        self.assertEqual(tables.sites.position, 0.0)
+        self.assertGreater(tables.mutations.num_rows, 0)
+        nodes = tables.nodes
+        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+        msprime.sort_tables(**tables.asdict())
+        add_mutation_parent(**tables.asdict())
+        # before simplify
+        ts = msprime.load_tables(**tables.asdict())
+        for h in ts.haplotypes():
+            self.assertEqual(len(h), 1)
+        # after simplify
+        msprime.simplify_tables(
+            samples=samples, nodes=tables.nodes, edges=tables.edges,
+            sites=tables.sites, mutations=tables.mutations)
+        self.assertGreater(tables.nodes.num_rows, 0)
+        self.assertGreater(tables.edges.num_rows, 0)
+        self.assertEqual(tables.sites.num_rows, 1)
         self.assertGreater(tables.mutations.num_rows, 0)
         ts = msprime.load_tables(**tables.asdict())
         self.assertEqual(ts.sample_size, N)
@@ -271,6 +328,9 @@ class TestSimplify(unittest.TestCase):
     """
     Tests for simplify on cases generated by the Wright-Fisher simulator.
     """
+    def assertArrayEqual(self, x, y):
+        nt.assert_equal(x, y)
+
     def assertTreeSequencesEqual(self, ts1, ts2):
         self.assertEqual(list(ts1.samples()), list(ts2.samples()))
         self.assertEqual(ts1.sequence_length, ts2.sequence_length)
@@ -290,17 +350,15 @@ class TestSimplify(unittest.TestCase):
         """
         for N in [5, 10, 20]:
             for surv in [0.0, 0.5, 0.9]:
-                for mut in [0.0, 0.5]:
-                    tables = wf_sim(
-                        N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
-                    msprime.sort_tables(
-                        nodes=tables.nodes, edges=tables.edges,
-                        sites=tables.sites, mutations=tables.mutations)
-                    ts = msprime.load_tables(
-                        nodes=tables.nodes, edges=tables.edges,
-                        sites=tables.sites, mutations=tables.mutations)
-                    self.verify_simulation(ts, ngens=N)
-                    yield ts
+                for mut in [0.0, 5.0]:
+                    for nloci in [np.inf, 3]:
+                        tables = wf_sim(
+                            N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
+                        msprime.sort_tables(**tables.asdict())
+                        add_mutation_parent(**tables.asdict())
+                        ts = msprime.load_tables(**tables.asdict())
+                        self.verify_simulation(ts, ngens=N)
+                        yield ts
 
     def verify_simulation(self, ts, ngens):
         """
@@ -328,7 +386,8 @@ class TestSimplify(unittest.TestCase):
     def verify_simplify(self, ts, new_ts, samples, node_map):
         """
         Check that trees in `ts` match `new_ts` using the specified node_map.
-        Modified from `verify_simplify_topology`.
+        Modified from `verify_simplify_topology`.  Also check that the `parent`
+        column in the MutationTable is correct.
         """
         # check trees agree at these points
         locs = [random.random() for _ in range(20)]
@@ -360,6 +419,8 @@ class TestSimplify(unittest.TestCase):
                 mrca2 = new_tree.get_mrca(*mapped_pair)
                 self.assertNotEqual(mrca2, msprime.NULL_NODE)
                 self.assertEqual(node_map[mrca1], mrca2)
+        mut_parent = tsutil.compute_mutation_parent(ts=ts)
+        self.assertArrayEqual(mut_parent, ts.tables.mutations.parent)
 
     def verify_haplotypes(self, ts, samples):
         """
