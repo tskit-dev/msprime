@@ -245,8 +245,13 @@ class TestDrawUnicode(TestDrawText):
     drawing_format = "unicode"
     example_label = "\u20ac" * 10  # euro symbol
 
-    def verify_text_rendering(self, tree, drawn_tree):
+    def verify_text_rendering(self, tree, drawn_tree, debug=False):
         drawn = tree.draw(format="unicode")
+        if debug:
+            print("Drawn:")
+            print(drawn)
+            print("Expected:")
+            print(drawn_tree)
         tree_lines = drawn_tree.splitlines()
         drawn_lines = drawn.splitlines()
         self.assertEqual(len(tree_lines), len(drawn_lines))
@@ -316,6 +321,28 @@ class TestDrawUnicode(TestDrawText):
             "   4   \n"
             "┏━┳┻┳━┓\n"
             "0 1 2 3\n")
+        ts = msprime.load_text(nodes, edges)
+        t = next(ts.trees())
+        self.verify_text_rendering(t, tree)
+
+    def test_stick_tree(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   1           0
+        1   1           1
+        2   1           2
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       1       0
+        0       1       2       1
+        """)
+        tree = (
+           "2\n"
+           "┃\n"
+           "1\n"
+           "┃\n"
+           "0\n")
         ts = msprime.load_text(nodes, edges)
         t = next(ts.trees())
         self.verify_text_rendering(t, tree)
