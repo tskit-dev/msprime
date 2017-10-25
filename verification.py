@@ -630,6 +630,105 @@ class SimulationVerifier(object):
         pyplot.savefig(filename)
         pyplot.close('all')
 
+
+    def _get_xiDirac_mutation_stats(self, sample_size, num_repeat, mut_rate, rec_rate, num_loci):
+        output = open("tmp", "w")
+        output.write("msprimedirac "+str(sample_size)+ " " +str(num_repeat) +"\n1 1 1\n")
+        model = msprime.DiracCoalescent(psi=0.99, c=0)
+        rep_ts = msprime.simulate(sample_size,
+            recombination_rate = rec_rate,
+            mutation_rate = mut_rate / 4,  # See line 317, theta divide by 4
+            length = num_loci,
+            model=model,
+            num_replicates = num_repeat)
+        for i, ts in enumerate(rep_ts):
+            print("\n//", file = output)
+            print("segsites: " + str(ts.get_num_mutations()), file = output)
+            print("positions: " + ' '.join(str(mutation.position / num_loci) for mutation in
+                        ts.mutations()), file = output)
+            for hap in ts.haplotypes():
+                print(hap, file = output)
+        output.close()
+
+    def _run_xiDirac_mutation_stats(self, sample_size, num_repeat, theta, r, num_loci):
+        self._get_xiDirac_mutation_stats(sample_size, num_repeat, theta/num_loci, r/(num_loci-1), num_loci)
+        p1 = subprocess.Popen(["cat", "tmp"], stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(
+            ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE)
+        p1.stdout.close()
+        output = p2.communicate()[0]
+        with tempfile.TemporaryFile() as f:
+            f.write(output)
+            f.seek(0)
+            df = pd.read_table(f)
+        return df
+
+
+    def _run_xiDirac_coalescent_stats(self, sample_size, num_repeat, r, num_loci):
+        print("\t msprime dirac")
+        replicates = num_repeat
+        model = msprime.DiracCoalescent(psi=0.99, c=0)
+        sim = msprime.simulator_factory(sample_size = sample_size,
+                recombination_map = msprime.RecombinationMap.uniform_map(
+                    num_loci, r / (num_loci - 1), num_loci),
+                model=model)
+        num_populations = sim.num_populations
+
+        num_trees = [0 for j in range(replicates)]
+        time = [0 for j in range(replicates)]
+        ca_events = [0 for j in range(replicates)]
+        re_events = [0 for j in range(replicates)]
+        mig_events = [None for j in range(replicates)]
+
+        for j in range(replicates):
+            sim.reset()
+            sim.run()
+            num_trees[j] = sim.num_breakpoints + 1
+            time[j] = sim.time / 4  # Convert to coalescent units
+            ### THIS IS NOT RIGHT, this following line will work, but it is not right
+            #time[j] = sim.time  # Convert to coalescent units
+            ca_events[j] = sim.num_common_ancestor_events
+            re_events[j] = sim.num_recombination_events
+            mig_events[j] = [r for row in sim.num_migration_events for r in row]
+        d = {
+            "t": time, "num_trees": num_trees,
+            "ca_events": ca_events, "re_events": re_events}
+        for j in range(num_populations**2):
+            events = [mig_events[k][j] for k in range(replicates)]
+            d["mig_events_{}".format(j)] = events
+        df = pd.DataFrame(d)
+        return df
+
+
+    def run_xiDirac_kingman_check(self):
+        print("Let's test here")
+        sample_size = 15
+        num_replicates = 10000
+        theta = 10.04
+        r = 100.0
+        num_loci = 2501
+        basedir = "tmp__NOBACKUP__/xiDirac_kingman"
+        args = "{} {} -t {} -r {} {}".format(
+            sample_size, num_replicates, theta, r, num_loci)
+        df_msp_dirac = self._run_xiDirac_mutation_stats(sample_size, num_replicates, theta, r, num_loci)
+        df_msp = self._run_msprime_mutation_stats(args)
+        self._plot_stats("xiDirac_kingman", "mutation", df_msp, df_msp_dirac)
+        df_ms = self._run_ms_mutation_stats(args)
+        self._plot_stats("xiDirac_kingman", "ms_mutation", df_ms, df_msp)
+        df_msp_dirac = self._run_xiDirac_coalescent_stats(sample_size, num_replicates, r, num_loci)
+        df_msp = self._run_msprime_coalescent_stats(args)
+        self._plot_stats("xiDirac_kingman", "coalescent", df_msp, df_msp_dirac)
+        df_ms = self._run_ms_coalescent_stats(args)
+        self._plot_stats("xiDirac_kingman", "ms_coalescent", df_ms, df_msp)
+
+
+    def add_xiDirac_vs_kingman_coalescent_check(self):
+        """
+        Adds a check for xiDirac the same as kingman coalescent
+        """
+        self._instances["xiDirac_kingman"] = self.run_xiDirac_kingman_check
+
+
     def add_s_analytical_check(self):
         """
         Adds a check for the analytical predictions about the distribution
@@ -887,6 +986,9 @@ def main():
     # Add SMC checks against scrm.
     verifier.add_smc_num_trees_analytical_check()
     verifier.add_smc_oldest_time_check()
+
+    # Add XiDirac checks against standard coalescent.
+    verifier.add_xiDirac_vs_kingman_coalescent_check()
 
     keys = None
     if len(sys.argv) > 1:
