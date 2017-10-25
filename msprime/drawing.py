@@ -308,8 +308,11 @@ class TextTreeDrawer(TreeDrawer):
                         canvas[row * w + col] = self.mid_up_down_char
                     for j in range(row + 1, self._y_coords[v]):
                         canvas[j * w + col] = self.vertical_line_char
-                canvas[row * w + left] = self.left_down_char
-                canvas[row * w + right] = self.right_down_char
+                if left == right:
+                    canvas[row * w + left] = self.vertical_line_char
+                else:
+                    canvas[row * w + left] = self.left_down_char
+                    canvas[row * w + right] = self.right_down_char
 
         # Put in the EOLs last so that if we can't overwrite them.
         for row in range(h):
