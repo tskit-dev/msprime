@@ -396,10 +396,7 @@ class TestSimplify(unittest.TestCase):
                 mrca2 = new_tree.get_mrca(*mapped_pair)
                 self.assertNotEqual(mrca2, msprime.NULL_NODE)
                 self.assertEqual(node_map[mrca1], mrca2)
-        mut_parent = msprime.compute_mutation_parent(sites=ts.tables.sites,
-                                                     mutations=ts.tables.mutations,
-                                                     nodes=ts.tables.nodes,
-                                                     edges=ts.tables.edges)
+        mut_parent = msprime.compute_mutation_parent(ts=ts)
         self.assertArrayEqual(mut_parent, ts.tables.mutations.parent)
 
     def verify_haplotypes(self, ts, samples):

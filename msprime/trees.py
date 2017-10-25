@@ -1781,58 +1781,41 @@ class TreeSequence(object):
             " method instead")
 
 
-def compute_mutation_parent(sites, mutations, nodes=None, edges=None, ts=None):
+def compute_mutation_parent(ts):
     """
-    (Re-)compute the `parent` column of a MutationTable.
+    (Re-)compute the `parent` column of a MutationTable. Doing this uses
+    topological information in the nodes and edgesets, as well as the fact that
+    each mutation must be listed after the mutation on whose background it occurred
+    (i.e., its parent).
 
-    :param SiteTable sites: The SiteTable for the tree sequence.
-    :param MutationTable mutations: The MutationTable to compute the parent
-        column for.
-    :param NodeTable nodes: The NodeTable for the tree sequence.
-    :param EdgeTable edges: The EdgeTable for the tree sequence.
-    :param TreeSequence ts: If provided, this contains the Node and Edge
-        relationships that SiteTable refers to.  If it is not provided,
-        `nodes` and `edges` will be loaded (internally) into a TreeSequence.
+    :param TreeSequence ts: The tree sequence to compute for.  Need not
+        have a valid mutation parent column.
     """
-    if mutations.num_rows == 0:
+    if ts.num_mutations == 0:
         return []
-    if ts is None:
-        ts = load_tables(nodes=nodes, edges=edges)
-    new_parent = np.repeat(-1, [mutations.num_rows])
     # sites are ordered by position,
     #  and mutations by site.
-    mut_start = 0
-    cur_site = mutations.site[mut_start]
-    cur_pos = sites.position[cur_site]
-    num_muts = 1
-    while ((mut_start + num_muts < mutations.num_rows)
-           and (mutations.site[mut_start + num_muts] == cur_site)):
-        num_muts += 1
+    mutation_parent = np.repeat(-1, [ts.num_mutations])
     for t in ts.trees():
-        left, right = t.interval
-        if right < cur_pos:
-            continue
-        while (mut_start < mutations.num_rows) and (cur_pos < right):
-            if num_muts > 1:
-                # this assumes no two mutations occur at the same site AND node
-                mut_nodes = [mutations.node[mut_start + u] for u in range(num_muts)]
-                # this effectively finds the subtree corresponding to mut_nodes
-                for u in range(num_muts):
-                    n = t.parent(mut_nodes[u])
-                    while (n != NULL_NODE) and not (n in mut_nodes):
-                        n = t.parent(n)
-                    if n != -1:
-                        new_parent[mut_start + u] = mut_start + mut_nodes.index(n)
+        for site in t.sites():
+            # If there is more than one mutation on a given node,
+            # they will be in time-increasing order.
+            print("site: --------", t)
+            node_map = {}
+            for mut in site.mutations:
+                u = mut.node
+                while u != NULL_NODE and u not in node_map:
+                    print(".", u)
+                    u = t.parent(u)
+                if u != NULL_NODE:
+                    print("parent", node_map[u].id)
+                    mutation_parent[mut.id] = node_map[u].id
                     # # for checking, we would
-                    # assert n == mutations.parent[mut_start + u]
-            # ok, on to the next position
-            mut_start = mut_start + num_muts
-            if mut_start >= mutations.num_rows:
-                break
-            cur_site = mutations.site[mut_start]
-            cur_pos = sites.position[cur_site]
-            num_muts = 1
-            while ((mut_start + num_muts < mutations.num_rows)
-                   and (mutations.site[mut_start + num_muts] == cur_site)):
-                num_muts += 1
-    return new_parent
+                    # assert node_map[u].id == mut.parent
+                node_map[mut.node] = mut
+                print("adding", mut.id, "to", u)
+            print("...........")
+            for mut in site.mutations:
+                print(mutation_parent[mut.id], mut)
+    print("-----------  DONE")
+    return mutation_parent

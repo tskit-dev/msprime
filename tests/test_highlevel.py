@@ -2245,25 +2245,14 @@ class TestMutationParent(unittest.TestCase):
                            sites=sites, mutations=mutations)
     tabs = ts.dump_tables()
 
-    def test_tables_interface(self):
-        mp = msprime.compute_mutation_parent(sites=self.tabs.sites,
-                                             mutations=self.tabs.mutations,
-                                             nodes=self.tabs.nodes,
-                                             edges=self.tabs.edges)
-        self.assertTrue(np.all(mp == self.tabs.mutations.parent))
-
-    def test_ts_interface(self):
-        mp = msprime.compute_mutation_parent(sites=self.tabs.sites,
-                                             mutations=self.tabs.mutations,
-                                             ts=self.ts)
+    def test_interface(self):
+        mp = msprime.compute_mutation_parent(ts=self.ts)
         self.assertTrue(np.all(mp == self.tabs.mutations.parent))
 
     def test_single_muts(self):
         ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=3.0,
                               recombination_rate=1.0)
-        tabs = ts.dump_tables()
-        mp = msprime.compute_mutation_parent(sites=tabs.sites,
-                                             mutations=tabs.mutations, ts=ts)
+        mp = msprime.compute_mutation_parent(ts=ts)
         self.assertTrue(np.all(mp == -1))
 
     def test_with_jukes_cantor(self):
@@ -2273,13 +2262,11 @@ class TestMutationParent(unittest.TestCase):
         mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
                                      multiple_per_node=False, seed=self.seed)
         tabs = mut_ts.dump_tables()
-        mp = msprime.compute_mutation_parent(sites=tabs.sites,
-                                             mutations=tabs.mutations, ts=ts)
+        mp = msprime.compute_mutation_parent(ts=mut_ts)
         print(tabs)
         print("mp:", mp)
         self.assertTrue(np.all(mp == tabs.mutations.parent))
 
-    @unittest.skip("more than one mutation per node")
     def test_with_jukes_cantor_multiple_per_node(self):
         ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
                               recombination_rate=1.0)
@@ -2287,9 +2274,7 @@ class TestMutationParent(unittest.TestCase):
         mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
                                      multiple_per_node=True, seed=self.seed)
         tabs = mut_ts.dump_tables()
-        mp = msprime.compute_mutation_parent(sites=tabs.sites,
-                                             mutations=tabs.mutations, ts=ts)
+        mp = msprime.compute_mutation_parent(ts=mut_ts)
         print(tabs)
         print("mp:", mp)
         self.assertTrue(np.all(mp == tabs.mutations.parent))
-

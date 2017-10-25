@@ -252,4 +252,3 @@ def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
     new_ts = msprime.load_tables(
         nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
     return new_ts
-
