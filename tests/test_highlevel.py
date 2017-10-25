@@ -2200,7 +2200,8 @@ class TestNodeOrdering(HighLevelTestCase):
 
 class TestMutationParent(unittest.TestCase):
     """
-    Tests for the compute_mutation_parent function.
+    Tests that mutation parent is correctly specified, and that we correctly
+    recompute it with compute_mutation_parent.
     """
     seed = 42
     nodes = six.StringIO("""\
@@ -2246,14 +2247,15 @@ class TestMutationParent(unittest.TestCase):
     tabs = ts.dump_tables()
 
     def test_interface(self):
-        mp = msprime.compute_mutation_parent(ts=self.ts)
+        mp = tsutil.compute_mutation_parent(ts=self.ts)
         self.assertTrue(np.all(mp == self.tabs.mutations.parent))
 
     def test_single_muts(self):
         ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=3.0,
                               recombination_rate=1.0)
-        mp = msprime.compute_mutation_parent(ts=ts)
-        self.assertTrue(np.all(mp == -1))
+        mp = tsutil.compute_mutation_parent(ts=ts)
+        for u in mp:
+            self.assertEqual(u, -1)
 
     def test_with_jukes_cantor(self):
         ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
@@ -2262,10 +2264,11 @@ class TestMutationParent(unittest.TestCase):
         mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
                                      multiple_per_node=False, seed=self.seed)
         tabs = mut_ts.dump_tables()
-        mp = msprime.compute_mutation_parent(ts=mut_ts)
+        mp = tsutil.compute_mutation_parent(ts=mut_ts)
         print(tabs)
         print("mp:", mp)
-        self.assertTrue(np.all(mp == tabs.mutations.parent))
+        for u, v in zip(mp, tabs.mutations.parent):
+            self.assertEqual(u, v)
 
     def test_with_jukes_cantor_multiple_per_node(self):
         ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
@@ -2274,7 +2277,8 @@ class TestMutationParent(unittest.TestCase):
         mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
                                      multiple_per_node=True, seed=self.seed)
         tabs = mut_ts.dump_tables()
-        mp = msprime.compute_mutation_parent(ts=mut_ts)
+        mp = tsutil.compute_mutation_parent(ts=mut_ts)
         print(tabs)
         print("mp:", mp)
-        self.assertTrue(np.all(mp == tabs.mutations.parent))
+        for u, v in zip(mp, tabs.mutations.parent):
+            self.assertEqual(u, v)

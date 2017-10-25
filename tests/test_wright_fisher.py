@@ -31,6 +31,7 @@ import numpy.testing as nt
 
 import msprime
 import tests
+import tests.tsutil as tsutil
 
 
 class WrightFisherSimulator(object):
@@ -40,6 +41,8 @@ class WrightFisherSimulator(object):
     survival and only those who die are replaced.  The chromosome is 1.0
     Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
     Setting `nloci` to something finite allows recurrent mutations.
+
+    Note that this does *not* compute the mutation parent column.
     """
     def __init__(
             self, N, survival=0.0, mutation_rate=0.0, seed=None, deep_history=True,
@@ -152,6 +155,22 @@ def wf_sim(
     return sim.run(ngens)
 
 
+def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
+                        migrations=None):
+    """
+    Before loading the tables into a tree sequence, we need to add the mutation
+    parent column.  Note that these must be sorted.
+    """
+    ts = msprime.load_tables(nodes=nodes, edges=edges, sites=sites,
+                             mutations=mutations, migrations=migrations)
+    mp = tsutil.compute_mutation_parent(ts)
+    mutations.set_columns(
+        site=mutations.site,
+        derived_state=mutations.derived_state,
+        derived_state_length=mutations.derived_state_length,
+        node=mutations.node, parent=mp)
+
+
 class TestSimulation(unittest.TestCase):
     """
     Tests that the simulations produce the output we expect.
@@ -253,6 +272,7 @@ class TestSimulation(unittest.TestCase):
         nodes = tables.nodes
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         msprime.sort_tables(**tables.asdict())
+        add_mutation_parent(**tables.asdict())
         msprime.simplify_tables(
             samples=samples, nodes=tables.nodes, edges=tables.edges,
             sites=tables.sites, mutations=tables.mutations)
@@ -278,6 +298,12 @@ class TestSimulation(unittest.TestCase):
         nodes = tables.nodes
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         msprime.sort_tables(**tables.asdict())
+        add_mutation_parent(**tables.asdict())
+        # before simplify
+        ts = msprime.load_tables(**tables.asdict())
+        for h in ts.haplotypes():
+            self.assertEqual(len(h), 1)
+        # after simplify
         msprime.simplify_tables(
             samples=samples, nodes=tables.nodes, edges=tables.edges,
             sites=tables.sites, mutations=tables.mutations)
@@ -328,12 +354,9 @@ class TestSimplify(unittest.TestCase):
                     for nloci in [np.inf, 3]:
                         tables = wf_sim(
                             N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
-                        msprime.sort_tables(
-                            nodes=tables.nodes, edges=tables.edges,
-                            sites=tables.sites, mutations=tables.mutations)
-                        ts = msprime.load_tables(
-                            nodes=tables.nodes, edges=tables.edges,
-                            sites=tables.sites, mutations=tables.mutations)
+                        msprime.sort_tables(**tables.asdict())
+                        add_mutation_parent(**tables.asdict())
+                        ts = msprime.load_tables(**tables.asdict())
                         self.verify_simulation(ts, ngens=N)
                         yield ts
 
@@ -396,7 +419,7 @@ class TestSimplify(unittest.TestCase):
                 mrca2 = new_tree.get_mrca(*mapped_pair)
                 self.assertNotEqual(mrca2, msprime.NULL_NODE)
                 self.assertEqual(node_map[mrca1], mrca2)
-        mut_parent = msprime.compute_mutation_parent(ts=ts)
+        mut_parent = tsutil.compute_mutation_parent(ts=ts)
         self.assertArrayEqual(mut_parent, ts.tables.mutations.parent)
 
     def verify_haplotypes(self, ts, samples):
