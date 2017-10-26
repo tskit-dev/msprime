@@ -32,6 +32,7 @@ import numpy.testing as nt
 import six
 
 import msprime
+import tests.tsutil as tsutil
 
 
 def path_length(tr, x, y):
@@ -73,9 +74,6 @@ class PythonBranchLengthStatCalculator(object):
                     u = tr.parent(u)
             print("S=", S)
             for u in tr.nodes():
-                print("u=", u)
-                print("X[u]=", X[u])
-                print("S[X[u]]=", S[X[u]])
                 if u != tr.root:
                     S[X[u]] += tr.branch_length(u) * tr_len
         for j in range(nout):
@@ -369,7 +367,7 @@ class PythonSiteStatCalculator(object):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
                 for x in X:
                     for y in Y:
-                        for z in set(Y) - set(y):
+                        for z in set(Y) - set([y]):
                             if ((haps[x][k] != haps[y][k])
                                and (haps[y][k] == haps[z][k])):
                                 # x|yz
@@ -385,7 +383,7 @@ class PythonSiteStatCalculator(object):
         for k in range(self.tree_sequence.num_sites):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
                 for x in X:
-                    for y in set(X) - set(x):
+                    for y in set(X) - set([x]):
                         for z in set(X) - set([x, y]):
                             if ((haps[x][k] != haps[y][k])
                                and (haps[y][k] == haps[z][k])):
@@ -690,6 +688,329 @@ class GeneralStatsTestCase(unittest.TestCase):
                            tsc_vector_fn=tsc.Y1_vector)
 
 
+class SpecificTreesTestCase(GeneralStatsTestCase):
+    seed = 21
+
+    def test_case_1(self):
+        # With mutations:
+        #
+        # 1.0          6
+        # 0.7         / \                                    5
+        #            /   X                                  / \
+        # 0.5       X     4                4               /   4
+        #          /     / \              / \             /   X X
+        # 0.4     X     X   \            X   3           X   /   \
+        #        /     /     X          /   / X         /   /     \
+        # 0.0   0     1       2        1   0   2       0   1       2
+        #          (0.0, 0.2),        (0.2, 0.8),       (0.8, 1.0)
+        #
+        branch_true_diversity_01 = 2*(1 * (0.2-0) + 0.5 * (0.8-0.2) + 0.7 * (1.0-0.8))
+        branch_true_diversity_02 = 2*(1 * (0.2-0) + 0.4 * (0.8-0.2) + 0.7 * (1.0-0.8))
+        branch_true_diversity_12 = 2*(0.5 * (0.2-0) + 0.5 * (0.8-0.2) + 0.5 * (1.0-0.8))
+        branch_true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
+        # site_true_diversity_01 = 4 + 1 + 2
+        # site_true_diversity_02 = 4 + 1 + 2
+        # site_true_diversity_12 = 2 + 2 + 2
+        site_true_Y = 3 + 0 + 1
+
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           0.4
+        4       0           0.5
+        5       0           0.7
+        6       0           1.0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0.2     0.8     3       0,2
+        0.0     0.2     4       1,2
+        0.2     0.8     4       1,3
+        0.8     1.0     4       1,2
+        0.8     1.0     5       0,4
+        0.0     0.2     6       0,4
+        """)
+        sites = six.StringIO("""\
+        id  position    ancestral_state
+        0   0.05        0
+        1   0.1         0
+        2   0.11        0
+        3   0.15        0
+        4   0.151       0
+        5   0.3         0
+        6   0.6         0
+        7   0.9         0
+        8   0.95        0
+        9   0.951       0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state
+        0       4       1
+        1       0       1
+        2       2       1
+        3       0       1
+        4       1       1
+        5       1       1
+        6       2       1
+        7       0       1
+        8       1       1
+        9       2       1
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+        branch_tsc = msprime.BranchLengthStatCalculator(ts)
+        py_branch_tsc = PythonBranchLengthStatCalculator(ts)
+        site_tsc = msprime.SiteStatCalculator(ts)
+        py_site_tsc = PythonSiteStatCalculator(ts)
+
+        # diversity between 0 and 1
+        A = [[0], [1]]
+
+        def f(x):
+            return float((x[0] > 0) != (x[1] > 0))/2.0
+
+        # tree lengths:
+        self.assertAlmostEqual(py_branch_tsc.tree_length_diversity([0], [1]),
+                               branch_true_diversity_01)
+        self.assertAlmostEqual(branch_tsc.tree_stat(A, f),
+                               branch_true_diversity_01)
+        self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f),
+                               branch_true_diversity_01)
+
+        # mean diversity between [0, 1] and [0, 2]:
+        branch_true_mean_diversity = (0 + branch_true_diversity_02
+                                      + branch_true_diversity_01
+                                      + branch_true_diversity_12)/4
+        A = [[0, 1], [0, 2]]
+        n = [len(a) for a in A]
+
+        def f(x):
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
+
+        # tree lengths:
+        self.assertAlmostEqual(py_branch_tsc.tree_length_diversity(A[0], A[1]),
+                               branch_true_mean_diversity)
+        self.assertAlmostEqual(branch_tsc.tree_stat(A, f),
+                               branch_true_mean_diversity)
+        self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f),
+                               branch_true_mean_diversity)
+
+        # Y-statistic for (0/12)
+        A = [[0], [1, 2]]
+
+        def f(x):
+            return float(((x[0] == 1) and (x[1] == 0))
+                         or ((x[0] == 0) and (x[1] == 2)))/2.0
+
+        # tree lengths:
+        branch_tsc_Y = branch_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
+        py_branch_tsc_Y = py_branch_tsc.Y3([0], [1], [2], 0.0, 1.0)
+        self.assertAlmostEqual(branch_tsc_Y, branch_true_Y)
+        self.assertAlmostEqual(py_branch_tsc_Y, branch_true_Y)
+        self.assertAlmostEqual(branch_tsc.tree_stat(A, f), branch_true_Y)
+        self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f), branch_true_Y)
+
+        # sites:
+        site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
+        py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
+        print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(site_tsc.tree_stat(A, f), site_true_Y)
+        self.assertAlmostEqual(py_site_tsc.tree_stat(A, f), site_true_Y)
+
+    def test_case_2(self):
+        # Here are the trees:
+        # t                  |              |              |             |
+        #
+        # 0       --3--      |     --3--    |     --3--    |    --3--    |    --3--
+        #        /  |  \     |    /  |  \   |    /     \   |   /     \   |   /     \
+        # 1     4   |   5    |   4   |   5  |   4       5  |  4       5  |  4       5
+        #       |\ / \ /|    |   |\   \     |   |\     /   |  |\     /   |  |\     /|
+        # 2     | 6   7 |    |   | 6   7    |   | 6   7    |  | 6   7    |  | 6   7 |
+        #       | |\ /| |    |   *  \  |    |   |  \  |    |  |  \       |  |  \    | ...
+        # 3     | | 8 | |    |   |   8 *    |   |   8 |    |  |   8      |  |   8   |
+        #       | |/ \| |    |   |  /  |    |   |  /  |    |  |  / \     |  |  / \  |
+        # 4     | 9  10 |    |   * 9  10    |   | 9  10    |  | 9  10    |  | 9  10 |
+        #       |/ \ / \|    |   |  \   \   |   |  \   \   |  |  \   \   |  |  \    |
+        # 5     0   1   2    |   0   1   2  |   0   1   2  |  0   1   2  |  0   1   2
+        #
+        #                    |   0.0 - 0.1  |   0.1 - 0.2  |  0.2 - 0.4  |  0.4 - 0.5
+        # ... continued:
+        # t                  |             |             |             |
+        #
+        # 0         --3--    |    --3--    |    --3--    |    --3--    |    --3--
+        #          /     \   |   /     \   |   /     \   |   /     \   |   /  |  \
+        # 1       4       5  |  4       5  |  4       5  |  4       5  |  4   |   5
+        #         |\     /|  |   \     /|  |   \     /|  |   \     /|  |     /   /|
+        # 2       | 6   7 |  |    6   7 |  |    6   7 |  |    6   7 |  |    6   7 |
+        #         |  *    *  |     \    |  |       *  |  |    |  /  |  |    |  /  |
+        # 3  ...  |   8   |  |      8   |  |      8   |  |    | 8   |  |    | 8   |
+        #         |  / \  |  |     / \  |  |     * \  |  |    |  \  |  |    |  \  |
+        # 4       | 9  10 |  |    9  10 |  |    9  10 |  |    9  10 |  |    9  10 |
+        #         |    /  |  |   /   /  |  |   /   /  |  |   /   /  |  |   /   /  |
+        # 5       0   1   2  |  0   1   2  |  0   1   2  |  0   1   2  |  0   1   2
+        #
+        #         0.5 - 0.6  |  0.6 - 0.7  |  0.7 - 0.8  |  0.8 - 0.9  |  0.9 - 1.0
+        #
+        # Above, subsequent mutations are backmutations.
+
+        # divergence betw 0 and 1
+        branch_true_diversity_01 = 2*(0.6*4 + 0.2*2 + 0.2*5)
+        # divergence betw 1 and 2
+        branch_true_diversity_12 = 2*(0.2*5 + 0.2*2 + 0.3*5 + 0.3*4)
+        # divergence betw 0 and 2
+        branch_true_diversity_02 = 2*(0.2*5 + 0.2*4 + 0.3*5 + 0.1*4 + 0.2*5)
+        # mean divergence between 0, 1 and 0, 2
+        branch_true_mean_diversity = (
+                0 + branch_true_diversity_02 + branch_true_diversity_01
+                + branch_true_diversity_12) / 4
+        # Y(0;1, 2)
+        branch_true_Y = 0.2*4 + 0.2*(4+2) + 0.2*4 + 0.2*2 + 0.2*(5+1)
+
+        # site stats
+        # Y(0;1, 2)
+        site_true_Y = 1
+
+        nodes = six.StringIO("""\
+        is_sample       time    population
+        1       0.000000        0
+        1       0.000000        0
+        1       0.000000        0
+        0       5.000000        0
+        0       4.000000        0
+        0       4.000000        0
+        0       3.000000        0
+        0       3.000000        0
+        0       2.000000        0
+        0       1.000000        0
+        0       1.000000        0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0.500000        1.000000        10      1
+        0.000000        0.400000        10      2
+        0.600000        1.000000        9       0
+        0.000000        0.500000        9       1
+        0.800000        1.000000        8       10
+        0.200000        0.800000        8       9,10
+        0.000000        0.200000        8       9
+        0.700000        1.000000        7       8
+        0.000000        0.200000        7       10
+        0.800000        1.000000        6       9
+        0.000000        0.700000        6       8
+        0.400000        1.000000        5       2,7
+        0.100000        0.400000        5       7
+        0.600000        0.900000        4       6
+        0.000000        0.600000        4       0,6
+        0.900000        1.000000        3       4,5,6
+        0.100000        0.900000        3       4,5
+        0.000000        0.100000        3       4,5,7
+        """)
+        sites = six.StringIO("""\
+        id  position    ancestral_state
+        0   0.0         0
+        1   0.55        0
+        2   0.75        0
+        3   0.85        0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        0       0       1               -1
+        0       10      1               -1
+        0       0       0               0
+        1       8       1               -1
+        1       2       1               -1
+        2       8       1               -1
+        2       9       0               5
+        """)
+        ts = msprime.load_text(nodes=nodes, edges=edges, sites=sites,
+                               mutations=mutations)
+        branch_tsc = msprime.BranchLengthStatCalculator(ts)
+        py_branch_tsc = PythonBranchLengthStatCalculator(ts)
+        site_tsc = msprime.SiteStatCalculator(ts)
+        py_site_tsc = PythonSiteStatCalculator(ts)
+
+        # divergence between 0 and 1
+        A = [[0], [1]]
+
+        def f(x):
+            return float((x[0] > 0) != (x[1] > 0))/2.0
+
+        # tree lengths:
+        self.assertAlmostEqual(py_branch_tsc.tree_length_diversity([0], [1]),
+                               branch_true_diversity_01)
+        self.assertAlmostEqual(branch_tsc.tree_stat(A, f),
+                               branch_true_diversity_01)
+        self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f),
+                               branch_true_diversity_01)
+
+        # mean divergence between 0, 1 and 0, 2
+        A = [[0, 1], [0, 2]]
+        n = [len(a) for a in A]
+
+        def f(x):
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
+
+        # tree lengths:
+        self.assertAlmostEqual(py_branch_tsc.tree_length_diversity(A[0], A[1]),
+                               branch_true_mean_diversity)
+        self.assertAlmostEqual(branch_tsc.tree_stat(A, f),
+                               branch_true_mean_diversity)
+        self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f),
+                               branch_true_mean_diversity)
+
+        # Y-statistic for (0/12)
+        A = [[0], [1, 2]]
+
+        def f(x):
+            return float(((x[0] == 1) and (x[1] == 0))
+                         or ((x[0] == 0) and (x[1] == 2)))/2.0
+
+        # tree lengths:
+        self.assertAlmostEqual(py_branch_tsc.Y3([0], [1], [2]), branch_true_Y)
+        self.assertAlmostEqual(branch_tsc.tree_stat(A, f), branch_true_Y)
+        self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f), branch_true_Y)
+
+        # sites:
+        site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
+        py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
+        print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(site_tsc.tree_stat(A, f), site_true_Y)
+        self.assertAlmostEqual(py_site_tsc.tree_stat(A, f), site_true_Y)
+
+    def test_small_sim(self):
+        orig_ts = msprime.simulate(4, random_seed=self.random_seed,
+                                   mutation_rate=0.0,
+                                   recombination_rate=3.0)
+        ts = tsutil.jukes_cantor(orig_ts, num_sites=3, mu=3,
+                                 multiple_per_node=True, seed=self.seed)
+        branch_tsc = msprime.BranchLengthStatCalculator(ts)
+        py_branch_tsc = PythonBranchLengthStatCalculator(ts)
+        site_tsc = msprime.SiteStatCalculator(ts)
+        py_site_tsc = PythonSiteStatCalculator(ts)
+
+        for t in ts.trees():
+            print(t.interval)
+            print(msprime.drawing.draw_tree(t, format='unicode'))
+
+        A = [[0], [1], [2]]
+        self.assertAlmostEqual(branch_tsc.Y3(A, [0.0, 1.0])[0][0],
+                               py_branch_tsc.Y3(*A))
+        self.assertAlmostEqual(site_tsc.Y3(A, [0.0, 1.0])[0][0],
+                               py_site_tsc.Y3(*A))
+
+        A = [[0], [1, 2]]
+        self.assertAlmostEqual(branch_tsc.Y2(A, [0.0, 1.0])[0][0],
+                               py_branch_tsc.Y2(*A))
+        self.assertAlmostEqual(site_tsc.Y2(A, [0.0, 1.0])[0][0],
+                               py_site_tsc.Y2(*A))
+
+
 class BranchLengthStatsTestCase(GeneralStatsTestCase):
     """
     Tests of tree statistic computation.
@@ -834,247 +1155,6 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
                 self.assertListAlmostEqual(tsdiv, pydiv)
                 self.assertListEqual(tsdiv, tsdiv_vx)
 
-    def test_case_1(self):
-        # With mutations:
-        #
-        # 1.0          6
-        # 0.7         / \                                    5
-        #            /   X                                  / \
-        # 0.5       X     4                4               /   4
-        #          /     / \              / \             /   X X
-        # 0.4     X     X   \            X   3           X   /   \
-        #        /     /     X          /   / X         /   /     \
-        # 0.0   0     1       2        1   0   2       0   1       2
-        #          (0.0, 0.2),        (0.2, 0.8),       (0.8, 1.0)
-        #
-        true_diversity_01 = 2*(1 * (0.2-0) + 0.5 * (0.8-0.2) + 0.7 * (1.0-0.8))
-        true_diversity_02 = 2*(1 * (0.2-0) + 0.4 * (0.8-0.2) + 0.7 * (1.0-0.8))
-        true_diversity_12 = 2*(0.5 * (0.2-0) + 0.5 * (0.8-0.2) + 0.5 * (1.0-0.8))
-        nodes = six.StringIO("""\
-        id      is_sample   time
-        0       1           0
-        1       1           0
-        2       1           0
-        3       0           0.4
-        4       0           0.5
-        5       0           0.7
-        6       0           1.0
-        """)
-        edges = six.StringIO("""\
-        left    right   parent  child
-        0.2     0.8     3       0,2
-        0.0     0.2     4       1,2
-        0.2     0.8     4       1,3
-        0.8     1.0     4       1,2
-        0.8     1.0     5       0,4
-        0.0     0.2     6       0,4
-        """)
-        sites = six.StringIO("""\
-        id  position    ancestral_state
-        0   0.05        0
-        1   0.1         0
-        2   0.11        0
-        3   0.15        0
-        4   0.151       0
-        5   0.3         0
-        6   0.6         0
-        7   0.9         0
-        8   0.95        0
-        9   0.951       0
-        """)
-        mutations = six.StringIO("""\
-        site    node    derived_state
-        0       4       1
-        1       0       1
-        2       2       1
-        3       0       1
-        4       1       1
-        5       1       1
-        6       2       1
-        7       0       1
-        8       1       1
-        9       2       1
-        """)
-        ts = msprime.load_text(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-        tsc = msprime.BranchLengthStatCalculator(ts)
-        py_tsc = PythonBranchLengthStatCalculator(ts)
-        self.check_pairwise_diversity(ts)
-        # TODO check this:
-        # self.check_pairwise_diversity_mutations(ts)
-
-        # diversity between 0 and 1
-        A = [[0], [1]]
-
-        def f(x):
-            return float((x[0] > 0) != (x[1] > 0))/2.0
-
-        # tree lengths:
-        self.assertAlmostEqual(py_tsc.tree_length_diversity([0], [1]),
-                               true_diversity_01)
-        self.assertAlmostEqual(tsc.tree_stat(A, f),
-                               true_diversity_01)
-        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
-                               true_diversity_01)
-
-        # mean diversity between [0, 1] and [0, 2]:
-        true_mean_diversity = (0 + true_diversity_02
-                               + true_diversity_01 + true_diversity_12)/4
-        A = [[0, 1], [0, 2]]
-        n = [len(a) for a in A]
-
-        def f(x):
-            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
-
-        # tree lengths:
-        self.assertAlmostEqual(py_tsc.tree_length_diversity(A[0], A[1]),
-                               true_mean_diversity)
-        self.assertAlmostEqual(tsc.tree_stat(A, f),
-                               true_mean_diversity)
-        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
-                               true_mean_diversity)
-
-        # Y-statistic for (0/12)
-        A = [[0], [1, 2]]
-
-        def f(x):
-            return float(((x[0] == 1) and (x[1] == 0))
-                         or ((x[0] == 0) and (x[1] == 2)))/2.0
-
-        # tree lengths:
-        true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        self.assertAlmostEqual(py_tsc.Y3([0], [1], [2]), true_Y)
-        self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
-        self.assertAlmostEqual(py_tsc.tree_stat(A, f), true_Y)
-
-    def test_case_2(self):
-        # Here are the trees:
-        # t                  |              |              |             |
-        #
-        # 0       --3--      |     --3--    |     --3--    |    --3--    |    --3--
-        #        /  |  \     |    /  |  \   |    /     \   |   /     \   |   /     \
-        # 1     4   |   5    |   4   |   5  |   4       5  |  4       5  |  4       5
-        #       |\ / \ /|    |   |\   \     |   |\     /   |  |\     /   |  |\     /|
-        # 2     | 6   7 |    |   | 6   7    |   | 6   7    |  | 6   7    |  | 6   7 |
-        #       | |\ /| |    |   |  \  |    |   |  \  |    |  |  \       |  |  \    | ...
-        # 3     | | 8 | |    |   |   8 |    |   |   8 |    |  |   8      |  |   8   |
-        #       | |/ \| |    |   |  /  |    |   |  /  |    |  |  / \     |  |  / \  |
-        # 4     | 9  10 |    |   | 9  10    |   | 9  10    |  | 9  10    |  | 9  10 |
-        #       |/ \ / \|    |   |  \   \   |   |  \   \   |  |  \   \   |  |  \    |
-        # 5     0   1   2    |   0   1   2  |   0   1   2  |  0   1   2  |  0   1   2
-        #
-        #                    |   0.0 - 0.1  |   0.1 - 0.2  |  0.2 - 0.4  |  0.4 - 0.5
-        # ... continued:
-        # t                  |             |             |             |
-        #
-        # 0         --3--    |    --3--    |    --3--    |    --3--    |    --3--
-        #          /     \   |   /     \   |   /     \   |   /     \   |   /  |  \
-        # 1       4       5  |  4       5  |  4       5  |  4       5  |  4   |   5
-        #         |\     /|  |   \     /|  |   \     /|  |   \     /|  |     /   /|
-        # 2       | 6   7 |  |    6   7 |  |    6   7 |  |    6   7 |  |    6   7 |
-        #         |  \    |  |     \    |  |       /  |  |    |  /  |  |    |  /  |
-        # 3  ...  |   8   |  |      8   |  |      8   |  |    | 8   |  |    | 8   |
-        #         |  / \  |  |     / \  |  |     / \  |  |    |  \  |  |    |  \  |
-        # 4       | 9  10 |  |    9  10 |  |    9  10 |  |    9  10 |  |    9  10 |
-        #         |    /  |  |   /   /  |  |   /   /  |  |   /   /  |  |   /   /  |
-        # 5       0   1   2  |  0   1   2  |  0   1   2  |  0   1   2  |  0   1   2
-        #
-        #         0.5 - 0.6  |  0.6 - 0.7  |  0.7 - 0.8  |  0.8 - 0.9  |  0.9 - 1.0
-
-        # divergence betw 0 and 1
-        true_diversity_01 = 2*(0.6*4 + 0.2*2 + 0.2*5)
-        # divergence betw 1 and 2
-        true_diversity_12 = 2*(0.2*5 + 0.2*2 + 0.3*5 + 0.3*4)
-        # divergence betw 0 and 2
-        true_diversity_02 = 2*(0.2*5 + 0.2*4 + 0.3*5 + 0.1*4 + 0.2*5)
-        # mean divergence between 0, 1 and 0, 2
-        true_mean_diversity = (
-                0 + true_diversity_02 + true_diversity_01 + true_diversity_12) / 4
-        # Y(0;1, 2)
-        true_Y = 0.2*4 + 0.2*(4+2) + 0.2*4 + 0.2*2 + 0.2*(5+1)
-
-        nodes = six.StringIO("""\
-        is_sample       time    population
-        1       0.000000        0
-        1       0.000000        0
-        1       0.000000        0
-        0       5.000000        0
-        0       4.000000        0
-        0       4.000000        0
-        0       3.000000        0
-        0       3.000000        0
-        0       2.000000        0
-        0       1.000000        0
-        0       1.000000        0
-        """)
-        edges = six.StringIO("""\
-        left    right   parent  child
-        0.500000        1.000000        10      1
-        0.000000        0.400000        10      2
-        0.600000        1.000000        9       0
-        0.000000        0.500000        9       1
-        0.800000        1.000000        8       10
-        0.200000        0.800000        8       9,10
-        0.000000        0.200000        8       9
-        0.700000        1.000000        7       8
-        0.000000        0.200000        7       10
-        0.800000        1.000000        6       9
-        0.000000        0.700000        6       8
-        0.400000        1.000000        5       2,7
-        0.100000        0.400000        5       7
-        0.600000        0.900000        4       6
-        0.000000        0.600000        4       0,6
-        0.900000        1.000000        3       4,5,6
-        0.100000        0.900000        3       4,5
-        0.000000        0.100000        3       4,5,7
-        """)
-        ts = msprime.load_text(nodes=nodes, edges=edges)
-        tsc = msprime.BranchLengthStatCalculator(ts)
-        py_tsc = PythonBranchLengthStatCalculator(ts)
-
-        self.check_pairwise_diversity(ts)
-
-        # divergence between 0 and 1
-        A = [[0], [1]]
-
-        def f(x):
-            return float((x[0] > 0) != (x[1] > 0))/2.0
-
-        # tree lengths:
-        self.assertAlmostEqual(py_tsc.tree_length_diversity([0], [1]),
-                               true_diversity_01)
-        self.assertAlmostEqual(tsc.tree_stat(A, f),
-                               true_diversity_01)
-        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
-                               true_diversity_01)
-
-        # mean divergence between 0, 1 and 0, 2
-        A = [[0, 1], [0, 2]]
-        n = [len(a) for a in A]
-
-        def f(x):
-            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/8.0
-
-        # tree lengths:
-        self.assertAlmostEqual(py_tsc.tree_length_diversity(A[0], A[1]),
-                               true_mean_diversity)
-        self.assertAlmostEqual(tsc.tree_stat(A, f),
-                               true_mean_diversity)
-        self.assertAlmostEqual(py_tsc.tree_stat(A, f),
-                               true_mean_diversity)
-
-        # Y-statistic for (0/12)
-        A = [[0], [1, 2]]
-
-        def f(x):
-            return float(((x[0] == 1) and (x[1] == 0))
-                         or ((x[0] == 0) and (x[1] == 2)))/2.0
-
-        # tree lengths:
-        self.assertAlmostEqual(py_tsc.Y3([0], [1], [2]), true_Y)
-        self.assertAlmostEqual(tsc.tree_stat(A, f), true_Y)
-        self.assertAlmostEqual(py_tsc.tree_stat(A, f), true_Y)
-
     def test_tree_stat_vector_interface(self):
         ts = msprime.simulate(10)
         tsc = msprime.BranchLengthStatCalculator(ts)
@@ -1100,18 +1180,19 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         self.assertRaises(
             ValueError, tsc.tree_stat_vector, [[1, 2]], f, [0, 1, 1])
 
-    def test_general_stats(self):
+    def test_branch_general_stats(self):
         for ts in self.get_ts():
             self.check_tree_stat_vector(ts)
 
-    def test_f_stats(self):
+    def test_branch_f_stats(self):
         for ts in self.get_ts():
             self.check_f_stats(ts)
 
-    def test_Y_stats(self):
+    def test_branch_Y_stats(self):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
 
+    @unittest.skip("sfs")
     def test_sfs(self):
         for ts in self.get_ts():
             self.check_sfs(ts)
@@ -1128,12 +1209,19 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     """
     stat_class = msprime.SiteStatCalculator
     py_stat_class = PythonSiteStatCalculator
+    seed = 147
 
     def get_ts(self):
         for mut in [0.0, 3.0]:
             yield msprime.simulate(20, random_seed=self.random_seed,
                                    mutation_rate=mut,
-                                   recombination_rate=10)
+                                   recombination_rate=3.0)
+        ts = msprime.simulate(20, random_seed=self.random_seed,
+                              mutation_rate=0.0,
+                              recombination_rate=3.0)
+        for mpn in [False, True]:
+            yield tsutil.jukes_cantor(ts, num_sites=10, mu=3,
+                                      multiple_per_node=mpn, seed=self.seed)
 
     def check_pairwise_diversity_mutations(self, ts):
         py_tsc = PythonSiteStatCalculator(ts)
@@ -1152,18 +1240,19 @@ class SiteStatsTestCase(GeneralStatsTestCase):
         ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity_mutations(ts)
 
-    def test_general_stats(self):
+    def test_site_general_stats(self):
         for ts in self.get_ts():
             self.check_tree_stat_vector(ts)
 
-    def test_f_stats(self):
+    def test_site_f_stats(self):
         for ts in self.get_ts():
             self.check_f_stats(ts)
 
-    def test_Y_stats(self):
+    def test_site_Y_stats(self):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
 
+    @unittest.skip("sfs")
     def test_sfs(self):
         for ts in self.get_ts():
             self.check_sfs(ts)
