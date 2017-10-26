@@ -47,7 +47,7 @@ def path_length(tr, x, y):
 class PythonBranchLengthStatCalculator(object):
     """
     Python implementations of various ("tree") branch-length statistics -
-    inefficient but more clear what they are doing.  
+    inefficient but more clear what they are doing.
     """
 
     def __init__(self, tree_sequence):
@@ -62,18 +62,20 @@ class PythonBranchLengthStatCalculator(object):
         nout = len(A)
         S = [0 for _ in range(nout+1)]
         for tr in self.tree_sequence.trees():
-            if tr.interval[1] <= begin:
+            tr_len = max(0, (min(end, tr.interval[1]) - max(begin, tr.interval[0])))
+            if tr_len == 0:
                 continue
-            if tr.interval[0] >= end:
-                break
-            tr_len = (min(end, tr.interval[1]) - max(begin, tr.interval[0]))
             X = [0 for _ in range(self.tree_sequence.num_nodes)]
             for x in A:
                 u = x
                 while u != msprime.NULL_NODE:
                     X[u] += 1
                     u = tr.parent(u)
+            print("S=", S)
             for u in tr.nodes():
+                print("u=", u)
+                print("X[u]=", X[u])
+                print("S[X[u]]=", S[X[u]])
                 if u != tr.root:
                     S[X[u]] += tr.branch_length(u) * tr_len
         for j in range(nout):
@@ -283,7 +285,7 @@ class PythonBranchLengthStatCalculator(object):
 
         This version is inefficient as it iterates over all nodes in each tree.
         '''
-        out = self.tree_stat_vector(sample_sets, 
+        out = self.tree_stat_vector(sample_sets,
                                     lambda x: [weight_fun(x)],
                                     begin=begin, end=end)
         if len(out) > 1:
@@ -304,7 +306,8 @@ class PythonBranchLengthStatCalculator(object):
         '''
         for U in sample_sets:
             if max([U.count(x) for x in set(U)]) > 1:
-                raise ValueError("elements of sample_sets cannot contain repeated elements.")
+                raise ValueError("elements of sample_sets",
+                                 "cannot contain repeated elements.")
         if end is None:
             end = self.tree_sequence.sequence_length
         tr_its = [self.tree_sequence.trees(
@@ -333,7 +336,7 @@ class PythonBranchLengthStatCalculator(object):
 class PythonSiteStatCalculator(object):
     """
     Python implementations of various single-site statistics -
-    inefficient but more clear what they are doing.  
+    inefficient but more clear what they are doing.
     """
 
     def __init__(self, tree_sequence):
@@ -350,8 +353,8 @@ class PythonSiteStatCalculator(object):
                 for x in X:
                     for y in Y:
                         for z in Z:
-                            if ((haps[x][k] != haps[y][k]) 
-                                and (haps[y][k] == haps[z][k])):
+                            if ((haps[x][k] != haps[y][k])
+                               and (haps[y][k] == haps[z][k])):
                                 # x|yz
                                 S += 1
         return S/((end - begin) * len(X) * len(Y) * len(Z))
@@ -367,8 +370,8 @@ class PythonSiteStatCalculator(object):
                 for x in X:
                     for y in Y:
                         for z in set(Y) - set(y):
-                            if ((haps[x][k] != haps[y][k]) 
-                                and (haps[y][k] == haps[z][k])):
+                            if ((haps[x][k] != haps[y][k])
+                               and (haps[y][k] == haps[z][k])):
                                 # x|yz
                                 S += 1
         return S/((end - begin) * len(X) * len(Y) * (len(Y) - 1))
@@ -383,9 +386,9 @@ class PythonSiteStatCalculator(object):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
                 for x in X:
                     for y in set(X) - set(x):
-                        for z in set(X) - set([x,y]):
-                            if ((haps[x][k] != haps[y][k]) 
-                                and (haps[y][k] == haps[z][k])):
+                        for z in set(X) - set([x, y]):
+                            if ((haps[x][k] != haps[y][k])
+                               and (haps[y][k] == haps[z][k])):
                                 # x|yz
                                 S += 1
         return S/((end - begin) * len(X) * (len(X) - 1) * (len(X) - 2))
@@ -405,12 +408,12 @@ class PythonSiteStatCalculator(object):
                     for b in B:
                         for c in C:
                             for d in D:
-                                if ((haps[a][k] == haps[c][k]) 
-                                    and (haps[b][k] == haps[d][k])
-                                    and (haps[a][k] != haps[b][k])):
+                                if ((haps[a][k] == haps[c][k])
+                                   and (haps[b][k] == haps[d][k])
+                                   and (haps[a][k] != haps[b][k])):
                                     # ac|bd
                                     S += 1
-                                elif ((haps[a][k] == haps[d][k]) 
+                                elif ((haps[a][k] == haps[d][k])
                                       and (haps[b][k] == haps[c][k])
                                       and (haps[a][k] != haps[b][k])):
                                     # ad|bc
@@ -432,12 +435,12 @@ class PythonSiteStatCalculator(object):
                     for b in B:
                         for c in set(A) - set([a]):
                             for d in C:
-                                if ((haps[a][k] == haps[c][k]) 
-                                    and (haps[b][k] == haps[d][k])
-                                    and (haps[a][k] != haps[b][k])):
+                                if ((haps[a][k] == haps[c][k])
+                                   and (haps[b][k] == haps[d][k])
+                                   and (haps[a][k] != haps[b][k])):
                                     # ac|bd
                                     S += 1
-                                elif ((haps[a][k] == haps[d][k]) 
+                                elif ((haps[a][k] == haps[d][k])
                                       and (haps[b][k] == haps[c][k])
                                       and (haps[a][k] != haps[b][k])):
                                     # ad|bc
@@ -459,36 +462,37 @@ class PythonSiteStatCalculator(object):
                     for b in B:
                         for c in set(A) - set([a]):
                             for d in set(B) - set([b]):
-                                if ((haps[a][k] == haps[c][k]) 
-                                    and (haps[b][k] == haps[d][k])
-                                    and (haps[a][k] != haps[b][k])):
+                                if ((haps[a][k] == haps[c][k])
+                                   and (haps[b][k] == haps[d][k])
+                                   and (haps[a][k] != haps[b][k])):
                                     # ac|bd
                                     S += 1
-                                elif ((haps[a][k] == haps[d][k]) 
+                                elif ((haps[a][k] == haps[d][k])
                                       and (haps[b][k] == haps[c][k])
                                       and (haps[a][k] != haps[b][k])):
                                     # ad|bc
                                     S -= 1
-        return S / ((end - begin) * len(A) * len(B) 
+        return S / ((end - begin) * len(A) * len(B)
                     * (len(A) - 1) * (len(B) - 1))
 
-    def site_frequency_spectrum(self, sample_sets, begin=0.0, end=None):
+    def site_frequency_spectrum(self, A, begin=0.0, end=None):
         """
-        The joint SFS.
+        The SFS.
         """
         if end is None:
             end = self.tree_sequence.sequence_length
-        for U in A, B:
-            if max([U.count(x) for x in set(U)]) > 1:
-                raise ValueError("A,and B cannot contain repeated elements.")
+        for u in A:
+            if max([A.count(x) for x in set(A)]) > 1:
+                raise ValueError("A cannot contain repeated elements.")
         haps = list(self.tree_sequence.haplotypes())
         site_positions = [x.position for x in self.tree_sequence.sites()]
-        n = [len(x) for x in sample_sets]
-        S = [0.0 for _ in range(np.product(n))]
+        sfs = [0 for _ in range(len(A)+1)]
         for k in range(self.tree_sequence.num_sites):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
-                all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
-                g = [[haps[j][k] for j in u] for u in sample_sets]
+                g = [haps[j][k] for j in A]
+                for a in set(g):
+                    sfs[g.count(a)] += 1
+        return [x/(end-begin) for x in sfs]
 
     def tree_stat_vector(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
@@ -504,7 +508,8 @@ class PythonSiteStatCalculator(object):
         '''
         for U in sample_sets:
             if max([U.count(x) for x in set(U)]) > 1:
-                raise ValueError("elements of sample_sets cannot contain repeated elements.")
+                raise ValueError("elements of sample_sets",
+                                 "cannot contain repeated elements.")
         if end is None:
             end = self.tree_sequence.sequence_length
         haps = list(self.tree_sequence.haplotypes())
@@ -635,14 +640,13 @@ class GeneralStatsTestCase(unittest.TestCase):
         def py_tsf(X, Y, Z, begin, end):
             def f(x):
                 return x[0] + 2.0 * x[1] + 3.5 * x[2]
-            return py_tsc.tree_stat([X, Y, Z], weight_fun=f, 
+            return py_tsc.tree_stat([X, Y, Z], weight_fun=f,
                                     begin=begin, end=end)
 
         self.compare_stats(ts, py_tsf, A, 3, tsc_vector_fn=tsf)
 
     def check_sfs(self, ts):
         # check site frequency spectrum
-        samples = random.sample(ts.samples(), 12)
         A = [random.sample(ts.samples(), 2),
              random.sample(ts.samples(), 4),
              random.sample(ts.samples(), 8),
@@ -651,14 +655,8 @@ class GeneralStatsTestCase(unittest.TestCase):
         tsc = self.stat_class(ts)
         py_tsc = self.py_stat_class(ts)
 
-        # a made-up example
-        def tsf(sample_sets, windows, indices):
-            return tsc.site_frequency_spectrum(sample_sets, windows=windows)
-
-        def py_tsf(X, begin, end):
-            return py_tsc.site_frequency_spectrum(X, begin=begin, end=end)
-
-        self.compare_stats(ts, py_tsf, A, 1, tsc_vector_fn=tsf)
+        self.compare_stats(ts, py_tsc.site_frequency_spectrum, A, 0,
+                           tsc_vector_fn=tsc.site_frequency_spectrum)
 
     def check_f_stats(self, ts):
         samples = random.sample(ts.samples(), 12)
@@ -698,6 +696,11 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
     """
     stat_class = msprime.BranchLengthStatCalculator
     py_stat_class = PythonBranchLengthStatCalculator
+
+    def get_ts(self):
+        for N in [12, 20]:
+            yield msprime.simulate(N, random_seed=self.random_seed,
+                                   recombination_rate=10)
 
     def check_pairwise_diversity(self, ts):
         samples = random.sample(ts.samples(), 2)
@@ -824,7 +827,8 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
                 tsdiv_v = tsc.tree_stat_vector(A, g, windows)
                 tsdiv_vx = [x[0] for x in tsdiv_v]
                 tsdiv = tsc.tree_stat_windowed(A, f, windows)
-                pydiv = [py_tsc.tree_length_diversity(A[0], A[1], windows[k], windows[k+1])
+                pydiv = [py_tsc.tree_length_diversity(A[0], A[1], windows[k],
+                                                      windows[k+1])
                          for k in range(len(windows)-1)]
                 self.assertEqual(len(tsdiv), len(windows)-1)
                 self.assertListAlmostEqual(tsdiv, pydiv)
@@ -934,7 +938,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         A = [[0], [1, 2]]
 
         def f(x):
-            return float(((x[0] == 1) and (x[1] == 0)) 
+            return float(((x[0] == 1) and (x[1] == 0))
                          or ((x[0] == 0) and (x[1] == 2)))/2.0
 
         # tree lengths:
@@ -1063,7 +1067,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         A = [[0], [1, 2]]
 
         def f(x):
-            return float(((x[0] == 1) and (x[1] == 0)) 
+            return float(((x[0] == 1) and (x[1] == 0))
                          or ((x[0] == 0) and (x[1] == 2)))/2.0
 
         # tree lengths:
@@ -1096,15 +1100,26 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         self.assertRaises(
             ValueError, tsc.tree_stat_vector, [[1, 2]], f, [0, 1, 1])
 
-    def test_derived_functions(self):
-        # Test implementation of statistics using these functions.
-        ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
-        self.check_tree_stat_vector(ts)
-        self.check_pairwise_diversity(ts)
-        self.check_tmrca_matrix(ts)
-        self.check_f_stats(ts)
-        self.check_Y_stat(ts)
-        self.check_sfs(ts)
+    def test_general_stats(self):
+        for ts in self.get_ts():
+            self.check_tree_stat_vector(ts)
+
+    def test_f_stats(self):
+        for ts in self.get_ts():
+            self.check_f_stats(ts)
+
+    def test_Y_stats(self):
+        for ts in self.get_ts():
+            self.check_Y_stat(ts)
+
+    def test_sfs(self):
+        for ts in self.get_ts():
+            self.check_sfs(ts)
+
+    def test_diversity(self):
+        for ts in self.get_ts():
+            self.check_pairwise_diversity(ts)
+            self.check_tmrca_matrix(ts)
 
 
 class SiteStatsTestCase(GeneralStatsTestCase):
@@ -1113,6 +1128,12 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     """
     stat_class = msprime.SiteStatCalculator
     py_stat_class = PythonSiteStatCalculator
+
+    def get_ts(self):
+        for mut in [0.0, 3.0]:
+            yield msprime.simulate(20, random_seed=self.random_seed,
+                                   mutation_rate=mut,
+                                   recombination_rate=10)
 
     def check_pairwise_diversity_mutations(self, ts):
         py_tsc = PythonSiteStatCalculator(ts)
@@ -1131,12 +1152,18 @@ class SiteStatsTestCase(GeneralStatsTestCase):
         ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
         self.check_pairwise_diversity_mutations(ts)
 
-    def test_derived_functions(self):
-        # Test implementation of statistics using these functions.
-        ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)
-        self.check_tree_stat_vector(ts)
-        # self.check_pairwise_diversity(ts)
-        # self.check_tmrca_matrix(ts)
-        self.check_f_stats(ts)
-        self.check_Y_stat(ts)
+    def test_general_stats(self):
+        for ts in self.get_ts():
+            self.check_tree_stat_vector(ts)
 
+    def test_f_stats(self):
+        for ts in self.get_ts():
+            self.check_f_stats(ts)
+
+    def test_Y_stats(self):
+        for ts in self.get_ts():
+            self.check_Y_stat(ts)
+
+    def test_sfs(self):
+        for ts in self.get_ts():
+            self.check_sfs(ts)

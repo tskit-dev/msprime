@@ -555,7 +555,7 @@ class GeneralStatCalculator(object):
     def site_frequency_spectrum(self, sample_sets, windows):
         """
         Find the (single) site frequency spectrum in each of the sets in
-        sample_sets.  These are strung together after each other, so that 
+        sample_sets.  These are strung together after each other, so that
         the first `len(sample_sets[0])+1` entries give the SFS for the first
         sample set, and so on.
 
@@ -590,7 +590,7 @@ class GeneralStatCalculator(object):
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
         :return: A list of lists of floats, each of length equal to the product
-            of the lengths of `sample_set`, which is the matrix of the joint 
+            of the lengths of `sample_set`, which is the matrix of the joint
             frequency spectrum, unfolded.
         """
         n = [len(x) for x in sample_sets]
@@ -688,8 +688,7 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         # below we actually just keep track of x, not (x,xbar), so here's the
         #   weighting function we actually use of just x:
         num_sample_sets = len(sample_sets)
-
-        n = [len(x) for x in sample_sets]
+        # n = [len(x) for x in sample_sets]
 
         # initialize
         n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
@@ -850,10 +849,9 @@ class SiteStatCalculator(GeneralStatCalculator):
         X = [[int(u in a) for a in sample_sets] for u in range(N)]
         # we will construct the tree here
         pi = [-1 for j in range(N)]
-        # keep track of where we are for the windows
-        chrom_pos = 0.0
         # keep track of which site we're looking at
         site_num = 0
+        site_pos = sites.position[site_num]
         next_mut = 0
         assert mutations.site[0] == 0
         # index of *left-hand* end of the current window
@@ -885,19 +883,21 @@ class SiteStatCalculator(GeneralStatCalculator):
                             next_u = pi[next_u]
                     # print("\t",X, "-->", L)
             # print("next tree:",L,length)
-            site_pos = sites.position[site_num]
             start_mut = next_mut
-            assert mutations.site[start_mut] == site_num
+            while mutations.site[start_mut] != site_num:
+                # some sites may have no mutations
+                site_num += 1
+                site_pos = sites.position[site_num]
             while site_pos < interval[1]:
                 if site_pos > windows[window_num + 1]:
                     window_length = windows[window_num + 1] - windows[window_num]
                     for j in range(n_out):
                         S[window_num][j] /= window_length
                     window_num += 1
-                mut_nodes = [-1] # -1 will stand in for the root
-                U = [n]  # number of nonmutated samples below node
+                mut_nodes = [-1]  # -1 will stand in for the root
+                U = [n]  # vector of number of nonmutated samples below node
                 alleles = [sites.ancestral_state[site_num]]
-                parent_muts = [-1] # index in mut_nodes of the parent mut
+                parent_muts = [-1]  # index in mut_nodes of the parent mut
                 while ((next_mut < nmuts) and
                        (mutations.site[next_mut] == site_num)):
                     m = mutations.node[next_mut]
@@ -918,13 +918,15 @@ class SiteStatCalculator(GeneralStatCalculator):
                 V = {}
                 for j in range(nm):
                     if alleles[j] not in V:
-                        V[alleles[j]] = 0
-                    V[alleles[j]] += U[j]
+                        V[alleles[j]] = [0 for _ in range(num_sample_sets)]
+                    for k in range(num_sample_sets):
+                        V[alleles[j]][k] += U[j][k]
                 for a in V:
                     w = weight_fun(V[a])
                     for j in range(n_out):
                         S[window_num][j] += w[j]
                 site_num += 1
+                site_pos = sites.position[site_num]
         # wrap up the final window
         window_length = windows[window_num + 1] - windows[window_num]
         for j in range(n_out):
