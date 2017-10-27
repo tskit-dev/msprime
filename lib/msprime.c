@@ -3478,13 +3478,13 @@ msp_std_common_ancestor_event(msp_t *self, population_id_t population_id)
 static double
 dirac_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return gsl_pow_2(model->population_size) * t;
+    return 4 * gsl_pow_2(model->population_size) * t; // THE problem is with this 4
 }
 
 static double
 dirac_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g / gsl_pow_2(model->population_size);
+    return g /(4 * gsl_pow_2(model->population_size));
 }
 
 static double
@@ -3562,7 +3562,7 @@ msp_dirac_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id)
 {
     population_t *pop = &self->populations[pop_id];
     unsigned int n = (unsigned int) avl_count(&pop->ancestors);
-    double lambda = msp_dirac_compute_coalescence_rate(self, n);
+    double lambda = msp_dirac_compute_coalescence_rate(self, n) * 2;
 
     return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
