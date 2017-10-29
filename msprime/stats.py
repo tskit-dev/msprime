@@ -890,29 +890,23 @@ class SiteStatCalculator(GeneralStatCalculator):
                 print(s)
                 print("X", X)
                 if nm > 0:
-                    U = {-1: n.copy()}  # gives number of nonmutated samples below node
+                    U = {s.ancestral_state: n.copy()}
                     for mut in s.mutations:
-                        U[mut.id] = X[mut.node].copy()
-                    assert len(U) == nm + 1
-                    print("prelim U:", U)
-                    # subtract offspring descendants from parents
-                    for mut in s.mutations:
+                        if mut.derived_state not in U:
+                            U[mut.derived_state] = [0 for _ in range(num_sample_sets)]
                         for k in range(num_sample_sets):
-                            U[mut.parent][k] -= X[mut.node][k]
-                    # step through alleles and compute contributions
-                    V = {s.ancestral_state: U[-1]}
-                    for mut in s.mutations:
-                        if mut.derived_state not in V:
-                            V[mut.derived_state] = [0 for _ in range(num_sample_sets)]
+                            U[mut.derived_state][k] += X[mut.node][k]
+                        parent_state = get_derived_state(s, mut.parent)
+                        if mut.parent_state not in U:
+                            U[mut.parent_state] = [0 for _ in range(num_sample_sets)]
                         for k in range(num_sample_sets):
-                            V[mut.derived_state][k] += U[mut.id][k]
-                    for a in V:
-                        w = weight_fun(V[a])
+                            U[parent_state][k] -= X[mut.node][k]
+                    for a in U:
+                        w = weight_fun(U[a])
                         print(a, "->", w)
                         for j in range(n_out):
                             S[window_num][j] += w[j]
                     print(U)
-                    print(V)
                 ns += 1
                 if ns == num_sites:
                     break
@@ -922,3 +916,18 @@ class SiteStatCalculator(GeneralStatCalculator):
         for j in range(n_out):
             S[window_num][j] /= window_length
         return S
+
+
+def get_derived_state(site, mut_id):
+    """
+    Find the derived state of the mutation with id `mut_id` at site `site`.
+
+    There must be a better way to do this.
+    """
+    if mut_id == -1:
+        state = site.ancestral_state
+    else:
+        for m in site.mutations:
+            if m.id == mut_id:
+                state = m.derived_state
+    return state
