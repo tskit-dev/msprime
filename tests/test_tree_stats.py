@@ -312,6 +312,7 @@ class PythonBranchLengthStatCalculator(object):
                         tracked_samples=x,
                         sample_counts=True,
                         sample_lists=True) for x in sample_sets]
+        n = [len(U) for U in sample_sets]
         n_out = len(weight_fun([0 for a in sample_sets]))
         S = [0.0 for j in range(n_out)]
         for k in range(self.tree_sequence.num_trees):
@@ -322,12 +323,12 @@ class PythonBranchLengthStatCalculator(object):
                 for node in trs[0].nodes():
                     if node != root:
                         x = [tr.num_tracked_samples(node) for tr in trs]
-                        w = weight_fun(x)
+                        nx = [a - b for a, b in zip(n, x)]
+                        w = weight_fun(x) + weight_fun(nx)
                         for j in range(n_out):
                             S[j] += w[j] * trs[0].branch_length(node) * tr_len
         for j in range(n_out):
-            # the notorious factor of 2
-            S[j] *= (2.0/(end-begin))
+            S[j] /= (end-begin)
         return S
 
 
@@ -352,7 +353,7 @@ class PythonSiteStatCalculator(object):
                     for y in Y:
                         for z in Z:
                             if ((haps[x][k] != haps[y][k])
-                               and (haps[y][k] == haps[z][k])):
+                               and (haps[x][k] != haps[z][k])):
                                 # x|yz
                                 S += 1
         return S/((end - begin) * len(X) * len(Y) * len(Z))
@@ -369,7 +370,7 @@ class PythonSiteStatCalculator(object):
                     for y in Y:
                         for z in set(Y) - set([y]):
                             if ((haps[x][k] != haps[y][k])
-                               and (haps[y][k] == haps[z][k])):
+                               and (haps[x][k] != haps[z][k])):
                                 # x|yz
                                 S += 1
         return S/((end - begin) * len(X) * len(Y) * (len(Y) - 1))
@@ -386,7 +387,7 @@ class PythonSiteStatCalculator(object):
                     for y in set(X) - set([x]):
                         for z in set(X) - set([x, y]):
                             if ((haps[x][k] != haps[y][k])
-                               and (haps[y][k] == haps[z][k])):
+                               and (haps[x][k] != haps[z][k])):
                                 # x|yz
                                 S += 1
         return S/((end - begin) * len(X) * (len(X) - 1) * (len(X) - 2))
@@ -407,12 +408,12 @@ class PythonSiteStatCalculator(object):
                         for c in C:
                             for d in D:
                                 if ((haps[a][k] == haps[c][k])
-                                   and (haps[b][k] == haps[d][k])
+                                   and (haps[a][k] != haps[d][k])
                                    and (haps[a][k] != haps[b][k])):
                                     # ac|bd
                                     S += 1
                                 elif ((haps[a][k] == haps[d][k])
-                                      and (haps[b][k] == haps[c][k])
+                                      and (haps[a][k] != haps[c][k])
                                       and (haps[a][k] != haps[b][k])):
                                     # ad|bc
                                     S -= 1
@@ -434,12 +435,12 @@ class PythonSiteStatCalculator(object):
                         for c in set(A) - set([a]):
                             for d in C:
                                 if ((haps[a][k] == haps[c][k])
-                                   and (haps[b][k] == haps[d][k])
+                                   and (haps[a][k] != haps[d][k])
                                    and (haps[a][k] != haps[b][k])):
                                     # ac|bd
                                     S += 1
                                 elif ((haps[a][k] == haps[d][k])
-                                      and (haps[b][k] == haps[c][k])
+                                      and (haps[a][k] != haps[c][k])
                                       and (haps[a][k] != haps[b][k])):
                                     # ad|bc
                                     S -= 1
@@ -461,12 +462,12 @@ class PythonSiteStatCalculator(object):
                         for c in set(A) - set([a]):
                             for d in set(B) - set([b]):
                                 if ((haps[a][k] == haps[c][k])
-                                   and (haps[b][k] == haps[d][k])
+                                   and (haps[a][k] != haps[d][k])
                                    and (haps[a][k] != haps[b][k])):
                                     # ac|bd
                                     S += 1
                                 elif ((haps[a][k] == haps[d][k])
-                                      and (haps[b][k] == haps[c][k])
+                                      and (haps[a][k] != haps[c][k])
                                       and (haps[a][k] != haps[b][k])):
                                     # ad|bc
                                     S -= 1
@@ -1034,7 +1035,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
             n = [len(a) for a in A]
 
             def f(x):
-                return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
+                return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
 
             self.assertAlmostEqual(
                     py_tsc.tree_stat(A, f),

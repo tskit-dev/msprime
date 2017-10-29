@@ -199,7 +199,7 @@ class GeneralStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i]*(n[j]-x[j]) + (n[i]-x[i])*x[j])
+            return [float(x[i]*(n[j]-x[j]))
                     for i in range(ns) for j in range(i, ns)]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -281,8 +281,8 @@ class GeneralStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k])
-                          + (n[i] - x[i]) * x[j] * x[k]) for i, j, k in indices]
+            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k]))
+                    for i, j, k in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
 
@@ -290,7 +290,7 @@ class GeneralStatCalculator(object):
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(2 * n[indices[u][0]] * n[indices[u][1]]
+                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
                                    * n[indices[u][2]])
 
         return out
@@ -321,13 +321,13 @@ class GeneralStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i] * (n[j] - x[j]) * (n[j] - x[j] - 1)
-                          + (n[i] - x[i]) * x[j] * (x[j] - 1)) for i, j in indices]
+            return [float(x[i] * (n[j] - x[j]) * (n[j] - x[j] - 1))
+                    for i, j in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(2 * n[indices[u][0]] * n[indices[u][1]]
+                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
                                    * (n[indices[u][1]]-1))
 
         return out
@@ -357,13 +357,12 @@ class GeneralStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(z * (m - z) * (m - z - 1)
-                          + (m - z) * z * (z - 1)) for m, z in zip(n, x)]
+            return [float(z * (m - z) * (m - z - 1)) for m, z in zip(n, x)]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         for w in range(len(windows)-1):
             for u in range(len(sample_sets)):
-                out[w][u] /= float(2 * n[u] * (n[u]-1) * (n[u]-2))
+                out[w][u] /= float(n[u] * (n[u]-1) * (n[u]-2))
 
         return out
 
@@ -405,9 +404,18 @@ class GeneralStatCalculator(object):
                 raise ValueError("All tuples in indices should be of length 4.")
         n = [len(x) for x in sample_sets]
 
+        # def f(x):
+        #     return [float((x[i] * (n[j] - x[j]) - x[j] * (n[i] - x[i]))
+        #                   * (x[k] * (n[l] - x[l]) - x[l] * (n[k] - x[k])))
+        #             for i, j, k, l in indices]
+        # def f(x):
+        #     return [float((x[i] * n[j] - x[j] * n[i])
+        #                   * (x[k] * n[l] - x[l] * n[k]))
+        #             for i, j, k, l in indices]
+
         def f(x):
-            return [float((x[i] * (n[j] - x[j]) - x[j] * (n[i] - x[i]))
-                          * (x[k] * (n[l] - x[l]) - x[l] * (n[k] - x[k])))
+            return [float(x[i] * x[k] * (n[j] - x[j]) * (n[l] - x[l])
+                          - x[i] * x[l] * (n[j] - x[j]) * (n[k] - x[k]))
                     for i, j, k, l in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -415,7 +423,7 @@ class GeneralStatCalculator(object):
         # corrects the diagonal for self comparisons
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(2 * n[indices[u][0]] * n[indices[u][1]]
+                out[w][u] /= float(n[indices[u][0]] * n[indices[u][1]]
                                    * n[indices[u][2]] * n[indices[u][3]])
 
         return out
@@ -459,9 +467,7 @@ class GeneralStatCalculator(object):
 
         def f(x):
             return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[k] - x[k])
-                          + (n[i] - x[i]) * (n[i] - x[i] - 1) * x[j] * x[k]
-                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[k]
-                          - (n[i] - x[i]) * x[i] * x[j] * (n[k] - x[k]))
+                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[k])
                     for i, j, k in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -471,7 +477,7 @@ class GeneralStatCalculator(object):
                 if n[indices[u][0]] == 1:
                     out[w][u] = np.nan
                 else:
-                    out[w][u] /= float(2 * n[indices[u][0]] * (n[indices[u][0]]-1)
+                    out[w][u] /= float(n[indices[u][0]] * (n[indices[u][0]]-1)
                                        * n[indices[u][1]] * n[indices[u][2]])
 
         return out
@@ -520,16 +526,14 @@ class GeneralStatCalculator(object):
 
         def f(x):
             return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[j] - x[j] - 1)
-                          + (n[i] - x[i]) * (n[i] - x[i] - 1) * x[j] * (x[j] - 1)
-                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[j]
-                          - (n[i] - x[i]) * x[i] * x[j] * (n[j] - x[j]))
+                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[j])
                     for i, j in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         # move this division outside of f(x) so it only has to happen once
         for w in range(len(windows)-1):
             for u in range(len(indices)):
-                out[w][u] /= float(2 * n[indices[u][0]] * (n[indices[u][0]]-1)
+                out[w][u] /= float(n[indices[u][0]] * (n[indices[u][0]]-1)
                                    * n[indices[u][1]] * (n[indices[u][1]] - 1))
 
         return out
@@ -650,16 +654,14 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
 
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
-        Here sample_sets is a list of lists of samples, and weight_fun is a function
-        whose argument is a list of integers of the same length as sample_sets
-        that returns a list of numbers.  A branch in a tree is weighted by
-        2*weight_fun(x), where x[i] is the number of samples in sample_sets[i]
-        below that branch.  This finds the sum of this weight for all branches
-        in each tree, and averages this across the tree sequence, weighted by
-        genomic length.  The factor of 2 is included to make this strictly
-        analogous to the behavior of `SiteStatCalculator`, and comes because we
-        evaluate `weight_fun()` only on one of the two sides of the split
-        induced by each branch.
+        Here sample_sets is a list of lists of samples, and weight_fun is a
+        function whose argument is a list of integers of the same length as
+        sample_sets that returns a list of numbers.  A branch in a tree is
+        weighted by weight_fun(x) + weight_fun(n-x), where x[i] is the number
+        of samples in sample_sets[i] below that branch, and n[i]-x[i] is the
+        number *not* below that branch.  This finds the sum of this weight for
+        all branches in each tree, and averages this across the tree sequence,
+        weighted by genomic length.
 
         It does this separately for each window [windows[i], windows[i+1]) and
         returns the values in a list.  Note that windows cannot be overlapping,
@@ -688,10 +690,17 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         # below we actually just keep track of x, not (x,xbar), so here's the
         #   weighting function we actually use of just x:
         num_sample_sets = len(sample_sets)
-        # n = [len(x) for x in sample_sets]
+
+        # this how we apply the weight function to both below the branch and
+        # above it
+        n = [len(x) for x in sample_sets]
+
+        def wfn(x):
+            ax = [nn - xx for nn, xx in zip(n, x)]
+            return [a + b for a, b in zip(weight_fun(x), weight_fun(ax))]
 
         # initialize
-        n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
+        n_out = len(wfn([0 for a in range(num_sample_sets)]))
 
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
@@ -717,40 +726,40 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                         pi[edge.child] = edge.parent
                     for k in range(num_sample_sets):
                         dx[k] += sign * X[edge.child][k]
-                    w = weight_fun(X[edge.child])
+                    w = wfn(X[edge.child])
                     dt = (node_time[pi[edge.child]] - node_time[edge.child])
                     for j in range(n_out):
                         L[j] += sign * dt * w[j]
-                    # print("\t\tchild:",child,"+=",sign,"*",weight_fun(X[child]),
+                    # print("\t\tchild:",child,"+=",sign,"*",wfn(X[child]),
                     #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
                     if sign == -1:
                         pi[edge.child] = -1
-                    old_w = weight_fun(X[edge.parent])
+                    old_w = wfn(X[edge.parent])
                     for k in range(num_sample_sets):
                         X[edge.parent][k] += dx[k]
                     if pi[edge.parent] != -1:
-                        w = weight_fun(X[edge.parent])
+                        w = wfn(X[edge.parent])
                         dt = (node_time[pi[edge.parent]] - node_time[edge.parent])
                         for j in range(n_out):
                             L[j] += dt * (w[j]-old_w[j])
-                        # print("\t\tnode:",node,"+=",dt,"*(",weight_fun(X[node]),"-",
+                        # print("\t\tnode:",node,"+=",dt,"*(",wfn(X[node]),"-",
                         #   old_w,") -->",L)
                     # propagate change up the tree
                     u = pi[edge.parent]
                     if u != -1:
                         next_u = pi[u]
                         while u != -1:
-                            old_w = weight_fun(X[u])
+                            old_w = wfn(X[u])
                             for k in range(num_sample_sets):
                                 X[u][k] += dx[k]
                             # need to update X for the root,
                             # but the root does not have a branch length
                             if next_u != -1:
-                                w = weight_fun(X[u])
+                                w = wfn(X[u])
                                 dt = (node_time[pi[u]] - node_time[u])
                                 for j in range(n_out):
                                     L[j] += dt*(w[j] - old_w[j])
-                                # print("\t\tanc:",u,"+=",dt,"*(",weight_fun(X[u]),"-",
+                                # print("\t\tanc:",u,"+=",dt,"*(",wfn(X[u]),"-",
                                 #    old_w,") -->",L)
                             u = next_u
                             next_u = pi[next_u]
@@ -762,8 +771,7 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                 window_length = windows[window_num + 1] - windows[window_num]
                 for j in range(n_out):
                     S[window_num][j] += L[j] * this_length
-                    # the notorious factor of two appears here:
-                    S[window_num][j] *= (2.0/window_length)
+                    S[window_num][j] /= window_length
                 length -= this_length
                 # start the next
                 if window_num < num_windows - 1:
@@ -897,8 +905,8 @@ class SiteStatCalculator(GeneralStatCalculator):
                         for k in range(num_sample_sets):
                             U[mut.derived_state][k] += X[mut.node][k]
                         parent_state = get_derived_state(s, mut.parent)
-                        if mut.parent_state not in U:
-                            U[mut.parent_state] = [0 for _ in range(num_sample_sets)]
+                        if parent_state not in U:
+                            U[parent_state] = [0 for _ in range(num_sample_sets)]
                         for k in range(num_sample_sets):
                             U[parent_state][k] -= X[mut.node][k]
                     for a in U:
