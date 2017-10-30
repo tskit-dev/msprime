@@ -343,6 +343,58 @@ class Simulator(object):
         # self.L.set_value(u.index, 0)
         self.segment_stack.append(u)
 
+
+    def msp_wright_fisher_generation(self):
+        """
+        Evolves one generation of a Wright Fisher population
+        """
+        for pop_idx, pop in enumerate(self.P):
+            ## Cluster haploid inds by parent
+            cur_inds = pop.get_ind_range(self.t)
+            offspring = bintrees.AVLTree()
+            for i in range(pop.get_num_ancestors()-1, -1, -1):
+                ## Popping every ancestor every generation is inefficient.
+                ## In the C implementation we store a pointer to the 
+                ## ancestor so we can pop only if we need to merge
+                anc = pop.remove(i)
+                parent = np.random.choice(cur_inds)
+                if parent not in offspring:
+                    offspring[parent] = []
+                offspring[parent].append(anc)
+
+            ## Draw recombinations in children and sort segments by
+            ## inheritance direction
+            for children in offspring.values():
+                need_merge = True if len(children) > 1 else False
+                H = [[], []]
+                for child in children:
+                    segs_pair = self.recombine(child)
+
+                    ## Collect segments inherited from the same individual
+                    for i, seg in enumerate(segs_pair):
+                        if seg is None:
+                            continue
+                        assert seg.prev is None
+                        heapq.heappush(H[i], (seg.left, seg))
+
+                ## Merge segments
+                for h in H:
+                    self.merge_ancestors(h, pop_idx)
+
+        ## Migration events happen at the rates in the matrix.
+        for j in range(len(self.P)):
+            source_size = self.P[j].get_num_ancestors()
+            for k in range(len(self.P)):
+                if j == k:
+                    continue
+                mig_rate = source_size * self.migration_matrix[j][k]
+                num_migs = min(source_size, np.random.poisson(mig_rate))
+                for _ in range(num_migs):
+                    mig_source = j
+                    mig_dest = k
+                    self.migration_event(mig_source, mig_dest)
+
+
     def simulate(self):
         """
         Simulates the algorithm until all loci have coalesced.
@@ -353,51 +405,8 @@ class Simulator(object):
             print("Recs:", self.num_re_events)
             self.verify()
 
-            for pop_idx, pop in enumerate(self.P):
-                ## Cluster haploid inds by parent
-                cur_inds = pop.get_ind_range(self.t)
-                offspring = bintrees.AVLTree()
-                for i in range(pop.get_num_ancestors()-1, -1, -1):
-                    ## Popping every ancestor every generation is inefficient.
-                    ## In the C implementation we store a pointer to the 
-                    ## ancestor so we can pop only if we need to merge
-                    anc = pop.remove(i)
-                    parent = np.random.choice(cur_inds)
-                    if parent not in offspring:
-                        offspring[parent] = []
-                    offspring[parent].append(anc)
+            self.msp_wright_fisher_generation()
 
-                ## Draw recombinations in children and sort segments by
-                ## inheritance direction
-                for children in offspring.values():
-                    need_merge = True if len(children) > 1 else False
-                    H = [[], []]
-                    for child in children:
-                        segs_pair = self.recombine(child)
-
-                        ## Collect segments inherited from the same individual
-                        for i, seg in enumerate(segs_pair):
-                            if seg is None:
-                                continue
-                            assert seg.prev is None
-                            heapq.heappush(H[i], (seg.left, seg))
-
-                    ## Merge segments
-                    for h in H:
-                        self.merge_ancestors(h, pop_idx)
-
-            ## Migration events happen at the rates in the matrix.
-            for j in range(len(self.P)):
-                source_size = self.P[j].get_num_ancestors()
-                for k in range(len(self.P)):
-                    if j == k:
-                        continue
-                    mig_rate = source_size * self.migration_matrix[j][k]
-                    num_migs = min(source_size, np.random.poisson(mig_rate))
-                    for _ in range(num_migs):
-                        mig_source = j
-                        mig_dest = k
-                        self.migration_event(mig_source, mig_dest)
 
 
     def migration_event(self, j, k):
@@ -422,10 +431,17 @@ class Simulator(object):
         Chooses breakpoints and returns segments sorted by inheritance
         direction, by iterating through segment chain starting with x
         """
-        k = x.left + np.random.exponential(1. / self.r)
         u = self.alloc_segment(-1, -1, -1, -1, None, None)
         v = self.alloc_segment(-1, -1, -1, -1, None, None)
         seg_tails = [u, v]
+
+        if self.r > 0:
+            mu = 1. / self.r
+            k = 1. + x.left + np.random.exponential(mu)
+        else:
+            mu = np.inf
+            k = np.inf
+
         ix = np.random.randint(2)
         seg_tails[ix].next = x
         seg_tails[ix] = x
@@ -435,6 +451,7 @@ class Simulator(object):
             y = x.next
 
             if x.right > k:
+                assert x.left <= k
                 self.num_re_events += 1
                 ix = (ix + 1) % 2
                 # Make new segment
@@ -446,9 +463,9 @@ class Simulator(object):
                 seg_tails[ix] = z
                 x.next = None
                 x.right = k
-                k = k + np.random.exponential(1. / self.r)
                 x = z
-            elif x.right < k and y is not None and y.left > k:
+                k = 1 + k + np.random.exponential(mu)
+            elif x.right <= k and y is not None and y.left >= k:
                 ## Recombine between segment and the next
                 assert seg_tails[ix] == x
                 x.next = None
@@ -456,7 +473,7 @@ class Simulator(object):
                 while y.left > k:
                     self.num_re_events += 1
                     ix = (ix + 1) % 2
-                    k = k + np.random.exponential(1. / self.r)
+                    k = 1 + k + np.random.exponential(1. / self.r)
                 seg_tails[ix].next = y
                 y.prev = seg_tails[ix]
                 seg_tails[ix] = y
@@ -465,7 +482,8 @@ class Simulator(object):
                 ## No recombination between x.right and y.left
                 x = y
 
-        ## Remove sentinal segments
+        ## Remove sentinal segments - this can be handled more simply
+        ## with pointers in C implemetation
         if u.next is not None:
             u.next.prev = None
         s = u
@@ -1351,7 +1369,7 @@ def main():
     #
     # args = parser.parse_args()
     # args.runner(args)
-    args = argparse.Namespace(sample_size=100, random_seed=1, num_loci=1e8,
+    args = argparse.Namespace(sample_size=100, random_seed=1, num_loci=1e7,
             num_replicates=1, recombination_rate=1e-8, num_populations=2,
             migration_rate=0.5, sample_configuration=[50, 50],
             population_growth_rates=None, population_sizes=[100, 100],
