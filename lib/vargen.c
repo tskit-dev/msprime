@@ -64,7 +64,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
         ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
         goto out;
     }
-    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
+    self->num_samples = tree_sequence_get_num_samples(tree_sequence);
     self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
@@ -74,7 +74,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
         goto out;
     }
 
-    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_LEAF_LISTS);
+    ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_SAMPLE_LISTS);
     if (ret != 0) {
         goto out;
     }
@@ -100,17 +100,17 @@ static int
 vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state_offset)
 {
     int ret = 0;
-    leaf_list_node_t *w, *tail;
+    node_list_t *w, *tail;
     node_id_t sample_index;
     bool not_done;
     list_len_t j;
     char derived;
     char ancestral = (char) (site->ancestral_state[0] - state_offset);
 
-    memset(genotypes, ancestral, self->sample_size);
+    memset(genotypes, ancestral, self->num_samples);
     for (j = 0; j < site->mutations_length; j++) {
         derived = (char) (site->mutations[j].derived_state[0] - state_offset);
-        ret = sparse_tree_get_leaf_list(&self->tree, site->mutations[j].node, &w, &tail);
+        ret = sparse_tree_get_sample_list(&self->tree, site->mutations[j].node, &w, &tail);
         if (ret != 0) {
             goto out;
         }

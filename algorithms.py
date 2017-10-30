@@ -1,28 +1,16 @@
 """
-Python versions of the algorithms from the paper.
+Python version of the simulation algorithm.
 """
 from __future__ import print_function
 from __future__ import division
 
 import sys
 import random
-import tempfile
 import argparse
 import heapq
 import math
 
 import bintrees
-import msprime
-import numpy as np
-import statsmodels.api as sm
-import matplotlib
-
-from six.moves import StringIO
-
-# Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
-from matplotlib import pyplot
-
 import msprime
 
 
@@ -150,7 +138,8 @@ class Segment(object):
         return s
 
     def __lt__(self, other):
-        return self.left < other.left
+        return ((self.left, self.right, self.population, self.node)
+                < (other.left, other.right, other.population, self.node))
 
 
 class Population(object):
@@ -224,8 +213,9 @@ class Population(object):
                 ret = self._start_size * u
             else:
                 dt = t - self._start_time
-                z = (1 + self._growth_rate * self._start_size *
-                    math.exp(-self._growth_rate * dt) * u)
+                z = (
+                    1 + self._growth_rate * self._start_size
+                    * math.exp(-self._growth_rate * dt) * u)
                 if z > 0:
                     ret = math.log(z) / self._growth_rate
         return ret
@@ -240,6 +230,7 @@ class Population(object):
 
     def __iter__(self):
         return iter(self._ancestors)
+
 
 class Simulator(object):
     """
@@ -272,24 +263,28 @@ class Simulator(object):
             self.segments[j + 1] = s
             self.segment_stack.append(s)
         self.P = [Population(id_) for id_ in range(N)]
-        self.C = []
-        # self.L = FenwickTree(self.max_segments)
+        self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
-        j = 0
+        # The output tree sequence.
+        self.nodes = msprime.NodeTable()
+        self.edges = msprime.EdgeTable()
+        self.edge_buffer = []
         for pop_index in range(N):
             sample_size = sample_configuration[pop_index]
             self.P[pop_index].set_start_size(population_sizes[pop_index])
             self.P[pop_index].set_growth_rate(
                 population_growth_rates[pop_index], 0)
             for k in range(sample_size):
+                j = len(self.nodes)
                 x = self.alloc_segment(0, self.m, j, pop_index)
                 # self.L.set_value(x.index, self.m - 1)
                 self.P[pop_index].add(x)
+                self.nodes.add_row(
+                    flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index)
                 j += 1
         self.S[0] = self.n
         self.S[self.m] = -1
         self.t = 0
-        self.w = self.n
         self.num_ca_events = 0
         self.num_re_events = 0
         self.modifier_events = [(sys.float_info.max, None, None)]
@@ -343,7 +338,6 @@ class Simulator(object):
         # self.L.set_value(u.index, 0)
         self.segment_stack.append(u)
 
-
     def msp_wright_fisher_generation(self):
         """
         Evolves one generation of a Wright Fisher population
@@ -394,8 +388,46 @@ class Simulator(object):
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
 
+    def store_node(self, population):
+        self.flush_edges()
+        self.nodes.add_row(time=self.t, population=population)
 
-    def simulate(self):
+    def flush_edges(self):
+        """
+        Flushes the edges in the edge buffer to the table, squashing any adjacent edges.
+        """
+        if len(self.edge_buffer) > 0:
+            parent = len(self.nodes) - 1
+            self.edge_buffer.sort(key=lambda e: (e.child, e.left))
+            left = self.edge_buffer[0].left
+            right = self.edge_buffer[0].right
+            child = self.edge_buffer[0].child
+            assert self.edge_buffer[0].parent == parent
+            for e in self.edge_buffer[1:]:
+                assert e.parent == parent
+                if e.left != right or e.child != child:
+                    self.edges.add_row(left, right, parent, child)
+                    left = e.left
+                    child = e.child
+                right = e.right
+            self.edges.add_row(left, right, parent, child)
+            self.edge_buffer = []
+
+    def store_edge(self, left, right, parent, child):
+        """
+        Stores the specified edge to the output tree sequence.
+        """
+        self.edge_buffer.append(
+            msprime.Edge(left=left, right=right, parent=parent, child=child))
+
+    def finalise(self):
+        """
+        Finalises the simulation returns an msprime tree sequence object.
+        """
+        self.flush_edges()
+        return msprime.load_tables(nodes=self.nodes, edges=self.edges)
+
+    def simulate_wf(self):
         """
         Simulates the algorithm until all loci have coalesced.
         """
@@ -407,7 +439,57 @@ class Simulator(object):
 
             self.msp_wright_fisher_generation()
 
+    def simulate(self):
+        """
+        Simulates the algorithm until all loci have coalesced.
+        """
+        while sum(pop.get_num_ancestors() for pop in self.P) != 0:
+            self.t += 1
+            print(self.t)
+            print("Recs:", self.num_re_events)
+            self.verify()
 
+            rate = self.r * self.L.get_total()
+            t_re = infinity
+            if rate != 0:
+                t_re = random.expovariate(rate)
+            # Common ancestor events occur within demes.
+            t_ca = infinity
+            for index, pop in enumerate(self.P):
+                t = pop.get_common_ancestor_waiting_time(self.t)
+                if t < t_ca:
+                    t_ca = t
+                    ca_population = index
+            t_mig = infinity
+            # Migration events happen at the rates in the matrix.
+            for j in range(len(self.P)):
+                source_size = self.P[j].get_num_ancestors()
+                for k in range(len(self.P)):
+                    rate = source_size * self.migration_matrix[j][k]
+                    if rate > 0:
+                        t = random.expovariate(rate)
+                        if t < t_mig:
+                            t_mig = t
+                            mig_source = j
+                            mig_dest = k
+            min_time = min(t_re, t_ca, t_mig)
+            assert min_time != infinity
+            if self.t + min_time > self.modifier_events[0][0]:
+                t, func, args = self.modifier_events.pop(0)
+                self.t = t
+                func(*args)
+            else:
+                self.t += min_time
+                if min_time == t_re:
+                    # print("RE EVENT")
+                    self.recombination_event()
+                elif min_time == t_ca:
+                    # print("CA EVENT")
+                    self.common_ancestor_event(ca_population)
+                else:
+                    # print("MIG EVENT")
+                    self.migration_event(mig_source, mig_dest)
+        return self.finalise()
 
     def migration_event(self, j, k):
         """
@@ -588,8 +670,8 @@ class Simulator(object):
             else:
                 if not coalescence:
                     coalescence = True
-                    self.w += 1
-                u = self.w - 1
+                    self.store_node(pop_id)
+                u = len(self.nodes) - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if l not in self.S:
@@ -609,9 +691,8 @@ class Simulator(object):
                         r = self.S.succ_key(r)
                     alpha = self.alloc_segment(l, r, u, pop_id)
                 # Update the heaps and make the record.
-                children = []
                 for x in X:
-                    children.append(x.node)
+                    self.store_edge(l, r, u, x.node)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:
@@ -620,7 +701,6 @@ class Simulator(object):
                     elif x.right > r:
                         x.left = r
                         heapq.heappush(H, (x.left, x))
-                self.C.append((l, r, u, children, self.t))
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
@@ -703,8 +783,8 @@ class Simulator(object):
                 else:
                     if not coalescence:
                         coalescence = True
-                        self.w += 1
-                    u = self.w - 1
+                        self.store_node(population_index)
+                    u = len(self.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
                     l = x.left
@@ -725,7 +805,8 @@ class Simulator(object):
                             self.S[r] -= 1
                             r = self.S.succ_key(r)
                         alpha = self.alloc_segment(l, r, u, population_index)
-                    self.C.append((l, r, u, (x.node, y.node), self.t))
+                    self.store_edge(l, r, u, x.node)
+                    self.store_edge(l, r, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
                     if x.right == r:
                         self.free_segment(x)
@@ -777,9 +858,10 @@ class Simulator(object):
             if s != 0:
                 print(
                     "\t", j, "->", s, self.L.get_cumulative_frequency(j))
-        print("Coalescence records: ")
-        for rec in self.C:
-            print("\t", rec)
+        print("nodes")
+        print(self.nodes)
+        print("edges")
+        print(self.edges)
         self.verify()
 
     def verify(self):
@@ -841,439 +923,6 @@ class Simulator(object):
                 j = k
         assert list(A.items()) == list(self.S.items())
 
-    def verify_end(self):
-        """
-        Verify the state of the simulation at the end.
-        """
-        # Check the coalescence records to make sure they correctly cover
-        # space
-        left_coords = sorted(set(r[0] for r in self.C))
-        for k in left_coords:
-            c = 0
-            for l, r, _, _, _, _ in self.C:
-                if l <= k < r:
-                    c += 1
-            assert c == self.n - 1
-
-    def write_text(self, nodes_file, edgesets_file):
-        """
-        Writes the records out as text.
-        """
-        num_nodes = max(r[2] for r in self.C) + 1
-        time = [0 for _ in range(num_nodes)]
-        print("is_sample\ttime", file=nodes_file)
-        print("left\tright\tparent\tchildren", file=edgesets_file)
-        for left, right, u, children, t in self.C:
-            time[u] = t
-            print(
-                left, right, u, ",".join(str(c) for c in sorted(children)),
-                sep="\t", file=edgesets_file)
-        for u in range(num_nodes):
-            print(
-                int(u < self.n), time[u], sep="\t", file=nodes_file)
-
-class Tree(object):
-    """
-    A tree in a tree sequence. This class represents a single point
-    in the seqeunce of trees and has next() and prev() methods to
-    change the state of the tree into other trees in the sequence.
-    """
-    def __init__(self, left, right, node, children, time):
-        self.__left = left
-        self.__right = right
-        self.__node = node
-        self.__children = children
-        self.__time = time
-        self.__num_records = len(left)
-        self.__left_order = sorted(
-            range(self.__num_records), key=lambda j: (left[j], time[j]))
-        self.__right_order = sorted(
-            range(self.__num_records), key=lambda j: (right[j], -time[j]))
-        self.__direction = -1
-        self.parent = [-1 for j in range(max(node) + 1)]
-        self.num_trees = len(set(left))
-
-    def first(self):
-        self.__left_index = 0
-        self.__right_index = 0
-        self.__direction = 1
-        self.index = -1
-        self.next()
-
-    def last(self):
-        self.__left_index = self.__num_records - 1
-        self.__right_index = self.__num_records - 1
-        self.__direction = -1
-        self.index = self.num_trees
-        self.prev()
-
-    def next(self):
-        if self.index == self.num_trees - 1:
-            raise ValueError("Cannot call next on last tree")
-        j = int(self.__direction != 1)
-        self.__direction = 1
-        il = self.__left_index + j
-        ir = self.__right_index + j
-        x = self.__left[self.__left_order[il]]
-        M = self.__num_records
-        while self.__right[self.__right_order[ir]] == x:
-            h = self.__right_order[ir]
-            for q in self.__children[h]:
-                self.parent[q] = -1
-            ir += 1
-        while il < M and self.__left[self.__left_order[il]] == x:
-            h = self.__left_order[il]
-            for q in self.__children[h]:
-                self.parent[q] = self.__node[h]
-            il += 1
-        self.__left_index = il
-        self.__right_index = ir
-        self.index += 1
-
-    def prev(self):
-        if self.index == 0:
-            raise ValueError("Cannot call prev on the first tree")
-        j = int(self.__direction != -1)
-        self.__direction = -1
-        il = self.__left_index - j
-        ir = self.__right_index - j
-        x = self.__right[self.__right_order[ir]]
-        while self.__left[self.__left_order[il]] == x:
-            h = self.__left_order[il]
-            for q in self.__children[h]:
-                self.parent[q] = -1
-            il -= 1
-        while ir >= 0 and self.__right[self.__right_order[ir]] == x:
-            h = self.__right_order[ir]
-            for q in self.__children[h]:
-                self.parent[q] = self.__node[h]
-            ir -= 1
-        self.__left_index = il
-        self.__right_index = ir
-        self.index -= 1
-
-
-def generate_trees(l, r, u, c, t):
-    """
-    Algorithm T. Sequentially visits all trees in the specified
-    tree sequence.
-    """
-    # Calculate the index vectors
-    M = len(l)
-    I = sorted(range(M), key=lambda j: (l[j], t[j]))
-    O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [-1 for j in range(max(u) + 1)]
-    j = 0
-    k = 0
-    while j < M:
-        x = l[I[j]]
-        while r[O[k]] == x:
-            h = O[k]
-            for q in c[h]:
-                pi[q] = -1
-            k = k + 1
-        while j < M and l[I[j]] == x:
-            h = I[j]
-            for q in c[h]:
-                pi[q] = u[h]
-            j += 1
-        yield pi
-
-def reverse_generate_trees(l, r, u, c, t):
-    """
-    Reversed version of Algorithm T. Sequentially visits all trees
-    in the specified tree sequence in right-to-left order.
-    """
-    # Calculate the index vectors
-    M = len(l)
-    O = sorted(range(M), key=lambda j: (l[j], t[j]))
-    I = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [-1 for j in range(max(u) + 1)]
-    j = M - 1
-    k = M - 1
-    while j >= 0:
-        x = r[I[j]]
-        while l[O[k]] == x:
-            h = O[k]
-            for q in c[h]:
-                pi[q] = -1
-            k -= 1
-        while j >= 0 and r[I[j]] == x:
-            h = I[j]
-            for q in c[h]:
-                pi[q] = u[h]
-            j -= 1
-        yield pi
-
-def count_leaves(l, r, u, c, t, S):
-    """
-    Algorithm L. Sequentially visits all trees in the specified
-    tree sequence and maintain a count of the leaf nodes in the
-    specified set for each node.
-    """
-    # Calculate the index vectors
-    M = len(l)
-    I = sorted(range(M), key=lambda j: (l[j], t[j]))
-    O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [-1 for j in range(max(u) + 1)]
-    beta = [0 for j in range(max(u) + 1)]
-    for j in S:
-        beta[j] = 1
-    j = 0
-    k = 0
-    while j < M:
-        x = l[I[j]]
-        while r[O[k]] == x:
-            h = O[k]
-            b = 0
-            for q in c[h]:
-                pi[q] = -1
-                b += beta[q]
-            k += 1
-            v = u[h]
-            while v != -1:
-                beta[v] -= b
-                v = pi[v]
-        while j < M and l[I[j]] == x:
-            h = I[j]
-            b = 0
-            for q in c[h]:
-                pi[q] = u[h]
-                b += beta[q]
-            j = j + 1
-            v = u[h]
-            while v != -1:
-                beta[v] += b
-                v = pi[v]
-        yield pi, beta
-
-class LeafListNode(object):
-    def __init__(self, value):
-        self.value = value
-        self.next = None
-        self.prev = None
-
-    def __str__(self):
-        prev = -1 if self.prev is None else self.prev.value
-        next = -1 if self.next is None else self.next.value
-        return "{}->{}->{}".format(prev, self.value, next)
-
-
-def update_leaf_lists(u, pi, xi, head, tail):
-    while u != -1:
-        head[u] = None
-        tail[u] = None
-        for v in xi[u]:
-            if head[v] is not None:
-                if head[u] is None:
-                    head[u] = head[v]
-                    tail[u] = tail[v]
-                else:
-                    tail[u].next = head[v]
-                    head[v].prev = tail[u]
-                    tail[u] = tail[v]
-        u = pi[u]
-
-
-def leaf_sets(l, r, u, c, t, S):
-    """
-    Sequentially visits all trees in the specified
-    tree sequence and maintain the leaf sets for all leaves in
-    specified set for each node.
-    """
-    # Calculate the index vectors
-    M = len(l)
-    I = sorted(range(M), key=lambda j: (l[j], t[j]))
-    O = sorted(range(M), key=lambda j: (r[j], -t[j]))
-    pi = [-1 for j in range(max(u) + 1)]
-    xi = [[] for j in range(max(u) + 1)]
-    head = [None for j in range(max(u) + 1)]
-    tail = [None for j in range(max(u) + 1)]
-    for j in S:
-        node = LeafListNode(j)
-        head[j] = node
-        tail[j] = node
-    j = 0
-    k = 0
-    while j < M:
-        x = l[I[j]]
-        while r[O[k]] == x:
-            h = O[k]
-            xi[u[h]] = []
-            for q in c[h]:
-                pi[q] = -1
-            update_leaf_lists(u[h], pi, xi, head, tail)
-            k += 1
-        while j < M and l[I[j]] == x:
-            h = I[j]
-            for q in c[h]:
-                pi[q] = u[h]
-            xi[u[h]] = c[h]
-            update_leaf_lists(u[h], pi, xi, head, tail)
-            j += 1
-        yield pi, xi, head, tail
-
-
-def check_consistency(n, pi, xi, head, tail, S):
-    """
-    Checks the consistency of the specified parent list, child list
-    and head and tail leaf list pointers.
-    """
-    all_leaves = set()
-    for sample in S:
-        root = sample
-        while pi[root] != -1:
-            root = pi[root]
-        for leaf in leaves(root, xi):
-            all_leaves.add(leaf)
-    assert set(all_leaves) == set(range(n))
-    for u in nodes(root, xi):
-        node_leaves = [v for v in leaves(u, xi) if v in S]
-        if len(node_leaves) == 0:
-            assert head[u] is None
-            assert tail[u] is None
-        else:
-            if node_leaves[0] != head[u].value:
-                print("HERROR: head incorrect:", head[u].value)
-            if node_leaves[-1] != tail[u].value:
-                print("TERROR: tail incorrect:", tail[u].value)
-            list_leaves = []
-            x = head[u]
-            while True:
-                if x.value in list_leaves:
-                    print("ERROR!!!", x.value, "already in leaf list at index",
-                            list_leaves.index(x.value), "len = ", len(list_leaves))
-                    break
-                list_leaves.append(x.value)
-                if x == tail[u]:
-                    break
-                x = x.next
-            if list_leaves != node_leaves:
-                print("ERROR")
-                print(list_leaves)
-                print(node_leaves)
-            # check reversed traversal
-            list_leaves = []
-            x = tail[u]
-            while True:
-                if x.value in list_leaves:
-                    print("ERROR!!!", x.value, "already in leaf list at index",
-                            list_leaves.index(x.value), "len = ", len(list_leaves))
-                    break
-                list_leaves.append(x.value)
-                if x == head[u]:
-                    break
-                x = x.prev
-            if list_leaves != list(reversed(node_leaves)):
-                print("ERROR")
-                print(list_leaves)
-                print(node_leaves)
-        # assert list_leaves == node_leaves
-        # print(list_leaves)
-        # print(list_leaves == node_leaves)
-
-    print("TREE")
-    print_tree(root, xi, head, tail, 0)
-
-def print_tree(u, xi, head, tail, depth):
-    indent = "  " * depth
-    leaf_list = []
-    # x = head[u]
-    # while True:
-    #     leaf_list.append(x.value)
-    #     if x == tail[u]:
-    #         break
-    #     x = x.next
-    print("{}[{}:{}]\thead = {}; tail = {}\t{}".format(
-        indent, u, len(xi[u]), head[u], tail[u], leaf_list))
-    for v in xi[u]:
-        print_tree(v, xi, head, tail, depth + 1)
-
-def nodes(root, xi):
-    """
-    Returns an iterator over the nodes in the specified tree
-    """
-    stack = [root]
-    while len(stack) > 0:
-        u = stack.pop()
-        stack.extend(reversed(xi[u]))
-        yield u
-
-
-def leaves(u, xi):
-    """
-    Returns an iterator over the leaves below the specified node.
-    """
-    for v in nodes(u, xi):
-        if len(xi[v]) == 0:
-            yield v
-
-
-def leaf_list(u, head, tail, forwards=True):
-    """
-    Returns the list of leaves for the specified node.
-    """
-    ret = []
-    if forwards:
-        v = head[u]
-        while True:
-            ret.append(v.value)
-            if v == tail[u]:
-                break
-            v = v.next
-    else:
-        v = tail[u]
-        while True:
-            ret.append(v.value)
-            if v == head[u]:
-                break
-            v = v.prev
-    return ret
-
-
-def run_trees(args):
-    process_trees(args.history_file)
-
-
-def process_trees(ts):
-    # Process the specified msprime tree sequence using local algorithms.
-    l = []
-    r = []
-    u = []
-    c = []
-    t = []
-    for e in ts.edgesets():
-        l.append(e.left)
-        r.append(e.right)
-        u.append(e.parent)
-        c.append(e.children)
-        t.append(ts.time(e.parent))
-    # N = len(l)
-    # print("Trees:")
-    # for pi in generate_trees(l, r, u, c, t):
-    #     print(pi)
-
-    n = ts.sample_size
-    S = set(range(n))
-    # S = set([1, 2, 3])
-    # # print("Counts:")
-    # # for pi, beta in count_leaves(l, r, u, c, t, S):
-    # #     print("\t", beta)
-    # print("Counts:")
-    all_leaves = [list(tree.leaves(tree.root)) for tree in ts.trees()]
-    j = 0
-    for pi, xi, head, tail in leaf_sets(l, r, u, c, t, S):
-        root = 0
-        while pi[root] != -1:
-            root = pi[root]
-        other_leaves = leaf_list(root, head, tail)
-        assert all_leaves[j] == other_leaves
-        other_leaves = leaf_list(root, head, tail, forwards=False)
-        assert list(reversed(all_leaves[j])) == other_leaves
-        j += 1
-        check_consistency(n, pi, xi, head, tail, S)
-        # print(pi)
-        # print(xi)
 
 def run_simulate(args):
     """
@@ -1304,19 +953,17 @@ def run_simulate(args):
         args.population_size_change,
         args.migration_matrix_element_change,
         args.bottleneck, 10000)
-    s.simulate()
-    nodes_file = StringIO()
-    edgesets_file = StringIO()
-    s.write_text(nodes_file, edgesets_file)
-    nodes_file.seek(0)
-    edgesets_file.seek(0)
-    ts = msprime.load_text(nodes_file, edgesets_file)
-    # process_trees(ts)
+    ts = s.simulate()
+    ts.dump(args.output_file)
+    if args.verbose:
+        s.print_state()
 
-    return ts
 
 def add_simulator_arguments(parser):
     parser.add_argument("sample_size", type=int)
+    parser.add_argument("output_file")
+    parser.add_argument(
+            "-v", "--verbose", help="increase output verbosity", action="store_true")
     parser.add_argument(
         "--random-seed", "-s", type=int, default=1)
     parser.add_argument(
@@ -1349,37 +996,10 @@ def add_simulator_arguments(parser):
 
 
 def main():
-    # parser = argparse.ArgumentParser()
-    # # This is required to get uniform behaviour in Python2 and Python3
-    # subparsers = parser.add_subparsers(dest="subcommand")
-    # subparsers.required = True
-    #
-    # simulate_parser = subparsers.add_parser(
-    #     "simulate",
-    #     help="Simulate the process and output the results in text")
-    # add_simulator_arguments(simulate_parser)
-    # simulate_parser.set_defaults(runner=run_simulate)
-    #
-    # trees_parser = subparsers.add_parser(
-    #     "trees",
-    #     help="Shows the trees from an text records file")
-    # trees_parser.add_argument("history_file")
-    #
-    # trees_parser.set_defaults(runner=run_trees)
-    #
-    # args = parser.parse_args()
-    # args.runner(args)
-    args = argparse.Namespace(sample_size=100, random_seed=1, num_loci=1e7,
-            num_replicates=1, recombination_rate=1e-8, num_populations=2,
-            migration_rate=0.5, sample_configuration=[50, 50],
-            population_growth_rates=None, population_sizes=[100, 100],
-            population_size_change=[], population_growth_rate_change=[],
-            migration_matrix_element_change=[], bottleneck=[])
-    ts = run_simulate(args)
-    print(len(list(ts.trees())))
-
-    return ts
-    # run_trees(args)
+    parser = argparse.ArgumentParser()
+    add_simulator_arguments(parser)
+    args = parser.parse_args()
+    run_simulate(args)
 
 
 if __name__ == "__main__":

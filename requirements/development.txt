@@ -3,6 +3,7 @@ coverage
 flake8
 h5py
 mock
+newick
 nose
 numpy
 six

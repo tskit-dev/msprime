@@ -1,4 +1,4 @@
-left    right   parent  children
+left    right   parent  child
 0.000000	4.000000	5	2,3	
 4.000000	9.000000	5	3	
 22.000000	28.000000	5	3	

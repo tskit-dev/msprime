@@ -33,18 +33,13 @@ import unittest
 import msprime
 import msprime.cli as cli
 
+import newick
+
 _h5py_available = True
 try:
     import h5py
 except ImportError:
     _h5py_available = False
-
-# We're forced to do this because dendropy doesn't support Python 3.
-_dendropy_available = True
-try:
-    import dendropy
-except ImportError:
-    _dendropy_available = False
 
 
 def div4(matrix):
@@ -564,61 +559,61 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
 
     def test_structure_args(self):
         sim = self.create_simulator("2 1 -T")
-        self.assertEqual(sim.get_sample_configuration(), [2])
-        self.assertEqual(sim.get_migration_matrix(), [[0]])
+        self.assertEqual(sim.sample_configuration, [2])
+        self.assertEqual(sim.migration_matrix, [[0]])
 
         # Specifying 1 population is the same as the default.
         sim = self.create_simulator("2 1 -T -I 1 2")
-        self.assertEqual(sim.get_sample_configuration(), [2])
-        self.assertEqual(sim.get_migration_matrix(), [[0]])
+        self.assertEqual(sim.sample_configuration, [2])
+        self.assertEqual(sim.migration_matrix, [[0]])
 
         sim = self.create_simulator("2 1 -T -I 2 1 1")
-        self.assertEqual(sim.get_sample_configuration(), [1, 1])
-        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
+        self.assertEqual(sim.sample_configuration, [1, 1])
+        self.assertEqual(sim.migration_matrix, [[0, 0], [0, 0]])
 
         # Default migration matrix is zeros
         sim = self.create_simulator("2 1 -T -I 2 2 0")
-        self.assertEqual(sim.get_migration_matrix(), [[0, 0], [0, 0]])
-        self.assertEqual(sim.get_sample_configuration(), [2, 0])
+        self.assertEqual(sim.migration_matrix, [[0, 0], [0, 0]])
+        self.assertEqual(sim.sample_configuration, [2, 0])
 
         sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
         self.assertEqual(
-            sim.get_migration_matrix(), div4([[0, 0.1], [0.1, 0]]))
-        self.assertEqual(sim.get_sample_configuration(), [1, 1])
+            sim.migration_matrix, div4([[0, 0.1], [0.1, 0]]))
+        self.assertEqual(sim.sample_configuration, [1, 1])
 
         # Initial migration matrix is M / (num_pops - 1)
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
-        self.assertEqual(sim.get_sample_configuration(), [1, 1, 1])
+        self.assertEqual(sim.sample_configuration, [1, 1, 1])
         self.assertEqual(
-            sim.get_migration_matrix(),
+            sim.migration_matrix,
             div4([[0, 1, 1], [1, 0, 1], [1, 1, 0]]))
         sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
-        self.assertEqual(sim.get_sample_configuration(), [5, 4, 3, 2, 1, 0])
+        self.assertEqual(sim.sample_configuration, [5, 4, 3, 2, 1, 0])
 
     def test_migration_matrix_entry(self):
         sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
         self.assertEqual(
-            sim.get_migration_matrix(), div4([[0, 1.1], [9.0, 0]]))
+            sim.migration_matrix, div4([[0, 1.1], [9.0, 0]]))
         sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
         self.assertEqual(
-            sim.get_migration_matrix(),
+            sim.migration_matrix,
             div4([[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]]))
 
     def test_migration_matrix(self):
         # All migration rates are divided by 4 to get per-generation rates.
         # Diagonal values are ignored
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
-        self.assertEqual(sim.get_migration_matrix(), div4([[0, 1], [2, 0]]))
+        self.assertEqual(sim.migration_matrix, div4([[0, 1], [2, 0]]))
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
-        self.assertEqual(sim.get_migration_matrix(), div4([[0, 1], [2, 0]]))
+        self.assertEqual(sim.migration_matrix, div4([[0, 1], [2, 0]]))
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
         self.assertEqual(
-            sim.get_migration_matrix(),
+            sim.migration_matrix,
             div4([[0, 2, 3], [4, 0, 6], [7, 8, 0]]))
 
     def test_simultaneous_events(self):
         sim = self.create_simulator("2 1 -T -eN 1 2.0 -eG 1.0 3 -eN 1 4")
-        events = sim.get_demographic_events()
+        events = sim.demographic_events
         self.assertEqual(len(events), 3)
         for event in events:
             self.assertEqual(event.time, 1.0 * 4)
@@ -637,46 +632,46 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             sim = self.create_simulator(args)
             return [
                 (c.initial_size, c.growth_rate * 4)
-                for c in sim.get_population_configurations()]
+                for c in sim.population_configurations]
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 -1"),
-            [(None, -1), (None, 0), (None, 0)])
+            [(1, -1), (1, 0), (1, 0)])
         self.assertEqual(
             f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3"),
-            [(None, 1), (None, 2), (None, 3), (None, 0)])
+            [(1, 1), (1, 2), (1, 3), (1, 0)])
         # A -g should override a -G
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"),
-            [(None, 2), (None, -1), (None, -1)])
+            [(1, 2), (1, -1), (1, -1)])
         # The last -g should be effective
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"),
-            [(None, -1), (None, 0), (None, 0)])
+            [(1, -1), (1, 0), (1, 0)])
 
     def test_population_size(self):
         def f(args):
             sim = self.create_simulator(args)
             return [
                 (c.initial_size, c.growth_rate * 4)
-                for c in sim.get_population_configurations()]
+                for c in sim.population_configurations]
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -n 1 2"),
-            [(2, 0), (None, 0), (None, 0)])
+            [(2, 0), (1, 0), (1, 0)])
         self.assertEqual(
             f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3"),
-            [(1, 0), (2, 0), (3, 0), (None, 0)])
+            [(1, 0), (2, 0), (3, 0), (1, 0)])
         # The last -n should be effective
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"),
-            [(0.1, 0), (None, 0), (None, 0)])
+            [(0.1, 0), (1, 0), (1, 0)])
         self.assertEqual(
             f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"),
-            [(0.1, 2), (None, 0), (None, 0)])
+            [(0.1, 2), (1, 0), (1, 0)])
 
     def test_population_growth_rate_change(self):
         def f(args):
             sim = self.create_simulator(args)
-            return sim.get_demographic_events()
+            return sim.demographic_events
         events = f("2 1 -T -eg 0.1 1 2")
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "population_parameters_change")
@@ -697,7 +692,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_population_size_change(self):
         def f(args):
             sim = self.create_simulator(args)
-            return sim.get_demographic_events()
+            return sim.demographic_events
         events = f("2 1 -T -en 0.1 1 2")
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "population_parameters_change")
@@ -721,7 +716,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_migration_rate_change(self):
         def check(args, results):
             sim = self.create_simulator(args)
-            events = sim.get_demographic_events()
+            events = sim.demographic_events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
@@ -737,7 +732,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_migration_matrix_entry_change(self):
         def check(args, results):
             sim = self.create_simulator(args)
-            events = sim.get_demographic_events()
+            events = sim.demographic_events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
@@ -754,11 +749,11 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def check(args, results):
             sim = self.create_simulator(args)
             # Make sure we haven't changed the initial matrix.
-            matrix = sim.get_migration_matrix()
+            matrix = sim.migration_matrix
             for row in matrix:
                 for entry in row:
                     self.assertEqual(entry, 0.0)
-            events = sim.get_demographic_events()
+            events = sim.demographic_events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
@@ -780,7 +775,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_population_split(self):
         def check(N, args, results):
             sim = self.create_simulator(args)
-            events = sim.get_demographic_events()
+            events = sim.demographic_events
             self.assertEqual(len(events), len(results) * N)
             k = 0
             for result in results:
@@ -812,11 +807,11 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_admixture(self):
         def check(N, args, results):
             sim = self.create_simulator(args)
-            events = sim.get_demographic_events()
-            self.assertEqual(sim.get_num_populations(), N)
+            events = sim.demographic_events
+            self.assertEqual(sim.num_populations, N)
             self.assertEqual(len(events), len(results))
             matrix = [[0 for _ in range(N)] for _ in range(N)]
-            self.assertEqual(sim.get_migration_matrix(), matrix)
+            self.assertEqual(sim.migration_matrix, matrix)
             for result, event in zip(results, events):
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0] * 4)
@@ -908,14 +903,11 @@ class TestMspmsOutput(TestCli):
         Verifies that the specified string is a valid newick tree.
         """
         self.assertEqual(tree[-1], ";")
-        if _dendropy_available:
-            parsed_tree = dendropy.Tree.get_from_string(tree, schema="newick")
-            leaf_labels = set(
-                int(ts.label) for ts in parsed_tree.taxon_namespace)
-            self.assertEqual(leaf_labels, set(range(1, sample_size + 1)))
-            if precision > 0:
-                self.assertGreater(parsed_tree.length(), 0)
-        # TODO test the branch length precision output.
+        newick_tree = newick.loads(tree)[0]
+        leaf_names = newick_tree.get_leaf_names()
+        self.assertEqual(
+            sorted(leaf_names),
+            sorted([str(u + 1) for u in range(sample_size)]))
 
     def verify_output(
             self, sample_size=2, num_loci=1, recombination_rate=0,
@@ -1165,25 +1157,25 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 5)
 
-    def test_edgesets_default_values(self):
+    def test_edges_default_values(self):
         parser = cli.get_msp_parser()
-        cmd = "edgesets"
+        cmd = "edges"
         history_file = "test.hdf5"
         args = parser.parse_args([cmd, history_file])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 6)
 
-    def test_edgesets_short_args(self):
+    def test_edges_short_args(self):
         parser = cli.get_msp_parser()
-        cmd = "edgesets"
+        cmd = "edges"
         history_file = "test.hdf5"
         args = parser.parse_args([cmd, history_file, "-p", "8"])
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 8)
 
-    def test_edgesets_long_args(self):
+    def test_edges_long_args(self):
         parser = cli.get_msp_parser()
-        cmd = "edgesets"
+        cmd = "edges"
         history_file = "test.hdf5"
         args = parser.parse_args([
             cmd, history_file, "--precision", "5"])
@@ -1391,21 +1383,21 @@ class TestMspConversionOutput(unittest.TestCase):
         output_nodes = stdout.splitlines()
         self.verify_nodes(output_nodes, precision)
 
-    def verify_edgesets(self, output_edgesets, precision):
+    def verify_edges(self, output_edges, precision):
         with tempfile.TemporaryFile("w+") as f:
-            self._tree_sequence.dump_text(edgesets=f, precision=precision)
+            self._tree_sequence.dump_text(edges=f, precision=precision)
             f.seek(0)
             output = f.read().splitlines()
-        self.assertEqual(output, output_edgesets)
+        self.assertEqual(output, output_edges)
 
-    def test_edgesets(self):
-        cmd = "edgesets"
+    def test_edges(self):
+        cmd = "edges"
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
             cmd, self._history_file, "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
-        output_edgesets = stdout.splitlines()
-        self.verify_edgesets(output_edgesets, precision)
+        output_edges = stdout.splitlines()
+        self.verify_edges(output_edges, precision)
 
     def verify_sites(self, output_sites, precision):
         with tempfile.TemporaryFile("w+") as f:
@@ -1484,15 +1476,14 @@ class TestMspConversionOutput(unittest.TestCase):
         self.verify_variants(output_variants)
 
     def verify_newick(self, output_newick):
-        newick = list(self._tree_sequence.newick_trees())
+        newick = list(tree.newick(precision=3) for tree in self._tree_sequence.trees())
         self.assertEqual(len(newick), len(output_newick))
-        for (l, tree), line in zip(newick, output_newick):
+        for tree, line in zip(newick, output_newick):
             self.assertEqual(tree, line)
 
     def test_newick(self):
         cmd = "newick"
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._history_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._history_file])
         self.assertEqual(len(stderr), 0)
         output_newick = stdout.splitlines()
         self.verify_newick(output_newick)
@@ -1554,7 +1545,7 @@ class TestUpgrade(TestCli):
             # Quick checks to ensure we have the right tree sequence.
             # More thorough checks are done elsewhere.
             self.assertEqual(ts1.get_sample_size(), ts2.get_sample_size())
-            self.assertEqual(ts1.num_edgesets, ts2.num_edgesets)
+            self.assertEqual(ts1.num_edges, ts2.num_edges)
             self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
 
     def test_duplicate_positions(self):

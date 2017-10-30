@@ -30,6 +30,9 @@ provided to put unsorted tables in the proper order.
 
 First are those that describe genealogical relationships:
 
+.. todo::
+    Update the definitions here to change Edgeset to Edge.
+
 tree
     A "gene tree", i.e., the genealogical tree describing how each of the
     individuals at the tips of the tree are related to each other.  A "tree
@@ -49,10 +52,12 @@ node
 
     where ``flags`` records information about the ancestor; ``population`` is
     the integer ID of the ancestor's (birth) population, and ``time`` is how
-    long ago the ancestor was born.
+    long ago the ancestor was born.  Each node also has a unique (integer) ID,
+    but this is *not* recorded explicitly - rather, the individual's ID is
+    given by their position in the tree sequence's node table.
 
 samples
-    The tips of the tree, that we have obtained data from.  These are
+    Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
     genome.  These are a special kind of node, having ``flags`` set to 1 (as a
@@ -81,10 +86,14 @@ and for algorithmic reasons:
 
 3. The leftmost endpoint of each chromosome is 0.0.
 4. Node times must be strictly greater than zero.
-5. The set of intervals on which each individual is a parent must be disjoint.
-6. The list of offspring in an edgeset must be sorted.
-7. Edgesets must be sorted in nondecreasing time order.
+5. The list of offspring in an edgeset must be sorted.
+6. Edgesets must be sorted in nondecreasing time order.
+7. The set of intervals on which each individual is a parent must be disjoint.
 8. Each edgeset must contain at least two children.
+
+A set of tables satisfying requirements 1-4 can be transformed into a completely
+valid set of tables by applying first ``sort_tables()`` (which ensures 5 and 6)
+and then ``simplify_tables()`` (which ensures 7 and 8).
 
 Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
@@ -129,8 +138,8 @@ site
         id	position	ancestral_state
         0	0.1	        0
 
-    The ``id`` is not stored directly, but is implied by its index in the site
-    table.
+    As with nodes, the ``id`` is not stored directly, but is implied by its
+    index in the site table.
 
 
 To allow for efficent algorithms, it is required that
@@ -191,7 +200,9 @@ Here is an example.  Consider the following sequence of trees::
 
     position 0.0                  0.2               0.8                1.0
 
-First, we specify the nodes in a ``NodeTable``::
+First, we specify the nodes::
+
+    NodeTable:
 
     id      is_sample    population   time
     0       1            0            0
@@ -202,9 +213,12 @@ First, we specify the nodes in a ``NodeTable``::
     5       0            0            0.7
     6       0            0            1.0
 
-Recall that the first column, ``id``, is not actually recorded, only provided
-for convenience.  This has three samples: nodes 0, 1, and 2, and lists their
-birth times.  Then, we specify the edgesets::
+Importantly, the first column, ``id``, is **not actually recorded**, and is
+only shown when printing out node tables (as here) for convenience. This has
+three samples: nodes 0, 1, and 2, and lists their birth times.  Then, we
+specify the edgesets::
+
+    EdgesetTable:
 
     left    right   parent  children
     0.2     0.8     3       0,2
@@ -227,11 +241,16 @@ mutation occurs at position 0.1 and the mutations in the second tree both
 occurred at the same position, at 0.5 (with a back mutation).  The positions
 are recorded in the sites table::
 
+    SiteTable:
+
     id	position	ancestral_state
     0	0.1     	0
     1	0.5     	0
 
-and the acutal mutations::
+As with node tables, the ``id`` column is **not** actually recorded, but is
+implied by the position in the table.  The acutal mutations are then recorded::
+
+    MutationTable:
 
     site	node	derived_state
     0	    4	    1
@@ -268,8 +287,8 @@ follows::
     sv = [True, True, True, False, False, False, False]
     tv = [0.0, 0.0, 0.0, 0.4, 0.5, 0.7, 1.0]
     pv = [0, 0, 0, 0, 0, 0, 0]
-    for s, t, p in zip(fv, tv, pv):
-        n.add_row(is_sample=s, population=p, time=t)
+    for s, t, p in zip(sv, tv, pv):
+        n.add_row(flags=s, population=p, time=t)
 
     print(n)
 
@@ -278,7 +297,7 @@ new records appear one-by-one. In the example above it would have been more
 natural to use ``.set_columns()``::
 
     n = msprime.NodeTable()
-    n.set_columns(is_sample=sv, population=pv, time=tv)
+    n.set_columns(flags=sv, population=pv, time=tv)
 
 
 Finally, here is an example where we add 1.4 to every ``time`` except the first
@@ -291,10 +310,20 @@ in the NodeTable constructed above using ``numpy`` indexing::
     n.set_columns(flags=fn, population=pn, time=tn)
 
 
-Sorting tables
-==============
+Sorting and simplifying tables
+==============================
 
-..autofunction:: msprime.sort_tables
+Tables that are noncontradictory but do not satisfy all algorithmic requirements
+listed above may be converted to a TreeSequence by first sorting, then simplifying
+them (both operate on the tables **in place**):
+
+.. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations, edge_start])
+
+**Note:** the following function is more general than
+``TreeSequence.simplify()``, since it can be applied to tables not satisfying
+all criteria above (and that hence could not be loaded into a TreeSequence).
+
+.. autofunction:: msprime.simplify_tables(samples, nodes, edgesets[, migrations, sites, mutations])
 
 
 NodeTable
@@ -303,10 +332,10 @@ NodeTable
 .. autoclass:: msprime.NodeTable
 
 
-EdgesetTable
+EdgeTable
 ============
 
-.. autoclass:: msprime.EdgesetTable
+.. autoclass:: msprime.EdgeTable
 
 
 SiteTable
@@ -330,10 +359,10 @@ immutible, often the best way to modify a ``TreeSequence`` is something along
 the lines of (for ``ts`` a ``TreeSequence``)::
 
     nodes = msprime.NodeTable()
-    edgesets = msprime.EdgesetTable()
-    ts.dump_tables(nodes=nodes, edgesets=edgesets)
-    # (modify nodes and edgesets)
-    ts.load_tables(nodes=nodes, edgesets=edgesets)
+    edges = msprime.EdgeTable()
+    ts.dump_tables(nodes=nodes, edges=edges)
+    # (modify nodes and edges)
+    ts.load_tables(nodes=nodes, edges=edges)
 
 
 .. automethod:: msprime.TreeSequence.load_tables

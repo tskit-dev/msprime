@@ -13,7 +13,7 @@ HEADERS=msprime.h err.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
     hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o table.o
 
-all: main tests
+all: main tests simulation_tests
 
 # We need a seperate rule for avl.c as it won't pass the strict checks.
 avl.o: avl.c
@@ -32,20 +32,23 @@ main: main.c ${COMPILED} ${HEADERS} argtable3.o
 tests: tests.c ${COMPILED} ${HEADERS}
 	${CC} ${CFLAGS} -Wall -o tests tests.c ${COMPILED} ${LDFLAGS} -lcunit 
 
+simulation_tests: simulation_tests.c ${COMPILED} ${HEADERS}
+	${CC} ${CFLAGS} -Wall -o simulation_tests simulation_tests.c ${COMPILED} ${LDFLAGS} -lcunit 
+
 tags:
 	etags *
 
 clean:
-	rm -f main tests *.o *.gcda *.gcno
+	rm -f main tests simulation_tests *.o *.gcda *.gcno
 
 ubuntu-tests: CC=gcc
 ubuntu-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
-ubuntu-tests: tests 
+ubuntu-tests: tests simulation_tests
 
 coverity-tests: CC=gcc 
 coverity-tests: CFLAGS+=-I/usr/include/hdf5/serial
 coverity-tests: LDFLAGS+=-L/usr/lib/x86_64-linux-gnu/hdf5/serial
-coverity-tests: tests main
+coverity-tests: tests main simulation_tests
 
 coverity: 
 	# We must use CC=gcc for this target or coverity won't 

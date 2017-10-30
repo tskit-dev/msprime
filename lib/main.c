@@ -65,7 +65,7 @@ fatal_library_error(int err, const char *msg, ...)
 }
 
 static int
-read_samples(config_t *config, size_t *sample_size, sample_t **samples)
+read_samples(config_t *config, size_t *num_samples, sample_t **samples)
 {
     int ret = 0;
     size_t j, n;
@@ -105,7 +105,7 @@ read_samples(config_t *config, size_t *sample_size, sample_t **samples)
         ret_samples[j].time = config_setting_get_float(t);
     }
     *samples = ret_samples;
-    *sample_size = n;
+    *num_samples = n;
 out:
     return ret;
 }
@@ -117,7 +117,7 @@ read_model_config(msp_t *msp, config_t *config)
     config_setting_t *setting = config_lookup(config, "model");
     config_setting_t *s;
     const char *name;
-    double psi, c, alpha, truncation_point;
+    double population_size, psi, c, alpha, truncation_point;
 
     if (setting == NULL) {
         fatal_error("model is a required parameter");
@@ -130,14 +130,20 @@ read_model_config(msp_t *msp, config_t *config)
         fatal_error("model name not specified");
     }
     name = config_setting_get_string(s);
+
+    s = config_setting_get_member(setting, "population_size");
+    if (s == NULL) {
+        fatal_error("population_size not specified");
+    }
+    population_size = config_setting_get_float(s);
     if (strcmp(name, "hudson") == 0) {
         ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_HUDSON);
     } else if (strcmp(name, "wright_fisher") == 0) {
         ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_DTWF);
     } else if (strcmp(name, "smc") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC, population_size);
     } else if (strcmp(name, "smc_prime") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_SMC_PRIME);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC_PRIME, population_size);
     } else if (strcmp(name, "dirac") == 0) {
         s = config_setting_get_member(setting, "psi");
         if (s == NULL) {
@@ -149,7 +155,7 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("dirac model c not specified");
         }
         c = config_setting_get_float(s);
-        ret = msp_set_simulation_model_dirac(msp, psi, c);
+        ret = msp_set_simulation_model_dirac(msp, population_size, psi, c);
     } else if (strcmp(name, "beta") == 0) {
         s = config_setting_get_member(setting, "alpha");
         if (s == NULL) {
@@ -161,10 +167,15 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("beta model truncation_point not specified");
         }
         truncation_point = config_setting_get_float(s);
-        ret = msp_set_simulation_model_beta(msp, alpha, truncation_point);
+        ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
     } else {
         fatal_error("Unknown simulation model '%s'", name);
     }
+    if (ret != 0) {
+        goto out;
+    }
+
+out:
     return ret;
 }
 
@@ -444,7 +455,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int err;
     int int_tmp;
     double rho;
-    size_t sample_size;
+    size_t num_samples;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -463,11 +474,11 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("random_seed is a required parameter");
     }
     gsl_rng_set(rng,  (unsigned long) int_tmp);
-    ret = read_samples(config, &sample_size, &samples);
+    ret = read_samples(config, &num_samples, &samples);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_alloc(msp, sample_size, samples, rng);
+    ret = msp_alloc(msp, num_samples, samples, rng);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
@@ -509,11 +520,19 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_int(config, "coalescence_record_block_size", &int_tmp)
+    if (config_lookup_int(config, "node_block_size", &int_tmp)
             == CONFIG_FALSE) {
-        fatal_error("coalescence_record_block_size is a required parameter");
+        fatal_error("node_block_size is a required parameter");
     }
-    ret = msp_set_coalescence_record_block_size(msp, (size_t) int_tmp);
+    ret = msp_set_node_block_size(msp, (size_t) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    if (config_lookup_int(config, "edge_block_size", &int_tmp)
+            == CONFIG_FALSE) {
+        fatal_error("edge_block_size is a required parameter");
+    }
+    ret = msp_set_edge_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -558,7 +577,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error(msp_strerror(ret));
     }
     rho = recomb_map_get_per_locus_recombination_rate(recomb_map);
-    ret = msp_set_scaled_recombination_rate(msp, rho);
+    ret = msp_set_recombination_rate(msp, rho);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -575,7 +594,7 @@ print_variants(tree_sequence_t *ts)
     vargen_t vg;
     uint32_t j, k;
     site_t *site;
-    char *genotypes = malloc(tree_sequence_get_sample_size(ts) * sizeof(char));
+    char *genotypes = malloc(tree_sequence_get_num_samples(ts) * sizeof(char));
 
     if (genotypes == NULL) {
         fatal_error("no memory");
@@ -590,7 +609,7 @@ print_variants(tree_sequence_t *ts)
         assert(site->mutations_length == 1);
         printf("%d\t%f\t%s\t%s\t", j, site->position, site->ancestral_state,
                 site->mutations[0].derived_state);
-        for (k = 0; k < tree_sequence_get_sample_size(ts); k++) {
+        for (k = 0; k < tree_sequence_get_num_samples(ts); k++) {
             printf("%d", genotypes[k]);
         }
         printf("\n");
@@ -625,7 +644,7 @@ print_haplotypes(tree_sequence_t *ts)
     if (ret != 0) {
         fatal_library_error(ret, "hapgen_alloc");
     }
-    for (j = 0; j < ts->sample_size; j++) {
+    for (j = 0; j < ts->num_samples; j++) {
         ret = hapgen_get_haplotype(&hg, (node_id_t) j, &haplotype);
         if (ret < 0) {
             fatal_library_error(ret, "hapgen_get_haplotype");
@@ -685,17 +704,17 @@ print_stats(tree_sequence_t *ts)
 {
     int ret = 0;
     uint32_t j;
-    size_t sample_size = tree_sequence_get_sample_size(ts) / 2;
-    node_id_t *sample = malloc(sample_size * sizeof(node_id_t));
+    size_t num_samples = tree_sequence_get_num_samples(ts) / 2;
+    node_id_t *sample = malloc(num_samples * sizeof(node_id_t));
     double pi;
 
     if (sample == NULL) {
         fatal_error("no memory");
     }
-    for (j = 0; j < sample_size; j++) {
+    for (j = 0; j < num_samples; j++) {
         sample[j] = (node_id_t) j;
     }
-    ret = tree_sequence_get_pairwise_diversity(ts, sample, sample_size, &pi);
+    ret = tree_sequence_get_pairwise_diversity(ts, sample, num_samples, &pi);
     if (ret != 0) {
         fatal_library_error(ret, "get_pairwise_diversity");
     }
@@ -737,24 +756,32 @@ static void
 print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
-    newick_converter_t nc;
-    double length;
-    char *tree;
+    char *newick = NULL;
+    size_t precision = 8;
+    size_t newick_buffer_size = (precision + 3) * tree_sequence_get_num_nodes(ts);
+    sparse_tree_t tree;
 
-    printf("converting newick trees\n");
-    /* We're using an Ne of 0.25 here throughout to cancel 4Ne conversions */
-    ret = newick_converter_alloc(&nc, ts, 4, 0.25);
+    newick = malloc(newick_buffer_size);
+    if (newick == NULL) {
+        fatal_error("No memory\n");
+    }
+
+    ret = sparse_tree_alloc(&tree, ts, 0);
     if (ret != 0) {
-        fatal_library_error(ret, "newick alloc");
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
-    while ((ret = newick_converter_next(&nc, &length, &tree)) == 1) {
-        printf("Tree: %f: %s\n", length, tree);
-        newick_converter_print_state(&nc, stdout);
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
+        ret = sparse_tree_get_newick(&tree, precision, 1, 0, newick_buffer_size, newick);
+        if (ret != 0) {
+            fatal_library_error(ret ,"newick");
+        }
+        printf("%d:\t%s\n", (int) tree.index, newick);
     }
-    if (ret != 0) {
-        fatal_library_error(ret, "newick next");
+    if (ret < 0) {
+        fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
-    newick_converter_free(&nc);
+    sparse_tree_free(&tree);
+    free(newick);
 }
 
 static void
@@ -768,7 +795,7 @@ print_tree_sequence(tree_sequence_t *ts, int verbose)
         printf("========================\n");
         printf("trees\n");
         printf("========================\n");
-        ret = sparse_tree_alloc(&tree, ts, MSP_LEAF_COUNTS);
+        ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS);
         if (ret != 0) {
             fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
         }
@@ -799,14 +826,13 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
     const char *provenance[] = {"main.simulate"};
     node_table_t *nodes = malloc(sizeof(node_table_t));
-    edgeset_table_t *edgesets = malloc(sizeof(edgeset_table_t));
+    edge_table_t *edges = malloc(sizeof(edge_table_t));
     site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
 
-
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL || nodes == NULL || edgesets == NULL
+            || mutgen == NULL || nodes == NULL || edges == NULL
             || sites == NULL || mutations == NULL || migrations == NULL) {
         goto out;
     }
@@ -814,23 +840,23 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = edgeset_table_alloc(edgesets, 10, 10);
+    ret = edge_table_alloc(edges, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_alloc(nodes, 10, 10);
+    ret = node_table_alloc(nodes, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_alloc(sites, 1, 1);
+    ret = site_table_alloc(sites, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_alloc(mutations, 10, 10);
+    ret = mutation_table_alloc(mutations, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = migration_table_alloc(migrations, 10);
+    ret = migration_table_alloc(migrations, 0);
     if (ret != 0) {
         goto out;
     }
@@ -847,6 +873,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
+
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
             printf("=====================\n");
@@ -868,14 +895,12 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        /* Create the tree_sequence from the state of the simulator.
-         * We want to use coalescent time here, so use an Ne of 1/4
-         * to cancel scaling factor. */
-        ret = msp_populate_tables(msp, 0.25, recomb_map, nodes, edgesets, migrations);
+        /* Create the tree_sequence from the state of the simulator. */
+        ret = msp_populate_tables(msp, recomb_map, nodes, edges, migrations);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, nodes, edgesets);
+        ret = mutgen_generate_tables_tmp(mutgen, nodes, edges);
         if (ret != 0) {
             goto out;
         }
@@ -883,8 +908,9 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables_tmp(tree_seq, nodes, edgesets, migrations,
-                sites, mutations, 1, (char **) &provenance);
+        ret = tree_sequence_load_tables_tmp(tree_seq,
+                recomb_map_get_sequence_length(recomb_map),
+                nodes, edges, migrations, sites, mutations, 1, (char **) &provenance);
         if (ret != 0) {
             goto out;
         }
@@ -896,7 +922,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         }
         if (verbose >= 1) {
             node_table_print_state(nodes, stdout);
-            edgeset_table_print_state(edgesets, stdout);
+            edge_table_print_state(edges, stdout);
             site_table_print_state(sites, stdout);
             mutation_table_print_state(mutations, stdout);
             migration_table_print_state(migrations, stdout);
@@ -926,9 +952,9 @@ out:
     if (rng != NULL) {
         gsl_rng_free(rng);
     }
-    if (edgesets != NULL) {
-        edgeset_table_free(edgesets);
-        free(edgesets);
+    if (edges != NULL) {
+        edge_table_free(edges);
+        free(edges);
     }
     if (nodes != NULL) {
         node_table_free(nodes);
@@ -1035,28 +1061,37 @@ run_stats(const char *filename, int verbose)
 }
 
 static void
-run_simplify(const char *input_filename, const char *output_filename, int verbose)
+run_simplify(const char *input_filename, const char *output_filename, size_t num_samples,
+        bool filter_zero_mutation_sites, int verbose)
 {
     tree_sequence_t ts, subset;
-    size_t j, num_samples;
     node_id_t *samples;
     int flags = 0;
     int ret;
 
-    load_tree_sequence(&ts, input_filename);
-    num_samples = tree_sequence_get_sample_size(&ts);
-    samples = malloc(num_samples * sizeof(node_id_t));
-    if (samples == NULL) {
-        fatal_error("out of memory");
+    if (filter_zero_mutation_sites) {
+        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
     }
-    for (j = 0; j < num_samples; j++) {
-        samples[j] = (node_id_t) j;
+
+    load_tree_sequence(&ts, input_filename);
+    if (verbose > 0) {
+        printf(">>>>>>>>\nINPUT:\n>>>>>>>>\n");
+        tree_sequence_print_state(&ts, stdout);
+    }
+    if (num_samples == 0) {
+        num_samples = tree_sequence_get_num_samples(&ts);
+    } else {
+        num_samples = GSL_MIN(num_samples, tree_sequence_get_num_samples(&ts));
+    }
+    ret = tree_sequence_get_samples(&ts, &samples);
+    if (ret != 0) {
+        fatal_library_error(ret, "get_samples");
     }
     ret = tree_sequence_initialise(&subset);
     if (ret != 0) {
         fatal_library_error(ret, "init error");
     }
-    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset);
+    ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset, NULL);
     if (ret != 0) {
         fatal_library_error(ret, "Subset error");
     }
@@ -1064,10 +1099,12 @@ run_simplify(const char *input_filename, const char *output_filename, int verbos
     if (ret != 0) {
         fatal_library_error(ret, "Write error");
     }
-    /* tree_sequence_print_state(&subset, stdout); */
+    if (verbose > 0) {
+        printf(">>>>>>>>\nOUTPUT:\n>>>>>>>>\n");
+        tree_sequence_print_state(&subset, stdout);
+    }
     tree_sequence_free(&ts);
     tree_sequence_free(&subset);
-    free(samples);
 }
 
 int
@@ -1145,13 +1182,18 @@ main(int argc, char** argv)
     void* argtable8[] = {cmd8, verbose8, infiles8, end8};
     int nerrors8;
 
-    /* SYNTAX 9: simplify [-v] <input-file> */
+    /* SYNTAX 9: simplify [-vi] [-s] <input-file> <output-file> */
     struct arg_rex *cmd9 = arg_rex1(NULL, NULL, "simplify", NULL, REG_ICASE, NULL);
     struct arg_lit *verbose9 = arg_lit0("v", "verbose", NULL);
+    struct arg_int *num_samples9 = arg_int0("s", "sample-size", "<sample-size>",
+            "Number of samples to keep in the simplified tree sequence.");
+    struct arg_lit *filter_zero_mutation_sites9 = arg_lit0("i",
+            "filter-invariant-sites", "<filter-invariant-sites>");
     struct arg_file *infiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *outfiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_end *end9 = arg_end(20);
-    void* argtable9[] = {cmd9, verbose9, infiles9, outfiles9, end9};
+    void* argtable9[] = {cmd9, verbose9, filter_zero_mutation_sites9, num_samples9,
+        infiles9, outfiles9, end9};
     int nerrors9;
 
     int exitcode = EXIT_SUCCESS;
@@ -1162,6 +1204,7 @@ main(int argc, char** argv)
     output1->filename[0] = NULL;
     ploidy5->ival[0] = 1;
     chrom5->sval[0] = "1";
+    num_samples9->ival[0] = 0;
 
     nerrors1 = arg_parse(argc, argv, argtable1);
     nerrors2 = arg_parse(argc, argv, argtable2);
@@ -1191,7 +1234,9 @@ main(int argc, char** argv)
     } else if (nerrors8 == 0) {
         run_stats(infiles8->filename[0], verbose8->count);
     } else if (nerrors9 == 0) {
-        run_simplify(infiles9->filename[0], outfiles9->filename[0], verbose9->count);
+        run_simplify(infiles9->filename[0], outfiles9->filename[0],
+                (size_t) num_samples9->ival[0], (bool) filter_zero_mutation_sites9->count,
+                verbose9->count);
     } else {
         /* We get here if the command line matched none of the possible syntaxes */
         if (cmd1->count > 0) {

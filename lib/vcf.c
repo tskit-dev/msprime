@@ -31,7 +31,7 @@ vcf_converter_print_state(vcf_converter_t *self, FILE* out)
 {
     fprintf(out, "VCF converter state\n");
     fprintf(out, "ploidy = %d\n", self->ploidy);
-    fprintf(out, "sample_size = %d\n", (int) self->sample_size);
+    fprintf(out, "num_samples = %d\n", (int) self->num_samples);
     fprintf(out, "contig_length = %lu\n", self->contig_length);
     fprintf(out, "num_vcf_samples = %d\n", (int) self->num_vcf_samples);
     fprintf(out, "header = %d bytes\n", (int) strlen(self->header));
@@ -118,13 +118,13 @@ vcf_converter_make_record(vcf_converter_t *self, const char *contig_id)
     size_t n = self->num_vcf_samples;
     size_t j, k;
 
-    self->vcf_genotypes_size = 2 * self->sample_size + 1;
+    self->vcf_genotypes_size = 2 * self->num_samples + 1;
     /* it's not worth working out exactly what size the record prefix
      * will be. 1K is plenty for us */
     self->record_size = 1024 + self->contig_id_size + self->vcf_genotypes_size;
     self->record = malloc(self->record_size);
     self->vcf_genotypes = malloc(self->vcf_genotypes_size);
-    self->genotypes = malloc(self->sample_size * sizeof(char));
+    self->genotypes = malloc(self->num_samples * sizeof(char));
     if (self->record == NULL || self->vcf_genotypes == NULL
             || self->genotypes == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -252,12 +252,12 @@ vcf_converter_alloc(vcf_converter_t *self,
     memset(self, 0, sizeof(vcf_converter_t));
     self->ploidy = ploidy;
     self->contig_id_size = strlen(contig_id);
-    self->sample_size = tree_sequence_get_sample_size(tree_sequence);
-    if (ploidy < 1 || self->sample_size % ploidy != 0) {
+    self->num_samples = tree_sequence_get_num_samples(tree_sequence);
+    if (ploidy < 1 || self->num_samples % ploidy != 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->num_vcf_samples = self->sample_size / self->ploidy;
+    self->num_vcf_samples = self->num_samples / self->ploidy;
     self->vargen = malloc(sizeof(vargen_t));
     if (self->vargen == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -288,7 +288,7 @@ vcf_converter_alloc(vcf_converter_t *self,
     if (ret != 0) {
         goto out;
     }
-    if (tree_sequence_get_num_edgesets(tree_sequence) > 0) {
+    if (tree_sequence_get_num_edges(tree_sequence) > 0) {
         ret = vcf_converter_make_record(self, contig_id);
         if (ret != 0) {
             goto out;
