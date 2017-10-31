@@ -473,62 +473,6 @@ msp_get_num_recombination_events(msp_t *self)
 }
 
 int
-msp_set_simulation_model_non_parametric(msp_t *self, int model)
-{
-    int ret = 0;
-
-    if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
-            && model != MSP_MODEL_SMC_PRIME
-            && model != MSP_MODEL_DIRAC
-            && model != MSP_MODEL_BETA
-            && model != MSP_MODEL_DTWF) {
-        ret = MSP_ERR_BAD_MODEL;
-        goto out;
-    }
-    if (self->demographic_events_head != NULL) {
-        /* We must set the model before any demographic events */
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
-    self->model.type = model;
-out:
-    return ret;
-}
-
-int
-msp_set_simulation_model_dirac(msp_t *self, double psi, double c)
-{
-    int ret = 0;
-
-    /* TODO bounds check psi: what are legal values? */
-    ret = msp_set_simulation_model_non_parametric(self, MSP_MODEL_DIRAC);
-    if (ret != 0) {
-        goto out;
-    }
-    self->model.params.dirac_coalescent.psi = psi;
-    self->model.params.dirac_coalescent.c = c;
-out:
-    return ret;
-}
-
-int
-msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point)
-{
-
-    int ret = 0;
-
-    /* TODO bounds check alpha and truncation_point: what are legal values? */
-    ret = msp_set_simulation_model_non_parametric(self, MSP_MODEL_BETA);
-    if (ret != 0) {
-        goto out;
-    }
-    self->model.params.beta_coalescent.alpha = alpha;
-    self->model.params.beta_coalescent.truncation_point = truncation_point;
-out:
-    return ret;
-}
-
-int
 msp_set_store_migrations(msp_t *self, bool store_migrations)
 {
     self->store_migrations = store_migrations;
@@ -1655,8 +1599,8 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
-    if ( self->scaled_recombination_rate > 0 ) {
-        mu = 1.0 / self->scaled_recombination_rate;
+    if ( self->recombination_rate > 0 ) {
+        mu = 1.0 / self->recombination_rate;
         k = 1 + (uint64_t) x->left +
             (uint64_t) gsl_ran_exponential(self->rng, mu);
     } else {
@@ -2613,7 +2557,8 @@ msp_wright_fisher_generation(msp_t *self)
     for (j = 0; j < self->num_populations; j++) {
 
         pop = &self->populations[j];
-        N = (uint32_t) msp_get_population_size(self, pop);
+        N = (uint32_t) avl_count(&pop->ancestors);
+        /* N = (uint32_t) msp_get_population_size(self, pop); */
 
         // Allocate memory for linked list of offspring per parent
         parents = calloc(N, sizeof(segment_list_t *));
@@ -2705,67 +2650,6 @@ out:
     return ret;
 }
 
-/* The main event loop for the Dirac and Beta multiple merger coalescents.
- */
-/* static int WARN_UNUSED */
-/* msp_run_multiple_mergers_coalescent(msp_t *self, double max_time, unsigned long max_events) */
-/* { */
-/*     int ret = 0; */
-/*     double lambda, t_temp, t_wait, ca_t_wait, re_t_wait; */
-/*     int64_t num_links; */
-/*     unsigned long events = 0; */
-/*  */
-/*     assert(self->num_populations == 1); */
-/*     assert(self->num_sampling_events == 0); */
-/*     assert(self->next_demographic_event == NULL); */
-/*     while (msp_get_num_ancestors(self) > 0 */
-/*             && self->time < max_time && events < max_events) { */
-/*         events++; */
-/*         num_links = fenwick_get_total(&self->links); */
-/*         ret = msp_sanity_check(self, num_links); */
-/*         if (ret != 0) { */
-/*             goto out; */
-/*         } */
-/*  */
-/*         #<{(| Recombination |)}># */
-/*         lambda = (double) num_links * self->scaled_recombination_rate; */
-/*         re_t_wait = DBL_MAX; */
-/*         if (lambda != 0.0) { */
-/*             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda); */
-/*         } */
-/*         #<{(| Common ancestors |)}># */
-/*         ca_t_wait = DBL_MAX; */
-/*         t_temp = msp_get_multiple_merger_waiting_time(self, 0); */
-/*         if (t_temp < ca_t_wait) { */
-/*             ca_t_wait = t_temp; */
-/*         } */
-/*         t_wait = GSL_MIN(re_t_wait, ca_t_wait); */
-/*         self->time += t_wait; */
-/*         if (re_t_wait == t_wait) { */
-/*             ret = msp_recombination_event(self); */
-/*         } else if (ca_t_wait == t_wait) { */
-/*             if (self->model.type == MSP_MODEL_DIRAC) { */
-/*                 ret = msp_multiple_merger_common_ancestor_event_dirac(self); */
-/*                 if (ret == 1) { */
-/*                     #<{(| No coalescences happened, and we must cancel this event |)}># */
-/*                     self->time -= t_wait; */
-/*                 } */
-/*             } else if (self->model.type == MSP_MODEL_BETA){ */
-/*                 ret = msp_multiple_merger_common_ancestor_event_beta(self); */
-/*             } else { */
-/*                 ret = MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT; */
-/*             } */
-/*         } */
-/*         #<{(| Migration ??? |)}># */
-/*         if (ret < 0) { */
-/*             goto out; */
-/*         } */
-/*     } */
-/* out: */
-/*     return ret; */
-/* } */
-/*  */
-
 /* Runs the simulation backwards in time until either the sample has coalesced,
  * or specified maximum simulation time has been reached or the specified maximum
  * number of events has been reached.
@@ -2784,13 +2668,11 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
-    /* if (model_type == MSP_MODEL_DIRAC || model_type == MSP_MODEL_BETA) { */
-    /*     ret = msp_run_multiple_mergers_coalescent(self, max_time, max_events); */
-    /* } else if (model_type == MSP_MODEL_DTWF) { */
-    /*     ret = msp_run_wright_fisher(self, max_time, max_events); */
-    /* } else { */
-    /*     ret = msp_run_standard_coalescent(self, max_time, max_events); */
-    ret = msp_run_coalescent(self, scaled_time, max_events);
+    if (self->model.type == MSP_MODEL_DTWF) {
+        ret = msp_run_wright_fisher(self, scaled_time, max_events);
+    } else {
+        ret = msp_run_coalescent(self, scaled_time, max_events);
+    }
     if (ret != 0) {
         goto out;
     }
@@ -4071,6 +3953,35 @@ out:
 }
 
 /**************************************************************
+ * Discrete Time Wright Fisher
+ *
+ * TODO provide background and documentation.
+ **************************************************************/
+static double
+dtwf_model_time_to_generations(simulation_model_t *model, double t)
+{
+    return t;
+}
+
+static double
+dtwf_generations_to_model_time(simulation_model_t *model, double g)
+{
+    return g;
+}
+
+static double
+dtwf_generation_rate_to_model_rate(simulation_model_t *model, double rate)
+{
+    return rate;
+}
+
+static double
+dtwf_model_rate_to_generation_rate(simulation_model_t *model, double rate)
+{
+    return rate;
+}
+
+/**************************************************************
  * Public API for setting simulation models.
  **************************************************************/
 int
@@ -4128,6 +4039,23 @@ msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi, 
 out:
     return ret;
 }
+
+int
+msp_set_simulation_model_dtwf(msp_t *self, double population_size)
+{
+    int ret = 0;
+    ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, population_size);
+    if (ret != 0) {
+        goto out;
+    }
+    self->model.model_time_to_generations = dtwf_model_time_to_generations;
+    self->model.generations_to_model_time = dtwf_generations_to_model_time;
+    self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;
+    self->model.generation_rate_to_model_rate = dtwf_generation_rate_to_model_rate;
+out:
+    return ret;
+}
+
 
 int
 msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,

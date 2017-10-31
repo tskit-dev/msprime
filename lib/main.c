@@ -137,13 +137,13 @@ read_model_config(msp_t *msp, config_t *config)
     }
     population_size = config_setting_get_float(s);
     if (strcmp(name, "hudson") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_HUDSON);
-    } else if (strcmp(name, "wright_fisher") == 0) {
-        ret = msp_set_simulation_model_non_parametric(msp, MSP_MODEL_DTWF);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_HUDSON, population_size);
     } else if (strcmp(name, "smc") == 0) {
         ret = msp_set_simulation_model(msp, MSP_MODEL_SMC, population_size);
     } else if (strcmp(name, "smc_prime") == 0) {
         ret = msp_set_simulation_model(msp, MSP_MODEL_SMC_PRIME, population_size);
+    } else if (strcmp(name, "wright_fisher") == 0) {
+        ret = msp_set_simulation_model_dtwf(msp, population_size);
     } else if (strcmp(name, "dirac") == 0) {
         s = config_setting_get_member(setting, "psi");
         if (s == NULL) {

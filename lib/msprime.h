@@ -687,6 +687,7 @@ typedef struct {
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model(msp_t *self, int model, double population_size);
+int msp_set_simulation_model_dtwf(msp_t *self, double population_size);
 int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
     double c);
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,

@@ -5849,7 +5849,6 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *beta_s = NULL;
     PyObject *value;
     int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta;
-    double psi, c, alpha, truncation_point;
     double population_size, psi, c, alpha, truncation_point;
 
     if (Simulator_check_sim(self) != 0) {
@@ -5910,7 +5909,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_dtwf) {
-        err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_DTWF);
+        err = msp_set_simulation_model(self->sim, MSP_MODEL_DTWF, population_size);
+        /* err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_DTWF); */
     }
 
     is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
