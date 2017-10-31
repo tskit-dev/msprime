@@ -3992,7 +3992,8 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
             && model != MSP_MODEL_SMC_PRIME
             && model != MSP_MODEL_DIRAC
-            && model != MSP_MODEL_BETA) {
+            && model != MSP_MODEL_BETA
+            && model != MSP_MODEL_DTWF) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
