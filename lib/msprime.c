@@ -2318,26 +2318,23 @@ out:
 
 /* Given the specified rate, return the waiting time until the next common ancestor
  * event for the specified population */
-/* static double */
-/* msp_get_population_size(msp_t *self, population_t *pop) */
-/* { */
-/*     double ret = 0; */
-/*     double alpha = pop->growth_rate; */
-/*     double t = self->time; */
-/*     double dt; */
-/*  */
-/*     if (alpha == 0.0) { */
-/*         ret = pop->initial_size; */
-/*     } else { */
-/*         dt = t - pop->start_time; */
-/*         ret = pop->initial_size * exp(-alpha * dt); */
-/*     } */
-/*     return ret; */
-/* } */
-/*  */
-/* static double */
-/* msp_get_common_ancestor_waiting_time_size(msp_t *self, population_t *pop, */
-/*         uint32_t size) */
+static double
+msp_get_population_size(msp_t *self, population_t *pop)
+{
+    double ret = 0;
+    double alpha = pop->growth_rate;
+    double t = self->time;
+    double dt;
+
+    if (alpha == 0.0) {
+        ret = pop->initial_size;
+    } else {
+        dt = t - pop->start_time;
+        ret = pop->initial_size * exp(-alpha * dt);
+    }
+    return ret;
+}
+
 static double
 msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, double lambda)
 {
@@ -2557,8 +2554,7 @@ msp_wright_fisher_generation(msp_t *self)
     for (j = 0; j < self->num_populations; j++) {
 
         pop = &self->populations[j];
-        N = (uint32_t) avl_count(&pop->ancestors);
-        /* N = (uint32_t) msp_get_population_size(self, pop); */
+        N = (uint32_t) msp_get_population_size(self, pop);
 
         // Allocate memory for linked list of offspring per parent
         parents = calloc(N, sizeof(segment_list_t *));
