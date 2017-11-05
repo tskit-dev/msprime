@@ -142,7 +142,7 @@ class SvgTreeDrawer(TreeDrawer):
             scaled_t = self._tree.get_time(u) * self._y_scale
             self._y_coords[u] = self._height - scaled_t - y_padding
         self._x_scale = self._width / (self._num_leaves + 2)
-        self._sample_x = 1
+        self._leaf_x = 1
         for root in self._tree.roots:
             self._assign_x_coordinates(root)
         self._mutations = []
@@ -174,8 +174,8 @@ class SvgTreeDrawer(TreeDrawer):
             b = max(coords)
             self._x_coords[node] = self._discretise(a + (b - a) / 2)
         else:
-            self._x_coords[node] = self._discretise(self._sample_x * self._x_scale)
-            self._sample_x += 1
+            self._x_coords[node] = self._discretise(self._leaf_x * self._x_scale)
+            self._leaf_x += 1
 
     def draw(self):
         """
@@ -191,7 +191,7 @@ class SvgTreeDrawer(TreeDrawer):
             dwg.add(dwg.circle(center=x, r=3))
             dx = [0]
             dy = None
-            if self._tree.is_sample(u):
+            if self._tree.is_leaf(u):
                 dy = [20]
             elif self._tree.parent(u) == NULL_NODE:
                 dy = [-5]
@@ -199,7 +199,7 @@ class SvgTreeDrawer(TreeDrawer):
                 dx = [-10]
                 dy = [-5]
             condition = (
-                (self._tree.is_sample(u) and self._show_leaf_node_labels) or
+                (self._tree.is_leaf(u) and self._show_leaf_node_labels) or
                 (self._tree.is_internal(u) and self._show_internal_node_labels))
             if condition:
                 labels.add(dwg.text(self._node_label_text[u], x, dx=dx, dy=dy))
