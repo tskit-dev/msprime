@@ -23,11 +23,11 @@ from __future__ import print_function
 from __future__ import division
 
 import unittest
-import random
 
 import numpy as np
 
 import msprime
+import tests.tsutil as tsutil
 
 
 def get_r2_matrix(ts):
@@ -43,15 +43,15 @@ def get_r2_matrix(ts):
             assert len(sA.mutations) == 1
             mA = sA.mutations[0]
             A[sA.index, sA.index] = 1
-            fA = t1.get_num_leaves(mA.node) / n
-            leaves = list(t1.leaves(mA.node))
-            for t2 in ts.trees(tracked_leaves=leaves):
+            fA = t1.get_num_samples(mA.node) / n
+            samples = list(t1.samples(mA.node))
+            for t2 in ts.trees(tracked_samples=samples):
                 for sB in t2.sites():
                     assert len(sB.mutations) == 1
                     mB = sB.mutations[0]
                     if sB.position > sA.position:
-                        fB = t2.get_num_leaves(mB.node) / n
-                        fAB = t2.get_num_tracked_leaves(mB.node) / n
+                        fB = t2.get_num_samples(mB.node) / n
+                        fAB = t2.get_num_tracked_samples(mB.node) / n
                         D = fAB - fA * fB
                         r2 = D * D / (fA * fB * (1 - fA) * (1 - fB))
                         A[sA.index, sB.index] = r2
@@ -137,13 +137,14 @@ class TestLdCalculator(unittest.TestCase):
 
     def test_single_tree_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10, random_seed=15)
-        sites = sorted(random.sample(list(ts.sites()), self.num_test_sites))
-        ts = ts.copy(sites)
+        ts = tsutil.subsample_sites(ts, self.num_test_sites)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
+    @unittest.skip("recurrent mutations")
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
+        # TODO change this to use branch_mutations from tsutil.
         sites = [
             msprime.Site(
                 position=j, index=j, ancestral_state="0",
@@ -158,22 +159,21 @@ class TestLdCalculator(unittest.TestCase):
             self.num_test_sites, recombination_rate=1,
             length=self.num_test_sites)
         self.assertGreater(ts.get_num_trees(), 10)
-        sites = [
-            msprime.Site(
-                position=j, index=j, ancestral_state="0",
-                mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
-            for j in range(self.num_test_sites)]
-        ts = ts.copy(sites)
+        t = ts.dump_tables()
+        t.sites.reset()
+        t.mutations.reset()
+        for j in range(self.num_test_sites):
+            site_id = len(t.sites)
+            t.sites.add_row(position=j, ancestral_state="0")
+            t.mutations.add_row(site=site_id, derived_state="1", node=j)
+        ts = msprime.load_tables(**t.asdict())
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
     def test_tree_sequence_simulated_mutations(self):
         ts = msprime.simulate(20, mutation_rate=10, recombination_rate=10)
         self.assertGreater(ts.get_num_trees(), 10)
-        sites = random.sample(list(ts.sites()), self.num_test_sites)
-        ts = ts.copy(sorted(sites, key=lambda x: x.position))
-        # for site in ts.sites():
-        #     print(site)
+        ts = tsutil.subsample_sites(ts, self.num_test_sites)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
         self.verify_max_mutations(ts)

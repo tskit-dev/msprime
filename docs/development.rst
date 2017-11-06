@@ -235,13 +235,17 @@ The C-library has an extensive suite of unit tests written using
 `CUnit <http://cunit.sourceforge.net>`_. These tests aim to establish that the
 low-level APIs work correctly over a variety of inputs, and particularly, that
 the tests don't result in leaked memory or illegal memory accesses. The tests should be
-periodically run under valgrind to make sure of this. To run all the tests, type
-``./tests``. To run a specific test, provide this test name as a command line argument,
+periodically run under valgrind to make sure of this.
+
+Tests are split into ``simulation_tests`` which covers functionality specific to the
+simulation logic, and ``tests`` which covers everything else. To run all the tests
+in a given suite, type ``./tests`` or ``./simulation_tests``.
+To run a specific test, provide this test name as a command line argument,
 e.g.:
 
 .. code-block:: bash
 
-    $ ./tests fenwick_tree
+    $ ./simulation_tests fenwick_tree
 
 
 While 100% test coverage is not feasible for C code, we aim to cover all code

@@ -189,11 +189,10 @@ out:
  * data via tables. */
 int WARN_UNUSED
 mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
-        edgeset_table_t *edgesets)
+        edge_table_t *edges)
 {
     int ret;
-    size_t j, l, offset, branch_mutations;
-    list_len_t k;
+    size_t j, l,  branch_mutations;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
     const mutation_type_t *mutation_types;
@@ -213,45 +212,37 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
 
     avl_init_tree(&positions, cmp_double, NULL);
     self->num_mutations = 0;
-    offset = 0;
-    for (j = 0; j < edgesets->num_rows; j++) {
-        left = edgesets->left[j];
-        right = edgesets->right[j];
+    for (j = 0; j < edges->num_rows; j++) {
+        left = edges->left[j];
+        right = edges->right[j];
         distance = right - left;
-        parent = edgesets->parent[j];
-        assert(parent >= 0 && parent < (node_id_t) nodes->num_rows);
-        for (k = 0; k < edgesets->children_length[j]; k++) {
-            assert(offset < edgesets->total_children_length);
-            child = edgesets->children[offset];
-            assert(child >= 0 && child < (node_id_t) nodes->num_rows);
-            offset++;
-            branch_length = nodes->time[parent] - nodes->time[child];
-            mu = branch_length * distance * self->mutation_rate;
-            branch_mutations = gsl_ran_poisson(self->rng, mu);
-            for (l = 0; l < branch_mutations; l++) {
-                /* Rejection sample positions until we get one we haven't seen before. */
-                do {
-                    position = gsl_ran_flat(self->rng, left, right);
-                    avl_node = avl_search(&positions, &position);
-                    if (avl_node != NULL) {
-                        printf("REJECTING %f\n", position);
-                    }
-                } while (avl_node != NULL);
-                avl_node = mutgen_alloc_avl_node(self, position);
-                if (avl_node == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                avl_insert_node(&positions, avl_node);
-                assert(left <= position && position < right);
-                type = gsl_rng_uniform_int(self->rng, num_mutation_types);
-                ancestral_state = mutation_types[type].ancestral_state;
-                derived_state = mutation_types[type].derived_state;
-                ret = mutgen_add_mutation(self, child, position, ancestral_state,
-                        derived_state);
-                if (ret != 0) {
-                    goto out;
-                }
+        parent = edges->parent[j];
+        child = edges->child[j];
+        assert(child >= 0 && child < (node_id_t) nodes->num_rows);
+        branch_length = nodes->time[parent] - nodes->time[child];
+        mu = branch_length * distance * self->mutation_rate;
+        branch_mutations = gsl_ran_poisson(self->rng, mu);
+        for (l = 0; l < branch_mutations; l++) {
+            /* Rejection sample positions until we get one we haven't seen before. */
+            /* TODO add a maximum number of rejections here */
+            do {
+                position = gsl_ran_flat(self->rng, left, right);
+                avl_node = avl_search(&positions, &position);
+            } while (avl_node != NULL);
+            avl_node = mutgen_alloc_avl_node(self, position);
+            if (avl_node == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            avl_insert_node(&positions, avl_node);
+            assert(left <= position && position < right);
+            type = gsl_rng_uniform_int(self->rng, num_mutation_types);
+            ancestral_state = mutation_types[type].ancestral_state;
+            derived_state = mutation_types[type].derived_state;
+            ret = mutgen_add_mutation(self, child, position, ancestral_state,
+                    derived_state);
+            if (ret != 0) {
+                goto out;
             }
         }
     }
@@ -289,7 +280,7 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
             goto out;
         }
         ret = mutation_table_add_row(mutations, (site_id_t) j, mut->node,
-                mut->derived_state, 1);
+                MSP_NULL_MUTATION, mut->derived_state, 1);
         if (ret != 0) {
             goto out;
         }
