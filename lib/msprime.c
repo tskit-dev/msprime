@@ -1589,7 +1589,7 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
 }
 
 static int WARN_UNUSED
-msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
+msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
     int ix;
@@ -1599,14 +1599,9 @@ msp_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
-    if ( self->recombination_rate > 0 ) {
-        mu = 1.0 / self->recombination_rate;
-        k = 1 + (uint64_t) x->left +
-            (uint64_t) gsl_ran_exponential(self->rng, mu);
-    } else {
-        mu = INFINITY;
-        k = INT64_MAX;
-    }
+    mu = 1.0 / self->recombination_rate;
+    k = 1 + (uint64_t) x->left +
+        (uint64_t) gsl_ran_exponential(self->rng, mu);
 
     s1.next = NULL;
     s2.next = NULL;
@@ -2411,8 +2406,7 @@ out:
     return ret;
 }
 
-/* The main event loop for continuous time coalescent models.
- */
+/* The main event loop for continuous time coalescent models. */
 static int WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
@@ -2534,13 +2528,14 @@ typedef struct _segment_list_t {
 
 /* Performs a single generation under the Wright Fisher model */
 static int WARN_UNUSED
-msp_wright_fisher_generation(msp_t *self)
+msp_dtwf_generation(msp_t *self)
 {
     int ret = 0;
     uint32_t N, i, j, k, p;
     size_t segment_mem_offset = 0;
     population_t *pop;
-    segment_t *u[2], *x;
+    segment_t *x;
+    segment_t *u[2];
     segment_list_t **parents = NULL;
     segment_list_t *segment_mem = NULL;
     segment_list_t *s;
@@ -2583,9 +2578,11 @@ msp_wright_fisher_generation(msp_t *self)
                 msp_free_avl_node(self, node);
                 
                 // Recombine ancestor
-                ret = msp_recombine(self, x, &u[0], &u[1]);
-                if (ret != 0) {
-                    goto out;
+                if ( self->recombination_rate > 0 ) {
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
                 // Add to AVLTree for each parental chromosome
                 for ( i = 0; i < 2; i++) {
@@ -2622,7 +2619,7 @@ out:
 
 /* The main event loop for the Wright Fisher model. */
 static int WARN_UNUSED
-msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
+msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     unsigned long events = 0;
@@ -2637,7 +2634,7 @@ msp_run_wright_fisher(msp_t *self, double max_time, unsigned long max_events)
         if (ret != 0) {
             goto out;
         }
-        ret = msp_wright_fisher_generation(self);
+        ret = msp_dtwf_generation(self);
         if (ret != 0) {
             goto out;
         }
@@ -2665,7 +2662,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     if (self->model.type == MSP_MODEL_DTWF) {
-        ret = msp_run_wright_fisher(self, scaled_time, max_events);
+        ret = msp_run_dtwf(self, scaled_time, max_events);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
