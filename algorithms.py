@@ -467,7 +467,6 @@ class Simulator(object):
             ## Draw recombinations in children and sort segments by
             ## inheritance direction
             for children in offspring.values():
-                need_merge = True if len(children) > 1 else False
                 H = [[], []]
                 for child in children:
                     segs_pair = self.dtwf_recombine(child)
