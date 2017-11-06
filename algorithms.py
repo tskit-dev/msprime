@@ -9,6 +9,7 @@ import random
 import argparse
 import heapq
 import math
+import numpy as np
 
 import bintrees
 import msprime
@@ -124,13 +125,6 @@ class Segment(object):
         self.population = None
         self.index = index
 
-        if self.prev is not None:
-            assert not (self.left == self.prev.left and
-                        self.right == self.prev.right and
-                        self.node == self.prev.node and
-                        self.population == self.prev.population and
-                        self.index == self.prev.index)
-
     def __str__(self):
         s = "({0}:{1}-{2}->{3}: prev={4} next={5})".format(
             self.index, self.left, self.right, self.node, repr(self.prev),
@@ -185,18 +179,10 @@ class Population(object):
     def get_num_ancestors(self):
         return len(self._ancestors)
 
-
-    def get_ind_range(self, t):
-        """ Returns ind labels at time t """
-        ##TODO: Check that generations don't overlap, and that 0 is an ind +t1
-        first_ind = np.sum([self.get_size(t_prev) for t_prev in range(0, t)])
-        last_ind = first_ind + self.get_size(t)
-
-        return range(int(first_ind), int(last_ind)+1)
-
-
     def get_size(self, t):
-        """ Returns the size of this population at time t. """
+        """
+        Returns the size of this population at time t.
+        """
         dt = t - self._start_time
         return self._start_size * math.exp(-self._growth_rate * dt)
 
@@ -220,12 +206,23 @@ class Population(object):
                     ret = math.log(z) / self._growth_rate
         return ret
 
+    def get_ind_range(self, t):
+        """ Returns ind labels at time t """
+        first_ind = np.sum([self.get_size(t_prev) for t_prev in range(0, t)])
+        last_ind = first_ind + self.get_size(t)
+
+        return range(int(first_ind), int(last_ind)+1)
+
     def remove(self, index):
-        """ Removes and returns the individual at the specified index. """
+        """
+        Removes and returns the individual at the specified index.
+        """
         return self._ancestors.pop(index)
 
     def add(self, individual):
-        """ Inserts the specified individual into this population. """
+        """
+        Inserts the specified individual into this population.
+        """
         self._ancestors.append(individual)
 
     def __iter__(self):
@@ -240,7 +237,8 @@ class Simulator(object):
             self, sample_size, num_loci, recombination_rate, migration_matrix,
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
-            migration_matrix_element_changes, bottlenecks, max_segments=100):
+            migration_matrix_element_changes, bottlenecks, model='hudson',
+	    max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -251,6 +249,7 @@ class Simulator(object):
             assert migration_matrix[j][j] == 0
         assert sum(sample_configuration) == sample_size
 
+        self.model = model
         self.n = sample_size
         self.m = num_loci
         self.r = recombination_rate
@@ -277,7 +276,7 @@ class Simulator(object):
             for k in range(sample_size):
                 j = len(self.nodes)
                 x = self.alloc_segment(0, self.m, j, pop_index)
-                # self.L.set_value(x.index, self.m - 1)
+                self.L.set_value(x.index, self.m - 1)
                 self.P[pop_index].add(x)
                 self.nodes.add_row(
                     flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index)
@@ -335,58 +334,8 @@ class Simulator(object):
         Frees the specified segment making it ready for reuse and
         setting its weight to zero.
         """
-        # self.L.set_value(u.index, 0)
+        self.L.set_value(u.index, 0)
         self.segment_stack.append(u)
-
-    def msp_wright_fisher_generation(self):
-        """
-        Evolves one generation of a Wright Fisher population
-        """
-        for pop_idx, pop in enumerate(self.P):
-            ## Cluster haploid inds by parent
-            cur_inds = pop.get_ind_range(self.t)
-            offspring = bintrees.AVLTree()
-            for i in range(pop.get_num_ancestors()-1, -1, -1):
-                ## Popping every ancestor every generation is inefficient.
-                ## In the C implementation we store a pointer to the 
-                ## ancestor so we can pop only if we need to merge
-                anc = pop.remove(i)
-                parent = np.random.choice(cur_inds)
-                if parent not in offspring:
-                    offspring[parent] = []
-                offspring[parent].append(anc)
-
-            ## Draw recombinations in children and sort segments by
-            ## inheritance direction
-            for children in offspring.values():
-                need_merge = True if len(children) > 1 else False
-                H = [[], []]
-                for child in children:
-                    segs_pair = self.recombine(child)
-
-                    ## Collect segments inherited from the same individual
-                    for i, seg in enumerate(segs_pair):
-                        if seg is None:
-                            continue
-                        assert seg.prev is None
-                        heapq.heappush(H[i], (seg.left, seg))
-
-                ## Merge segments
-                for h in H:
-                    self.merge_ancestors(h, pop_idx)
-
-        ## Migration events happen at the rates in the matrix.
-        for j in range(len(self.P)):
-            source_size = self.P[j].get_num_ancestors()
-            for k in range(len(self.P)):
-                if j == k:
-                    continue
-                mig_rate = source_size * self.migration_matrix[j][k]
-                num_migs = min(source_size, np.random.poisson(mig_rate))
-                for _ in range(num_migs):
-                    mig_source = j
-                    mig_dest = k
-                    self.migration_event(mig_source, mig_dest)
 
     def store_node(self, population):
         self.flush_edges()
@@ -427,28 +376,24 @@ class Simulator(object):
         self.flush_edges()
         return msprime.load_tables(nodes=self.nodes, edges=self.edges)
 
-    def simulate_wf(self):
+    def simulate(self, model='hudson'):
+        if self.model == 'hudson':
+            self.hudson_simulate()
+        elif self.model == 'dtwf':
+            self.dtwf_simulate()
+        else:
+            print("Error: bad model specification -", self.model)
+            raise ValueError
+
+        return self.finalise()
+
+    def hudson_simulate(self):
         """
         Simulates the algorithm until all loci have coalesced.
         """
+        infinity = sys.float_info.max
         while sum(pop.get_num_ancestors() for pop in self.P) != 0:
-            self.t += 1
-            print(self.t)
-            print("Recs:", self.num_re_events)
             self.verify()
-
-            self.msp_wright_fisher_generation()
-
-    def simulate(self):
-        """
-        Simulates the algorithm until all loci have coalesced.
-        """
-        while sum(pop.get_num_ancestors() for pop in self.P) != 0:
-            self.t += 1
-            print(self.t)
-            print("Recs:", self.num_re_events)
-            self.verify()
-
             rate = self.r * self.L.get_total()
             t_re = infinity
             if rate != 0:
@@ -482,7 +427,7 @@ class Simulator(object):
                 self.t += min_time
                 if min_time == t_re:
                     # print("RE EVENT")
-                    self.recombination_event()
+                    self.hudson_recombination_event()
                 elif min_time == t_ca:
                     # print("CA EVENT")
                     self.common_ancestor_event(ca_population)
@@ -490,6 +435,66 @@ class Simulator(object):
                     # print("MIG EVENT")
                     self.migration_event(mig_source, mig_dest)
         return self.finalise()
+
+    def dtwf_simulate(self):
+        """
+        Simulates the algorithm until all loci have coalesced.
+        """
+        while sum(pop.get_num_ancestors() for pop in self.P) != 0:
+            self.t += 1
+            self.verify()
+
+            self.dtwf_generation()
+
+    def dtwf_generation(self):
+        """
+        Evolves one generation of a Wright Fisher population
+        """
+        for pop_idx, pop in enumerate(self.P):
+            ## Cluster haploid inds by parent
+            cur_inds = pop.get_ind_range(self.t)
+            offspring = bintrees.AVLTree()
+            for i in range(pop.get_num_ancestors()-1, -1, -1):
+                ## Popping every ancestor every generation is inefficient.
+                ## In the C implementation we store a pointer to the 
+                ## ancestor so we can pop only if we need to merge
+                anc = pop.remove(i)
+                parent = np.random.choice(cur_inds)
+                if parent not in offspring:
+                    offspring[parent] = []
+                offspring[parent].append(anc)
+
+            ## Draw recombinations in children and sort segments by
+            ## inheritance direction
+            for children in offspring.values():
+                need_merge = True if len(children) > 1 else False
+                H = [[], []]
+                for child in children:
+                    segs_pair = self.dtwf_recombine(child)
+
+                    ## Collect segments inherited from the same individual
+                    for i, seg in enumerate(segs_pair):
+                        if seg is None:
+                            continue
+                        assert seg.prev is None
+                        heapq.heappush(H[i], (seg.left, seg))
+
+                ## Merge segments
+                for h in H:
+                    self.merge_ancestors(h, pop_idx)
+
+        ## Migration events happen at the rates in the matrix.
+        for j in range(len(self.P)):
+            source_size = self.P[j].get_num_ancestors()
+            for k in range(len(self.P)):
+                if j == k:
+                    continue
+                mig_rate = source_size * self.migration_matrix[j][k]
+                num_migs = min(source_size, np.random.poisson(mig_rate))
+                for _ in range(num_migs):
+                    mig_source = j
+                    mig_dest = k
+                    self.migration_event(mig_source, mig_dest)
 
     def migration_event(self, j, k):
         """
@@ -507,8 +512,34 @@ class Simulator(object):
             u = u.next
         # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
+    def hudson_recombination_event(self):
+        """
+        Implements a recombination event.
+        """
+        self.num_re_events += 1
+        h = random.randint(1, self.L.get_total())
+        # Get the segment containing the h'th link
+        y = self.segments[self.L.find(h)]
+        k = y.right - self.L.get_cumulative_frequency(y.index) + h - 1
+        x = y.prev
+        if y.left < k:
+            # Make new segment
+            z = self.alloc_segment(
+                k, y.right, y.node, y.population, None, y.next)
+            if y.next is not None:
+                y.next.prev = z
+            y.next = None
+            y.right = k
+            self.L.increment(y.index, k - z.right)
+        else:
+            # split the link between x and y.
+            x.next = None
+            y.prev = None
+            z = y
+        self.L.set_value(z.index, z.right - z.left - 1)
+        self.P[z.population].add(z)
 
-    def recombine(self, x):
+    def dtwf_recombine(self, x):
         """
         Chooses breakpoints and returns segments sorted by inheritance
         direction, by iterating through segment chain starting with x
@@ -579,36 +610,6 @@ class Simulator(object):
         self.free_segment(s)
 
         return u, v
-
-
-    def recombination_event(self, x, k):
-        """
-        Implements a recombination event on or immediately after segment x,
-        at breakpoint k
-        """
-        self.num_re_events += 1
-
-        if x.right > k:
-            # Make new segment
-            z = self.alloc_segment(
-                k, x.right, x.node, x.population, None, x.next)
-            if x.next is not None:
-                x.next.prev = z
-            x.next = None
-            x.right = k
-        else:
-            # split the link between x and y.
-            y = x.next
-            assert y is not None # Otherwise recombination is irrelevant
-            assert y.left > k
-            x.next = None
-            y.prev = None
-            z = y
-
-        # self.P[z.population].add(z)
-
-        return z
-
 
     def print_heaps(self, L):
         copy = list(L)
@@ -706,12 +707,12 @@ class Simulator(object):
             if alpha is not None:
                 if z is None:
                     pop.add(alpha)
-                    # self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
+                    self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
                 else:
                     defrag_required |= (
                         z.right == alpha.left and z.node == alpha.node)
                     z.next = alpha
-                    # self.L.set_value(alpha.index, alpha.right - z.right)
+                    self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
         if defrag_required:
@@ -728,7 +729,7 @@ class Simulator(object):
                 x.next = y.next
                 if y.next is not None:
                     y.next.prev = x
-                # self.L.increment(x.index, y.right - y.left)
+                self.L.increment(x.index, y.right - y.left)
                 self.free_segment(y)
             y = x
 
@@ -881,7 +882,8 @@ class Simulator(object):
                         s = u.right - u.prev.right
                     else:
                         s = u.right - u.left - 1
-                    # assert s == self.L.get_frequency(u.index)
+                    if self.model != 'dtwf':
+                        assert s == self.L.get_frequency(u.index)
                     right = u.right
                     v = u.next
                     if v is not None:
@@ -891,7 +893,8 @@ class Simulator(object):
                         assert u.right <= v.left
                     u = v
                 q += right - left - 1
-        # assert q == self.L.get_total()
+        if self.model != 'dtwf':
+            assert q == self.L.get_total()
 
         assert self.S[self.m] == -1
         # Check the ancestry tracking.
@@ -952,7 +955,7 @@ def run_simulate(args):
         population_sizes, args.population_growth_rate_change,
         args.population_size_change,
         args.migration_matrix_element_change,
-        args.bottleneck, 10000)
+        args.bottleneck, args.model, 10000)
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -993,6 +996,8 @@ def add_simulator_arguments(parser):
         action="append", default=[])
     parser.add_argument(
         "--bottleneck", type=float, nargs=3, action="append", default=[])
+    parser.add_argument(
+        "--model", default='hudson')
 
 
 def main():
@@ -1003,4 +1008,4 @@ def main():
 
 
 if __name__ == "__main__":
-    ts = main()
+    main()
