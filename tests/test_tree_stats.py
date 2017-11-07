@@ -62,20 +62,15 @@ class PythonBranchLengthStatCalculator(object):
             end = self.tree_sequence.sequence_length
         nout = len(A)
         S = [0 for _ in range(nout+1)]
-        for tr in self.tree_sequence.trees():
+        for tr in self.tree_sequence.trees(sample_counts=True, tracked_samples=A):
             tr_len = max(0, (min(end, tr.interval[1]) - max(begin, tr.interval[0])))
             if tr_len == 0:
                 continue
-            X = [0 for _ in range(self.tree_sequence.num_nodes)]
-            for x in A:
-                u = x
-                while u != msprime.NULL_NODE:
-                    X[u] += 1
-                    u = tr.parent(u)
-            print("S=", S)
+            # print("S=", S)
             for u in tr.nodes():
                 if u != tr.root:
-                    S[X[u]] += tr.branch_length(u) * tr_len
+                    x = tr.num_tracked_samples(u)
+                    S[x] += tr.branch_length(u) * tr_len
         for j in range(nout):
             S[j] /= (end-begin)
         return S
@@ -324,7 +319,7 @@ class PythonBranchLengthStatCalculator(object):
                     if node != root:
                         x = [tr.num_tracked_samples(node) for tr in trs]
                         nx = [a - b for a, b in zip(n, x)]
-                        w = weight_fun(x) + weight_fun(nx)
+                        w = [a + b for a, b in zip(weight_fun(x), weight_fun(nx))]
                         for j in range(n_out):
                             S[j] += w[j] * trs[0].branch_length(node) * tr_len
         for j in range(n_out):
@@ -596,6 +591,11 @@ class GeneralStatsTestCase(unittest.TestCase):
         win_args = [{'begin': windows[i], 'end': windows[i+1]}
                     for i in range(len(windows)-1)]
         tree_vals = [[tree_fn(*a, **b) for a in leafset_args] for b in win_args]
+        # flatten if necessary
+        if isinstance(tree_vals[0][0], list):
+            tree_vals = [[x for a in b for x in a] for b in tree_vals]
+        print("indices:", indices)
+        print("windows:", windows)
 
         if tsc_vector_fn is not None:
             if index_length > 0:
@@ -606,6 +606,7 @@ class GeneralStatsTestCase(unittest.TestCase):
             print("vector:")
             print(tsc_vector_vals)
             print(tree_vals)
+            self.assertEqual(len(tree_vals), len(windows)-1)
             self.assertEqual(len(tsc_vector_vals), len(windows)-1)
             for i in range(len(windows)-1):
                 self.assertListAlmostEqual(tsc_vector_vals[i], tree_vals[i])
@@ -709,9 +710,6 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         branch_true_diversity_02 = 2*(1 * (0.2-0) + 0.4 * (0.8-0.2) + 0.7 * (1.0-0.8))
         branch_true_diversity_12 = 2*(0.5 * (0.2-0) + 0.5 * (0.8-0.2) + 0.5 * (1.0-0.8))
         branch_true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        # site_true_diversity_01 = 4 + 1 + 2
-        # site_true_diversity_02 = 4 + 1 + 2
-        # site_true_diversity_12 = 2 + 2 + 2
         site_true_Y = 3 + 0 + 1
 
         nodes = six.StringIO("""\
@@ -768,9 +766,10 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
 
         # diversity between 0 and 1
         A = [[0], [1]]
+        n = [len(a) for a in A]
 
         def f(x):
-            return float((x[0] > 0) != (x[1] > 0))/2.0
+            return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
         # tree lengths:
         self.assertAlmostEqual(py_branch_tsc.tree_length_diversity([0], [1]),
@@ -813,7 +812,7 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         self.assertAlmostEqual(branch_tsc.tree_stat(A, f), branch_true_Y)
         self.assertAlmostEqual(py_branch_tsc.tree_stat(A, f), branch_true_Y)
 
-        # sites:
+        # sites, Y:
         site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
         py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
         print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
@@ -821,6 +820,71 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc.tree_stat(A, f), site_true_Y)
         self.assertAlmostEqual(py_site_tsc.tree_stat(A, f), site_true_Y)
+
+    def test_case_recurrent_muts(self):
+        # With mutations:
+        #
+        # 1.0          6
+        # 0.7         / \                                    5
+        #           (0)  \                                  /(6)
+        # 0.5      (1)    4                4               /   4
+        #          /     / \              / \             /  (7|8)
+        # 0.4    (2)   (3)  \           (4)  3           /   /   \
+        #        /     /     \          /   /(5)        /   /     \
+        # 0.0   0     1       2        1   0   2       0   1       2
+        #          (0.0, 0.2),        (0.2, 0.8),       (0.8, 1.0)
+        # genotypes:
+        #       0     2       0        1   0   1       0   2       3
+        site_true_Y = 0 + 1 + 1
+
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       1           0
+        3       0           0.4
+        4       0           0.5
+        5       0           0.7
+        6       0           1.0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0.2     0.8     3       0,2
+        0.0     0.2     4       1,2
+        0.2     0.8     4       1,3
+        0.8     1.0     4       1,2
+        0.8     1.0     5       0,4
+        0.0     0.2     6       0,4
+        """)
+        sites = six.StringIO("""\
+        id  position    ancestral_state
+        0   0.05        0
+        1   0.3         0
+        2   0.9         0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        0       0       1               -1
+        0       0       2               0
+        0       0       0               1
+        0       1       2               -1
+        1       1       1               -1
+        1       2       1               -1
+        2       4       1               -1
+        2       1       2               6
+        2       2       3               6
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+        site_tsc = msprime.SiteStatCalculator(ts)
+        py_site_tsc = PythonSiteStatCalculator(ts)
+
+        # Y3:
+        site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
+        py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
+        print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(site_tsc_Y, site_true_Y)
+        self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
 
     def test_case_2(self):
         # Here are the trees:
@@ -1035,7 +1099,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
             n = [len(a) for a in A]
 
             def f(x):
-                return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(n[0]*n[1])
+                return float(x[0]*(n[1]-x[1]))/float(n[0]*n[1])
 
             self.assertAlmostEqual(
                     py_tsc.tree_stat(A, f),
@@ -1193,7 +1257,6 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
 
-    @unittest.skip("sfs")
     def test_sfs(self):
         for ts in self.get_ts():
             self.check_sfs(ts)
@@ -1221,8 +1284,9 @@ class SiteStatsTestCase(GeneralStatsTestCase):
                               mutation_rate=0.0,
                               recombination_rate=3.0)
         for mpn in [False, True]:
-            yield tsutil.jukes_cantor(ts, num_sites=10, mu=3,
-                                      multiple_per_node=mpn, seed=self.seed)
+            mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=3,
+                                         multiple_per_node=mpn, seed=self.seed)
+            yield mut_ts
 
     def check_pairwise_diversity_mutations(self, ts):
         py_tsc = PythonSiteStatCalculator(ts)
@@ -1253,7 +1317,6 @@ class SiteStatsTestCase(GeneralStatsTestCase):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
 
-    @unittest.skip("sfs")
     def test_sfs(self):
         for ts in self.get_ts():
             self.check_sfs(ts)

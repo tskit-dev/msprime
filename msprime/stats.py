@@ -214,9 +214,9 @@ class GeneralStatCalculator(object):
                         if n[i] == 1:
                             out[w][k] = np.nan
                         else:
-                            out[w][k] /= float(4 * n[i] * (n[i] - 1))
+                            out[w][k] /= float(2 * n[i] * (n[i] - 1))
                     else:
-                        out[w][k] /= float(4 * n[i] * n[j])
+                        out[w][k] /= float(2 * n[i] * n[j])
                     k += 1
 
         return out
@@ -569,19 +569,14 @@ class GeneralStatCalculator(object):
         :return: A list of lists of floats, one list per window.
         """
         n = [len(x) for x in sample_sets]
-        nout = sum([k + 1 for k in n])
 
         def f(x):
             out = []
             for k in range(len(n)):
-                out += [1 if u == x else 0 for u in range(n[k]+1)]
+                out += [1 if u == x[k] else 0 for u in range(n[k]+1)]
             return out
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
-        # move this division outside of f(x) so it only has to happen once
-        for w in range(len(windows)-1):
-            for u in range(nout):
-                out[w][u] /= (windows[w+1] - windows[w])
 
         return out
 
@@ -857,7 +852,10 @@ class SiteStatCalculator(GeneralStatCalculator):
         # index of *left-hand* end of the current window
         tabs = self.tree_sequence.dump_tables()  # FOR DEBUGGING
         print(tabs)
+        print("sample sets:", sample_sets)
         window_num = 0
+        while s.position > windows[window_num + 1]:
+            window_num += 1
         for interval, records_out, records_in in self.tree_sequence.edge_diffs():
             # if we've done all the sites then stop
             if ns == num_sites:
@@ -892,7 +890,9 @@ class SiteStatCalculator(GeneralStatCalculator):
                     window_length = windows[window_num + 1] - windows[window_num]
                     for j in range(n_out):
                         S[window_num][j] /= window_length
-                    window_num += 1
+                    # may need to advance through empty windows
+                    while s.position > windows[window_num + 1]:
+                        window_num += 1
                 nm = len(s.mutations)
                 print("---------")
                 print(s)
