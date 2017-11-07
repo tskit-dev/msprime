@@ -54,27 +54,6 @@ class PythonBranchLengthStatCalculator(object):
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
 
-    def site_frequency_spectrum(self, A, begin=0.0, end=None):
-        '''
-        Computes the expected SFS for A.
-        '''
-        if end is None:
-            end = self.tree_sequence.sequence_length
-        nout = len(A)
-        S = [0 for _ in range(nout+1)]
-        for tr in self.tree_sequence.trees(sample_counts=True, tracked_samples=A):
-            tr_len = max(0, (min(end, tr.interval[1]) - max(begin, tr.interval[0])))
-            if tr_len == 0:
-                continue
-            # print("S=", S)
-            for u in tr.nodes():
-                if u != tr.root:
-                    x = tr.num_tracked_samples(u)
-                    S[x] += tr.branch_length(u) * tr_len
-        for j in range(nout):
-            S[j] /= (end-begin)
-        return S
-
     def tree_length_diversity(self, X, Y, begin=0.0, end=None):
         '''
         Computes average pairwise diversity between a random choice from x
@@ -468,25 +447,6 @@ class PythonSiteStatCalculator(object):
                                     S -= 1
         return S / ((end - begin) * len(A) * len(B)
                     * (len(A) - 1) * (len(B) - 1))
-
-    def site_frequency_spectrum(self, A, begin=0.0, end=None):
-        """
-        The SFS.
-        """
-        if end is None:
-            end = self.tree_sequence.sequence_length
-        for u in A:
-            if max([A.count(x) for x in set(A)]) > 1:
-                raise ValueError("A cannot contain repeated elements.")
-        haps = list(self.tree_sequence.haplotypes())
-        site_positions = [x.position for x in self.tree_sequence.sites()]
-        sfs = [0 for _ in range(len(A)+1)]
-        for k in range(self.tree_sequence.num_sites):
-            if (site_positions[k] >= begin) and (site_positions[k] < end):
-                g = [haps[j][k] for j in A]
-                for a in set(g):
-                    sfs[g.count(a)] += 1
-        return [x/(end-begin) for x in sfs]
 
     def tree_stat_vector(self, sample_sets, weight_fun, begin=0.0, end=None):
         '''
@@ -1257,10 +1217,6 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
 
-    def test_sfs(self):
-        for ts in self.get_ts():
-            self.check_sfs(ts)
-
     def test_diversity(self):
         for ts in self.get_ts():
             self.check_pairwise_diversity(ts)
@@ -1316,7 +1272,3 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     def test_site_Y_stats(self):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
-
-    def test_sfs(self):
-        for ts in self.get_ts():
-            self.check_sfs(ts)
