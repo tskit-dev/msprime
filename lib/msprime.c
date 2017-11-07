@@ -1609,7 +1609,6 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     seg_tails[ix]->next = x;
     x->prev = seg_tails[ix];
 
-
     while ( x != NULL ) {
         seg_tails[ix] = x;
         y = x->next;
@@ -2583,6 +2582,9 @@ msp_dtwf_generation(msp_t *self)
                     if (ret != 0) {
                         goto out;
                     }
+                } else {
+                    u[0] = x;
+                    u[1] = NULL;
                 }
                 // Add to AVLTree for each parental chromosome
                 for ( i = 0; i < 2; i++) {
