@@ -46,6 +46,30 @@ combinations of tests on different platforms:
 3. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on 32 and 64 bit
    Windows using conda.
 
++++++++++++++++++++++++++++++++++++++++++++++++++
+Running tests on multiple Python versions locally
++++++++++++++++++++++++++++++++++++++++++++++++++
+
+On `Travis CI <https://travis-ci.org/>`_ all supported Python versions are tested.
+If you'd like to test multiple versions locally, you can use `tox`:
+
+.. code-block:: bash
+
+    echo \
+    '[tox]
+    envlist = py27,py35
+    [testenv]
+    deps= -rrequirements/development.txt
+    commands=nosetests' > tox.ini && tox
+
+Note that if the `requirements/development.txt` have been updated since
+initially running `tox`, you may need to `recreate them <http://tox.readthedocs.io/en/latest/example/basic.html#forcing-re-creation-of-virtual-environments>`_:
+
+them:
+
+.. code-block:: bash
+
+    tox --recreate -e py27,py35
 
 ********
 Overview
@@ -514,5 +538,3 @@ and contained in the ``docs`` directory. It is written in the
 is deployed automatically to `readthedocs <https://readthedocs.org/>`_. To
 build the documentation locally run ``make`` in the ``docs`` directory.
 This should build the HTML documentation in ``docs/_build/html/``.
-
-
