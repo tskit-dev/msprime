@@ -351,6 +351,81 @@ class TestHoleyTreeSequences(TopologyTestCase):
         self.verify_trees(ts, expected)
 
 
+class TestTsinferExamples(TopologyTestCase):
+    """
+    Test cases on troublesome topology examples that arose from tsinfer.
+    """
+    def test_no_last_tree(self):
+        # The last tree was not being generated here because of a bug in
+        # the low-level tree generation code.
+        nodes = six.StringIO("""\
+        id      is_sample   population      time
+        0       1       -1              3.00000000000000
+        1       1       -1              2.00000000000000
+        2       1       -1              2.00000000000000
+        3       1       -1              2.00000000000000
+        4       1       -1              2.00000000000000
+        5       1       -1              1.00000000000000
+        6       1       -1              1.00000000000000
+        7       1       -1              1.00000000000000
+        8       1       -1              1.00000000000000
+        9       1       -1              1.00000000000000
+        10      1       -1              1.00000000000000
+        """)
+        edges = six.StringIO("""\
+        id      left            right           parent  child
+        0       62291.41659631  79679.17408763  1       5
+        1       62291.41659631  62374.60889677  1       6
+        2       122179.36037089 138345.43104411 1       7
+        3       67608.32330402  79679.17408763  1       8
+        4       122179.36037089 138345.43104411 1       8
+        5       62291.41659631  79679.17408763  1       9
+        6       126684.47550333 138345.43104411 1       10
+        7       23972.05905068  62291.41659631  2       5
+        8       79679.17408763  82278.53390076  2       5
+        9       23972.05905068  62291.41659631  2       6
+        10      79679.17408763  110914.43816806 2       7
+        11      145458.28890561 189765.31932273 2       7
+        12      79679.17408763  110914.43816806 2       8
+        13      145458.28890561 200000.00000000 2       8
+        14      23972.05905068  62291.41659631  2       9
+        15      79679.17408763  110914.43816806 2       9
+        16      145458.28890561 145581.18329797 2       10
+        17      4331.62138785   23972.05905068  3       6
+        18      4331.62138785   23972.05905068  3       9
+        19      110914.43816806 122179.36037089 4       7
+        20      138345.43104411 145458.28890561 4       7
+        21      110914.43816806 122179.36037089 4       8
+        22      138345.43104411 145458.28890561 4       8
+        23      110914.43816806 112039.30503475 4       9
+        24      138345.43104411 145458.28890561 4       10
+        25      0.00000000      200000.00000000 0       1
+        26      0.00000000      200000.00000000 0       2
+        27      0.00000000      200000.00000000 0       3
+        28      0.00000000      200000.00000000 0       4
+        """)
+        ts = msprime.load_text(nodes, edges, sequence_length=200000)
+        pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
+        num_trees = 0
+        for t in pts.trees():
+            num_trees += 1
+        self.assertEqual(num_trees, ts.num_trees)
+        n = 0
+        for pt, t in zip(pts.trees(), ts.trees()):
+            self.assertEqual((pt.left, pt.right), t.interval)
+            for j in range(ts.num_nodes):
+                self.assertEqual(pt.parent[j], t.parent(j))
+                self.assertEqual(pt.left_child[j], t.left_child(j))
+                self.assertEqual(pt.right_child[j], t.right_child(j))
+                self.assertEqual(pt.left_sib[j], t.left_sib(j))
+                self.assertEqual(pt.right_sib[j], t.right_sib(j))
+            n += 1
+        self.assertEqual(n, num_trees)
+        intervals = [t.interval for t in ts.trees()]
+        self.assertEqual(intervals[0][0], 0)
+        self.assertEqual(intervals[-1][-1], ts.sequence_length)
+
+
 class TestRecordSquashing(TopologyTestCase):
     """
     Tests that we correctly squash adjacent equal records together.
