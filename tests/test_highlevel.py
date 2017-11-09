@@ -1749,6 +1749,14 @@ class TestRecombinationMap(HighLevelTestCase):
         self.assertEqual(rm.get_positions(), [0, 1, 2])
         self.assertEqual(rm.get_rates(), [0, 5e-8, 0])
 
+    def test_read_hapmap_nonzero_end(self):
+        with open(self.temp_file, "w+") as f:
+            print("HEADER", file=f)
+            print("chr1 0 5 x", file=f)
+            print("s    2 1 x x x", file=f)
+        self.assertRaises(
+            ValueError, msprime.RecombinationMap.read_hapmap, self.temp_file)
+
     def test_read_hapmap_gzipped(self):
         try:
             filename = self.temp_file + ".gz"
