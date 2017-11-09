@@ -807,7 +807,7 @@ tree_sequence_init_trees(tree_sequence_t *self)
     self->num_trees = 0;
     j = 0;
     k = 0;
-    while (j < self->edges.num_records) {
+    while (j < self->edges.num_records || tree_left < self->sequence_length) {
         while (k < self->edges.num_records && self->edges.right[O[k]] == tree_left) {
             k++;
         }
@@ -822,9 +822,6 @@ tree_sequence_init_trees(tree_sequence_t *self)
              tree_right = GSL_MIN(tree_right, self->edges.right[O[k]]);
         }
         tree_left = tree_right;
-        self->num_trees++;
-    }
-    if (tree_right != self->sequence_length || self->edges.num_records == 0) {
         self->num_trees++;
     }
     assert(self->num_trees > 0);
@@ -850,8 +847,8 @@ tree_sequence_init_trees(tree_sequence_t *self)
     site = 0;
     j = 0;
     k = 0;
-    while (j < self->edges.num_records) {
-        while (self->edges.right[O[k]] == tree_left) {
+    while (j < self->edges.num_records || tree_left < self->sequence_length) {
+        while (k < self->edges.num_records && self->edges.right[O[k]] == tree_left) {
             k++;
         }
         while (j < self->edges.num_records && self->edges.left[I[j]] == tree_left) {
@@ -871,17 +868,6 @@ tree_sequence_init_trees(tree_sequence_t *self)
             site++;
         }
         tree_left = tree_right;
-        tree_index++;
-    }
-    if (tree_right != self->sequence_length || self->edges.num_records == 0) {
-        /* Add in the sites for the last, empty, tree. */
-        self->sites.tree_sites[tree_index] = self->sites.tree_sites_mem + site;
-        tree_right = self->sequence_length;
-        while (site < (site_id_t) self->sites.num_records
-                && self->sites.position[site] < tree_right) {
-            self->sites.tree_sites_length[tree_index]++;
-            site++;
-        }
         tree_index++;
     }
     assert(site == (site_id_t) self->sites.num_records);
