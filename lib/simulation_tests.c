@@ -659,6 +659,72 @@ test_demographic_events(void)
     gsl_rng_free(rng);
 }
 
+static int
+get_num_children(int node, size_t num_edges, edge_t *edges)
+{
+    int num_children = 0;
+    edge_t edge;
+
+    for (int i = 0; i < (int) num_edges; i++) {
+        edge = *(edges + i);
+        if ( edge.parent == (int) node ) {
+            num_children++;
+        }
+
+    }
+    return num_children;
+}
+
+static void
+test_dtwf_single_locus_simulation(void)
+{
+    int ret;
+    const char *model_name;
+    /* uint32_t j; */
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    int num_coalescent_events = 0;
+    int num_children;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model(msp, MSP_MODEL_DTWF, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+    ret = msp_set_population_configuration(msp, 0, n, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+
+    /* For the single locus sim we should have n-1 coalescent events,
+     * counting multiple mergers as multiple coalescent events */
+    for ( int i = 0; i < msp->num_nodes; i++ ) {
+        num_children = get_num_children(i, msp->num_edges, msp->edges);
+        if ( num_children > 0 ) {
+            num_coalescent_events += num_children - 1;
+        }
+    }
+    CU_ASSERT_EQUAL(num_coalescent_events, n-1);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+}
+
 static void
 test_single_locus_simulation(void)
 {
@@ -1411,6 +1477,7 @@ main(int argc, char **argv)
         {"test_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_demographic_events},
         {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_simulation_memory_limit", test_simulation_memory_limit},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_simulation_replicates", test_simulation_replicates},
