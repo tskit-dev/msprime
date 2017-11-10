@@ -594,6 +594,68 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         interested in.
     """
 
+    def tracked_sample_tree_stat_vector(self, sample_sets, weight_fun, windows=None):
+        if windows is None:
+            windows = (0, self.tree_sequence.sequence_length)
+        for U in sample_sets:
+            if len(U) != len(set(U)):
+                raise ValueError(
+                    "elements of sample_sets cannot contain repeated elements.")
+            for u in U:
+                if not self.tree_sequence.node(u).is_sample():
+                    raise ValueError("Not all elements of sample_sets are samples.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.tree_sequence.sequence_length:
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
+        for U in sample_sets:
+            if max([U.count(x) for x in set(U)]) > 1:
+                raise ValueError("elements of sample_sets",
+                                 "cannot contain repeated elements.")
+        tr_its = [self.tree_sequence.trees(
+                        tracked_samples=x,
+                        sample_counts=True) for x in sample_sets]
+        n = [len(U) for U in sample_sets]
+        n_out = len(weight_fun([0 for a in sample_sets]))
+        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
+        T = [0.0 for j in range(n_out)]
+        window_num = 0
+        for k in range(self.tree_sequence.num_trees):
+            for j in range(n_out):
+                T[j] = 0.0
+            trs = [next(x) for x in tr_its]
+            root = trs[0].root
+            for node in trs[0].nodes():
+                if node != root:
+                    x = [tr.num_tracked_samples(node) for tr in trs]
+                    nx = [a - b for a, b in zip(n, x)]
+                    w = [a + b for a, b in zip(weight_fun(x), weight_fun(nx))]
+                    for j in range(n_out):
+                        T[j] += w[j] * trs[0].branch_length(node)
+            tr_len = (min(windows[window_num + 1], trs[0].interval[1])
+                      - max(windows[window_num], trs[0].interval[0]))
+            for j in range(n_out):
+                S[window_num][j] += T[j] * tr_len
+            while (window_num < num_windows and
+                   trs[0].interval[1] >= windows[window_num + 1]):
+                # wrap up the last window
+                window_length = windows[window_num + 1] - windows[window_num]
+                for j in range(n_out):
+                    S[window_num][j] /= window_length
+                # start the next
+                window_num += 1
+                if window_num < num_windows:
+                    tr_len = (min(windows[window_num + 1], trs[0].interval[1])
+                              - max(windows[window_num], trs[0].interval[0]))
+                    for j in range(n_out):
+                        S[window_num][j] += T[j] * tr_len
+        return S
+
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a
