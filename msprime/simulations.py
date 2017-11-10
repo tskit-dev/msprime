@@ -668,7 +668,9 @@ class RecombinationMap(object):
                 # Rate is expressed in centimorgans per megabase, which
                 # we convert to per-base rates
                 rates.append(rate * 1e-8)
-            assert rate == 0
+            if rate != 0:
+                raise ValueError(
+                    "The last rate provided in the recombination map must zero")
         finally:
             f.close()
         return cls(positions, rates)
