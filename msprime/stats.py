@@ -845,7 +845,7 @@ class SiteStatCalculator(GeneralStatCalculator):
                 print(s)
                 print("X", X)
                 if nm > 0:
-                    U = {s.ancestral_state: n.copy()}
+                    U = {s.ancestral_state: list(n)}
                     for mut in s.mutations:
                         if mut.derived_state not in U:
                             U[mut.derived_state] = [0 for _ in range(num_sample_sets)]

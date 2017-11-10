@@ -284,8 +284,7 @@ class PythonBranchLengthStatCalculator(object):
             end = self.tree_sequence.sequence_length
         tr_its = [self.tree_sequence.trees(
                         tracked_samples=x,
-                        sample_counts=True,
-                        sample_lists=True) for x in sample_sets]
+                        sample_counts=True) for x in sample_sets]
         n = [len(U) for U in sample_sets]
         n_out = len(weight_fun([0 for a in sample_sets]))
         S = [0.0 for j in range(n_out)]
@@ -554,8 +553,8 @@ class GeneralStatsTestCase(unittest.TestCase):
         # flatten if necessary
         if isinstance(tree_vals[0][0], list):
             tree_vals = [[x for a in b for x in a] for b in tree_vals]
-        print("indices:", indices)
-        print("windows:", windows)
+        # print("indices:", indices)
+        # print("windows:", windows)
 
         if tsc_vector_fn is not None:
             if index_length > 0:
@@ -563,9 +562,9 @@ class GeneralStatsTestCase(unittest.TestCase):
             else:
                 tsc_vector_vals = tsc_vector_fn([sample_sets[i[0]] for i in indices],
                                                 windows)
-            print("vector:")
-            print(tsc_vector_vals)
-            print(tree_vals)
+            # print("vector:")
+            # print(tsc_vector_vals)
+            # print(tree_vals)
             self.assertEqual(len(tree_vals), len(windows)-1)
             self.assertEqual(len(tsc_vector_vals), len(windows)-1)
             for i in range(len(windows)-1):
@@ -574,9 +573,9 @@ class GeneralStatsTestCase(unittest.TestCase):
         if tsc_fn is not None:
             tsc_vals_orig = [tsc_fn(*([ls] + [windows])) for ls in leafset_args]
             tsc_vals = [[x[k][0] for x in tsc_vals_orig] for k in range(len(windows)-1)]
-            print("not:")
-            print(tsc_vals)
-            print(tree_vals)
+            # print("not:")
+            # print(tsc_vals)
+            # print(tree_vals)
             self.assertEqual(len(tsc_vals), len(windows)-1)
             for i in range(len(windows)-1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
@@ -775,7 +774,6 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         # sites, Y:
         site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
         py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
-        print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc.tree_stat(A, f), site_true_Y)
@@ -842,7 +840,6 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         # Y3:
         site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
         py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
-        print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
 
@@ -1002,7 +999,6 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         # sites:
         site_tsc_Y = site_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
         py_site_tsc_Y = py_site_tsc.Y3([0], [1], [2], 0.0, 1.0)
-        print(site_tsc_Y, py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc.tree_stat(A, f), site_true_Y)
@@ -1018,10 +1014,6 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         py_branch_tsc = PythonBranchLengthStatCalculator(ts)
         site_tsc = msprime.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
-
-        for t in ts.trees():
-            print(t.interval)
-            print(msprime.drawing.draw_tree(t, format='unicode'))
 
         A = [[0], [1], [2]]
         self.assertAlmostEqual(branch_tsc.Y3(A, [0.0, 1.0])[0][0],
