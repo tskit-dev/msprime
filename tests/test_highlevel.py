@@ -674,6 +674,13 @@ class TestVariantGenerator(HighLevelTestCase):
         variants = list(ts.variants())
         self.assertEqual(len(variants), 0)
 
+    def test_genotype_matrix(self):
+        ts = self.get_tree_sequence()
+        G = np.empty((ts.num_sites, ts.num_samples), dtype=np.uint8)
+        for v in ts.variants():
+            G[v.index, :] = v.genotypes
+        self.assertTrue(np.array_equal(G, ts.genotype_matrix()))
+
     @unittest.skip("Recurrent mutations")
     def test_recurrent_mutations_over_samples(self):
         ts = self.get_tree_sequence()
