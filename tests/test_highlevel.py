@@ -2280,8 +2280,6 @@ class TestMutationParent(unittest.TestCase):
                                      multiple_per_node=False, seed=self.seed)
         tabs = mut_ts.dump_tables()
         mp = tsutil.compute_mutation_parent(ts=mut_ts)
-        print(tabs)
-        print("mp:", mp)
         for u, v in zip(mp, tabs.mutations.parent):
             self.assertEqual(u, v)
 
@@ -2293,7 +2291,5 @@ class TestMutationParent(unittest.TestCase):
                                      multiple_per_node=True, seed=self.seed)
         tabs = mut_ts.dump_tables()
         mp = tsutil.compute_mutation_parent(ts=mut_ts)
-        print(tabs)
-        print("mp:", mp)
         for u, v in zip(mp, tabs.mutations.parent):
             self.assertEqual(u, v)
