@@ -553,8 +553,6 @@ class GeneralStatsTestCase(unittest.TestCase):
         # flatten if necessary
         if isinstance(tree_vals[0][0], list):
             tree_vals = [[x for a in b for x in a] for b in tree_vals]
-        # print("indices:", indices)
-        # print("windows:", windows)
 
         if tsc_vector_fn is not None:
             if index_length > 0:
