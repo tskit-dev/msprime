@@ -595,68 +595,6 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         interested in.
     """
 
-    def tracked_sample_tree_stat_vector(self, sample_sets, weight_fun, windows=None):
-        if windows is None:
-            windows = (0, self.tree_sequence.sequence_length)
-        for U in sample_sets:
-            if len(U) != len(set(U)):
-                raise ValueError(
-                    "elements of sample_sets cannot contain repeated elements.")
-            for u in U:
-                if not self.tree_sequence.node(u).is_sample():
-                    raise ValueError("Not all elements of sample_sets are samples.")
-        num_windows = len(windows) - 1
-        if windows[0] != 0.0:
-            raise ValueError(
-                "Windows must start at the start of the sequence (at 0.0).")
-        if windows[-1] != self.tree_sequence.sequence_length:
-            raise ValueError("Windows must extend to the end of the sequence.")
-        for k in range(num_windows):
-            if windows[k + 1] <= windows[k]:
-                raise ValueError("Windows must be increasing.")
-        for U in sample_sets:
-            if max([U.count(x) for x in set(U)]) > 1:
-                raise ValueError("elements of sample_sets",
-                                 "cannot contain repeated elements.")
-        tr_its = [self.tree_sequence.trees(
-                        tracked_samples=x,
-                        sample_counts=True) for x in sample_sets]
-        n = [len(U) for U in sample_sets]
-        n_out = len(weight_fun([0 for a in sample_sets]))
-        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
-        T = [0.0 for j in range(n_out)]
-        window_num = 0
-        for k in range(self.tree_sequence.num_trees):
-            for j in range(n_out):
-                T[j] = 0.0
-            trs = [next(x) for x in tr_its]
-            root = trs[0].root
-            for node in trs[0].nodes():
-                if node != root:
-                    x = [tr.num_tracked_samples(node) for tr in trs]
-                    nx = [a - b for a, b in zip(n, x)]
-                    w = [a + b for a, b in zip(weight_fun(x), weight_fun(nx))]
-                    for j in range(n_out):
-                        T[j] += w[j] * trs[0].branch_length(node)
-            tr_len = (min(windows[window_num + 1], trs[0].interval[1])
-                      - max(windows[window_num], trs[0].interval[0]))
-            for j in range(n_out):
-                S[window_num][j] += T[j] * tr_len
-            while (window_num < num_windows and
-                   trs[0].interval[1] >= windows[window_num + 1]):
-                # wrap up the last window
-                window_length = windows[window_num + 1] - windows[window_num]
-                for j in range(n_out):
-                    S[window_num][j] /= window_length
-                # start the next
-                window_num += 1
-                if window_num < num_windows:
-                    tr_len = (min(windows[window_num + 1], trs[0].interval[1])
-                              - max(windows[window_num], trs[0].interval[0]))
-                    for j in range(n_out):
-                        S[window_num][j] += T[j] * tr_len
-        return S
-
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a
@@ -709,8 +647,6 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
 
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
-        # print("sample_sets:", sample_sets)
-        # print("n_out:",n_out)
         N = self.tree_sequence.num_nodes
         X = [[int(u in a) for a in sample_sets] for u in range(N)]
         # we will essentially construct the tree
@@ -724,8 +660,6 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
             length = interval[1] - interval[0]
             for sign, records in ((-1, records_out), (+1, records_in)):
                 for edge in records:
-                    # print("Record (",sign,"):",node,children,time)
-                    # print("\t",X, "-->", L)
                     dx = [0 for k in range(num_sample_sets)]
                     if sign == +1:
                         pi[edge.child] = edge.parent
@@ -735,8 +669,6 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                     dt = (node_time[pi[edge.child]] - node_time[edge.child])
                     for j in range(n_out):
                         L[j] += sign * dt * w[j]
-                    # print("\t\tchild:",child,"+=",sign,"*",wfn(X[child]),
-                    #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
                     if sign == -1:
                         pi[edge.child] = -1
                     old_w = wfn(X[edge.parent])
@@ -747,8 +679,6 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                         dt = (node_time[pi[edge.parent]] - node_time[edge.parent])
                         for j in range(n_out):
                             L[j] += dt * (w[j]-old_w[j])
-                        # print("\t\tnode:",node,"+=",dt,"*(",wfn(X[node]),"-",
-                        #   old_w,") -->",L)
                     # propagate change up the tree
                     u = pi[edge.parent]
                     if u != -1:
@@ -764,12 +694,8 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                                 dt = (node_time[pi[u]] - node_time[u])
                                 for j in range(n_out):
                                     L[j] += dt*(w[j] - old_w[j])
-                                # print("\t\tanc:",u,"+=",dt,"*(",wfn(X[u]),"-",
-                                #    old_w,") -->",L)
                             u = next_u
                             next_u = pi[next_u]
-                    # print("\t",X, "-->", L)
-            # print("next tree:",L,length)
             while chrom_pos + length >= windows[window_num + 1]:
                 # wrap up the last window
                 this_length = windows[window_num + 1] - chrom_pos
@@ -848,8 +774,6 @@ class SiteStatCalculator(GeneralStatCalculator):
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         if num_sites == 0:
             return S
-        # print("sample_sets:", sample_sets)
-        # print("n_out:",n_out)
         N = self.tree_sequence.num_nodes
         # initialize: with no tree, each node is either in a sample set or not
         X = [[int(u in a) for a in sample_sets] for u in range(N)]
@@ -860,9 +784,6 @@ class SiteStatCalculator(GeneralStatCalculator):
         ns = 0  # this will record number of sites seen so far
         s = next(sites)
         # index of *left-hand* end of the current window
-        tabs = self.tree_sequence.dump_tables()  # FOR DEBUGGING
-        print(tabs)
-        print("sample sets:", sample_sets)
         window_num = 0
         while s.position > windows[window_num + 1]:
             window_num += 1
@@ -873,8 +794,6 @@ class SiteStatCalculator(GeneralStatCalculator):
             # update the tree
             for sign, records in ((-1, records_out), (+1, records_in)):
                 for edge in records:
-                    # print("Record (",sign,"):",node,children,time)
-                    # print("\t",X, "-->", L)
                     dx = [0 for k in range(num_sample_sets)]
                     if sign == +1:
                         pi[edge.child] = edge.parent
@@ -904,9 +823,6 @@ class SiteStatCalculator(GeneralStatCalculator):
                     while s.position > windows[window_num + 1]:
                         window_num += 1
                 nm = len(s.mutations)
-                print("---------")
-                print(s)
-                print("X", X)
                 if nm > 0:
                     U = {s.ancestral_state: list(n)}
                     for mut in s.mutations:
@@ -921,10 +837,8 @@ class SiteStatCalculator(GeneralStatCalculator):
                             U[parent_state][k] -= X[mut.node][k]
                     for a in U:
                         w = weight_fun(U[a])
-                        print(a, "->", w)
                         for j in range(n_out):
                             S[window_num][j] += w[j]
-                    print(U)
                 ns += 1
                 if ns == num_sites:
                     break
@@ -939,8 +853,6 @@ class SiteStatCalculator(GeneralStatCalculator):
 def get_derived_state(site, mut_id):
     """
     Find the derived state of the mutation with id `mut_id` at site `site`.
-
-    There must be a better way to do this.
     """
     if mut_id == -1:
         state = site.ancestral_state
