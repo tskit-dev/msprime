@@ -660,17 +660,15 @@ test_demographic_events(void)
 }
 
 static int
-get_num_children(int node, size_t num_edges, edge_t *edges)
+get_num_children(size_t node, size_t num_edges, edge_t *edges)
 {
     int num_children = 0;
-    edge_t edge;
+    size_t i;
 
-    for (int i = 0; i < (int) num_edges; i++) {
-        edge = *(edges + i);
-        if ( edge.parent == (int) node ) {
+    for ( i = 0; i < num_edges; i++) {
+        if ( edges[i].parent == node ) {
             num_children++;
         }
-
     }
     return num_children;
 }
@@ -680,7 +678,7 @@ test_dtwf_single_locus_simulation(void)
 {
     int ret;
     const char *model_name;
-    /* uint32_t j; */
+    int i;
     uint32_t n = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -710,7 +708,7 @@ test_dtwf_single_locus_simulation(void)
 
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
-    for ( int i = 0; i < msp->num_nodes; i++ ) {
+    for ( i = 0; i < msp->num_nodes; i++ ) {
         num_children = get_num_children(i, msp->num_edges, msp->edges);
         if ( num_children > 0 ) {
             num_coalescent_events += num_children - 1;

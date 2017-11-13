@@ -2527,10 +2527,13 @@ typedef struct _segment_list_t {
 
 /* Performs a single generation under the Wright Fisher model */
 static int WARN_UNUSED
-msp_dtwf_generation(msp_t *self)
+msp_dtwf_generation(msp_t *self, unsigned long events)
 {
     int ret = 0;
     uint32_t N, i, j, k, p;
+    int mig_source_pop, mig_dest_pop;
+    double mu;
+    uint32_t num_migrations, n;
     size_t segment_mem_offset = 0;
     population_t *pop;
     segment_t *x;
@@ -2563,6 +2566,10 @@ msp_dtwf_generation(msp_t *self)
             s = segment_mem + segment_mem_offset;
             segment_mem_offset++;
             p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
+            if ( parents[p] != NULL ) {
+                self->num_ca_events++;
+                events++;
+            }
             s->next = parents[p];
             s->node = a;
             parents[p] = s;
@@ -2609,6 +2616,29 @@ msp_dtwf_generation(msp_t *self)
         segment_mem = NULL;
         parents = NULL;
     }
+    // Migrations
+    mig_source_pop = 0;
+    mig_dest_pop = 0;
+    for (j = 0; j < self->num_populations; j++) {
+        n = avl_count(&self->populations[j].ancestors);
+        for (k = 0; k < self->num_populations; k++) {
+            mu = n * self->migration_matrix[j * self->num_populations + k];
+            num_migrations = gsl_ran_poisson(self->rng, mu);
+            for ( i = 0; i < num_migrations; i++ ) {
+                /* m[j, k] is the rate at which migrants move from
+                 * population k to j forwards in time. Backwards
+                 * in time, we move the individual from from
+                 * population j into population k.
+                 */
+                mig_source_pop = (population_id_t) j;
+                mig_dest_pop = (population_id_t) k;
+                ret = msp_migration_event(self, mig_source_pop, mig_dest_pop);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    }
 out:
     if (parents != NULL) {
         free(parents);
@@ -2629,14 +2659,13 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 
     while (msp_get_num_ancestors(self) > 0
             && self->time < max_time && events < max_events) {
-        events++;
         self->time++;
         // NOTE: num_links is never properly set here
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
             goto out;
         }
-        ret = msp_dtwf_generation(self);
+        ret = msp_dtwf_generation(self, events);
         if (ret != 0) {
             goto out;
         }
