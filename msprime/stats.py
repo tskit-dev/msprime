@@ -591,6 +591,8 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
 
+    NOTE: this interface is still in beta, and may change in the future.
+
     :param TreeSequence tree_sequence: The tree sequence mutations we are
         interested in.
     """
@@ -724,6 +726,8 @@ class SiteStatCalculator(GeneralStatCalculator):
     all calculated using :meth:``SiteStatCalculator.tree_stat_vector`` as the
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
+
+    NOTE: this interface is still in beta, and may change in the future.
 
     :param TreeSequence tree_sequence: The tree sequence mutations we are
         interested in.
