@@ -674,6 +674,13 @@ class TestVariantGenerator(HighLevelTestCase):
         variants = list(ts.variants())
         self.assertEqual(len(variants), 0)
 
+    def test_genotype_matrix(self):
+        ts = self.get_tree_sequence()
+        G = np.empty((ts.num_sites, ts.num_samples), dtype=np.uint8)
+        for v in ts.variants():
+            G[v.index, :] = v.genotypes
+        self.assertTrue(np.array_equal(G, ts.genotype_matrix()))
+
     @unittest.skip("Recurrent mutations")
     def test_recurrent_mutations_over_samples(self):
         ts = self.get_tree_sequence()
@@ -2273,8 +2280,6 @@ class TestMutationParent(unittest.TestCase):
                                      multiple_per_node=False, seed=self.seed)
         tabs = mut_ts.dump_tables()
         mp = tsutil.compute_mutation_parent(ts=mut_ts)
-        print(tabs)
-        print("mp:", mp)
         for u, v in zip(mp, tabs.mutations.parent):
             self.assertEqual(u, v)
 
@@ -2286,7 +2291,5 @@ class TestMutationParent(unittest.TestCase):
                                      multiple_per_node=True, seed=self.seed)
         tabs = mut_ts.dump_tables()
         mp = tsutil.compute_mutation_parent(ts=mut_ts)
-        print(tabs)
-        print("mp:", mp)
         for u, v in zip(mp, tabs.mutations.parent):
             self.assertEqual(u, v)

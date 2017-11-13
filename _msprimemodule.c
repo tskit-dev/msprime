@@ -3671,8 +3671,6 @@ out:
     return ret;
 }
 
-
-
 static PyObject *
 TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
 {
@@ -3833,6 +3831,67 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_genotype_matrix(TreeSequence  *self)
+{
+#ifdef HAVE_NUMPY
+    PyObject *ret = NULL;
+    int err;
+    size_t num_sites;
+    size_t num_samples;
+    npy_intp dims[2];
+    PyArrayObject *genotype_matrix = NULL;
+    vargen_t *vg = NULL;
+    char *V;
+    site_t *site;
+    size_t j;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_sites = tree_sequence_get_num_sites(self->tree_sequence);
+    num_samples = tree_sequence_get_num_samples(self->tree_sequence);
+    dims[0] = num_sites;
+    dims[1] = num_samples;
+
+    genotype_matrix = (PyArrayObject *) PyArray_SimpleNew(2, dims, NPY_UINT8);
+    if (genotype_matrix == NULL) {
+        goto out;
+    }
+    V = (char *) PyArray_DATA(genotype_matrix);
+    vg = PyMem_Malloc(sizeof(vargen_t));
+    if (vg == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = vargen_alloc(vg, self->tree_sequence, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    j = 0;
+    while ((err = vargen_next(vg, &site, V + (j * num_samples))) == 1) {
+        j++;
+    }
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = (PyObject *) genotype_matrix;
+    genotype_matrix = NULL;
+out:
+    if (vg != NULL) {
+        vargen_free(vg);
+        PyMem_Free(vg);
+    }
+    Py_XDECREF(genotype_matrix);
+    return ret;
+#else
+    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
+    return NULL;
+#endif
+}
+
 static PyMemberDef TreeSequence_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -3888,6 +3947,8 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
+    {"get_genotype_matrix", (PyCFunction) TreeSequence_get_genotype_matrix, METH_NOARGS,
+        "Returns the genotypes matrix." },
     {NULL}  /* Sentinel */
 };
 

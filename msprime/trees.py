@@ -1595,6 +1595,9 @@ class TreeSequence(object):
                     mutations=[Mutation(*mutation) for mutation in mutations])
                 yield Variant(position=pos, site=site, index=index, genotypes=g)
 
+    def genotype_matrix(self):
+        return self._ll_tree_sequence.get_genotype_matrix()
+
     def pairwise_diversity(self, samples=None):
         return self.get_pairwise_diversity(samples)
 

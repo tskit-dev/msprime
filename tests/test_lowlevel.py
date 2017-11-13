@@ -1918,6 +1918,7 @@ class TestTreeSequence(LowLevelTestCase):
         self.assertRaises(ValueError, ts.get_num_mutations)
         self.assertRaises(ValueError, ts.get_num_migrations)
         self.assertRaises(ValueError, ts.get_num_migrations)
+        self.assertRaises(ValueError, ts.get_genotype_matrix)
         self.assertRaises(ValueError, ts.dump)
 
     def test_num_nodes(self):
@@ -1991,6 +1992,13 @@ class TestTreeSequence(LowLevelTestCase):
                 self.assertRaises(IndexError, ts.get_node, num_nodes + j)
             for x in [None, "", {}, []]:
                 self.assertRaises(TypeError, ts.get_node, x)
+
+    def test_get_genotype_matrix_interface(self):
+        for ts in self.get_example_tree_sequences():
+            num_samples = ts.get_num_samples()
+            num_sites = ts.get_num_sites()
+            G = ts.get_genotype_matrix()
+            self.assertEqual(G.shape, (num_sites, num_samples))
 
     def test_get_migration_interface(self):
         ts = self.get_example_migration_tree_sequence()
