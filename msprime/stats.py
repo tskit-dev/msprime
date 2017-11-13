@@ -168,23 +168,24 @@ class GeneralStatCalculator(object):
         check_numpy()
         self.tree_sequence = tree_sequence
 
-    def mean_pairwise_tmrca(self, sample_sets, windows):
+    def divergence(self, sample_sets, windows):
         """
-        Finds the mean time to most recent common ancestor between pairs of samples
-        as described in mean_pairwise_tmrca_matrix (which uses this function).
-        Returns the upper triangle (including the diagonal) in row-major order,
-        so if the output is `x`, then:
+        Finds the divergence between pairs of samples as described in
+        mean_pairwise_tmrca_matrix (which uses this function).  Returns the
+        upper triangle (including the diagonal) in row-major order, so if the
+        output is `x`, then:
 
         >>> k=0
         >>> for w in range(len(windows)-1):
         >>>     for i in range(len(sample_sets)):
         >>>         for j in range(i,len(sample_sets)):
-        >>>             trmca[i,j] = tmrca[j,i] = x[w][k]
+        >>>             trmca[i,j] = tmrca[j,i] = x[w][k]/2.0
         >>>             k += 1
 
         will fill out the matrix of mean TMRCAs in the `i`th window between (and
         within) each group of samples in `sample_sets` in the matrix `tmrca`.
-        Alternatively, if `names` labels the sample_sets, the output labels are:
+        (This is because divergence is one-half TMRCA.) Alternatively, if
+        `names` labels the sample_sets, the output labels are:
 
         >>> [".".join(names[i],names[j]) for i in range(len(names))
         >>>         for j in range(i,len(names))]
@@ -192,7 +193,7 @@ class GeneralStatCalculator(object):
         :param list sample_sets: A list of sets of IDs of samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :return: A list of the upper triangle of mean TMRCA values in row-major
+        :return: A list of the upper triangle of divergences in row-major
             order, including the diagonal.
         """
         ns = len(sample_sets)
@@ -214,26 +215,26 @@ class GeneralStatCalculator(object):
                         if n[i] == 1:
                             out[w][k] = np.nan
                         else:
-                            out[w][k] /= float(2 * n[i] * (n[i] - 1))
+                            out[w][k] /= float(n[i] * (n[i] - 1))
                     else:
-                        out[w][k] /= float(2 * n[i] * n[j])
+                        out[w][k] /= float(n[i] * n[j])
                     k += 1
 
         return out
 
-    def mean_pairwise_tmrca_matrix(self, sample_sets, windows):
+    def divergence_matrix(self, sample_sets, windows):
         """
-        Finds the mean time to most recent common ancestor between pairs of
-        samples from each set of samples and in each window. Returns a numpy
-        array indexed by (window, sample_set, sample_set).  Diagonal entries are
-        corrected so that the value gives the mean pairwise TMRCA for *distinct*
-        samples, but it is not checked whether the sample_sets are disjoint
-        (so offdiagonals are not corrected).  For this reason, if an element of
-        `sample_sets` has only one element, the corresponding diagonal will be
-        NaN.
+        Finds the mean divergence  between pairs of samples from each set of
+        samples and in each window. Returns a numpy array indexed by (window,
+        sample_set, sample_set).  Diagonal entries are corrected so that the
+        value gives the mean divergence for *distinct* samples, but it is not
+        checked whether the sample_sets are disjoint (so offdiagonals are not
+        corrected).  For this reason, if an element of `sample_sets` has only
+        one element, the corresponding diagonal will be NaN.
 
-        The mean TMRCA between two samples is defined to be one-half the length
-        of all edges separating them in the tree at a uniformly chosen position
+        The mean divergence between two samples is defined to be the mean: (as
+        a TreeStat) length of all edges separating them in the tree, or (as a
+        SiteStat) density of segregating sites, at a uniformly chosen position
         on the genome.
 
         :param list sample_sets: A list of sets of IDs of samples.
@@ -242,7 +243,7 @@ class GeneralStatCalculator(object):
         :return: A list of the upper triangle of mean TMRCA values in row-major
             order, including the diagonal.
         """
-        x = self.mean_pairwise_tmrca(sample_sets, windows)
+        x = self.divergence(sample_sets, windows)
         ns = len(sample_sets)
         nw = len(windows) - 1
         A = np.ones((nw, ns, ns), dtype=float)

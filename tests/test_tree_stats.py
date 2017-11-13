@@ -1060,15 +1060,15 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
                     tsc.tree_stat(A, f),
                     py_tsc.tree_length_diversity(A[0], A[1]))
 
-    def check_tmrca_matrix(self, ts):
+    def check_divergence_matrix(self, ts):
         # nonoverlapping samples
         samples = random.sample(ts.samples(), 6)
         tsc = msprime.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A = [samples[0:3], samples[3:5], samples[5:6]]
         windows = [0.0, ts.sequence_length/2, ts.sequence_length]
-        ts_values = tsc.mean_pairwise_tmrca(A, windows)
-        ts_matrix_values = tsc.mean_pairwise_tmrca_matrix(A, windows)
+        ts_values = tsc.divergence(A, windows)
+        ts_matrix_values = tsc.divergence_matrix(A, windows)
         self.assertListEqual([len(x) for x in ts_values], [len(samples), len(samples)])
         assert(len(A[2]) == 1)
         self.assertListEqual([x[5] for x in ts_values], [np.nan, np.nan])
@@ -1090,9 +1090,9 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
                         if len(A[i]) == 1:
                             here_values[k, i, i] = np.nan
                         else:
-                            here_values[k, i, i] /= 2.0 * (len(A[i])-1)/len(A[i])
+                            here_values[k, i, i] /= (len(A[i])-1)/len(A[i])
                     else:
-                        here_values[k, j, i] /= 2.0
+                        here_values[k, j, i]
         for k in range(len(windows)-1):
             self.assertArrayAlmostEqual(here_values[k], ts_matrix_values[k])
 
@@ -1100,15 +1100,15 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
         tsc = msprime.BranchLengthStatCalculator(ts)
         self.assertRaises(ValueError,
-                          tsc.mean_pairwise_tmrca, [[0], [11]], [0, ts.sequence_length])
+                          tsc.divergence, [[0], [11]], [0, ts.sequence_length])
         self.assertRaises(ValueError,
-                          tsc.mean_pairwise_tmrca, [[0], [1]], [0, ts.sequence_length/2])
+                          tsc.divergence, [[0], [1]], [0, ts.sequence_length/2])
         self.assertRaises(ValueError,
-                          tsc.mean_pairwise_tmrca, [[0], [1]], [ts.sequence_length/2,
-                                                                ts.sequence_length])
+                          tsc.divergence, [[0], [1]], [ts.sequence_length/2,
+                                                       ts.sequence_length])
         self.assertRaises(ValueError,
-                          tsc.mean_pairwise_tmrca, [[0], [1]], [0.0, 2.0, 1.0,
-                                                                ts.sequence_length])
+                          tsc.divergence, [[0], [1]], [0.0, 2.0, 1.0,
+                                                       ts.sequence_length])
         # errors for not enough sample_sets
         self.assertRaises(ValueError,
                           tsc.f4, [[0, 1], [2], [3]], [0, ts.sequence_length])
@@ -1212,7 +1212,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
     def test_diversity(self):
         for ts in self.get_ts():
             self.check_pairwise_diversity(ts)
-            self.check_tmrca_matrix(ts)
+            self.check_divergence_matrix(ts)
 
 
 class SiteStatsTestCase(GeneralStatsTestCase):
