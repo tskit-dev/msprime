@@ -509,6 +509,17 @@ def upper_tri_to_matrix(x):
     return out
 
 
+class TestStatsInterface(unittest.TestCase):
+    """
+    Tests basic stat calculator interface.
+    """
+
+    def test_interface(self):
+        self.assertRaises(TypeError, msprime.GeneralStatCalculator)
+        self.assertRaises(TypeError, msprime.SiteStatCalculator)
+        self.assertRaises(TypeError, msprime.BranchLengthStatCalculator)
+
+
 class GeneralStatsTestCase(unittest.TestCase):
     """
     Tests of statistic computation.  Derived classes should have attributes
