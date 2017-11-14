@@ -32,6 +32,12 @@
 #include <gsl/gsl_randist.h>
 #include <CUnit/Basic.h>
 
+/* State machine for the simulator object. */
+#define MSP_STATE_NEW 0
+#define MSP_STATE_INITIALISED 1
+#define MSP_STATE_SIMULATING 2
+#define MSP_STATE_DEBUGGING 3
+
 /* Global variables used for test in state in the test suite */
 
 char * _tmp_file_name;
@@ -802,6 +808,144 @@ test_simulation_memory_limit(void)
     free(samples);
 }
 
+/* Runs the simulation backwards in time until either the sample has coalesced,
+ * or specified maximum simulation time has been reached or the specified maximum
+ * number of events has been reached.
+ */
+int WARN_UNUSED
+msp_run_dtwf_for_testing(msp_t *self, double max_time, unsigned long max_events,
+        unsigned long *num_events)
+{
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+    double scaled_time = model->generations_to_model_time(model, max_time);
+
+    if (self->state == MSP_STATE_INITIALISED) {
+        self->state = MSP_STATE_SIMULATING;
+    }
+    if (self->state != MSP_STATE_SIMULATING) {
+        ret = MSP_ERR_BAD_STATE;
+        goto out;
+    }
+    ret = msp_run_dtwf(self, scaled_time, max_events, num_events);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_flush_edges(self);
+    if (ret != 0) {
+        goto out;
+    }
+    if (msp_get_num_ancestors(self) != 0) {
+        ret = 1;
+        if (self->time >= scaled_time) {
+            ret = 2;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+test_dtwf_multi_locus_simulation(void)
+{
+    int ret;
+    unsigned long max_events, num_events;
+    uint32_t n = 100;
+    uint32_t m = 100;
+    long seed = 10;
+    int model = MSP_MODEL_DTWF;
+    double migration_matrix[] = {0, 1, 1, 0};
+    size_t migration_events[4];
+    const char *model_name;
+
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    gsl_rng_set(rng, seed);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_migrations(msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* set all the block sizes to something small to provoke the memory
+     * expansions. */
+    ret = msp_set_avl_node_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_node_mapping_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_segment_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_edge_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(msp, m);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model(msp, model, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    num_events = 0;
+    max_events = UINT32_MAX;
+    while ((ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
+                    &num_events)) == 1) {
+        msp_verify(msp);
+    }
+    ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
+                    &num_events);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+    ret = msp_get_num_migration_events(msp, migration_events);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT(num_events > n - 1);
+    CU_ASSERT_EQUAL(num_events,
+            /* diagonals must be zero here */
+            migration_events[1] + migration_events[2] +
+            msp_get_num_recombination_events(msp) +
+            msp_get_num_common_ancestor_events(msp) +
+            msp_get_num_rejected_common_ancestor_events(msp));
+    CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
+
+    gsl_rng_set(rng, seed);
+    ret = msp_reset(msp);
+    num_events = 0;
+    while ((ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
+                    &num_events)) == 1) {
+        msp_verify(msp);
+    }
+    ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
+                    &num_events);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_get_num_migration_events(msp, migration_events);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(num_events,
+            migration_events[1] + migration_events[2] +
+            msp_get_num_recombination_events(msp) +
+            msp_get_num_common_ancestor_events(msp) +
+            msp_get_num_rejected_common_ancestor_events(msp));
+    CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
+
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+}
+
 static void
 test_multi_locus_simulation(void)
 {
@@ -1478,6 +1622,7 @@ main(int argc, char **argv)
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_simulation_memory_limit", test_simulation_memory_limit},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
+        {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},

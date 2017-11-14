@@ -1467,7 +1467,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+int WARN_UNUSED
 msp_flush_edges(msp_t *self)
 {
     int ret = 0;
@@ -1589,7 +1589,8 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
 }
 
 static int WARN_UNUSED
-msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
+msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v,
+                   unsigned long *events)
 {
     int ret = 0;
     int ix;
@@ -1617,6 +1618,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             // Make new segment
             assert(x->left <= k);
             self->num_re_events++;
+            (*events)++;
             ix = (ix + 1) % 2;
             z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
                     x->population_id, seg_tails[ix], x->next);
@@ -1642,6 +1644,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             y->prev = NULL;
             while ( y->left >= k ) {
                 self->num_re_events++;
+                (*events)++;
                 ix = (ix + 1) % 2;
                 k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
             }
@@ -2527,14 +2530,14 @@ typedef struct _segment_list_t {
 
 /* Performs a single generation under the Wright Fisher model */
 static int WARN_UNUSED
-msp_dtwf_generation(msp_t *self, unsigned long events)
+msp_dtwf_generation(msp_t *self, unsigned long *events)
 {
     int ret = 0;
     uint32_t N, i, j, k, p;
     int mig_source_pop, mig_dest_pop;
     double mu;
     uint32_t num_migrations, n;
-    size_t segment_mem_offset = 0;
+    size_t segment_mem_offset;
     population_t *pop;
     segment_t *x;
     segment_t *u[2];
@@ -2562,13 +2565,16 @@ msp_dtwf_generation(msp_t *self, unsigned long events)
             goto out;
         }
         // Iterate through ancestors and draw parents
+        i = 0;
+        segment_mem_offset = 0;
         for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
+            i++;
             s = segment_mem + segment_mem_offset;
             segment_mem_offset++;
             p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
             if ( parents[p] != NULL ) {
                 self->num_ca_events++;
-                events++;
+                (*events)++;
             }
             s->next = parents[p];
             s->node = a;
@@ -2585,7 +2591,8 @@ msp_dtwf_generation(msp_t *self, unsigned long events)
                 
                 // Recombine ancestor
                 if ( self->recombination_rate > 0 ) {
-                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1],
+                            events);
                     if (ret != 0) {
                         goto out;
                     }
@@ -2620,11 +2627,17 @@ msp_dtwf_generation(msp_t *self, unsigned long events)
     mig_source_pop = 0;
     mig_dest_pop = 0;
     for (j = 0; j < self->num_populations; j++) {
-        n = avl_count(&self->populations[j].ancestors);
         for (k = 0; k < self->num_populations; k++) {
+            n = avl_count(&self->populations[j].ancestors);
             mu = n * self->migration_matrix[j * self->num_populations + k];
+            if ( mu == 0 ) {
+                continue;
+            }
             num_migrations = gsl_ran_poisson(self->rng, mu);
-            for ( i = 0; i < num_migrations; i++ ) {
+            if ( num_migrations > n ) {
+                num_migrations = n;
+            }
+            for ( i = 0; i < num_migrations && i < n; i++ ) {
                 /* m[j, k] is the rate at which migrants move from
                  * population k to j forwards in time. Backwards
                  * in time, we move the individual from from
@@ -2636,6 +2649,7 @@ msp_dtwf_generation(msp_t *self, unsigned long events)
                 if (ret != 0) {
                     goto out;
                 }
+                (*events)++;
             }
         }
     }
@@ -2650,15 +2664,15 @@ out:
 }
 
 /* The main event loop for the Wright Fisher model. */
-static int WARN_UNUSED
-msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
+int WARN_UNUSED
+msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events,
+        unsigned long *events)
 {
     int ret = 0;
-    unsigned long events = 0;
     int64_t num_links = 0;
 
     while (msp_get_num_ancestors(self) > 0
-            && self->time < max_time && events < max_events) {
+            && self->time < max_time && *events < max_events) {
         self->time++;
         // NOTE: num_links is never properly set here
         ret = msp_sanity_check(self, num_links);
@@ -2682,6 +2696,7 @@ int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
+    unsigned long dtwf_actual_events = 0;
     simulation_model_t *model = &self->model;
     double scaled_time = model->generations_to_model_time(model, max_time);
 
@@ -2693,7 +2708,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     if (self->model.type == MSP_MODEL_DTWF) {
-        ret = msp_run_dtwf(self, scaled_time, max_events);
+        ret = msp_run_dtwf(self, scaled_time, max_events, &dtwf_actual_events);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
