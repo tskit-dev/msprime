@@ -54,6 +54,26 @@ class PythonBranchLengthStatCalculator(object):
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
 
+    def divergence(self, X, Y, begin=0.0, end=None):
+        '''
+        Computes average pairwise diversity between a random choice from x
+        and a random choice from y over the window specified.
+        '''
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        S = 0
+        for tr in self.tree_sequence.trees():
+            if tr.interval[1] <= begin:
+                continue
+            if tr.interval[0] >= end:
+                break
+            SS = 0
+            for x in X:
+                for y in Y:
+                    SS += path_length(tr, x, y) / 2.0
+            S += SS*(min(end, tr.interval[1]) - max(begin, tr.interval[0]))
+        return S/((end-begin)*len(X)*len(Y))
+
     def tree_length_diversity(self, X, Y, begin=0.0, end=None):
         '''
         Computes average pairwise diversity between a random choice from x
@@ -313,6 +333,21 @@ class PythonSiteStatCalculator(object):
 
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
+
+    def divergence(self, X, Y, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        haps = list(self.tree_sequence.haplotypes())
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = 0
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                for x in X:
+                    for y in Y:
+                        if (haps[x][k] != haps[y][k]):
+                            # x|y
+                            S += 1
+        return S/((end - begin) * len(X) * len(Y))
 
     def Y3(self, X, Y, Z, begin=0.0, end=None):
         if end is None:
@@ -589,8 +624,36 @@ class GeneralStatsTestCase(unittest.TestCase):
             for i in range(len(windows)-1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
+    def check_tree_stat_interface(self, ts):
+        samples = ts.samples()
+        tsc = self.stat_class(ts)
+
+        def wfn(x):
+            return [1]
+
+        # sample_sets must be lists without repeated elements
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          samples[0:2], wfn)
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          [samples[0:2], [samples[2], samples[2]]], wfn)
+        # and must all be samples
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          [samples[0:2], [max(samples)+1]], wfn)
+        # windows must start at 0.0, be increasing, and extend to the end
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          [samples[0:2], samples[2:4]], wfn,
+                          [0.1, ts.sequence_length])
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          [samples[0:2], samples[2:4]], wfn,
+                          [0.0, 0.8*ts.sequence_length])
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          [samples[0:2], samples[2:4]], wfn,
+                          [0.0, 0.8*ts.sequence_length, 0.4*ts.sequence_length,
+                           ts.sequence_length])
+
     def check_tree_stat_vector(self, ts):
         # test the general tree_stat_vector() machinery
+        self.check_tree_stat_interface(ts)
         samples = random.sample(ts.samples(), 12)
         A = [[samples[0], samples[1], samples[6]],
              [samples[2], samples[3], samples[7]],
@@ -626,7 +689,14 @@ class GeneralStatsTestCase(unittest.TestCase):
         self.compare_stats(ts, py_tsc.site_frequency_spectrum, A, 0,
                            tsc_vector_fn=tsc.site_frequency_spectrum)
 
+    def check_f_interface(self, ts):
+        tsc = self.stat_class(ts)
+        # sample sets must have at least two samples
+        self.assertRaises(ValueError, tsc.f2_vector,
+                          [[0, 1], [3]], [0, ts.sequence_length], [(0, 1)])
+
     def check_f_stats(self, ts):
+        self.check_f_interface(ts)
         samples = random.sample(ts.samples(), 12)
         A = [[samples[0], samples[1], samples[2]],
              [samples[3], samples[4]],
@@ -787,6 +857,45 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         self.assertAlmostEqual(py_site_tsc_Y, site_true_Y)
         self.assertAlmostEqual(site_tsc.tree_stat(A, f), site_true_Y)
         self.assertAlmostEqual(py_site_tsc.tree_stat(A, f), site_true_Y)
+
+    def test_case_odds_and_ends(self):
+        """
+        Tests having (a) the first site after the first window, and
+        (b) no samples having the ancestral state.
+        """
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       1           0
+        1       1           0
+        2       0           0.5
+        3       0           1.0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0.0     0.5     2       0,1
+        0.5     1.0     3       0,1
+        """)
+        sites = six.StringIO("""\
+        id  position    ancestral_state
+        0   0.65        0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        0       0       1               -1
+        0       1       2               -1
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+        site_tsc = msprime.SiteStatCalculator(ts)
+        py_site_tsc = PythonSiteStatCalculator(ts)
+
+        # recall that divergence returns the upper triangle
+        # with nans on the diag in this case
+        py_div = [[np.nan, py_site_tsc.divergence([0], [1], 0.0, 0.5), np.nan],
+                  [np.nan, py_site_tsc.divergence([0], [1], 0.5, 1.0), np.nan]]
+        div = site_tsc.divergence([[0], [1]], [0.0, 0.5, 1.0])
+        self.assertListEqual(py_div[0], div[0])
+        self.assertListEqual(py_div[1], div[1])
 
     def test_case_recurrent_muts(self):
         # With mutations:

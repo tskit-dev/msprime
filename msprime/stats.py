@@ -617,9 +617,10 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
         for U in sample_sets:
-            if len(U) != len(set(U)):
+            if ((not isinstance(U, list)) or
+               len(U) != len(set(U))):
                 raise ValueError(
-                    "elements of sample_sets cannot contain repeated elements.")
+                    "elements of sample_sets must be lists without repeated elements.")
             for u in U:
                 if not self.tree_sequence.node(u).is_sample():
                     raise ValueError("Not all elements of sample_sets are samples.")
@@ -755,9 +756,10 @@ class SiteStatCalculator(GeneralStatCalculator):
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
         for U in sample_sets:
-            if len(U) != len(set(U)):
+            if ((not isinstance(U, list)) or
+               len(U) != len(set(U))):
                 raise ValueError(
-                    "elements of sample_sets cannot contain repeated elements.")
+                    "elements of sample_sets must be lists without repeated elements.")
             for u in U:
                 if not self.tree_sequence.node(u).is_sample():
                     raise ValueError("Not all elements of sample_sets are samples.")
