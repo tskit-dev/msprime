@@ -162,6 +162,9 @@ class GeneralStatCalculator(object):
     A common class for BranchLengthStatCalculator and SiteStatCalculator -- those
     implemment different `tree_stat_vector()` methods, but given that
     general-purpose function, many statistics are computed in the same way.
+
+    .. warning::
+        This interface is still in beta, and may change in the future.
     """
 
     def __init__(self, tree_sequence):
@@ -405,15 +408,6 @@ class GeneralStatCalculator(object):
                 raise ValueError("All tuples in indices should be of length 4.")
         n = [len(x) for x in sample_sets]
 
-        # def f(x):
-        #     return [float((x[i] * (n[j] - x[j]) - x[j] * (n[i] - x[i]))
-        #                   * (x[k] * (n[l] - x[l]) - x[l] * (n[k] - x[k])))
-        #             for i, j, k, l in indices]
-        # def f(x):
-        #     return [float((x[i] * n[j] - x[j] * n[i])
-        #                   * (x[k] * n[l] - x[l] * n[k]))
-        #             for i, j, k, l in indices]
-
         def f(x):
             return [float(x[i] * x[k] * (n[j] - x[j]) * (n[l] - x[l])
                           - x[i] * x[l] * (n[j] - x[j]) * (n[k] - x[k]))
@@ -591,7 +585,8 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
 
-    NOTE: this interface is still in beta, and may change in the future.
+    .. warning::
+        This interface is still in beta, and may change in the future.
 
     :param TreeSequence tree_sequence: The tree sequence mutations we are
         interested in.
@@ -728,7 +723,8 @@ class SiteStatCalculator(GeneralStatCalculator):
     underlying engine.  This class requires the `numpy
     <http://www.numpy.org/>`_ library.
 
-    NOTE: this interface is still in beta, and may change in the future.
+    .. warning::
+        This interface is still in beta, and may change in the future.
 
     :param TreeSequence tree_sequence: The tree sequence mutations we are
         interested in.
