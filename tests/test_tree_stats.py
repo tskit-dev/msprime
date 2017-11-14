@@ -630,7 +630,10 @@ class GeneralStatsTestCase(unittest.TestCase):
 
         def wfn(x):
             return [1]
-
+        
+        # empty sample sets will raise an error
+        self.assertRaises(ValueError, tsc.tree_stat_vector,
+                          samples[0:2] + [], wfn)
         # sample_sets must be lists without repeated elements
         self.assertRaises(ValueError, tsc.tree_stat_vector,
                           samples[0:2], wfn)
