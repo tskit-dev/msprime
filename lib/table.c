@@ -2357,10 +2357,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
 
         /* Loop tail; integrate alpha into the global state */
         assert(alpha != NULL);
-        if (z == NULL) {
-            self->ancestor_map[input_id] = alpha;
-        } else {
-        }
+        assert(z != NULL);
         defrag_required |= z->right == alpha->left && z->node == alpha->node;
         z->next = alpha;
         z = alpha;
