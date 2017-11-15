@@ -1467,7 +1467,7 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
+static int WARN_UNUSED
 msp_flush_edges(msp_t *self)
 {
     int ret = 0;
@@ -1589,8 +1589,7 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
 }
 
 static int WARN_UNUSED
-msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v,
-                   unsigned long *events)
+msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
     int ix;
@@ -1610,15 +1609,14 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v,
     seg_tails[ix]->next = x;
     x->prev = seg_tails[ix];
 
-    while ( x != NULL ) {
+    while (x != NULL) {
         seg_tails[ix] = x;
         y = x->next;
 
-        if ( x->right > k ) {
+        if (x->right > k) {
             // Make new segment
             assert(x->left <= k);
             self->num_re_events++;
-            (*events)++;
             ix = (ix + 1) % 2;
             z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
                     x->population_id, seg_tails[ix], x->next);
@@ -1644,7 +1642,6 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v,
             y->prev = NULL;
             while ( y->left >= k ) {
                 self->num_re_events++;
-                (*events)++;
                 ix = (ix + 1) % 2;
                 k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
             }
@@ -2530,7 +2527,7 @@ typedef struct _segment_list_t {
 
 /* Performs a single generation under the Wright Fisher model */
 static int WARN_UNUSED
-msp_dtwf_generation(msp_t *self, unsigned long *events)
+msp_dtwf_generation(msp_t *self)
 {
     int ret = 0;
     uint32_t N, i, j, k, p;
@@ -2547,7 +2544,7 @@ msp_dtwf_generation(msp_t *self, unsigned long *events)
     avl_node_t *a, *node;
     avl_tree_t Q[2];
 
-    for ( i = 0; i < 2; i++ ) {
+    for (i = 0; i < 2; i++) {
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
     }
 
@@ -2558,23 +2555,19 @@ msp_dtwf_generation(msp_t *self, unsigned long *events)
 
         // Allocate memory for linked list of offspring per parent
         parents = calloc(N, sizeof(segment_list_t *));
-        segment_mem = malloc(msp_get_num_ancestors(self) *
-                             sizeof(segment_list_t));
+        segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
         if (parents == NULL || segment_mem == NULL){
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
         // Iterate through ancestors and draw parents
-        i = 0;
         segment_mem_offset = 0;
-        for ( a = pop->ancestors.head; a != NULL; a = a->next ) {
-            i++;
+        for (a = pop->ancestors.head; a != NULL; a = a->next) {
             s = segment_mem + segment_mem_offset;
             segment_mem_offset++;
             p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
-            if ( parents[p] != NULL ) {
+            if (parents[p] != NULL) {
                 self->num_ca_events++;
-                (*events)++;
             }
             s->next = parents[p];
             s->node = a;
@@ -2588,11 +2581,10 @@ msp_dtwf_generation(msp_t *self, unsigned long *events)
                 x = (segment_t *) node->item;
                 avl_unlink_node(&pop->ancestors, node);
                 msp_free_avl_node(self, node);
-                
+
                 // Recombine ancestor
                 if ( self->recombination_rate > 0 ) {
-                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1],
-                            events);
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
                     if (ret != 0) {
                         goto out;
                     }
@@ -2649,7 +2641,6 @@ msp_dtwf_generation(msp_t *self, unsigned long *events)
                 if (ret != 0) {
                     goto out;
                 }
-                (*events)++;
             }
         }
     }
@@ -2664,22 +2655,14 @@ out:
 }
 
 /* The main event loop for the Wright Fisher model. */
-int WARN_UNUSED
-msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events,
-        unsigned long *events)
+static int WARN_UNUSED
+msp_run_dtwf(msp_t *self, double max_time)
 {
     int ret = 0;
-    int64_t num_links = 0;
 
-    while (msp_get_num_ancestors(self) > 0
-            && self->time < max_time && *events < max_events) {
+    while (msp_get_num_ancestors(self) > 0 && self->time < max_time) {
         self->time++;
-        // NOTE: num_links is never properly set here
-        ret = msp_sanity_check(self, num_links);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_dtwf_generation(self, events);
+        ret = msp_dtwf_generation(self);
         if (ret != 0) {
             goto out;
         }
@@ -2691,12 +2674,14 @@ out:
 /* Runs the simulation backwards in time until either the sample has coalesced,
  * or specified maximum simulation time has been reached or the specified maximum
  * number of events has been reached.
+ *
+ * Note that max_events is ignored for the DTWF simulation and only the time
+ * (== number of generations) is considered.
  */
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    unsigned long dtwf_actual_events = 0;
     simulation_model_t *model = &self->model;
     double scaled_time = model->generations_to_model_time(model, max_time);
 
@@ -2708,7 +2693,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     if (self->model.type == MSP_MODEL_DTWF) {
-        ret = msp_run_dtwf(self, scaled_time, max_events, &dtwf_actual_events);
+        ret = msp_run_dtwf(self, scaled_time);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }

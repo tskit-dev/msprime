@@ -32,11 +32,6 @@
 #include <gsl/gsl_randist.h>
 #include <CUnit/Basic.h>
 
-/* State machine for the simulator object. */
-#define MSP_STATE_NEW 0
-#define MSP_STATE_INITIALISED 1
-#define MSP_STATE_SIMULATING 2
-#define MSP_STATE_DEBUGGING 3
 
 /* Global variables used for test in state in the test suite */
 
@@ -671,8 +666,8 @@ get_num_children(size_t node, size_t num_edges, edge_t *edges)
     int num_children = 0;
     size_t i;
 
-    for ( i = 0; i < num_edges; i++) {
-        if ( edges[i].parent == node ) {
+    for (i = 0; i < num_edges; i++) {
+        if (edges[i].parent == node) {
             num_children++;
         }
     }
@@ -714,9 +709,9 @@ test_dtwf_single_locus_simulation(void)
 
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
-    for ( i = 0; i < msp->num_nodes; i++ ) {
+    for (i = 0; i < msp->num_nodes; i++) {
         num_children = get_num_children(i, msp->num_edges, msp->edges);
-        if ( num_children > 0 ) {
+        if (num_children > 0) {
             num_coalescent_events += num_children - 1;
         }
     }
@@ -808,55 +803,18 @@ test_simulation_memory_limit(void)
     free(samples);
 }
 
-/* Runs the simulation backwards in time until either the sample has coalesced,
- * or specified maximum simulation time has been reached or the specified maximum
- * number of events has been reached.
- */
-int WARN_UNUSED
-msp_run_dtwf_for_testing(msp_t *self, double max_time, unsigned long max_events,
-        unsigned long *num_events)
-{
-    int ret = 0;
-    simulation_model_t *model = &self->model;
-    double scaled_time = model->generations_to_model_time(model, max_time);
-
-    if (self->state == MSP_STATE_INITIALISED) {
-        self->state = MSP_STATE_SIMULATING;
-    }
-    if (self->state != MSP_STATE_SIMULATING) {
-        ret = MSP_ERR_BAD_STATE;
-        goto out;
-    }
-    ret = msp_run_dtwf(self, scaled_time, max_events, num_events);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_flush_edges(self);
-    if (ret != 0) {
-        goto out;
-    }
-    if (msp_get_num_ancestors(self) != 0) {
-        ret = 1;
-        if (self->time >= scaled_time) {
-            ret = 2;
-        }
-    }
-out:
-    return ret;
-}
-
 static void
 test_dtwf_multi_locus_simulation(void)
 {
     int ret;
-    unsigned long max_events, num_events;
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
     int model = MSP_MODEL_DTWF;
     double migration_matrix[] = {0, 1, 1, 0};
-    size_t migration_events[4];
     const char *model_name;
+    size_t num_ca_events, num_re_events;
+    double t;
 
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -895,49 +853,37 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
 
-    num_events = 0;
-    max_events = UINT32_MAX;
-    while ((ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
-                    &num_events)) == 1) {
-        msp_verify(msp);
-    }
-    ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
-                    &num_events);
-    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(msp, DBL_MAX, ULONG_MAX);
     msp_verify(msp);
-    ret = msp_get_num_migration_events(msp, migration_events);
+    num_ca_events = msp_get_num_common_ancestor_events(msp);
+    num_re_events = msp_get_num_recombination_events(msp);
+    CU_ASSERT_TRUE(num_ca_events > 0);
+    CU_ASSERT_TRUE(num_re_events > 0);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT(num_events > n - 1);
-    CU_ASSERT_EQUAL(num_events,
-            /* diagonals must be zero here */
-            migration_events[1] + migration_events[2] +
-            msp_get_num_recombination_events(msp) +
-            msp_get_num_common_ancestor_events(msp) +
-            msp_get_num_rejected_common_ancestor_events(msp));
-    CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
 
     gsl_rng_set(rng, seed);
     ret = msp_reset(msp);
-    num_events = 0;
-    while ((ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
-                    &num_events)) == 1) {
+    CU_ASSERT_EQUAL(ret, 0);
+    t = 1;
+    /* We should be able to step forward here generation-by-generation until
+     * coalescence, and get the same results as when we run it all in one go.
+     */
+    /* JK: not working at the moment, leaving printfs in to help with debugging. */
+    while ((ret = msp_run(msp, t, ULONG_MAX)) > 0) {
+        printf("t = %f\n", t);
         msp_verify(msp);
+        CU_ASSERT_EQUAL_FATAL(msp->time, t);
+        t++;
     }
-    ret = msp_run_dtwf_for_testing(msp, DBL_MAX, max_events,
-                    &num_events);
+    printf("ret = %d\n", ret);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_get_num_migration_events(msp, migration_events);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(num_events,
-            migration_events[1] + migration_events[2] +
-            msp_get_num_recombination_events(msp) +
-            msp_get_num_common_ancestor_events(msp) +
-            msp_get_num_rejected_common_ancestor_events(msp));
-    CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
 
-    model_name = msp_get_model_name(msp);
-    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+    printf("%d -> %d\n", (int) num_ca_events, (int) msp_get_num_common_ancestor_events(msp));
+    CU_ASSERT_TRUE(num_ca_events == msp_get_num_common_ancestor_events(msp));
+    CU_ASSERT_TRUE(num_re_events == msp_get_num_recombination_events(msp));
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
