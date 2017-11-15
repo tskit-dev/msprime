@@ -157,38 +157,38 @@ class LdCalculator(object):
         return A
 
 
-class TreeStatCalculator(object):
+class GeneralStatCalculator(object):
     """
-    Class for calculating a broad class of tree statistics.  These are all
-    calculated using :meth:``TreeStatCalculator.tree_stat_vector`` as the
-    underlying engine.  This class requires the `numpy
-    <http://www.numpy.org/>`_ library.
+    A common class for BranchLengthStatCalculator and SiteStatCalculator -- those
+    implemment different `tree_stat_vector()` methods, but given that
+    general-purpose function, many statistics are computed in the same way.
 
-    :param TreeSequence tree_sequence: The tree sequence mutations we are
-        interested in.
+    .. warning::
+        This interface is still in beta, and may change in the future.
     """
 
     def __init__(self, tree_sequence):
         check_numpy()
         self.tree_sequence = tree_sequence
 
-    def mean_pairwise_tmrca(self, sample_sets, windows):
+    def divergence(self, sample_sets, windows):
         """
-        Finds the mean time to most recent common ancestor between pairs of samples
-        as described in mean_pairwise_tmrca_matrix (which uses this function).
-        Returns the upper triangle (including the diagonal) in row-major order,
-        so if the output is `x`, then:
+        Finds the divergence between pairs of samples as described in
+        mean_pairwise_tmrca_matrix (which uses this function).  Returns the
+        upper triangle (including the diagonal) in row-major order, so if the
+        output is `x`, then:
 
         >>> k=0
         >>> for w in range(len(windows)-1):
         >>>     for i in range(len(sample_sets)):
         >>>         for j in range(i,len(sample_sets)):
-        >>>             trmca[i,j] = tmrca[j,i] = x[w][k]
+        >>>             trmca[i,j] = tmrca[j,i] = x[w][k]/2.0
         >>>             k += 1
 
         will fill out the matrix of mean TMRCAs in the `i`th window between (and
         within) each group of samples in `sample_sets` in the matrix `tmrca`.
-        Alternatively, if `names` labels the sample_sets, the output labels are:
+        (This is because divergence is one-half TMRCA.) Alternatively, if
+        `names` labels the sample_sets, the output labels are:
 
         >>> [".".join(names[i],names[j]) for i in range(len(names))
         >>>         for j in range(i,len(names))]
@@ -196,14 +196,14 @@ class TreeStatCalculator(object):
         :param list sample_sets: A list of sets of IDs of samples.
         :param iterable windows: The breakpoints of the windows (including start
             and end, so has one more entry than number of windows).
-        :return: A list of the upper triangle of mean TMRCA values in row-major
+        :return: A list of the upper triangle of divergences in row-major
             order, including the diagonal.
         """
         ns = len(sample_sets)
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i][0]*x[j][1] + x[i][1]*x[j][0])
+            return [float(x[i]*(n[j]-x[j]))
                     for i in range(ns) for j in range(i, ns)]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -218,26 +218,26 @@ class TreeStatCalculator(object):
                         if n[i] == 1:
                             out[w][k] = np.nan
                         else:
-                            out[w][k] /= float(2 * n[i] * (n[i] - 1))
+                            out[w][k] /= float(n[i] * (n[i] - 1))
                     else:
-                        out[w][k] /= float(2 * n[i] * n[j])
+                        out[w][k] /= float(n[i] * n[j])
                     k += 1
 
         return out
 
-    def mean_pairwise_tmrca_matrix(self, sample_sets, windows):
+    def divergence_matrix(self, sample_sets, windows):
         """
-        Finds the mean time to most recent common ancestor between pairs of
-        samples from each set of samples and in each window. Returns a numpy
-        array indexed by (window, sample_set, sample_set).  Diagonal entries are
-        corrected so that the value gives the mean pairwise TMRCA for *distinct*
-        samples, but it is not checked whether the sample_sets are disjoint
-        (so offdiagonals are not corrected).  For this reason, if an element of
-        `sample_sets` has only one element, the corresponding diagonal will be
-        NaN.
+        Finds the mean divergence  between pairs of samples from each set of
+        samples and in each window. Returns a numpy array indexed by (window,
+        sample_set, sample_set).  Diagonal entries are corrected so that the
+        value gives the mean divergence for *distinct* samples, but it is not
+        checked whether the sample_sets are disjoint (so offdiagonals are not
+        corrected).  For this reason, if an element of `sample_sets` has only
+        one element, the corresponding diagonal will be NaN.
 
-        The mean TMRCA between two samples is defined to be one-half the length
-        of all edges separating them in the tree at a uniformly chosen position
+        The mean divergence between two samples is defined to be the mean: (as
+        a TreeStat) length of all edges separating them in the tree, or (as a
+        SiteStat) density of segregating sites, at a uniformly chosen position
         on the genome.
 
         :param list sample_sets: A list of sets of IDs of samples.
@@ -246,7 +246,7 @@ class TreeStatCalculator(object):
         :return: A list of the upper triangle of mean TMRCA values in row-major
             order, including the diagonal.
         """
-        x = self.mean_pairwise_tmrca(sample_sets, windows)
+        x = self.divergence(sample_sets, windows)
         ns = len(sample_sets)
         nw = len(windows) - 1
         A = np.ones((nw, ns, ns), dtype=float)
@@ -265,7 +265,8 @@ class TreeStatCalculator(object):
         on the amount of overlap).  If the sample_sets are A, B, and C, then the
         result gives the mean total length of any edge in the tree between a
         and the most recent common ancestor of b and c, where a, b, and c are
-        random draws from A, B, and C respectively.
+        random draws from A, B, and C respectively; or the density of mutations
+        segregating a|bc.
 
         The result is, for each window, a vector whose k-th entry is
             Y(sample_sets[indices[k][0]], sample_sets[indices[k][1]],
@@ -284,8 +285,8 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i][0] * x[j][1] * x[k][1]
-                          + x[i][1] * x[j][0] * x[k][0]) for i, j, k in indices]
+            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k]))
+                    for i, j, k in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
 
@@ -324,8 +325,8 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i][0] * x[j][1] * (x[j][1]-1)
-                          + x[i][1] * x[j][0] * (x[j][0]-1)) for i, j in indices]
+            return [float(x[i] * (n[j] - x[j]) * (n[j] - x[j] - 1))
+                    for i, j in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         for w in range(len(windows)-1):
@@ -360,8 +361,7 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(z[0] * z[1] * (z[1]-1)
-                          + z[1] * z[0] * (z[0]-1)) for z in x]
+            return [float(z * (m - z) * (m - z - 1)) for m, z in zip(n, x)]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
         for w in range(len(windows)-1):
@@ -409,8 +409,8 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float((x[i][0] * x[j][1] - x[j][0] * x[i][1])
-                          * (x[k][0] * x[l][1] - x[l][0] * x[k][1]))
+            return [float(x[i] * x[k] * (n[j] - x[j]) * (n[l] - x[l])
+                          - x[i] * x[l] * (n[j] - x[j]) * (n[k] - x[k]))
                     for i, j, k, l in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -461,10 +461,8 @@ class TreeStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i][0] * (x[i][0] - 1) * x[j][1] * x[k][1]
-                          + x[i][1] * (x[i][1] - 1) * x[j][0] * x[k][0]
-                          - x[i][0] * x[i][1] * x[j][1] * x[k][0]
-                          - x[i][1] * x[i][0] * x[j][0] * x[k][1])
+            return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[k] - x[k])
+                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[k])
                     for i, j, k in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -522,10 +520,8 @@ class TreeStatCalculator(object):
                 raise ValueError("All sample_sets must have at least two samples.")
 
         def f(x):
-            return [float(x[i][0] * (x[i][0] - 1) * x[j][1] * (x[j][1] - 1)
-                          + x[i][1] * (x[i][1] - 1) * x[j][0] * (x[j][0] - 1)
-                          - x[i][0] * x[i][1] * x[j][1] * x[j][0]
-                          - x[i][1] * x[i][0] * x[j][0] * x[j][1])
+            return [float(x[i] * (x[i] - 1) * (n[j] - x[j]) * (n[j] - x[j] - 1)
+                          - x[i] * (n[i] - x[i]) * (n[j] - x[j]) * x[j])
                     for i, j in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -559,7 +555,7 @@ class TreeStatCalculator(object):
         '''
         Here sample_sets is a list of lists of samples, and weight_fun is a function
         whose argument is a list of integers of the same length as sample_sets
-        that returns a boolean.  A branch in a tree is weighted by weight_fun(x),
+        that returns a weight.  A branch in a tree is weighted by weight_fun(x),
         where x[i] is the number of samples in sample_sets[i] below that
         branch.  This finds the sum of all counted branches for each tree,
         and averages this across the tree sequence, weighted by genomic length.
@@ -581,13 +577,29 @@ class TreeStatCalculator(object):
         assert len(out[0]) == 1
         return [x[0] for x in out]
 
+
+class BranchLengthStatCalculator(GeneralStatCalculator):
+    """
+    Class for calculating a broad class of tree statistics.  These are all
+    calculated using :meth:``BranchLengthStatCalculator.tree_stat_vector`` as the
+    underlying engine.  This class requires the `numpy
+    <http://www.numpy.org/>`_ library.
+
+    .. warning::
+        This interface is still in beta, and may change in the future.
+
+    :param TreeSequence tree_sequence: The tree sequence mutations we are
+        interested in.
+    """
+
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
         '''
-        Here sample_sets is a list of lists of samples, and weight_fun is a function
-        whose argument is a list of pairs of integers of the same length as sample_sets
-        that returns a list of numbers.  A branch in a tree is weighted by
-        weight_fun(x), where x[i] is the number of samples in
-        sample_sets[i] below that branch.  This finds the sum of this weight for
+        Here sample_sets is a list of lists of samples, and weight_fun is a
+        function whose argument is a list of integers of the same length as
+        sample_sets that returns a list of numbers.  A branch in a tree is
+        weighted by weight_fun(x) + weight_fun(n-x), where x[i] is the number
+        of samples in sample_sets[i] below that branch, and n[i]-x[i] is the
+        number *not* below that branch.  This finds the sum of this weight for
         all branches in each tree, and averages this across the tree sequence,
         weighted by genomic length.
 
@@ -600,9 +612,12 @@ class TreeStatCalculator(object):
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
         for U in sample_sets:
-            if len(U) != len(set(U)):
+            if ((not isinstance(U, list)) or
+               len(U) != len(set(U))):
                 raise ValueError(
-                    "elements of sample_sets cannot contain repeated elements.")
+                    "elements of sample_sets must be lists without repeated elements.")
+            if len(U) == 0:
+                raise ValueError("elements of sample_sets cannot be empty.")
             for u in U:
                 if not self.tree_sequence.node(u).is_sample():
                     raise ValueError("Not all elements of sample_sets are samples.")
@@ -619,19 +634,19 @@ class TreeStatCalculator(object):
         #   weighting function we actually use of just x:
         num_sample_sets = len(sample_sets)
 
+        # this how we apply the weight function to both below the branch and
+        # above it
         n = [len(x) for x in sample_sets]
 
         def wfn(x):
-            y = [(x[k], n[k]-x[k]) for k in range(num_sample_sets)]
-            return weight_fun(y)
+            ax = [nn - xx for nn, xx in zip(n, x)]
+            return [a + b for a, b in zip(weight_fun(x), weight_fun(ax))]
 
         # initialize
         n_out = len(wfn([0 for a in range(num_sample_sets)]))
 
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
-        # print("sample_sets:", sample_sets)
-        # print("n_out:",n_out)
         N = self.tree_sequence.num_nodes
         X = [[int(u in a) for a in sample_sets] for u in range(N)]
         # we will essentially construct the tree
@@ -645,8 +660,6 @@ class TreeStatCalculator(object):
             length = interval[1] - interval[0]
             for sign, records in ((-1, records_out), (+1, records_in)):
                 for edge in records:
-                    # print("Record (",sign,"):",node,children,time)
-                    # print("\t",X, "-->", L)
                     dx = [0 for k in range(num_sample_sets)]
                     if sign == +1:
                         pi[edge.child] = edge.parent
@@ -656,8 +669,6 @@ class TreeStatCalculator(object):
                     dt = (node_time[pi[edge.child]] - node_time[edge.child])
                     for j in range(n_out):
                         L[j] += sign * dt * w[j]
-                    # print("\t\tchild:",child,"+=",sign,"*",wfn(X[child]),
-                    #    "*(",node_time[pi[child]],"-",node_time[child],")","-->",L)
                     if sign == -1:
                         pi[edge.child] = -1
                     old_w = wfn(X[edge.parent])
@@ -668,8 +679,6 @@ class TreeStatCalculator(object):
                         dt = (node_time[pi[edge.parent]] - node_time[edge.parent])
                         for j in range(n_out):
                             L[j] += dt * (w[j]-old_w[j])
-                        # print("\t\tnode:",node,"+=",dt,"*(",wfn(X[node]),"-",
-                        #   old_w,") -->",L)
                     # propagate change up the tree
                     u = pi[edge.parent]
                     if u != -1:
@@ -685,12 +694,8 @@ class TreeStatCalculator(object):
                                 dt = (node_time[pi[u]] - node_time[u])
                                 for j in range(n_out):
                                     L[j] += dt*(w[j] - old_w[j])
-                                # print("\t\tanc:",u,"+=",dt,"*(",wfn(X[u]),"-",
-                                #    old_w,") -->",L)
                             u = next_u
                             next_u = pi[next_u]
-                    # print("\t",X, "-->", L)
-            # print("next tree:",L,length)
             while chrom_pos + length >= windows[window_num + 1]:
                 # wrap up the last window
                 this_length = windows[window_num + 1] - chrom_pos
@@ -711,3 +716,154 @@ class TreeStatCalculator(object):
                     S[window_num][j] += L[j] * length
                 chrom_pos += length
         return S
+
+
+class SiteStatCalculator(GeneralStatCalculator):
+    """
+    Class for calculating a broad class of single-site statistics.  These are
+    all calculated using :meth:``SiteStatCalculator.tree_stat_vector`` as the
+    underlying engine.  This class requires the `numpy
+    <http://www.numpy.org/>`_ library.
+
+    .. warning::
+        This interface is still in beta, and may change in the future.
+
+    :param TreeSequence tree_sequence: The tree sequence mutations we are
+        interested in.
+    """
+
+    def __init__(self, tree_sequence):
+        check_numpy()
+        self.tree_sequence = tree_sequence
+
+    def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
+        '''
+        Here sample_sets is a list of lists of samples, and weight_fun is a
+        function whose argument is a list of integers of the same length as
+        sample_sets that returns a list of numbers.  Each allele is weighted by
+        weight_fun(x), where x[i] is the number of samples in sample_sets[i]
+        that inherit that allele.  This finds the sum of this weight for all
+        polymorphic sites, and divides by the sequence length.
+
+        It does this separately for each window [windows[i], windows[i+1]) and
+        returns the values in a list.  Note that windows cannot be overlapping,
+        but overlapping windows can be achieved by (a) computing staistics on a
+        small window size and (b) averaging neighboring windows, by additivity
+        of the statistics.
+        '''
+        if windows is None:
+            windows = (0, self.tree_sequence.sequence_length)
+        for U in sample_sets:
+            if ((not isinstance(U, list)) or
+               len(U) != len(set(U))):
+                raise ValueError(
+                    "elements of sample_sets must be lists without repeated elements.")
+            if len(U) == 0:
+                raise ValueError("elements of sample_sets cannot be empty.")
+            for u in U:
+                if not self.tree_sequence.node(u).is_sample():
+                    raise ValueError("Not all elements of sample_sets are samples.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.tree_sequence.sequence_length:
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
+        num_sample_sets = len(sample_sets)
+        num_sites = self.tree_sequence.num_sites
+        n = [len(x) for x in sample_sets]
+        n_out = len(weight_fun([0 for a in range(num_sample_sets)]))
+        # we store the final answers here
+        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
+        if num_sites == 0:
+            return S
+        N = self.tree_sequence.num_nodes
+        # initialize: with no tree, each node is either in a sample set or not
+        X = [[int(u in a) for a in sample_sets] for u in range(N)]
+        # we will construct the tree here
+        pi = [-1 for j in range(N)]
+        # keep track of which site we're looking at
+        sites = self.tree_sequence.sites()
+        ns = 0  # this will record number of sites seen so far
+        s = next(sites)
+        # index of *left-hand* end of the current window
+        window_num = 0
+        while s.position > windows[window_num + 1]:
+            window_num += 1
+        for interval, records_out, records_in in self.tree_sequence.edge_diffs():
+            # if we've done all the sites then stop
+            if ns == num_sites:
+                break
+            # update the tree
+            for sign, records in ((-1, records_out), (+1, records_in)):
+                for edge in records:
+                    dx = [0 for k in range(num_sample_sets)]
+                    if sign == +1:
+                        pi[edge.child] = edge.parent
+                    for k in range(num_sample_sets):
+                        dx[k] += sign * X[edge.child][k]
+                    if sign == -1:
+                        pi[edge.child] = -1
+                    for k in range(num_sample_sets):
+                        X[edge.parent][k] += dx[k]
+                    # propagate change up the tree
+                    u = pi[edge.parent]
+                    if u != -1:
+                        next_u = pi[u]
+                        while u != -1:
+                            for k in range(num_sample_sets):
+                                X[u][k] += dx[k]
+                            u = next_u
+                            next_u = pi[next_u]
+            # loop over sites in this tree
+            while s.position < interval[1]:
+                if s.position > windows[window_num + 1]:
+                    # finalize this window and move to the next
+                    window_length = windows[window_num + 1] - windows[window_num]
+                    for j in range(n_out):
+                        S[window_num][j] /= window_length
+                    # may need to advance through empty windows
+                    while s.position > windows[window_num + 1]:
+                        window_num += 1
+                nm = len(s.mutations)
+                if nm > 0:
+                    U = {s.ancestral_state: list(n)}
+                    for mut in s.mutations:
+                        if mut.derived_state not in U:
+                            U[mut.derived_state] = [0 for _ in range(num_sample_sets)]
+                        for k in range(num_sample_sets):
+                            U[mut.derived_state][k] += X[mut.node][k]
+                        parent_state = get_derived_state(s, mut.parent)
+                        if parent_state not in U:
+                            U[parent_state] = [0 for _ in range(num_sample_sets)]
+                        for k in range(num_sample_sets):
+                            U[parent_state][k] -= X[mut.node][k]
+                    for a in U:
+                        w = weight_fun(U[a])
+                        for j in range(n_out):
+                            S[window_num][j] += w[j]
+                ns += 1
+                if ns == num_sites:
+                    break
+                s = next(sites)
+        # wrap up the final window
+        window_length = windows[window_num + 1] - windows[window_num]
+        for j in range(n_out):
+            S[window_num][j] /= window_length
+        return S
+
+
+def get_derived_state(site, mut_id):
+    """
+    Find the derived state of the mutation with id `mut_id` at site `site`.
+    """
+    if mut_id == -1:
+        state = site.ancestral_state
+    else:
+        for m in site.mutations:
+            if m.id == mut_id:
+                state = m.derived_state
+    return state
