@@ -617,7 +617,7 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                 raise ValueError(
                     "elements of sample_sets must be lists without repeated elements.")
             if len(U) == 0:
-                raise ValueError( "elements of sample_sets cannot be empty.")
+                raise ValueError("elements of sample_sets cannot be empty.")
             for u in U:
                 if not self.tree_sequence.node(u).is_sample():
                     raise ValueError("Not all elements of sample_sets are samples.")
@@ -758,6 +758,8 @@ class SiteStatCalculator(GeneralStatCalculator):
                len(U) != len(set(U))):
                 raise ValueError(
                     "elements of sample_sets must be lists without repeated elements.")
+            if len(U) == 0:
+                raise ValueError("elements of sample_sets cannot be empty.")
             for u in U:
                 if not self.tree_sequence.node(u).is_sample():
                     raise ValueError("Not all elements of sample_sets are samples.")
