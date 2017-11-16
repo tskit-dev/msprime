@@ -829,6 +829,11 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
+    /* DN: Hackish setting of pop size */
+    ret = msp_set_population_configuration(msp, 0, n / 4, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 1, n / 4, 0);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(msp, 4, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(msp, true);
@@ -851,6 +856,8 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model(msp, model, n);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
@@ -864,24 +871,61 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_TRUE(num_re_events > 0);
     CU_ASSERT_EQUAL(ret, 0);
 
+    /* Perform a 'hard' reset - msp_reset() modifies the order in
+     * which we iterate through ancestors, while preserving the
+     * coalescent structure. This would give the same recombination
+     * events, but in different ancestors, changing the end result */
     gsl_rng_set(rng, seed);
-    ret = msp_reset(msp);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* DN: Hackish setting of pop size */
+    ret = msp_set_population_configuration(msp, 0, n / 4, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 1, n / 4, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_migrations(msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* set all the block sizes to something small to provoke the memory
+     * expansions. */
+    ret = msp_set_avl_node_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_node_mapping_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_segment_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_edge_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_block_size(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(msp, m);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model(msp, model, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
     CU_ASSERT_EQUAL(ret, 0);
     t = 1;
     /* We should be able to step forward here generation-by-generation until
      * coalescence, and get the same results as when we run it all in one go.
      */
-    /* JK: not working at the moment, leaving printfs in to help with debugging. */
     while ((ret = msp_run(msp, t, ULONG_MAX)) > 0) {
-        printf("t = %f\n", t);
         msp_verify(msp);
         CU_ASSERT_EQUAL_FATAL(msp->time, t);
         t++;
     }
-    printf("ret = %d\n", ret);
+    msp_verify(msp);
     CU_ASSERT_EQUAL(ret, 0);
-
-    printf("%d -> %d\n", (int) num_ca_events, (int) msp_get_num_common_ancestor_events(msp));
     CU_ASSERT_TRUE(num_ca_events == msp_get_num_common_ancestor_events(msp));
     CU_ASSERT_TRUE(num_re_events == msp_get_num_recombination_events(msp));
 

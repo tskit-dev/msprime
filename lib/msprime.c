@@ -2310,8 +2310,6 @@ out:
     return ret;
 }
 
-/* Given the specified rate, return the waiting time until the next common ancestor
- * event for the specified population */
 static double
 msp_get_population_size(msp_t *self, population_t *pop)
 {
@@ -2329,6 +2327,8 @@ msp_get_population_size(msp_t *self, population_t *pop)
     return ret;
 }
 
+/* Given the specified rate, return the waiting time until the next common ancestor
+ * event for the specified population */
 static double
 msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, double lambda)
 {
