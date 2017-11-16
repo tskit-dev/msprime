@@ -1636,11 +1636,11 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             x = z;
             k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
         }
-        else if ( x->right <= k && y != NULL && y->left >= k ) {
+        else if (x->right <= k && y != NULL && y->left >= k) {
             // Recombine in gap between segment and the next
             x->next = NULL;
             y->prev = NULL;
-            while ( y->left >= k ) {
+            while (y->left >= k) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
                 k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
@@ -1675,7 +1675,7 @@ msp_recombination_event(msp_t *self)
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
-    //printf( "l = %d, num_links = %d\n", (int)l, (int)num_links);
+    //printf("l = %d, num_links = %d\n", (int)l, (int)num_links);
     assert(l > 0 && l <= num_links);
     segment_id = fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, segment_id);
@@ -2575,7 +2575,7 @@ msp_dtwf_generation(msp_t *self)
         }
 
         // Iterate through offspring of parent k, adding to avl_tree
-        for ( k = 0; k < N; k++) {
+        for (k = 0; k < N; k++) {
             for (s = parents[k]; s != NULL; s = s->next) {
                 node = s->node;
                 x = (segment_t *) node->item;
@@ -2583,7 +2583,7 @@ msp_dtwf_generation(msp_t *self)
                 msp_free_avl_node(self, node);
 
                 // Recombine ancestor
-                if ( self->recombination_rate > 0 ) {
+                if (self->recombination_rate > 0) {
                     ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
                     if (ret != 0) {
                         goto out;
@@ -2593,7 +2593,7 @@ msp_dtwf_generation(msp_t *self)
                     u[1] = NULL;
                 }
                 // Add to AVLTree for each parental chromosome
-                for ( i = 0; i < 2; i++) {
+                for (i = 0; i < 2; i++) {
                     if (u[i] != NULL) {
                         ret = msp_priority_queue_insert(self, &Q[i], u[i]);
                         if (ret != 0) {
@@ -2603,7 +2603,7 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
             // Merge segments in each parental chromosome
-            for ( i = 0; i < 2; i ++ ) {
+            for (i = 0; i < 2; i ++) {
                 ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j);
                 if (ret != 0) {
                     goto out;
@@ -2622,14 +2622,14 @@ msp_dtwf_generation(msp_t *self)
         for (k = 0; k < self->num_populations; k++) {
             n = avl_count(&self->populations[j].ancestors);
             mu = n * self->migration_matrix[j * self->num_populations + k];
-            if ( mu == 0 ) {
+            if (mu == 0) {
                 continue;
             }
             num_migrations = gsl_ran_poisson(self->rng, mu);
-            if ( num_migrations > n ) {
+            if (num_migrations > n) {
                 num_migrations = n;
             }
-            for ( i = 0; i < num_migrations && i < n; i++ ) {
+            for (i = 0; i < num_migrations && i < n; i++) {
                 /* m[j, k] is the rate at which migrants move from
                  * population k to j forwards in time. Backwards
                  * in time, we move the individual from from
