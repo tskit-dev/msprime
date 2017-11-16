@@ -205,9 +205,9 @@ class SparseTree(object):
 
         :return: The sum of all the branch lengths in this tree.
         """
-        root = self.get_root()
+        roots = self.roots
         return sum(
-            self.get_branch_length(u) for u in self.nodes() if u != root)
+            self.get_branch_length(u) for u in self.nodes() if u not in roots)
 
     def mrca(self, u, v):
         return self.get_mrca(u, v)
