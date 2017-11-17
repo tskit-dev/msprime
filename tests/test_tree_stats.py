@@ -324,6 +324,24 @@ class PythonBranchLengthStatCalculator(object):
             S[j] /= (end-begin)
         return S
 
+    def site_frequency_spectrum(self, sample_set, begin=0.0, end=None):
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        n_out = len(sample_set) + 1
+        S = [0.0 for j in range(n_out)]
+        for t in self.tree_sequence.trees(tracked_samples=sample_set,
+                                          sample_counts=True):
+            root = t.root
+            tr_len = min(end, t.interval[1]) - max(begin, t.interval[0])
+            if tr_len > 0:
+                for node in t.nodes():
+                    if node != root:
+                        x = t.num_tracked_samples(node)
+                        S[x] += t.branch_length(node) * tr_len
+        for j in range(n_out):
+            S[j] /= (end-begin)
+        return S
+
 
 class PythonSiteStatCalculator(object):
     """
@@ -527,6 +545,26 @@ class PythonSiteStatCalculator(object):
             raise ValueError("Expecting output of length 1.")
         return out[0]
 
+    def site_frequency_spectrum(self, sample_set, begin=0.0, end=None):
+        '''
+        '''
+        if end is None:
+            end = self.tree_sequence.sequence_length
+        haps = list(self.tree_sequence.haplotypes())
+        n_out = len(sample_set) + 1
+        site_positions = [x.position for x in self.tree_sequence.sites()]
+        S = [0.0 for j in range(n_out)]
+        for k in range(self.tree_sequence.num_sites):
+            if (site_positions[k] >= begin) and (site_positions[k] < end):
+                all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
+                g = [haps[j][k] for j in sample_set]
+                for a in set(all_g):
+                    x = g.count(a)
+                    S[x] += 1.0
+        for j in range(n_out):
+            S[j] /= (end - begin)
+        return S
+
 
 def upper_tri_to_matrix(x):
     """
@@ -624,6 +662,21 @@ class GeneralStatsTestCase(unittest.TestCase):
             for i in range(len(windows)-1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
+    def compare_sfs(self, ts, tree_fn, sample_sets, tsc_fn):
+        """
+        """
+        for sample_set in sample_sets:
+            windows = [k * ts.sequence_length / 20 for k in
+                       [0] + sorted(random.sample(range(1, 20), 4)) + [20]]
+            win_args = [{'begin': windows[i], 'end': windows[i+1]}
+                        for i in range(len(windows)-1)]
+            tree_vals = [tree_fn(sample_set, **b) for b in win_args]
+
+            tsc_vals = tsc_fn(sample_set, windows)
+            self.assertEqual(len(tsc_vals), len(windows) - 1)
+            for i in range(len(windows) - 1):
+                self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
+
     def check_tree_stat_interface(self, ts):
         samples = ts.samples()
         tsc = self.stat_class(ts)
@@ -654,6 +707,28 @@ class GeneralStatsTestCase(unittest.TestCase):
                           [0.0, 0.8*ts.sequence_length, 0.4*ts.sequence_length,
                            ts.sequence_length])
 
+    def check_sfs_interface(self, ts):
+        samples = ts.samples()
+        tsc = self.stat_class(ts)
+
+        # empty sample sets will raise an error
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum, [])
+        # sample_sets must be lists without repeated elements
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum,
+                          [samples[2], samples[2]])
+        # and must all be samples
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum,
+                          [samples[0], max(samples)+1])
+        # windows must start at 0.0, be increasing, and extend to the end
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum,
+                          samples[0:2], [0.1, ts.sequence_length])
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum,
+                          samples[0:2], [0.0, 0.8*ts.sequence_length])
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum,
+                          samples[0:2],
+                          [0.0, 0.8*ts.sequence_length, 0.4*ts.sequence_length,
+                           ts.sequence_length])
+
     def check_tree_stat_vector(self, ts):
         # test the general tree_stat_vector() machinery
         self.check_tree_stat_interface(ts)
@@ -681,6 +756,7 @@ class GeneralStatsTestCase(unittest.TestCase):
 
     def check_sfs(self, ts):
         # check site frequency spectrum
+        self.check_sfs_interface(ts)
         A = [random.sample(ts.samples(), 2),
              random.sample(ts.samples(), 4),
              random.sample(ts.samples(), 8),
@@ -689,8 +765,8 @@ class GeneralStatsTestCase(unittest.TestCase):
         tsc = self.stat_class(ts)
         py_tsc = self.py_stat_class(ts)
 
-        self.compare_stats(ts, py_tsc.site_frequency_spectrum, A, 0,
-                           tsc_vector_fn=tsc.site_frequency_spectrum)
+        self.compare_sfs(ts, py_tsc.site_frequency_spectrum, A,
+                         tsc.site_frequency_spectrum)
 
     def check_f_interface(self, ts):
         tsc = self.stat_class(ts)
@@ -1318,6 +1394,27 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         self.assertRaises(
             ValueError, tsc.tree_stat_vector, [[1, 2]], f, [0, 1, 1])
 
+    def test_sfs_interface(self):
+        ts = msprime.simulate(10)
+        tsc = msprime.BranchLengthStatCalculator(ts)
+
+        # Duplicated samples raise an error
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum, [1, 1])
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum, [])
+        self.assertRaises(ValueError, tsc.site_frequency_spectrum, [0, 11])
+        # Check for bad windows
+        for bad_start in [-1, 1, 1e-7]:
+            self.assertRaises(
+                ValueError, tsc.site_frequency_spectrum, [1, 2],
+                [bad_start, ts.sequence_length])
+        for bad_end in [0, ts.sequence_length - 1, ts.sequence_length + 1]:
+            self.assertRaises(
+                ValueError, tsc.site_frequency_spectrum, [1, 2],
+                [0, bad_end])
+        # Windows must be increasing.
+        self.assertRaises(
+            ValueError, tsc.site_frequency_spectrum, [1, 2], [0, 1, 1])
+
     def test_branch_general_stats(self):
         for ts in self.get_ts():
             self.check_tree_stat_vector(ts)
@@ -1334,6 +1431,10 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         for ts in self.get_ts():
             self.check_pairwise_diversity(ts)
             self.check_divergence_matrix(ts)
+
+    def test_branch_sfs(self):
+        for ts in self.get_ts():
+            self.check_sfs(ts)
 
 
 class SiteStatsTestCase(GeneralStatsTestCase):
@@ -1385,3 +1486,7 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     def test_site_Y_stats(self):
         for ts in self.get_ts():
             self.check_Y_stat(ts)
+
+    def test_site_sfs(self):
+        for ts in self.get_ts():
+            self.check_sfs(ts)
