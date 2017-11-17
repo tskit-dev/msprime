@@ -719,8 +719,8 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
 
     def site_frequency_spectrum(self, sample_set, windows=None):
         '''
-        Computes the expected site frequency spectrum, based on tree lengths,
-        separately in each window.
+        Computes the expected *derived* (unfolded) site frequency spectrum,
+        based on tree lengths, separately in each window.
         '''
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
@@ -742,7 +742,7 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         for k in range(num_windows):
             if windows[k + 1] <= windows[k]:
                 raise ValueError("Windows must be increasing.")
-        n_out = len(sample_set) + 1
+        n_out = len(sample_set)
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         L = [0.0 for j in range(n_out)]
         N = self.tree_sequence.num_nodes
@@ -763,15 +763,18 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                         pi[edge.child] = edge.parent
                     dx += sign * X[edge.child]
                     dt = (node_time[pi[edge.child]] - node_time[edge.child])
-                    L[X[edge.child]] += sign * dt
+                    if X[edge.childe] > 0:
+                        L[X[edge.child] - 1] += sign * dt
                     if sign == -1:
                         pi[edge.child] = -1
                     old_X = X[edge.parent]
                     X[edge.parent] += dx
                     if pi[edge.parent] != -1:
                         dt = (node_time[pi[edge.parent]] - node_time[edge.parent])
-                        L[X[edge.parent]] += dt
-                        L[old_X] -= dt
+                        if X[edge.parent] > 0:
+                            L[X[edge.parent] - 1] += dt
+                        if old_X > 0:
+                            L[old_X - 1] -= dt
                     # propagate change up the tree
                     u = pi[edge.parent]
                     if u != -1:
@@ -783,8 +786,10 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                             # but the root does not have a branch length
                             if next_u != -1:
                                 dt = (node_time[pi[u]] - node_time[u])
-                                L[X[u]] += dt
-                                L[old_X] -= dt
+                                if X[u] > 0:
+                                    L[X[u] - 1] += dt
+                                if old_X > 0:
+                                    L[old_X - 1] -= dt
                             u = next_u
                             next_u = pi[next_u]
             while chrom_pos + length >= windows[window_num + 1]:
@@ -948,7 +953,8 @@ class SiteStatCalculator(GeneralStatCalculator):
 
     def site_frequency_spectrum(self, sample_set, windows=None):
         '''
-        Computes the site frequency spectrum in sample_set, independently in windows.
+        Computes the folded site frequency spectrum in sample_set,
+        independently in windows.
         '''
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
@@ -972,7 +978,7 @@ class SiteStatCalculator(GeneralStatCalculator):
                 raise ValueError("Windows must be increasing.")
         num_sites = self.tree_sequence.num_sites
         n = len(sample_set)
-        n_out = n + 1
+        n_out = n
         # we store the final answers here
         S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
         if num_sites == 0:
@@ -1034,7 +1040,8 @@ class SiteStatCalculator(GeneralStatCalculator):
                             U[parent_state] = 0
                         U[parent_state] -= X[mut.node]
                     for a in U:
-                        S[window_num][U[a]] += 1.0
+                        if U[a] > 0:
+                            S[window_num][U[a] - 1] += 1.0
                 ns += 1
                 if ns == num_sites:
                     break

@@ -327,7 +327,7 @@ class PythonBranchLengthStatCalculator(object):
     def site_frequency_spectrum(self, sample_set, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
-        n_out = len(sample_set) + 1
+        n_out = len(sample_set)
         S = [0.0 for j in range(n_out)]
         for t in self.tree_sequence.trees(tracked_samples=sample_set,
                                           sample_counts=True):
@@ -337,7 +337,8 @@ class PythonBranchLengthStatCalculator(object):
                 for node in t.nodes():
                     if node != root:
                         x = t.num_tracked_samples(node)
-                        S[x] += t.branch_length(node) * tr_len
+                        if x > 0:
+                            S[x - 1] += t.branch_length(node) * tr_len
         for j in range(n_out):
             S[j] /= (end-begin)
         return S
@@ -550,17 +551,20 @@ class PythonSiteStatCalculator(object):
         '''
         if end is None:
             end = self.tree_sequence.sequence_length
+        print("\n\n-- ", begin, "--", end, "\n")
         haps = list(self.tree_sequence.haplotypes())
-        n_out = len(sample_set) + 1
+        n_out = len(sample_set)
         site_positions = [x.position for x in self.tree_sequence.sites()]
         S = [0.0 for j in range(n_out)]
         for k in range(self.tree_sequence.num_sites):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
                 all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
                 g = [haps[j][k] for j in sample_set]
+                print(g)
                 for a in set(all_g):
                     x = g.count(a)
-                    S[x] += 1.0
+                    if x > 0:
+                        S[x - 1] += 1.0
         for j in range(n_out):
             S[j] /= (end - begin)
         return S
@@ -674,6 +678,8 @@ class GeneralStatsTestCase(unittest.TestCase):
 
             tsc_vals = tsc_fn(sample_set, windows)
             self.assertEqual(len(tsc_vals), len(windows) - 1)
+            print(tree_vals)
+            print(tsc_vals)
             for i in range(len(windows) - 1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
@@ -1233,7 +1239,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
     py_stat_class = PythonBranchLengthStatCalculator
 
     def get_ts(self):
-        for N in [12, 20]:
+        for N in [12, 15, 20]:
             yield msprime.simulate(N, random_seed=self.random_seed,
                                    recombination_rate=10)
 
@@ -1443,7 +1449,7 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     """
     stat_class = msprime.SiteStatCalculator
     py_stat_class = PythonSiteStatCalculator
-    seed = 147
+    seed = 23
 
     def get_ts(self):
         for mut in [0.0, 3.0]:
@@ -1454,9 +1460,10 @@ class SiteStatsTestCase(GeneralStatsTestCase):
                               mutation_rate=0.0,
                               recombination_rate=3.0)
         for mpn in [False, True]:
-            mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=3,
-                                         multiple_per_node=mpn, seed=self.seed)
-            yield mut_ts
+            for num_sites in [10, 100]:
+                mut_ts = tsutil.jukes_cantor(ts, num_sites=num_sites, mu=3,
+                                             multiple_per_node=mpn, seed=self.seed)
+                yield mut_ts
 
     def check_pairwise_diversity_mutations(self, ts):
         py_tsc = PythonSiteStatCalculator(ts)
