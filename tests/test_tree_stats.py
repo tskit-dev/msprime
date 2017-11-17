@@ -551,7 +551,6 @@ class PythonSiteStatCalculator(object):
         '''
         if end is None:
             end = self.tree_sequence.sequence_length
-        print("\n\n-- ", begin, "--", end, "\n")
         haps = list(self.tree_sequence.haplotypes())
         n_out = len(sample_set)
         site_positions = [x.position for x in self.tree_sequence.sites()]
@@ -560,7 +559,6 @@ class PythonSiteStatCalculator(object):
             if (site_positions[k] >= begin) and (site_positions[k] < end):
                 all_g = [haps[j][k] for j in range(self.tree_sequence.num_samples)]
                 g = [haps[j][k] for j in sample_set]
-                print(g)
                 for a in set(all_g):
                     x = g.count(a)
                     if x > 0:
@@ -678,8 +676,6 @@ class GeneralStatsTestCase(unittest.TestCase):
 
             tsc_vals = tsc_fn(sample_set, windows)
             self.assertEqual(len(tsc_vals), len(windows) - 1)
-            print(tree_vals)
-            print(tsc_vals)
             for i in range(len(windows) - 1):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 

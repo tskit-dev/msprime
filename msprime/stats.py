@@ -771,7 +771,7 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                         pi[edge.child] = edge.parent
                     dx += sign * X[edge.child]
                     dt = (node_time[pi[edge.child]] - node_time[edge.child])
-                    if X[edge.childe] > 0:
+                    if X[edge.child] > 0:
                         L[X[edge.child] - 1] += sign * dt
                     if sign == -1:
                         pi[edge.child] = -1
