@@ -721,6 +721,14 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
         '''
         Computes the expected *derived* (unfolded) site frequency spectrum,
         based on tree lengths, separately in each window.
+
+        :param list sample_set: A list of IDs of samples of length n.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of lists of length n, one for each window, whose kth
+            entry gives the total length of any branches in the marginal trees
+            over that window that are ancestral to exactly k of the samples,
+            divided by the length of the window.
         '''
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
@@ -955,6 +963,13 @@ class SiteStatCalculator(GeneralStatCalculator):
         '''
         Computes the folded site frequency spectrum in sample_set,
         independently in windows.
+
+        :param list sample_set: A list of IDs of samples of length n.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of lists of length n, one for each window, whose kth
+            entry gives the number of mutations in that window at which a mutation
+            is seen by exactly k of the samples, divided by the window length.
         '''
         if windows is None:
             windows = (0, self.tree_sequence.sequence_length)
