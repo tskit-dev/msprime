@@ -717,6 +717,110 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
                 chrom_pos += length
         return S
 
+    def site_frequency_spectrum(self, sample_set, windows=None):
+        '''
+        Computes the expected *derived* (unfolded) site frequency spectrum,
+        based on tree lengths, separately in each window.
+
+        :param list sample_set: A list of IDs of samples of length n.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of lists of length n, one for each window, whose kth
+            entry gives the total length of any branches in the marginal trees
+            over that window that are ancestral to exactly k of the samples,
+            divided by the length of the window.
+        '''
+        if windows is None:
+            windows = (0, self.tree_sequence.sequence_length)
+        if ((not isinstance(sample_set, list)) or
+           len(sample_set) != len(set(sample_set))):
+            raise ValueError(
+                "elements of sample_sets must be lists without repeated elements.")
+        if len(sample_set) == 0:
+            raise ValueError("elements of sample_sets cannot be empty.")
+        for u in sample_set:
+            if not self.tree_sequence.node(u).is_sample():
+                raise ValueError("Not all elements of sample_sets are samples.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.tree_sequence.sequence_length:
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
+        n_out = len(sample_set)
+        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
+        L = [0.0 for j in range(n_out)]
+        N = self.tree_sequence.num_nodes
+        X = [int(u in sample_set) for u in range(N)]
+        # we will essentially construct the tree
+        pi = [-1 for j in range(N)]
+        node_time = [self.tree_sequence.node(u).time for u in range(N)]
+        # keep track of where we are for the windows
+        chrom_pos = 0.0
+        # index of *left-hand* end of the current window
+        window_num = 0
+        for interval, records_out, records_in in self.tree_sequence.edge_diffs():
+            length = interval[1] - interval[0]
+            for sign, records in ((-1, records_out), (+1, records_in)):
+                for edge in records:
+                    dx = 0
+                    if sign == +1:
+                        pi[edge.child] = edge.parent
+                    dx += sign * X[edge.child]
+                    dt = (node_time[pi[edge.child]] - node_time[edge.child])
+                    if X[edge.child] > 0:
+                        L[X[edge.child] - 1] += sign * dt
+                    if sign == -1:
+                        pi[edge.child] = -1
+                    old_X = X[edge.parent]
+                    X[edge.parent] += dx
+                    if pi[edge.parent] != -1:
+                        dt = (node_time[pi[edge.parent]] - node_time[edge.parent])
+                        if X[edge.parent] > 0:
+                            L[X[edge.parent] - 1] += dt
+                        if old_X > 0:
+                            L[old_X - 1] -= dt
+                    # propagate change up the tree
+                    u = pi[edge.parent]
+                    if u != -1:
+                        next_u = pi[u]
+                        while u != -1:
+                            old_X = X[u]
+                            X[u] += dx
+                            # need to update X for the root,
+                            # but the root does not have a branch length
+                            if next_u != -1:
+                                dt = (node_time[pi[u]] - node_time[u])
+                                if X[u] > 0:
+                                    L[X[u] - 1] += dt
+                                if old_X > 0:
+                                    L[old_X - 1] -= dt
+                            u = next_u
+                            next_u = pi[next_u]
+            while chrom_pos + length >= windows[window_num + 1]:
+                # wrap up the last window
+                this_length = windows[window_num + 1] - chrom_pos
+                window_length = windows[window_num + 1] - windows[window_num]
+                for j in range(n_out):
+                    S[window_num][j] += L[j] * this_length
+                    S[window_num][j] /= window_length
+                length -= this_length
+                # start the next
+                if window_num < num_windows - 1:
+                    window_num += 1
+                    chrom_pos = windows[window_num]
+                else:
+                    # skips the else statement below
+                    break
+            else:
+                for j in range(n_out):
+                    S[window_num][j] += L[j] * length
+                chrom_pos += length
+        return S
+
 
 class SiteStatCalculator(GeneralStatCalculator):
     """
@@ -845,6 +949,114 @@ class SiteStatCalculator(GeneralStatCalculator):
                         w = weight_fun(U[a])
                         for j in range(n_out):
                             S[window_num][j] += w[j]
+                ns += 1
+                if ns == num_sites:
+                    break
+                s = next(sites)
+        # wrap up the final window
+        window_length = windows[window_num + 1] - windows[window_num]
+        for j in range(n_out):
+            S[window_num][j] /= window_length
+        return S
+
+    def site_frequency_spectrum(self, sample_set, windows=None):
+        '''
+        Computes the folded site frequency spectrum in sample_set,
+        independently in windows.
+
+        :param list sample_set: A list of IDs of samples of length n.
+        :param iterable windows: The breakpoints of the windows (including start
+            and end, so has one more entry than number of windows).
+        :return: A list of lists of length n, one for each window, whose kth
+            entry gives the number of mutations in that window at which a mutation
+            is seen by exactly k of the samples, divided by the window length.
+        '''
+        if windows is None:
+            windows = (0, self.tree_sequence.sequence_length)
+        if ((not isinstance(sample_set, list)) or
+           len(sample_set) != len(set(sample_set))):
+            raise ValueError(
+                "sample_set must not contain repeated elements.")
+        if len(sample_set) == 0:
+            raise ValueError("sample_set cannot be empty.")
+        for u in sample_set:
+            if not self.tree_sequence.node(u).is_sample():
+                raise ValueError("Not all elements of sample_set are samples.")
+        num_windows = len(windows) - 1
+        if windows[0] != 0.0:
+            raise ValueError(
+                "Windows must start at the start of the sequence (at 0.0).")
+        if windows[-1] != self.tree_sequence.sequence_length:
+            raise ValueError("Windows must extend to the end of the sequence.")
+        for k in range(num_windows):
+            if windows[k + 1] <= windows[k]:
+                raise ValueError("Windows must be increasing.")
+        num_sites = self.tree_sequence.num_sites
+        n = len(sample_set)
+        n_out = n
+        # we store the final answers here
+        S = [[0.0 for j in range(n_out)] for _ in range(num_windows)]
+        if num_sites == 0:
+            return S
+        N = self.tree_sequence.num_nodes
+        # initialize: with no tree, each node is either in a sample set or not
+        X = [int(u in sample_set) for u in range(N)]
+        # we will construct the tree here
+        pi = [-1 for j in range(N)]
+        # keep track of which site we're looking at
+        sites = self.tree_sequence.sites()
+        ns = 0  # this will record number of sites seen so far
+        s = next(sites)
+        # index of *left-hand* end of the current window
+        window_num = 0
+        while s.position > windows[window_num + 1]:
+            window_num += 1
+        for interval, records_out, records_in in self.tree_sequence.edge_diffs():
+            # if we've done all the sites then stop
+            if ns == num_sites:
+                break
+            # update the tree
+            for sign, records in ((-1, records_out), (+1, records_in)):
+                for edge in records:
+                    dx = 0
+                    if sign == +1:
+                        pi[edge.child] = edge.parent
+                    dx += sign * X[edge.child]
+                    if sign == -1:
+                        pi[edge.child] = -1
+                    X[edge.parent] += dx
+                    # propagate change up the tree
+                    u = pi[edge.parent]
+                    if u != -1:
+                        next_u = pi[u]
+                        while u != -1:
+                            X[u] += dx
+                            u = next_u
+                            next_u = pi[next_u]
+            # loop over sites in this tree
+            while s.position < interval[1]:
+                if s.position > windows[window_num + 1]:
+                    # finalize this window and move to the next
+                    window_length = windows[window_num + 1] - windows[window_num]
+                    for j in range(n_out):
+                        S[window_num][j] /= window_length
+                    # may need to advance through empty windows
+                    while s.position > windows[window_num + 1]:
+                        window_num += 1
+                nm = len(s.mutations)
+                if nm > 0:
+                    U = {s.ancestral_state: n}
+                    for mut in s.mutations:
+                        if mut.derived_state not in U:
+                            U[mut.derived_state] = 0
+                        U[mut.derived_state] += X[mut.node]
+                        parent_state = get_derived_state(s, mut.parent)
+                        if parent_state not in U:
+                            U[parent_state] = 0
+                        U[parent_state] -= X[mut.node]
+                    for a in U:
+                        if U[a] > 0:
+                            S[window_num][U[a] - 1] += 1.0
                 ns += 1
                 if ns == num_sites:
                     break
