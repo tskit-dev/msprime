@@ -675,6 +675,71 @@ get_num_children(size_t node, size_t num_edges, edge_t *edges)
 }
 
 static void
+test_dtwf_deterministic(void)
+{
+    int j, ret;
+    uint32_t n = 10;
+    uint32_t m = 2;
+    unsigned long seed = 133;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    node_table_t nodes[2];
+    edge_table_t edges[2];
+    migration_table_t migrations;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    ret = migration_table_alloc(&migrations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    memset(samples, 0, n * sizeof(sample_t));
+    for (j = 0; j < 2; j++) {
+        ret = node_table_alloc(&nodes[j], 0, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = edge_table_alloc(&edges[j], 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        gsl_rng_set(rng, seed);
+        ret = msp_alloc(msp, n, samples, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_simulation_model(msp, MSP_MODEL_DTWF, n);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(msp, 0, n, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_num_loci(msp, m);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_recombination_rate(msp, 1.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_verify(msp);
+        ret = msp_populate_tables(msp, NULL, &nodes[j], &edges[j], &migrations);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_free(msp);
+        CU_ASSERT_EQUAL(migrations.num_rows, 0);
+        CU_ASSERT(nodes[j].num_rows > 0);
+        CU_ASSERT(edges[j].num_rows > 0);
+
+    }
+    CU_ASSERT_TRUE(node_table_equal(&nodes[0], &nodes[1]));
+    CU_ASSERT_TRUE(edge_table_equal(&edges[0], &edges[1]));
+
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    for (j = 0; j < 2; j++) {
+        node_table_free(&nodes[j]);
+        edge_table_free(&edges[j]);
+    }
+    migration_table_free(&migrations);
+}
+
+static void
 test_dtwf_single_locus_simulation(void)
 {
     int ret;
@@ -810,7 +875,6 @@ test_dtwf_multi_locus_simulation(void)
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
-    int model = MSP_MODEL_DTWF;
     double migration_matrix[] = {0, 1, 1, 0};
     const char *model_name;
     size_t num_ca_events, num_re_events;
@@ -838,23 +902,9 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(msp, true);
     CU_ASSERT_EQUAL(ret, 0);
-    /* set all the block sizes to something small to provoke the memory
-     * expansions. */
-    ret = msp_set_avl_node_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_node_mapping_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_segment_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_edge_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model(msp, model, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
@@ -870,13 +920,11 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_TRUE(num_ca_events > 0);
     CU_ASSERT_TRUE(num_re_events > 0);
     CU_ASSERT_EQUAL(ret, 0);
+    msp_free(msp);
 
-    /* Perform a 'hard' reset - msp_reset() modifies the order in
-     * which we iterate through ancestors, while preserving the
-     * coalescent structure. This would give the same recombination
-     * events, but in different ancestors, changing the end result */
+    /* Realloc the simulator under different memory params to see if
+     * we get the same result. */
     gsl_rng_set(rng, seed);
-    memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
@@ -887,37 +935,17 @@ test_dtwf_multi_locus_simulation(void)
     ret = msp_set_population_configuration(msp, 1, n / 4, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(msp, 4, migration_matrix);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_store_migrations(msp, true);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* set all the block sizes to something small to provoke the memory
-     * expansions. */
-    ret = msp_set_avl_node_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_node_mapping_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_segment_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_edge_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_block_size(msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model(msp, model, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    model_name = msp_get_model_name(msp);
-    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
-    CU_ASSERT_EQUAL(ret, 0);
     t = 1;
-    /* We should be able to step forward here generation-by-generation until
-     * coalescence, and get the same results as when we run it all in one go.
+    /* We should be able to step backward here generation-by-generation until
+     * coalescence.
      */
     while ((ret = msp_run(msp, t, ULONG_MAX)) > 0) {
         msp_verify(msp);
@@ -1609,6 +1637,7 @@ main(int argc, char **argv)
         {"test_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_demographic_events},
         {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_simulation_memory_limit", test_simulation_memory_limit},
         {"test_multi_locus_simulation", test_multi_locus_simulation},

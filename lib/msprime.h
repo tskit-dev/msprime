@@ -928,6 +928,7 @@ int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *fla
 int node_table_reset(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
+bool node_table_equal(node_table_t *self, node_table_t *other);
 
 int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
 int edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,
@@ -939,6 +940,7 @@ int edge_table_append_columns(edge_table_t *self, size_t num_rows, double *left,
 int edge_table_reset(edge_table_t *self);
 int edge_table_free(edge_table_t *self);
 void edge_table_print_state(edge_table_t *self, FILE *out);
+bool edge_table_equal(edge_table_t *self, edge_table_t *other);
 
 int site_table_alloc(site_table_t *self, size_t max_rows_increment,
         size_t max_total_ancestral_state_length_increment);

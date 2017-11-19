@@ -2250,8 +2250,7 @@ msp_reset(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_overlap_count(self, self->num_loci,
-            self->num_samples + 1);
+    ret = msp_insert_overlap_count(self, self->num_loci, self->num_samples + 1);
     if (ret != 0) {
         goto out;
     }

@@ -292,6 +292,26 @@ node_table_print_state(node_table_t *self, FILE *out)
     }
 }
 
+bool
+node_table_equal(node_table_t *self, node_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->total_name_length == other->total_name_length) {
+        ret = memcmp(self->time, other->time,
+                self->num_rows * sizeof(double)) == 0
+            && memcmp(self->flags, other->flags,
+                    self->num_rows * sizeof(uint32_t)) == 0
+            && memcmp(self->population, other->population,
+                    self->num_rows * sizeof(population_id_t)) == 0
+            && memcmp(self->name_length, other->name_length,
+                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->name, other->name,
+                    self->total_name_length * sizeof(char)) == 0;
+    }
+    return ret;
+}
+
 /*************************
  * edge table
  *************************/
@@ -437,6 +457,24 @@ edge_table_print_state(edge_table_t *self, FILE *out)
         fprintf(out, "\n");
     }
 }
+
+bool
+edge_table_equal(edge_table_t *self, edge_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows) {
+        ret = memcmp(self->left, other->left,
+                self->num_rows * sizeof(double)) == 0
+            && memcmp(self->right, other->right,
+                    self->num_rows * sizeof(double)) == 0
+            && memcmp(self->parent, other->parent,
+                    self->num_rows * sizeof(node_id_t)) == 0
+            && memcmp(self->child, other->child,
+                    self->num_rows * sizeof(node_id_t)) == 0;
+    }
+    return ret;
+}
+
 
 /*************************
  * site table
