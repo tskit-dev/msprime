@@ -2263,6 +2263,13 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
     /* check if the input ID is a sample */
     output_id = self->node_id_map[input_id];
     coalescence = sample_node = self->is_sample[input_id];
+    if (sample_node) {
+        assert(self->ancestor_map[input_id] != NULL);
+        x = self->ancestor_map[input_id];
+        assert(x->left == 0.0);
+        assert(x->right == self->sequence_length);
+        assert(x->node == output_id);
+    }
 
     head_sentinel.left = 0.0;
     head_sentinel.right = 0.0;
@@ -2363,7 +2370,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         z->next = alpha;
         z = alpha;
     }
-    if (self->ancestor_map[input_id] == NULL) {
+    if (!sample_node) {
         self->ancestor_map[input_id] = head->next;
     } else {
         /* There is already ancestral material present for this node, which
@@ -2375,11 +2382,6 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             simplifier_free_segment(self ,x);
             x = x->next;
         }
-        x = self->ancestor_map[input_id];
-        assert(self->is_sample[input_id]);
-        assert(x->left == 0.0);
-        assert(x->right == self->sequence_length);
-        assert(x->node == self->node_id_map[input_id]);
     }
     if (defrag_required) {
         ret = simplifier_defrag_segment_chain(self, input_id);
