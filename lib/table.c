@@ -2281,9 +2281,9 @@ static int WARN_UNUSED
 simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
 {
     int ret = MSP_ERR_GENERIC;
-    bool coalescence = false;
-    bool defrag_required = 0;
-    node_id_t v;
+    bool node_is_sample, output_node_used;
+    bool defrag_required = false;
+    node_id_t output_id;
     double l, r, next_l;
     uint32_t j, h;
     avl_node_t *node;
@@ -2296,6 +2296,26 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
     if (H == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
+    }
+
+    /* check if the input ID is a sample */
+    node_is_sample = self->is_sample[input_id];
+    output_node_used = false;
+    output_id = self->node_id_map[input_id];
+    if (node_is_sample) {
+        assert(output_id != MSP_NULL_NODE);
+        x = self->ancestor_map[input_id];
+        assert(x != NULL);
+        assert(x->left == 0.0);
+        assert(x->right == self->sequence_length);
+        assert(x->node == output_id);
+    } else {
+        assert(output_id == MSP_NULL_NODE);
+        assert(self->ancestor_map[input_id] == NULL);
+        /* We allocate the output ID here to save looking it up
+         * within the inner loop. However, we will not record this
+         * unless the output_node_used flag is set */
+        output_id = (node_id_t) self->nodes->num_rows;
     }
 
     head_sentinel.left = 0.0;
@@ -2342,31 +2362,21 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
                     goto out;
                 }
             }
-            v = self->node_id_map[input_id];
-            if (v >= 0 && self->is_sample[input_id]) {
+            if (node_is_sample) {
                 /* If we have a mapped node over an interval with no other segments,
                  * then we must record this edge as it joins internal samples */
-                ret = simplifier_record_edge(self, alpha->left, alpha->right, v,
+                ret = simplifier_record_edge(self, alpha->left, alpha->right, output_id,
                         alpha->node);
                 if (ret != 0) {
                     goto out;
                 }
                 /* The node on this segment must be remapped to the parent so that we
                  * have the correct nodes further up in the tree. */
-                alpha->node = v;
+                alpha->node = output_id;
             }
         } else {
-            if (!coalescence) {
-                coalescence = true;
-                if (self->node_id_map[input_id] == MSP_NULL_NODE) {
-                    ret = simplifier_record_node(self, input_id, false);
-                    if (ret != 0) {
-                        goto out;
-                    }
-                }
-            }
-            v = self->node_id_map[input_id];
-            alpha = simplifier_alloc_segment(self, l, r, v, NULL);
+            output_node_used = true;
+            alpha = simplifier_alloc_segment(self, l, r, output_id, NULL);
             if (alpha == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2374,7 +2384,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             /* Create the record and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
-                ret = simplifier_record_edge(self, l, r, v, x->node);
+                ret = simplifier_record_edge(self, l, r, output_id, x->node);
                 if (ret != 0) {
                     goto out;
                 }
@@ -2395,17 +2405,13 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
 
         /* Loop tail; integrate alpha into the global state */
         assert(alpha != NULL);
-        if (z == NULL) {
-            self->ancestor_map[input_id] = alpha;
-        } else {
-        }
+        assert(z != NULL);
         defrag_required |= z->right == alpha->left && z->node == alpha->node;
         z->next = alpha;
         z = alpha;
     }
-    if (self->ancestor_map[input_id] == NULL) {
-        self->ancestor_map[input_id] = head->next;
-    } else {
+
+    if (node_is_sample) {
         /* There is already ancestral material present for this node, which
          * is a sample. We can free the segments computed here because the
          * existing mapping covers the full region */
@@ -2415,11 +2421,17 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             simplifier_free_segment(self ,x);
             x = x->next;
         }
-        x = self->ancestor_map[input_id];
-        assert(self->is_sample[input_id]);
-        assert(x->left == 0.0);
-        assert(x->right == self->sequence_length);
-        assert(x->node == self->node_id_map[input_id]);
+    } else {
+        self->ancestor_map[input_id] = head->next;
+        if (output_node_used) {
+            ret = simplifier_record_node(self, input_id, false);
+            if (ret != 0) {
+                goto out;
+            }
+            assert(output_id == self->node_id_map[input_id]);
+        } else {
+            assert(self->node_id_map[input_id] == MSP_NULL_NODE);
+        }
     }
     if (defrag_required) {
         ret = simplifier_defrag_segment_chain(self, input_id);
