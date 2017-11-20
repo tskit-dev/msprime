@@ -1589,6 +1589,80 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
 }
 
 static int WARN_UNUSED
+msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
+{
+    int ret = 0;
+    int ix;
+    double mu;
+    uint64_t k;
+    segment_t *y, *z;
+    segment_t s1, s2;
+    segment_t *seg_tails[] = {&s1, &s2};
+
+    mu = 1.0 / self->recombination_rate;
+    k = 1 + (uint64_t) x->left +
+        (uint64_t) gsl_ran_exponential(self->rng, mu);
+
+    s1.next = NULL;
+    s2.next = NULL;
+    ix = (int) gsl_rng_uniform_int(self->rng, 2);
+    seg_tails[ix]->next = x;
+    x->prev = seg_tails[ix];
+
+    while (x != NULL) {
+        seg_tails[ix] = x;
+        y = x->next;
+
+        if (x->right > k) {
+            // Make new segment
+            assert(x->left <= k);
+            self->num_re_events++;
+            ix = (ix + 1) % 2;
+            z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
+                    x->population_id, seg_tails[ix], x->next);
+            assert(z->left < z->right);
+            if (z == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            if (x->next != NULL) {
+                x->next->prev = z;
+            }
+            seg_tails[ix]->next = z;
+            seg_tails[ix] = z;
+            x->next = NULL;
+            x->right = (uint32_t) k;
+            assert(x->left < x->right);
+            x = z;
+            k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
+        }
+        else if (x->right <= k && y != NULL && y->left >= k) {
+            // Recombine in gap between segment and the next
+            x->next = NULL;
+            y->prev = NULL;
+            while (y->left >= k) {
+                self->num_re_events++;
+                ix = (ix + 1) % 2;
+                k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
+            }
+            seg_tails[ix]->next = y;
+            y->prev = seg_tails[ix];
+            seg_tails[ix] = y;
+            x = y;
+        } else {
+            // Breakpoint in later segment
+            x = y;
+        }
+    }
+    // Remove sentinal segments
+    *u = s1.next;
+    *v = s2.next;
+
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
 msp_recombination_event(msp_t *self)
 {
     int ret = 0;
@@ -1601,7 +1675,7 @@ msp_recombination_event(msp_t *self)
     self->num_re_events++;
     /* We can't use the GSL integer generator here as the range is too large */
     l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
-    //printf( "l = %d, num_links = %d\n", (int)l, (int)num_links);
+    //printf("l = %d, num_links = %d\n", (int)l, (int)num_links);
     assert(l > 0 && l <= num_links);
     segment_id = fenwick_find(&self->links, l);
     t = fenwick_get_cumulative_sum(&self->links, segment_id);
@@ -2176,8 +2250,7 @@ msp_reset(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_overlap_count(self, self->num_loci,
-            self->num_samples + 1);
+    ret = msp_insert_overlap_count(self, self->num_loci, self->num_samples + 1);
     if (ret != 0) {
         goto out;
     }
@@ -2233,6 +2306,23 @@ msp_initialise(msp_t *self)
         goto out;
     }
 out:
+    return ret;
+}
+
+static double
+msp_get_population_size(msp_t *self, population_t *pop)
+{
+    double ret = 0;
+    double alpha = pop->growth_rate;
+    double t = self->time;
+    double dt;
+
+    if (alpha == 0.0) {
+        ret = pop->initial_size;
+    } else {
+        dt = t - pop->start_time;
+        ret = pop->initial_size * exp(-alpha * dt);
+    }
     return ret;
 }
 
@@ -2314,8 +2404,7 @@ out:
     return ret;
 }
 
-/* The main event loop for continuous time coalescent models.
- */
+/* The main event loop for continuous time coalescent models. */
 static int WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
@@ -2429,9 +2518,164 @@ out:
     return ret;
 }
 
+/* List structure for collecting segments by parent */
+typedef struct _segment_list_t {
+    avl_node_t *node;
+    struct _segment_list_t *next;
+} segment_list_t;
+
+/* Performs a single generation under the Wright Fisher model */
+static int WARN_UNUSED
+msp_dtwf_generation(msp_t *self)
+{
+    int ret = 0;
+    uint32_t N, i, j, k, p;
+    int mig_source_pop, mig_dest_pop;
+    double mu;
+    uint32_t num_migrations, n;
+    size_t segment_mem_offset;
+    population_t *pop;
+    segment_t *x;
+    segment_t *u[2];
+    segment_list_t **parents = NULL;
+    segment_list_t *segment_mem = NULL;
+    segment_list_t *s;
+    avl_node_t *a, *node;
+    avl_tree_t Q[2];
+
+    for (i = 0; i < 2; i++) {
+        avl_init_tree(&Q[i], cmp_segment_queue, NULL);
+    }
+
+    for (j = 0; j < self->num_populations; j++) {
+
+        pop = &self->populations[j];
+        N = (uint32_t) msp_get_population_size(self, pop);
+
+        // Allocate memory for linked list of offspring per parent
+        parents = calloc(N, sizeof(segment_list_t *));
+        segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
+        if (parents == NULL || segment_mem == NULL){
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        // Iterate through ancestors and draw parents
+        segment_mem_offset = 0;
+        for (a = pop->ancestors.head; a != NULL; a = a->next) {
+            s = segment_mem + segment_mem_offset;
+            segment_mem_offset++;
+            p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
+            if (parents[p] != NULL) {
+                self->num_ca_events++;
+            }
+            s->next = parents[p];
+            s->node = a;
+            parents[p] = s;
+        }
+
+        // Iterate through offspring of parent k, adding to avl_tree
+        for (k = 0; k < N; k++) {
+            for (s = parents[k]; s != NULL; s = s->next) {
+                node = s->node;
+                x = (segment_t *) node->item;
+                avl_unlink_node(&pop->ancestors, node);
+                msp_free_avl_node(self, node);
+
+                // Recombine ancestor
+                if (self->recombination_rate > 0) {
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                } else {
+                    u[0] = x;
+                    u[1] = NULL;
+                }
+                // Add to AVLTree for each parental chromosome
+                for (i = 0; i < 2; i++) {
+                    if (u[i] != NULL) {
+                        ret = msp_priority_queue_insert(self, &Q[i], u[i]);
+                        if (ret != 0) {
+                            goto out;
+                        }
+                    }
+                }
+            }
+            // Merge segments in each parental chromosome
+            for (i = 0; i < 2; i ++) {
+                ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+        free(parents);
+        free(segment_mem);
+        segment_mem = NULL;
+        parents = NULL;
+    }
+    // Migrations
+    mig_source_pop = 0;
+    mig_dest_pop = 0;
+    for (j = 0; j < self->num_populations; j++) {
+        for (k = 0; k < self->num_populations; k++) {
+            n = avl_count(&self->populations[j].ancestors);
+            mu = n * self->migration_matrix[j * self->num_populations + k];
+            if (mu == 0) {
+                continue;
+            }
+            num_migrations = gsl_ran_poisson(self->rng, mu);
+            if (num_migrations > n) {
+                num_migrations = n;
+            }
+            for (i = 0; i < num_migrations && i < n; i++) {
+                /* m[j, k] is the rate at which migrants move from
+                 * population k to j forwards in time. Backwards
+                 * in time, we move the individual from from
+                 * population j into population k.
+                 */
+                mig_source_pop = (population_id_t) j;
+                mig_dest_pop = (population_id_t) k;
+                ret = msp_migration_event(self, mig_source_pop, mig_dest_pop);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    }
+out:
+    if (parents != NULL) {
+        free(parents);
+    }
+    if (segment_mem != NULL){
+        free(segment_mem);
+    }
+    return ret;
+}
+
+/* The main event loop for the Wright Fisher model. */
+static int WARN_UNUSED
+msp_run_dtwf(msp_t *self, double max_time)
+{
+    int ret = 0;
+
+    while (msp_get_num_ancestors(self) > 0 && self->time < max_time) {
+        self->time++;
+        ret = msp_dtwf_generation(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
 /* Runs the simulation backwards in time until either the sample has coalesced,
  * or specified maximum simulation time has been reached or the specified maximum
  * number of events has been reached.
+ *
+ * Note that max_events is ignored for the DTWF simulation and only the time
+ * (== number of generations) is considered.
  */
 int WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
@@ -2447,7 +2691,11 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
-    ret = msp_run_coalescent(self, scaled_time, max_events);
+    if (self->model.type == MSP_MODEL_DTWF) {
+        ret = msp_run_dtwf(self, scaled_time);
+    } else {
+        ret = msp_run_coalescent(self, scaled_time, max_events);
+    }
     if (ret != 0) {
         goto out;
     }
@@ -2589,6 +2837,9 @@ msp_get_model_name(msp_t *self)
             break;
         case MSP_MODEL_BETA:
             ret = "beta";
+            break;
+        case MSP_MODEL_DTWF:
+            ret = "dtwf";
             break;
         default:
             ret = "BUG: bad model in simulator!";
@@ -3725,6 +3976,35 @@ out:
 }
 
 /**************************************************************
+ * Discrete Time Wright Fisher
+ *
+ * TODO provide background and documentation.
+ **************************************************************/
+static double
+dtwf_model_time_to_generations(simulation_model_t *model, double t)
+{
+    return t;
+}
+
+static double
+dtwf_generations_to_model_time(simulation_model_t *model, double g)
+{
+    return g;
+}
+
+static double
+dtwf_generation_rate_to_model_rate(simulation_model_t *model, double rate)
+{
+    return rate;
+}
+
+static double
+dtwf_model_rate_to_generation_rate(simulation_model_t *model, double rate)
+{
+    return rate;
+}
+
+/**************************************************************
  * Public API for setting simulation models.
  **************************************************************/
 int
@@ -3735,7 +4015,8 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
             && model != MSP_MODEL_SMC_PRIME
             && model != MSP_MODEL_DIRAC
-            && model != MSP_MODEL_BETA) {
+            && model != MSP_MODEL_BETA
+            && model != MSP_MODEL_DTWF) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -3782,6 +4063,23 @@ msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi, 
 out:
     return ret;
 }
+
+int
+msp_set_simulation_model_dtwf(msp_t *self, double population_size)
+{
+    int ret = 0;
+    ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, population_size);
+    if (ret != 0) {
+        goto out;
+    }
+    self->model.model_time_to_generations = dtwf_model_time_to_generations;
+    self->model.generations_to_model_time = dtwf_generations_to_model_time;
+    self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;
+    self->model.generation_rate_to_model_rate = dtwf_generation_rate_to_model_rate;
+out:
+    return ret;
+}
+
 
 int
 msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,

@@ -502,7 +502,8 @@ class Simulator(object):
         model_map = {
             "hudson": StandardCoalescent(population_size),
             "smc": SmcApproxCoalescent(population_size),
-            "smc_prime": SmcPrimeApproxCoalescent(population_size)
+            "smc_prime": SmcPrimeApproxCoalescent(population_size),
+            "dtwf": DiscreteTimeWrightFisher(population_size)
         }
         if model is None:
             model_instance = StandardCoalescent(population_size)
@@ -949,6 +950,14 @@ class SmcApproxCoalescent(SimulationModel):
 class SmcPrimeApproxCoalescent(SimulationModel):
     # TODO document
     name = "smc_prime"
+
+
+class DiscreteTimeWrightFisher(SimulationModel):
+    """
+    A discrete backwards-time Wright Fisher model, with back-and-forth
+    recombination
+    """
+    name = 'dtwf'
 
 
 class ParametricSimulationModel(SimulationModel):
