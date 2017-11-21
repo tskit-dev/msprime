@@ -2127,6 +2127,11 @@ out:
     return ret;
 }
 
+/* Defragging segment chains is not necessary for correctness and has no effect
+ * on the output. However, it is an important performance optimisation (for
+ * some large tree sequences simplification can take ~3X as long without
+ * defgragging).
+ */
 static int WARN_UNUSED
 simplifier_defrag_segment_chain(simplifier_t *self, node_id_t input_id)
 {
@@ -2207,6 +2212,16 @@ simplifier_record_mutations(simplifier_t *self, node_id_t input_id)
     return ret;
 }
 
+/* This function accounts for about half of the CPU usage currently when
+ * operating on very large sets of edges produced by forward simulations.
+ * The inner loop where we skip over segments that are strictly within the
+ * interval seems to account for the majority of this cost. This suggests
+ * that the current linked-list approach could perhaps be improved by
+ * representing ancestors via an AVL tree (keyed by left coordinate), meaning
+ * that we could avoid the cost of iterating over these linked lists. The
+ * merge algorithm could probably be recast as iterating over several
+ * AVL trees rather than a single priority queue.
+ */
 static int
 simplifier_remove_ancestry(simplifier_t *self, double left, double right,
         node_id_t input_id)
