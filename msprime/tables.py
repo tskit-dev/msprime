@@ -37,14 +37,14 @@ except ImportError:
 class NodeTable(_msprime.NodeTable):
     """
     Class for tables describing all nodes in the tree sequence, of the form
-        id	flags	population	time
-        0	1	0		0.0
-        1	1	1		0.0
-        2	0	0		0.0
-        3	1	0		0.5
-        4	0	2		2.1
+        id     is_sample  population   time
+        0      1          0            0.0
+        1      1          1            0.0
+        2      0          0            0.0
+        3      1          0            0.5
+        4      0          2            2.1
     Node IDs are *not* recorded; rather the `id` column shows the row index, so
-    that the `k`-th row describes the node whose ID is `k`.  `flags` currently
+    that the `k`-th row describes the node whose ID is `k`.  `is_sample`
     records whether the node is a sample (=1) or not (=0).  `population` is an
     integer population ID, and `time` is the time since that individual was
     born, as a float.
@@ -59,7 +59,7 @@ class NodeTable(_msprime.NodeTable):
         time = self.time
         flags = self.flags
         population = self.population
-        ret = "id\tflags\tpopulation\ttime\n"
+        ret = "id\tis_sample\tpopulation\ttime\n"
         for j in range(self.num_rows):
             ret += "{}\t{}\t{}\t\t{:.14f}\n".format(j, flags[j], population[j], time[j])
         return ret[:-1]
