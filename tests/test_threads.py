@@ -166,3 +166,61 @@ class TestLdCalculatorReplicates(unittest.TestCase):
         results = run_threads(worker, m)
         for j in range(m):
             self.assertEqual(results[j][0], m - j - 1)
+
+
+class TestTables(unittest.TestCase):
+    """
+    Tests to ensure that attempts to access tables in threads correctly
+    raise an exception.
+    """
+    def get_tables(self):
+        ts = msprime.simulate(20, mutation_rate=10, recombination_rate=10, random_seed=8)
+        return ts.tables
+
+    def run_worker(self, worker, must_succeed=None, num_threads=16):
+
+        def worker_proxy(thread_index, results):
+            # Attempts to operate on a table while locked should raise a RuntimeError
+            try:
+                worker(thread_index, results)
+                results[thread_index] = 0
+            except RuntimeError:
+                results[thread_index] = 1
+
+        results = run_threads(worker_proxy, num_threads)
+        failures = sum(results)
+        successes = num_threads - failures
+        self.assertGreater(failures, 0)
+        self.assertGreater(successes, 0)
+        if must_succeed is not None:
+            self.assertEqual(results[must_succeed], 0)
+
+    def test_many_simplify(self):
+        tables = self.get_tables()
+
+        def worker(thread_index, results):
+            msprime.simplify_tables([0, 1], nodes=tables.nodes, edges=tables.edges)
+
+        self.run_worker(worker)
+
+    def test_many_sort(self):
+        tables = self.get_tables()
+
+        def worker(thread_index, results):
+            msprime.sort_tables(**tables.asdict())
+
+        self.run_worker(worker)
+
+    @unittest.skip("Test not reliable. Need a barrier to ensure critical section")
+    def test_simplify_access_nodes(self):
+        tables = self.get_tables()
+
+        def worker(thread_index, results):
+            if thread_index == 0:
+                msprime.simplify_tables([0, 1], nodes=tables.nodes, edges=tables.edges)
+            else:
+                for j in range(100):
+                    x = tables.nodes.time
+                    assert x.shape[0] == len(tables.nodes)
+
+        self.run_worker(worker, must_succeed=0)

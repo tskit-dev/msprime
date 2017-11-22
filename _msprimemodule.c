@@ -60,28 +60,41 @@ typedef struct {
     RandomGenerator *random_generator;
 } MutationGenerator;
 
+/* The XTable classes each have 'lock' attribute, which is used to
+ * raise an error if a Python thread attempts to access a table
+ * while another Python thread is operating on it. Because tables
+ * allocate memory dynamically, we cannot gaurantee safety otherwise.
+ * The locks are set before the GIL is released and unset afterwards.
+ * Because C code executed here represents atomic Python operations
+ * (while the GIL is held), this should be safe */
+
 typedef struct {
     PyObject_HEAD
+    bool locked;
     node_table_t *node_table;
 } NodeTable;
 
 typedef struct {
     PyObject_HEAD
+    bool locked;
     edge_table_t *edge_table;
 } EdgeTable;
 
 typedef struct {
     PyObject_HEAD
+    bool locked;
     site_table_t *site_table;
 } SiteTable;
 
 typedef struct {
     PyObject_HEAD
+    bool locked;
     mutation_table_t *mutation_table;
 } MutationTable;
 
 typedef struct {
     PyObject_HEAD
+    bool locked;
     migration_table_t *migration_table;
 } MigrationTable;
 
@@ -763,12 +776,16 @@ out:
 static int
 NodeTable_check_state(NodeTable *self)
 {
-    int ret = 0;
+    int ret = -1;
     if (self->node_table == NULL) {
         PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
-        ret = -1;
         goto out;
     }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "NodeTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -794,6 +811,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     Py_ssize_t max_name_length_increment = 0;
 
     self->node_table = NULL;
+    self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
@@ -1162,12 +1180,16 @@ static PyTypeObject NodeTableType = {
 static int
 EdgeTable_check_state(EdgeTable *self)
 {
-    int ret = 0;
+    int ret = -1;
     if (self->edge_table == NULL) {
         PyErr_SetString(PyExc_SystemError, "EdgeTable not initialised");
-        ret = -1;
         goto out;
     }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "EdgeTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -1516,12 +1538,16 @@ static PyTypeObject EdgeTableType = {
 static int
 MigrationTable_check_state(MigrationTable *self)
 {
-    int ret = 0;
+    int ret = -1;
     if (self->migration_table == NULL) {
         PyErr_SetString(PyExc_SystemError, "MigrationTable not initialised");
-        ret = -1;
         goto out;
     }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "MigrationTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -1881,12 +1907,16 @@ static PyTypeObject MigrationTableType = {
 static int
 SiteTable_check_state(SiteTable *self)
 {
-    int ret = 0;
+    int ret = -1;
     if (self->site_table == NULL) {
         PyErr_SetString(PyExc_SystemError, "SiteTable not initialised");
-        ret = -1;
         goto out;
     }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "SiteTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -2252,12 +2282,16 @@ static PyTypeObject SiteTableType = {
 static int
 MutationTable_check_state(MutationTable *self)
 {
-    int ret = 0;
+    int ret = -1;
     if (self->mutation_table == NULL) {
         PyErr_SetString(PyExc_SystemError, "MutationTable not initialised");
-        ret = -1;
         goto out;
     }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "MutationTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -7577,27 +7611,32 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
+    py_nodes->locked = true;
     nodes = py_nodes->node_table;
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
+    py_edges->locked = true;
     edges = py_edges->edge_table;
     if (py_migrations != NULL) {
         if (MigrationTable_check_state(py_migrations) != 0) {
             goto out;
         }
+        py_migrations->locked = true;
         migrations = py_migrations->migration_table;
     }
     if (py_sites != NULL) {
         if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
+        py_sites->locked = true;
         sites = py_sites->site_table;
     }
     if (py_mutations != NULL) {
         if (MutationTable_check_state(py_mutations) != 0) {
             goto out;
         }
+        py_mutations->locked = true;
         mutations = py_mutations->mutation_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
@@ -7608,13 +7647,30 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError,
                 "edge_start must be between 0 and len(edges)");
     }
+    Py_BEGIN_ALLOW_THREADS
     err = sort_tables(nodes, edges, migrations, sites, mutations, (size_t) edge_start);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
+    if (py_nodes != NULL) {
+        py_nodes->locked = false;
+    }
+    if (py_edges != NULL) {
+        py_edges->locked = false;
+    }
+    if (py_migrations != NULL) {
+        py_migrations->locked = false;
+    }
+    if (py_sites != NULL) {
+        py_sites->locked = false;
+    }
+    if (py_mutations != NULL) {
+        py_mutations->locked = false;
+    }
     return ret;
 #else
     PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
@@ -7686,6 +7742,9 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
+    /* Set the locks on the node and edge tables */
+    py_nodes->locked = true;
+    py_edges->locked = true;
     edges = py_edges->edge_table;
     if (py_migrations != NULL) {
         PyErr_SetString(PyExc_ValueError,
@@ -7696,12 +7755,14 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
+        py_sites->locked = true;
         sites = py_sites->site_table;
     }
     if (py_mutations != NULL) {
         if (MutationTable_check_state(py_mutations) != 0) {
             goto out;
         }
+        py_mutations->locked = true;
         mutations = py_mutations->mutation_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
@@ -7777,6 +7838,9 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    /* We cannot release the GIL during alloc here because we are accessing
+     * the memory for the samples array which could change. We could avoid
+     * this by taking a copy before. */
     err = simplifier_alloc(simplifier, sequence_length,
             (node_id_t *) PyArray_DATA(samples_array), num_samples,
             nodes, edges, migrations, sites, mutations, 0, flags);
@@ -7784,13 +7848,28 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    Py_BEGIN_ALLOW_THREADS
     err = simplifier_run(simplifier, node_map_data);
+    Py_END_ALLOW_THREADS
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
+    /* Release the table locks */
+    if (py_nodes != NULL) {
+        py_nodes->locked = false;
+    }
+    if (py_edges != NULL) {
+        py_edges->locked = false;
+    }
+    if (py_sites != NULL) {
+        py_sites->locked = false;
+    }
+    if (py_mutations != NULL) {
+        py_mutations->locked = false;
+    }
     if (simplifier != NULL) {
         simplifier_free(simplifier);
         PyMem_Free(simplifier);
