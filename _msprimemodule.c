@@ -7595,6 +7595,11 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
     Py_ssize_t edge_start = 0;
+    bool nodes_lock_acquired = false;
+    bool edges_lock_acquired = false;
+    bool migrations_lock_acquired = false;
+    bool sites_lock_acquired = false;
+    bool mutations_lock_acquired = false;
 
     static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations",
         "edge_start", NULL};
@@ -7612,17 +7617,20 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     py_nodes->locked = true;
+    nodes_lock_acquired = true;
     nodes = py_nodes->node_table;
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
     py_edges->locked = true;
+    edges_lock_acquired = true;
     edges = py_edges->edge_table;
     if (py_migrations != NULL) {
         if (MigrationTable_check_state(py_migrations) != 0) {
             goto out;
         }
         py_migrations->locked = true;
+        migrations_lock_acquired = true;
         migrations = py_migrations->migration_table;
     }
     if (py_sites != NULL) {
@@ -7630,6 +7638,7 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         py_sites->locked = true;
+        sites_lock_acquired = true;
         sites = py_sites->site_table;
     }
     if (py_mutations != NULL) {
@@ -7637,6 +7646,7 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         py_mutations->locked = true;
+        mutations_lock_acquired = true;
         mutations = py_mutations->mutation_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
@@ -7647,28 +7657,33 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError,
                 "edge_start must be between 0 and len(edges)");
     }
+    assert(py_nodes->locked);
+    assert(py_edges->locked);
     Py_BEGIN_ALLOW_THREADS
     err = sort_tables(nodes, edges, migrations, sites, mutations, (size_t) edge_start);
     Py_END_ALLOW_THREADS
+    assert(py_nodes->locked);
+    assert(py_edges->locked);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    if (py_nodes != NULL) {
+    /* Release the table locks IF we acquired them */
+    if (nodes_lock_acquired) {
         py_nodes->locked = false;
     }
-    if (py_edges != NULL) {
+    if (edges_lock_acquired) {
         py_edges->locked = false;
     }
-    if (py_migrations != NULL) {
+    if (migrations_lock_acquired) {
         py_migrations->locked = false;
     }
-    if (py_sites != NULL) {
+    if (sites_lock_acquired) {
         py_sites->locked = false;
     }
-    if (py_mutations != NULL) {
+    if (mutations_lock_acquired) {
         py_mutations->locked = false;
     }
     return ret;
@@ -7706,6 +7721,10 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     bool migrations_allocated = false;
     bool sites_allocated = false;
     bool mutations_allocated = false;
+    bool nodes_lock_acquired = false;
+    bool edges_lock_acquired = false;
+    bool sites_lock_acquired = false;
+    bool mutations_lock_acquired = false;
     double sequence_length = 0;
     node_id_t *node_map_data;
     static char *kwlist[] = {
@@ -7742,9 +7761,14 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
-    /* Set the locks on the node and edge tables */
+
+    /* Set the locks on the node and edge tables. We set the x_lock_acquired flags
+     * here so that we know that we should release the locks in this specific
+     * thread and not others. */
     py_nodes->locked = true;
+    nodes_lock_acquired = true;
     py_edges->locked = true;
+    edges_lock_acquired = true;
     edges = py_edges->edge_table;
     if (py_migrations != NULL) {
         PyErr_SetString(PyExc_ValueError,
@@ -7756,6 +7780,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         py_sites->locked = true;
+        sites_lock_acquired = true;
         sites = py_sites->site_table;
     }
     if (py_mutations != NULL) {
@@ -7763,6 +7788,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         py_mutations->locked = true;
+        mutations_lock_acquired = true;
         mutations = py_mutations->mutation_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
@@ -7848,26 +7874,30 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    assert(py_nodes->locked);
+    assert(py_edges->locked);
     Py_BEGIN_ALLOW_THREADS
     err = simplifier_run(simplifier, node_map_data);
     Py_END_ALLOW_THREADS
+    assert(py_nodes->locked);
+    assert(py_edges->locked);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    /* Release the table locks */
-    if (py_nodes != NULL) {
+    /* Release the table locks IF we acquired them in this thread. */
+    if (nodes_lock_acquired) {
         py_nodes->locked = false;
     }
-    if (py_edges != NULL) {
+    if (edges_lock_acquired) {
         py_edges->locked = false;
     }
-    if (py_sites != NULL) {
+    if (sites_lock_acquired) {
         py_sites->locked = false;
     }
-    if (py_mutations != NULL) {
+    if (mutations_lock_acquired) {
         py_mutations->locked = false;
     }
     if (simplifier != NULL) {
