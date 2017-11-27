@@ -1920,14 +1920,12 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     size_t j, offset, max_alloc_block, num_nodes_alloc, num_edges_alloc;
 
     memset(self, 0, sizeof(simplifier_t));
-    self->samples = samples;
     self->num_samples = num_samples;
     self->flags = flags;
     self->nodes = nodes;
     self->edges = edges;
     self->sites = sites;
     self->mutations = mutations;
-
 
     if (nodes == NULL || edges == NULL || samples == NULL
             || sites == NULL || mutations == NULL || migrations == NULL) {
@@ -1946,6 +1944,13 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         }
     }
     self->sequence_length = sequence_length;
+    /* Take a copy of the input samples */
+    self->samples = malloc(num_samples * sizeof(node_id_t));
+    if (self->samples == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(self->samples, samples, num_samples * sizeof(node_id_t));
 
     /* If we have more then 256K blocks or edges just allocate this much */
     max_alloc_block = 256 * 1024;
@@ -2094,6 +2099,7 @@ simplifier_free(simplifier_t *self)
     mutation_table_free(&self->input_mutations);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->avl_node_heap);
+    msp_safe_free(self->samples);
     msp_safe_free(self->node_name_offset);
     msp_safe_free(self->ancestor_map);
     msp_safe_free(self->node_id_map);

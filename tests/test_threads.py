@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 University of Oxford
+# Copyright (C) 2016-2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -22,13 +22,16 @@ Test cases for threading enabled aspects of the API.
 from __future__ import print_function
 from __future__ import division
 
-import unittest
+import sys
 import threading
+import unittest
 
 import numpy as np
 
 import msprime
 import tests.tsutil as tsutil
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 def run_threads(worker, num_threads):
@@ -166,3 +169,150 @@ class TestLdCalculatorReplicates(unittest.TestCase):
         results = run_threads(worker, m)
         for j in range(m):
             self.assertEqual(results[j][0], m - j - 1)
+
+
+@unittest.skipIf(IS_PY2, "Cannot test thread support on Py2.")
+class TestTables(unittest.TestCase):
+    """
+    Tests to ensure that attempts to access tables in threads correctly
+    raise an exception.
+    """
+    def get_tables(self):
+        # TODO include migrations here.
+        ts = msprime.simulate(
+            100, mutation_rate=10, recombination_rate=10, random_seed=8)
+        return ts.tables
+
+    def run_multiple_writers(self, writer, num_writers=32):
+        barrier = threading.Barrier(num_writers)
+
+        def writer_proxy(thread_index, results):
+            barrier.wait()
+            # Attempts to operate on a table while locked should raise a RuntimeError
+            try:
+                writer(thread_index, results)
+                results[thread_index] = 0
+            except RuntimeError:
+                results[thread_index] = 1
+
+        results = run_threads(writer_proxy, num_writers)
+        failures = sum(results)
+        successes = num_writers - failures
+        # Note: we would like to insist that #failures is > 0, but this is too
+        # stochastic to guarantee for test purposes.
+        self.assertGreaterEqual(failures, 0)
+        self.assertGreater(successes, 0)
+
+    def run_failing_reader(self, writer, reader, num_readers=32):
+        """
+        Runs a test in which a single writer acceses some tables
+        and a bunch of other threads try to read the data.
+        """
+        barrier = threading.Barrier(num_readers + 1)
+
+        def writer_proxy():
+            barrier.wait()
+            writer()
+
+        def reader_proxy(thread_index, results):
+            barrier.wait()
+            # Attempts to operate on a table while locked should raise a RuntimeError
+            try:
+                reader(thread_index, results)
+                results[thread_index] = 0
+            except RuntimeError:
+                results[thread_index] = 1
+
+        writer_thread = threading.Thread(target=writer_proxy)
+        writer_thread.start()
+        results = run_threads(reader_proxy, num_readers)
+        writer_thread.join()
+
+        failures = sum(results)
+        successes = num_readers - failures
+        # Note: we would like to insist that #failures is > 0, but this is too
+        # stochastic to guarantee for test purposes.
+        self.assertGreaterEqual(failures, 0)
+        self.assertGreater(successes, 0)
+
+    def test_many_simplify_nodes_edges(self):
+        tables = self.get_tables()
+
+        def writer(thread_index, results):
+            msprime.simplify_tables([0, 1], nodes=tables.nodes, edges=tables.edges)
+
+        self.run_multiple_writers(writer)
+
+    def test_many_simplify_all_tables(self):
+        tables = self.get_tables()
+
+        def writer(thread_index, results):
+            msprime.simplify_tables(
+                [0, 1], nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
+                mutations=tables.mutations)
+
+        self.run_multiple_writers(writer)
+
+    def test_many_sort(self):
+        tables = self.get_tables()
+
+        def writer(thread_index, results):
+            msprime.sort_tables(**tables.asdict())
+
+        self.run_multiple_writers(writer)
+
+    def run_simplify_access_table(self, table_name, col_name):
+        tables = self.get_tables()
+
+        def writer():
+            msprime.simplify_tables(
+                [0, 1], nodes=tables.nodes, edges=tables.edges,
+                sites=tables.sites, mutations=tables.mutations)
+
+        table = getattr(tables, table_name)
+
+        def reader(thread_index, results):
+            for j in range(100):
+                x = getattr(table, col_name)
+                assert x.shape[0] == len(table)
+
+        self.run_failing_reader(writer, reader)
+
+    def run_sort_access_table(self, table_name, col_name):
+        tables = self.get_tables()
+
+        def writer():
+            msprime.sort_tables(**tables.asdict())
+
+        table = getattr(tables, table_name)
+
+        def reader(thread_index, results):
+            for j in range(100):
+                x = getattr(table, col_name)
+                assert x.shape[0] == len(table)
+
+        self.run_failing_reader(writer, reader)
+
+    def test_simplify_access_nodes(self):
+        self.run_simplify_access_table("nodes", "time")
+
+    def test_simplify_access_edges(self):
+        self.run_simplify_access_table("edges", "left")
+
+    def test_simplify_access_sites(self):
+        self.run_simplify_access_table("sites", "position")
+
+    def test_simplify_access_mutations(self):
+        self.run_simplify_access_table("mutations", "site")
+
+    def test_sort_access_nodes(self):
+        self.run_sort_access_table("nodes", "time")
+
+    def test_sort_access_edges(self):
+        self.run_sort_access_table("edges", "left")
+
+    def test_sort_access_sites(self):
+        self.run_sort_access_table("sites", "position")
+
+    def test_sort_access_mutations(self):
+        self.run_sort_access_table("mutations", "site")
