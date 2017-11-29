@@ -477,8 +477,8 @@ make_mutation(mutation_t *mutation)
 {
     PyObject *ret = NULL;
 
-    ret = Py_BuildValue("iisii", mutation->site, mutation->node, mutation->derived_state,
-            mutation->parent, mutation->id);
+    ret = Py_BuildValue("iis#ii", mutation->site, mutation->node, mutation->derived_state,
+            mutation->derived_state_length, mutation->parent, mutation->id);
     return ret;
 }
 
@@ -511,9 +511,10 @@ static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
+    const char *name = r->name == NULL? "": r->name;
 
-    ret = Py_BuildValue("Idis",
-        (unsigned int) r->flags, r->time, (int) r->population, r->name);
+    ret = Py_BuildValue("Idis#",
+        (unsigned int) r->flags, r->time, (int) r->population, name, r->name_length);
     return ret;
 }
 
@@ -546,8 +547,8 @@ make_site(site_t *site)
     if (mutations == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("dsOn", site->position, site->ancestral_state, mutations,
-            (Py_ssize_t) site->id);
+    ret = Py_BuildValue("ds#On", site->position, site->ancestral_state,
+            site->ancestral_state_length, mutations, (Py_ssize_t) site->id);
 out:
     Py_XDECREF(mutations);
     return ret;
@@ -578,25 +579,6 @@ convert_sites(site_t *sites, size_t num_sites)
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
-static int
-verify_column_sum(size_t num_rows, uint32_t *length, size_t total_length)
-{
-    int ret = 0;
-    size_t j;
-    size_t sum = 0;
-
-    for (j = 0; j < num_rows; j++) {
-        sum += length[j];
-    }
-    if (sum != total_length) {
-        PyErr_SetString(PyExc_ValueError, "Sum mismatch in length column");
-        ret = -1;
-    }
-    return ret;
-}
-#endif
 
 /*===================================================================
  * RandomGenerator
@@ -766,6 +748,46 @@ out:
     }
     return ret;
 }
+
+static PyArrayObject *
+table_read_offset_array(PyObject *input, size_t num_rows, size_t length)
+{
+    PyArrayObject *ret = NULL;
+    PyArrayObject *array = NULL;
+    npy_intp *shape;
+    uint32_t *offsets;
+
+    array = (PyArrayObject *) PyArray_FROM_OTF(input, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
+    if (array == NULL) {
+        goto out;
+    }
+    if (PyArray_NDIM(array) != 1) {
+        PyErr_SetString(PyExc_ValueError, "Dim != 1");
+        goto out;
+    }
+    shape = PyArray_DIMS(array);
+    if (shape[0] != num_rows + 1) {
+        PyErr_SetString(PyExc_ValueError, "offset columns must have n + 1 rows.");
+        goto out;
+    }
+    offsets = PyArray_DATA(array);
+    if (offsets[0] != 0) {
+        PyErr_SetString(PyExc_ValueError, "Zeroth element of offsets array must be 0");
+        goto out;
+    }
+    if (offsets[num_rows] != length) {
+        PyErr_SetString(PyExc_ValueError,
+            "Last element of offsets array must be equal to column length");
+        goto out;
+    }
+    ret = array;
+out:
+    if (ret == NULL) {
+        Py_XDECREF(array);
+    }
+    return ret;
+}
+
 #endif
 
 /*===================================================================
@@ -856,7 +878,7 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = node_table_add_row(self->node_table, (uint32_t) flags, time,
-            (population_id_t) population, name);
+            (population_id_t) population, name, name_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -874,9 +896,9 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
 {
     PyObject *ret = NULL;
     int err;
-    size_t num_rows, total_name_length;
+    size_t num_rows, name_length;
     char *name_data = NULL;
-    uint32_t *name_length_data = NULL;
+    uint32_t *name_offset_data = NULL;
     void *population_data = NULL;
     PyObject *time_input = NULL;
     PyArrayObject *time_array = NULL;
@@ -886,13 +908,13 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
     PyArrayObject *population_array = NULL;
     PyObject *name_input = NULL;
     PyArrayObject *name_array = NULL;
-    PyObject *name_length_input = NULL;
-    PyArrayObject *name_length_array = NULL;
-    static char *kwlist[] = {"flags", "time", "population", "name", "name_length", NULL};
+    PyObject *name_offset_input = NULL;
+    PyArrayObject *name_offset_array = NULL;
+    static char *kwlist[] = {"flags", "time", "population", "name", "name_offset", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OOO", kwlist,
                 &flags_input, &time_input, &population_input, &name_input,
-                &name_length_input)) {
+                &name_offset_input)) {
         goto out;
     }
     if (NodeTable_check_state(self) != 0) {
@@ -914,34 +936,30 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         }
         population_data = PyArray_DATA(population_array);
     }
-    if ((name_input == NULL) != (name_length_input == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "name and name_length must be specified together");
+    if ((name_input == NULL) != (name_offset_input == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "name and name_offset must be specified together");
         goto out;
     }
     if (name_input != NULL) {
-        name_length_array = table_read_column_array(name_length_input, NPY_UINT32, &num_rows,
-                true);
-        if (name_length_array == NULL) {
-            goto out;
-        }
-        name_length_data = PyArray_DATA(name_length_array);
-        name_array = table_read_column_array(name_input, NPY_INT8, &total_name_length, false);
+        name_array = table_read_column_array(name_input, NPY_INT8, &name_length, false);
         if (name_array == NULL) {
             goto out;
         }
         name_data = PyArray_DATA(name_array);
-        if (verify_column_sum(num_rows, name_length_data, total_name_length) != 0) {
+        name_offset_array = table_read_offset_array(name_offset_input, num_rows, name_length);
+        if (name_offset_array == NULL) {
             goto out;
         }
+        name_offset_data = PyArray_DATA(name_offset_array);
     }
     if (method == SET_COLS) {
         err = node_table_set_columns(self->node_table, num_rows,
                 PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-                name_data, name_length_data);
+                name_data, name_offset_data);
     } else if (method == APPEND_COLS) {
         err = node_table_append_columns(self->node_table, num_rows,
                 PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-                name_data, name_length_data);
+                name_data, name_offset_data);
     } else {
         assert(0);
     }
@@ -955,7 +973,7 @@ out:
     Py_XDECREF(time_array);
     Py_XDECREF(population_array);
     Py_XDECREF(name_array);
-    Py_XDECREF(name_length_array);
+    Py_XDECREF(name_offset_array);
     return ret;
 }
 
@@ -1079,22 +1097,22 @@ NodeTable_get_name(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->total_name_length,
+    ret = table_get_column_array(self->node_table->name_length,
             self->node_table->name, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-NodeTable_get_name_length(NodeTable *self, void *closure)
+NodeTable_get_name_offset(NodeTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows,
-            self->node_table->name_length, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->node_table->num_rows + 1,
+            self->node_table->name_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1112,7 +1130,7 @@ static PyGetSetDef NodeTable_getsetters[] = {
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
     {"population", (getter) NodeTable_get_population, NULL, "The population array"},
     {"name", (getter) NodeTable_get_name, NULL, "The name array"},
-    {"name_length", (getter) NodeTable_get_name_length, NULL, "The name length array"},
+    {"name_offset", (getter) NodeTable_get_name_offset, NULL, "The name offset array"},
 #endif
     {NULL}  /* Sentinel */
 };
@@ -1938,7 +1956,7 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {"max_rows_increment",
-        "max_total_ancestral_state_length_increment", NULL};
+        "max_ancestral_state_length_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
     Py_ssize_t max_length_increment = 0;
 
@@ -2008,48 +2026,42 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t total_ancestral_state_length;
-    uint32_t *ancestral_state_length;
+    size_t ancestral_state_length;
     PyObject *position_input = NULL;
     PyArrayObject *position_array = NULL;
     PyObject *ancestral_state_input = NULL;
     PyArrayObject *ancestral_state_array = NULL;
-    PyObject *ancestral_state_length_input = NULL;
-    PyArrayObject *ancestral_state_length_array = NULL;
+    PyObject *ancestral_state_offset_input = NULL;
+    PyArrayObject *ancestral_state_offset_array = NULL;
 
-    static char *kwlist[] = {"position", "ancestral_state", "ancestral_state_length", NULL};
+    static char *kwlist[] = {"position", "ancestral_state", "ancestral_state_offset", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
-                &position_input, &ancestral_state_input, &ancestral_state_length_input)) {
+                &position_input, &ancestral_state_input, &ancestral_state_offset_input)) {
         goto out;
     }
     position_array = table_read_column_array(position_input, NPY_FLOAT64, &num_rows, false);
     if (position_array == NULL) {
         goto out;
     }
-    ancestral_state_length_array = table_read_column_array(ancestral_state_length_input,
-            NPY_UINT32, &num_rows, true);
-    if (ancestral_state_length_array == NULL) {
-        goto out;
-    }
     ancestral_state_array = table_read_column_array(ancestral_state_input, NPY_INT8,
-            &total_ancestral_state_length, false);
+            &ancestral_state_length, false);
     if (ancestral_state_array == NULL) {
         goto out;
     }
-    ancestral_state_length = PyArray_DATA(ancestral_state_length_array);
-    if (verify_column_sum(num_rows, ancestral_state_length,
-                total_ancestral_state_length) != 0) {
+    ancestral_state_offset_array = table_read_offset_array(ancestral_state_offset_input,
+            num_rows, ancestral_state_length);
+    if (ancestral_state_offset_array == NULL) {
         goto out;
     }
     if (method == SET_COLS) {
         err = site_table_set_columns(self->site_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
-            ancestral_state_length);
+            PyArray_DATA(ancestral_state_offset_array));
     } else if (method == APPEND_COLS) {
         err = site_table_append_columns(self->site_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
-            ancestral_state_length);
+            PyArray_DATA(ancestral_state_offset_array));
     } else {
         assert(0);
     }
@@ -2061,7 +2073,7 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
 out:
     Py_XDECREF(position_array);
     Py_XDECREF(ancestral_state_array);
-    Py_XDECREF(ancestral_state_length_array);
+    Py_XDECREF(ancestral_state_offset_array);
     return ret;
 }
 
@@ -2112,14 +2124,14 @@ out:
 }
 
 static PyObject *
-SiteTable_get_max_total_ancestral_state_length_increment(SiteTable *self, void *closure)
+SiteTable_get_max_ancestral_state_length_increment(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
     ret = Py_BuildValue("n",
-        (Py_ssize_t) self->site_table->max_total_ancestral_state_length_increment);
+        (Py_ssize_t) self->site_table->max_ancestral_state_length_increment);
 out:
     return ret;
 }
@@ -2173,14 +2185,14 @@ SiteTable_get_ancestral_state(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->total_ancestral_state_length,
+            self->site_table->ancestral_state_length,
             self->site_table->ancestral_state, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-SiteTable_get_ancestral_state_length(SiteTable *self, void *closure)
+SiteTable_get_ancestral_state_offset(SiteTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2188,8 +2200,8 @@ SiteTable_get_ancestral_state_length(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows,
-            self->site_table->ancestral_state_length, NPY_UINT32, sizeof(uint32_t));
+            self->site_table->num_rows + 1,
+            self->site_table->ancestral_state_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -2199,8 +2211,8 @@ static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows_increment",
         (getter) SiteTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_total_ancestral_state_length_increment",
-        (getter) SiteTable_get_max_total_ancestral_state_length_increment, NULL,
+    {"max_ancestral_state_length_increment",
+        (getter) SiteTable_get_max_ancestral_state_length_increment, NULL,
         "The string length increment"},
     {"num_rows",
         (getter) SiteTable_get_num_rows, NULL,
@@ -2213,8 +2225,8 @@ static PyGetSetDef SiteTable_getsetters[] = {
         "The position array."},
     {"ancestral_state", (getter) SiteTable_get_ancestral_state, NULL,
         "The ancestral state array."},
-    {"ancestral_state_length", (getter) SiteTable_get_ancestral_state_length, NULL,
-        "The ancestral state_length array."},
+    {"ancestral_state_offset", (getter) SiteTable_get_ancestral_state_offset, NULL,
+        "The ancestral state offset array."},
 #endif
     {NULL}  /* Sentinel */
 };
@@ -2313,22 +2325,22 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {
-        "max_rows_increment", "max_total_derived_state_length_increment", NULL};
+        "max_rows_increment", "max_derived_state_length_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_total_derived_state_length_increment = 0;
+    Py_ssize_t max_derived_state_length_increment = 0;
 
     self->mutation_table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_total_derived_state_length_increment)) {
+                &max_rows_increment, &max_derived_state_length_increment)) {
         goto out;
     }
     if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    if (max_total_derived_state_length_increment < 0) {
+    if (max_derived_state_length_increment < 0) {
         PyErr_SetString(PyExc_ValueError,
-                "max_total_derived_state_length_increment must be positive");
+                "max_derived_state_length_increment must be positive");
         goto out;
     }
     self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
@@ -2337,7 +2349,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutation_table_alloc(self->mutation_table, (size_t) max_rows_increment,
-            (size_t) max_total_derived_state_length_increment);
+            (size_t) max_derived_state_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2388,13 +2400,13 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t total_derived_state_length = 0;
+    size_t derived_state_length = 0;
     PyObject *site_input = NULL;
     PyArrayObject *site_array = NULL;
     PyObject *derived_state_input = NULL;
     PyArrayObject *derived_state_array = NULL;
-    PyObject *derived_state_length_input = NULL;
-    PyArrayObject *derived_state_length_array = NULL;
+    PyObject *derived_state_offset_input = NULL;
+    PyArrayObject *derived_state_offset_array = NULL;
     PyObject *node_input = NULL;
     PyArrayObject *node_array = NULL;
     PyObject *parent_input = NULL;
@@ -2402,11 +2414,11 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     mutation_id_t *parent_data;
 
     static char *kwlist[] = {"site", "node", "derived_state",
-        "derived_state_length", "parent", NULL};
+        "derived_state_offset", "parent", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O", kwlist,
                 &site_input, &node_input, &derived_state_input,
-                &derived_state_length_input, &parent_input)) {
+                &derived_state_offset_input, &parent_input)) {
         goto out;
     }
     site_array = table_read_column_array(site_input, NPY_INT32, &num_rows, false);
@@ -2414,13 +2426,13 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
         goto out;
     }
     derived_state_array = table_read_column_array(derived_state_input, NPY_INT8,
-            &total_derived_state_length, false);
+            &derived_state_length, false);
     if (derived_state_array == NULL) {
         goto out;
     }
-    derived_state_length_array = table_read_column_array(derived_state_length_input,
-            NPY_UINT32, &num_rows, true);
-    if (derived_state_length_array == NULL) {
+    derived_state_offset_array = table_read_offset_array(derived_state_offset_input,
+            num_rows, derived_state_length);
+    if (derived_state_offset_array == NULL) {
         goto out;
     }
     node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
@@ -2439,12 +2451,12 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
         err = mutation_table_set_columns(self->mutation_table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
-                PyArray_DATA(derived_state_length_array));
+                PyArray_DATA(derived_state_offset_array));
     } else if (method == APPEND_COLS) {
         err = mutation_table_append_columns(self->mutation_table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
-                PyArray_DATA(derived_state_length_array));
+                PyArray_DATA(derived_state_offset_array));
     } else {
         assert(0);
     }
@@ -2456,7 +2468,7 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
 out:
     Py_XDECREF(site_array);
     Py_XDECREF(derived_state_array);
-    Py_XDECREF(derived_state_length_array);
+    Py_XDECREF(derived_state_offset_array);
     Py_XDECREF(node_array);
     Py_XDECREF(parent_array);
     return ret;
@@ -2509,14 +2521,14 @@ out:
 }
 
 static PyObject *
-MutationTable_get_max_total_derived_state_length_increment(MutationTable *self, void *closure)
+MutationTable_get_max_derived_state_length_increment(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
     ret = Py_BuildValue("n",
-            (Py_ssize_t) self->mutation_table->max_total_derived_state_length_increment);
+            (Py_ssize_t) self->mutation_table->max_derived_state_length_increment);
 out:
     return ret;
 }
@@ -2600,14 +2612,14 @@ MutationTable_get_derived_state(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->total_derived_state_length, self->mutation_table->derived_state,
+            self->mutation_table->derived_state_length, self->mutation_table->derived_state,
             NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-MutationTable_get_derived_state_length(MutationTable *self, void *closure)
+MutationTable_get_derived_state_offset(MutationTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2615,7 +2627,7 @@ MutationTable_get_derived_state_length(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->derived_state_length,
+            self->mutation_table->num_rows + 1, self->mutation_table->derived_state_offset,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -2626,8 +2638,8 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_total_derived_state_length_increment",
-        (getter) MutationTable_get_max_total_derived_state_length_increment, NULL,
+    {"max_derived_state_length_increment",
+        (getter) MutationTable_get_max_derived_state_length_increment, NULL,
         "The total derived_state increment"},
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
@@ -2641,8 +2653,8 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"parent", (getter) MutationTable_get_parent, NULL, "The parent array"},
     {"derived_state", (getter) MutationTable_get_derived_state, NULL,
         "The derived_state array"},
-    {"derived_state_length", (getter) MutationTable_get_derived_state_length, NULL,
-        "The derived_state_length array"},
+    {"derived_state_offset", (getter) MutationTable_get_derived_state_offset, NULL,
+        "The derived_state_offset array"},
 #endif
     {NULL}  /* Sentinel */
 };

@@ -99,12 +99,12 @@ def _convert_hdf5_mutations(
     sites.set_columns(
         position=position,
         ancestral_state=ord("0") * np.ones(num_mutations, dtype=np.int8),
-        ancestral_state_length=np.ones(num_mutations, dtype=np.uint32))
+        ancestral_state_offset=np.arange(num_mutations + 1, dtype=np.uint32))
     mutations.set_columns(
         node=node,
         site=np.arange(num_mutations, dtype=np.int32),
         derived_state=ord("1") * np.ones(num_mutations, dtype=np.int8),
-        derived_state_length=np.ones(num_mutations, dtype=np.uint32))
+        derived_state_offset=np.arange(num_mutations + 1, dtype=np.uint32))
 
 
 def _load_legacy_hdf5_v2(root, remove_duplicate_positions):

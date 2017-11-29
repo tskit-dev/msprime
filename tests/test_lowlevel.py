@@ -2679,23 +2679,23 @@ class TestSparseTree(LowLevelTestCase):
             node = []
             site = []
             ancestral_state = []
-            ancestral_state_length = []
+            ancestral_state_offset = [0]
             derived_state = []
-            derived_state_length = []
+            derived_state_offset = [0]
             for j, (p, n) in enumerate(mutations):
                 site.append(j)
                 position.append(p)
                 ancestral_state.append("0")
-                ancestral_state_length.append(1)
+                ancestral_state_offset.append(ancestral_state_offset[-1] + 1)
                 derived_state.append("1")
-                derived_state_length.append(1)
+                derived_state_offset.append(derived_state_offset[-1] + 1)
                 node.append(n)
             site_table.set_columns(
                 position=position, ancestral_state=ancestral_state,
-                ancestral_state_length=ancestral_state_length)
+                ancestral_state_offset=ancestral_state_offset)
             mutation_table.set_columns(
                 site=site, node=node, derived_state=derived_state,
-                derived_state_length=derived_state_length)
+                derived_state_offset=derived_state_offset)
             ts2 = _msprime.TreeSequence()
             ts2.load_tables(
                 nodes=node_table, edges=edge_table, migrations=migration_table,
@@ -2821,16 +2821,15 @@ class TestTablesInterface(LowLevelTestCase):
         site = mutations.site
         node = mutations.node
         derived_state = mutations.derived_state
-        derived_state_length = mutations.derived_state_length
-        offset = 0
+        derived_state_offset = mutations.derived_state_offset
         for j in range(ts.get_num_mutations()):
             t = ts.get_mutation(j)
             self.assertEqual(t[0], site[j])
             self.assertEqual(t[1], node[j])
-            self.assertEqual(len(t[2]), derived_state_length[j])
+            length = derived_state_offset[j + 1] - derived_state_offset[j]
+            self.assertEqual(len(t[2]), length)
             for c in t[2]:
-                self.assertEqual(ord(c), derived_state[offset])
-                offset += 1
+                self.assertEqual(ord(c), derived_state[derived_state_offset[j]])
 
     def test_dump_tables(self):
         ts = self.get_example_migration_tree_sequence()
@@ -3045,7 +3044,7 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(table.flags, [0])
         self.assertEqual(table.time, [0])
         self.assertEqual(list(table.name), [])
-        self.assertEqual(list(table.name_length), [0])
+        self.assertEqual(list(table.name_offset), [0, 0])
 
         name = "abcde"
         table = _msprime.NodeTable()
@@ -3055,7 +3054,7 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(table.flags, [5])
         self.assertEqual(table.time, [1.23])
         self.assertEqual(list(table.name), [ord(c) for c in name])
-        self.assertEqual(list(table.name_length), [len(name)])
+        self.assertEqual(list(table.name_offset), [0, len(name)])
 
     def test_node_table_add_row_errors(self):
         table = _msprime.NodeTable()
@@ -3102,17 +3101,14 @@ class TestTablesInterface(LowLevelTestCase):
         mutations = _msprime.MutationTable()
         sites = _msprime.SiteTable()
         ts = self.get_example_migration_tree_sequence()
-        ts.dump_tables(
-            nodes=nodes, edges=edges, sites=sites,
-            mutations=mutations)
+        ts.dump_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
         self.assertGreater(sites.num_rows, 0)
         self.assertGreater(mutations.num_rows, 0)
 
         new_nodes = _msprime.NodeTable()
         for j in range(ts.get_num_nodes()):
             flags, time, population, name = ts.get_node(j)
-            new_nodes.add_row(
-                flags=flags, time=time, population=population, name=name)
+            new_nodes.add_row(flags=flags, time=time, population=population, name=name)
         self.assertEqual(list(nodes.time), list(new_nodes.time))
         self.assertEqual(list(nodes.flags), list(new_nodes.flags))
         self.assertEqual(list(nodes.population), list(new_nodes.population))

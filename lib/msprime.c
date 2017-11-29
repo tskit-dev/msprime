@@ -273,6 +273,9 @@ msp_strerror(int err)
         case MSP_ERR_MUTATION_PARENT_AFTER_CHILD:
             ret = "Parent mutation ID must be < current ID.";
             break;
+        case MSP_ERR_BAD_OFFSET:
+            ret = "Bad offset provided in input array.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
@@ -1508,6 +1511,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     node->population = population_id;
     node->time = time;
     node->name = NULL;
+    node->name_length = 0;
     self->num_nodes++;
     /* Check for overflow */
     assert(self->num_nodes < INT32_MAX);
@@ -2732,7 +2736,8 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
         scaled_time = self->model.model_time_to_generations(&self->model, node->time);
-        ret = node_table_add_row(nodes, node->flags, scaled_time, node->population, "");
+        ret = node_table_add_row(nodes, node->flags, scaled_time, node->population,
+                NULL, 0);
         if (ret != 0) {
             goto out;
         }

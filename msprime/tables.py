@@ -72,7 +72,7 @@ class NodeTable(_msprime.NodeTable):
                 np.array_equal(self.population, other.population) and
                 np.array_equal(self.time, other.time) and
                 np.array_equal(self.name, other.name) and
-                np.array_equal(self.name_length, other.name_length))
+                np.array_equal(self.name_offset, other.name_offset))
         return ret
 
     def __ne__(self, other):
@@ -86,7 +86,7 @@ class NodeTable(_msprime.NodeTable):
         self.__init__()
         self.set_columns(
             time=state["time"], flags=state["flags"], population=state["population"],
-            name=state["name"], name_length=state["name_length"])
+            name=state["name"], name_offset=state["name_offset"])
 
     def copy(self):
         """
@@ -95,7 +95,7 @@ class NodeTable(_msprime.NodeTable):
         copy = NodeTable()
         copy.set_columns(
             flags=self.flags, time=self.time, population=self.population,
-            name=self.name, name_length=self.name_length)
+            name=self.name, name_offset=self.name_offset)
         return copy
 
 
@@ -106,7 +106,7 @@ def _pickle_node_table(table):
         "flags": table.flags,
         "population": table.population,
         "name": table.name,
-        "name_length": table.name_length,
+        "name_offset": table.name_offset,
     }
     return NodeTable, tuple(), state
 
@@ -282,7 +282,7 @@ class SiteTable(_msprime.SiteTable):
     def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
-            self.ancestral_state, self.ancestral_state_length)
+            self.ancestral_state, self.ancestral_state_offset)
         ret = "id\tposition\tancestral_state\n"
         for j in range(self.num_rows):
             ret += "{}\t{:.8f}\t{}\n".format(j, position[j], ancestral_state[j])
@@ -295,7 +295,7 @@ class SiteTable(_msprime.SiteTable):
                 np.array_equal(self.position, other.position) and
                 np.array_equal(self.ancestral_state, other.ancestral_state) and
                 np.array_equal(
-                    self.ancestral_state_length, other.ancestral_state_length))
+                    self.ancestral_state_offset, other.ancestral_state_offset))
         return ret
 
     def __ne__(self, other):
@@ -309,7 +309,7 @@ class SiteTable(_msprime.SiteTable):
         self.__init__()
         self.set_columns(
             position=state["position"], ancestral_state=state["ancestral_state"],
-            ancestral_state_length=state["ancestral_state_length"])
+            ancestral_state_offset=state["ancestral_state_offset"])
 
     def copy(self):
         """
@@ -318,7 +318,7 @@ class SiteTable(_msprime.SiteTable):
         copy = SiteTable()
         copy.set_columns(
             position=self.position, ancestral_state=self.ancestral_state,
-            ancestral_state_length=self.ancestral_state_length)
+            ancestral_state_offset=self.ancestral_state_offset)
         return copy
 
 
@@ -327,7 +327,7 @@ def _site_table_pickle(table):
     state = {
         "position": table.position,
         "ancestral_state": table.ancestral_state,
-        "ancestral_state_length": table.ancestral_state_length,
+        "ancestral_state_offset": table.ancestral_state_offset,
     }
     return SiteTable, tuple(), state
 
@@ -353,7 +353,7 @@ class MutationTable(_msprime.MutationTable):
         node = self.node
         parent = self.parent
         derived_state = unpack_strings(
-            self.derived_state, self.derived_state_length)
+            self.derived_state, self.derived_state_offset)
         ret = "id\tsite\tnode\tderived_state\tparent\n"
         for j in range(self.num_rows):
             ret += "{}\t{}\t{}\t{}\t{}\n".format(
@@ -369,7 +369,7 @@ class MutationTable(_msprime.MutationTable):
                 np.array_equal(self.parent, other.parent) and
                 np.array_equal(self.derived_state, other.derived_state) and
                 np.array_equal(
-                    self.derived_state_length, other.derived_state_length))
+                    self.derived_state_offset, other.derived_state_offset))
         return ret
 
     def __ne__(self, other):
@@ -384,7 +384,7 @@ class MutationTable(_msprime.MutationTable):
         self.set_columns(
             site=state["site"], node=state["node"], parent=state["parent"],
             derived_state=state["derived_state"],
-            derived_state_length=state["derived_state_length"])
+            derived_state_offset=state["derived_state_offset"])
 
     def copy(self):
         """
@@ -394,7 +394,7 @@ class MutationTable(_msprime.MutationTable):
         copy.set_columns(
             site=self.site, node=self.node, parent=self.parent,
             derived_state=self.derived_state,
-            derived_state_length=self.derived_state_length)
+            derived_state_offset=self.derived_state_offset)
         return copy
 
 
@@ -405,7 +405,7 @@ def _mutation_table_pickle(table):
         "node": table.node,
         "parent": table.parent,
         "derived_state": table.derived_state,
-        "derived_state_length": table.derived_state_length,
+        "derived_state_offset": table.derived_state_offset,
     }
     return MutationTable, tuple(), state
 
@@ -539,21 +539,20 @@ def pack_strings(strings):
     Packs the specified list of strings into a flattened numpy array of characters
     and corresponding lengths.
     """
-    lengths = np.array([len(s) for s in strings], dtype=np.uint32)
+    lengths = np.array([0] + [len(s) for s in strings], dtype=np.uint32)
+    offsets = np.cumsum(lengths, dtype=np.uint32)
     encoded = ("".join(strings)).encode()
-    return np.fromstring(encoded, dtype=np.int8), lengths
+    return np.fromstring(encoded, dtype=np.int8), offsets
 
 
-def unpack_strings(packed, length):
+def unpack_strings(packed, offset):
     """
     Unpacks a list of string from the specified numpy arrays of packed character
-    data and corresponding lengths.
+    data and corresponding offsets.
     """
     # This could be done a lot more efficiently...
     ret = []
-    offset = 0
-    for l in length:
-        raw = packed[offset: offset + l].tostring()
+    for j in range(offset.shape[0] - 1):
+        raw = packed[offset[j]: offset[j + 1]].tostring()
         ret.append(raw.decode())
-        offset += l
     return ret

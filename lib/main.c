@@ -607,8 +607,8 @@ print_variants(tree_sequence_t *ts)
     j = 0;
     while ((ret = vargen_next(&vg, &site, genotypes)) == 1) {
         assert(site->mutations_length == 1);
-        printf("%d\t%f\t%s\t%s\t", j, site->position, site->ancestral_state,
-                site->mutations[0].derived_state);
+        printf("%d\t%f\t%c\t%c\t", j, site->position, site->ancestral_state[0],
+                site->mutations[0].derived_state[0]);
         for (k = 0; k < tree_sequence_get_num_samples(ts); k++) {
             printf("%d", genotypes[k]);
         }

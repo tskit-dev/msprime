@@ -37,7 +37,7 @@
 #define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 9
+#define MSP_FILE_FORMAT_VERSION_MAJOR 10
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 /* Flags for simplify() */
@@ -78,46 +78,47 @@ typedef int32_t node_id_t;
 typedef int32_t population_id_t;
 typedef int32_t site_id_t;
 typedef int32_t mutation_id_t;
+/* TODO change list_len_t to table_size_t */
 typedef uint32_t list_len_t;
 
 typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
-    size_t total_ancestral_state_length;
-    size_t max_total_ancestral_state_length;
-    size_t max_total_ancestral_state_length_increment;
+    list_len_t num_rows;
+    list_len_t max_rows;
+    list_len_t max_rows_increment;
+    list_len_t ancestral_state_length;
+    list_len_t max_ancestral_state_length;
+    list_len_t max_ancestral_state_length_increment;
     char *ancestral_state;
-    list_len_t *ancestral_state_length;
+    list_len_t *ancestral_state_offset;
     double *position;
 } site_table_t;
 
 typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
-    size_t total_derived_state_length;
-    size_t max_total_derived_state_length;
-    size_t max_total_derived_state_length_increment;
+    list_len_t num_rows;
+    list_len_t max_rows;
+    list_len_t max_rows_increment;
+    list_len_t derived_state_length;
+    list_len_t max_derived_state_length;
+    list_len_t max_derived_state_length_increment;
     node_id_t *node;
     site_id_t *site;
     mutation_id_t *parent;
     char *derived_state;
-    list_len_t *derived_state_length;
+    list_len_t *derived_state_offset;
 } mutation_table_t;
 
 typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
-    size_t total_name_length;
-    size_t max_total_name_length;
-    size_t max_total_name_length_increment;
+    list_len_t num_rows;
+    list_len_t max_rows;
+    list_len_t max_rows_increment;
+    list_len_t name_length;
+    list_len_t max_name_length;
+    list_len_t max_name_length_increment;
     uint32_t *flags;
     double *time;
     population_id_t *population;
     char *name;
-    list_len_t *name_length;
+    list_len_t *name_offset;
 } node_table_t;
 
 typedef struct {
@@ -157,7 +158,8 @@ typedef struct {
     uint32_t flags;
     double time;
     population_id_t population;
-    char *name;
+    const char *name;
+    list_len_t name_length;
 } node_t;
 
 typedef struct {
@@ -410,14 +412,13 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_name_length;
-        size_t max_total_name_length;
+        size_t name_length;
+        size_t max_name_length;
         uint32_t *flags;
         population_id_t *population;
         double *time;
-        list_len_t *name_length;
-        char **name;
-        char *name_mem;
+        char *name;
+        list_len_t *name_offset;
         node_id_t *sample_index_map;
     } nodes;
 
@@ -437,11 +438,10 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_ancestral_state_length;
-        size_t max_total_ancestral_state_length;
-        char **ancestral_state;
-        char *ancestral_state_mem;
-        list_len_t *ancestral_state_length;
+        size_t ancestral_state_length;
+        size_t max_ancestral_state_length;
+        char *ancestral_state;
+        list_len_t *ancestral_state_offset;
         double *position;
         site_t *tree_sites_mem;
         site_t **tree_sites;
@@ -454,14 +454,13 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t total_derived_state_length;
-        size_t max_total_derived_state_length;
+        size_t derived_state_length;
+        size_t max_derived_state_length;
         node_id_t *node;
         site_id_t *site;
         mutation_id_t *parent;
-        char **derived_state;
-        char *derived_state_mem;
-        list_len_t *derived_state_length;
+        char *derived_state;
+        list_len_t *derived_state_offset;
     } mutations;
 
     struct {
@@ -918,9 +917,9 @@ int sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *mig
         site_table_t *sites, mutation_table_t *mutations, size_t edge_start);
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_total_name_length_increment);
+        size_t max_name_length_increment);
 int node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *name);
+        population_id_t population, const char *name, size_t name_length);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         population_id_t *population, char *name, list_len_t *name_length);
 int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,

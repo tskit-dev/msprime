@@ -167,7 +167,7 @@ def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
     mutations.set_columns(
         site=mutations.site,
         derived_state=mutations.derived_state,
-        derived_state_length=mutations.derived_state_length,
+        derived_state_offset=mutations.derived_state_offset,
         node=mutations.node, parent=mp)
 
 

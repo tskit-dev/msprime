@@ -34,6 +34,26 @@
 #define TABLE_SEP "-----------------------------------------\n"
 
 
+/* Checks that the specified list of offsets is well-formed. */
+static int
+check_offsets(size_t num_rows, list_len_t *offsets)
+{
+    int ret = MSP_ERR_BAD_OFFSET;
+    size_t j;
+
+    if (offsets[0] != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        if (offsets[j] > offsets[j + 1]) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 static int
 expand_column(void **column, size_t new_max_rows, size_t element_size)
 {
@@ -55,11 +75,11 @@ out:
  *************************/
 
 static int
-node_table_expand_main_columns(node_table_t *self, size_t additional_rows)
+node_table_expand_main_columns(node_table_t *self, list_len_t additional_rows)
 {
     int ret = 0;
-    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    list_len_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    list_len_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
@@ -70,12 +90,12 @@ node_table_expand_main_columns(node_table_t *self, size_t additional_rows)
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->population, new_size,
-                sizeof(population_id_t));
+        ret = expand_column((void **) &self->population, new_size, sizeof(population_id_t));
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->name_length, new_size, sizeof(uint32_t));
+        ret = expand_column((void **) &self->name_offset, new_size + 1,
+                sizeof(list_len_t));
         if (ret != 0) {
             goto out;
         }
@@ -86,19 +106,19 @@ out:
 }
 
 static int
-node_table_expand_name(node_table_t *self, size_t additional_length)
+node_table_expand_name(node_table_t *self, list_len_t additional_length)
 {
     int ret = 0;
-    size_t increment = GSL_MAX(additional_length,
-            self->max_total_name_length_increment);
-    size_t new_size = self->max_total_name_length + increment;
+    list_len_t increment = GSL_MAX(additional_length,
+            self->max_name_length_increment);
+    list_len_t new_size = self->max_name_length + increment;
 
-    if ((self->total_name_length + additional_length) > self->max_total_name_length) {
+    if ((self->name_length + additional_length) > self->max_name_length) {
         ret = expand_column((void **) &self->name, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
         }
-        self->max_total_name_length = new_size;
+        self->max_name_length = new_size;
     }
 out:
     return ret;
@@ -106,7 +126,7 @@ out:
 
 int
 node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_total_name_length_increment)
+        size_t max_name_length_increment)
 {
     int ret = 0;
 
@@ -114,15 +134,15 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
     if (max_rows_increment == 0) {
        max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    if (max_total_name_length_increment == 0) {
-        max_total_name_length_increment = DEFAULT_SIZE_INCREMENT;
+    if (max_name_length_increment == 0) {
+        max_name_length_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
-    self->max_total_name_length_increment = max_total_name_length_increment;
+    self->max_rows_increment = (list_len_t) max_rows_increment;
+    self->max_name_length_increment = (list_len_t) max_name_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_total_name_length = 0;
-    self->total_name_length = 0;
+    self->max_name_length = 0;
+    self->name_length = 0;
     ret = node_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -131,6 +151,7 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
     if (ret != 0) {
         goto out;
     }
+    self->name_offset[0] = 0;
 out:
     return ret;
 }
@@ -153,42 +174,45 @@ out:
 
 int
 node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *name, uint32_t *name_length)
+        population_id_t *population, char *name, uint32_t *name_offset)
 {
     int ret;
-    size_t j, total_name_length;
+    list_len_t j, name_length;
 
     if (flags == NULL || time == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if ((name == NULL) != (name_length == NULL)) {
+    if ((name == NULL) != (name_offset == NULL)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    ret = node_table_expand_main_columns(self, num_rows);
+    ret = node_table_expand_main_columns(self, (list_len_t) num_rows);
     if (ret != 0) {
         goto out;
     }
     memcpy(self->flags + self->num_rows, flags, num_rows * sizeof(uint32_t));
     memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
     if (name == NULL) {
-        self->total_name_length = 0;
-        memset(self->name_length + self->num_rows, 0, num_rows * sizeof(uint32_t));
-    } else {
-        memcpy(self->name_length + self->num_rows, name_length,
-                num_rows * sizeof(uint32_t));
-        total_name_length = 0;
         for (j = 0; j < num_rows; j++) {
-            total_name_length += name_length[j];
+            self->name_offset[self->num_rows + j + 1] = (list_len_t) self->name_length;
         }
-        ret = node_table_expand_name(self, total_name_length);
+    } else {
+        ret = check_offsets(num_rows, name_offset);
         if (ret != 0) {
             goto out;
         }
-        memcpy(self->name + self->total_name_length, name,
-                total_name_length * sizeof(char));
-        self->total_name_length += total_name_length;
+        for (j = 0; j < num_rows; j++) {
+            self->name_offset[self->num_rows + j] =
+                (list_len_t) self->name_length + name_offset[j];
+        }
+        name_length = name_offset[num_rows];
+        ret = node_table_expand_name(self, name_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->name + self->name_length, name, name_length * sizeof(char));
+        self->name_length += name_length;
     }
     if (population == NULL) {
         /* Set population to NULL_POPULATION (-1) if not specified */
@@ -198,49 +222,44 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
         memcpy(self->population + self->num_rows, population,
                 num_rows * sizeof(population_id_t));
     }
-    self->num_rows += num_rows;
+    self->num_rows += (list_len_t) num_rows;
+    self->name_offset[self->num_rows] = self->name_length;
 out:
     return ret;
 }
 
 static int
 node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, size_t name_length, const char *name)
+        population_id_t population, const char *name, list_len_t name_length)
 {
     assert(self->num_rows < self->max_rows);
-    assert(self->total_name_length + name_length < self->max_total_name_length);
-    memcpy(self->name + self->total_name_length, name, name_length);
-    self->total_name_length += name_length;
+    assert(self->name_length + name_length < self->max_name_length);
+    memcpy(self->name + self->name_length, name, name_length);
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
-    self->name_length[self->num_rows] = (uint32_t) name_length;
+    self->name_offset[self->num_rows + 1] = self->name_length + name_length;
+    self->name_length += name_length;
     self->num_rows++;
     return 0;
 }
 
-/* TODO this is a bad API: we should include size_t name_length here. */
 int
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *name)
+        population_id_t population, const char *name, size_t name_length)
 {
     int ret = 0;
-    size_t name_length;
 
-    if (name == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
     ret = node_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    name_length = strlen(name);
-    ret = node_table_expand_name(self, name_length);
+    ret = node_table_expand_name(self, (list_len_t) name_length);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_add_row_internal(self, flags, time, population, name_length, name);
+    ret = node_table_add_row_internal(self, flags, time, population, name,
+            (list_len_t) name_length);
 out:
     return ret;
 }
@@ -249,7 +268,7 @@ int
 node_table_reset(node_table_t *self)
 {
     self->num_rows = 0;
-    self->total_name_length = 0;
+    self->name_length = 0;
     return 0;
 }
 
@@ -260,36 +279,35 @@ node_table_free(node_table_t *self)
     msp_safe_free(self->time);
     msp_safe_free(self->population);
     msp_safe_free(self->name);
-    msp_safe_free(self->name_length);
+    msp_safe_free(self->name_offset);
     return 0;
 }
 
 void
 node_table_print_state(node_table_t *self, FILE *out)
 {
-    size_t j, k, offset;
+    size_t j, k;
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "node_table: %p:\n", (void *) self);
     fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "total_name_length = %d\tmax= %d\tincrement = %d)\n",
-            (int) self->total_name_length,
-            (int) self->max_total_name_length,
-            (int) self->max_total_name_length_increment);
+    fprintf(out, "name_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->name_length,
+            (int) self->max_name_length,
+            (int) self->max_name_length_increment);
     fprintf(out, TABLE_SEP);
     fprintf(out, "index\tflags\ttime\tpopulation\tname_length\tname\n");
-    offset = 0;
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
-                (int) self->population[j], self->name_length[j]);
-        for (k = 0; k < self->name_length[j]; k++) {
-            assert(offset < self->total_name_length);
-            fprintf(out, "%c", self->name[offset]);
-            offset++;
+                (int) self->population[j], self->name_offset[j]);
+        for (k = self->name_offset[j]; k < self->name_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->name[k]);
         }
         fprintf(out, "\n");
     }
+    assert(self->name_offset[0] == 0);
+    assert(self->name_offset[self->num_rows] == self->name_length);
 }
 
 bool
@@ -297,17 +315,17 @@ node_table_equal(node_table_t *self, node_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
-            && self->total_name_length == other->total_name_length) {
+            && self->name_length == other->name_length) {
         ret = memcmp(self->time, other->time,
                 self->num_rows * sizeof(double)) == 0
             && memcmp(self->flags, other->flags,
                     self->num_rows * sizeof(uint32_t)) == 0
             && memcmp(self->population, other->population,
                     self->num_rows * sizeof(population_id_t)) == 0
-            && memcmp(self->name_length, other->name_length,
-                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->name_offset, other->name_offset,
+                    (self->num_rows + 1) * sizeof(list_len_t)) == 0
             && memcmp(self->name, other->name,
-                    self->total_name_length * sizeof(char)) == 0;
+                    self->name_length * sizeof(char)) == 0;
     }
     return ret;
 }
@@ -484,15 +502,15 @@ static int
 site_table_expand_main_columns(site_table_t *self, size_t additional_rows)
 {
     int ret = 0;
-    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    list_len_t increment = (list_len_t) GSL_MAX(additional_rows, self->max_rows_increment);
+    list_len_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->position, new_size, sizeof(double));
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->ancestral_state_length, new_size,
+        ret = expand_column((void **) &self->ancestral_state_offset, new_size + 1,
                 sizeof(uint32_t));
         if (ret != 0) {
             goto out;
@@ -507,17 +525,17 @@ static int
 site_table_expand_ancestral_state(site_table_t *self, size_t additional_length)
 {
     int ret = 0;
-    size_t increment = GSL_MAX(additional_length,
-            self->max_total_ancestral_state_length_increment);
-    size_t new_size = self->max_total_ancestral_state_length + increment;
+    list_len_t increment = (list_len_t) GSL_MAX(additional_length,
+            self->max_ancestral_state_length_increment);
+    list_len_t new_size = self->max_ancestral_state_length + increment;
 
-    if ((self->total_ancestral_state_length + additional_length)
-            > self->max_total_ancestral_state_length) {
+    if ((self->ancestral_state_length + additional_length)
+            > self->max_ancestral_state_length) {
         ret = expand_column((void **) &self->ancestral_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
-        self->max_total_ancestral_state_length = new_size;
+        self->max_ancestral_state_length = new_size;
     }
 out:
     return ret;
@@ -525,7 +543,7 @@ out:
 
 int
 site_table_alloc(site_table_t *self, size_t max_rows_increment,
-        size_t max_total_ancestral_state_length_increment)
+        size_t max_ancestral_state_length_increment)
 {
     int ret = 0;
 
@@ -533,16 +551,16 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    if (max_total_ancestral_state_length_increment == 0) {
-        max_total_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    if (max_ancestral_state_length_increment == 0) {
+        max_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = (list_len_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_total_ancestral_state_length_increment =
-        max_total_ancestral_state_length_increment;
-    self->max_total_ancestral_state_length = 0;
-    self->total_ancestral_state_length = 0;
+    self->max_ancestral_state_length_increment =
+        (list_len_t) max_ancestral_state_length_increment;
+    self->max_ancestral_state_length = 0;
+    self->ancestral_state_length = 0;
     ret = site_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -551,6 +569,7 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
     if (ret != 0) {
         goto out;
     }
+    self->ancestral_state_offset[0] = 0;
 out:
     return ret;
 }
@@ -560,7 +579,9 @@ site_table_add_row(site_table_t *self, double position, const char *ancestral_st
         list_len_t ancestral_state_length)
 {
     int ret = 0;
+    list_len_t offset = (list_len_t) self->ancestral_state_length;
 
+    assert(self->ancestral_state_offset[self->num_rows] == offset);
     ret = site_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -569,47 +590,50 @@ site_table_add_row(site_table_t *self, double position, const char *ancestral_st
     if (ret != 0) {
         goto out;
     }
+    self->ancestral_state_length += ancestral_state_length;
     self->position[self->num_rows] = position;
-    self->ancestral_state_length[self->num_rows] = (uint32_t) ancestral_state_length;
-    memcpy(self->ancestral_state + self->total_ancestral_state_length,
-            ancestral_state, ancestral_state_length);
-    self->total_ancestral_state_length += ancestral_state_length;
+    memcpy(self->ancestral_state + offset, ancestral_state, ancestral_state_length);
     self->num_rows++;
+    self->ancestral_state_offset[self->num_rows] = self->ancestral_state_length;
 out:
     return ret;
 }
 
 int
 site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
-        const char *ancestral_state, list_len_t *ancestral_state_length)
+        const char *ancestral_state, list_len_t *ancestral_state_offset)
 {
     int ret = 0;
-    size_t total_ancestral_state_length = 0;
-    size_t j;
+    list_len_t j, ancestral_state_length;
 
-    if (position == NULL || ancestral_state == NULL || ancestral_state_length == NULL) {
+    if (position == NULL || ancestral_state == NULL || ancestral_state_offset == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
 
-    for (j = 0; j < num_rows; j++) {
-        total_ancestral_state_length += ancestral_state_length[j];
-    }
+    ancestral_state_length = ancestral_state_offset[num_rows];
     ret = site_table_expand_main_columns(self, num_rows);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_expand_ancestral_state(self, total_ancestral_state_length);
+    ret = site_table_expand_ancestral_state(self, ancestral_state_length);
     if (ret != 0) {
         goto out;
     }
     memcpy(self->position + self->num_rows, position, num_rows * sizeof(double));
-    memcpy(self->ancestral_state + self->total_ancestral_state_length, ancestral_state,
-            total_ancestral_state_length * sizeof(char));
-    memcpy(self->ancestral_state_length + self->num_rows, ancestral_state_length,
-            num_rows * sizeof(uint32_t));
-    self->num_rows += num_rows;
-    self->total_ancestral_state_length += total_ancestral_state_length;
+    memcpy(self->ancestral_state + self->ancestral_state_length, ancestral_state,
+            ancestral_state_length * sizeof(char));
+    ret = check_offsets(num_rows, ancestral_state_offset);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        self->ancestral_state_offset[self->num_rows + j] =
+            (list_len_t) self->ancestral_state_length + ancestral_state_offset[j];
+    }
+    self->num_rows += (list_len_t) num_rows;
+    self->ancestral_state_length += ancestral_state_length;
+    self->ancestral_state_offset[self->num_rows] = self->ancestral_state_length;
 out:
     return ret;
 }
@@ -635,13 +659,13 @@ site_table_equal(site_table_t *self, site_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
-            && self->total_ancestral_state_length == other->total_ancestral_state_length) {
+            && self->ancestral_state_length == other->ancestral_state_length) {
         ret = memcmp(self->position, other->position,
                 self->num_rows * sizeof(double)) == 0
-            && memcmp(self->ancestral_state_length, other->ancestral_state_length,
-                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->ancestral_state_offset, other->ancestral_state_offset,
+                    (self->num_rows + 1) * sizeof(list_len_t)) == 0
             && memcmp(self->ancestral_state, other->ancestral_state,
-                    self->total_ancestral_state_length * sizeof(char)) == 0;
+                    self->ancestral_state_length * sizeof(char)) == 0;
     }
     return ret;
 }
@@ -650,7 +674,8 @@ int
 site_table_reset(site_table_t *self)
 {
     self->num_rows = 0;
-    self->total_ancestral_state_length = 0;
+    self->ancestral_state_length = 0;
+    self->ancestral_state_offset[0] = 0;
     return 0;
 }
 
@@ -659,35 +684,38 @@ site_table_free(site_table_t *self)
 {
     msp_safe_free(self->position);
     msp_safe_free(self->ancestral_state);
-    msp_safe_free(self->ancestral_state_length);
+    msp_safe_free(self->ancestral_state_offset);
     return 0;
 }
 
 void
 site_table_print_state(site_table_t *self, FILE *out)
 {
-    size_t j, k, ancestral_state_offset;
+    list_len_t j, k, offset, length;
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "site_table: %p:\n", (void *) self);
     fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "total_ancestral_state_length = %d\tmax= %d\tincrement = %d)\n",
-            (int) self->total_ancestral_state_length,
-            (int) self->max_total_ancestral_state_length,
-            (int) self->max_total_ancestral_state_length_increment);
+    fprintf(out, "ancestral_state_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->ancestral_state_length,
+            (int) self->max_ancestral_state_length,
+            (int) self->max_ancestral_state_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tposition\tancestral_state_length\tancestral_state\n");
-    ancestral_state_offset = 0;
+    fprintf(out, "index\tposition\tancestral_state_offset\tancestral_state\n");
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "%d\t%f\t%d\t", (int) j, self->position[j],
-                self->ancestral_state_length[j]);
-        for (k = 0; k < self->ancestral_state_length[j]; k++) {
-            fprintf(out, "%c", self->ancestral_state[ancestral_state_offset]);
-            ancestral_state_offset++;
+        offset = self->ancestral_state_offset[j];
+        length = self->ancestral_state_offset[j + 1] - offset;
+        fprintf(out, "%d\t%f\t%d\t", (int) j, self->position[j], offset);
+        for (k = 0; k < length; k++) {
+            fprintf(out, "%c", self->ancestral_state[offset + k]);
         }
         fprintf(out, "\n");
     }
+
+    assert(self->ancestral_state_offset[0] == 0);
+    assert(self->ancestral_state_length
+            == self->ancestral_state_offset[self->num_rows]);
 }
 
 /*************************
@@ -698,8 +726,8 @@ static int
 mutation_table_expand_main_columns(mutation_table_t *self, size_t additional_rows)
 {
     int ret = 0;
-    size_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    list_len_t increment = (list_len_t) GSL_MAX(additional_rows, self->max_rows_increment);
+    list_len_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->site, new_size, sizeof(site_id_t));
@@ -714,8 +742,8 @@ mutation_table_expand_main_columns(mutation_table_t *self, size_t additional_row
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->derived_state_length, new_size,
-                sizeof(uint32_t));
+        ret = expand_column((void **) &self->derived_state_offset, new_size + 1,
+                sizeof(list_len_t));
         if (ret != 0) {
             goto out;
         }
@@ -729,17 +757,17 @@ static int
 mutation_table_expand_derived_state(mutation_table_t *self, size_t additional_length)
 {
     int ret = 0;
-    size_t increment = GSL_MAX(additional_length,
-            self->max_total_derived_state_length_increment);
-    size_t new_size = self->max_total_derived_state_length + increment;
+    list_len_t increment = (list_len_t) GSL_MAX(additional_length,
+            self->max_derived_state_length_increment);
+    list_len_t new_size = self->max_derived_state_length + increment;
 
-    if ((self->total_derived_state_length + additional_length)
-            > self->max_total_derived_state_length) {
+    if ((self->derived_state_length + additional_length)
+            > self->max_derived_state_length) {
         ret = expand_column((void **) &self->derived_state, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
-        self->max_total_derived_state_length = new_size;
+        self->max_derived_state_length = (list_len_t) new_size;
     }
 out:
     return ret;
@@ -747,7 +775,7 @@ out:
 
 int
 mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_total_derived_state_length_increment)
+        size_t max_derived_state_length_increment)
 {
     int ret = 0;
 
@@ -755,16 +783,16 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    if (max_total_derived_state_length_increment == 0) {
-        max_total_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    if (max_derived_state_length_increment == 0) {
+        max_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = (list_len_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_total_derived_state_length_increment =
-        max_total_derived_state_length_increment;
-    self->max_total_derived_state_length = 0;
-    self->total_derived_state_length = 0;
+    self->max_derived_state_length_increment =
+        (list_len_t) max_derived_state_length_increment;
+    self->max_derived_state_length = 0;
+    self->derived_state_length = 0;
     ret = mutation_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -773,6 +801,7 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
     if (ret != 0) {
         goto out;
     }
+    self->derived_state_offset[0] = 0;
 out:
     return ret;
 }
@@ -782,7 +811,9 @@ mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
         mutation_id_t parent, const char *derived_state, list_len_t derived_state_length)
 {
     int ret = 0;
+    list_len_t offset = (list_len_t) self->derived_state_length;
 
+    assert(self->derived_state_offset[self->num_rows] == offset);
     ret = mutation_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -794,11 +825,10 @@ mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
     self->site[self->num_rows] = site;
     self->node[self->num_rows] = node;
     self->parent[self->num_rows] = parent;
-    self->derived_state_length[self->num_rows] = (list_len_t) derived_state_length;
-    memcpy(self->derived_state + self->total_derived_state_length, derived_state,
-            derived_state_length * sizeof(char));
-    self->total_derived_state_length += derived_state_length;
+    self->derived_state_length += derived_state_length;
+    memcpy(self->derived_state + offset, derived_state, derived_state_length);
     self->num_rows++;
+    self->derived_state_offset[self->num_rows] = self->derived_state_length;
 out:
     return ret;
 }
@@ -806,14 +836,14 @@ out:
 int
 mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
         node_id_t *node, mutation_id_t *parent,
-        const char *derived_state, uint32_t *derived_state_length)
+        const char *derived_state, list_len_t *derived_state_offset)
 {
     int ret = 0;
-    size_t total_derived_state_length = 0;
+    size_t derived_state_length = 0;
     size_t j;
 
     if (site == NULL || node == NULL || derived_state == NULL
-            || derived_state_length == NULL) {
+            || derived_state_offset == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -821,27 +851,32 @@ mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < num_rows; j++) {
-        total_derived_state_length += (size_t) derived_state_length[j];
-    }
-    ret = mutation_table_expand_derived_state(self, total_derived_state_length);
+    derived_state_length = derived_state_offset[num_rows];
+    ret = mutation_table_expand_derived_state(self, derived_state_length);
     if (ret != 0) {
         goto out;
     }
     memcpy(self->site + self->num_rows, site, num_rows * sizeof(site_id_t));
     memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
-    memcpy(self->derived_state_length + self->num_rows, derived_state_length,
-            num_rows * sizeof(node_id_t));
-    memcpy(self->derived_state + self->total_derived_state_length, derived_state,
-            total_derived_state_length * sizeof(char));
+    memcpy(self->derived_state + self->derived_state_length, derived_state,
+            derived_state_length * sizeof(char));
+    ret = check_offsets(num_rows, derived_state_offset);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        self->derived_state_offset[self->num_rows + j] =
+            (list_len_t) self->derived_state_length + derived_state_offset[j];
+    }
     if (parent == NULL) {
         /* If parent is NULL, set all parents to the null mutation */
         memset(self->parent + self->num_rows, 0xff, num_rows * sizeof(mutation_id_t));
     } else {
         memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(mutation_id_t));
     }
-    self->num_rows += num_rows;
-    self->total_derived_state_length += total_derived_state_length;
+    self->num_rows += (list_len_t) num_rows;
+    self->derived_state_length += (list_len_t) derived_state_length;
+    self->derived_state_offset[self->num_rows] = self->derived_state_length;
 out:
     return ret;
 }
@@ -849,7 +884,7 @@ out:
 int
 mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
         node_id_t *node, mutation_id_t *parent,
-        const char *derived_state, uint32_t *derived_state_length)
+        const char *derived_state, list_len_t *derived_state_offset)
 {
     int ret = 0;
 
@@ -857,8 +892,8 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *s
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_append_columns(self, num_rows ,site, node, parent,
-            derived_state, derived_state_length);
+    ret = mutation_table_append_columns(self, num_rows, site, node, parent,
+            derived_state, derived_state_offset);
 out:
     return ret;
 }
@@ -868,15 +903,15 @@ mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
-            && self->total_derived_state_length == other->total_derived_state_length) {
+            && self->derived_state_length == other->derived_state_length) {
         ret = memcmp(self->site, other->site, self->num_rows * sizeof(site_id_t)) == 0
             && memcmp(self->node, other->node, self->num_rows * sizeof(node_id_t)) == 0
             && memcmp(self->parent, other->parent,
                     self->num_rows * sizeof(mutation_id_t)) == 0
-            && memcmp(self->derived_state_length, other->derived_state_length,
-                    self->num_rows * sizeof(list_len_t)) == 0
+            && memcmp(self->derived_state_offset, other->derived_state_offset,
+                    (self->num_rows + 1) * sizeof(list_len_t)) == 0
             && memcmp(self->derived_state, other->derived_state,
-                    self->total_derived_state_length * sizeof(char)) == 0;
+                    self->derived_state_length * sizeof(char)) == 0;
     }
     return ret;
 }
@@ -885,7 +920,8 @@ int
 mutation_table_reset(mutation_table_t *self)
 {
     self->num_rows = 0;
-    self->total_derived_state_length = 0;
+    self->derived_state_length = 0;
+    self->derived_state_offset[0] = 0;
     return 0;
 }
 
@@ -896,7 +932,7 @@ mutation_table_free(mutation_table_t *self)
     msp_safe_free(self->site);
     msp_safe_free(self->parent);
     msp_safe_free(self->derived_state);
-    msp_safe_free(self->derived_state_length);
+    msp_safe_free(self->derived_state_offset);
     return 0;
 }
 
@@ -910,21 +946,26 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
     fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
     fprintf(out, "derived_state_length = %d\tmax= %d\tincrement = %d)\n",
-            (int) self->total_derived_state_length,
-            (int) self->max_total_derived_state_length,
-            (int) self->max_total_derived_state_length_increment);
+            (int) self->derived_state_length,
+            (int) self->max_derived_state_length,
+            (int) self->max_derived_state_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tsite\tnode\tparent\tderived_state_length\tderived_state\n");
+    fprintf(out, "index\tsite\tnode\tparent\tderived_state_offset\tderived_state\n");
     offset = 0;
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t%d\t%d\t%d\t", (int) j, self->site[j], self->node[j],
-                self->parent[j], self->derived_state_length[j]);
-        for (k = 0; k < self->derived_state_length[j]; k++) {
+                self->parent[j], self->derived_state_offset[j]);
+        for (k = self->derived_state_offset[j];
+                k < self->derived_state_offset[j + 1]; k++) {
             fprintf(out, "%c", self->derived_state[offset]);
             offset++;
         }
         fprintf(out, "\n");
     }
+
+    assert(self->derived_state_offset[0] == 0);
+    assert(self->derived_state_length
+            == self->derived_state_offset[self->num_rows]);
 }
 
 /*************************
@@ -1192,7 +1233,7 @@ table_sorter_alloc(table_sorter_t *self, node_table_t *nodes, edge_table_t *edge
             goto out;
         }
         self->sorted_sites = malloc(sites->num_rows * sizeof(site_t));
-        self->ancestral_state_mem = malloc(sites->total_ancestral_state_length * sizeof(char));
+        self->ancestral_state_mem = malloc(sites->ancestral_state_length * sizeof(char));
         self->site_id_map = malloc(sites->num_rows * sizeof(site_id_t));
         if (self->sorted_sites == NULL || self->ancestral_state_mem == NULL
                 || self->site_id_map == NULL) {
@@ -1200,7 +1241,7 @@ table_sorter_alloc(table_sorter_t *self, node_table_t *nodes, edge_table_t *edge
             goto out;
         }
         self->sorted_mutations = malloc(mutations->num_rows * sizeof(mutation_t));
-        self->derived_state_mem = malloc(mutations->total_derived_state_length * sizeof(char));
+        self->derived_state_mem = malloc(mutations->derived_state_length * sizeof(char));
         if (self->sorted_mutations == NULL || self->derived_state_mem == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1249,31 +1290,32 @@ static int
 table_sorter_sort_sites(table_sorter_t *self)
 {
     int ret = 0;
-    size_t j, ancestral_state_offset;
+    list_len_t j, offset, length;
 
     memcpy(self->ancestral_state_mem, self->sites->ancestral_state,
-            self->sites->total_ancestral_state_length * sizeof(char));
-    ancestral_state_offset = 0;
+            self->sites->ancestral_state_length * sizeof(char));
     for (j = 0; j < self->sites->num_rows; j++) {
         self->sorted_sites[j].id = (site_id_t) j;
         self->sorted_sites[j].position = self->sites->position[j];
-        self->sorted_sites[j].ancestral_state_length = self->sites->ancestral_state_length[j];
-        self->sorted_sites[j].ancestral_state = self->ancestral_state_mem
-            + ancestral_state_offset;
-        ancestral_state_offset += self->sites->ancestral_state_length[j];
+        offset = self->sites->ancestral_state_offset[j];
+        length = self->sites->ancestral_state_offset[j + 1] - offset;
+        self->sorted_sites[j].ancestral_state_length = length;
+        self->sorted_sites[j].ancestral_state = self->ancestral_state_mem + offset;
     }
     /* Sort the sites by position */
     qsort(self->sorted_sites, self->sites->num_rows, sizeof(site_t), cmp_site);
     /* Build the mapping from old site IDs to new site IDs and copy back into the table */
-    ancestral_state_offset = 0;
+    offset = 0;
     for (j = 0; j < self->sites->num_rows; j++) {
         self->site_id_map[self->sorted_sites[j].id] = (site_id_t) j;
         self->sites->position[j] = self->sorted_sites[j].position;
-        self->sites->ancestral_state_length[j] = self->sorted_sites[j].ancestral_state_length;
-        memcpy(self->sites->ancestral_state + ancestral_state_offset,
-            self->sorted_sites[j].ancestral_state, self->sorted_sites[j].ancestral_state_length);
-        ancestral_state_offset += self->sorted_sites[j].ancestral_state_length;
+        self->sites->ancestral_state_offset[j] = offset;
+        memcpy(self->sites->ancestral_state + offset,
+            self->sorted_sites[j].ancestral_state,
+            self->sorted_sites[j].ancestral_state_length);
+        offset += self->sorted_sites[j].ancestral_state_length;
     }
+    self->sites->ancestral_state_offset[self->sites->num_rows] = offset;
     return ret;
 }
 
@@ -1281,16 +1323,15 @@ static int
 table_sorter_sort_mutations(table_sorter_t *self)
 {
     int ret = 0;
-    size_t j, derived_state_offset;
     site_id_t site;
     node_id_t node;
+    list_len_t j, offset, length;
     mutation_id_t parent, mapped_parent;
     mutation_id_t *mutation_id_map = malloc(self->mutations->num_rows
             * sizeof(mutation_id_t));
 
     memcpy(self->derived_state_mem, self->mutations->derived_state,
-            self->mutations->total_derived_state_length * sizeof(char));
-    derived_state_offset = 0;
+            self->mutations->derived_state_length * sizeof(char));
     for (j = 0; j < self->mutations->num_rows; j++) {
         site = self->mutations->site[j];
         if (site >= (site_id_t) self->sites->num_rows) {
@@ -1309,26 +1350,25 @@ table_sorter_sort_mutations(table_sorter_t *self)
                 goto out;
             }
         }
+        offset = self->mutations->derived_state_offset[j];
+        length = self->mutations->derived_state_offset[j + 1] - offset;
         self->sorted_mutations[j].id = (mutation_id_t) j;
         self->sorted_mutations[j].site = self->site_id_map[site];
         self->sorted_mutations[j].node = node;
         self->sorted_mutations[j].parent = self->mutations->parent[j];
-        self->sorted_mutations[j].derived_state_length =
-            self->mutations->derived_state_length[j];
-        self->sorted_mutations[j].derived_state = self->derived_state_mem
-            + derived_state_offset;
-        derived_state_offset += self->mutations->derived_state_length[j];
+        self->sorted_mutations[j].derived_state_length = length;
+        self->sorted_mutations[j].derived_state = self->derived_state_mem + offset;
     }
 
     qsort(self->sorted_mutations, self->mutations->num_rows, sizeof(mutation_t),
         cmp_mutation);
+
     /* Make a first pass through the sorted mutations to build the ID map. */
     for (j = 0; j < self->mutations->num_rows; j++) {
         mutation_id_map[self->sorted_mutations[j].id] = (mutation_id_t) j;
     }
-
+    offset = 0;
     /* Copy the sorted mutations back into the table */
-    derived_state_offset = 0;
     for (j = 0; j < self->mutations->num_rows; j++) {
         self->mutations->site[j] = self->sorted_mutations[j].site;
         self->mutations->node[j] = self->sorted_mutations[j].node;
@@ -1338,13 +1378,12 @@ table_sorter_sort_mutations(table_sorter_t *self)
             mapped_parent = mutation_id_map[parent];
         }
         self->mutations->parent[j] = mapped_parent;
-        self->mutations->derived_state_length[j] =
-            self->sorted_mutations[j].derived_state_length;
-        memcpy(self->mutations->derived_state + derived_state_offset,
+        memcpy(self->mutations->derived_state + offset,
             self->sorted_mutations[j].derived_state,
             self->sorted_mutations[j].derived_state_length * sizeof(char));
-        derived_state_offset += self->sorted_mutations[j].derived_state_length;
+        offset += self->sorted_mutations[j].derived_state_length;
     }
+    self->mutations->derived_state_offset[self->mutations->num_rows] = offset;
 out:
     msp_safe_free(mutation_id_map);
     return ret;
@@ -1625,7 +1664,8 @@ static int WARN_UNUSED
 simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
 {
     int ret = 0;
-    const char *name = self->input_nodes.name + self->node_name_offset[input_id];
+    list_len_t offset = self->input_nodes.name_offset[input_id];
+    list_len_t length = self->input_nodes.name_offset[input_id + 1] - offset;
     uint32_t flags = self->input_nodes.flags[input_id];
 
     /* Zero out the sample bit */
@@ -1636,7 +1676,7 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
     self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
     ret = node_table_add_row_internal(self->nodes, flags,
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
-            self->input_nodes.name_length[input_id], name);
+            self->input_nodes.name + offset, length);
     if (ret != 0) {
         goto out;
     }
@@ -1917,7 +1957,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         size_t max_buffered_edges, int flags)
 {
     int ret = 0;
-    size_t j, offset, max_alloc_block, num_nodes_alloc, num_edges_alloc;
+    size_t j, max_alloc_block, num_nodes_alloc, num_edges_alloc;
 
     memset(self, 0, sizeof(simplifier_t));
     self->num_samples = num_samples;
@@ -1966,12 +2006,12 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
 
     /* Make a copy of the input nodes and clear the table ready for output */
-    ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->total_name_length);
+    ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->name_length);
     if (ret != 0) {
         goto out;
     }
     ret = node_table_set_columns(&self->input_nodes, nodes->num_rows,
-            nodes->flags, nodes->time, nodes->population, nodes->name, nodes->name_length);
+            nodes->flags, nodes->time, nodes->population, nodes->name, nodes->name_offset);
     if (ret != 0) {
         goto out;
     }
@@ -1979,18 +2019,6 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    /* Build the offset table so we can map node names */
-    self->node_name_offset = malloc(num_nodes_alloc * sizeof(size_t));
-    if (self->node_name_offset == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    offset = 0;
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
-        self->node_name_offset[j] = offset;
-        offset += self->input_nodes.name_length[j];
-    }
-
     /* Make a copy of the input edges and clear the input table, ready for output. */
     ret = edge_table_alloc(&self->input_edges, edges->num_rows);
     if (ret != 0) {
@@ -2018,12 +2046,12 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
 
     /* Make a copy of the input sites and clear the input table, ready for output. */
     ret = site_table_alloc(&self->input_sites, sites->num_rows,
-            sites->total_ancestral_state_length);
+            sites->ancestral_state_length);
     if (ret != 0) {
         goto out;
     }
     ret = site_table_set_columns(&self->input_sites, sites->num_rows,
-            sites->position, sites->ancestral_state, sites->ancestral_state_length);
+            sites->position, sites->ancestral_state, sites->ancestral_state_offset);
     if (ret != 0) {
         goto out;
     }
@@ -2034,13 +2062,13 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
 
     /* Make a copy of the input mutations and clear the input table, ready for output. */
     ret = mutation_table_alloc(&self->input_mutations, mutations->num_rows,
-            mutations->total_derived_state_length);
+            mutations->derived_state_length);
     if (ret != 0) {
         goto out;
     }
     ret = mutation_table_set_columns(&self->input_mutations, mutations->num_rows,
             mutations->site, mutations->node, mutations->parent,
-            mutations->derived_state, mutations->derived_state_length);
+            mutations->derived_state, mutations->derived_state_offset);
     if (ret != 0) {
         goto out;
     }
@@ -2470,6 +2498,7 @@ simplifier_output_sites(simplifier_t *self)
 {
     int ret = 0;
     site_id_t input_site;
+    list_len_t offset, length;
     mutation_id_t input_mutation, mapped_parent ,site_start, site_end;
     site_id_t num_input_sites = (site_id_t) self->input_sites.num_rows;
     mutation_id_t num_input_mutations = (mutation_id_t) self->input_mutations.num_rows;
@@ -2480,9 +2509,8 @@ simplifier_output_sites(simplifier_t *self)
 
     /* TODO Implement the checks below for ancestral state and derived state properly when
      * we've added the _offset columns to the tables. */
-    assert(self->input_sites.total_ancestral_state_length
-            == self->input_sites.num_rows);
-    assert(self->input_mutations.total_derived_state_length
+    assert(self->input_sites.ancestral_state_length == self->input_sites.num_rows);
+    assert(self->input_mutations.derived_state_length
             == self->input_mutations.num_rows);
 
     input_mutation = 0;
@@ -2534,23 +2562,23 @@ simplifier_output_sites(simplifier_t *self)
                     if (mapped_parent != MSP_NULL_MUTATION) {
                         mapped_parent = self->mutation_id_map[mapped_parent];
                     }
+                    offset = self->input_mutations.derived_state_offset[input_mutation];
+                    length = self->input_mutations.derived_state_offset[input_mutation + 1]
+                        - offset;
                     ret = mutation_table_add_row(self->mutations,
                             (site_id_t) self->sites->num_rows,
                             mapped_node, mapped_parent,
-                            /* FIXME do this properly when derived_state_offset is
-                             * implemented */
-                            self->input_mutations.derived_state + input_mutation,
-                            self->input_mutations.derived_state_length[input_mutation]);
+                            self->input_mutations.derived_state + offset, length);
                     if (ret != 0) {
                         goto out;
                     }
                 }
             }
+            offset = self->input_sites.ancestral_state_offset[input_site];
+            length = self->input_sites.ancestral_state_offset[input_site + 1] - offset;
             ret = site_table_add_row(self->sites,
                     self->input_sites.position[input_site],
-                    /* FIXME do this properly when ancestral_state_offset is implemented */
-                    self->input_sites.ancestral_state + input_site,
-                    self->input_sites.ancestral_state_length[input_site]);
+                    self->input_sites.ancestral_state + offset, length);
             if (ret != 0) {
                 goto out;
             }
