@@ -117,23 +117,29 @@ class EdgeTable(_msprime.EdgeTable):
 
 
     Class for tables describing all edges in a tree sequence, of the form
-        left	right	parent	children
-        0.0     0.4     3       0,2
-        0.4     1.0     3       0,1,2
-        0.0     0.4     4       1,3
+        left	right	parent	child
+        0.0     0.4     3       0
+        0.0     0.4     3       2
+        0.4     1.0     3       0,
+        0.4     1.0     3       1
+        0.4     1.0     3       2
+        0.0     0.4     4       1
+        0.0     0.4     4       3
     These describe the half-open genomic interval affected: `[left, right)`,
-    the `parent` and the `children` on that interval.
+    the `parent` and the `child` on that interval.
 
     Requirements: to describe a valid tree sequence, a `EdgeTable` (and
     corresponding `NodeTable`, to provide birth times) must satisfy:
-        1. each list of children must be in sorted order,
-        2. any two edges that share a child must be nonoverlapping, and
-        3. the birth times of the `parent` in an edge must be strictly
-            greater than the birth times of the `children` in that edge.
+        1. any two edges that share a child must be nonoverlapping, and
+        2. the birth times of the `parent` in an edge must be strictly
+            greater than the birth times of the `child` in that edge.
     Furthermore, for algorithmic requirements
         4. the smallest `left` coordinate must be 0.0,
-        5. the the table must be sorted by birth time of the `parent`, and
-        6. any two edges corresponding to the same `parent` must be nonoverlapping.
+        5. the table must be sorted so that birth time of the `parent` increases
+            with table row, and
+        6. any two edges corresponding to the same `parent` must be
+            nonoverlapping.
+
     It is an additional requirement that the complete ancestry of each sample
     must be specified, but this is harder to verify.
 

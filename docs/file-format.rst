@@ -63,18 +63,18 @@ samples
     genome.  These are a special kind of node, having ``flags`` set to 1 (as a
     binary mask).
 
-edgeset
+edge
     Tree sequences are constructed by specifying over which segments of genome
     which nodes inherit from which other nodes.  This information is stored by
     recording::
 
-        (left, right, parent, children)
+        (left, right, parent, child)
 
-    where each node in the list ``children`` inherits from the node ``parent``
+    where each node in ``child`` inherits from the node ``parent``
     on the half-open interval of chromosome ``[left, right)``.
 
 
-Here are the formal requirements for a set of nodes and edgesets to make sense,
+Here are the formal requirements for a set of nodes and edges to make sense,
 and to allow ``msprime``'s algorithms to work properly.
 
 To disallow time travel and multiple inheritance:
@@ -86,14 +86,12 @@ and for algorithmic reasons:
 
 3. The leftmost endpoint of each chromosome is 0.0.
 4. Node times must be strictly greater than zero.
-5. The list of offspring in an edgeset must be sorted.
-6. Edgesets must be sorted in nondecreasing time order.
-7. The set of intervals on which each individual is a parent must be disjoint.
-8. Each edgeset must contain at least two children.
+5. Edges must be sorted in nondecreasing time order.
+6. The set of intervals on which each individual is a parent must be disjoint.
 
 A set of tables satisfying requirements 1-4 can be transformed into a completely
-valid set of tables by applying first ``sort_tables()`` (which ensures 5 and 6)
-and then ``simplify_tables()`` (which ensures 7 and 8).
+valid set of tables by applying first ``sort_tables()`` (which ensures 5)
+and then ``simplify_tables()`` (which ensures 6).
 
 Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
@@ -216,23 +214,29 @@ First, we specify the nodes::
 Importantly, the first column, ``id``, is **not actually recorded**, and is
 only shown when printing out node tables (as here) for convenience. This has
 three samples: nodes 0, 1, and 2, and lists their birth times.  Then, we
-specify the edgesets::
+specify the edges::
 
     EdgesetTable:
 
     left    right   parent  children
-    0.2     0.8     3       0,2
-    0.0     0.2     4       1,2
-    0.2     0.8     4       1,3
-    0.8     1.0     4       1,2
-    0.8     1.0     5       0,4
-    0.0     0.2     6       0,4
+    0.2     0.8     3       0
+    0.2     0.8     3       2
+    0.0     0.2     4       1
+    0.0     0.2     4       2
+    0.2     0.8     4       1
+    0.2     0.8     4       3
+    0.8     1.0     4       1
+    0.8     1.0     4       2
+    0.8     1.0     5       0
+    0.8     1.0     5       4
+    0.0     0.2     6       0
+    0.0     0.2     6       4
 
 Since node 3 is most recent, the edgeset that says that nodes 0 and 2 inherit
 from node 3 on the interval between 0.2 and 0.8 comes first.  Next are the
-edgesets from node 4: there are three of these, for each of the three genomic
+edges from node 4: there are three of these, for each of the three genomic
 intervals over which node 4 is ancestor to a distinct set of nodes.  At this
-point, we know the full tree on the middle interval.  Finally, edgesets
+point, we know the full tree on the middle interval.  Finally, edges
 specifying the common ancestor of 0 and 4 on the remaining intervals (parents 6
 and 5 respectively) allow us to construct all trees across the entire interval.
 
@@ -317,13 +321,13 @@ Tables that are noncontradictory but do not satisfy all algorithmic requirements
 listed above may be converted to a TreeSequence by first sorting, then simplifying
 them (both operate on the tables **in place**):
 
-.. autofunction:: msprime.sort_tables(nodes, edgesets[, migrations, sites, mutations, edge_start])
+.. autofunction:: msprime.sort_tables(nodes, edges[, migrations, sites, mutations, edge_start])
 
 **Note:** the following function is more general than
 ``TreeSequence.simplify()``, since it can be applied to tables not satisfying
 all criteria above (and that hence could not be loaded into a TreeSequence).
 
-.. autofunction:: msprime.simplify_tables(samples, nodes, edgesets[, migrations, sites, mutations])
+.. autofunction:: msprime.simplify_tables(samples, nodes, edges[, migrations, sites, mutations])
 
 
 NodeTable
