@@ -338,11 +338,11 @@ class TestDrawUnicode(TestDrawText):
         0       1       2       1
         """)
         tree = (
-           "2\n"
-           "┃\n"
-           "1\n"
-           "┃\n"
-           "0\n")
+            "2\n"
+            "┃\n"
+            "1\n"
+            "┃\n"
+            "0\n")
         ts = msprime.load_text(nodes, edges)
         t = next(ts.trees())
         self.verify_text_rendering(t, tree)
