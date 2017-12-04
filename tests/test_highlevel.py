@@ -95,7 +95,7 @@ def insert_gap(ts, position, length):
     L = ts.sequence_length + length
     sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
     return msprime.load_tables(
-            nodes=tables.nodes, edges=edges, sites=sites, mutations=mutations)
+        nodes=tables.nodes, edges=edges, sites=sites, mutations=mutations)
 
 
 def get_gap_examples():
@@ -1119,7 +1119,7 @@ class TestTreeSequence(HighLevelTestCase):
 
     def verify_simplify_haplotypes(self, ts, samples):
         sub_ts, node_map = ts.simplify(
-                samples, map_nodes=True, filter_zero_mutation_sites=False)
+            samples, map_nodes=True, filter_zero_mutation_sites=False)
         # Sites tables should be equal
         self.assertEqual(ts.tables.sites, sub_ts.tables.sites)
         sub_haplotypes = dict(zip(sub_ts.samples(), sub_ts.haplotypes()))
@@ -1477,8 +1477,8 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         sites_file = six.StringIO("position\tancestral_state\n")
         mutations_file = six.StringIO("site\tnode\tderived_state\n")
         ts = msprime.load_text(
-                nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, sequence_length=100)
+            nodes=nodes_file, edges=edges_file, sites=sites_file,
+            mutations=mutations_file, sequence_length=100)
         self.assertEqual(ts.sequence_length, 100)
         self.assertEqual(ts.num_nodes, 0)
         self.assertEqual(ts.num_edges, 0)
@@ -1572,8 +1572,8 @@ class TestSparseTree(HighLevelTestCase):
                     list(t1.nodes(order=test_order)),
                     list(t1.nodes(t1.get_root(), test_order)))
                 self.assertEqual(
-                   list(t1.nodes(order=test_order)),
-                   list(t2.nodes(order=test_order)))
+                    list(t1.nodes(order=test_order)),
+                    list(t2.nodes(order=test_order)))
                 for u in t1.nodes():
                     self.assertEqual(
                         list(t1.nodes(u, test_order)),

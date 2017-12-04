@@ -302,9 +302,9 @@ class PythonBranchLengthStatCalculator(object):
                                  "cannot contain repeated elements.")
         if end is None:
             end = self.tree_sequence.sequence_length
-        tr_its = [self.tree_sequence.trees(
-                        tracked_samples=x,
-                        sample_counts=True) for x in sample_sets]
+        tr_its = [
+            self.tree_sequence.trees(tracked_samples=x, sample_counts=True)
+            for x in sample_sets]
         n = [len(U) for U in sample_sets]
         n_out = len(weight_fun([0 for a in sample_sets]))
         S = [0.0 for j in range(n_out)]
@@ -1086,8 +1086,8 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         branch_true_diversity_02 = 2*(0.2*5 + 0.2*4 + 0.3*5 + 0.1*4 + 0.2*5)
         # mean divergence between 0, 1 and 0, 2
         branch_true_mean_diversity = (
-                0 + branch_true_diversity_02 + branch_true_diversity_01
-                + branch_true_diversity_12) / 4
+            0 + branch_true_diversity_02 + branch_true_diversity_01
+            + branch_true_diversity_12) / 4
         # Y(0;1, 2)
         branch_true_Y = 0.2*4 + 0.2*(4+2) + 0.2*4 + 0.2*2 + 0.2*(5+1)
 
@@ -1253,11 +1253,11 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
                 return float(x[0]*(n[1]-x[1]))/float(n[0]*n[1])
 
             self.assertAlmostEqual(
-                    py_tsc.tree_stat(A, f),
-                    py_tsc.tree_length_diversity(A[0], A[1]))
+                py_tsc.tree_stat(A, f),
+                py_tsc.tree_length_diversity(A[0], A[1]))
             self.assertAlmostEqual(
-                    tsc.tree_stat(A, f),
-                    py_tsc.tree_length_diversity(A[0], A[1]))
+                tsc.tree_stat(A, f),
+                py_tsc.tree_length_diversity(A[0], A[1]))
 
     def check_divergence_matrix(self, ts):
         # nonoverlapping samples
@@ -1274,8 +1274,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
         self.assertEqual(len(ts_values), len(ts_matrix_values))
         for w in range(len(ts_values)):
             self.assertArrayEqual(
-                    ts_matrix_values[w, :, :],
-                    upper_tri_to_matrix(ts_values[w]))
+                ts_matrix_values[w, :, :], upper_tri_to_matrix(ts_values[w]))
         here_values = np.array([[[py_tsc.tree_length_diversity(A[i], A[j],
                                                                begin=windows[k],
                                                                end=windows[k+1])
@@ -1471,8 +1470,7 @@ class SiteStatsTestCase(GeneralStatsTestCase):
             return float(x[0]*(n[1]-x[1]) + (n[0]-x[0])*x[1])/float(2*n[0]*n[1])
 
         self.assertAlmostEqual(
-                py_tsc.tree_stat(A, f),
-                ts.pairwise_diversity(samples=samples))
+            py_tsc.tree_stat(A, f), ts.pairwise_diversity(samples=samples))
 
     def test_pairwise_diversity(self):
         ts = msprime.simulate(20, random_seed=self.random_seed, recombination_rate=100)

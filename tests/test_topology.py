@@ -460,7 +460,7 @@ class TestRecordSquashing(TopologyTestCase):
 
     def test_many_trees(self):
         ts = msprime.simulate(
-                20, recombination_rate=5, random_seed=self.random_seed)
+            20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = tsutil.insert_redundant_breakpoints(ts)
         tss = ts_redundant.simplify()
@@ -486,7 +486,7 @@ class TestRedundantBreakpoints(TopologyTestCase):
 
     def test_many_trees(self):
         ts = msprime.simulate(
-                20, recombination_rate=5, random_seed=self.random_seed)
+            20, recombination_rate=5, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         ts_redundant = tsutil.insert_redundant_breakpoints(ts)
         self.assertEqual(ts.sample_size, ts_redundant.sample_size)
@@ -1899,12 +1899,12 @@ class TestWithVisuals(TopologyTestCase):
         0.0  0.4   12     11
         """)
         true_trees = [
-                {0: 6, 1: 6, 2: 7, 3: 7, 4: 8, 5: 8, 6: 11,
-                    7: 11, 8: 12, 9: -1, 10: -1, 11: 12, 12: -1},
-                {0: 6, 1: 6, 2: 9, 3: 9, 4: 8, 5: 8, 6: 12,
-                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1},
-                {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
-                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
+            {0: 6, 1: 6, 2: 7, 3: 7, 4: 8, 5: 8, 6: 11,
+                7: 11, 8: 12, 9: -1, 10: -1, 11: 12, 12: -1},
+            {0: 6, 1: 6, 2: 9, 3: 9, 4: 8, 5: 8, 6: 12,
+                7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1},
+            {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
+                7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
         ]
         ts = msprime.load_text(nodes, edges)
         tree_dicts = [t.parent_dict for t in ts.trees()]
@@ -1984,12 +1984,12 @@ class TestWithVisuals(TopologyTestCase):
         0.4  1.0   12     6,10
         """)
         true_trees = [
-                {0: 6, 1: 6, 2: 7, 3: 7, 4: 8, 5: 8, 6: 11,
-                    7: 11, 8: 12, 9: -1, 10: -1, 11: 12, 12: -1},
-                {0: 6, 1: 6, 2: 9, 3: 9, 4: 8, 5: 8, 6: 12,
-                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1},
-                {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
-                    7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
+            {0: 6, 1: 6, 2: 7, 3: 7, 4: 8, 5: 8, 6: 11,
+                7: 11, 8: 12, 9: -1, 10: -1, 11: 12, 12: -1},
+            {0: 6, 1: 6, 2: 9, 3: 9, 4: 8, 5: 8, 6: 12,
+                7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1},
+            {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
+                7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
         ]
         big_ts = msprime.load_text(nodes, edges)
         self.assertEqual(big_ts.num_trees, 1 + len(true_trees))
