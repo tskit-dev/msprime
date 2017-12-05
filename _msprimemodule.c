@@ -478,7 +478,7 @@ make_mutation(mutation_t *mutation)
     PyObject *ret = NULL;
 
     ret = Py_BuildValue("iis#ii", mutation->site, mutation->node, mutation->derived_state,
-            mutation->derived_state_length, mutation->parent, mutation->id);
+            (Py_ssize_t) mutation->derived_state_length, mutation->parent, mutation->id);
     return ret;
 }
 
@@ -514,7 +514,8 @@ make_node(node_t *r)
     const char *metadata = r->metadata == NULL? "": r->metadata;
 
     ret = Py_BuildValue("Idis#",
-        (unsigned int) r->flags, r->time, (int) r->population, metadata, r->metadata_length);
+        (unsigned int) r->flags, r->time, (int) r->population, metadata,
+        (Py_ssize_t) r->metadata_length);
     return ret;
 }
 
@@ -548,7 +549,8 @@ make_site(site_t *site)
         goto out;
     }
     ret = Py_BuildValue("ds#On", site->position, site->ancestral_state,
-            site->ancestral_state_length, mutations, (Py_ssize_t) site->id);
+            (Py_ssize_t) site->ancestral_state_length, mutations,
+            (Py_ssize_t) site->id);
 out:
     Py_XDECREF(mutations);
     return ret;
