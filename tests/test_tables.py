@@ -399,50 +399,54 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
         UInt32Column("flags"),
         DoubleColumn("time"),
         Int32Column("population")]
-    ragged_list_columns = [(CharColumn("name"),  UInt32Column("name_offset"))]
+    ragged_list_columns = [(CharColumn("metadata"),  UInt32Column("metadata_offset"))]
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["time", "flags", "population"]]
     table_class = msprime.NodeTable
 
     def test_optional_population(self):
         for num_rows in [0, 10, 100]:
-            names = [str(j) for j in range(num_rows)]
-            name, name_offset = msprime.pack_strings(names)
+            metadatas = [str(j) for j in range(num_rows)]
+            metadata, metadata_offset = msprime.pack_strings(metadatas)
             flags = list(range(num_rows))
             time = list(range(num_rows))
             table = msprime.NodeTable()
             table.set_columns(
-                name=name, name_offset=name_offset, flags=flags, time=time)
+                metadata=metadata, metadata_offset=metadata_offset,
+                flags=flags, time=time)
             self.assertEqual(list(table.population), [-1 for _ in range(num_rows)])
             self.assertEqual(list(table.flags), flags)
             self.assertEqual(list(table.time), time)
-            self.assertEqual(list(table.name), list(name))
-            self.assertEqual(list(table.name_offset), list(name_offset))
+            self.assertEqual(list(table.metadata), list(metadata))
+            self.assertEqual(list(table.metadata_offset), list(metadata_offset))
 
-    def test_random_names(self):
+    def test_random_metadata(self):
         for num_rows in [0, 10, 100]:
-            names = [random_string(10) for _ in range(num_rows)]
-            name, name_offset = msprime.pack_strings(names)
+            metadatas = [random_string(10) for _ in range(num_rows)]
+            metadata, metadata_offset = msprime.pack_strings(metadatas)
             flags = list(range(num_rows))
             time = list(range(num_rows))
             table = msprime.NodeTable()
             table.set_columns(
-                name=name, name_offset=name_offset, flags=flags, time=time)
+                metadata=metadata, metadata_offset=metadata_offset, flags=flags,
+                time=time)
             self.assertEqual(list(table.flags), flags)
             self.assertEqual(list(table.time), time)
-            self.assertEqual(list(table.name), list(name))
-            self.assertEqual(list(table.name_offset), list(name_offset))
-            unpacked_names = msprime.unpack_strings(table.name, table.name_offset)
-            self.assertEqual(names, unpacked_names)
+            self.assertEqual(list(table.metadata), list(metadata))
+            self.assertEqual(list(table.metadata_offset), list(metadata_offset))
+            unpacked_metadatas = msprime.unpack_strings(
+                table.metadata, table.metadata_offset)
+            self.assertEqual(metadatas, unpacked_metadatas)
 
-    def test_optional_names(self):
+    def test_optional_metadata(self):
         for num_rows in [0, 10, 100]:
             flags = list(range(num_rows))
             time = list(range(num_rows))
             table = msprime.NodeTable()
             table.set_columns(flags=flags, time=time)
-            self.assertEqual(len(list(table.name)), 0)
-            self.assertEqual(list(table.name_offset), [0 for _ in range(num_rows + 1)])
+            self.assertEqual(len(list(table.metadata)), 0)
+            self.assertEqual(
+                list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
 
 
 class TestEdgeTable(unittest.TestCase, CommonTestsMixin):

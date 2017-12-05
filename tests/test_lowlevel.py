@@ -569,7 +569,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(breakpoints, sorted(breakpoints))
         nodes = sim.get_nodes()
         self.assertEqual(len(nodes), sim.get_num_nodes())
-        for j, (flags, t, pop, name) in enumerate(nodes):
+        for j, (flags, t, pop, metadata) in enumerate(nodes):
             if j < sim.get_num_samples():
                 self.assertEqual(t, 0.0)
                 self.assertEqual(flags, 1)
@@ -577,6 +577,7 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertGreater(t, 0.0)
                 self.assertEqual(flags, 0)
             self.assertTrue(0 <= pop < sim.get_num_populations())
+            self.assertEqual(len(metadata), 0)
 
         edges = sim.get_edges()
         self.assertEqual(len(edges), sim.get_num_edges())
@@ -3043,18 +3044,18 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(table.population, [-1])
         self.assertEqual(table.flags, [0])
         self.assertEqual(table.time, [0])
-        self.assertEqual(list(table.name), [])
-        self.assertEqual(list(table.name_offset), [0, 0])
+        self.assertEqual(list(table.metadata), [])
+        self.assertEqual(list(table.metadata_offset), [0, 0])
 
-        name = "abcde"
+        metadata = "abcde"
         table = _msprime.NodeTable()
-        table.add_row(flags=5, population=10, time=1.23, name=name)
+        table.add_row(flags=5, population=10, time=1.23, metadata=metadata)
         self.assertEqual(table.num_rows, 1)
         self.assertEqual(table.population, [10])
         self.assertEqual(table.flags, [5])
         self.assertEqual(table.time, [1.23])
-        self.assertEqual(list(table.name), [ord(c) for c in name])
-        self.assertEqual(list(table.name_offset), [0, len(name)])
+        self.assertEqual(list(table.metadata), [ord(c) for c in metadata])
+        self.assertEqual(list(table.metadata_offset), [0, len(metadata)])
 
     def test_node_table_add_row_errors(self):
         table = _msprime.NodeTable()
@@ -3063,7 +3064,7 @@ class TestTablesInterface(LowLevelTestCase):
             self.assertRaises(TypeError, table.add_row, population=bad_type)
             self.assertRaises(TypeError, table.add_row, time=bad_type)
         for bad_type in [234, None, []]:
-            self.assertRaises(TypeError, table.add_row, name=bad_type)
+            self.assertRaises(TypeError, table.add_row, metadata=bad_type)
 
     def test_edge_table_add_row(self):
         table = _msprime.EdgeTable()
@@ -3093,7 +3094,7 @@ class TestTablesInterface(LowLevelTestCase):
                 TypeError, table.add_row, left=0, right=1, parent=1,
                 children=(0, bad_type))
         for bad_type in [234, None, []]:
-            self.assertRaises(TypeError, table.add_row, name=bad_type)
+            self.assertRaises(TypeError, table.add_row, metadata=bad_type)
 
     def test_add_row_data(self):
         nodes = _msprime.NodeTable()
@@ -3107,12 +3108,13 @@ class TestTablesInterface(LowLevelTestCase):
 
         new_nodes = _msprime.NodeTable()
         for j in range(ts.get_num_nodes()):
-            flags, time, population, name = ts.get_node(j)
-            new_nodes.add_row(flags=flags, time=time, population=population, name=name)
+            flags, time, population, metadata = ts.get_node(j)
+            new_nodes.add_row(
+                flags=flags, time=time, population=population, metadata=metadata)
         self.assertEqual(list(nodes.time), list(new_nodes.time))
         self.assertEqual(list(nodes.flags), list(new_nodes.flags))
         self.assertEqual(list(nodes.population), list(new_nodes.population))
-        self.assertEqual(list(nodes.name), list(new_nodes.name))
+        self.assertEqual(list(nodes.metadata), list(new_nodes.metadata))
 
         new_edges = _msprime.EdgeTable()
         for j in range(ts.get_num_edges()):

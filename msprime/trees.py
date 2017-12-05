@@ -111,10 +111,10 @@ class SimpleContainer(object):
 
 class Node(SimpleContainer):
     def __init__(
-            self, time=0, population=NULL_POPULATION, name="", is_sample=False):
+            self, time=0, population=NULL_POPULATION, metadata="", is_sample=False):
         self.time = time
         self.population = population
-        self.name = name
+        self.metadata = metadata
         self.flags = 0
         if is_sample:
             self.flags |= NODE_IS_SAMPLE
@@ -1621,9 +1621,9 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_pairwise_diversity(samples)
 
     def node(self, u):
-        flags, time, population, name = self._ll_tree_sequence.get_node(u)
+        flags, time, population, metadata = self._ll_tree_sequence.get_node(u)
         return Node(
-            time=time, population=population, name=name,
+            time=time, population=population, metadata=metadata,
             is_sample=flags & NODE_IS_SAMPLE)
 
     def time(self, u):

@@ -1084,14 +1084,14 @@ class TestTreeSequence(HighLevelTestCase):
                 new_node = new_ts.node(node_map[u])
                 self.assertEqual(old_node.time, new_node.time)
                 self.assertEqual(old_node.population, new_node.population)
-                self.assertEqual(old_node.name, new_node.name)
+                self.assertEqual(old_node.metadata, new_node.metadata)
         for u in sample:
             old_node = ts.node(u)
             new_node = new_ts.node(node_map[u])
             self.assertEqual(old_node.flags, new_node.flags)
             self.assertEqual(old_node.time, new_node.time)
             self.assertEqual(old_node.population, new_node.population)
-            self.assertEqual(old_node.name, new_node.name)
+            self.assertEqual(old_node.metadata, new_node.metadata)
         old_trees = ts.trees()
         old_tree = next(old_trees)
         self.assertGreaterEqual(ts.get_num_trees(), new_ts.get_num_trees())
@@ -1414,7 +1414,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         checked = 0
         for n1, n2 in zip(ts1.nodes(), ts2.nodes()):
             self.assertEqual(n1.population, n2.population)
-            self.assertEqual(n1.name, n2.name)
+            self.assertEqual(n1.metadata, n2.metadata)
             self.assertAlmostEqual(n1.time, n2.time)
             checked += 1
         self.assertEqual(checked, ts1.num_nodes)
@@ -2116,7 +2116,7 @@ class TestNodeOrdering(HighLevelTestCase):
         self.assertEqual(ts1.num_edges, j)
         j = 0
         for n1, n2 in zip(ts1.nodes(), ts2.nodes()):
-            self.assertEqual(n1.name, n2.name)
+            self.assertEqual(n1.metadata, n2.metadata)
             self.assertEqual(n1.population, n2.population)
             if approx:
                 self.assertAlmostEqual(n1.time, n2.time)

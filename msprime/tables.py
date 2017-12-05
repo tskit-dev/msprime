@@ -71,8 +71,8 @@ class NodeTable(_msprime.NodeTable):
                 np.array_equal(self.flags, other.flags) and
                 np.array_equal(self.population, other.population) and
                 np.array_equal(self.time, other.time) and
-                np.array_equal(self.name, other.name) and
-                np.array_equal(self.name_offset, other.name_offset))
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
     def __ne__(self, other):
@@ -86,7 +86,7 @@ class NodeTable(_msprime.NodeTable):
         self.__init__()
         self.set_columns(
             time=state["time"], flags=state["flags"], population=state["population"],
-            name=state["name"], name_offset=state["name_offset"])
+            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -95,7 +95,7 @@ class NodeTable(_msprime.NodeTable):
         copy = NodeTable()
         copy.set_columns(
             flags=self.flags, time=self.time, population=self.population,
-            name=self.name, name_offset=self.name_offset)
+            metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
 
@@ -105,8 +105,8 @@ def _pickle_node_table(table):
         "time": table.time,
         "flags": table.flags,
         "population": table.population,
-        "name": table.name,
-        "name_offset": table.name_offset,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
     }
     return NodeTable, tuple(), state
 

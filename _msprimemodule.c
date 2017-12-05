@@ -511,10 +511,10 @@ static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
-    const char *name = r->name == NULL? "": r->name;
+    const char *metadata = r->metadata == NULL? "": r->metadata;
 
     ret = Py_BuildValue("Idis#",
-        (unsigned int) r->flags, r->time, (int) r->population, name, r->name_length);
+        (unsigned int) r->flags, r->time, (int) r->population, metadata, r->metadata_length);
     return ret;
 }
 
@@ -830,7 +830,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_name_length_increment = 0;
+    Py_ssize_t max_metadata_length_increment = 0;
 
     self->node_table = NULL;
     self->locked = false;
@@ -848,7 +848,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = node_table_alloc(self->node_table, (size_t) max_rows_increment,
-            (size_t) max_name_length_increment);
+            (size_t) max_metadata_length_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -866,19 +866,19 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
     unsigned int flags = 0;
     double time = 0;
     int population = -1;
-    char *name = "";
-    Py_ssize_t name_length = 0;
-    static char *kwlist[] = {"flags", "time", "population", "name", NULL};
+    char *metadata = "";
+    Py_ssize_t metadata_length = 0;
+    static char *kwlist[] = {"flags", "time", "population", "metadata", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|idis#", kwlist,
-                &flags, &time, &population, &name, &name_length)) {
+                &flags, &time, &population, &metadata, &metadata_length)) {
         goto out;
     }
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
     err = node_table_add_row(self->node_table, (uint32_t) flags, time,
-            (population_id_t) population, name, name_length);
+            (population_id_t) population, metadata, metadata_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -896,9 +896,9 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
 {
     PyObject *ret = NULL;
     int err;
-    size_t num_rows, name_length;
-    char *name_data = NULL;
-    uint32_t *name_offset_data = NULL;
+    size_t num_rows, metadata_length;
+    char *metadata_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
     void *population_data = NULL;
     PyObject *time_input = NULL;
     PyArrayObject *time_array = NULL;
@@ -906,15 +906,15 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
     PyArrayObject *flags_array = NULL;
     PyObject *population_input = NULL;
     PyArrayObject *population_array = NULL;
-    PyObject *name_input = NULL;
-    PyArrayObject *name_array = NULL;
-    PyObject *name_offset_input = NULL;
-    PyArrayObject *name_offset_array = NULL;
-    static char *kwlist[] = {"flags", "time", "population", "name", "name_offset", NULL};
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    static char *kwlist[] = {"flags", "time", "population", "metadata", "metadata_offset", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OOO", kwlist,
-                &flags_input, &time_input, &population_input, &name_input,
-                &name_offset_input)) {
+                &flags_input, &time_input, &population_input, &metadata_input,
+                &metadata_offset_input)) {
         goto out;
     }
     if (NodeTable_check_state(self) != 0) {
@@ -936,30 +936,30 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         }
         population_data = PyArray_DATA(population_array);
     }
-    if ((name_input == NULL) != (name_offset_input == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "name and name_offset must be specified together");
+    if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "metadata and metadata_offset must be specified together");
         goto out;
     }
-    if (name_input != NULL) {
-        name_array = table_read_column_array(name_input, NPY_INT8, &name_length, false);
-        if (name_array == NULL) {
+    if (metadata_input != NULL) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8, &metadata_length, false);
+        if (metadata_array == NULL) {
             goto out;
         }
-        name_data = PyArray_DATA(name_array);
-        name_offset_array = table_read_offset_array(name_offset_input, num_rows, name_length);
-        if (name_offset_array == NULL) {
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, num_rows, metadata_length);
+        if (metadata_offset_array == NULL) {
             goto out;
         }
-        name_offset_data = PyArray_DATA(name_offset_array);
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
     }
     if (method == SET_COLS) {
         err = node_table_set_columns(self->node_table, num_rows,
                 PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-                name_data, name_offset_data);
+                metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
         err = node_table_append_columns(self->node_table, num_rows,
                 PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-                name_data, name_offset_data);
+                metadata_data, metadata_offset_data);
     } else {
         assert(0);
     }
@@ -972,8 +972,8 @@ out:
     Py_XDECREF(flags_array);
     Py_XDECREF(time_array);
     Py_XDECREF(population_array);
-    Py_XDECREF(name_array);
-    Py_XDECREF(name_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
@@ -1090,21 +1090,21 @@ out:
 }
 
 static PyObject *
-NodeTable_get_name(NodeTable *self, void *closure)
+NodeTable_get_metadata(NodeTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->name_length,
-            self->node_table->name, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->node_table->metadata_length,
+            self->node_table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-NodeTable_get_name_offset(NodeTable *self, void *closure)
+NodeTable_get_metadata_offset(NodeTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -1112,7 +1112,7 @@ NodeTable_get_name_offset(NodeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(self->node_table->num_rows + 1,
-            self->node_table->name_offset, NPY_UINT32, sizeof(uint32_t));
+            self->node_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1129,8 +1129,9 @@ static PyGetSetDef NodeTable_getsetters[] = {
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
     {"population", (getter) NodeTable_get_population, NULL, "The population array"},
-    {"name", (getter) NodeTable_get_name, NULL, "The name array"},
-    {"name_offset", (getter) NodeTable_get_name_offset, NULL, "The name offset array"},
+    {"metadata", (getter) NodeTable_get_metadata, NULL, "The metadata array"},
+    {"metadata_offset", (getter) NodeTable_get_metadata_offset, NULL,
+        "The metadata offset array"},
 #endif
     {NULL}  /* Sentinel */
 };

@@ -110,7 +110,7 @@ def permute_nodes(ts, node_map):
     for j in range(ts.num_nodes):
         old_node = old_nodes[reverse_map[j]]
         new_nodes.add_row(
-            flags=old_node.flags, name=old_node.name,
+            flags=old_node.flags, metadata=old_node.metadata,
             population=old_node.population, time=old_node.time)
     new_edges = msprime.EdgeTable()
     for edge in ts.edges():
