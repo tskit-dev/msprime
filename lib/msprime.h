@@ -111,14 +111,14 @@ typedef struct {
     list_len_t num_rows;
     list_len_t max_rows;
     list_len_t max_rows_increment;
-    list_len_t name_length;
-    list_len_t max_name_length;
-    list_len_t max_name_length_increment;
+    list_len_t metadata_length;
+    list_len_t max_metadata_length;
+    list_len_t max_metadata_length_increment;
     uint32_t *flags;
     double *time;
     population_id_t *population;
-    char *name;
-    list_len_t *name_offset;
+    char *metadata;
+    list_len_t *metadata_offset;
 } node_table_t;
 
 typedef struct {
@@ -158,8 +158,8 @@ typedef struct {
     uint32_t flags;
     double time;
     population_id_t population;
-    const char *name;
-    list_len_t name_length;
+    const char *metadata;
+    list_len_t metadata_length;
 } node_t;
 
 typedef struct {
@@ -412,13 +412,13 @@ typedef struct {
     struct {
         size_t num_records;
         size_t max_num_records;
-        size_t name_length;
-        size_t max_name_length;
+        size_t metadata_length;
+        size_t max_metadata_length;
         uint32_t *flags;
         population_id_t *population;
         double *time;
-        char *name;
-        list_len_t *name_offset;
+        char *metadata;
+        list_len_t *metadata_offset;
         node_id_t *sample_index_map;
     } nodes;
 

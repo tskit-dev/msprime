@@ -81,7 +81,7 @@ tree_sequence_check_state(tree_sequence_t *self)
             }
         }
     }
-    assert(self->nodes.name_offset[0] == 0);
+    assert(self->nodes.metadata_offset[0] == 0);
     assert(self->sites.ancestral_state_offset[0] == 0);
     assert(self->mutations.derived_state_offset[0] == 0);
 }
@@ -112,8 +112,8 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
                 (int) self->nodes.population[j],
                 self->nodes.time[j],
                 self->nodes.sample_index_map[j]);
-        for (k = self->nodes.name_offset[j]; k < self->nodes.name_offset[j + 1]; k++) {
-            fprintf(out, "%c", self->nodes.name[k]);
+        for (k = self->nodes.metadata_offset[j]; k < self->nodes.metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->nodes.metadata[k]);
         }
         fprintf(out, "\n");
     }
@@ -280,11 +280,11 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
     int ret = MSP_ERR_GENERIC;
     size_t size;
 
-    if (self->nodes.name_length > self->nodes.max_name_length) {
-        size = self->nodes.name_length;
-        self->nodes.max_name_length = size;
-        self->nodes.name = malloc(size * sizeof(char));
-        if (self->nodes.name == NULL) {
+    if (self->nodes.metadata_length > self->nodes.max_metadata_length) {
+        size = self->nodes.metadata_length;
+        self->nodes.max_metadata_length = size;
+        self->nodes.metadata = malloc(size * sizeof(char));
+        if (self->nodes.metadata == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -295,17 +295,17 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
         msp_safe_free(self->nodes.time);
         msp_safe_free(self->nodes.population);
         msp_safe_free(self->nodes.flags);
-        msp_safe_free(self->nodes.name_offset);
+        msp_safe_free(self->nodes.metadata_offset);
         msp_safe_free(self->nodes.sample_index_map);
         self->nodes.flags = malloc(size * sizeof(uint32_t));
         self->nodes.time = malloc(size * sizeof(double));
         self->nodes.population = malloc(size * sizeof(population_id_t));
-        self->nodes.name_offset = malloc((size + 1) * sizeof(list_len_t));
+        self->nodes.metadata_offset = malloc((size + 1) * sizeof(list_len_t));
         self->nodes.sample_index_map = malloc(size * sizeof(node_id_t));
         if (self->nodes.flags == NULL
                 || self->nodes.time == NULL
                 || self->nodes.population == NULL
-                || self->nodes.name_offset == NULL
+                || self->nodes.metadata_offset == NULL
                 || self->nodes.sample_index_map == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -423,7 +423,7 @@ tree_sequence_alloc(tree_sequence_t *self)
         goto out;
     }
     /* Ensure that the offsets are set even when we have an empty tree sequence. */
-    self->nodes.name_offset[0] = 0;
+    self->nodes.metadata_offset[0] = 0;
     self->sites.ancestral_state_offset[0] = 0;
     self->mutations.derived_state_offset[0] = 0;
 
@@ -472,8 +472,8 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->nodes.flags);
     msp_safe_free(self->nodes.population);
     msp_safe_free(self->nodes.time);
-    msp_safe_free(self->nodes.name);
-    msp_safe_free(self->nodes.name_offset);
+    msp_safe_free(self->nodes.metadata);
+    msp_safe_free(self->nodes.metadata_offset);
     msp_safe_free(self->nodes.sample_index_map);
     msp_safe_free(self->edges.left);
     msp_safe_free(self->edges.right);
@@ -518,7 +518,7 @@ tree_sequence_check_offsets(tree_sequence_t *self)
 {
     int ret = MSP_ERR_BAD_OFFSET;
 
-    if (self->nodes.name_length != self->nodes.name_offset[self->nodes.num_records]) {
+    if (self->nodes.metadata_length != self->nodes.metadata_offset[self->nodes.num_records]) {
         goto out;
     }
     if (self->sites.ancestral_state_length
@@ -997,7 +997,7 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     self->sequence_length = sequence_length;
     self->num_provenance_strings = num_provenance_strings;
     self->nodes.num_records = nodes->num_rows;
-    self->nodes.name_length = nodes->name_length;
+    self->nodes.metadata_length = nodes->metadata_length;
     self->edges.num_records = edges->num_rows;
     self->sites.num_records = 0;
     self->sites.ancestral_state_length = 0;
@@ -1032,8 +1032,8 @@ tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
     memcpy(self->nodes.flags, nodes->flags, nodes->num_rows * sizeof(uint32_t));
     memcpy(self->nodes.population, nodes->population,
             nodes->num_rows * sizeof(population_id_t));
-    memcpy(self->nodes.name, nodes->name, nodes->name_length * sizeof(char));
-    memcpy(self->nodes.name_offset, nodes->name_offset,
+    memcpy(self->nodes.metadata, nodes->metadata, nodes->metadata_length * sizeof(char));
+    memcpy(self->nodes.metadata_offset, nodes->metadata_offset,
             (nodes->num_rows + 1) * sizeof(list_len_t));
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
@@ -1130,11 +1130,11 @@ tree_sequence_dump_tables_tmp(tree_sequence_t *self,
         goto out;
     }
     for (j = 0; j < self->nodes.num_records; j++) {
-        offset = self->nodes.name_offset[j];
-        length = self->nodes.name_offset[j + 1] - offset;
+        offset = self->nodes.metadata_offset[j];
+        length = self->nodes.metadata_offset[j + 1] - offset;
         ret = node_table_add_row(nodes, self->nodes.flags[j],
                 self->nodes.time[j], self->nodes.population[j],
-                self->nodes.name + offset, length);
+                self->nodes.metadata + offset, length);
         if (ret != 0) {
             goto out;
         }
@@ -1338,8 +1338,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
 
         {"/nodes/flags", self->nodes.num_records},
         {"/nodes/population", self->nodes.num_records},
-        {"/nodes/name", self->nodes.name_length},
-        {"/nodes/name_offset", self->nodes.num_records + 1},
+        {"/nodes/metadata", self->nodes.metadata_length},
+        {"/nodes/metadata_offset", self->nodes.num_records + 1},
         {"/nodes/time", self->nodes.num_records},
 
         {"/edges/left", self->edges.num_records},
@@ -1468,7 +1468,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/mutations/derived_state", &self->mutations.derived_state_length},
         {"/provenance", &self->num_provenance_strings},
         {"/nodes/time", &self->nodes.num_records},
-        {"/nodes/name", &self->nodes.name_length},
+        {"/nodes/metadata", &self->nodes.metadata_length},
         {"/edges/left", &self->edges.num_records},
         {"/migrations/left", &self->migrations.num_records},
     };
@@ -1530,8 +1530,8 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
     };
     struct _hdf5_field_read fields[] = {
         {"/provenance", 0, self->provenance_strings},
-        {"/nodes/name", H5T_NATIVE_CHAR, self->nodes.name},
-        {"/nodes/name_offset", H5T_NATIVE_UINT32, self->nodes.name_offset},
+        {"/nodes/metadata", H5T_NATIVE_CHAR, self->nodes.metadata},
+        {"/nodes/metadata_offset", H5T_NATIVE_UINT32, self->nodes.metadata_offset},
         {"/nodes/flags", H5T_NATIVE_UINT32, self->nodes.flags},
         {"/nodes/population", H5T_NATIVE_INT32, self->nodes.population},
         {"/nodes/time", H5T_NATIVE_DOUBLE, self->nodes.time},
@@ -1691,11 +1691,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/provenance",
             0, 0, /* We must set this afterwards */
             self->num_provenance_strings, self->provenance_strings},
-        {"/nodes/name",
-            H5T_STD_I8LE, H5T_NATIVE_CHAR, self->nodes.name_length, self->nodes.name},
-        {"/nodes/name_offset",
+        {"/nodes/metadata_",
+            H5T_STD_I8LE, H5T_NATIVE_CHAR,
+            self->nodes.metadata_length, self->nodes.metadata},
+        {"/nodes/metadata_offset",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
-            self->nodes.num_records + 1, self->nodes.name_offset},
+            self->nodes.num_records + 1, self->nodes.metadata_offset},
         {"/nodes/flags",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->nodes.num_records, self->nodes.flags},
@@ -2144,10 +2145,10 @@ tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node)
     node->time = self->nodes.time[index];
     node->population = self->nodes.population[index];
     node->flags = self->nodes.flags[index];
-    offset = self->nodes.name_offset[index];
-    length = self->nodes.name_offset[index + 1] - offset;
-    node->name = self->nodes.name + offset;
-    node->name_length = length;
+    offset = self->nodes.metadata_offset[index];
+    length = self->nodes.metadata_offset[index + 1] - offset;
+    node->metadata = self->nodes.metadata+ offset;
+    node->metadata_length = length;
 out:
     return ret;
 }
@@ -2267,7 +2268,7 @@ tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples, size_t num_sam
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = node_table_alloc(nodes, self->nodes.num_records, self->nodes.name_length);
+    ret = node_table_alloc(nodes, self->nodes.num_records, self->nodes.metadata_length);
     if (ret != 0) {
         goto out;
     }

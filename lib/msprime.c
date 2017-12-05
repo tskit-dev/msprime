@@ -1510,8 +1510,8 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     node->flags = flags;
     node->population = population_id;
     node->time = time;
-    node->name = NULL;
-    node->name_length = 0;
+    node->metadata = NULL;
+    node->metadata_length = 0;
     self->num_nodes++;
     /* Check for overflow */
     assert(self->num_nodes < INT32_MAX);

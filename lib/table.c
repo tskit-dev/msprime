@@ -94,7 +94,7 @@ node_table_expand_main_columns(node_table_t *self, list_len_t additional_rows)
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->name_offset, new_size + 1,
+        ret = expand_column((void **) &self->metadata_offset, new_size + 1,
                 sizeof(list_len_t));
         if (ret != 0) {
             goto out;
@@ -106,19 +106,19 @@ out:
 }
 
 static int
-node_table_expand_name(node_table_t *self, list_len_t additional_length)
+node_table_expand_metadata(node_table_t *self, list_len_t additional_length)
 {
     int ret = 0;
     list_len_t increment = GSL_MAX(additional_length,
-            self->max_name_length_increment);
-    list_len_t new_size = self->max_name_length + increment;
+            self->max_metadata_length_increment);
+    list_len_t new_size = self->max_metadata_length + increment;
 
-    if ((self->name_length + additional_length) > self->max_name_length) {
-        ret = expand_column((void **) &self->name, new_size, sizeof(char *));
+    if ((self->metadata_length + additional_length) > self->max_metadata_length) {
+        ret = expand_column((void **) &self->metadata, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
         }
-        self->max_name_length = new_size;
+        self->max_metadata_length = new_size;
     }
 out:
     return ret;
@@ -126,7 +126,7 @@ out:
 
 int
 node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_name_length_increment)
+        size_t max_metadata_length_increment)
 {
     int ret = 0;
 
@@ -134,31 +134,31 @@ node_table_alloc(node_table_t *self, size_t max_rows_increment,
     if (max_rows_increment == 0) {
        max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    if (max_name_length_increment == 0) {
-        max_name_length_increment = DEFAULT_SIZE_INCREMENT;
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
     }
     self->max_rows_increment = (list_len_t) max_rows_increment;
-    self->max_name_length_increment = (list_len_t) max_name_length_increment;
+    self->max_metadata_length_increment = (list_len_t) max_metadata_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
-    self->max_name_length = 0;
-    self->name_length = 0;
+    self->max_metadata_length = 0;
+    self->metadata_length = 0;
     ret = node_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_expand_name(self, 1);
+    ret = node_table_expand_metadata(self, 1);
     if (ret != 0) {
         goto out;
     }
-    self->name_offset[0] = 0;
+    self->metadata_offset[0] = 0;
 out:
     return ret;
 }
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *name, uint32_t *name_length)
+        population_id_t *population, char *metadata, uint32_t *metadata_length)
 {
     int ret;
 
@@ -166,24 +166,24 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_append_columns(self, num_rows, flags, time, population, name,
-            name_length);
+    ret = node_table_append_columns(self, num_rows, flags, time, population, metadata,
+            metadata_length);
 out:
     return ret;
 }
 
 int
 node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *name, uint32_t *name_offset)
+        population_id_t *population, char *metadata, uint32_t *metadata_offset)
 {
     int ret;
-    list_len_t j, name_length;
+    list_len_t j, metadata_length;
 
     if (flags == NULL || time == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if ((name == NULL) != (name_offset == NULL)) {
+    if ((metadata == NULL) != (metadata_offset == NULL)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -193,26 +193,26 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
     }
     memcpy(self->flags + self->num_rows, flags, num_rows * sizeof(uint32_t));
     memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
-    if (name == NULL) {
+    if (metadata == NULL) {
         for (j = 0; j < num_rows; j++) {
-            self->name_offset[self->num_rows + j + 1] = (list_len_t) self->name_length;
+            self->metadata_offset[self->num_rows + j + 1] = (list_len_t) self->metadata_length;
         }
     } else {
-        ret = check_offsets(num_rows, name_offset);
+        ret = check_offsets(num_rows, metadata_offset);
         if (ret != 0) {
             goto out;
         }
         for (j = 0; j < num_rows; j++) {
-            self->name_offset[self->num_rows + j] =
-                (list_len_t) self->name_length + name_offset[j];
+            self->metadata_offset[self->num_rows + j] =
+                (list_len_t) self->metadata_length + metadata_offset[j];
         }
-        name_length = name_offset[num_rows];
-        ret = node_table_expand_name(self, name_length);
+        metadata_length = metadata_offset[num_rows];
+        ret = node_table_expand_metadata(self, metadata_length);
         if (ret != 0) {
             goto out;
         }
-        memcpy(self->name + self->name_length, name, name_length * sizeof(char));
-        self->name_length += name_length;
+        memcpy(self->metadata + self->metadata_length, metadata, metadata_length * sizeof(char));
+        self->metadata_length += metadata_length;
     }
     if (population == NULL) {
         /* Set population to NULL_POPULATION (-1) if not specified */
@@ -223,30 +223,30 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
                 num_rows * sizeof(population_id_t));
     }
     self->num_rows += (list_len_t) num_rows;
-    self->name_offset[self->num_rows] = self->name_length;
+    self->metadata_offset[self->num_rows] = self->metadata_length;
 out:
     return ret;
 }
 
 static int
 node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *name, list_len_t name_length)
+        population_id_t population, const char *metadata, list_len_t metadata_length)
 {
     assert(self->num_rows < self->max_rows);
-    assert(self->name_length + name_length < self->max_name_length);
-    memcpy(self->name + self->name_length, name, name_length);
+    assert(self->metadata_length + metadata_length < self->max_metadata_length);
+    memcpy(self->metadata + self->metadata_length, metadata, metadata_length);
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
-    self->name_offset[self->num_rows + 1] = self->name_length + name_length;
-    self->name_length += name_length;
+    self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
+    self->metadata_length += metadata_length;
     self->num_rows++;
     return 0;
 }
 
 int
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *name, size_t name_length)
+        population_id_t population, const char *metadata, size_t metadata_length)
 {
     int ret = 0;
 
@@ -254,12 +254,12 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_expand_name(self, (list_len_t) name_length);
+    ret = node_table_expand_metadata(self, (list_len_t) metadata_length);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_add_row_internal(self, flags, time, population, name,
-            (list_len_t) name_length);
+    ret = node_table_add_row_internal(self, flags, time, population, metadata,
+            (list_len_t) metadata_length);
 out:
     return ret;
 }
@@ -268,7 +268,7 @@ int
 node_table_reset(node_table_t *self)
 {
     self->num_rows = 0;
-    self->name_length = 0;
+    self->metadata_length = 0;
     return 0;
 }
 
@@ -278,8 +278,8 @@ node_table_free(node_table_t *self)
     msp_safe_free(self->flags);
     msp_safe_free(self->time);
     msp_safe_free(self->population);
-    msp_safe_free(self->name);
-    msp_safe_free(self->name_offset);
+    msp_safe_free(self->metadata);
+    msp_safe_free(self->metadata_offset);
     return 0;
 }
 
@@ -292,22 +292,22 @@ node_table_print_state(node_table_t *self, FILE *out)
     fprintf(out, "node_table: %p:\n", (void *) self);
     fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "name_length = %d\tmax= %d\tincrement = %d)\n",
-            (int) self->name_length,
-            (int) self->max_name_length,
-            (int) self->max_name_length_increment);
+    fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->metadata_length,
+            (int) self->max_metadata_length,
+            (int) self->max_metadata_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tflags\ttime\tpopulation\tname_length\tname\n");
+    fprintf(out, "index\tflags\ttime\tpopulation\tmetadata_length\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
-                (int) self->population[j], self->name_offset[j]);
-        for (k = self->name_offset[j]; k < self->name_offset[j + 1]; k++) {
-            fprintf(out, "%c", self->name[k]);
+                (int) self->population[j], self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
         }
         fprintf(out, "\n");
     }
-    assert(self->name_offset[0] == 0);
-    assert(self->name_offset[self->num_rows] == self->name_length);
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_offset[self->num_rows] == self->metadata_length);
 }
 
 bool
@@ -315,17 +315,17 @@ node_table_equal(node_table_t *self, node_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
-            && self->name_length == other->name_length) {
+            && self->metadata_length == other->metadata_length) {
         ret = memcmp(self->time, other->time,
                 self->num_rows * sizeof(double)) == 0
             && memcmp(self->flags, other->flags,
                     self->num_rows * sizeof(uint32_t)) == 0
             && memcmp(self->population, other->population,
                     self->num_rows * sizeof(population_id_t)) == 0
-            && memcmp(self->name_offset, other->name_offset,
+            && memcmp(self->metadata_offset, other->metadata_offset,
                     (self->num_rows + 1) * sizeof(list_len_t)) == 0
-            && memcmp(self->name, other->name,
-                    self->name_length * sizeof(char)) == 0;
+            && memcmp(self->metadata, other->metadata,
+                    self->metadata_length * sizeof(char)) == 0;
     }
     return ret;
 }
@@ -1664,8 +1664,8 @@ static int WARN_UNUSED
 simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
 {
     int ret = 0;
-    list_len_t offset = self->input_nodes.name_offset[input_id];
-    list_len_t length = self->input_nodes.name_offset[input_id + 1] - offset;
+    list_len_t offset = self->input_nodes.metadata_offset[input_id];
+    list_len_t length = self->input_nodes.metadata_offset[input_id + 1] - offset;
     uint32_t flags = self->input_nodes.flags[input_id];
 
     /* Zero out the sample bit */
@@ -1676,7 +1676,7 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
     self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
     ret = node_table_add_row_internal(self->nodes, flags,
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
-            self->input_nodes.name + offset, length);
+            self->input_nodes.metadata + offset, length);
     if (ret != 0) {
         goto out;
     }
@@ -2006,12 +2006,13 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
 
     /* Make a copy of the input nodes and clear the table ready for output */
-    ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->name_length);
+    ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->metadata_length);
     if (ret != 0) {
         goto out;
     }
     ret = node_table_set_columns(&self->input_nodes, nodes->num_rows,
-            nodes->flags, nodes->time, nodes->population, nodes->name, nodes->name_offset);
+            nodes->flags, nodes->time, nodes->population,
+            nodes->metadata, nodes->metadata_offset);
     if (ret != 0) {
         goto out;
     }
