@@ -3047,14 +3047,14 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(list(table.metadata), [])
         self.assertEqual(list(table.metadata_offset), [0, 0])
 
-        metadata = "abcde"
+        metadata = b"abcde"
         table = _msprime.NodeTable()
         table.add_row(flags=5, population=10, time=1.23, metadata=metadata)
         self.assertEqual(table.num_rows, 1)
         self.assertEqual(table.population, [10])
         self.assertEqual(table.flags, [5])
         self.assertEqual(table.time, [1.23])
-        self.assertEqual(list(table.metadata), [ord(c) for c in metadata])
+        self.assertEqual(table.metadata.tobytes(), metadata)
         self.assertEqual(list(table.metadata_offset), [0, len(metadata)])
 
     def test_node_table_add_row_errors(self):

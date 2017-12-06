@@ -59,9 +59,14 @@ class NodeTable(_msprime.NodeTable):
         time = self.time
         flags = self.flags
         population = self.population
-        ret = "id\tis_sample\tpopulation\ttime\n"
+        metadata = unpack_bytes(self.metadata, self.metadata_offset)
+        ret = "id\tis_sample\tpopulation\ttime\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\t\t{:.14f}\n".format(j, flags[j], population[j], time[j])
+            # Not clear how we should deal with printing metadata out here.
+            # Probably try to decode as utf8, but printout as raw bytes if
+            # this fails??
+            ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
+                j, flags[j], population[j], time[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):

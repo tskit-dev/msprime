@@ -512,10 +512,15 @@ make_node(node_t *r)
 {
     PyObject *ret = NULL;
     const char *metadata = r->metadata == NULL? "": r->metadata;
-
-    ret = Py_BuildValue("Idis#",
-        (unsigned int) r->flags, r->time, (int) r->population, metadata,
-        (Py_ssize_t) r->metadata_length);
+    PyObject* py_metadata = PyBytes_FromStringAndSize(
+        metadata, (Py_ssize_t) r->metadata_length);
+    if (py_metadata == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("IdiO",
+        (unsigned int) r->flags, r->time, (int) r->population, py_metadata);
+out:
+    Py_XDECREF(py_metadata);
     return ret;
 }
 
@@ -868,16 +873,22 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
     unsigned int flags = 0;
     double time = 0;
     int population = -1;
+    PyObject *py_metadata = NULL;
     char *metadata = "";
     Py_ssize_t metadata_length = 0;
     static char *kwlist[] = {"flags", "time", "population", "metadata", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|idis#", kwlist,
-                &flags, &time, &population, &metadata, &metadata_length)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|idiO", kwlist,
+                &flags, &time, &population, &py_metadata)) {
         goto out;
     }
     if (NodeTable_check_state(self) != 0) {
         goto out;
+    }
+    if (py_metadata != NULL) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
     }
     err = node_table_add_row(self->node_table, (uint32_t) flags, time,
             (population_id_t) population, metadata, metadata_length);
