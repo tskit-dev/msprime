@@ -534,25 +534,43 @@ def simplify_tables(*args, **kwargs):
     return _msprime.simplify_tables(*args, **kwargs)
 
 
-def pack_strings(strings):
+def pack_bytes(data):
     """
-    Packs the specified list of strings into a flattened numpy array of characters
+    Packs the specified list of bytes into a flattened numpy array of 8 bit integers
     and corresponding lengths.
     """
-    lengths = np.array([0] + [len(s) for s in strings], dtype=np.uint32)
+    lengths = np.array([0] + [len(b) for b in data], dtype=np.uint32)
     offsets = np.cumsum(lengths, dtype=np.uint32)
-    encoded = ("".join(strings)).encode()
-    return np.fromstring(encoded, dtype=np.int8), offsets
+    column = np.empty(offsets[-1], dtype=np.int8)
+    for j, value in enumerate(data):
+        column[offsets[j]: offsets[j + 1]] = bytearray(value)
+    return column, offsets
 
 
-def unpack_strings(packed, offset):
+def unpack_bytes(packed, offset):
     """
-    Unpacks a list of string from the specified numpy arrays of packed character
+    Unpacks a list of bytes from the specified numpy arrays of packed byte
     data and corresponding offsets.
     """
     # This could be done a lot more efficiently...
     ret = []
     for j in range(offset.shape[0] - 1):
-        raw = packed[offset[j]: offset[j + 1]].tostring()
-        ret.append(raw.decode())
+        raw = packed[offset[j]: offset[j + 1]].tobytes()
+        ret.append(raw)
     return ret
+
+
+def pack_strings(strings, encoding="utf8"):
+    """
+    Packs the specified list of strings into a flattened numpy array of 8 bit integers
+    and corresponding lengths.
+    """
+    return pack_bytes([bytearray(s.encode(encoding)) for s in strings])
+
+
+def unpack_strings(packed, offset, encoding="utf8"):
+    """
+    Unpacks a list of strings from the specified numpy arrays of packed byte
+    data and corresponding offsets.
+    """
+    return [b.decode(encoding) for b in unpack_bytes(packed, offset)]

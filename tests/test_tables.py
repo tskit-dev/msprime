@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2017 University of Oxford
 #
@@ -35,9 +36,17 @@ import msprime
 import _msprime
 
 
-def random_string(max_length):
+def random_bytes(max_length):
     """
-    Returns a random character string of the specified maximum length.
+    Returns a random bytearray of the specified maximum length.
+    """
+    length = random.randint(0, max_length)
+    return bytearray(random.randint(0, 255) for _ in range(length))
+
+
+def random_strings(max_length):
+    """
+    Returns a random bytearray of the specified maximum length.
     """
     length = random.randint(0, max_length)
     return "".join(random.choice(string.printable) for _ in range(length))
@@ -422,8 +431,8 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
 
     def test_random_metadata(self):
         for num_rows in [0, 10, 100]:
-            metadatas = [random_string(10) for _ in range(num_rows)]
-            metadata, metadata_offset = msprime.pack_strings(metadatas)
+            metadatas = [random_bytes(10) for _ in range(num_rows)]
+            metadata, metadata_offset = msprime.pack_bytes(metadatas)
             flags = list(range(num_rows))
             time = list(range(num_rows))
             table = msprime.NodeTable()
@@ -434,7 +443,7 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
             self.assertEqual(list(table.time), time)
             self.assertEqual(list(table.metadata), list(metadata))
             self.assertEqual(list(table.metadata_offset), list(metadata_offset))
-            unpacked_metadatas = msprime.unpack_strings(
+            unpacked_metadatas = msprime.unpack_bytes(
                 table.metadata, table.metadata_offset)
             self.assertEqual(metadatas, unpacked_metadatas)
 
@@ -503,10 +512,10 @@ class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
 
 class TestStringPacking(unittest.TestCase):
     """
-    Tests the code for packing and unpacking strings into numpy arrays.
+    Tests the code for packing and unpacking unicode string data into numpy arrays.
     """
 
-    def test_simple_case(self):
+    def test_simple_string_case(self):
         strings = ["hello", "world"]
         packed, offset = msprime.pack_strings(strings)
         self.assertEqual(list(offset), [0, 5, 10])
@@ -518,10 +527,6 @@ class TestStringPacking(unittest.TestCase):
         packed, offset = msprime.pack_strings(strings)
         self.assertEqual(packed.dtype, np.int8)
         self.assertEqual(offset.dtype, np.uint32)
-        computed_offset = [0]
-        for s in strings:
-            computed_offset.append(computed_offset[-1] + len(s))
-        self.assertEqual(list(offset), computed_offset)
         self.assertEqual(packed.shape[0], offset[-1])
         returned = msprime.unpack_strings(packed, offset)
         self.assertEqual(strings, returned)
@@ -533,11 +538,50 @@ class TestStringPacking(unittest.TestCase):
 
     def test_random_cases(self):
         for n in range(100):
-            strings = [random_string(10) for _ in range(n)]
+            strings = [random_strings(10) for _ in range(n)]
             self.verify_packing(strings)
 
+    def test_unicode(self):
+        self.verify_packing([u'abcdé', u'€'])
 
-@unittest.skip("text site/mutaitons")
+
+class TestBytePacking(unittest.TestCase):
+    """
+    Tests the code for packing and unpacking binary data into numpy arrays.
+    """
+
+    def test_simple_string_case(self):
+        strings = [b"hello", b"world"]
+        packed, offset = msprime.pack_bytes(strings)
+        self.assertEqual(list(offset), [0, 5, 10])
+        self.assertEqual(packed.shape, (10,))
+        returned = msprime.unpack_bytes(packed, offset)
+        self.assertEqual(returned, strings)
+
+    def verify_packing(self, data):
+        packed, offset = msprime.pack_bytes(data)
+        self.assertEqual(packed.dtype, np.int8)
+        self.assertEqual(offset.dtype, np.uint32)
+        self.assertEqual(packed.shape[0], offset[-1])
+        returned = msprime.unpack_bytes(packed, offset)
+        self.assertEqual(data, returned)
+        return returned
+
+    def test_random_cases(self):
+        for n in range(100):
+            data = [random_bytes(10) for _ in range(n)]
+            self.verify_packing(data)
+
+    def test_pickle_packing(self):
+        data = [list(range(j)) for j in range(10)]
+        # Pickle each of these in turn
+        pickled = [pickle.dumps(d) for d in data]
+        unpacked = self.verify_packing(pickled)
+        unpickled = [pickle.loads(p) for p in unpacked]
+        self.assertEqual(data, unpickled)
+
+
+@unittest.skip("text site/mutations")
 class TestSortTables(unittest.TestCase):
     """
     Tests for the sort_tables method.
