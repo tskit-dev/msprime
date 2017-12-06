@@ -143,6 +143,22 @@ typedef struct {
     double *time;
 } migration_table_t;
 
+typedef struct {
+    list_len_t num_rows;
+    list_len_t max_rows;
+    list_len_t max_rows_increment;
+    list_len_t timestamp_length;
+    list_len_t max_timestamp_length;
+    list_len_t max_timestamp_length_increment;
+    list_len_t provenance_length;
+    list_len_t max_provenance_length;
+    list_len_t max_provenance_length_increment;
+    char *timestamp;
+    list_len_t *timestamp_offset;
+    char *provenance;
+    list_len_t *provenance_offset;
+} provenance_table_t;
+
 typedef struct segment_t_t {
     population_id_t population_id;
     /* During simulation we use genetic coordinates */
@@ -991,6 +1007,23 @@ int simplifier_alloc(simplifier_t *self, double sequence_length,
 int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self, node_id_t *node_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);
+
+int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
+        size_t max_timestamp_length_increment, 
+        size_t max_provenance_length_increment);
+int provenance_table_add_row(provenance_table_t *self, 
+        const char *timestamp, size_t timestamp_length,
+        const char *provenance, size_t provenance_length);
+int provenance_table_set_columns(provenance_table_t *self, size_t num_rows, 
+       char *timestamp, list_len_t *timestamp_offset,
+       char *provenance, list_len_t *provenance_offset);
+int provenance_table_append_columns(provenance_table_t *self, size_t num_rows, 
+        char *timestamp, list_len_t *timestamp_offset,
+        char *provenance, list_len_t *provenance_offset);
+int provenance_table_reset(provenance_table_t *self);
+int provenance_table_free(provenance_table_t *self);
+void provenance_table_print_state(provenance_table_t *self, FILE *out);
+bool provenance_table_equal(provenance_table_t *self, provenance_table_t *other);
 
 int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);
 const char * msp_strerror(int err);

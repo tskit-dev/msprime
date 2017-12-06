@@ -6597,6 +6597,116 @@ test_migration_table(void)
     free(dest);
 }
 
+static void
+test_provenance_table(void)
+{
+    int ret;
+    provenance_table_t table;
+    size_t num_rows = 100;
+    size_t j;
+    char *timestamp;
+    uint32_t *timestamp_offset;
+    const char *test_timestamp = "2017-12-06T20:40:25+00:00";
+    size_t test_timestamp_length = strlen(test_timestamp);
+    char timestamp_copy[test_timestamp_length + 1];
+    char *provenance;
+    uint32_t *provenance_offset;
+    const char *test_provenance = "{\"json\"=1234}";
+    size_t test_provenance_length = strlen(test_provenance);
+    char provenance_copy[test_provenance_length + 1];
+
+    timestamp_copy[test_timestamp_length] = '\0';
+    provenance_copy[test_provenance_length] = '\0';
+    ret = provenance_table_alloc(&table, 1, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    provenance_table_print_state(&table, _devnull);
+
+    for (j = 0; j < num_rows; j++) {
+        ret = provenance_table_add_row(&table, test_timestamp, test_timestamp_length,
+                test_provenance, test_provenance_length);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(table.timestamp_length, (j + 1) * test_timestamp_length);
+        CU_ASSERT_EQUAL(table.timestamp_offset[j + 1], table.timestamp_length);
+        CU_ASSERT_EQUAL(table.provenance_length, (j + 1) * test_provenance_length);
+        CU_ASSERT_EQUAL(table.provenance_offset[j + 1], table.provenance_length);
+        /* check the timestamp */
+        memcpy(timestamp_copy, table.timestamp + table.timestamp_offset[j],
+                test_timestamp_length);
+        CU_ASSERT_NSTRING_EQUAL(timestamp_copy, test_timestamp, test_timestamp_length);
+        /* check the provenance */
+        memcpy(provenance_copy, table.provenance + table.provenance_offset[j],
+                test_provenance_length);
+        CU_ASSERT_NSTRING_EQUAL(provenance_copy, test_provenance, test_provenance_length);
+    }
+    provenance_table_print_state(&table, _devnull);
+    provenance_table_reset(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.timestamp_length, 0);
+    CU_ASSERT_EQUAL(table.provenance_length, 0);
+
+    num_rows *= 2;
+    timestamp = malloc(num_rows * sizeof(char));
+    memset(timestamp, 'a', num_rows * sizeof(char));
+    CU_ASSERT_FATAL(timestamp != NULL);
+    timestamp_offset = malloc((num_rows + 1) * sizeof(list_len_t));
+    CU_ASSERT_FATAL(timestamp_offset != NULL);
+    provenance = malloc(num_rows * sizeof(char));
+    memset(provenance, 'a', num_rows * sizeof(char));
+    CU_ASSERT_FATAL(provenance != NULL);
+    provenance_offset = malloc((num_rows + 1) * sizeof(list_len_t));
+    CU_ASSERT_FATAL(provenance_offset != NULL);
+    for (j = 0; j < num_rows + 1; j++) {
+        timestamp_offset[j] = j;
+        provenance_offset[j] = j;
+    }
+    ret = provenance_table_set_columns(&table, num_rows,
+            timestamp, timestamp_offset, provenance, provenance_offset);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.timestamp, timestamp, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.timestamp_offset, timestamp_offset,
+                (num_rows + 1) * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.provenance, provenance, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.provenance_offset, provenance_offset,
+                (num_rows + 1) * sizeof(list_len_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.timestamp_length, num_rows);
+    CU_ASSERT_EQUAL(table.provenance_length, num_rows);
+    provenance_table_print_state(&table, _devnull);
+
+    /* Append another num_rows onto the end */
+    ret = provenance_table_append_columns(&table, num_rows,
+            timestamp, timestamp_offset, provenance, provenance_offset);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.timestamp, timestamp, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.timestamp + num_rows, timestamp, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.provenance, provenance, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.provenance + num_rows, provenance, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.timestamp_length, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.provenance_length, 2 * num_rows);
+    provenance_table_print_state(&table, _devnull);
+
+    /* No arguments can be null */
+    ret = provenance_table_set_columns(&table, num_rows, NULL, timestamp_offset,
+            provenance, provenance_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = provenance_table_set_columns(&table, num_rows, timestamp, NULL,
+            provenance, provenance_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = provenance_table_set_columns(&table, num_rows, timestamp, timestamp_offset,
+            NULL, provenance_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = provenance_table_set_columns(&table, num_rows, timestamp, timestamp_offset,
+            provenance, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    provenance_table_free(&table);
+    free(timestamp);
+    free(timestamp_offset);
+    free(provenance);
+    free(provenance_offset);
+}
+
 
 static int
 msprime_suite_init(void)
@@ -6744,6 +6854,7 @@ main(int argc, char **argv)
         {"test_site_table", test_site_table},
         {"test_mutation_table", test_mutation_table},
         {"test_migration_table", test_migration_table},
+        {"test_provenance_table", test_provenance_table},
         CU_TEST_INFO_NULL,
     };
 

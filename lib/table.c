@@ -158,7 +158,7 @@ out:
 
 int
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *metadata, uint32_t *metadata_length)
+        population_id_t *population, char *metadata, uint32_t *metadata_offset)
 {
     int ret;
 
@@ -167,7 +167,7 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
         goto out;
     }
     ret = node_table_append_columns(self, num_rows, flags, time, population, metadata,
-            metadata_length);
+            metadata_offset);
 out:
     return ret;
 }
@@ -297,7 +297,7 @@ node_table_print_state(node_table_t *self, FILE *out)
             (int) self->max_metadata_length,
             (int) self->max_metadata_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tflags\ttime\tpopulation\tmetadata_length\tmetadata\n");
+    fprintf(out, "index\tflags\ttime\tpopulation\tmetadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
                 (int) self->population[j], self->metadata_offset[j]);
@@ -1130,6 +1130,305 @@ migration_table_print_state(migration_table_t *self, FILE *out)
                 self->right[j], (int) self->node[j], (int) self->source[j],
                 (int) self->dest[j], self->time[j]);
     }
+}
+
+
+/*************************
+ * provenance table
+ *************************/
+
+static int
+provenance_table_expand_main_columns(provenance_table_t *self, list_len_t additional_rows)
+{
+    int ret = 0;
+    list_len_t increment = GSL_MAX(additional_rows, self->max_rows_increment);
+    list_len_t new_size = self->max_rows + increment;
+
+    if ((self->num_rows + additional_rows) > self->max_rows) {
+        ret = expand_column((void **) &self->timestamp_offset, new_size + 1,
+                sizeof(list_len_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->provenance_offset, new_size + 1,
+                sizeof(list_len_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+provenance_table_expand_timestamp(provenance_table_t *self, list_len_t additional_length)
+{
+    int ret = 0;
+    list_len_t increment = GSL_MAX(additional_length,
+            self->max_timestamp_length_increment);
+    list_len_t new_size = self->max_timestamp_length + increment;
+
+    if ((self->timestamp_length + additional_length) > self->max_timestamp_length) {
+        ret = expand_column((void **) &self->timestamp, new_size, sizeof(char *));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_timestamp_length = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+provenance_table_expand_provenance(provenance_table_t *self, list_len_t additional_length)
+{
+    int ret = 0;
+    list_len_t increment = GSL_MAX(additional_length,
+            self->max_provenance_length_increment);
+    list_len_t new_size = self->max_provenance_length + increment;
+
+    if ((self->provenance_length + additional_length) > self->max_provenance_length) {
+        ret = expand_column((void **) &self->provenance, new_size, sizeof(char *));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_provenance_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
+        size_t max_timestamp_length_increment, size_t max_provenance_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(provenance_table_t));
+    if (max_rows_increment == 0) {
+       max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_timestamp_length_increment == 0) {
+        max_timestamp_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_provenance_length_increment == 0) {
+        max_provenance_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (list_len_t) max_rows_increment;
+    self->max_timestamp_length_increment = (list_len_t) max_timestamp_length_increment;
+    self->max_provenance_length_increment = (list_len_t) max_provenance_length_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_timestamp_length = 0;
+    self->timestamp_length = 0;
+    self->max_provenance_length = 0;
+    self->provenance_length = 0;
+    ret = provenance_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_expand_timestamp(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->timestamp_offset[0] = 0;
+    ret = provenance_table_expand_provenance(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->provenance_offset[0] = 0;
+out:
+    return ret;
+}
+
+int
+provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
+        char *timestamp, uint32_t *timestamp_offset,
+        char *provenance, uint32_t *provenance_offset)
+{
+    int ret;
+
+    ret = provenance_table_reset(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_append_columns(self, num_rows,
+            timestamp, timestamp_offset, provenance, provenance_offset);
+out:
+    return ret;
+}
+
+int
+provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
+        char *timestamp, uint32_t *timestamp_offset,
+        char *provenance, uint32_t *provenance_offset)
+{
+    int ret;
+    list_len_t j, timestamp_length, provenance_length;
+
+    if (timestamp == NULL || timestamp_offset == NULL ||
+            provenance == NULL || provenance_offset == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = provenance_table_expand_main_columns(self, (list_len_t) num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+
+    ret = check_offsets(num_rows, timestamp_offset);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        self->timestamp_offset[self->num_rows + j] =
+            (list_len_t) self->timestamp_length + timestamp_offset[j];
+    }
+    timestamp_length = timestamp_offset[num_rows];
+    ret = provenance_table_expand_timestamp(self, timestamp_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->timestamp + self->timestamp_length, timestamp,
+            timestamp_length * sizeof(char));
+    self->timestamp_length += timestamp_length;
+
+    ret = check_offsets(num_rows, provenance_offset);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        self->provenance_offset[self->num_rows + j] =
+            (list_len_t) self->provenance_length + provenance_offset[j];
+    }
+    provenance_length = provenance_offset[num_rows];
+    ret = provenance_table_expand_provenance(self, provenance_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->provenance + self->provenance_length, provenance,
+            provenance_length * sizeof(char));
+    self->provenance_length += provenance_length;
+
+    self->num_rows += (list_len_t) num_rows;
+    self->timestamp_offset[self->num_rows] = self->timestamp_length;
+    self->provenance_offset[self->num_rows] = self->provenance_length;
+out:
+    return ret;
+}
+
+static int
+provenance_table_add_row_internal(provenance_table_t *self,
+        const char *timestamp, list_len_t timestamp_length,
+        const char *provenance, list_len_t provenance_length)
+{
+    assert(self->num_rows < self->max_rows);
+    assert(self->timestamp_length + timestamp_length < self->max_timestamp_length);
+    memcpy(self->timestamp + self->timestamp_length, timestamp, timestamp_length);
+    self->timestamp_offset[self->num_rows + 1] = self->timestamp_length + timestamp_length;
+    self->timestamp_length += timestamp_length;
+    assert(self->provenance_length + provenance_length < self->max_provenance_length);
+    memcpy(self->provenance + self->provenance_length, provenance, provenance_length);
+    self->provenance_offset[self->num_rows + 1] = self->provenance_length + provenance_length;
+    self->provenance_length += provenance_length;
+    self->num_rows++;
+    return 0;
+}
+
+int
+provenance_table_add_row(provenance_table_t *self,
+        const char *timestamp, size_t timestamp_length,
+        const char *provenance, size_t provenance_length)
+{
+    int ret = 0;
+
+    ret = provenance_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_expand_timestamp(self, (list_len_t) timestamp_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_expand_provenance(self, (list_len_t) provenance_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_add_row_internal(self,
+            timestamp, (list_len_t) timestamp_length,
+            provenance, (list_len_t) provenance_length);
+out:
+    return ret;
+}
+
+int
+provenance_table_reset(provenance_table_t *self)
+{
+    self->num_rows = 0;
+    self->timestamp_length = 0;
+    self->provenance_length = 0;
+    return 0;
+}
+
+int
+provenance_table_free(provenance_table_t *self)
+{
+    msp_safe_free(self->timestamp);
+    msp_safe_free(self->timestamp_offset);
+    msp_safe_free(self->provenance);
+    msp_safe_free(self->provenance_offset);
+    return 0;
+}
+
+void
+provenance_table_print_state(provenance_table_t *self, FILE *out)
+{
+    size_t j, k;
+
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "provenance_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    fprintf(out, "timestamp_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->timestamp_length,
+            (int) self->max_timestamp_length,
+            (int) self->max_timestamp_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tttimestamp_offset\ttimestamp\tprovenance_offset\tprovenance\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%d\t", (int) j, self->timestamp_offset[j]);
+        for (k = self->timestamp_offset[j]; k < self->timestamp_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->timestamp[k]);
+        }
+        fprintf(out, "\t%d\t", self->provenance_offset[j]);
+        for (k = self->provenance_offset[j]; k < self->provenance_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->provenance[k]);
+        }
+        fprintf(out, "\n");
+    }
+    assert(self->timestamp_offset[0] == 0);
+    assert(self->timestamp_offset[self->num_rows] == self->timestamp_length);
+    assert(self->provenance_offset[0] == 0);
+    assert(self->provenance_offset[self->num_rows] == self->provenance_length);
+}
+
+bool
+provenance_table_equal(provenance_table_t *self, provenance_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->timestamp_length == other->timestamp_length) {
+        ret = memcmp(self->timestamp_offset, other->timestamp_offset,
+                    (self->num_rows + 1) * sizeof(list_len_t)) == 0
+            && memcmp(self->timestamp, other->timestamp,
+                    self->timestamp_length * sizeof(char)) == 0
+            && memcmp(self->provenance_offset, other->provenance_offset,
+                    (self->num_rows + 1) * sizeof(list_len_t)) == 0
+            && memcmp(self->provenance, other->provenance,
+                    self->provenance_length * sizeof(char)) == 0;
+    }
+    return ret;
 }
 
 /*************************
