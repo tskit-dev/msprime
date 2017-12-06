@@ -1691,7 +1691,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/provenance",
             0, 0, /* We must set this afterwards */
             self->num_provenance_strings, self->provenance_strings},
-        {"/nodes/metadata_",
+        {"/nodes/metadata",
             H5T_STD_I8LE, H5T_NATIVE_CHAR,
             self->nodes.metadata_length, self->nodes.metadata},
         {"/nodes/metadata_offset",

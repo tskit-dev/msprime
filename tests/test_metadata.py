@@ -27,6 +27,7 @@ import json
 import os
 import tempfile
 import unittest
+import pickle
 
 import numpy as np
 
@@ -63,6 +64,26 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
             decoded_metadata = json.loads(node.metadata.decode())
             self.assertEqual(decoded_metadata, metadata[j])
         ts1.dump(self.temp_file)
-        # TODO Fix this, currently returning lib error.
-        # ts2 = msprime.load(self.temp_file)
-        # self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
+        ts2 = msprime.load(self.temp_file)
+        self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
+
+    def test_pickle(self):
+        ts = msprime.simulate(10, random_seed=1)
+        tables = ts.dump_tables()
+        nodes = tables.nodes
+        # For each node, we create some Python metadata that can be JSON encoded.
+        metadata = [
+            {"one": j, "two": 2 * j, "three": list(range(j))} for j in range(len(nodes))]
+        encoded, offset = msprime.pack_bytes(map(pickle.dumps, metadata))
+        nodes.set_columns(
+            flags=nodes.flags, time=nodes.time, population=nodes.population,
+            metadata_offset=offset, metadata=encoded)
+        self.assertTrue(np.array_equal(nodes.metadata_offset, offset))
+        self.assertTrue(np.array_equal(nodes.metadata, encoded))
+        ts1 = msprime.load_tables(nodes=nodes, edges=tables.edges)
+        for j, node in enumerate(ts1.nodes()):
+            decoded_metadata = pickle.loads(node.metadata)
+            self.assertEqual(decoded_metadata, metadata[j])
+        ts1.dump(self.temp_file)
+        ts2 = msprime.load(self.temp_file)
+        self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
