@@ -385,7 +385,7 @@ contextual information.
 
 The root group contains one attributes, ``format_version``. This
 is a pair ``(major, minor)`` describing the file format version. This
-document describes version 3.2.
+document describes version 9.0.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
@@ -535,3 +535,43 @@ Path                               Type
 /trees/indexes/insertion_order     H5T_STD_U32LE
 /trees/indexes/removal_order       H5T_STD_U32LE
 ==============================     ==============
+
+***************
+Legacy Versions
+***************
+
+Tree sequence files written by older versions of msprime are not readable by
+newer versions of msprime. For major releases of msprime, :command:`msp
+upgrade` will convert older tree sequence files to the latest version.
+
+However many changes to the tree sequence format are not part of major
+releases. The table below gives these versions (contained in the root group
+attribute, ``format_version`` as a pair ``(major, minor)``).
+
+.. to obtain hashes where versions were changed:
+        git log --oneline -L40,41:lib/msprime.h
+   then on each hash, to obtain the parent where a merge occured:
+        git log --merges --pretty=format:"%h" fc17dbd | head -n 1
+   in some cases this didn't work so required hand manipulation. checks were
+   done (after checkign out and rebuilding) with:
+        python msp_dev.py simulate 10 tmp.hdf5 && h5dump tmp.hdf5 | head
+
+=======    =================
+Version    Commit Short Hash
+=======    =================
+9.0        e504abd
+8.0        299ddc9
+7.0        ca9c0c5
+6.0        6310725
+5.0        62659fb
+4.0        a586646
+3.2        8f44bed
+3.1        d69c059
+3.0        7befdcf
+2.1        a26a227
+2.0        7c507f3
+1.1        c143dd9
+1.0        04722d8
+0.3        f42215e
+0.1        34ac742
+=======    =================
