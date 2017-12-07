@@ -71,10 +71,10 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
         ts = msprime.simulate(10, random_seed=1)
         tables = ts.dump_tables()
         nodes = tables.nodes
-        # For each node, we create some Python metadata that can be JSON encoded.
+        # For each node, we create some Python metadata that can be pickled
         metadata = [
             {"one": j, "two": 2 * j, "three": list(range(j))} for j in range(len(nodes))]
-        encoded, offset = msprime.pack_bytes(map(pickle.dumps, metadata))
+        encoded, offset = msprime.pack_bytes(list(map(pickle.dumps, metadata)))
         nodes.set_columns(
             flags=nodes.flags, time=nodes.time, population=nodes.population,
             metadata_offset=offset, metadata=encoded)

@@ -544,9 +544,11 @@ def pack_bytes(data):
     Packs the specified list of bytes into a flattened numpy array of 8 bit integers
     and corresponding lengths.
     """
-    lengths = np.array([0] + [len(b) for b in data], dtype=np.uint32)
-    offsets = np.cumsum(lengths, dtype=np.uint32)
-    column = np.empty(offsets[-1], dtype=np.int8)
+    n = len(data)
+    offsets = np.zeros(n + 1, dtype=np.uint32)
+    for j in range(n):
+        offsets[j + 1] = offsets[j] + len(data[j])
+    column = np.zeros(offsets[-1], dtype=np.int8)
     for j, value in enumerate(data):
         column[offsets[j]: offsets[j + 1]] = bytearray(value)
     return column, offsets
