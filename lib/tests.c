@@ -1157,7 +1157,6 @@ get_example_tree_sequence(uint32_t num_samples,
     migration_table_t *migrations= malloc(sizeof(migration_table_t));
     site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
-    char *provenance[] = {"get_example_tree_sequence"};
     uint32_t j;
     size_t num_populations = 3;
     double migration_matrix[] = {
@@ -1246,7 +1245,7 @@ get_example_tree_sequence(uint32_t num_samples,
     ret = mutgen_populate_tables(mutgen, sites, mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(tree_seq, 0, nodes, edges, migrations,
-            sites, mutations, 1, provenance);
+            sites, mutations, NULL, 0);
     /* edge_table_print_state(edges, stdout); */
     /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1304,8 +1303,6 @@ tree_sequence_t *
 make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
 {
     int ret;
-    size_t num_provenance_strings;
-    char **provenance_strings;
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
     sparse_tree_t tree;
     node_table_t nodes;
@@ -1377,14 +1374,13 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tree_sequence_dump_tables_tmp(ts, &nodes, &edges,
-            &migrations, NULL, NULL, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(ts, &nodes, &edges,
+            &migrations, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
-            &sites, &mutations, num_provenance_strings, provenance_strings);
+            &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1414,8 +1410,6 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     edge_t edge;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
-    char **provenance_strings;
-    size_t num_provenance_strings;
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1431,9 +1425,8 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     node_map = malloc(num_nodes * sizeof(node_id_t));
     CU_ASSERT_FATAL(node_map != NULL);
 
-    ret = tree_sequence_dump_tables_tmp(ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     for (j = 0; j < num_nodes; j++) {
         node_map[j] = j;
@@ -1464,7 +1457,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
-            &sites, &mutations, 0, NULL);
+            &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1493,8 +1486,6 @@ make_gappy_copy(tree_sequence_t *ts)
     site_table_t sites;
     double left, right;
     double gap_size = 1e-4;
-    char **provenance_strings;
-    size_t num_provenance_strings;
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1508,9 +1499,8 @@ make_gappy_copy(tree_sequence_t *ts)
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tree_sequence_dump_tables_tmp(ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edge_table_reset(&edges);
     for (j = 0; j < tree_sequence_get_num_edges(ts); j++) {
@@ -1535,7 +1525,7 @@ make_gappy_copy(tree_sequence_t *ts)
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, ts->sequence_length + 1,
-            &nodes, &edges, &migrations, &sites, &mutations, 0, NULL);
+            &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1558,8 +1548,7 @@ make_decapitated_copy(tree_sequence_t *ts)
     migration_table_t migrations;
     mutation_table_t mutations;
     site_table_t sites;
-    char **provenance_strings;
-    size_t j, num_provenance_strings;
+    size_t j;
     node_id_t oldest_node;
 
     CU_ASSERT_FATAL(new_ts != NULL);
@@ -1574,9 +1563,8 @@ make_decapitated_copy(tree_sequence_t *ts)
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tree_sequence_dump_tables_tmp(ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edges.num_rows -= edges.num_rows / 4;
     oldest_node = edges.parent[edges.num_rows - 1];
@@ -1592,7 +1580,7 @@ make_decapitated_copy(tree_sequence_t *ts)
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
-            &sites, &mutations, 0, NULL);
+            &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1941,10 +1929,10 @@ test_empty_tree_sequence(void)
 
     /* Zero length TS is invalid. */
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table,
-            NULL, NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SEQUENCE_LENGTH);
     ret = tree_sequence_load_tables(&ts, 1, &node_table, &edge_table,
-            NULL, NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     verify_empty_tree_sequence(&ts, 1.0);
@@ -2693,7 +2681,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table,
-            NULL, NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     tree_sequence_free(&ts);
 
@@ -2701,21 +2689,21 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, NULL, NULL, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     tree_sequence_free(&ts);
 
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, NULL, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     tree_sequence_free(&ts);
 
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, NULL, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     tree_sequence_free(&ts);
 
@@ -2724,7 +2712,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tree_sequence_free(&ts);
     edge_table.right[0]= 1.0;
@@ -2734,7 +2722,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 1, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_RIGHT_GREATER_SEQ_LENGTH);
     tree_sequence_free(&ts);
     edge_table.right[0]= 1.0;
@@ -2744,7 +2732,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_EDGES);
     tree_sequence_free(&ts);
     edge_table.child[0] = 0;
@@ -2755,7 +2743,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EDGES_NOT_SORTED_LEFT);
     tree_sequence_free(&ts);
     edge_table.child[0] = 0;
@@ -2766,7 +2754,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_NODE_TIME_ORDERING);
     tree_sequence_free(&ts);
     edge_table.child[1] = 1;
@@ -2777,7 +2765,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EDGES_NOT_SORTED_CHILD);
     tree_sequence_free(&ts);
     edge_table.child[0] = 0;
@@ -2792,7 +2780,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS);
     tree_sequence_free(&ts);
     edge_table.parent[2] = 4;
@@ -2805,7 +2793,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_PARENT);
     tree_sequence_free(&ts);
     edge_table.parent[0] = 2;
@@ -2815,7 +2803,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     node_table.num_rows = 5;
@@ -2825,7 +2813,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     edge_table.parent[0] = 2;
@@ -2835,7 +2823,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NULL_CHILD);
     tree_sequence_free(&ts);
     edge_table.child[0] = 0;
@@ -2845,7 +2833,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     edge_table.child[0] = 0;
@@ -2855,7 +2843,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     edge_table.child[0] = 0;
@@ -2864,7 +2852,7 @@ test_simplest_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     tree_sequence_free(&ts);
 
@@ -2903,7 +2891,7 @@ test_simplest_overlapping_parents(void)
     edge_table.left[0] = 0;
     edge_table.parent[0] = 2;
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table,
-            NULL, NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_alloc(&tree, &ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2955,7 +2943,7 @@ test_simplest_contradictory_children(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table,
-            NULL, NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_alloc(&tree, &ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -3304,7 +3292,7 @@ test_single_tree_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME);
     tree_sequence_free(&ts);
     node_table.time[5] = 2.0;
@@ -3314,7 +3302,7 @@ test_single_tree_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tree_sequence_free(&ts);
     edge_table.left[2] = 0.0;
@@ -3322,7 +3310,7 @@ test_single_tree_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     tree_sequence_free(&ts);
 
@@ -3432,7 +3420,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 4);
@@ -3443,7 +3431,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SITE_POSITION);
     tree_sequence_free(&ts);
     site_table.position[0] = 0.0;
@@ -3453,7 +3441,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SITE_POSITION);
     tree_sequence_free(&ts);
     site_table.position[2] = 0.2;
@@ -3463,7 +3451,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SITE_POSITION);
     tree_sequence_free(&ts);
     site_table.position[2] = 0.2;
@@ -3473,7 +3461,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_SITES);
     tree_sequence_free(&ts);
     site_table.position[0] = 0.0;
@@ -3483,7 +3471,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     mutation_table.site[0] = 0;
@@ -3493,7 +3481,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     mutation_table.site[0] = 0;
@@ -3503,7 +3491,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     mutation_table.node[0] = 0;
@@ -3513,7 +3501,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     mutation_table.node[0] = 0;
@@ -3523,7 +3511,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     mutation_table.parent[0] = MSP_NULL_MUTATION;
@@ -3533,7 +3521,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     mutation_table.parent[0] = MSP_NULL_MUTATION;
@@ -3543,7 +3531,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE);
     tree_sequence_free(&ts);
     mutation_table.parent[1] = MSP_NULL_MUTATION;
@@ -3553,7 +3541,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_EQUAL);
     tree_sequence_free(&ts);
     mutation_table.parent[0] = MSP_NULL_MUTATION;
@@ -3563,7 +3551,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_AFTER_CHILD);
     tree_sequence_free(&ts);
     mutation_table.parent[2] = MSP_NULL_MUTATION;
@@ -3572,7 +3560,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            &site_table, &mutation_table, 0, NULL);
+            &site_table, &mutation_table, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 4);
@@ -4047,8 +4035,6 @@ test_single_tree_simplify(void)
     migration_table_t migrations;
     site_table_t sites;
     mutation_table_t mutations;
-    size_t num_provenance_strings;
-    char **provenance_strings;
     int ret;
     simplifier_t simplifier;
     node_id_t samples[] = {0, 1};
@@ -4069,9 +4055,8 @@ test_single_tree_simplify(void)
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Set the max_buffered_edges to 1 to ensure we excercise the realloc */
@@ -4088,9 +4073,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL(edges.num_rows, 2);
 
     /* Make sure we detect unsorted edges */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     unsort_edges(&edges, 0);
     ret = simplifier_alloc(&simplifier, 0.0, samples, 2,
@@ -4100,9 +4084,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad parents */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edges.parent[0] = -1;
     ret = simplifier_alloc(&simplifier, 0.0, samples, 2,
@@ -4112,9 +4095,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad children */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edges.child[0] = -1;
     ret = simplifier_alloc(&simplifier, 0.0, samples, 2,
@@ -4124,9 +4106,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect loops */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edges.child[0] = edges.parent[0];
     ret = simplifier_alloc(&simplifier, 0.0, samples, 2,
@@ -4136,9 +4117,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad sites */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(mutations.num_rows > 0 && sites.num_rows > 0);
     mutations.site[0] = -1;
@@ -4149,9 +4129,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* detect bad mutation nodes */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(mutations.num_rows > 0 && sites.num_rows > 0);
     mutations.node[0] = -1;
@@ -4162,9 +4141,8 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Test the interface for NULL inputs */
-    ret = tree_sequence_dump_tables_tmp(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, &num_provenance_strings,
-            &provenance_strings);
+    ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
+            &migrations, &sites, &mutations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = simplifier_alloc(&simplifier, 0.0, NULL, 2,
             &nodes, &edges, &migrations, &sites, &mutations, 0, 0);
@@ -5011,7 +4989,7 @@ test_tree_sequence_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(ts.num_trees, 3);
     verify_trees(&ts, num_trees, parents);
@@ -5022,7 +5000,7 @@ test_tree_sequence_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tree_sequence_free(&ts);
     edge_table.left[0] = 2.0;
@@ -5030,7 +5008,7 @@ test_tree_sequence_bad_records(void)
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, 0, &node_table, &edge_table, NULL,
-            NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
     verify_trees(&ts, num_trees, parents);
     tree_sequence_free(&ts);
@@ -5432,14 +5410,13 @@ test_newick_from_examples(void)
 static void
 verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         bool check_migrations, bool check_mutations,
-        bool check_provenance_strings)
+        bool check_provenance)
 {
     int ret, err1, err2;
-    size_t j, nps1, nps2;
+    size_t j;
     edge_t r1, r2;
     node_t n1, n2;
     migration_t m1, m2;
-    char **ps1, **ps2;
     size_t num_mutations = tree_sequence_get_num_mutations(ts1);
     site_t site_1, site_2;
     mutation_t mutation_1, mutation_2;
@@ -5525,17 +5502,8 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
             verify_migrations_equal(&m1, &m2, 1.0);
         }
     }
-    if (check_provenance_strings) {
-        ret = tree_sequence_get_provenance_strings(ts1, &nps1, &ps1);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = tree_sequence_get_provenance_strings(ts2, &nps2, &ps2);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(nps1, nps2);
-        for (j = 0; j < nps1; j++) {
-            CU_ASSERT_FATAL(ps1[j] != NULL);
-            CU_ASSERT_FATAL(ps2[j] != NULL);
-            CU_ASSERT_STRING_EQUAL(ps1[j], ps2[j]);
-        }
+    if (check_provenance) {
+        /* FIXME add checks for provenance */
     }
     ret = sparse_tree_alloc(&t1, ts1, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -5574,7 +5542,7 @@ test_save_empty_hdf5(void)
     ret = tree_sequence_initialise(&ts1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts1, sequence_length, &node_table, &edge_table,
-            NULL, NULL, NULL, 0, NULL);
+            NULL, NULL, NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_initialise(&ts2);
@@ -5632,9 +5600,8 @@ test_sort_tables(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
-    size_t j, k, start, starts[3], num_provenance_strings;
+    size_t j, k, start, starts[3];
 
-    char **provenance_strings;
     node_table_t nodes;
     edge_table_t edges;
     migration_table_t migrations;
@@ -5657,9 +5624,8 @@ test_sort_tables(void)
     for (j = 0; examples[j] != NULL; j++) {
         ts1 = examples[j];
 
-        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edges,
-                &migrations, &sites, &mutations, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
+                &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         /* Check the input validation */
@@ -5692,8 +5658,7 @@ test_sort_tables(void)
             ret = tree_sequence_initialise(&ts2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load_tables(&ts2, 0, &nodes, &edges,
-                    &migrations, &sites, &mutations, num_provenance_strings,
-                    provenance_strings);
+                    &migrations, &sites, &mutations, NULL, 0);
             CU_ASSERT_NOT_EQUAL_FATAL(ret, 0);
             tree_sequence_free(&ts2);
 
@@ -5703,8 +5668,7 @@ test_sort_tables(void)
             ret = tree_sequence_initialise(&ts2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                    &nodes, &edges, &migrations, &sites, &mutations,
-                    num_provenance_strings, provenance_strings);
+                    &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             verify_tree_sequences_equal(ts1, &ts2, true, true, true);
             tree_sequence_free(&ts2);
@@ -5717,8 +5681,7 @@ test_sort_tables(void)
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                &nodes, &edges, &migrations, &sites, &mutations,
-                num_provenance_strings, provenance_strings);
+                &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_tree_sequences_equal(ts1, &ts2, true, true, true);
         tree_sequence_free(&ts2);
@@ -5729,8 +5692,7 @@ test_sort_tables(void)
             ret = tree_sequence_initialise(&ts2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                    &nodes, &edges, &migrations, &sites, &mutations,
-                    num_provenance_strings, provenance_strings);
+                    &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
             CU_ASSERT_NOT_EQUAL(ret, 0);
             tree_sequence_free(&ts2);
 
@@ -5740,8 +5702,7 @@ test_sort_tables(void)
             ret = tree_sequence_initialise(&ts2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                    &nodes, &edges, &migrations, &sites, &mutations,
-                    num_provenance_strings, provenance_strings);
+                    &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             verify_tree_sequences_equal(ts1, &ts2, true, true, true);
             tree_sequence_free(&ts2);
@@ -5791,8 +5752,7 @@ test_dump_tables(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
-    size_t j, num_provenance_strings;
-    char **provenance_strings;
+    size_t j;
     node_table_t nodes;
     edge_table_t edges;
     migration_table_t migrations;
@@ -5815,56 +5775,46 @@ test_dump_tables(void)
     for (j = 0; examples[j] != NULL; j++) {
         ts1 = examples[j];
 
-        ret = tree_sequence_dump_tables_tmp(ts1, NULL, &edges,
-                &migrations, &sites, &mutations, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, NULL, &edges,
+                &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, NULL,
-                &migrations, &sites, &mutations, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, &nodes, NULL,
+                &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
         ret = tree_sequence_load_tables(&ts2, 0, NULL, &edges,
-                &migrations, &sites, &mutations, num_provenance_strings,
-                provenance_strings);
+                &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
         ret = tree_sequence_load_tables(&ts2, 0, &nodes, NULL,
-                &migrations, &sites, &mutations, num_provenance_strings,
-                provenance_strings);
+                &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edges,
-                &migrations, &sites, &mutations, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
+                &migrations, &sites, &mutations, NULL, 0);
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                &nodes, &edges, &migrations, &sites, &mutations,
-                num_provenance_strings, provenance_strings);
+                &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
         verify_tree_sequences_equal(ts1, &ts2, true, true, true);
         tree_sequence_print_state(&ts2, _devnull);
         tree_sequence_free(&ts2);
 
-        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edges,
-                NULL, &sites, &mutations, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
+                NULL, &sites, &mutations, NULL, 0);
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                &nodes, &edges, NULL, &sites, &mutations,
-                num_provenance_strings, provenance_strings);
+                &nodes, &edges, NULL, &sites, &mutations, NULL, 0);
         verify_tree_sequences_equal(ts1, &ts2, false, true, true);
         CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_migrations(&ts2), 0);
         tree_sequence_free(&ts2);
 
-        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edges,
-                &migrations, NULL, NULL, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
+                &migrations, NULL, NULL, NULL, 0);
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                &nodes, &edges, &migrations, NULL, NULL, num_provenance_strings,
-                provenance_strings);
+                &nodes, &edges, &migrations, NULL, NULL, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_tree_sequences_equal(ts1, &ts2, true, false, true);
         CU_ASSERT_EQUAL_FATAL(
@@ -5886,14 +5836,14 @@ static void
 test_dump_tables_hdf5(void)
 {
     int ret;
-    size_t k, num_provenance_strings;
+    size_t k;
     tree_sequence_t *ts1, ts2, ts3, **examples;
-    char **provenance_strings;
     node_table_t nodes;
     edge_table_t edges;
     migration_table_t migrations;
     site_table_t sites;
     mutation_table_t mutations;
+    provenance_table_t provenance;
 
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5906,20 +5856,21 @@ test_dump_tables_hdf5(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenance, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     examples = get_example_tree_sequences(1);
     for (k = 0; examples[k] != NULL; k++) {
         ts1 = examples[k];
         CU_ASSERT_FATAL(ts1 != NULL);
-        ret = tree_sequence_dump_tables_tmp(ts1, &nodes, &edges,
-                &migrations, &sites, &mutations, &num_provenance_strings,
-                &provenance_strings);
+        ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
+                &migrations, &sites, &mutations, &provenance, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
                 &nodes, &edges, &migrations, &sites, &mutations,
-                num_provenance_strings, provenance_strings);
+                &provenance, 0);
         ret = tree_sequence_dump(&ts2, _tmp_file_name, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_initialise(&ts3);
