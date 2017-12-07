@@ -542,7 +542,7 @@ tree_sequence_free(tree_sequence_t *self)
 }
 
 static int
-check_offset_array(size_t num_rows, size_t total_length, list_len_t *restrict offset)
+check_offset_array(size_t num_rows, size_t total_length, list_len_t *offset)
 {
     int ret = MSP_ERR_BAD_OFFSET;
     int j;
