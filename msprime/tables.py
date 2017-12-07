@@ -415,6 +415,75 @@ def _mutation_table_pickle(table):
     return MutationTable, tuple(), state
 
 
+class ProvenanceTable(_msprime.ProvenanceTable):
+    """
+    Class for tables describing all sites at which mutations have occurred in a
+    tree sequence, of the form
+        id	position	timestamp
+        0	0.1     	0
+        1	0.5     	0
+    Here ``id`` is not stored directly, but is determined by the row index in
+    the table.  ``position`` is the position along the genome, and
+    ``timestamp`` gives the allele at the root of the tree at that
+    position.
+    """
+    def __str__(self):
+        timestamp = unpack_strings(self.timestamp, self.timestamp_offset)
+        provenance = unpack_strings(self.provenance, self.provenance_offset)
+        ret = "id\ttimestamp\tprovenance\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\t{}\n".format(j, timestamp[j], provenance[j])
+        return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.timestamp, other.timestamp) and
+                np.array_equal(self.timestamp_offset, other.timestamp_offset) and
+                np.array_equal(self.provenance, other.provenance) and
+                np.array_equal(self.provenance_offset, other.provenance_offset))
+        return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __len__(self):
+        return self.num_rows
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.__init__()
+        self.set_columns(
+            timestamp=state["timestamp"],
+            timestamp_offset=state["timestamp_offset"],
+            provenance=state["provenance"],
+            provenance_offset=state["provenance_offset"])
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = ProvenanceTable()
+        copy.set_columns(
+            timestamp=self.timestamp,
+            timestamp_offset=self.timestamp_offset,
+            provenance=self.provenance,
+            provenance_offset=self.provenance_offset)
+        return copy
+
+
+# Pickle support. See copyreg registration for this function below.
+def _provenance_table_pickle(table):
+    state = {
+        "timestamp": table.timestamp,
+        "timestamp_offset": table.timestamp_offset,
+        "provenance": table.provenance,
+        "provenance_offset": table.provenance_offset,
+    }
+    return ProvenanceTable, tuple(), state
+
+
 # Pickle support for the various tables. We are forced to use copyreg.pickle
 # here to support Python 2. For Python 3, we can just use the __setstate__.
 # It would be cleaner to attach the pickle_*_table functions to the classes
@@ -424,6 +493,7 @@ copyreg.pickle(EdgeTable, _edge_table_pickle)
 copyreg.pickle(MigrationTable, _migration_table_pickle)
 copyreg.pickle(SiteTable, _site_table_pickle)
 copyreg.pickle(MutationTable, _mutation_table_pickle)
+copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
 class TableCollection(object):

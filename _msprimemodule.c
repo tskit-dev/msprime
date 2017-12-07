@@ -100,6 +100,12 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    bool locked;
+    provenance_table_t *provenance_table;
+} ProvenanceTable;
+
+typedef struct {
+    PyObject_HEAD
     msp_t *sim;
     RandomGenerator *random_generator;
 } Simulator;
@@ -289,39 +295,6 @@ out:
     return ret;
 }
 
-static int
-parse_provenance_strings(PyObject *py_provenance_strings, Py_ssize_t *num_provenance_strings,
-        char ***provenance_strings)
-{
-
-    int ret = -1;
-    Py_ssize_t j, n;
-    PyObject *item;
-    char *s;
-    char **ret_provenance_strings = NULL;
-
-    n = PyList_Size(py_provenance_strings);
-    ret_provenance_strings = PyMem_Malloc(n * sizeof(char *));
-    if (ret_provenance_strings == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        item = PyList_GetItem(py_provenance_strings, j);
-        assert(item != NULL);
-        s = PyBytes_AsString(item);
-        if (s == NULL) {
-            goto out;
-        }
-        ret_provenance_strings[j] = s;
-    }
-    *num_provenance_strings = n;
-    *provenance_strings = ret_provenance_strings;
-    ret = 0;
-out:
-    return ret;
-}
-
 /*
  * Retrieves the PyObject* corresponding the specified key in the
  * specified dictionary.
@@ -390,32 +363,6 @@ convert_integer_list(size_t *list, size_t size)
             goto out;
         }
         PyList_SET_ITEM(l, j, py_int);
-    }
-    ret = l;
-out:
-    return ret;
-}
-
-static PyObject *
-convert_string_list(char **list, size_t size)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_str = NULL;
-    size_t j;
-
-    l = PyList_New(size);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < size; j++) {
-        assert(list[j] != NULL);
-        py_str = PyBytes_FromString(list[j]);
-        if (py_str == NULL) {
-            Py_DECREF(l);
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, py_str);
     }
     ret = l;
 out:
@@ -757,12 +704,11 @@ out:
 }
 
 static PyArrayObject *
-table_read_offset_array(PyObject *input, size_t num_rows, size_t length)
+table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool check_num_rows)
 {
     PyArrayObject *ret = NULL;
     PyArrayObject *array = NULL;
     npy_intp *shape;
-    uint32_t *offsets;
 
     array = (PyArrayObject *) PyArray_FROM_OTF(input, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
     if (array == NULL) {
@@ -773,18 +719,17 @@ table_read_offset_array(PyObject *input, size_t num_rows, size_t length)
         goto out;
     }
     shape = PyArray_DIMS(array);
-    if (shape[0] != num_rows + 1) {
+    if (! check_num_rows) {
+        *num_rows = shape[0];
+        if (*num_rows == 0) {
+            PyErr_SetString(PyExc_ValueError,
+                    "Offset arrays must have at least one element");
+            goto out;
+        }
+        *num_rows -= 1;
+    }
+    if (shape[0] != *num_rows + 1) {
         PyErr_SetString(PyExc_ValueError, "offset columns must have n + 1 rows.");
-        goto out;
-    }
-    offsets = PyArray_DATA(array);
-    if (offsets[0] != 0) {
-        PyErr_SetString(PyExc_ValueError, "Zeroth element of offsets array must be 0");
-        goto out;
-    }
-    if (offsets[num_rows] != length) {
-        PyErr_SetString(PyExc_ValueError,
-            "Last element of offsets array must be equal to column length");
         goto out;
     }
     ret = array;
@@ -950,16 +895,19 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         population_data = PyArray_DATA(population_array);
     }
     if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "metadata and metadata_offset must be specified together");
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
         goto out;
     }
     if (metadata_input != NULL) {
-        metadata_array = table_read_column_array(metadata_input, NPY_INT8, &metadata_length, false);
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
         if (metadata_array == NULL) {
             goto out;
         }
         metadata_data = PyArray_DATA(metadata_array);
-        metadata_offset_array = table_read_offset_array(metadata_offset_input, num_rows, metadata_length);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
         if (metadata_offset_array == NULL) {
             goto out;
         }
@@ -2064,7 +2012,7 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
         goto out;
     }
     ancestral_state_offset_array = table_read_offset_array(ancestral_state_offset_input,
-            num_rows, ancestral_state_length);
+            &num_rows, ancestral_state_length, true);
     if (ancestral_state_offset_array == NULL) {
         goto out;
     }
@@ -2445,7 +2393,7 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
         goto out;
     }
     derived_state_offset_array = table_read_offset_array(derived_state_offset_input,
-            num_rows, derived_state_length);
+            &num_rows, derived_state_length, true);
     if (derived_state_offset_array == NULL) {
         goto out;
     }
@@ -2726,6 +2674,380 @@ static PyTypeObject MutationTableType = {
     0,                         /* tp_dictoffset */
     (initproc)MutationTable_init,      /* tp_init */
 };
+
+/*===================================================================
+ * ProvenanceTable
+ *===================================================================
+ */
+
+static int
+ProvenanceTable_check_state(ProvenanceTable *self)
+{
+    int ret = -1;
+    if (self->provenance_table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "ProvenanceTable not initialised");
+        goto out;
+    }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "ProvenanceTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static void
+ProvenanceTable_dealloc(ProvenanceTable* self)
+{
+    if (self->provenance_table != NULL) {
+        provenance_table_free(self->provenance_table);
+        PyMem_Free(self->provenance_table);
+        self->provenance_table = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"max_rows_increment", NULL};
+    Py_ssize_t max_rows_increment = 0;
+
+    self->provenance_table = NULL;
+    self->locked = false;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
+                &max_rows_increment)) {
+        goto out;
+    }
+    if (max_rows_increment < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    self->provenance_table = PyMem_Malloc(sizeof(provenance_table_t));
+    if (self->provenance_table == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    /* Take the default size increments for timestamp and provenance */
+    err = provenance_table_alloc(self->provenance_table,
+            (size_t) max_rows_increment, 0, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    char *timestamp = "";
+    Py_ssize_t timestamp_length = 0;
+    char *provenance = "";
+    Py_ssize_t provenance_length = 0;
+    static char *kwlist[] = {"timestamp", "provenance", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s#s#", kwlist,
+                &timestamp, &timestamp_length, &provenance, &provenance_length)){
+        goto out;
+    }
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = provenance_table_add_row(self->provenance_table,
+            timestamp, timestamp_length, provenance, provenance_length);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+#ifdef HAVE_NUMPY
+
+static PyObject *
+ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds,
+        int method)
+{
+    PyObject *ret = NULL;
+    int err;
+    size_t num_rows, timestamp_length, provenance_length;
+    PyObject *timestamp_input = NULL;
+    PyArrayObject *timestamp_array = NULL;
+    PyObject *timestamp_offset_input = NULL;
+    PyArrayObject *timestamp_offset_array = NULL;
+    PyObject *provenance_input = NULL;
+    PyArrayObject *provenance_array = NULL;
+    PyObject *provenance_offset_input = NULL;
+    PyArrayObject *provenance_offset_array = NULL;
+
+    static char *kwlist[] = {"timestamp", "timestamp_offset",
+        "provenance", "provenance_offset", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
+                &timestamp_input, &timestamp_offset_input,
+                &provenance_input, &provenance_offset_input)) {
+        goto out;
+    }
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    timestamp_array = table_read_column_array(timestamp_input, NPY_INT8,
+            &timestamp_length, false);
+    if (timestamp_array == NULL) {
+        goto out;
+    }
+    timestamp_offset_array = table_read_offset_array(timestamp_offset_input, &num_rows,
+            timestamp_length, false);
+    if (timestamp_offset_array == NULL) {
+        goto out;
+    }
+    provenance_array = table_read_column_array(provenance_input, NPY_INT8,
+            &provenance_length, false);
+    if (provenance_array == NULL) {
+        goto out;
+    }
+    provenance_offset_array = table_read_offset_array(provenance_offset_input, &num_rows,
+            provenance_length, true);
+    if (provenance_offset_array == NULL) {
+        goto out;
+    }
+    if (method == SET_COLS) {
+        err = provenance_table_set_columns(self->provenance_table, num_rows,
+                PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
+                PyArray_DATA(provenance_array), PyArray_DATA(provenance_offset_array));
+    } else if (method == APPEND_COLS) {
+        err = provenance_table_append_columns(self->provenance_table, num_rows,
+                PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
+                PyArray_DATA(provenance_array), PyArray_DATA(provenance_offset_array));
+    } else {
+        assert(0);
+    }
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(timestamp_array);
+    Py_XDECREF(timestamp_offset_array);
+    Py_XDECREF(provenance_array);
+    Py_XDECREF(provenance_offset_array);
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_append_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds)
+{
+    return ProvenanceTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+ProvenanceTable_set_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds)
+{
+    return ProvenanceTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+#endif
+
+static PyObject *
+ProvenanceTable_reset(ProvenanceTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = provenance_table_reset(self->provenance_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_get_max_rows_increment(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_get_num_rows(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_get_max_rows(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->max_rows);
+out:
+    return ret;
+}
+
+#ifdef HAVE_NUMPY
+
+static PyObject *
+ProvenanceTable_get_timestamp(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->provenance_table->timestamp_length,
+            self->provenance_table->timestamp, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_get_timestamp_offset(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->provenance_table->num_rows + 1,
+            self->provenance_table->timestamp_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_get_provenance(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->provenance_table->provenance_length,
+            self->provenance_table->provenance, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_get_provenance_offset(ProvenanceTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->provenance_table->num_rows + 1,
+            self->provenance_table->provenance_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+#endif
+
+static PyGetSetDef ProvenanceTable_getsetters[] = {
+    {"max_rows_increment",
+        (getter) ProvenanceTable_get_max_rows_increment, NULL, "The size increment"},
+    {"num_rows", (getter) ProvenanceTable_get_num_rows, NULL,
+        "The number of rows in the table."},
+    {"max_rows", (getter) ProvenanceTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
+#ifdef HAVE_NUMPY
+    {"timestamp", (getter) ProvenanceTable_get_timestamp, NULL, "The timestamp array"},
+    {"timestamp_offset", (getter) ProvenanceTable_get_timestamp_offset, NULL,
+        "The timestamp offset array"},
+    {"provenance", (getter) ProvenanceTable_get_provenance, NULL, "The provenance array"},
+    {"provenance_offset", (getter) ProvenanceTable_get_provenance_offset, NULL,
+        "The provenance offset array"},
+#endif
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef ProvenanceTable_methods[] = {
+    {"add_row", (PyCFunction) ProvenanceTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
+#ifdef HAVE_NUMPY
+    {"append_columns", (PyCFunction) ProvenanceTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
+    {"set_columns", (PyCFunction) ProvenanceTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
+#endif
+    {"reset", (PyCFunction) ProvenanceTable_reset, METH_NOARGS,
+        "Clears this table."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject ProvenanceTableType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.ProvenanceTable",             /* tp_name */
+    sizeof(ProvenanceTable),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)ProvenanceTable_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "ProvenanceTable objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    ProvenanceTable_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    ProvenanceTable_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)ProvenanceTable_init,      /* tp_init */
+};
+
+
 
 /*===================================================================
  * MutationGenerator
@@ -3347,18 +3669,17 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     MigrationTable *py_migrations = NULL;
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
-    PyObject *py_provenance_strings = NULL;
-    Py_ssize_t num_provenance_strings = 0;
-    char **provenance_strings = NULL;
+    ProvenanceTable *py_provenance = NULL;
     node_table_t *nodes = NULL;
     edge_table_t *edges = NULL;
     migration_table_t *migrations = NULL;
     mutation_table_t *mutations = NULL;
     site_table_t *sites = NULL;
+    provenance_table_t *provenance = NULL;
     double sequence_length = 0.0;
 
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenance_strings", "sequence_length", NULL};
+        "sites", "mutations", "provenance", "sequence_length", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
@@ -3366,7 +3687,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &PyList_Type, &py_provenance_strings,
+            &ProvenanceTableType, &py_provenance,
             &sequence_length)) {
         goto out;
     }
@@ -3396,12 +3717,11 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
         mutations = py_mutations->mutation_table;
     }
-    num_provenance_strings = 0;
-    if (py_provenance_strings != NULL) {
-        if (parse_provenance_strings(py_provenance_strings, &num_provenance_strings,
-                    &provenance_strings) != 0) {
+    if (py_provenance != NULL) {
+        if (ProvenanceTable_check_state(py_provenance) != 0) {
             goto out;
         }
+        provenance = py_provenance->provenance_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
@@ -3412,9 +3732,8 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (err != 0) {
         goto out;
     }
-    err = tree_sequence_load_tables_tmp(self->tree_sequence, sequence_length,
-        nodes, edges, migrations, sites, mutations,
-        num_provenance_strings, provenance_strings);
+    err = tree_sequence_load_tables(self->tree_sequence, sequence_length,
+        nodes, edges, migrations, sites, mutations, provenance, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3439,8 +3758,6 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
-    size_t num_provenance_strings = 0;
-    char **provenance_strings = NULL;
     static char *kwlist[] = {"nodes", "edges", "migrations",
         "sites", "mutations", NULL};
 
@@ -3485,9 +3802,8 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
         goto out;
     }
-    err = tree_sequence_dump_tables_tmp(self->tree_sequence,
-        nodes, edges, migrations, sites, mutations,
-        &num_provenance_strings, &provenance_strings);
+    err = tree_sequence_dump_tables(self->tree_sequence,
+        nodes, edges, migrations, sites, mutations, NULL, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3525,28 +3841,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-TreeSequence_get_provenance_strings(TreeSequence *self)
-{
-    int err;
-    PyObject *ret = NULL;
-    size_t num_provenance_strings;
-    char **provenance_strings;
-
-    if (TreeSequence_check_tree_sequence(self) != 0) {
-        goto out;
-    }
-    err = tree_sequence_get_provenance_strings(self->tree_sequence,
-            &num_provenance_strings, &provenance_strings);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = convert_string_list(provenance_strings, num_provenance_strings);
 out:
     return ret;
 }
@@ -3969,8 +4263,6 @@ static PyMethodDef TreeSequence_methods[] = {
     {"dump_tables", (PyCFunction) TreeSequence_dump_tables,
         METH_VARARGS|METH_KEYWORDS,
         "Dumps the tree sequence to the specified set of tables"},
-    {"get_provenance_strings", (PyCFunction) TreeSequence_get_provenance_strings,
-        METH_NOARGS, "Returns the list of provenance strings."},
     {"get_node",
         (PyCFunction) TreeSequence_get_node, METH_VARARGS,
         "Returns the node record at the specified index."},
@@ -8109,6 +8401,14 @@ init_msprime(void)
     }
     Py_INCREF(&MutationTableType);
     PyModule_AddObject(module, "MutationTable", (PyObject *) &MutationTableType);
+
+    /* ProvenanceTable type */
+    ProvenanceTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&ProvenanceTableType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&ProvenanceTableType);
+    PyModule_AddObject(module, "ProvenanceTable", (PyObject *) &ProvenanceTableType);
 
     /* MutationGenerator type */
     MutationGeneratorType.tp_new = PyType_GenericNew;

@@ -1202,6 +1202,7 @@ class TestTreeSequence(HighLevelTestCase):
             j += 1
         self.assertGreater(j, 1)
 
+    @unittest.skip("provenance API")
     def test_apis(self):
         ts = msprime.simulate(10, random_seed=1)
         self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
@@ -2024,6 +2025,7 @@ class TestSimulateInterface(unittest.TestCase):
     """
     Some simple test cases for the simulate() interface.
     """
+    @unittest.skip("provenance API")
     def test_defaults(self):
         n = 10
         ts = msprime.simulate(n)
@@ -2034,6 +2036,7 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sequence_length(), 1)
         self.assertEqual(len(ts.provenance), 1)
 
+    @unittest.skip("provenance API")
     def test_provenance(self):
         ts = msprime.simulate(10)
         self.assertEqual(len(ts.provenance), 1)

@@ -1514,7 +1514,8 @@ class TestMspConversionOutput(unittest.TestCase):
                 self.assertEqual(col[j], haplotypes[j][site])
 
 
-@unittest.skipIf(not _h5py_available, "h5py not installed, skipping upgrade tests")
+# @unittest.skipIf(not _h5py_available, "h5py not installed, skipping upgrade tests")
+@unittest.skip("provenance API")
 class TestUpgrade(TestCli):
     """
     Tests the results of the upgrade operation to ensure they are

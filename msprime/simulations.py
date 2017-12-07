@@ -103,13 +103,13 @@ def _replicate_generator(
     # simulation parameters so that particular simulations can be
     # replicated. This will also involve encoding the state of the
     # random generator.
-    provenance = [json.dumps(provenance_dict).encode()]
+    # provenance = [json.dumps(provenance_dict).encode()]
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
         j += 1
         sim.run()
-        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance)
+        tree_sequence = sim.get_tree_sequence(mutation_generator)
         yield tree_sequence
         sim.reset()
 
@@ -565,7 +565,7 @@ class Simulator(object):
             self.ll_sim = self.create_ll_instance()
         self.ll_sim.run()
 
-    def get_tree_sequence(self, mutation_generator=None, provenance_strings=[]):
+    def get_tree_sequence(self, mutation_generator=None):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
@@ -580,8 +580,7 @@ class Simulator(object):
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edge_table, self.migration_table,
-            self.mutation_type_table, self.mutation_table,
-            provenance_strings=provenance_strings)
+            self.mutation_type_table, self.mutation_table)
         return trees.TreeSequence(ll_tree_sequence)
 
     def reset(self):
