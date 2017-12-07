@@ -814,6 +814,28 @@ print_tree_sequence(tree_sequence_t *ts, int verbose)
 }
 
 static void
+record_provenance(provenance_table_t *provenance)
+{
+    time_t timer;
+    size_t timestamp_size = 64;
+    char buffer[timestamp_size];
+    struct tm* tm_info;
+    const char *provenance_str = "{\"program\"=\"main\"}";
+    int ret;
+
+    time(&timer);
+    tm_info = localtime(&timer);
+    strftime(buffer, timestamp_size, "%Y-%m-%dT%H:%M:%S", tm_info);
+
+    ret = provenance_table_add_row(provenance, buffer, strlen(buffer), provenance_str,
+            strlen(provenance_str));
+    if (ret != 0) {
+        fatal_error("Error recording provenance");
+    }
+
+}
+
+static void
 run_simulate(const char *conf_file, const char *output_file, int verbose, int num_replicates)
 {
     int ret = -1;
@@ -824,16 +846,17 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
-    const char *provenance[] = {"main.simulate"};
     node_table_t *nodes = malloc(sizeof(node_table_t));
     edge_table_t *edges = malloc(sizeof(edge_table_t));
     site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
     migration_table_t *migrations = malloc(sizeof(migration_table_t));
+    provenance_table_t *provenance = malloc(sizeof(provenance_table_t));
 
     if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
             || mutgen == NULL || nodes == NULL || edges == NULL
-            || sites == NULL || mutations == NULL || migrations == NULL) {
+            || sites == NULL || mutations == NULL || migrations == NULL
+            || provenance == NULL) {
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
@@ -860,6 +883,10 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
+    ret = provenance_table_alloc(provenance, 0, 0, 0);
+    if (ret != 0) {
+        goto out;
+    }
     ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng,
             mutation_params.alphabet, 1024);
     if (ret != 0) {
@@ -873,6 +900,8 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
+
+    record_provenance(provenance);
 
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
@@ -908,9 +937,9 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables_tmp(tree_seq,
+        ret = tree_sequence_load_tables(tree_seq,
                 recomb_map_get_sequence_length(recomb_map),
-                nodes, edges, migrations, sites, mutations, 1, (char **) &provenance);
+                nodes, edges, migrations, sites, mutations, provenance, 0);
         if (ret != 0) {
             goto out;
         }
@@ -926,6 +955,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             site_table_print_state(sites, stdout);
             mutation_table_print_state(mutations, stdout);
             migration_table_print_state(migrations, stdout);
+            provenance_table_print_state(provenance, stdout);
             printf("-----------------\n");
             mutgen_print_state(mutgen, stdout);
             printf("-----------------\n");
@@ -971,6 +1001,10 @@ out:
     if (migrations != NULL) {
         migration_table_free(migrations);
         free(migrations);
+    }
+    if (provenance != NULL) {
+        provenance_table_free(provenance);
+        free(provenance);
     }
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));

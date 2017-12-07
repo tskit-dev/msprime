@@ -1390,12 +1390,16 @@ provenance_table_print_state(provenance_table_t *self, FILE *out)
     fprintf(out, "provenance_table: %p:\n", (void *) self);
     fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "timestamp_length = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "timestamp_length  = %d\tmax= %d\tincrement = %d)\n",
             (int) self->timestamp_length,
             (int) self->max_timestamp_length,
             (int) self->max_timestamp_length_increment);
+    fprintf(out, "provenance_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->provenance_length,
+            (int) self->max_provenance_length,
+            (int) self->max_provenance_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tttimestamp_offset\ttimestamp\tprovenance_offset\tprovenance\n");
+    fprintf(out, "index\ttimestamp_offset\ttimestamp\tprovenance_offset\tprovenance\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t", (int) j, self->timestamp_offset[j]);
         for (k = self->timestamp_offset[j]; k < self->timestamp_offset[j + 1]; k++) {

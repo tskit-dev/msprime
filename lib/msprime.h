@@ -425,6 +425,7 @@ typedef struct {
     size_t num_samples;
     size_t max_num_samples;
     node_id_t *samples;
+
     struct {
         size_t num_records;
         size_t max_num_records;
@@ -490,9 +491,19 @@ typedef struct {
         double *time;
     } migrations;
 
-    char **provenance_strings;
-    size_t num_provenance_strings;
-    size_t max_num_provenance_strings;
+    struct {
+        size_t num_records;
+        size_t max_num_records;
+        size_t timestamp_length;
+        size_t max_timestamp_length;
+        size_t provenance_length;
+        size_t max_provenance_length;
+        char *timestamp;
+        list_len_t *timestamp_offset;
+        char *provenance;
+        list_len_t *provenance_offset;
+    } provenance;
+
 } tree_sequence_t;
 
 typedef struct _edge_list_t {
@@ -785,16 +796,15 @@ size_t msp_get_num_recombination_events(msp_t *self);
 
 void tree_sequence_print_state(tree_sequence_t *self, FILE *out);
 int tree_sequence_initialise(tree_sequence_t *self);
-/* Marking the x_tables API as tmp until we figure out what to do
- * with provenance. */
-int tree_sequence_load_tables_tmp(tree_sequence_t *self, double sequence_length,
+
+int tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations,
-        size_t num_provenance_strings, char **provenance_strings);
-int tree_sequence_dump_tables_tmp(tree_sequence_t *self, node_table_t *node_table,
+        provenance_table_t *provenance, int flags);
+int tree_sequence_dump_tables(tree_sequence_t *self, node_table_t *node_table,
         edge_table_t *edge_table, migration_table_t *migration_table,
         site_table_t *sites, mutation_table_t *mutations,
-        size_t *num_provenance_strings, char ***provenance_strings);
+        provenance_table_t *provenance, int flags);
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
@@ -1009,15 +1019,15 @@ int simplifier_run(simplifier_t *self, node_id_t *node_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);
 
 int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
-        size_t max_timestamp_length_increment, 
+        size_t max_timestamp_length_increment,
         size_t max_provenance_length_increment);
-int provenance_table_add_row(provenance_table_t *self, 
+int provenance_table_add_row(provenance_table_t *self,
         const char *timestamp, size_t timestamp_length,
         const char *provenance, size_t provenance_length);
-int provenance_table_set_columns(provenance_table_t *self, size_t num_rows, 
+int provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
        char *timestamp, list_len_t *timestamp_offset,
        char *provenance, list_len_t *provenance_offset);
-int provenance_table_append_columns(provenance_table_t *self, size_t num_rows, 
+int provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
         char *timestamp, list_len_t *timestamp_offset,
         char *provenance, list_len_t *provenance_offset);
 int provenance_table_reset(provenance_table_t *self);

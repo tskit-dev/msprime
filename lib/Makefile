@@ -13,7 +13,8 @@ HEADERS=msprime.h err.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
     hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o table.o
 
-all: main tests simulation_tests
+# all: main tests simulation_tests
+all: main
 
 # We need a seperate rule for avl.c as it won't pass the strict checks.
 avl.o: avl.c
