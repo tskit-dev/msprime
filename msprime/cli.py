@@ -822,6 +822,11 @@ def run_dump_mutations(args):
     tree_sequence.dump_text(mutations=sys.stdout, precision=args.precision)
 
 
+def run_dump_provenance(args):
+    tree_sequence = msprime.load(args.history_file)
+    tree_sequence.dump_text(provenance=sys.stdout)
+
+
 def run_dump_vcf(args):
     tree_sequence = msprime.load(args.history_file)
     tree_sequence.write_vcf(sys.stdout, args.ploidy)
@@ -925,6 +930,12 @@ def get_msp_parser():
     add_history_file_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_mutations)
+
+    parser = subparsers.add_parser(
+        "provenance",
+        help="Dump provenance information in tabular format.")
+    add_history_file_argument(parser)
+    parser.set_defaults(runner=run_dump_provenance)
 
     parser = subparsers.add_parser(
         "haplotypes",

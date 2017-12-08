@@ -150,13 +150,13 @@ typedef struct {
     list_len_t timestamp_length;
     list_len_t max_timestamp_length;
     list_len_t max_timestamp_length_increment;
-    list_len_t provenance_length;
-    list_len_t max_provenance_length;
-    list_len_t max_provenance_length_increment;
+    list_len_t record_length;
+    list_len_t max_record_length;
+    list_len_t max_record_length_increment;
     char *timestamp;
     list_len_t *timestamp_offset;
-    char *provenance;
-    list_len_t *provenance_offset;
+    char *record;
+    list_len_t *record_offset;
 } provenance_table_t;
 
 typedef struct segment_t_t {
@@ -496,12 +496,12 @@ typedef struct {
         size_t max_num_records;
         size_t timestamp_length;
         size_t max_timestamp_length;
-        size_t provenance_length;
-        size_t max_provenance_length;
+        size_t record_length;
+        size_t max_record_length;
         char *timestamp;
         list_len_t *timestamp_offset;
-        char *provenance;
-        list_len_t *provenance_offset;
+        char *record;
+        list_len_t *record_offset;
     } provenance;
 
 } tree_sequence_t;
@@ -1023,13 +1023,13 @@ int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
         size_t max_provenance_length_increment);
 int provenance_table_add_row(provenance_table_t *self,
         const char *timestamp, size_t timestamp_length,
-        const char *provenance, size_t provenance_length);
+        const char *record, size_t record_length);
 int provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
        char *timestamp, list_len_t *timestamp_offset,
-       char *provenance, list_len_t *provenance_offset);
+       char *record, list_len_t *record_offset);
 int provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
         char *timestamp, list_len_t *timestamp_offset,
-        char *provenance, list_len_t *provenance_offset);
+        char *record, list_len_t *record_offset);
 int provenance_table_reset(provenance_table_t *self);
 int provenance_table_free(provenance_table_t *self);
 void provenance_table_print_state(provenance_table_t *self, FILE *out);

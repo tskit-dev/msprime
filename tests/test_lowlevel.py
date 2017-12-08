@@ -468,7 +468,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
         for j in range(num_provenance_records):
-            provenance.add_row(timestamp="y" * j, provenance="x" * j)
+            provenance.add_row(timestamp="y" * j, record="x" * j)
         sim.populate_tables(nodes, edges, migrations)
         mutgen.generate(nodes, edges, sites, mutations)
         ts.load_tables(nodes, edges, migrations, sites, mutations, provenance)

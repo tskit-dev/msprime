@@ -516,7 +516,7 @@ class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
     columns = []
     ragged_list_columns = [
         (CharColumn("timestamp"), UInt32Column("timestamp_offset")),
-        (CharColumn("provenance"), UInt32Column("provenance_offset"))]
+        (CharColumn("record"), UInt32Column("record_offset"))]
     equal_len_columns = [[]]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.ProvenanceTable

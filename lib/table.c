@@ -1150,7 +1150,7 @@ provenance_table_expand_main_columns(provenance_table_t *self, list_len_t additi
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->provenance_offset, new_size + 1,
+        ret = expand_column((void **) &self->record_offset, new_size + 1,
                 sizeof(list_len_t));
         if (ret != 0) {
             goto out;
@@ -1185,15 +1185,15 @@ provenance_table_expand_provenance(provenance_table_t *self, list_len_t addition
 {
     int ret = 0;
     list_len_t increment = GSL_MAX(additional_length,
-            self->max_provenance_length_increment);
-    list_len_t new_size = self->max_provenance_length + increment;
+            self->max_record_length_increment);
+    list_len_t new_size = self->max_record_length + increment;
 
-    if ((self->provenance_length + additional_length) > self->max_provenance_length) {
-        ret = expand_column((void **) &self->provenance, new_size, sizeof(char *));
+    if ((self->record_length + additional_length) > self->max_record_length) {
+        ret = expand_column((void **) &self->record, new_size, sizeof(char *));
         if (ret != 0) {
             goto out;
         }
-        self->max_provenance_length = new_size;
+        self->max_record_length = new_size;
     }
 out:
     return ret;
@@ -1201,7 +1201,7 @@ out:
 
 int
 provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
-        size_t max_timestamp_length_increment, size_t max_provenance_length_increment)
+        size_t max_timestamp_length_increment, size_t max_record_length_increment)
 {
     int ret = 0;
 
@@ -1212,18 +1212,18 @@ provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
     if (max_timestamp_length_increment == 0) {
         max_timestamp_length_increment = DEFAULT_SIZE_INCREMENT;
     }
-    if (max_provenance_length_increment == 0) {
-        max_provenance_length_increment = DEFAULT_SIZE_INCREMENT;
+    if (max_record_length_increment == 0) {
+        max_record_length_increment = DEFAULT_SIZE_INCREMENT;
     }
     self->max_rows_increment = (list_len_t) max_rows_increment;
     self->max_timestamp_length_increment = (list_len_t) max_timestamp_length_increment;
-    self->max_provenance_length_increment = (list_len_t) max_provenance_length_increment;
+    self->max_record_length_increment = (list_len_t) max_record_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
     self->max_timestamp_length = 0;
     self->timestamp_length = 0;
-    self->max_provenance_length = 0;
-    self->provenance_length = 0;
+    self->max_record_length = 0;
+    self->record_length = 0;
     ret = provenance_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -1237,7 +1237,7 @@ provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
     if (ret != 0) {
         goto out;
     }
-    self->provenance_offset[0] = 0;
+    self->record_offset[0] = 0;
 out:
     return ret;
 }
@@ -1245,7 +1245,7 @@ out:
 int
 provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
         char *timestamp, uint32_t *timestamp_offset,
-        char *provenance, uint32_t *provenance_offset)
+        char *record, uint32_t *record_offset)
 {
     int ret;
 
@@ -1254,7 +1254,7 @@ provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
         goto out;
     }
     ret = provenance_table_append_columns(self, num_rows,
-            timestamp, timestamp_offset, provenance, provenance_offset);
+            timestamp, timestamp_offset, record, record_offset);
 out:
     return ret;
 }
@@ -1262,13 +1262,13 @@ out:
 int
 provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
         char *timestamp, uint32_t *timestamp_offset,
-        char *provenance, uint32_t *provenance_offset)
+        char *record, uint32_t *record_offset)
 {
     int ret;
-    list_len_t j, timestamp_length, provenance_length;
+    list_len_t j, timestamp_length, record_length;
 
     if (timestamp == NULL || timestamp_offset == NULL ||
-            provenance == NULL || provenance_offset == NULL) {
+            record == NULL || record_offset == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -1294,26 +1294,25 @@ provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
             timestamp_length * sizeof(char));
     self->timestamp_length += timestamp_length;
 
-    ret = check_offsets(num_rows, provenance_offset);
+    ret = check_offsets(num_rows, record_offset);
     if (ret != 0) {
         goto out;
     }
     for (j = 0; j < num_rows; j++) {
-        self->provenance_offset[self->num_rows + j] =
-            (list_len_t) self->provenance_length + provenance_offset[j];
+        self->record_offset[self->num_rows + j] =
+            (list_len_t) self->record_length + record_offset[j];
     }
-    provenance_length = provenance_offset[num_rows];
-    ret = provenance_table_expand_provenance(self, provenance_length);
+    record_length = record_offset[num_rows];
+    ret = provenance_table_expand_provenance(self, record_length);
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->provenance + self->provenance_length, provenance,
-            provenance_length * sizeof(char));
-    self->provenance_length += provenance_length;
+    memcpy(self->record + self->record_length, record, record_length * sizeof(char));
+    self->record_length += record_length;
 
     self->num_rows += (list_len_t) num_rows;
     self->timestamp_offset[self->num_rows] = self->timestamp_length;
-    self->provenance_offset[self->num_rows] = self->provenance_length;
+    self->record_offset[self->num_rows] = self->record_length;
 out:
     return ret;
 }
@@ -1321,17 +1320,17 @@ out:
 static int
 provenance_table_add_row_internal(provenance_table_t *self,
         const char *timestamp, list_len_t timestamp_length,
-        const char *provenance, list_len_t provenance_length)
+        const char *record, list_len_t record_length)
 {
     assert(self->num_rows < self->max_rows);
     assert(self->timestamp_length + timestamp_length < self->max_timestamp_length);
     memcpy(self->timestamp + self->timestamp_length, timestamp, timestamp_length);
     self->timestamp_offset[self->num_rows + 1] = self->timestamp_length + timestamp_length;
     self->timestamp_length += timestamp_length;
-    assert(self->provenance_length + provenance_length < self->max_provenance_length);
-    memcpy(self->provenance + self->provenance_length, provenance, provenance_length);
-    self->provenance_offset[self->num_rows + 1] = self->provenance_length + provenance_length;
-    self->provenance_length += provenance_length;
+    assert(self->record_length + record_length < self->max_record_length);
+    memcpy(self->record + self->record_length, record, record_length);
+    self->record_offset[self->num_rows + 1] = self->record_length + record_length;
+    self->record_length += record_length;
     self->num_rows++;
     return 0;
 }
@@ -1339,7 +1338,7 @@ provenance_table_add_row_internal(provenance_table_t *self,
 int
 provenance_table_add_row(provenance_table_t *self,
         const char *timestamp, size_t timestamp_length,
-        const char *provenance, size_t provenance_length)
+        const char *record, size_t record_length)
 {
     int ret = 0;
 
@@ -1351,13 +1350,13 @@ provenance_table_add_row(provenance_table_t *self,
     if (ret != 0) {
         goto out;
     }
-    ret = provenance_table_expand_provenance(self, (list_len_t) provenance_length);
+    ret = provenance_table_expand_provenance(self, (list_len_t) record_length);
     if (ret != 0) {
         goto out;
     }
     ret = provenance_table_add_row_internal(self,
             timestamp, (list_len_t) timestamp_length,
-            provenance, (list_len_t) provenance_length);
+            record, (list_len_t) record_length);
 out:
     return ret;
 }
@@ -1367,7 +1366,7 @@ provenance_table_reset(provenance_table_t *self)
 {
     self->num_rows = 0;
     self->timestamp_length = 0;
-    self->provenance_length = 0;
+    self->record_length = 0;
     return 0;
 }
 
@@ -1376,8 +1375,8 @@ provenance_table_free(provenance_table_t *self)
 {
     msp_safe_free(self->timestamp);
     msp_safe_free(self->timestamp_offset);
-    msp_safe_free(self->provenance);
-    msp_safe_free(self->provenance_offset);
+    msp_safe_free(self->record);
+    msp_safe_free(self->record_offset);
     return 0;
 }
 
@@ -1394,27 +1393,27 @@ provenance_table_print_state(provenance_table_t *self, FILE *out)
             (int) self->timestamp_length,
             (int) self->max_timestamp_length,
             (int) self->max_timestamp_length_increment);
-    fprintf(out, "provenance_length = %d\tmax= %d\tincrement = %d)\n",
-            (int) self->provenance_length,
-            (int) self->max_provenance_length,
-            (int) self->max_provenance_length_increment);
+    fprintf(out, "record_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->record_length,
+            (int) self->max_record_length,
+            (int) self->max_record_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\ttimestamp_offset\ttimestamp\tprovenance_offset\tprovenance\n");
+    fprintf(out, "index\ttimestamp_offset\ttimestamp\trecord_offset\tprovenance\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t", (int) j, self->timestamp_offset[j]);
         for (k = self->timestamp_offset[j]; k < self->timestamp_offset[j + 1]; k++) {
             fprintf(out, "%c", self->timestamp[k]);
         }
-        fprintf(out, "\t%d\t", self->provenance_offset[j]);
-        for (k = self->provenance_offset[j]; k < self->provenance_offset[j + 1]; k++) {
-            fprintf(out, "%c", self->provenance[k]);
+        fprintf(out, "\t%d\t", self->record_offset[j]);
+        for (k = self->record_offset[j]; k < self->record_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->record[k]);
         }
         fprintf(out, "\n");
     }
     assert(self->timestamp_offset[0] == 0);
     assert(self->timestamp_offset[self->num_rows] == self->timestamp_length);
-    assert(self->provenance_offset[0] == 0);
-    assert(self->provenance_offset[self->num_rows] == self->provenance_length);
+    assert(self->record_offset[0] == 0);
+    assert(self->record_offset[self->num_rows] == self->record_length);
 }
 
 bool
@@ -1427,10 +1426,10 @@ provenance_table_equal(provenance_table_t *self, provenance_table_t *other)
                     (self->num_rows + 1) * sizeof(list_len_t)) == 0
             && memcmp(self->timestamp, other->timestamp,
                     self->timestamp_length * sizeof(char)) == 0
-            && memcmp(self->provenance_offset, other->provenance_offset,
+            && memcmp(self->record_offset, other->record_offset,
                     (self->num_rows + 1) * sizeof(list_len_t)) == 0
-            && memcmp(self->provenance, other->provenance,
-                    self->provenance_length * sizeof(char)) == 0;
+            && memcmp(self->record, other->record,
+                    self->record_length * sizeof(char)) == 0;
     }
     return ret;
 }

@@ -93,23 +93,23 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(
-        sim, mutation_generator, num_replicates, provenance_dict):
+def _replicate_generator(sim, mutation_generator, num_replicates, provenance_dict):
     """
     Generator function for the many-replicates case of the simulate
     function.
     """
-    # TODO like in the single replicate case, we need to encode the
-    # simulation parameters so that particular simulations can be
-    # replicated. This will also involve encoding the state of the
-    # random generator.
-    # provenance = [json.dumps(provenance_dict).encode()]
+    # TODO We should encode the replicate index in here with the rest of the
+    # parameters. This will provide sufficient information to reproduce the
+    # simulation if necessary. Much simpler than encoding the details of
+    # the random number generator.
+    provenance = json.dumps(provenance_dict)
+
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
         j += 1
         sim.run()
-        tree_sequence = sim.get_tree_sequence(mutation_generator)
+        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance)
         yield tree_sequence
         sim.reset()
 
@@ -356,8 +356,9 @@ class Simulator(object):
         self.node_table = tables.NodeTable(block_size)
         self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
-        self.mutation_type_table = tables.SiteTable(1)
+        self.mutation_type_table = tables.SiteTable()
         self.mutation_table = tables.MutationTable(block_size)
+        self.provenance_table = tables.ProvenanceTable()
 
     @property
     def num_loci(self):
@@ -565,7 +566,7 @@ class Simulator(object):
             self.ll_sim = self.create_ll_instance()
         self.ll_sim.run()
 
-    def get_tree_sequence(self, mutation_generator=None):
+    def get_tree_sequence(self, mutation_generator=None, provenance=None):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
@@ -577,6 +578,10 @@ class Simulator(object):
             mutation_generator.generate(
                 self.node_table, self.edge_table, self.mutation_type_table,
                 self.mutation_table)
+        self.provenance_table.reset()
+        # if provenance is not None:
+        #     self.provenance_table.add_row(provenance)
+        # print(self.provenance_table)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edge_table, self.migration_table,

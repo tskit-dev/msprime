@@ -1121,7 +1121,8 @@ class TreeSequence(object):
             mutations=mutations)
 
     def dump_text(
-            self, nodes=None, edges=None, sites=None, mutations=None, precision=6):
+            self, nodes=None, edges=None, sites=None, mutations=None, provenance=None,
+            precision=6):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
@@ -1131,6 +1132,7 @@ class TreeSequence(object):
         :param stream edges: The file-like object to write the EdgeTable to.
         :param stream sites: The file-like object to write the SiteTable to.
         :param stream mutations: The file-like object to write the MutationTable to.
+        :param stream mutations: The file-like object to write the ProvenanceTable to.
         :param int precision: The number of digits of precision.
         """
 
@@ -1182,6 +1184,20 @@ class TreeSequence(object):
                             derived_state=mutation.derived_state,
                             parent=mutation.parent)
                     print(row, file=mutations)
+
+        # if provenance is not None:
+        #     print("timestamp", "prov", sep="\t", file=mutations)
+        #     for record in self.provenance():
+        #         for mutation in site.mutations:
+        #             row = (
+        #                 "{site}\t"
+        #                 "{node}\t"
+        #                 "{derived_state}\t"
+        #                 "{parent}").format(
+        #                     site=mutation.site, node=mutation.node,
+        #                     derived_state=mutation.derived_state,
+        #                     parent=mutation.parent)
+        #             print(row, file=mutations)
 
     # num_samples was originally called sample_size, and so we must keep sample_size
     # around as a deprecated alias.

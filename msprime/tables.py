@@ -22,6 +22,8 @@ Tree sequence IO via the tables API.
 from __future__ import division
 from __future__ import print_function
 
+# import datetime
+
 from six.moves import copyreg
 
 import _msprime
@@ -412,22 +414,21 @@ def _mutation_table_pickle(table):
 
 class ProvenanceTable(_msprime.ProvenanceTable):
     """
-    Class for tables describing all sites at which mutations have occurred in a
-    tree sequence, of the form
-        id	position	timestamp
-        0	0.1     	0
-        1	0.5     	0
-    Here ``id`` is not stored directly, but is determined by the row index in
-    the table.  ``position`` is the position along the genome, and
-    ``timestamp`` gives the allele at the root of the tree at that
-    position.
+    TODO Document
     """
+    # def add_row(self, record, timestamp=None):
+    #     if timestamp is None:
+    #         timestamp = datetime.datetime.now().isoformat()
+    #     print(timestamp)
+
+    #     super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
+
     def __str__(self):
         timestamp = unpack_strings(self.timestamp, self.timestamp_offset)
-        provenance = unpack_strings(self.provenance, self.provenance_offset)
-        ret = "id\ttimestamp\tprovenance\n"
+        record = unpack_strings(self.record, self.record_offset)
+        ret = "id\ttimestamp\trecord\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\n".format(j, timestamp[j], provenance[j])
+            ret += "{}\t{}\t{}\n".format(j, timestamp[j], record[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -436,8 +437,8 @@ class ProvenanceTable(_msprime.ProvenanceTable):
             ret = (
                 np.array_equal(self.timestamp, other.timestamp) and
                 np.array_equal(self.timestamp_offset, other.timestamp_offset) and
-                np.array_equal(self.provenance, other.provenance) and
-                np.array_equal(self.provenance_offset, other.provenance_offset))
+                np.array_equal(self.record, other.record) and
+                np.array_equal(self.record_offset, other.record_offset))
         return ret
 
     def __ne__(self, other):
@@ -451,8 +452,8 @@ class ProvenanceTable(_msprime.ProvenanceTable):
         self.set_columns(
             timestamp=state["timestamp"],
             timestamp_offset=state["timestamp_offset"],
-            provenance=state["provenance"],
-            provenance_offset=state["provenance_offset"])
+            record=state["record"],
+            record_offset=state["record_offset"])
 
     def copy(self):
         """
@@ -462,8 +463,8 @@ class ProvenanceTable(_msprime.ProvenanceTable):
         copy.set_columns(
             timestamp=self.timestamp,
             timestamp_offset=self.timestamp_offset,
-            provenance=self.provenance,
-            provenance_offset=self.provenance_offset)
+            record=self.record,
+            record_offset=self.record_offset)
         return copy
 
 
@@ -472,8 +473,8 @@ def _provenance_table_pickle(table):
     state = {
         "timestamp": table.timestamp,
         "timestamp_offset": table.timestamp_offset,
-        "provenance": table.provenance,
-        "provenance_offset": table.provenance_offset,
+        "record": table.record,
+        "record_offset": table.record_offset,
     }
     return ProvenanceTable, tuple(), state
 

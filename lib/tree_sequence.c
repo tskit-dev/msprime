@@ -109,9 +109,9 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
             fprintf(out, "%c", self->provenance.timestamp[k]);
         }
         fprintf(out, "\t");
-        for (k = self->provenance.provenance_offset[j];
-                k < self->provenance.provenance_offset[j + 1]; k++) {
-            fprintf(out, "%c", self->provenance.provenance[k]);
+        for (k = self->provenance.record_offset[j];
+                k < self->provenance.record_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->provenance.record[k]);
         }
         fprintf(out, "\n");
     }
@@ -403,12 +403,12 @@ tree_sequence_alloc_provenance(tree_sequence_t *self)
             goto out;
         }
     }
-    if (self->provenance.provenance_length > self->provenance.max_provenance_length) {
-        size = self->provenance.provenance_length;
-        self->provenance.max_provenance_length = size;
-        msp_safe_free(self->provenance.provenance);
-        self->provenance.provenance = malloc(size * sizeof(char));
-        if (self->provenance.provenance == NULL) {
+    if (self->provenance.record_length > self->provenance.max_record_length) {
+        size = self->provenance.record_length;
+        self->provenance.max_record_length = size;
+        msp_safe_free(self->provenance.record);
+        self->provenance.record = malloc(size * sizeof(char));
+        if (self->provenance.record == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -417,11 +417,11 @@ tree_sequence_alloc_provenance(tree_sequence_t *self)
         size = self->provenance.num_records;
         self->provenance.max_num_records = size;
         msp_safe_free(self->provenance.timestamp_offset);
-        msp_safe_free(self->provenance.provenance_offset);
+        msp_safe_free(self->provenance.record_offset);
         self->provenance.timestamp_offset = malloc((size + 1) * sizeof(list_len_t));
-        self->provenance.provenance_offset = malloc((size + 1) * sizeof(list_len_t));
+        self->provenance.record_offset = malloc((size + 1) * sizeof(list_len_t));
         if (self->provenance.timestamp_offset == NULL
-                || self->provenance.provenance_offset == NULL) {
+                || self->provenance.record_offset == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -474,7 +474,7 @@ tree_sequence_alloc(tree_sequence_t *self)
     self->sites.ancestral_state_offset[0] = 0;
     self->mutations.derived_state_offset[0] = 0;
     self->provenance.timestamp_offset[0] = 0;
-    self->provenance.provenance_offset[0] = 0;
+    self->provenance.record_offset[0] = 0;
     ret = 0;
 out:
     /* Reset the size values. See above for rationale. */
@@ -535,9 +535,9 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->migrations.right);
     msp_safe_free(self->migrations.time);
     msp_safe_free(self->provenance.timestamp);
-    msp_safe_free(self->provenance.provenance);
+    msp_safe_free(self->provenance.record);
     msp_safe_free(self->provenance.timestamp_offset);
-    msp_safe_free(self->provenance.provenance_offset);
+    msp_safe_free(self->provenance.record_offset);
     return 0;
 }
 
@@ -589,7 +589,7 @@ tree_sequence_check_offsets(tree_sequence_t *self)
         goto out;
     }
     ret = check_offset_array(self->provenance.num_records,
-            self->provenance.provenance_length, self->provenance.provenance_offset);
+            self->provenance.record_length, self->provenance.record_offset);
     if (ret != 0) {
         goto out;
     }
@@ -1051,7 +1051,7 @@ tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
     if (provenance != NULL) {
         self->provenance.num_records = provenance->num_rows;
         self->provenance.timestamp_length = provenance->timestamp_length;
-        self->provenance.provenance_length = provenance->provenance_length;
+        self->provenance.record_length = provenance->record_length;
     }
     ret = tree_sequence_alloc(self);
     if (ret != 0) {
@@ -1112,10 +1112,10 @@ tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
                 (provenance->num_rows + 1) * sizeof(list_len_t));
         memcpy(self->provenance.timestamp, provenance->timestamp,
                 provenance->timestamp_length * sizeof(char));
-        memcpy(self->provenance.provenance_offset, provenance->provenance_offset,
+        memcpy(self->provenance.record_offset, provenance->record_offset,
                 (provenance->num_rows + 1) * sizeof(list_len_t));
-        memcpy(self->provenance.provenance, provenance->provenance,
-                provenance->provenance_length * sizeof(char));
+        memcpy(self->provenance.record, provenance->record,
+                provenance->record_length * sizeof(char));
     }
     ret = tree_sequence_check_offsets(self);
     if (ret != 0) {
@@ -1414,8 +1414,8 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
 
         {"/provenance/timestamp", self->provenance.timestamp_length},
         {"/provenance/timestamp_offset", self->provenance.num_records + 1},
-        {"/provenance/provenance", self->provenance.provenance_length},
-        {"/provenance/provenance_offset", self->provenance.num_records + 1},
+        {"/provenance/provenance", self->provenance.record_length},
+        {"/provenance/record_offset", self->provenance.num_records + 1},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
@@ -1534,7 +1534,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/migrations/left", &self->migrations.num_records},
         {"/provenance/timestamp_offset", &self->provenance.num_records},
         {"/provenance/timestamp", &self->provenance.timestamp_length},
-        {"/provenance/provenance", &self->provenance.provenance_length},
+        {"/provenance/provenance", &self->provenance.record_length},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
@@ -1631,9 +1631,9 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/provenance/timestamp", H5T_NATIVE_CHAR, self->provenance.timestamp},
         {"/provenance/timestamp_offset", H5T_NATIVE_UINT32,
             self->provenance.timestamp_offset},
-        {"/provenance/provenance", H5T_NATIVE_CHAR, self->provenance.provenance},
-        {"/provenance/provenance_offset", H5T_NATIVE_UINT32,
-            self->provenance.provenance_offset},
+        {"/provenance/record", H5T_NATIVE_CHAR, self->provenance.record},
+        {"/provenance/record_offset", H5T_NATIVE_UINT32,
+            self->provenance.record_offset},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
     size_t j;
@@ -1829,12 +1829,12 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/provenance/timestamp_offset",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->provenance.num_records + 1, self->provenance.timestamp_offset},
-        {"/provenance/provenance",
+        {"/provenance/record",
             H5T_STD_I8LE, H5T_NATIVE_CHAR,
-            self->provenance.provenance_length, self->provenance.provenance},
-        {"/provenance/provenance_offset",
+            self->provenance.record_length, self->provenance.record},
+        {"/provenance/record_offset",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
-            self->provenance.num_records + 1, self->provenance.provenance_offset},
+            self->provenance.num_records + 1, self->provenance.record_offset},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_write);
     struct _hdf5_group_write {

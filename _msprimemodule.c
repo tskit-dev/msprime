@@ -2731,7 +2731,7 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    /* Take the default size increments for timestamp and provenance */
+    /* Take the default size increments for timestamp and record */
     err = provenance_table_alloc(self->provenance_table,
             (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
@@ -2750,19 +2750,19 @@ ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
     int err;
     char *timestamp = "";
     Py_ssize_t timestamp_length = 0;
-    char *provenance = "";
-    Py_ssize_t provenance_length = 0;
-    static char *kwlist[] = {"timestamp", "provenance", NULL};
+    char *record = "";
+    Py_ssize_t record_length = 0;
+    static char *kwlist[] = {"timestamp", "record", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s#s#", kwlist,
-                &timestamp, &timestamp_length, &provenance, &provenance_length)){
+                &timestamp, &timestamp_length, &record, &record_length)){
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
     err = provenance_table_add_row(self->provenance_table,
-            timestamp, timestamp_length, provenance, provenance_length);
+            timestamp, timestamp_length, record, record_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2780,22 +2780,22 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 {
     PyObject *ret = NULL;
     int err;
-    size_t num_rows, timestamp_length, provenance_length;
+    size_t num_rows, timestamp_length, record_length;
     PyObject *timestamp_input = NULL;
     PyArrayObject *timestamp_array = NULL;
     PyObject *timestamp_offset_input = NULL;
     PyArrayObject *timestamp_offset_array = NULL;
     PyObject *provenance_input = NULL;
     PyArrayObject *provenance_array = NULL;
-    PyObject *provenance_offset_input = NULL;
-    PyArrayObject *provenance_offset_array = NULL;
+    PyObject *record_offset_input = NULL;
+    PyArrayObject *record_offset_array = NULL;
 
     static char *kwlist[] = {"timestamp", "timestamp_offset",
-        "provenance", "provenance_offset", NULL};
+        "record", "record_offset", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
                 &timestamp_input, &timestamp_offset_input,
-                &provenance_input, &provenance_offset_input)) {
+                &provenance_input, &record_offset_input)) {
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {
@@ -2812,23 +2812,23 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
         goto out;
     }
     provenance_array = table_read_column_array(provenance_input, NPY_INT8,
-            &provenance_length, false);
+            &record_length, false);
     if (provenance_array == NULL) {
         goto out;
     }
-    provenance_offset_array = table_read_offset_array(provenance_offset_input, &num_rows,
-            provenance_length, true);
-    if (provenance_offset_array == NULL) {
+    record_offset_array = table_read_offset_array(record_offset_input, &num_rows,
+            record_length, true);
+    if (record_offset_array == NULL) {
         goto out;
     }
     if (method == SET_COLS) {
         err = provenance_table_set_columns(self->provenance_table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(provenance_offset_array));
+                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
     } else if (method == APPEND_COLS) {
         err = provenance_table_append_columns(self->provenance_table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(provenance_offset_array));
+                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
     } else {
         assert(0);
     }
@@ -2841,7 +2841,7 @@ out:
     Py_XDECREF(timestamp_array);
     Py_XDECREF(timestamp_offset_array);
     Py_XDECREF(provenance_array);
-    Py_XDECREF(provenance_offset_array);
+    Py_XDECREF(record_offset_array);
     return ret;
 }
 
@@ -2945,21 +2945,21 @@ out:
 }
 
 static PyObject *
-ProvenanceTable_get_provenance(ProvenanceTable *self, void *closure)
+ProvenanceTable_get_record(ProvenanceTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->provenance_length,
-            self->provenance_table->provenance, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->provenance_table->record_length,
+            self->provenance_table->record, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
 
 static PyObject *
-ProvenanceTable_get_provenance_offset(ProvenanceTable *self, void *closure)
+ProvenanceTable_get_record_offset(ProvenanceTable *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2967,7 +2967,7 @@ ProvenanceTable_get_provenance_offset(ProvenanceTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(self->provenance_table->num_rows + 1,
-            self->provenance_table->provenance_offset, NPY_UINT32, sizeof(uint32_t));
+            self->provenance_table->record_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -2985,9 +2985,9 @@ static PyGetSetDef ProvenanceTable_getsetters[] = {
     {"timestamp", (getter) ProvenanceTable_get_timestamp, NULL, "The timestamp array"},
     {"timestamp_offset", (getter) ProvenanceTable_get_timestamp_offset, NULL,
         "The timestamp offset array"},
-    {"provenance", (getter) ProvenanceTable_get_provenance, NULL, "The provenance array"},
-    {"provenance_offset", (getter) ProvenanceTable_get_provenance_offset, NULL,
-        "The provenance offset array"},
+    {"record", (getter) ProvenanceTable_get_record, NULL, "The record array"},
+    {"record_offset", (getter) ProvenanceTable_get_record_offset, NULL,
+        "The record offset array"},
 #endif
     {NULL}  /* Sentinel */
 };
