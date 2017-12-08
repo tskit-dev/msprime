@@ -1294,12 +1294,13 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_nodes) - 1, ts.num_nodes)
         self.assertEqual(
             list(output_nodes[0].split()),
-            ["is_sample", "time", "population"])
+            ["id", "is_sample", "time", "population"])
         for node, line in zip(ts.nodes(), output_nodes[1:]):
             splits = line.split("\t")
-            self.assertEqual(str(node.is_sample()), splits[0])
-            self.assertEqual(convert(node.time), splits[1])
-            self.assertEqual(str(node.population), splits[2])
+            self.assertEqual(str(node.id), splits[0])
+            self.assertEqual(str(node.is_sample()), splits[1])
+            self.assertEqual(convert(node.time), splits[2])
+            self.assertEqual(str(node.population), splits[3])
 
     def verify_samples_format(self, ts, samples_file, precision):
         """
@@ -1391,14 +1392,6 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
                 self.verify_edges_format(ts, edges_file, precision)
                 self.verify_sites_format(ts, sites_file, precision)
                 self.verify_mutations_format(ts, mutations_file, precision)
-
-    def test_dump_samples_text(self):
-        for ts in get_example_tree_sequences():
-            for precision in [2, 7]:
-                samples_file = six.StringIO()
-                ts.dump_samples_text(samples_file, precision=precision)
-                samples_file.seek(0)
-                self.verify_samples_format(ts, samples_file, precision)
 
     def verify_approximate_equality(self, ts1, ts2):
         """

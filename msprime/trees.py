@@ -111,7 +111,9 @@ class SimpleContainer(object):
 
 class Node(SimpleContainer):
     def __init__(
-            self, time=0, population=NULL_POPULATION, metadata="", is_sample=False):
+            self, id_=None, time=0, population=NULL_POPULATION, metadata="",
+            is_sample=False):
+        self.id = id_
         self.time = time
         self.population = population
         self.metadata = metadata
@@ -1133,13 +1135,15 @@ class TreeSequence(object):
         """
 
         if nodes is not None:
-            print("is_sample", "time", "population", sep="\t", file=nodes)
+            print("id", "is_sample", "time", "population", sep="\t", file=nodes)
             for node in self.nodes():
                 row = (
+                    "{id:d}\t"
                     "{is_sample:d}\t"
                     "{time:.{precision}f}\t"
                     "{population:d}\t").format(
-                        precision=precision, is_sample=node.is_sample(), time=node.time,
+                        precision=precision, id=node.id,
+                        is_sample=node.is_sample(), time=node.time,
                         population=node.population)
                 print(row, file=nodes)
 
@@ -1178,28 +1182,6 @@ class TreeSequence(object):
                             derived_state=mutation.derived_state,
                             parent=mutation.parent)
                     print(row, file=mutations)
-
-    def dump_samples_text(self, samples, precision=6):
-        """
-        Writes a text representation of the entries in the NodeTable
-        corresponding to samples to the specified connections.
-
-        :param stream samples: The file-like object to write the subset of the NodeTable
-            describing the samples to, with an extra column, `id`.
-        :param int precision: The number of digits of precision.
-        """
-
-        print("id", "is_sample", "time", "population", sep="\t", file=samples)
-        for node_id in self.samples():
-            node = self.node(node_id)
-            row = (
-                "{node_id:d}\t"
-                "{is_sample:d}\t"
-                "{time:.{precision}f}\t"
-                "{population:d}").format(
-                    precision=precision, is_sample=node.is_sample(), time=node.time,
-                    population=node.population, node_id=node_id)
-            print(row, file=samples)
 
     # num_samples was originally called sample_size, and so we must keep sample_size
     # around as a deprecated alias.
@@ -1623,7 +1605,7 @@ class TreeSequence(object):
     def node(self, u):
         flags, time, population, metadata = self._ll_tree_sequence.get_node(u)
         return Node(
-            time=time, population=population, metadata=metadata,
+            id_=u, time=time, population=population, metadata=metadata,
             is_sample=flags & NODE_IS_SAMPLE)
 
     def time(self, u):
