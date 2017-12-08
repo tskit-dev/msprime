@@ -455,6 +455,17 @@ out:
 }
 
 static PyObject *
+make_provenance(provenance_t *provenance)
+{
+    PyObject *ret = NULL;
+
+    ret = Py_BuildValue("s#s#",
+            provenance->timestamp, (Py_ssize_t) provenance->timestamp_length,
+            provenance->record, (Py_ssize_t) provenance->record_length);
+    return ret;
+}
+
+static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
@@ -3669,17 +3680,17 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     MigrationTable *py_migrations = NULL;
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
-    ProvenanceTable *py_provenance = NULL;
+    ProvenanceTable *py_provenances = NULL;
     node_table_t *nodes = NULL;
     edge_table_t *edges = NULL;
     migration_table_t *migrations = NULL;
     mutation_table_t *mutations = NULL;
     site_table_t *sites = NULL;
-    provenance_table_t *provenance = NULL;
+    provenance_table_t *provenances = NULL;
     double sequence_length = 0.0;
 
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenance", "sequence_length", NULL};
+        "sites", "mutations", "provenances", "sequence_length", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
@@ -3687,7 +3698,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &ProvenanceTableType, &py_provenance,
+            &ProvenanceTableType, &py_provenances,
             &sequence_length)) {
         goto out;
     }
@@ -3717,11 +3728,11 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
         mutations = py_mutations->mutation_table;
     }
-    if (py_provenance != NULL) {
-        if (ProvenanceTable_check_state(py_provenance) != 0) {
+    if (py_provenances != NULL) {
+        if (ProvenanceTable_check_state(py_provenances) != 0) {
             goto out;
         }
-        provenance = py_provenance->provenance_table;
+        provenances = py_provenances->provenance_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
@@ -3733,7 +3744,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = tree_sequence_load_tables(self->tree_sequence, sequence_length,
-        nodes, edges, migrations, sites, mutations, provenance, 0);
+        nodes, edges, migrations, sites, mutations, provenances, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3753,20 +3764,23 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     MigrationTable *py_migrations = NULL;
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
+    ProvenanceTable *py_provenances = NULL;
     node_table_t *nodes = NULL;
     edge_table_t *edges = NULL;
     migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
+    provenance_table_t *provenances = NULL;
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", NULL};
+        "sites", "mutations", "provenances", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations)) {
+            &MutationTableType, &py_mutations,
+            &ProvenanceTableType, &py_provenances)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
@@ -3799,11 +3813,17 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         mutations = py_mutations->mutation_table;
     }
     if ((mutations == NULL) != (sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and mutation types");
+        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and sites");
         goto out;
     }
+    if (py_provenances != NULL) {
+        if (ProvenanceTable_check_state(py_provenances) != 0) {
+            goto out;
+        }
+        provenances = py_provenances->provenance_table;
+    }
     err = tree_sequence_dump_tables(self->tree_sequence,
-        nodes, edges, migrations, sites, mutations, NULL, 0);
+        nodes, edges, migrations, sites, mutations, provenances, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3994,6 +4014,34 @@ out:
     return ret;
 }
 
+static PyObject *
+TreeSequence_get_provenance(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    provenance_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_provenances(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_provenance(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_provenance(&record);
+out:
+    return ret;
+}
 
 static PyObject *
 TreeSequence_get_num_edges(TreeSequence *self, PyObject *args)
@@ -4186,6 +4234,21 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_num_provenances(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+    size_t num_provenances;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_provenances = tree_sequence_get_num_provenances(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_provenances);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_genotype_matrix(TreeSequence  *self)
 {
 #ifdef HAVE_NUMPY
@@ -4278,6 +4341,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_mutation",
         (PyCFunction) TreeSequence_get_mutation, METH_VARARGS,
         "Returns the mutation record at the specified index."},
+    {"get_provenance",
+        (PyCFunction) TreeSequence_get_provenance, METH_VARARGS,
+        "Returns the provenance record at the specified index."},
     {"get_num_edges", (PyCFunction) TreeSequence_get_num_edges,
         METH_NOARGS, "Returns the number of coalescence records." },
     {"get_num_migrations", (PyCFunction) TreeSequence_get_num_migrations,
@@ -4290,6 +4356,8 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of sites" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
         "Returns the number of mutations" },
+    {"get_num_provenances", (PyCFunction) TreeSequence_get_num_provenances,
+        METH_NOARGS, "Returns the number of provenances" },
     {"get_num_nodes", (PyCFunction) TreeSequence_get_num_nodes, METH_NOARGS,
         "Returns the number of unique nodes in the tree sequence." },
     {"get_num_samples", (PyCFunction) TreeSequence_get_num_samples, METH_NOARGS,

@@ -215,6 +215,7 @@ typedef struct {
 } migration_t;
 
 typedef struct {
+    list_len_t id;
     const char *timestamp;
     list_len_t timestamp_length;
     const char *record;

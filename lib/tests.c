@@ -5974,6 +5974,7 @@ test_dump_tables_hdf5(void)
     edge_table_free(&edges);
     migration_table_free(&migrations);
     site_table_free(&sites);
+    provenance_table_free(&provenance);
     mutation_table_free(&mutations);
 }
 

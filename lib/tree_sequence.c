@@ -1413,10 +1413,10 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/migrations/dest", self->migrations.num_records},
         {"/migrations/time", self->migrations.num_records},
 
-        {"/provenance/timestamp", self->provenances.timestamp_length},
-        {"/provenance/timestamp_offset", self->provenances.num_records + 1},
-        {"/provenance/record", self->provenances.record_length},
-        {"/provenance/record_offset", self->provenances.num_records + 1},
+        {"/provenances/timestamp", self->provenances.timestamp_length},
+        {"/provenances/timestamp_offset", self->provenances.num_records + 1},
+        {"/provenances/record", self->provenances.record_length},
+        {"/provenances/record_offset", self->provenances.num_records + 1},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
     size_t j;
@@ -1488,7 +1488,7 @@ tree_sequence_read_hdf5_groups(tree_sequence_t *self, hid_t file_id)
         "/sites",
         "/mutations",
         "/migrations",
-        "/provenance",
+        "/provenances",
     };
     size_t num_groups = sizeof(groups) / sizeof(const char *);
     size_t j;
@@ -1533,9 +1533,9 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/nodes/metadata", &self->nodes.metadata_length},
         {"/edges/left", &self->edges.num_records},
         {"/migrations/left", &self->migrations.num_records},
-        {"/provenance/timestamp_offset", &self->provenances.num_records},
-        {"/provenance/timestamp", &self->provenances.timestamp_length},
-        {"/provenance/record", &self->provenances.record_length},
+        {"/provenances/timestamp_offset", &self->provenances.num_records},
+        {"/provenances/timestamp", &self->provenances.timestamp_length},
+        {"/provenances/record", &self->provenances.record_length},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
@@ -1629,11 +1629,11 @@ tree_sequence_read_hdf5_data(tree_sequence_t *self, hid_t file_id)
         {"/migrations/source", H5T_NATIVE_INT32, self->migrations.source},
         {"/migrations/dest", H5T_NATIVE_INT32, self->migrations.dest},
         {"/migrations/time", H5T_NATIVE_DOUBLE, self->migrations.time},
-        {"/provenance/timestamp", H5T_NATIVE_CHAR, self->provenances.timestamp},
-        {"/provenance/timestamp_offset", H5T_NATIVE_UINT32,
+        {"/provenances/timestamp", H5T_NATIVE_CHAR, self->provenances.timestamp},
+        {"/provenances/timestamp_offset", H5T_NATIVE_UINT32,
             self->provenances.timestamp_offset},
-        {"/provenance/record", H5T_NATIVE_CHAR, self->provenances.record},
-        {"/provenance/record_offset", H5T_NATIVE_UINT32,
+        {"/provenances/record", H5T_NATIVE_CHAR, self->provenances.record},
+        {"/provenances/record_offset", H5T_NATIVE_UINT32,
             self->provenances.record_offset},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _hdf5_field_read);
@@ -1824,16 +1824,16 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/migrations/dest",
             H5T_STD_I32LE, H5T_NATIVE_INT32,
             self->migrations.num_records, self->migrations.dest},
-        {"/provenance/timestamp",
+        {"/provenances/timestamp",
             H5T_STD_I8LE, H5T_NATIVE_CHAR,
             self->provenances.timestamp_length, self->provenances.timestamp},
-        {"/provenance/timestamp_offset",
+        {"/provenances/timestamp_offset",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->provenances.num_records + 1, self->provenances.timestamp_offset},
-        {"/provenance/record",
+        {"/provenances/record",
             H5T_STD_I8LE, H5T_NATIVE_CHAR,
             self->provenances.record_length, self->provenances.record},
-        {"/provenance/record_offset",
+        {"/provenances/record_offset",
             H5T_STD_U32LE, H5T_NATIVE_UINT32,
             self->provenances.num_records + 1, self->provenances.record_offset},
     };
@@ -1848,7 +1848,7 @@ tree_sequence_write_hdf5_data(tree_sequence_t *self, hid_t file_id, int flags)
         {"/edges"},
         {"/edges/indexes"},
         {"/migrations"},
-        {"/provenance"},
+        {"/provenances"},
     };
     size_t num_groups = sizeof(groups) / sizeof(struct _hdf5_group_write);
     size_t j;
@@ -2283,6 +2283,7 @@ tree_sequence_get_provenance(tree_sequence_t *self, size_t index, provenance_t *
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
+    provenance->id = (list_len_t) index;
     offset = self->provenances.timestamp_offset[index];
     length = self->provenances.timestamp_offset[index + 1] - offset;
     provenance->timestamp = self->provenances.timestamp + offset;

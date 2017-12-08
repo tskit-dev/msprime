@@ -534,9 +534,7 @@ class TestHdf5FormatErrors(TestHdf5):
         names = []
 
         def visit(name):
-            # The only dataset we can delete on its own is provenance
-            if name != "provenance":
-                names.append(name)
+            names.append(name)
         ts.dump(self.temp_file)
         hfile = h5py.File(self.temp_file, "r")
         hfile.visit(visit)
