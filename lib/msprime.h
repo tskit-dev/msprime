@@ -509,7 +509,7 @@ typedef struct {
         list_len_t *timestamp_offset;
         char *record;
         list_len_t *record_offset;
-    } provenance;
+    } provenances;
 
 } tree_sequence_t;
 
