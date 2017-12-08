@@ -88,7 +88,6 @@ class NodeTable(_msprime.NodeTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             time=state["time"], flags=state["flags"], population=state["population"],
             metadata=state["metadata"], metadata_offset=state["metadata_offset"])
@@ -183,7 +182,6 @@ class EdgeTable(_msprime.EdgeTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             left=state["left"], right=state["right"], parent=state["parent"],
             child=state["child"])
@@ -243,7 +241,6 @@ class MigrationTable(_msprime.MigrationTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             left=state["left"], right=state["right"], node=state["node"],
             source=state["source"], dest=state["dest"], time=state["time"])
@@ -311,7 +308,6 @@ class SiteTable(_msprime.SiteTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             position=state["position"], ancestral_state=state["ancestral_state"],
             ancestral_state_offset=state["ancestral_state_offset"])
@@ -385,7 +381,6 @@ class MutationTable(_msprime.MutationTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             site=state["site"], node=state["node"], parent=state["parent"],
             derived_state=state["derived_state"],
@@ -453,7 +448,6 @@ class ProvenanceTable(_msprime.ProvenanceTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             timestamp=state["timestamp"],
             timestamp_offset=state["timestamp_offset"],
