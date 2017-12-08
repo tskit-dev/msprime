@@ -23,6 +23,7 @@ formats.
 from __future__ import division
 from __future__ import print_function
 
+import datetime
 import json
 import logging
 
@@ -46,8 +47,7 @@ def _check_h5py():
 
 def _get_v2_provenance(command, attrs):
     """
-    Returns the V2 tree provenance attributes reformatted as a V3
-    provenance string.
+    Returns the V2 tree provenance attributes reformatted as a provenance record.
     """
     environment = {}
     parameters = {}
@@ -56,6 +56,7 @@ def _get_v2_provenance(command, attrs):
     try:
         environment = json.loads(str(attrs["environment"]))
     except ValueError:
+
         logging.warn("Failed to convert environment provenance")
     try:
         parameters = json.loads(str(attrs["parameters"]))
@@ -110,9 +111,11 @@ def _convert_hdf5_mutations(
 def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
-    provenance = [
-        _get_v2_provenance("generate_trees", trees_group.attrs),
-    ]
+    old_timestamp = datetime.datetime.fromtimestamp(0).isoformat()
+    provenances = msprime.ProvenanceTable()
+    provenances.add_row(
+        timestamp=old_timestamp,
+        record=_get_v2_provenance("generate_trees", trees_group.attrs))
     num_rows = trees_group["node"].shape[0]
     index = np.arange(num_rows, dtype=int)
     parent = np.zeros(2 * num_rows, dtype=np.int32)
@@ -154,13 +157,14 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
         mutations_group = root["mutations"]
         _convert_hdf5_mutations(
             mutations_group, sites, mutations, remove_duplicate_positions)
-        provenance.append(
-            _get_v2_provenance("generate_mutations", mutations_group.attrs))
-    provenance.append(_get_upgrade_provenance(root))
+        provenances.add_row(
+            timestamp=old_timestamp,
+            record=_get_v2_provenance("generate_mutations", mutations_group.attrs))
+    provenances.add_row(_get_upgrade_provenance(root))
     msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenance_strings=provenance)
+        provenances=provenances)
 
 
 def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
@@ -206,14 +210,16 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     if "mutations" in root:
         _convert_hdf5_mutations(
             root["mutations"], sites, mutations, remove_duplicate_positions)
-    provenance = []
+    old_timestamp = datetime.datetime.fromtimestamp(0).isoformat()
+    provenances = msprime.ProvenanceTable()
     if "provenance" in root:
-        provenance = list(root["provenance"])
-    provenance.append(_get_upgrade_provenance(root))
+        for provenance in root["provenance"]:
+            provenances.add_row(timestamp=old_timestamp, record=provenance)
+    provenances.add_row(_get_upgrade_provenance(root))
     msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenance_strings=provenance)
+        provenances=provenances)
 
 
 def load_legacy(filename, remove_duplicate_positions=False):
