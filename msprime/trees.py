@@ -149,6 +149,13 @@ class Edgeset(SimpleContainer):
             self.left, self.right, self.parent, self.children)
 
 
+class Provenance(SimpleContainer):
+    def __init__(self, id_=None, timestamp=None, record=None):
+        self.id = id_
+        self.timestamp = timestamp
+        self.record = record
+
+
 # TODO:
 # - Pickle and copy support
 class SparseTree(object):
@@ -1053,13 +1060,6 @@ class TreeSequence(object):
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
 
-    @property
-    def provenance(self):
-        return self.get_provenance()
-
-    def get_provenance(self):
-        return self._ll_tree_sequence.get_provenance_strings()
-
     def dump(self, path, zlib_compression=False):
         """
         Writes the tree sequence to the specified file path.
@@ -1186,7 +1186,7 @@ class TreeSequence(object):
                     print(row, file=mutations)
 
         if provenances is not None:
-            print("id", "timestamp", "record", sep="\t", file=mutations)
+            print("id", "timestamp", "record", sep="\t", file=provenances)
             for provenance in self.provenances():
                 row = (
                     "{id}\t"
@@ -1309,6 +1309,10 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_nodes()
 
+    @property
+    def num_provenances(self):
+        return self._ll_tree_sequence.get_num_provenances()
+
     # TODO deprecate
     def records(self):
         """
@@ -1346,6 +1350,10 @@ class TreeSequence(object):
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
+
+    def provenances(self):
+        for j in range(self.num_provenances):
+            yield self.provenance(j)
 
     def nodes(self):
         for j in range(self.num_nodes):
@@ -1621,6 +1629,10 @@ class TreeSequence(object):
         return Node(
             id_=u, time=time, population=population, metadata=metadata,
             is_sample=flags & NODE_IS_SAMPLE)
+
+    def provenance(self, id_):
+        timestamp, record = self._ll_tree_sequence.get_provenance(id_)
+        return Provenance(id_=id_, timestamp=timestamp, record=record)
 
     def time(self, u):
         return self.get_time(u)

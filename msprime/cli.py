@@ -24,6 +24,7 @@ from __future__ import print_function
 
 import argparse
 import hashlib
+import json
 import os
 import random
 import signal
@@ -824,7 +825,13 @@ def run_dump_mutations(args):
 
 def run_dump_provenances(args):
     tree_sequence = msprime.load(args.history_file)
-    tree_sequence.dump_text(provenances=sys.stdout)
+    if args.human:
+        for provenance in tree_sequence.provenances():
+            d = json.loads(provenance.record)
+            print("id={}, timestamp={}, record={}".format(
+                provenance.id, provenance.timestamp, json.dumps(d, indent=4)))
+    else:
+        tree_sequence.dump_text(provenances=sys.stdout)
 
 
 def run_dump_vcf(args):
@@ -935,6 +942,9 @@ def get_msp_parser():
         "provenances",
         help="Dump provenance information in tabular format.")
     add_history_file_argument(parser)
+    parser.add_argument(
+        "-H", "--human", action="store_true",
+        help="Print out the provenances in a human readable format")
     parser.set_defaults(runner=run_dump_provenances)
 
     parser = subparsers.add_parser(

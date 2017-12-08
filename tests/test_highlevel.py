@@ -30,6 +30,7 @@ except ImportError:
     pass
 
 import collections
+import datetime
 import gzip
 import itertools
 import json
@@ -1202,11 +1203,9 @@ class TestTreeSequence(HighLevelTestCase):
             j += 1
         self.assertGreater(j, 1)
 
-    @unittest.skip("provenance API")
     def test_apis(self):
         ts = msprime.simulate(10, random_seed=1)
         self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
-        self.assertEqual(ts.get_provenance(), ts.provenance)
         self.assertEqual(ts.get_sample_size(), ts.sample_size)
         self.assertEqual(ts.get_sample_size(), ts.num_samples)
         self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
@@ -1214,8 +1213,7 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertEqual(ts.get_num_trees(), ts.num_trees)
         self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
         self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
-        self.assertEqual(
-            ts.get_pairwise_diversity(), ts.pairwise_diversity())
+        self.assertEqual(ts.get_pairwise_diversity(), ts.pairwise_diversity())
         samples = ts.samples()
         self.assertEqual(
             ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
@@ -2018,7 +2016,6 @@ class TestSimulateInterface(unittest.TestCase):
     """
     Some simple test cases for the simulate() interface.
     """
-    @unittest.skip("provenance API")
     def test_defaults(self):
         n = 10
         ts = msprime.simulate(n)
@@ -2027,18 +2024,31 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
         self.assertEqual(ts.get_sequence_length(), 1)
-        self.assertEqual(len(ts.provenance), 1)
+        self.assertEqual(len(list(ts.provenances())), 1)
 
-    @unittest.skip("provenance API")
+    def verify_provenance(self, provenance):
+        """
+        Checks that the specified provenance object has the right sort of
+        properties.
+        """
+        # Generate the ISO 8601 time for now, without the high precision suffix,
+        # and compare the prefixes.
+        today = datetime.date.today().isoformat()
+        k = len(today)
+        self.assertEqual(provenance.timestamp[:k], today)
+        self.assertEqual(provenance.timestamp[k], "T")
+        d = json.loads(provenance.record)
+        self.assertGreater(len(d), 0)
+        # TODO check the format of the dictionary.
+
     def test_provenance(self):
         ts = msprime.simulate(10)
-        self.assertEqual(len(ts.provenance), 1)
-        d = json.loads(ts.provenance[0].decode())
+        self.assertEqual(ts.num_provenances, 1)
+        self.verify_provenance(ts.provenance(0))
         # TODO check the form of the dictionary
         for ts in msprime.simulate(10, num_replicates=10):
-            self.assertEqual(len(ts.provenance), 1)
-            d = json.loads(ts.provenance[0].decode())
-            self.assertGreater(len(d), 0)
+            self.assertEqual(ts.num_provenances, 1)
+            self.verify_provenance(ts.provenance(0))
 
     def test_replicates(self):
         n = 20
