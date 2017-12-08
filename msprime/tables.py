@@ -22,7 +22,7 @@ Tree sequence IO via the tables API.
 from __future__ import division
 from __future__ import print_function
 
-# import datetime
+import datetime
 
 from six.moves import copyreg
 
@@ -416,12 +416,23 @@ class ProvenanceTable(_msprime.ProvenanceTable):
     """
     TODO Document
     """
-    # def add_row(self, record, timestamp=None):
-    #     if timestamp is None:
-    #         timestamp = datetime.datetime.now().isoformat()
-    #     print(timestamp)
+    def add_row(self, record, timestamp=None):
+        """
+        Adds a new row to this ProvenanceTable consisting of the specified record and
+        timestamp. If timestamp is not specified, it is automatically generated from
+        the current time.
 
-    #     super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
+        :param str record: A provenance record, describing the parameters and
+            environment used to generate the current set of tables.
+        :param str timestamp: A string timestamp. This should be in ISO8601 form.
+        """
+        if timestamp is None:
+            timestamp = datetime.datetime.now().isoformat()
+        # Note that the order of the positional arguments has been reversed
+        # from the low-level module, which is a bit confusing. However, we
+        # want the default behaviour here to be to add a row to the table at
+        # the current time as simply as possible.
+        super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
 
     def __str__(self):
         timestamp = unpack_strings(self.timestamp, self.timestamp_offset)

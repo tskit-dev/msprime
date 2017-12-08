@@ -1151,7 +1151,8 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     int ret = -1;
     size_t j;
     double left, right;
-    list_len_t offset, length;
+    list_len_t offset, length, timestamp_offset, timestamp_length,
+               record_offset, record_length;
 
     if (nodes == NULL || edges == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -1250,17 +1251,17 @@ tree_sequence_dump_tables(tree_sequence_t *self,
             goto out;
         }
         for (j = 0; j < self->provenance.num_records; j++) {
-            /* offset = self->provenances.derived_state_offset[j]; */
-            /* length = self->provenances.derived_state_offset[j + 1] - offset; */
-            /* ret = provenance_table_add_row(provenances, */
-            /*         self->provenances.site[j], self->provenances.node[j], */
-            /*         self->provenances.parent[j], self->provenances.derived_state + offset, */
-            /*         length); */
-            /* if (ret != 0) { */
-            /*     goto out; */
-            /* } */
+            timestamp_offset = self->provenance.timestamp_offset[j];
+            timestamp_length = self->provenance.timestamp_offset[j + 1] - timestamp_offset;
+            record_offset = self->provenance.record_offset[j];
+            record_length = self->provenance.record_offset[j + 1] - record_offset;
+            ret = provenance_table_add_row(provenance,
+                    self->provenance.timestamp + timestamp_offset, timestamp_length,
+                    self->provenance.record + record_offset, record_length);
+            if (ret != 0) {
+                goto out;
+            }
         }
-
     }
 
     ret = 0;
@@ -1414,7 +1415,7 @@ tree_sequence_check_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
 
         {"/provenance/timestamp", self->provenance.timestamp_length},
         {"/provenance/timestamp_offset", self->provenance.num_records + 1},
-        {"/provenance/provenance", self->provenance.record_length},
+        {"/provenance/record", self->provenance.record_length},
         {"/provenance/record_offset", self->provenance.num_records + 1},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_check);
@@ -1534,7 +1535,7 @@ tree_sequence_read_hdf5_dimensions(tree_sequence_t *self, hid_t file_id)
         {"/migrations/left", &self->migrations.num_records},
         {"/provenance/timestamp_offset", &self->provenance.num_records},
         {"/provenance/timestamp", &self->provenance.timestamp_length},
-        {"/provenance/provenance", &self->provenance.record_length},
+        {"/provenance/record", &self->provenance.record_length},
     };
     size_t num_fields = sizeof(fields) / sizeof(struct _dimension_read);
     size_t j;
@@ -2087,6 +2088,12 @@ tree_sequence_get_num_mutations(tree_sequence_t *self)
 }
 
 size_t
+tree_sequence_get_num_provenances(tree_sequence_t *self)
+{
+    return self->provenance.num_records;
+}
+
+size_t
 tree_sequence_get_num_trees(tree_sequence_t *self)
 {
     return self->num_trees;
@@ -2265,6 +2272,30 @@ tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
 out:
     return ret;
 }
+
+int WARN_UNUSED
+tree_sequence_get_provenance(tree_sequence_t *self, size_t index, provenance_t *provenance)
+{
+    int ret = 0;
+    list_len_t offset, length;
+
+    if (index >= self->provenance.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    offset = self->provenance.timestamp_offset[index];
+    length = self->provenance.timestamp_offset[index + 1] - offset;
+    provenance->timestamp = self->provenance.timestamp + offset;
+    provenance->timestamp_length = length;
+    offset = self->provenance.record_offset[index];
+    length = self->provenance.record_offset[index + 1] - offset;
+    provenance->record = self->provenance.record + offset;
+    provenance->record_length = length;
+out:
+    return ret;
+}
+
+
 
 int WARN_UNUSED
 tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples)

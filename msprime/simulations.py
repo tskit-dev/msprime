@@ -356,7 +356,7 @@ class Simulator(object):
         self.node_table = tables.NodeTable(block_size)
         self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
-        self.mutation_type_table = tables.SiteTable()
+        self.site_table = tables.SiteTable()
         self.mutation_table = tables.MutationTable(block_size)
         self.provenance_table = tables.ProvenanceTable()
 
@@ -576,16 +576,14 @@ class Simulator(object):
             recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
-                self.node_table, self.edge_table, self.mutation_type_table,
-                self.mutation_table)
+                self.node_table, self.edge_table, self.site_table, self.mutation_table)
         self.provenance_table.reset()
-        # if provenance is not None:
-        #     self.provenance_table.add_row(provenance)
-        # print(self.provenance_table)
+        if provenance is not None:
+            self.provenance_table.add_row(provenance)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edge_table, self.migration_table,
-            self.mutation_type_table, self.mutation_table)
+            self.site_table, self.mutation_table, self.provenance_table)
         return trees.TreeSequence(ll_tree_sequence)
 
     def reset(self):

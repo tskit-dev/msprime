@@ -215,6 +215,13 @@ typedef struct {
 } migration_t;
 
 typedef struct {
+    const char *timestamp;
+    list_len_t timestamp_length;
+    const char *record;
+    list_len_t record_length;
+} provenance_t;
+
+typedef struct {
     uint32_t left; /* TODO CHANGE THIS - not a good name! */
     uint32_t value;
 } node_mapping_t;
@@ -810,11 +817,11 @@ int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
 
 size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
-size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_edges(tree_sequence_t *self);
 size_t tree_sequence_get_num_migrations(tree_sequence_t *self);
 size_t tree_sequence_get_num_sites(tree_sequence_t *self);
 size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
+size_t tree_sequence_get_num_provenances(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_num_samples(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
@@ -828,12 +835,12 @@ int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
 int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
 int tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id,
         mutation_t *mutation);
+int tree_sequence_get_provenance(tree_sequence_t *self, size_t index,
+        provenance_t *provenance);
 int tree_sequence_get_samples(tree_sequence_t *self, node_id_t **samples);
 int tree_sequence_get_sample_index_map(tree_sequence_t *self,
         node_id_t **sample_index_map);
 
-int tree_sequence_get_provenance_strings(tree_sequence_t *self,
-        size_t *num_provenance_strings, char ***provenance_strings);
 int tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         size_t num_samples, int flags, tree_sequence_t *output,
         node_id_t *node_map);

@@ -459,6 +459,8 @@ tree_sequence_from_text(tree_sequence_t *ts, double sequence_length,
     CU_ASSERT_FATAL(ts != NULL);
     CU_ASSERT_FATAL(nodes != NULL);
     CU_ASSERT_FATAL(edges != NULL);
+    /* Not supporting provenance here for now */
+    CU_ASSERT_FATAL(provenance == NULL);
 
     ret = node_table_alloc(&node_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -595,6 +597,15 @@ verify_migrations_equal(migration_t *r1, migration_t *r2, double scale)
     CU_ASSERT_EQUAL_FATAL(r1->node, r2->node);
     CU_ASSERT_EQUAL_FATAL(r1->source, r2->source);
     CU_ASSERT_EQUAL_FATAL(r1->dest, r2->dest);
+}
+
+static void
+verify_provenances_equal(provenance_t *p1, provenance_t *p2)
+{
+    CU_ASSERT_FATAL(p1->timestamp_length == p2->timestamp_length);
+    CU_ASSERT_NSTRING_EQUAL_FATAL(p1->timestamp, p2->timestamp, p1->timestamp_length);
+    CU_ASSERT_FATAL(p1->record_length == p2->record_length);
+    CU_ASSERT_NSTRING_EQUAL_FATAL(p1->record, p2->record, p1->record_length);
 }
 
 static sparse_tree_t *
@@ -1157,6 +1168,9 @@ get_example_tree_sequence(uint32_t num_samples,
     migration_table_t *migrations= malloc(sizeof(migration_table_t));
     site_table_t *sites = malloc(sizeof(site_table_t));
     mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
+    provenance_table_t *provenance = malloc(sizeof(provenance_table_t));
+    char *timestamp = "timestamp";
+    char *record = "get_example_tree_sequence";
     uint32_t j;
     size_t num_populations = 3;
     double migration_matrix[] = {
@@ -1176,6 +1190,7 @@ get_example_tree_sequence(uint32_t num_samples,
     CU_ASSERT_FATAL(migrations != NULL);
     CU_ASSERT_FATAL(sites != NULL);
     CU_ASSERT_FATAL(mutations != NULL);
+    CU_ASSERT_FATAL(provenance != NULL);
     gsl_rng_set(rng, 1);
 
     ret = node_table_alloc(nodes, 10, 10);
@@ -1187,6 +1202,8 @@ get_example_tree_sequence(uint32_t num_samples,
     ret = site_table_alloc(sites, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutation_table_alloc(mutations, 10, 10);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = provenance_table_alloc(provenance, 0, 0, 0);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = mutgen_alloc(mutgen, mutation_rate, rng, alphabet, 10);
@@ -1244,8 +1261,11 @@ get_example_tree_sequence(uint32_t num_samples,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_populate_tables(mutgen, sites, mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_add_row(provenance,
+            timestamp, strlen(timestamp), record, strlen(record));
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(tree_seq, 0, nodes, edges, migrations,
-            sites, mutations, NULL, 0);
+            sites, mutations, provenance, 0);
     /* edge_table_print_state(edges, stdout); */
     /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1261,12 +1281,14 @@ get_example_tree_sequence(uint32_t num_samples,
     node_table_free(nodes);
     edge_table_free(edges);
     mutation_table_free(mutations);
+    provenance_table_free(provenance);
     site_table_free(sites);
     migration_table_free(migrations);
     free(nodes);
     free(edges);
     free(migrations);
     free(mutations);
+    free(provenance);
     free(sites);
     return tree_seq;
 }
@@ -1307,17 +1329,20 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     sparse_tree_t tree;
     node_table_t nodes;
     edge_table_t edges;
+    provenance_table_t provenance;
     migration_table_t migrations;
     mutation_table_t mutations;
     site_table_t sites;
     node_id_t *stack;
-    mutation_id_t *mutation, parent;;
+    mutation_id_t *mutation, parent;
     node_id_t u, v, root;
     site_id_t site_id;
     char *state = NULL;
     int stack_top = 0;
     size_t j;
     size_t num_mutations_per_branch = 2;
+    char *timestamp = "timestamp";
+    char *record = "make_recurrent_and_back_mutations_copy";
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1325,6 +1350,8 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     ret = edge_table_alloc(&edges, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenance, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1375,12 +1402,15 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_dump_tables(ts, &nodes, &edges,
-            &migrations, NULL, NULL, NULL, 0);
+            &migrations, NULL, NULL, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_add_row(&provenance,
+            timestamp, strlen(timestamp), record, strlen(record));
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
-            &sites, &mutations, NULL, 0);
+            &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1388,6 +1418,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    provenance_table_free(&provenance);
     sparse_tree_free(&tree);
     free(state);
     free(mutation);
@@ -1404,12 +1435,15 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     edge_table_t edges;
     migration_table_t migrations;
     mutation_table_t mutations;
+    provenance_table_t provenance;
     site_table_t sites;
     node_id_t *node_map;
     node_t node;
     edge_t edge;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
+    char *timestamp = "timestamp";
+    char *record = "make_permuted_nodes_copy";
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1422,11 +1456,13 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenance, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_map = malloc(num_nodes * sizeof(node_id_t));
     CU_ASSERT_FATAL(node_map != NULL);
 
     ret = tree_sequence_dump_tables(ts, &nodes, &edges,
-            &migrations, &sites, &mutations, NULL, 0);
+            &migrations, &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     for (j = 0; j < num_nodes; j++) {
         node_map[j] = j;
@@ -1456,8 +1492,11 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_add_row(&provenance,
+            timestamp, strlen(timestamp), record, strlen(record));
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
-            &sites, &mutations, NULL, 0);
+            &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1465,6 +1504,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    provenance_table_free(&provenance);
     gsl_rng_free(rng);
     free(node_map);
     return new_ts;
@@ -1480,12 +1520,15 @@ make_gappy_copy(tree_sequence_t *ts)
     tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
     node_table_t nodes;
     edge_table_t edges;
+    provenance_table_t provenance;
     edge_t edge;
     migration_table_t migrations;
     mutation_table_t mutations;
     site_table_t sites;
     double left, right;
     double gap_size = 1e-4;
+    char *timestamp = "timestamp";
+    char *record = "make_gappy_copy";
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1498,9 +1541,11 @@ make_gappy_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenance, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_dump_tables(ts, &nodes, &edges,
-            &migrations, &sites, &mutations, NULL, 0);
+            &migrations, &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edge_table_reset(&edges);
     for (j = 0; j < tree_sequence_get_num_edges(ts); j++) {
@@ -1521,11 +1566,13 @@ make_gappy_copy(tree_sequence_t *ts)
     ret = mutation_table_add_row(&mutations, sites.num_rows - 1, 0, MSP_NULL_MUTATION,
             "1", 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-
+    ret = provenance_table_add_row(&provenance,
+            timestamp, strlen(timestamp), record, strlen(record));
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, ts->sequence_length + 1,
-            &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
+            &nodes, &edges, &migrations, &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1533,6 +1580,7 @@ make_gappy_copy(tree_sequence_t *ts)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    provenance_table_free(&provenance);
     return new_ts;
 }
 
@@ -1547,9 +1595,12 @@ make_decapitated_copy(tree_sequence_t *ts)
     edge_table_t edges;
     migration_table_t migrations;
     mutation_table_t mutations;
+    provenance_table_t provenance;
     site_table_t sites;
     size_t j;
     node_id_t oldest_node;
+    char *timestamp = "timestamp";
+    char *record = "make_decapitated_copy";
 
     CU_ASSERT_FATAL(new_ts != NULL);
     ret = node_table_alloc(&nodes, 0, 0);
@@ -1562,9 +1613,11 @@ make_decapitated_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenance, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_dump_tables(ts, &nodes, &edges,
-            &migrations, &sites, &mutations, NULL, 0);
+            &migrations, &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edges.num_rows -= edges.num_rows / 4;
     oldest_node = edges.parent[edges.num_rows - 1];
@@ -1577,10 +1630,13 @@ make_decapitated_copy(tree_sequence_t *ts)
     sites.num_rows = j;
     sites.ancestral_state_length = j;
 
+    ret = provenance_table_add_row(&provenance,
+            timestamp, strlen(timestamp), record, strlen(record));
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
-            &sites, &mutations, NULL, 0);
+            &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     node_table_free(&nodes);
@@ -1588,6 +1644,7 @@ make_decapitated_copy(tree_sequence_t *ts)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    provenance_table_free(&provenance);
     return new_ts;
 }
 
@@ -5417,6 +5474,7 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     edge_t r1, r2;
     node_t n1, n2;
     migration_t m1, m2;
+    provenance_t p1, p2;
     size_t num_mutations = tree_sequence_get_num_mutations(ts1);
     site_t site_1, site_2;
     mutation_t mutation_1, mutation_2;
@@ -5503,7 +5561,16 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
         }
     }
     if (check_provenance) {
-        /* FIXME add checks for provenance */
+        CU_ASSERT_EQUAL_FATAL(
+            tree_sequence_get_num_provenances(ts1),
+            tree_sequence_get_num_provenances(ts2));
+        for (j = 0; j < tree_sequence_get_num_provenances(ts1); j++) {
+            ret = tree_sequence_get_provenance(ts1, j, &p1);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = tree_sequence_get_provenance(ts2, j, &p2);
+            CU_ASSERT_EQUAL(ret, 0);
+            verify_provenances_equal(&p1, &p2);
+        }
     }
     ret = sparse_tree_alloc(&t1, ts1, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -5607,6 +5674,7 @@ test_sort_tables(void)
     migration_table_t migrations;
     site_table_t sites;
     mutation_table_t mutations;
+    provenance_table_t provenances;
 
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5617,6 +5685,8 @@ test_sort_tables(void)
     ret = site_table_alloc(&sites, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenances, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_FATAL(examples != NULL);
@@ -5670,7 +5740,7 @@ test_sort_tables(void)
             ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
                     &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+            verify_tree_sequences_equal(ts1, &ts2, true, true, false);
             tree_sequence_free(&ts2);
         }
 
@@ -5683,7 +5753,7 @@ test_sort_tables(void)
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
                 &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+        verify_tree_sequences_equal(ts1, &ts2, true, true, false);
         tree_sequence_free(&ts2);
 
         if (sites.num_rows > 1) {
@@ -5704,7 +5774,7 @@ test_sort_tables(void)
             ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
                     &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+            verify_tree_sequences_equal(ts1, &ts2, true, true, false);
             tree_sequence_free(&ts2);
 
             /* Check for site bounds error */
@@ -5743,6 +5813,7 @@ test_sort_tables(void)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    provenance_table_free(&provenances);
 }
 
 static void
@@ -5758,6 +5829,7 @@ test_dump_tables(void)
     migration_table_t migrations;
     site_table_t sites;
     mutation_table_t mutations;
+    provenance_table_t provenances;
 
     ret = node_table_alloc(&nodes, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5769,6 +5841,8 @@ test_dump_tables(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenances, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_FATAL(examples != NULL);
 
@@ -5776,24 +5850,24 @@ test_dump_tables(void)
         ts1 = examples[j];
 
         ret = tree_sequence_dump_tables(ts1, NULL, &edges,
-                &migrations, &sites, &mutations, NULL, 0);
+                &migrations, &sites, &mutations, &provenances, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
         ret = tree_sequence_dump_tables(ts1, &nodes, NULL,
-                &migrations, &sites, &mutations, NULL, 0);
+                &migrations, &sites, &mutations, &provenances, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
         ret = tree_sequence_load_tables(&ts2, 0, NULL, &edges,
-                &migrations, &sites, &mutations, NULL, 0);
+                &migrations, &sites, &mutations, &provenances, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
         ret = tree_sequence_load_tables(&ts2, 0, &nodes, NULL,
-                &migrations, &sites, &mutations, NULL, 0);
+                &migrations, &sites, &mutations, &provenances, 0);
         CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
         ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
-                &migrations, &sites, &mutations, NULL, 0);
+                &migrations, &sites, &mutations, &provenances, 0);
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                &nodes, &edges, &migrations, &sites, &mutations, NULL, 0);
+                &nodes, &edges, &migrations, &sites, &mutations, &provenances, 0);
         verify_tree_sequences_equal(ts1, &ts2, true, true, true);
         tree_sequence_print_state(&ts2, _devnull);
         tree_sequence_free(&ts2);
@@ -5803,10 +5877,20 @@ test_dump_tables(void)
         ret = tree_sequence_initialise(&ts2);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
-                &nodes, &edges, NULL, &sites, &mutations, NULL, 0);
+                &nodes, &edges, NULL, &sites, &mutations, &provenances, 0);
         verify_tree_sequences_equal(ts1, &ts2, false, true, true);
-        CU_ASSERT_EQUAL_FATAL(
-            tree_sequence_get_num_migrations(&ts2), 0);
+        CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_migrations(&ts2), 0);
+        tree_sequence_free(&ts2);
+
+        ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
+                &migrations, NULL, NULL, &provenances, 0);
+        ret = tree_sequence_initialise(&ts2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
+                &nodes, &edges, &migrations, NULL, NULL, &provenances, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        verify_tree_sequences_equal(ts1, &ts2, true, false, true);
+        CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_mutations(&ts2), 0);
         tree_sequence_free(&ts2);
 
         ret = tree_sequence_dump_tables(ts1, &nodes, &edges,
@@ -5816,9 +5900,8 @@ test_dump_tables(void)
         ret = tree_sequence_load_tables(&ts2, ts1->sequence_length,
                 &nodes, &edges, &migrations, NULL, NULL, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        verify_tree_sequences_equal(ts1, &ts2, true, false, true);
-        CU_ASSERT_EQUAL_FATAL(
-            tree_sequence_get_num_mutations(&ts2), 0);
+        verify_tree_sequences_equal(ts1, &ts2, true, false, false);
+        CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_provenances(&ts2), 0);
         tree_sequence_free(&ts2);
 
         tree_sequence_free(ts1);
@@ -5830,6 +5913,7 @@ test_dump_tables(void)
     migration_table_free(&migrations);
     site_table_free(&sites);
     mutation_table_free(&mutations);
+    provenance_table_free(&provenances);
 }
 
 static void
