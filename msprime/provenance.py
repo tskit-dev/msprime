@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 University of Oxford
+# Copyright (C) 2016-2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Common environment methods used to determine the state and versions
+Common provenance methods used to determine the state and versions
 of various dependencies and the OS.
 """
 from __future__ import print_function
@@ -60,3 +60,19 @@ def get_environment():
         }
     }
     return env
+
+
+def get_provenance_dict(command, parameters):
+    """
+    Returns a dictionary encoding an execution of msprime.
+
+    Note: this format is incomplete and provisional.
+    """
+    document = {
+        "software": "msprime",
+        "version": __version__,
+        "command": command,
+        "parameters": parameters,
+        "environment": get_environment()
+    }
+    return document

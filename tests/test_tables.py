@@ -1248,12 +1248,14 @@ class TestTableCollection(unittest.TestCase):
                 "edges": t.edges,
                 "sites": t.sites,
                 "mutations": t.mutations,
-                "migrations": t.migrations})
+                "migrations": t.migrations,
+                "provenances": t.provenances})
         d = t.asdict()
         self.assertEqual(id(t.nodes), id(d["nodes"]))
         self.assertEqual(id(t.edges), id(d["edges"]))
         self.assertEqual(id(t.migrations), id(d["migrations"]))
         self.assertEqual(id(t.sites), id(d["sites"]))
         self.assertEqual(id(t.mutations), id(d["mutations"]))
+        self.assertEqual(id(t.provenances), id(d["provenances"]))
 
     # TODO tests for equality.

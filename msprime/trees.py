@@ -24,6 +24,7 @@ from __future__ import print_function
 
 import collections
 import itertools
+import json
 import sys
 
 try:
@@ -35,6 +36,7 @@ except ImportError:
 
 import _msprime
 import msprime.drawing as drawing
+import msprime.provenance as provenance
 import msprime.tables as tables
 
 from _msprime import NODE_IS_SAMPLE
@@ -1086,7 +1088,7 @@ class TreeSequence(object):
 
     def dump_tables(
             self, nodes=None, edges=None, migrations=None, sites=None,
-            mutations=None):
+            mutations=None, provenances=None):
         """
         Copy the contents of the tables underlying the tree sequence to the
         specified objects.
@@ -1095,8 +1097,9 @@ class TreeSequence(object):
         :param EdgeTable edges: The EdgeTable to load the edges into.
         :param MigrationTable migrations: The MigrationTable to load the migrations into.
         :param SiteTable sites: The SiteTable to load the sites into.
-        :param MutationTable mutations: The NodeTable to load the mutations into.
-
+        :param MutationTable mutations: The MutationTable to load the mutations into.
+        :param ProvenanceTable mutations: The ProvenanceTable to load the provenances
+            into.
         :return: A :class:`.TableCollection` containing all tables underlying
             the tree sequence.
         :rtype: TableCollection
@@ -1113,12 +1116,14 @@ class TreeSequence(object):
             sites = tables.SiteTable()
         if mutations is None:
             mutations = tables.MutationTable()
+        if provenances is None:
+            provenances = tables.ProvenanceTable()
         self._ll_tree_sequence.dump_tables(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations)
+            mutations=mutations, provenances=provenances)
         return tables.TableCollection(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations)
+            mutations=mutations, provenances=provenances)
 
     def dump_text(
             self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
@@ -1765,15 +1770,13 @@ class TreeSequence(object):
                 nodes=t.nodes, edges=t.edges,
                 sites=t.sites, mutations=t.mutations,
                 filter_zero_mutation_sites=filter_zero_mutation_sites)
+        # TODO add simplify arguments here??
+        t.provenances.add_row(record=json.dumps(
+            provenance.get_provenance_dict("simplify", [])))
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
-            mutations=t.mutations, sequence_length=self.sequence_length)
-        # FIXME provenance
-        # for provenance in self.get_provenance():
-        #     new_ts.add_provenance(provenance)
-        # parameters = {"TODO": "encode subset parameters"}
-        # new_ts_provenance = get_provenance_dict("simplify", parameters)
-        # new_ts.add_provenance(json.dumps(new_ts_provenance))
+            mutations=t.mutations, provenances=t.provenances,
+            sequence_length=self.sequence_length)
 
         if map_nodes:
             return new_ts, node_map

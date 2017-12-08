@@ -1064,6 +1064,16 @@ class TestTreeSequence(HighLevelTestCase):
             for bad_ploidy in [-1, 0, n + 1]:
                 self.assertRaises(ValueError, ts.write_vcf, self.temp_file, bad_ploidy)
 
+    def verify_simplify_provenance(self, ts):
+        new_ts = ts.simplify()
+        self.assertEqual(new_ts.num_provenances, ts.num_provenances + 1)
+        old = list(ts.provenances())
+        new = list(new_ts.provenances())
+        self.assertEqual(old, new[:-1])
+        # TODO call verify_provenance on this.
+        self.assertGreater(len(new[-1].timestamp), 0)
+        self.assertGreater(len(new[-1].record), 0)
+
     def verify_simplify_topology(self, ts, sample):
         new_ts, node_map = ts.simplify(sample, map_nodes=True)
         if len(sample) == 0:
@@ -1169,6 +1179,7 @@ class TestTreeSequence(HighLevelTestCase):
     def test_simplify(self):
         num_mutations = 0
         for ts in get_example_tree_sequences():
+            self.verify_simplify_provenance(ts)
             n = ts.get_sample_size()
             num_mutations += ts.get_num_mutations()
             sample_sizes = {0, 1}

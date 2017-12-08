@@ -75,6 +75,7 @@ class WrightFisherSimulator(object):
         migrations = msprime.MigrationTable()
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
+        provenances = msprime.ProvenanceTable()
         mut_positions = {}
         if self.deep_history:
             # initial population
@@ -143,7 +144,8 @@ class WrightFisherSimulator(object):
             print(mutations)
             print("Migrations:")
             print(migrations)
-        return msprime.TableCollection(nodes, edges, migrations, sites, mutations)
+        return msprime.TableCollection(
+            nodes, edges, migrations, sites, mutations, provenances)
 
 
 def wf_sim(
@@ -156,7 +158,7 @@ def wf_sim(
 
 
 def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
-                        migrations=None):
+                        migrations=None, provenances=None):
     """
     Before loading the tables into a tree sequence, we need to add the mutation
     parent column.  Note that these must be sorted.

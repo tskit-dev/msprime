@@ -2862,18 +2862,21 @@ class TestTablesInterface(LowLevelTestCase):
         sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
+        provenances = _msprime.ProvenanceTable()
         kwargs = {
             "nodes": nodes,
             "edges": edges,
             "sites": sites,
             "mutations": mutations,
             "migrations": migrations,
+            "provenances": provenances,
         }
         ts.dump_tables(**kwargs)
         self.verify_node_table(nodes, ts)
         self.verify_edge_table(edges, ts)
         self.verify_migration_table(migrations, ts)
         self.verify_mutation_table(mutations, ts)
+        self.verify_provenance_table(provenances, ts)
 
     def test_dump_tables_errors(self):
         ts = self.get_example_migration_tree_sequence()
@@ -2882,7 +2885,8 @@ class TestTablesInterface(LowLevelTestCase):
             "edges": _msprime.EdgeTable(),
             "sites": _msprime.SiteTable(),
             "mutations": _msprime.MutationTable(),
-            "migrations": _msprime.MigrationTable()
+            "migrations": _msprime.MigrationTable(),
+            "provenances": _msprime.ProvenanceTable()
         }
 
         for bad_type in [None, "", []]:
@@ -2909,6 +2913,7 @@ class TestTablesInterface(LowLevelTestCase):
         sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
+        provenances = _msprime.ProvenanceTable()
 
         ts.dump_tables(nodes=nodes, edges=edges)
         self.verify_node_table(nodes, ts)
@@ -2926,6 +2931,11 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_edge_table(edges, ts)
         self.verify_site_table(sites, ts)
         self.verify_mutation_table(mutations, ts)
+
+        ts.dump_tables(nodes=nodes, edges=edges, provenances=provenances)
+        self.verify_node_table(nodes, ts)
+        self.verify_edge_table(edges, ts)
+        self.verify_provenance_table(provenances, ts)
 
     def test_load_tables(self):
         ex_ts = self.get_example_migration_tree_sequence()
@@ -2961,10 +2971,10 @@ class TestTablesInterface(LowLevelTestCase):
             "sites": _msprime.SiteTable(),
             "mutations": _msprime.MutationTable(),
             "migrations": _msprime.MigrationTable(),
+            "provenances": _msprime.ProvenanceTable(),
         }
         ex_ts.dump_tables(**kwargs)
         ts = _msprime.TreeSequence()
-        kwargs["provenance_strings"] = ["sdf", "wer"]
 
         for bad_type in [None, "", tuple()]:
             for parameter in kwargs.keys():
@@ -2990,9 +3000,11 @@ class TestTablesInterface(LowLevelTestCase):
         sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         migrations = _msprime.MigrationTable()
+        provenances = _msprime.ProvenanceTable()
         ex_ts.dump_tables(
             nodes=nodes, edges=edges, sites=sites,
-            mutations=mutations, migrations=migrations)
+            mutations=mutations, migrations=migrations,
+            provenances=provenances)
 
         ts = _msprime.TreeSequence()
         ts.load_tables(nodes=nodes, edges=edges)
@@ -3017,6 +3029,14 @@ class TestTablesInterface(LowLevelTestCase):
         self.verify_site_table(sites, ts)
         self.verify_mutation_table(mutations, ts)
         self.assertEqual(ts.get_num_migrations(), 0)
+
+        ts = _msprime.TreeSequence()
+        ts.load_tables(nodes=nodes, edges=edges, provenances=provenances)
+        self.verify_node_table(nodes, ts)
+        self.verify_edge_table(edges, ts)
+        self.verify_provenance_table(provenances, ts)
+        self.assertEqual(ts.get_num_migrations(), 0)
+        self.assertEqual(ts.get_num_mutations(), 0)
 
     def test_load_tables_sequence_length(self):
         ex_ts = self.get_example_migration_tree_sequence()

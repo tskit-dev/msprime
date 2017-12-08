@@ -35,8 +35,8 @@ try:
 except ImportError:
     _h5py_imported = False
 
-
 import msprime
+import msprime.provenance as provenance
 import msprime.exceptions as exceptions
 
 
@@ -62,10 +62,10 @@ def _get_v2_provenance(command, attrs):
         parameters = json.loads(str(attrs["parameters"]))
     except ValueError:
         logging.warn("Failed to convert parameters provenance")
-    provenance = msprime.get_provenance_dict(command, parameters)
-    provenance["version"] = environment.get("msprime_version", "Unknown_version")
-    provenance["environment"] = environment
-    return json.dumps(provenance).encode()
+    provenance_dict = provenance.get_provenance_dict(command, parameters)
+    provenance_dict["version"] = environment.get("msprime_version", "Unknown_version")
+    provenance_dict["environment"] = environment
+    return json.dumps(provenance_dict).encode()
 
 
 def _get_upgrade_provenance(root):
@@ -76,7 +76,7 @@ def _get_upgrade_provenance(root):
     parameters = {
         "source_version": list(map(int, root.attrs["format_version"]))
     }
-    s = json.dumps(msprime.get_provenance_dict("upgrade", parameters))
+    s = json.dumps(provenance.get_provenance_dict("upgrade", parameters))
     return s.encode()
 
 
@@ -111,7 +111,7 @@ def _convert_hdf5_mutations(
 def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
-    old_timestamp = datetime.datetime.fromtimestamp(0).isoformat()
+    old_timestamp = datetime.datetime.min.isoformat()
     provenances = msprime.ProvenanceTable()
     provenances.add_row(
         timestamp=old_timestamp,
@@ -210,11 +210,11 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     if "mutations" in root:
         _convert_hdf5_mutations(
             root["mutations"], sites, mutations, remove_duplicate_positions)
-    old_timestamp = datetime.datetime.fromtimestamp(0).isoformat()
+    old_timestamp = datetime.datetime.min.isoformat()
     provenances = msprime.ProvenanceTable()
     if "provenance" in root:
-        for provenance in root["provenance"]:
-            provenances.add_row(timestamp=old_timestamp, record=provenance)
+        for record in root["provenance"]:
+            provenances.add_row(timestamp=old_timestamp, record=record)
     provenances.add_row(_get_upgrade_provenance(root))
     msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(

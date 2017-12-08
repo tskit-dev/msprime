@@ -508,12 +508,14 @@ class TableCollection(object):
     printing and comparisons of a collection of related tables.
     """
     def __init__(
-            self, nodes=None, edges=None, migrations=None, sites=None, mutations=None):
+            self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
+            provenances=None):
         self.nodes = nodes
         self.edges = edges
         self.migrations = migrations
         self.sites = sites
         self.mutations = mutations
+        self.provenances = provenances
 
     def asdict(self):
         """
@@ -525,7 +527,8 @@ class TableCollection(object):
             "edges": self.edges,
             "migrations": self.migrations,
             "sites": self.sites,
-            "mutations": self.mutations
+            "mutations": self.mutations,
+            "provenances": self.provenances
         }
 
     def __banner(self, title):
@@ -547,6 +550,8 @@ class TableCollection(object):
         s += str(self.mutations) + "\n"
         s += self.__banner("Migrations")
         s += str(self.migrations)
+        s += self.__banner("Provenances")
+        s += str(self.provenances)
         return s
 
     # TODO add support for __eq__ and __ne__
@@ -586,7 +591,12 @@ def sort_tables(*args, **kwargs):
     :param MutationTable mutations:
     :param int edge_start: The index in the edge table where sorting starts.
     """
-    return _msprime.sort_tables(*args, **kwargs)
+    kwargs_copy = dict(kwargs)
+    # If provenances is supplied as a keyword argument just ignore it. This is
+    # because we'll often call sort_tables(**t.asdict()), and the provenances
+    # entry breaks this pattern.
+    kwargs_copy.pop("provenances", None)
+    return _msprime.sort_tables(*args, **kwargs_copy)
 
 
 def simplify_tables(*args, **kwargs):
