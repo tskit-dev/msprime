@@ -2447,9 +2447,10 @@ class TestSparseTree(LowLevelTestCase):
                 tree_sites = st.get_sites()
                 self.assertEqual(st.get_num_sites(), len(tree_sites))
                 all_tree_sites.extend(tree_sites)
-                for position, ancestral_state, mutations, index in tree_sites:
+                for position, ancestral_state, mutations, index, metadata in tree_sites:
                     self.assertTrue(st.get_left() <= position < st.get_right())
                     self.assertEqual(index, j)
+                    self.assertEqual(metadata, b"")
                     for site, node, derived_state, parent, mut_id in mutations:
                         self.assertEqual(site, index)
                         self.assertEqual(mutation_id, mut_id)
@@ -3185,6 +3186,37 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertEqual(list(new_mutations.parent), list(mutations.parent))
         self.assertEqual(
             list(new_mutations.derived_state), list(mutations.derived_state))
+
+    def test_site_table_add_row(self):
+        table = _msprime.SiteTable()
+        table.add_row(position=1, ancestral_state="0")
+        self.assertEqual(table.num_rows, 1)
+        self.assertEqual(table.position, [1])
+        self.assertEqual(list(table.ancestral_state), [ord("0")])
+        self.assertEqual(list(table.ancestral_state_offset), [0, 1])
+        self.assertEqual(list(table.metadata), [])
+        self.assertEqual(list(table.metadata_offset), [0, 0])
+
+        metadata = b"abcde"
+        table.add_row(position=2, ancestral_state="1", metadata=metadata)
+        self.assertEqual(table.num_rows, 2)
+        self.assertEqual(list(table.position), [1, 2])
+        self.assertEqual(list(table.ancestral_state), [ord("0"), ord("1")])
+        self.assertEqual(list(table.ancestral_state_offset), [0, 1, 2])
+        self.assertEqual(table.metadata.tobytes(), metadata)
+        self.assertEqual(list(table.metadata_offset), [0, 0, len(metadata)])
+
+    def test_site_table_add_row_errors(self):
+        table = _msprime.SiteTable()
+        self.assertRaises(TypeError, table.add_row)
+        for bad_type in [None, [], {}]:
+            self.assertRaises(
+                TypeError, table.add_row, position=bad_type, ancestral_state="1")
+            self.assertRaises(
+                TypeError, table.add_row, ancestral_state=bad_type, position=1)
+            self.assertRaises(
+                TypeError, table.add_row, ancestral_state="0", position=1,
+                metadata=bad_type)
 
 
 class TestSampleListIterator(LowLevelTestCase):

@@ -62,7 +62,7 @@ def get_environment():
     return env
 
 
-def get_provenance_dict(command, parameters):
+def get_provenance_dict(command, parameters=None):
     """
     Returns a dictionary encoding an execution of msprime.
 

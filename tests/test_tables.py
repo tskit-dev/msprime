@@ -404,7 +404,44 @@ class CommonTestsMixin(object):
                 input_data[offset_col.name] = np.arange(num_rows + 1, dtype=np.uint32)
 
 
-class TestNodeTable(unittest.TestCase, CommonTestsMixin):
+class MetadataTestsMixin(object):
+    """
+    Tests for column that have metadata columns.
+    """
+    def test_random_metadata(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, offset_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[offset_col.name] = np.arange(num_rows + 1, dtype=np.uint32)
+            table = self.table_class()
+            metadatas = [random_bytes(10) for _ in range(num_rows)]
+            metadata, metadata_offset = msprime.pack_bytes(metadatas)
+            input_data["metadata"] = metadata
+            input_data["metadata_offset"] = metadata_offset
+            table.set_columns(**input_data)
+            unpacked_metadatas = msprime.unpack_bytes(
+                table.metadata, table.metadata_offset)
+            self.assertEqual(metadatas, unpacked_metadatas)
+
+    def test_optional_metadata(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, offset_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[offset_col.name] = np.arange(num_rows + 1, dtype=np.uint32)
+            table = self.table_class()
+            del input_data["metadata"]
+            del input_data["metadata_offset"]
+            table.set_columns(**input_data)
+            self.assertEqual(len(list(table.metadata)), 0)
+            self.assertEqual(
+                list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
+
+
+class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
 
     columns = [
         UInt32Column("flags"),
@@ -431,34 +468,6 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin):
             self.assertEqual(list(table.metadata), list(metadata))
             self.assertEqual(list(table.metadata_offset), list(metadata_offset))
 
-    def test_random_metadata(self):
-        for num_rows in [0, 10, 100]:
-            metadatas = [random_bytes(10) for _ in range(num_rows)]
-            metadata, metadata_offset = msprime.pack_bytes(metadatas)
-            flags = list(range(num_rows))
-            time = list(range(num_rows))
-            table = msprime.NodeTable()
-            table.set_columns(
-                metadata=metadata, metadata_offset=metadata_offset, flags=flags,
-                time=time)
-            self.assertEqual(list(table.flags), flags)
-            self.assertEqual(list(table.time), time)
-            self.assertEqual(list(table.metadata), list(metadata))
-            self.assertEqual(list(table.metadata_offset), list(metadata_offset))
-            unpacked_metadatas = msprime.unpack_bytes(
-                table.metadata, table.metadata_offset)
-            self.assertEqual(metadatas, unpacked_metadatas)
-
-    def test_optional_metadata(self):
-        for num_rows in [0, 10, 100]:
-            flags = list(range(num_rows))
-            time = list(range(num_rows))
-            table = msprime.NodeTable()
-            table.set_columns(flags=flags, time=time)
-            self.assertEqual(len(list(table.metadata)), 0)
-            self.assertEqual(
-                list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
-
 
 class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
 
@@ -473,14 +482,13 @@ class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
     table_class = msprime.EdgeTable
 
 
-class TestSiteTable(unittest.TestCase, CommonTestsMixin):
+class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     columns = [DoubleColumn("position")]
     ragged_list_columns = [
-        (CharColumn("ancestral_state"), UInt32Column("ancestral_state_offset"))]
-    equal_len_columns = [["position", "ancestral_state_offset"]]
-    input_parameters = [
-        ("max_rows_increment", 1024),
-        ("max_ancestral_state_length_increment", 1024)]
+        (CharColumn("ancestral_state"), UInt32Column("ancestral_state_offset")),
+        (CharColumn("metadata"), UInt32Column("metadata_offset"))]
+    equal_len_columns = [["position"]]
+    input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.SiteTable
 
 

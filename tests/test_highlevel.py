@@ -59,7 +59,8 @@ def get_uniform_mutations(num_mutations, sequence_length, nodes):
     mutations = msprime.MutationTable()
     for j in range(num_mutations):
         sites.add_row(
-            position=j * (sequence_length / num_mutations), ancestral_state='0')
+            position=j * (sequence_length / num_mutations), ancestral_state='0',
+            metadata=json.dumps({"index": j}).encode())
         mutations.add_row(site=j, derived_state='1', node=nodes[j % len(nodes)])
     return sites, mutations
 

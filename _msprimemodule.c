@@ -466,19 +466,24 @@ make_provenance(provenance_t *provenance)
 }
 
 static PyObject *
+make_metadata(const char *metadata, Py_ssize_t length)
+{
+    const char *m = metadata == NULL? "": metadata;
+    return PyBytes_FromStringAndSize(m, length);
+}
+
+static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
-    const char *metadata = r->metadata == NULL? "": r->metadata;
-    PyObject* py_metadata = PyBytes_FromStringAndSize(
-        metadata, (Py_ssize_t) r->metadata_length);
-    if (py_metadata == NULL) {
+    PyObject* metadata = make_metadata(r->metadata, (Py_ssize_t) r->metadata_length);
+    if (metadata == NULL) {
         goto out;
     }
     ret = Py_BuildValue("IdiO",
-        (unsigned int) r->flags, r->time, (int) r->population, py_metadata);
+        (unsigned int) r->flags, r->time, (int) r->population, metadata);
 out:
-    Py_XDECREF(py_metadata);
+    Py_XDECREF(metadata);
     return ret;
 }
 
@@ -506,19 +511,25 @@ make_site(site_t *site)
 {
     PyObject *ret = NULL;
     PyObject *mutations = NULL;
+    PyObject* metadata = NULL;
 
+    metadata = make_metadata(site->metadata, (Py_ssize_t) site->metadata_length);
+    if (metadata == NULL) {
+        goto out;
+    }
     mutations = make_mutation_list(site->mutations, site->mutations_length);
     if (mutations == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("ds#On", site->position, site->ancestral_state,
+    /* TODO should reorder this tuple, as it's not very logical. */
+    ret = Py_BuildValue("ds#OnO", site->position, site->ancestral_state,
             (Py_ssize_t) site->ancestral_state_length, mutations,
-            (Py_ssize_t) site->id);
+            (Py_ssize_t) site->id, metadata);
 out:
     Py_XDECREF(mutations);
+    Py_XDECREF(metadata);
     return ret;
 }
-
 
 static PyObject *
 convert_sites(site_t *sites, size_t num_sites)
@@ -1928,22 +1939,15 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"max_rows_increment",
-        "max_ancestral_state_length_increment", NULL};
+    static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_length_increment = 0;
 
     self->site_table = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_length_increment)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
     if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
-        goto out;
-    }
-    if (max_length_increment < 0) {
-        PyErr_SetString(PyExc_ValueError, "max_length_increment must be positive");
         goto out;
     }
     self->site_table = PyMem_Malloc(sizeof(site_table_t));
@@ -1951,8 +1955,7 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = site_table_alloc(self->site_table, (size_t) max_rows_increment,
-            (size_t) max_length_increment);
+    err = site_table_alloc(self->site_table, (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1969,18 +1972,26 @@ SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
     int err;
     double position;
     char *ancestral_state = NULL;
-    Py_ssize_t ancestral_state_length;
-    static char *kwlist[] = {"position", "ancestral_state", NULL};
+    Py_ssize_t ancestral_state_length = 0;
+    PyObject *py_metadata = NULL;
+    char *metadata = NULL;
+    Py_ssize_t metadata_length = 0;
+    static char *kwlist[] = {"position", "ancestral_state", "metadata", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ds#", kwlist,
-                &position, &ancestral_state, &ancestral_state_length)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ds#|O", kwlist,
+                &position, &ancestral_state, &ancestral_state_length, &py_metadata)) {
         goto out;
     }
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
+    if (py_metadata != NULL) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
+    }
     err = site_table_add_row(self->site_table, position, ancestral_state,
-            ancestral_state_length);
+            ancestral_state_length, metadata, metadata_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1999,18 +2010,28 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
     PyObject *ret = NULL;
     int err;
     size_t num_rows = 0;
-    size_t ancestral_state_length;
+    size_t ancestral_state_length, metadata_length;
     PyObject *position_input = NULL;
     PyArrayObject *position_array = NULL;
     PyObject *ancestral_state_input = NULL;
     PyArrayObject *ancestral_state_array = NULL;
     PyObject *ancestral_state_offset_input = NULL;
     PyArrayObject *ancestral_state_offset_array = NULL;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    char *metadata_data;
+    uint32_t *metadata_offset_data;
 
-    static char *kwlist[] = {"position", "ancestral_state", "ancestral_state_offset", NULL};
+    static char *kwlist[] = {"position",
+        "ancestral_state", "ancestral_state_offset",
+        "metadata", "metadata_offset", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO", kwlist,
-                &position_input, &ancestral_state_input, &ancestral_state_offset_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO|OO", kwlist,
+                &position_input,
+                &ancestral_state_input, &ancestral_state_offset_input,
+                &metadata_input, &metadata_offset_input)) {
         goto out;
     }
     position_array = table_read_column_array(position_input, NPY_FLOAT64, &num_rows, false);
@@ -2027,14 +2048,37 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
     if (ancestral_state_offset_array == NULL) {
         goto out;
     }
+
+    metadata_data = NULL;
+    metadata_offset_data = NULL;
+    if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != NULL) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, false);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+
     if (method == SET_COLS) {
         err = site_table_set_columns(self->site_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
-            PyArray_DATA(ancestral_state_offset_array));
+            PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
         err = site_table_append_columns(self->site_table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
-            PyArray_DATA(ancestral_state_offset_array));
+            PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
     } else {
         assert(0);
     }
@@ -2047,6 +2091,8 @@ out:
     Py_XDECREF(position_array);
     Py_XDECREF(ancestral_state_array);
     Py_XDECREF(ancestral_state_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
@@ -2092,19 +2138,6 @@ SiteTable_get_max_rows_increment(SiteTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows_increment);
-out:
-    return ret;
-}
-
-static PyObject *
-SiteTable_get_max_ancestral_state_length_increment(SiteTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-    if (SiteTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) self->site_table->max_ancestral_state_length_increment);
 out:
     return ret;
 }
@@ -2178,15 +2211,43 @@ SiteTable_get_ancestral_state_offset(SiteTable *self, void *closure)
 out:
     return ret;
 }
+
+static PyObject *
+SiteTable_get_metadata(SiteTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->site_table->metadata_length,
+            self->site_table->metadata, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+SiteTable_get_metadata_offset(SiteTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->site_table->num_rows + 1,
+            self->site_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
 #endif
 
 static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows_increment",
         (getter) SiteTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_ancestral_state_length_increment",
-        (getter) SiteTable_get_max_ancestral_state_length_increment, NULL,
-        "The string length increment"},
     {"num_rows",
         (getter) SiteTable_get_num_rows, NULL,
         "The number of rows in the table."},
@@ -2200,6 +2261,10 @@ static PyGetSetDef SiteTable_getsetters[] = {
         "The ancestral state array."},
     {"ancestral_state_offset", (getter) SiteTable_get_ancestral_state_offset, NULL,
         "The ancestral state offset array."},
+    {"metadata", (getter) SiteTable_get_metadata, NULL,
+        "The metadata array."},
+    {"metadata_offset", (getter) SiteTable_get_metadata_offset, NULL,
+        "The metadata offset array."},
 #endif
     {NULL}  /* Sentinel */
 };
@@ -8225,7 +8290,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         sites_allocated = true;
-        err = site_table_alloc(sites, 0, 0);
+        err = site_table_alloc(sites, 0, 0, 0);
         if (err != 0) {
             handle_library_error(err);
             goto out;

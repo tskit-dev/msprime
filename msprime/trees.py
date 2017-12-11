@@ -71,7 +71,7 @@ Migration = collections.namedtuple(
 
 Site = collections.namedtuple(
     "Site",
-    ["position", "ancestral_state", "index", "mutations"])
+    ["position", "ancestral_state", "index", "mutations", "metadata"])
 
 
 Mutation = collections.namedtuple(
@@ -556,10 +556,11 @@ class SparseTree(object):
 
     def sites(self):
         for ll_site in self._ll_sparse_tree.get_sites():
-            pos, ancestral_state, mutations, index = ll_site
+            pos, ancestral_state, mutations, index, metadata = ll_site
             yield Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations])
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
 
     def mutations(self):
         """
@@ -1409,10 +1410,12 @@ class TreeSequence(object):
 
     def sites(self):
         for j in range(self.num_sites):
-            pos, ancestral_state, mutations, index = self._ll_tree_sequence.get_site(j)
+            ll_site = self._ll_tree_sequence.get_site(j)
+            pos, ancestral_state, mutations, index, metadata = ll_site
             yield Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations])
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
 
     def mutations(self):
         """
@@ -1589,19 +1592,21 @@ class TreeSequence(object):
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
         if as_bytes:
-            for pos, ancestral_state, mutations, index in iterator:
+            for pos, ancestral_state, mutations, index, metadata in iterator:
                 site = Site(
                     position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations])
+                    mutations=[Mutation(*mutation) for mutation in mutations],
+                    metadata=metadata)
                 g = bytes(genotypes_buffer)
                 yield Variant(position=pos, site=site, index=index, genotypes=g)
         else:
             check_numpy()
             g = np.frombuffer(genotypes_buffer, "u1", n)
-            for pos, ancestral_state, mutations, index in iterator:
+            for pos, ancestral_state, mutations, index, metadata in iterator:
                 site = Site(
                     position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations])
+                    mutations=[Mutation(*mutation) for mutation in mutations],
+                    metadata=metadata)
                 yield Variant(position=pos, site=site, index=index, genotypes=g)
 
     def genotype_matrix(self):

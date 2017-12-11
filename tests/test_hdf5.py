@@ -77,8 +77,8 @@ def general_mutation_example():
     ts.dump_tables(nodes=nodes, edges=edges)
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
-    sites.add_row(position=0, ancestral_state="A")
-    sites.add_row(position=1, ancestral_state="C")
+    sites.add_row(position=0, ancestral_state="A", metadata=b"{}")
+    sites.add_row(position=1, ancestral_state="C", metadata=b"{'id':1}")
     mutations.add_row(site=0, node=0, derived_state="T")
     mutations.add_row(site=1, node=0, derived_state="G")
     return msprime.load_tables(
@@ -160,10 +160,10 @@ class TestLoadLegacyExamples(TestHdf5):
         self.assertGreater(ts.num_mutations, 0)
         self.assertGreater(ts.sequence_length, 0)
         for t in ts.trees():
-            l, r = t.interval
-            self.assertGreater(r, l)
+            left, right = t.interval
+            self.assertGreater(right, left)
             for site in t.sites():
-                self.assertTrue(l <= site.position < r)
+                self.assertTrue(left <= site.position < right)
                 for mut in site.mutations:
                     self.assertEqual(mut.site, site.index)
 
@@ -328,6 +328,20 @@ class TestHdf5Format(TestHdf5):
     Tests on the HDF5 file format.
     """
 
+    def verify_metadata(self, group, num_rows):
+
+        self.assertEqual(group["metadata_offset"].dtype, np.uint32)
+        metadata_offset = list(group["metadata_offset"])
+        metadata_length = 0
+        if metadata_offset[-1] > 0:
+            self.assertEqual(group["metadata"].dtype, np.int8)
+            metadata = list(group["metadata"])
+            metadata_length = len(metadata)
+            self.assertEqual(metadata_offset[-1], metadata_length)
+        else:
+            self.assertNotIn("metadata", group)
+        self.assertEqual(len(metadata_offset), num_rows + 1)
+
     def verify_tree_dump_format(self, ts):
         int8 = "<i1"
         int32 = "<i4"
@@ -356,10 +370,11 @@ class TestHdf5Format(TestHdf5):
         fields = [
             ("position", float64), ("ancestral_state", int8),
             ("ancestral_state_offset", uint32)]
+        self.verify_metadata(g, ts.num_sites)
         ancestral_state_offset = g["ancestral_state_offset"]
         if ts.num_sites == 0:
             self.assertEqual(ancestral_state_offset.shape, (1,))
-            self.assertEqual(1, len(list(g.keys())))
+            self.assertNotIn("ancestral_state", list(g.keys()))
         else:
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)
@@ -408,17 +423,7 @@ class TestHdf5Format(TestHdf5):
         self.assertEqual(nodes_group["flags"].dtype, uint32)
         self.assertEqual(nodes_group["population"].dtype, int32)
         self.assertEqual(nodes_group["time"].dtype, float64)
-        self.assertEqual(nodes_group["metadata_offset"].dtype, uint32)
-        metadata_offset = list(nodes_group["metadata_offset"])
-        metadata_length = 0
-        if metadata_offset[-1] > 0:
-            self.assertEqual(nodes_group["metadata"].dtype, int8)
-            metadata = list(nodes_group["metadata"])
-            metadata_length = len(metadata)
-            self.assertEqual(metadata_offset[-1], metadata_length)
-        else:
-            self.assertNotIn("metadata", nodes_group)
-        self.assertEqual(len(metadata_offset), ts.num_nodes + 1)
+        self.verify_metadata(nodes_group, ts.num_nodes)
         population = [0 for _ in range(ts.num_nodes)]
         time = [0 for _ in range(ts.num_nodes)]
         flags = [0 for _ in range(ts.num_nodes)]
@@ -459,14 +464,14 @@ class TestHdf5Format(TestHdf5):
             set(indexes_group.keys()), {"insertion_order", "removal_order"})
         for field in indexes_group.keys():
             self.assertEqual(indexes_group[field].dtype, int32, child[j])
-        I = sorted(
+        in_order = sorted(
             range(ts.num_edges),
             key=lambda j: (left[j], time[parent[j]]))
-        O = sorted(
+        out_order = sorted(
             range(ts.num_edges),
             key=lambda j: (right[j], -time[parent[j]], -child[j]))
-        self.assertEqual(I, list(indexes_group["insertion_order"]))
-        self.assertEqual(O, list(indexes_group["removal_order"]))
+        self.assertEqual(in_order, list(indexes_group["insertion_order"]))
+        self.assertEqual(out_order, list(indexes_group["removal_order"]))
 
         provenances_group = root["provenances"]
         timestamp_offset = list(provenances_group["timestamp_offset"])

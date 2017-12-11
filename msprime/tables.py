@@ -287,9 +287,13 @@ class SiteTable(_msprime.SiteTable):
         position = self.position
         ancestral_state = unpack_strings(
             self.ancestral_state, self.ancestral_state_offset)
-        ret = "id\tposition\tancestral_state\n"
+        # TODO we should wrap this with a try-except, and fall back to printing
+        # something else if utf8 decoding fails.
+        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{:.8f}\t{}\n".format(j, position[j], ancestral_state[j])
+            ret += "{}\t{:.8f}\t{}\t{}\n".format(
+                    j, position[j], ancestral_state[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -299,7 +303,9 @@ class SiteTable(_msprime.SiteTable):
                 np.array_equal(self.position, other.position) and
                 np.array_equal(self.ancestral_state, other.ancestral_state) and
                 np.array_equal(
-                    self.ancestral_state_offset, other.ancestral_state_offset))
+                    self.ancestral_state_offset, other.ancestral_state_offset) and
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
     def __ne__(self, other):
@@ -311,8 +317,11 @@ class SiteTable(_msprime.SiteTable):
     # Unpickle support
     def __setstate__(self, state):
         self.set_columns(
-            position=state["position"], ancestral_state=state["ancestral_state"],
-            ancestral_state_offset=state["ancestral_state_offset"])
+            position=state["position"],
+            ancestral_state=state["ancestral_state"],
+            ancestral_state_offset=state["ancestral_state_offset"],
+            metadata=state["metadata"],
+            metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -320,8 +329,11 @@ class SiteTable(_msprime.SiteTable):
         """
         copy = SiteTable()
         copy.set_columns(
-            position=self.position, ancestral_state=self.ancestral_state,
-            ancestral_state_offset=self.ancestral_state_offset)
+            position=self.position,
+            ancestral_state=self.ancestral_state,
+            ancestral_state_offset=self.ancestral_state_offset,
+            metadata=self.metadata,
+            metadata_offset=self.metadata_offset)
         return copy
 
 
@@ -331,6 +343,8 @@ def _site_table_pickle(table):
         "position": table.position,
         "ancestral_state": table.ancestral_state,
         "ancestral_state_offset": table.ancestral_state_offset,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
     }
     return SiteTable, tuple(), state
 

@@ -220,15 +220,16 @@ class PythonTreeSequence(object):
         self._sites = []
         _Site = collections.namedtuple(
             "Site",
-            ["position", "ancestral_state", "index", "mutations"])
+            ["position", "ancestral_state", "index", "mutations", "metadata"])
         _Mutation = collections.namedtuple(
             "Mutation",
             ["site", "node", "derived_state", "parent", "id"])
         for j in range(tree_sequence.get_num_sites()):
-            pos, ancestral_state, mutations, index = tree_sequence.get_site(j)
+            pos, ancestral_state, mutations, index, metadata = tree_sequence.get_site(j)
             self._sites.append(_Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[_Mutation(*mut) for mut in mutations]))
+                mutations=[_Mutation(*mut) for mut in mutations],
+                metadata=metadata))
 
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
@@ -727,7 +728,8 @@ class Simplifier(object):
             flags |= msprime.NODE_IS_SAMPLE
         self.node_id_map[input_id] = len(self.node_table)
         self.node_table.add_row(
-            flags=flags, time=node.time, population=node.population)
+            flags=flags, time=node.time, population=node.population,
+            metadata=node.metadata)
 
     def flush_edges(self):
         """
@@ -861,7 +863,8 @@ class Simplifier(object):
                             parent=mapped_parent,
                             derived_state=mut.derived_state)
                 self.site_table.add_row(
-                    position=site.position, ancestral_state=site.ancestral_state)
+                    position=site.position, ancestral_state=site.ancestral_state,
+                    metadata=site.metadata)
 
     def simplify(self):
         # print("START")
