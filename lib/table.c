@@ -515,6 +515,11 @@ site_table_expand_main_columns(site_table_t *self, size_t additional_rows)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->metadata_offset, new_size + 1,
+                sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -541,9 +546,30 @@ out:
     return ret;
 }
 
+static int
+site_table_expand_metadata(site_table_t *self, size_t additional_length)
+{
+    int ret = 0;
+    table_size_t increment = (table_size_t) GSL_MAX(additional_length,
+            self->max_metadata_length_increment);
+    table_size_t new_size = self->max_metadata_length + increment;
+
+    if ((self->metadata_length + additional_length)
+            > self->max_metadata_length) {
+        ret = expand_column((void **) &self->metadata, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_metadata_length = new_size;
+    }
+out:
+    return ret;
+}
+
 int
 site_table_alloc(site_table_t *self, size_t max_rows_increment,
-        size_t max_ancestral_state_length_increment)
+        size_t max_ancestral_state_length_increment,
+        size_t max_metadata_length_increment)
 {
     int ret = 0;
 
@@ -554,6 +580,9 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
     if (max_ancestral_state_length_increment == 0) {
         max_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
     }
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
     self->max_rows_increment = (table_size_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
@@ -561,6 +590,9 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
         (table_size_t) max_ancestral_state_length_increment;
     self->max_ancestral_state_length = 0;
     self->ancestral_state_length = 0;
+    self->max_metadata_length_increment = (table_size_t) max_metadata_length_increment;
+    self->max_metadata_length = 0;
+    self->metadata_length = 0;
     ret = site_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -569,78 +601,132 @@ site_table_alloc(site_table_t *self, size_t max_rows_increment,
     if (ret != 0) {
         goto out;
     }
+    ret = site_table_expand_metadata(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
     self->ancestral_state_offset[0] = 0;
+    self->metadata_offset[0] = 0;
 out:
     return ret;
 }
 
 int
-site_table_add_row(site_table_t *self, double position, const char *ancestral_state,
-        table_size_t ancestral_state_length)
+site_table_add_row(site_table_t *self, double position,
+        const char *ancestral_state, table_size_t ancestral_state_length,
+        const char *metadata, table_size_t metadata_length)
 {
     int ret = 0;
-    table_size_t offset = (table_size_t) self->ancestral_state_length;
+    table_size_t ancestral_state_offset, metadata_offset;
 
-    assert(self->ancestral_state_offset[self->num_rows] == offset);
     ret = site_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
+    self->position[self->num_rows] = position;
+
+    ancestral_state_offset = (table_size_t) self->ancestral_state_length;
+    assert(self->ancestral_state_offset[self->num_rows] == ancestral_state_offset);
     ret = site_table_expand_ancestral_state(self, ancestral_state_length);
     if (ret != 0) {
         goto out;
     }
     self->ancestral_state_length += ancestral_state_length;
-    self->position[self->num_rows] = position;
-    memcpy(self->ancestral_state + offset, ancestral_state, ancestral_state_length);
+    memcpy(self->ancestral_state + ancestral_state_offset, ancestral_state,
+            ancestral_state_length);
+    self->ancestral_state_offset[self->num_rows + 1] = self->ancestral_state_length;
+
+    metadata_offset = (table_size_t) self->metadata_length;
+    assert(self->metadata_offset[self->num_rows] == metadata_offset);
+    ret = site_table_expand_metadata(self, metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    self->metadata_length += metadata_length;
+    memcpy(self->metadata + metadata_offset, metadata, metadata_length);
+    self->metadata_offset[self->num_rows + 1] = self->metadata_length;
+
     self->num_rows++;
-    self->ancestral_state_offset[self->num_rows] = self->ancestral_state_length;
 out:
     return ret;
 }
 
 int
 site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
-        const char *ancestral_state, table_size_t *ancestral_state_offset)
+        const char *ancestral_state, table_size_t *ancestral_state_offset,
+        const char *metadata, table_size_t *metadata_offset)
 {
     int ret = 0;
-    table_size_t j, ancestral_state_length;
+    table_size_t j, ancestral_state_length, metadata_length;
 
     if (position == NULL || ancestral_state == NULL || ancestral_state_offset == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    if ((metadata == NULL) != (metadata_offset == NULL)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
 
-    ancestral_state_length = ancestral_state_offset[num_rows];
     ret = site_table_expand_main_columns(self, num_rows);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_expand_ancestral_state(self, ancestral_state_length);
-    if (ret != 0) {
-        goto out;
-    }
     memcpy(self->position + self->num_rows, position, num_rows * sizeof(double));
-    memcpy(self->ancestral_state + self->ancestral_state_length, ancestral_state,
-            ancestral_state_length * sizeof(char));
+
+    /* Metadata column */
+    if (metadata == NULL) {
+        for (j = 0; j < num_rows; j++) {
+            self->metadata_offset[self->num_rows + j + 1] = (table_size_t) self->metadata_length;
+        }
+    } else {
+        ret = check_offsets(num_rows, metadata_offset);
+        if (ret != 0) {
+            goto out;
+        }
+        metadata_length = metadata_offset[num_rows];
+        ret = site_table_expand_metadata(self, metadata_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->metadata + self->metadata_length, metadata,
+                metadata_length * sizeof(char));
+        for (j = 0; j < num_rows; j++) {
+            self->metadata_offset[self->num_rows + j] =
+                (table_size_t) self->metadata_length + metadata_offset[j];
+        }
+        self->metadata_length += metadata_length;
+    }
+    self->metadata_offset[self->num_rows + num_rows] = self->metadata_length;
+
+    /* Ancestral state column */
     ret = check_offsets(num_rows, ancestral_state_offset);
     if (ret != 0) {
         goto out;
     }
+    ancestral_state_length = ancestral_state_offset[num_rows];
+    ret = site_table_expand_ancestral_state(self, ancestral_state_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->ancestral_state + self->ancestral_state_length, ancestral_state,
+            ancestral_state_length * sizeof(char));
     for (j = 0; j < num_rows; j++) {
         self->ancestral_state_offset[self->num_rows + j] =
             (table_size_t) self->ancestral_state_length + ancestral_state_offset[j];
     }
-    self->num_rows += (table_size_t) num_rows;
     self->ancestral_state_length += ancestral_state_length;
-    self->ancestral_state_offset[self->num_rows] = self->ancestral_state_length;
+    self->ancestral_state_offset[self->num_rows + num_rows] = self->ancestral_state_length;
+
+    self->num_rows += (table_size_t) num_rows;
 out:
     return ret;
 }
 
 int
 site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
-        const char *ancestral_state, table_size_t *ancestral_state_length)
+        const char *ancestral_state, table_size_t *ancestral_state_length,
+        const char *metadata, table_size_t *metadata_length)
 {
     int ret = 0;
 
@@ -649,7 +735,7 @@ site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
         goto out;
     }
     ret = site_table_append_columns(self, num_rows, position, ancestral_state,
-            ancestral_state_length);
+            ancestral_state_length, metadata, metadata_length);
 out:
     return ret;
 }
@@ -665,7 +751,11 @@ site_table_equal(site_table_t *self, site_table_t *other)
             && memcmp(self->ancestral_state_offset, other->ancestral_state_offset,
                     (self->num_rows + 1) * sizeof(table_size_t)) == 0
             && memcmp(self->ancestral_state, other->ancestral_state,
-                    self->ancestral_state_length * sizeof(char)) == 0;
+                    self->ancestral_state_length * sizeof(char)) == 0
+            && memcmp(self->metadata_offset, other->metadata_offset,
+                    (self->num_rows + 1) * sizeof(table_size_t)) == 0
+            && memcmp(self->metadata, other->metadata,
+                    self->metadata_length * sizeof(char)) == 0;
     }
     return ret;
 }
@@ -676,6 +766,8 @@ site_table_reset(site_table_t *self)
     self->num_rows = 0;
     self->ancestral_state_length = 0;
     self->ancestral_state_offset[0] = 0;
+    self->metadata_length = 0;
+    self->metadata_offset[0] = 0;
     return 0;
 }
 
@@ -685,6 +777,8 @@ site_table_free(site_table_t *self)
     msp_safe_free(self->position);
     msp_safe_free(self->ancestral_state);
     msp_safe_free(self->ancestral_state_offset);
+    msp_safe_free(self->metadata);
+    msp_safe_free(self->metadata_offset);
     return 0;
 }
 
@@ -701,8 +795,13 @@ site_table_print_state(site_table_t *self, FILE *out)
             (int) self->ancestral_state_length,
             (int) self->max_ancestral_state_length,
             (int) self->max_ancestral_state_length_increment);
+    fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->metadata_length,
+            (int) self->max_metadata_length,
+            (int) self->max_metadata_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tposition\tancestral_state_offset\tancestral_state\n");
+    fprintf(out, "index\tposition\tancestral_state_offset\tancestral_state\t"
+            "metadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
         offset = self->ancestral_state_offset[j];
         length = self->ancestral_state_offset[j + 1] - offset;
@@ -710,12 +809,20 @@ site_table_print_state(site_table_t *self, FILE *out)
         for (k = 0; k < length; k++) {
             fprintf(out, "%c", self->ancestral_state[offset + k]);
         }
+        offset = self->metadata_offset[j];
+        fprintf(out, "\t%d\t", offset);
+        length = self->metadata_offset[j + 1] - offset;
+        for (k = 0; k < length; k++) {
+            fprintf(out, "%c", self->metadata[offset + k]);
+        }
         fprintf(out, "\n");
     }
 
     assert(self->ancestral_state_offset[0] == 0);
     assert(self->ancestral_state_length
             == self->ancestral_state_offset[self->num_rows]);
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_length == self->metadata_offset[self->num_rows]);
 }
 
 /*************************
@@ -2349,12 +2456,13 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
 
     /* Make a copy of the input sites and clear the input table, ready for output. */
     ret = site_table_alloc(&self->input_sites, sites->num_rows,
-            sites->ancestral_state_length);
+            sites->ancestral_state_length, sites->metadata_length);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_set_columns(&self->input_sites, sites->num_rows,
-            sites->position, sites->ancestral_state, sites->ancestral_state_offset);
+    ret = site_table_set_columns(&self->input_sites, sites->num_rows, sites->position,
+            sites->ancestral_state, sites->ancestral_state_offset,
+            sites->metadata, sites->metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -2801,7 +2909,9 @@ simplifier_output_sites(simplifier_t *self)
 {
     int ret = 0;
     site_id_t input_site;
-    table_size_t offset, length;
+    table_size_t ancestral_state_offset, ancestral_state_length;
+    table_size_t derived_state_offset, derived_state_length;
+    table_size_t metadata_offset, metadata_length;
     mutation_id_t input_mutation, mapped_parent ,site_start, site_end;
     site_id_t num_input_sites = (site_id_t) self->input_sites.num_rows;
     mutation_id_t num_input_mutations = (mutation_id_t) self->input_mutations.num_rows;
@@ -2865,23 +2975,32 @@ simplifier_output_sites(simplifier_t *self)
                     if (mapped_parent != MSP_NULL_MUTATION) {
                         mapped_parent = self->mutation_id_map[mapped_parent];
                     }
-                    offset = self->input_mutations.derived_state_offset[input_mutation];
-                    length = self->input_mutations.derived_state_offset[input_mutation + 1]
-                        - offset;
+                    derived_state_offset = self->input_mutations.derived_state_offset[
+                        input_mutation];
+                    derived_state_length = self->input_mutations.derived_state_offset[
+                        input_mutation + 1] - derived_state_offset;
                     ret = mutation_table_add_row(self->mutations,
                             (site_id_t) self->sites->num_rows,
                             mapped_node, mapped_parent,
-                            self->input_mutations.derived_state + offset, length);
+                            self->input_mutations.derived_state + derived_state_offset,
+                            derived_state_length);
                     if (ret != 0) {
                         goto out;
                     }
                 }
             }
-            offset = self->input_sites.ancestral_state_offset[input_site];
-            length = self->input_sites.ancestral_state_offset[input_site + 1] - offset;
+            ancestral_state_offset = self->input_sites.ancestral_state_offset[input_site];
+            ancestral_state_length = self->input_sites.ancestral_state_offset[
+                input_site + 1] - ancestral_state_offset;
+            metadata_offset = self->input_sites.metadata_offset[input_site];
+            metadata_length = self->input_sites.metadata_offset[input_site + 1]
+                - metadata_offset;
             ret = site_table_add_row(self->sites,
                     self->input_sites.position[input_site],
-                    self->input_sites.ancestral_state + offset, length);
+                    self->input_sites.ancestral_state + ancestral_state_offset,
+                    ancestral_state_length,
+                    self->input_sites.metadata + metadata_offset,
+                    metadata_length);
             if (ret != 0) {
                 goto out;
             }

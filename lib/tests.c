@@ -390,7 +390,7 @@ parse_sites(const char *text, site_table_t *site_table)
         CU_ASSERT_FATAL(p != NULL);
         strncpy(ancestral_state, p, MAX_LINE);
         ret = site_table_add_row(site_table, position, ancestral_state,
-                strlen(ancestral_state));
+                strlen(ancestral_state), NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
@@ -466,7 +466,7 @@ tree_sequence_from_text(tree_sequence_t *ts, double sequence_length,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edge_table_alloc(&edge_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 0, 0);
+    ret = site_table_alloc(&site_table, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1199,7 +1199,7 @@ get_example_tree_sequence(uint32_t num_samples,
     CU_ASSERT_EQUAL(ret, 0);
     ret = migration_table_alloc(migrations, 10);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = site_table_alloc(sites, 10, 10);
+    ret = site_table_alloc(sites, 10, 10, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutation_table_alloc(mutations, 10, 10);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1353,7 +1353,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_alloc(&provenance, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1367,7 +1367,9 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     stack = tree.stack1;
     site_id = 0;
     for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
-        ret = site_table_add_row(&sites, tree.left, "0", 1);
+        /* add some fake metadata here to make sure we have cases with site metadata
+         * in our examples */
+        ret = site_table_add_row(&sites, tree.left, "0", 1, "recurrent", 9);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         for (root = tree.left_root; root != MSP_NULL_NODE; root = tree.right_sib[root]) {
             /* Traverse down the tree and put a mutation on every branch. */
@@ -1452,7 +1454,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1537,7 +1539,7 @@ make_gappy_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1561,7 +1563,7 @@ make_gappy_copy(tree_sequence_t *ts)
         sites.position[j] += gap_size;
     }
     /* Add a site into the gap at the end. */
-    ret = site_table_add_row(&sites, ts->sequence_length + 0.5, "0", 1);
+    ret = site_table_add_row(&sites, ts->sequence_length + 0.5, "0", 1, "end-gap", 7);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_add_row(&mutations, sites.num_rows - 1, 0, MSP_NULL_MUTATION,
             "1", 1);
@@ -1609,7 +1611,7 @@ make_decapitated_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3041,7 +3043,7 @@ test_simplest_overlapping_edges_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migration_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 0, 0);
+    ret = site_table_alloc(&site_table, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3115,7 +3117,7 @@ test_simplest_overlapping_unary_edges_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migration_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 0, 0);
+    ret = site_table_alloc(&site_table, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3184,7 +3186,7 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migration_table, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 1, 1);
+    ret = site_table_alloc(&site_table, 1, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutation_table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3459,7 +3461,7 @@ test_single_tree_bad_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = edge_table_alloc(&edge_table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&site_table, 0, 0);
+    ret = site_table_alloc(&site_table, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutation_table, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4107,7 +4109,7 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4367,11 +4369,11 @@ test_single_tree_mutgen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     parse_nodes(nodes, &node_table);
     parse_edges(edges, &edge_table);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites_after, 0, 0);
+    ret = site_table_alloc(&sites_after, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations_after, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5526,6 +5528,9 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
             CU_ASSERT_EQUAL(site_1.ancestral_state_length, site_2.ancestral_state_length);
             CU_ASSERT_NSTRING_EQUAL(site_1.ancestral_state, site_2.ancestral_state,
                     site_1.ancestral_state_length);
+            CU_ASSERT_EQUAL(site_1.metadata_length, site_2.metadata_length);
+            CU_ASSERT_NSTRING_EQUAL(site_1.metadata, site_2.metadata,
+                    site_1.metadata_length);
         }
         CU_ASSERT_EQUAL_FATAL(
             tree_sequence_get_num_mutations(ts1),
@@ -5682,7 +5687,7 @@ test_sort_tables(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5837,7 +5842,7 @@ test_dump_tables(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5936,7 +5941,7 @@ test_dump_tables_hdf5(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutation_table_alloc(&mutations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6249,37 +6254,51 @@ test_site_table(void)
     site_table_t table;
     size_t num_rows, j;
     char *ancestral_state;
+    char *metadata;
     double *position;
     table_size_t *ancestral_state_offset;
+    table_size_t *metadata_offset;
 
-    ret = site_table_alloc(&table, 1, 1);
+    ret = site_table_alloc(&table, 1, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     site_table_print_state(&table, _devnull);
 
-    ret = site_table_add_row(&table, 0, "A", 1);
+    ret = site_table_add_row(&table, 0, "A", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(table.position[0], 0);
     CU_ASSERT_EQUAL(table.ancestral_state_offset[0], 0);
     CU_ASSERT_EQUAL(table.ancestral_state_offset[1], 1);
+    CU_ASSERT_EQUAL(table.ancestral_state_length, 1);
+    CU_ASSERT_EQUAL(table.metadata_offset[0], 0);
+    CU_ASSERT_EQUAL(table.metadata_offset[1], 0);
+    CU_ASSERT_EQUAL(table.metadata_length, 0);
     CU_ASSERT_EQUAL(table.num_rows, 1);
 
-    ret = site_table_add_row(&table, 1, "AA", 2);
+    ret = site_table_add_row(&table, 1, "AA", 2, "{}", 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(table.position[1], 1);
     CU_ASSERT_EQUAL(table.ancestral_state_offset[2], 3);
+    CU_ASSERT_EQUAL(table.metadata_offset[1], 0);
+    CU_ASSERT_EQUAL(table.metadata_offset[2], 2);
+    CU_ASSERT_EQUAL(table.metadata_length, 2);
     CU_ASSERT_EQUAL(table.num_rows, 2);
 
-    ret = site_table_add_row(&table, 2, "A", 1);
+    ret = site_table_add_row(&table, 2, "A", 1, "metadata", 8);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(table.position[1], 1);
     CU_ASSERT_EQUAL(table.ancestral_state_offset[3], 4);
-    CU_ASSERT_EQUAL(table.num_rows, 3);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 4);
+    CU_ASSERT_EQUAL(table.metadata_offset[3], 10);
+    CU_ASSERT_EQUAL(table.metadata_length, 10);
+    CU_ASSERT_EQUAL(table.num_rows, 3);
 
     site_table_print_state(&table, _devnull);
     site_table_reset(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 0);
+    CU_ASSERT_EQUAL(table.metadata_length, 0);
+    CU_ASSERT_EQUAL(table.ancestral_state_offset[0], 0);
+    CU_ASSERT_EQUAL(table.metadata_offset[0], 0);
 
     num_rows = 100;
     position = malloc(num_rows * sizeof(double));
@@ -6288,26 +6307,37 @@ test_site_table(void)
     CU_ASSERT_FATAL(ancestral_state != NULL);
     ancestral_state_offset = malloc((num_rows + 1) * sizeof(uint32_t));
     CU_ASSERT_FATAL(ancestral_state_offset != NULL);
+    metadata = malloc(num_rows * sizeof(char));
+    CU_ASSERT_FATAL(metadata != NULL);
+    metadata_offset = malloc((num_rows + 1) * sizeof(uint32_t));
+    CU_ASSERT_FATAL(metadata_offset != NULL);
 
     for (j = 0; j < num_rows; j++) {
         position[j] = j;
         ancestral_state[j] = j;
         ancestral_state_offset[j] = j;
+        metadata[j] = 'A' + j;
+        metadata_offset[j] = j;
     }
     ancestral_state_offset[num_rows] = num_rows;
-    ret = site_table_set_columns(&table, num_rows, position, ancestral_state,
-            ancestral_state_offset);
-    CU_ASSERT_EQUAL(ret, 0);
+    metadata_offset[num_rows] = num_rows;
+
+    ret = site_table_set_columns(&table, num_rows, position,
+            ancestral_state, ancestral_state_offset,
+            metadata, metadata_offset);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.position, position,
                 num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.ancestral_state, ancestral_state,
                 num_rows * sizeof(char)), 0);
-    CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.ancestral_state_length, num_rows);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
 
     /* Append another num rows */
     ret = site_table_append_columns(&table, num_rows, position, ancestral_state,
-            ancestral_state_offset);
+            ancestral_state_offset, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.position, position,
                 num_rows * sizeof(double)), 0);
@@ -6317,38 +6347,84 @@ test_site_table(void)
                 num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.ancestral_state + num_rows, ancestral_state,
                 num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata + num_rows, metadata,
+                num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 2 * num_rows);
 
     /* Inputs cannot be NULL */
     ret = site_table_set_columns(&table, num_rows, NULL, ancestral_state,
-            ancestral_state_offset);
+            ancestral_state_offset, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = site_table_set_columns(&table, num_rows, position, NULL, ancestral_state_offset);
+    ret = site_table_set_columns(&table, num_rows, position, NULL, ancestral_state_offset,
+            metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = site_table_set_columns(&table, num_rows, position, ancestral_state, NULL);
+    ret = site_table_set_columns(&table, num_rows, position, ancestral_state, NULL,
+            metadata, metadata_offset);
+    /* Metadata and metadata_offset must both be null */
+    ret = site_table_set_columns(&table, num_rows, position, ancestral_state,
+            ancestral_state_offset, NULL, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = site_table_set_columns(&table, num_rows, position, ancestral_state,
+            ancestral_state_offset, metadata, NULL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    /* Set metadata to NULL */
+    ret = site_table_set_columns(&table, num_rows, position,
+            ancestral_state, ancestral_state_offset, NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(metadata_offset, 0, (num_rows + 1) * sizeof(uint32_t));
+    CU_ASSERT_EQUAL(memcmp(table.position, position,
+                num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.ancestral_state, ancestral_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.ancestral_state_length, num_rows);
+    CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
+                (num_rows + 1) * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.metadata_length, 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
 
     /* Test for bad offsets */
     ancestral_state_offset[0] = 1;
     ret = site_table_set_columns(&table, num_rows, position,
-            ancestral_state, ancestral_state_offset);
+            ancestral_state, ancestral_state_offset,
+            metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
     ancestral_state_offset[0] = 0;
     ancestral_state_offset[num_rows] = 0;
     ret = site_table_set_columns(&table, num_rows, position,
-            ancestral_state, ancestral_state_offset);
+            ancestral_state, ancestral_state_offset,
+            metadata, metadata_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    ancestral_state_offset[0] = 0;
+
+    metadata_offset[0] = 0;
+    ret = site_table_set_columns(&table, num_rows, position,
+            ancestral_state, ancestral_state_offset,
+            metadata, metadata_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    metadata_offset[0] = 0;
+    metadata_offset[num_rows] = 0;
+    ret = site_table_set_columns(&table, num_rows, position,
+            ancestral_state, ancestral_state_offset,
+            metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
 
     ret = site_table_reset(&table);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 0);
+    CU_ASSERT_EQUAL(table.metadata_length, 0);
 
     site_table_free(&table);
     free(position);
     free(ancestral_state);
     free(ancestral_state_offset);
+    free(metadata);
+    free(metadata_offset);
 }
 
 static void

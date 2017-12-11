@@ -78,7 +78,6 @@ typedef int32_t node_id_t;
 typedef int32_t population_id_t;
 typedef int32_t site_id_t;
 typedef int32_t mutation_id_t;
-/* TODO change table_size_t to table_size_t */
 typedef uint32_t table_size_t;
 
 typedef struct {
@@ -88,9 +87,14 @@ typedef struct {
     table_size_t ancestral_state_length;
     table_size_t max_ancestral_state_length;
     table_size_t max_ancestral_state_length_increment;
+    table_size_t metadata_length;
+    table_size_t max_metadata_length;
+    table_size_t max_metadata_length_increment;
+    double *position;
     char *ancestral_state;
     table_size_t *ancestral_state_offset;
-    double *position;
+    char *metadata;
+    table_size_t *metadata_offset;
 } site_table_t;
 
 typedef struct {
@@ -201,6 +205,8 @@ typedef struct {
     double position;
     const char *ancestral_state;
     table_size_t ancestral_state_length;
+    const char *metadata;
+    table_size_t metadata_length;
     mutation_t *mutations;
     table_size_t mutations_length;
 } site_t;
@@ -467,6 +473,10 @@ typedef struct {
         size_t max_ancestral_state_length;
         char *ancestral_state;
         table_size_t *ancestral_state_offset;
+        size_t metadata_length;
+        size_t max_metadata_length;
+        char *metadata;
+        table_size_t *metadata_offset;
         double *position;
         site_t *tree_sites_mem;
         site_t **tree_sites;
@@ -976,13 +986,18 @@ void edge_table_print_state(edge_table_t *self, FILE *out);
 bool edge_table_equal(edge_table_t *self, edge_table_t *other);
 
 int site_table_alloc(site_table_t *self, size_t max_rows_increment,
-        size_t max_total_ancestral_state_length_increment);
-int site_table_add_row(site_table_t *self, double position, const char *ancestral_state,
-        table_size_t ancestral_state_length);
-int site_table_set_columns(site_table_t *self, size_t num_rows,
-        double *position, const char *ancestral_state, table_size_t *ancestral_state_length);
-int site_table_append_columns(site_table_t *self, size_t num_rows,
-        double *position, const char *ancestral_state, table_size_t *ancestral_state_length);
+        size_t max_ancestral_state_length_increment,
+        size_t max_metadata_length_increment);
+int site_table_add_row(site_table_t *self, double position,
+        const char *ancestral_state, table_size_t ancestral_state_length,
+        const char *metadata, table_size_t metadata_length);
+
+int site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
+        const char *ancestral_state, table_size_t *ancestral_state_length,
+        const char *metadata, table_size_t *metadata_length);
+int site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
+        const char *ancestral_state, table_size_t *ancestral_state_length,
+        const char *metadata, table_size_t *metadata_length);
 bool site_table_equal(site_table_t *self, site_table_t *other);
 int site_table_reset(site_table_t *self);
 int site_table_free(site_table_t *self);

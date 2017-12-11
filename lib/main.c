@@ -871,7 +871,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_alloc(sites, 0, 0);
+    ret = site_table_alloc(sites, 0, 0, 0);
     if (ret != 0) {
         goto out;
     }
