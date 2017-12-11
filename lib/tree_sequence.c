@@ -67,7 +67,7 @@ static void
 tree_sequence_check_state(tree_sequence_t *self)
 {
     size_t j;
-    list_len_t k, l;
+    table_size_t k, l;
     site_t site;
     site_id_t site_id = 0;
 
@@ -90,7 +90,7 @@ void
 tree_sequence_print_state(tree_sequence_t *self, FILE *out)
 {
     size_t j;
-    list_len_t k, l, m;
+    table_size_t k, l, m;
     site_t site;
 
     fprintf(out, "tree_sequence state\n");
@@ -223,9 +223,9 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         msp_safe_free(self->sites.site_mutations);
         msp_safe_free(self->sites.site_mutations_length);
         msp_safe_free(self->sites.tree_sites_mem);
-        self->sites.ancestral_state_offset = malloc((size + 1) * sizeof(list_len_t));
+        self->sites.ancestral_state_offset = malloc((size + 1) * sizeof(table_size_t));
         self->sites.position = malloc(size * sizeof(double));
-        self->sites.site_mutations_length = malloc(size * sizeof(list_len_t));
+        self->sites.site_mutations_length = malloc(size * sizeof(table_size_t));
         self->sites.site_mutations = malloc(size * sizeof(mutation_t *));
         self->sites.tree_sites_mem = malloc(size * sizeof(site_t));
         if (self->sites.ancestral_state_offset == NULL
@@ -267,7 +267,7 @@ tree_sequence_alloc_mutations(tree_sequence_t *self)
         msp_safe_free(self->sites.site_mutations_mem);
         self->mutations.node = malloc(size * sizeof(node_id_t));
         self->mutations.parent = malloc(size * sizeof(mutation_id_t));
-        self->mutations.derived_state_offset = malloc((size + 1) * sizeof(list_len_t));
+        self->mutations.derived_state_offset = malloc((size + 1) * sizeof(table_size_t));
         self->mutations.site = malloc(size * sizeof(site_id_t));
         self->sites.site_mutations_mem = malloc(size * sizeof(mutation_t));
         if (self->mutations.site == NULL
@@ -311,7 +311,7 @@ tree_sequence_alloc_trees(tree_sequence_t *self)
         self->nodes.flags = malloc(size * sizeof(uint32_t));
         self->nodes.time = malloc(size * sizeof(double));
         self->nodes.population = malloc(size * sizeof(population_id_t));
-        self->nodes.metadata_offset = malloc((size + 1) * sizeof(list_len_t));
+        self->nodes.metadata_offset = malloc((size + 1) * sizeof(table_size_t));
         self->nodes.sample_index_map = malloc(size * sizeof(node_id_t));
         if (self->nodes.flags == NULL
                 || self->nodes.time == NULL
@@ -418,8 +418,8 @@ tree_sequence_alloc_provenance(tree_sequence_t *self)
         self->provenances.max_num_records = size;
         msp_safe_free(self->provenances.timestamp_offset);
         msp_safe_free(self->provenances.record_offset);
-        self->provenances.timestamp_offset = malloc((size + 1) * sizeof(list_len_t));
-        self->provenances.record_offset = malloc((size + 1) * sizeof(list_len_t));
+        self->provenances.timestamp_offset = malloc((size + 1) * sizeof(table_size_t));
+        self->provenances.record_offset = malloc((size + 1) * sizeof(table_size_t));
         if (self->provenances.timestamp_offset == NULL
                 || self->provenances.record_offset == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -542,7 +542,7 @@ tree_sequence_free(tree_sequence_t *self)
 }
 
 static int
-check_offset_array(size_t num_rows, size_t total_length, list_len_t *offset)
+check_offset_array(size_t num_rows, size_t total_length, table_size_t *offset)
 {
     int ret = MSP_ERR_BAD_OFFSET;
     int j;
@@ -604,7 +604,7 @@ tree_sequence_check(tree_sequence_t *self)
     int ret = MSP_ERR_GENERIC;
     node_id_t child, parent, last_parent, last_child;
     mutation_id_t parent_mut;
-    list_len_t length;
+    table_size_t length;
     size_t j;
     double left, last_left;
     double *time = self->nodes.time;
@@ -796,13 +796,13 @@ static int
 tree_sequence_init_sites(tree_sequence_t *self)
 {
     site_id_t j;
-    list_len_t k;
+    table_size_t k;
     int ret = 0;
     bool binary = true;
     size_t offset = 0;
 
     self->alphabet = MSP_ALPHABET_ASCII;
-    for (k = 0; k < (list_len_t) self->mutations.num_records; k++) {
+    for (k = 0; k < (table_size_t) self->mutations.num_records; k++) {
         ret = tree_sequence_get_mutation(self, (mutation_id_t) k,
                 self->sites.site_mutations_mem + k);
         if (ret != 0) {
@@ -839,7 +839,7 @@ tree_sequence_init_sites(tree_sequence_t *self)
         self->sites.site_mutations[j] = self->sites.site_mutations_mem + offset;
         self->sites.site_mutations_length[j] = 0;
         /* Go through all mutations for this site */
-        while (k < (list_len_t) self->mutations.num_records
+        while (k < (table_size_t) self->mutations.num_records
                 && self->mutations.site[k] == j) {
             self->sites.site_mutations_length[j]++;
             offset++;
@@ -899,13 +899,13 @@ tree_sequence_init_trees(tree_sequence_t *self)
      */
     msp_safe_free(self->sites.tree_sites);
     msp_safe_free(self->sites.tree_sites_length);
-    self->sites.tree_sites_length = malloc(self->num_trees * sizeof(list_len_t));
+    self->sites.tree_sites_length = malloc(self->num_trees * sizeof(table_size_t));
     self->sites.tree_sites = malloc(self->num_trees * sizeof(site_t *));
     if (self->sites.tree_sites == NULL || self->sites.tree_sites_length == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    memset(self->sites.tree_sites_length, 0, self->num_trees * sizeof(list_len_t));
+    memset(self->sites.tree_sites_length, 0, self->num_trees * sizeof(table_size_t));
     memset(self->sites.tree_sites, 0, self->num_trees * sizeof(site_t *));
 
     tree_left = 0;
@@ -1063,7 +1063,7 @@ tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
             nodes->num_rows * sizeof(population_id_t));
     memcpy(self->nodes.metadata, nodes->metadata, nodes->metadata_length * sizeof(char));
     memcpy(self->nodes.metadata_offset, nodes->metadata_offset,
-            (nodes->num_rows + 1) * sizeof(list_len_t));
+            (nodes->num_rows + 1) * sizeof(table_size_t));
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -1078,7 +1078,7 @@ tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
         memcpy(self->sites.position, sites->position, sites->num_rows * sizeof(double));
         memcpy(self->sites.ancestral_state_offset,
                 sites->ancestral_state_offset,
-                (sites->num_rows + 1) * sizeof(list_len_t));
+                (sites->num_rows + 1) * sizeof(table_size_t));
         memcpy(self->sites.ancestral_state,
                 sites->ancestral_state, sites->ancestral_state_length * sizeof(char));
     }
@@ -1089,7 +1089,7 @@ tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
                 mutations->num_rows * sizeof(mutation_id_t));
         memcpy(self->mutations.derived_state_offset,
                 mutations->derived_state_offset,
-                (mutations->num_rows + 1) * sizeof(list_len_t));
+                (mutations->num_rows + 1) * sizeof(table_size_t));
         memcpy(self->mutations.derived_state,
                 mutations->derived_state,
                 mutations->derived_state_length * sizeof(char));
@@ -1109,11 +1109,11 @@ tree_sequence_load_tables(tree_sequence_t *self, double sequence_length,
     }
     if (provenance != NULL) {
         memcpy(self->provenances.timestamp_offset, provenance->timestamp_offset,
-                (provenance->num_rows + 1) * sizeof(list_len_t));
+                (provenance->num_rows + 1) * sizeof(table_size_t));
         memcpy(self->provenances.timestamp, provenance->timestamp,
                 provenance->timestamp_length * sizeof(char));
         memcpy(self->provenances.record_offset, provenance->record_offset,
-                (provenance->num_rows + 1) * sizeof(list_len_t));
+                (provenance->num_rows + 1) * sizeof(table_size_t));
         memcpy(self->provenances.record, provenance->record,
                 provenance->record_length * sizeof(char));
     }
@@ -1151,7 +1151,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     int ret = -1;
     size_t j;
     double left, right;
-    list_len_t offset, length, timestamp_offset, timestamp_length,
+    table_size_t offset, length, timestamp_offset, timestamp_length,
                record_offset, record_length;
 
     if (nodes == NULL || edges == NULL) {
@@ -2120,7 +2120,7 @@ tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     sparse_tree_t *tree = NULL;
     double result, denom, n, count;
     site_t *sites;
-    list_len_t j, k, num_sites;
+    table_size_t j, k, num_sites;
 
     if (num_samples < 2 || num_samples > self->num_samples) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -2175,7 +2175,7 @@ int WARN_UNUSED
 tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node)
 {
     int ret = 0;
-    list_len_t offset, length;
+    table_size_t offset, length;
 
     if (index < 0 || index >= (node_id_t) self->nodes.num_records) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -2232,7 +2232,7 @@ int WARN_UNUSED
 tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id, mutation_t *record)
 {
     int ret = 0;
-    list_len_t offset, length;
+    table_size_t offset, length;
 
     if (id < 0 || id >= (mutation_id_t) self->mutations.num_records) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -2255,7 +2255,7 @@ int WARN_UNUSED
 tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
 {
     int ret = 0;
-    list_len_t offset, length;
+    table_size_t offset, length;
 
     if (id < 0 || id >= (site_id_t) self->sites.num_records) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
@@ -2277,13 +2277,13 @@ int WARN_UNUSED
 tree_sequence_get_provenance(tree_sequence_t *self, size_t index, provenance_t *provenance)
 {
     int ret = 0;
-    list_len_t offset, length;
+    table_size_t offset, length;
 
     if (index >= self->provenances.num_records) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    provenance->id = (list_len_t) index;
+    provenance->id = (table_size_t) index;
     offset = self->provenances.timestamp_offset[index];
     length = self->provenances.timestamp_offset[index + 1] - offset;
     provenance->timestamp = self->provenances.timestamp + offset;
@@ -3065,7 +3065,7 @@ out:
 }
 
 int WARN_UNUSED
-sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, list_len_t *sites_length)
+sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, table_size_t *sites_length)
 {
     *sites = self->sites;
     *sites_length = self->sites_length;

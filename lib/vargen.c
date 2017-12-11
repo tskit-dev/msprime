@@ -104,7 +104,7 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
     node_list_t *w, *tail;
     node_id_t sample_index;
     bool not_done;
-    list_len_t j;
+    table_size_t j;
     char derived;
     char ancestral = (char) (site->ancestral_state[0] - state_offset);
 

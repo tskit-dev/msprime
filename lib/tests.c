@@ -879,7 +879,7 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
     int ret;
     node_id_t u, v;
     uint32_t j, mutation_index, site_index;
-    list_len_t k, l, tree_sites_length;
+    table_size_t k, l, tree_sites_length;
     site_t *sites = NULL;
     sparse_tree_t tree;
     size_t num_nodes = tree_sequence_get_num_nodes(ts);
@@ -993,7 +993,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
     node_t n1, n2;
     sparse_tree_t full_tree, subset_tree;
     site_t *tree_sites;
-    list_len_t tree_sites_length;
+    table_size_t tree_sites_length;
     uint32_t j, k;
     node_id_t u, mrca1, mrca2;
     size_t total_sites;
@@ -6067,7 +6067,7 @@ test_node_table(void)
     metadata = malloc(num_rows * sizeof(char));
     memset(metadata, 'a', num_rows * sizeof(char));
     CU_ASSERT_FATAL(metadata != NULL);
-    metadata_offset = malloc((num_rows + 1) * sizeof(list_len_t));
+    metadata_offset = malloc((num_rows + 1) * sizeof(table_size_t));
     CU_ASSERT_FATAL(metadata_offset != NULL);
     for (j = 0; j < num_rows + 1; j++) {
         metadata_offset[j] = j;
@@ -6080,7 +6080,7 @@ test_node_table(void)
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
-                (num_rows + 1) * sizeof(list_len_t)), 0);
+                (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, num_rows);
     node_table_print_state(&table, _devnull);
@@ -6132,13 +6132,13 @@ test_node_table(void)
 
     /* if metadata and metadata_offset are both null, all metadatas are zero length */
     num_rows = 10;
-    memset(metadata_offset, 0, (num_rows + 1) * sizeof(list_len_t));
+    memset(metadata_offset, 0, (num_rows + 1) * sizeof(table_size_t));
     ret = node_table_set_columns(&table, num_rows, flags, time, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
-                (num_rows + 1) * sizeof(list_len_t)), 0);
+                (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
     ret = node_table_append_columns(&table, num_rows, flags, time, NULL, NULL, NULL);
@@ -6148,7 +6148,7 @@ test_node_table(void)
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time + num_rows, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
-                (num_rows + 1) * sizeof(list_len_t)), 0);
+                (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset + num_rows, metadata_offset,
                 num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
@@ -6250,7 +6250,7 @@ test_site_table(void)
     size_t num_rows, j;
     char *ancestral_state;
     double *position;
-    list_len_t *ancestral_state_offset;
+    table_size_t *ancestral_state_offset;
 
     ret = site_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6364,7 +6364,7 @@ test_mutation_table(void)
     site_id_t *site;
     char *derived_state;
     char c[max_len + 1];
-    list_len_t *derived_state_offset;
+    table_size_t *derived_state_offset;
 
     for (j = 0; j < max_len; j++) {
         c[j] = 'A' + j;
@@ -6399,7 +6399,7 @@ test_mutation_table(void)
     CU_ASSERT_FATAL(parent != NULL);
     derived_state = malloc(num_rows * sizeof(char));
     CU_ASSERT_FATAL(derived_state != NULL);
-    derived_state_offset = malloc((num_rows + 1) * sizeof(list_len_t));
+    derived_state_offset = malloc((num_rows + 1) * sizeof(table_size_t));
     CU_ASSERT_FATAL(derived_state_offset != NULL);
 
     for (j = 0; j < num_rows; j++) {
@@ -6450,7 +6450,7 @@ test_mutation_table(void)
     CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
                 num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.derived_state_offset, derived_state_offset,
-                num_rows * sizeof(list_len_t)), 0);
+                num_rows * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.derived_state_length, num_rows);
 
@@ -6684,12 +6684,12 @@ test_provenance_table(void)
     timestamp = malloc(num_rows * sizeof(char));
     memset(timestamp, 'a', num_rows * sizeof(char));
     CU_ASSERT_FATAL(timestamp != NULL);
-    timestamp_offset = malloc((num_rows + 1) * sizeof(list_len_t));
+    timestamp_offset = malloc((num_rows + 1) * sizeof(table_size_t));
     CU_ASSERT_FATAL(timestamp_offset != NULL);
     record = malloc(num_rows * sizeof(char));
     memset(record, 'a', num_rows * sizeof(char));
     CU_ASSERT_FATAL(record != NULL);
-    record_offset = malloc((num_rows + 1) * sizeof(list_len_t));
+    record_offset = malloc((num_rows + 1) * sizeof(table_size_t));
     CU_ASSERT_FATAL(record_offset != NULL);
     for (j = 0; j < num_rows + 1; j++) {
         timestamp_offset[j] = j;
@@ -6700,10 +6700,10 @@ test_provenance_table(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.timestamp, timestamp, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.timestamp_offset, timestamp_offset,
-                (num_rows + 1) * sizeof(list_len_t)), 0);
+                (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.record, record, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.record_offset, record_offset,
-                (num_rows + 1) * sizeof(list_len_t)), 0);
+                (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.timestamp_length, num_rows);
     CU_ASSERT_EQUAL(table.record_length, num_rows);

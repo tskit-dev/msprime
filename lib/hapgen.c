@@ -115,7 +115,7 @@ hapgen_apply_tree_site(hapgen_t *self, site_t *site)
     int ret = 0;
     node_list_t *w, *tail;
     bool not_done;
-    list_len_t j;
+    table_size_t j;
     const char *derived_state;
 
     for (j = 0; j < site->mutations_length; j++) {
@@ -149,8 +149,8 @@ static int
 hapgen_generate_all_haplotypes(hapgen_t *self)
 {
     int ret = 0;
-    list_len_t j;
-    list_len_t num_sites = 0;
+    table_size_t j;
+    table_size_t num_sites = 0;
     site_t *sites = NULL;
     sparse_tree_t *t = &self->tree;
 
