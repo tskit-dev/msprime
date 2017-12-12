@@ -1103,7 +1103,7 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = site_table_alloc(&sites, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, 1, 1);
+    ret = mutation_table_alloc(&mutations, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = migration_table_alloc(&migrations, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

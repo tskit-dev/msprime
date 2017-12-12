@@ -104,11 +104,16 @@ typedef struct {
     table_size_t derived_state_length;
     table_size_t max_derived_state_length;
     table_size_t max_derived_state_length_increment;
+    table_size_t metadata_length;
+    table_size_t max_metadata_length;
+    table_size_t max_metadata_length_increment;
     node_id_t *node;
     site_id_t *site;
     mutation_id_t *parent;
     char *derived_state;
     table_size_t *derived_state_offset;
+    char *metadata;
+    table_size_t *metadata_offset;
 } mutation_table_t;
 
 typedef struct {
@@ -196,6 +201,8 @@ typedef struct _mutation_t {
     mutation_id_t parent;
     const char *derived_state;
     table_size_t derived_state_length;
+    const char *metadata;
+    table_size_t metadata_length;
     // TODO remove this and change to ID?
     size_t index;
 } mutation_t;
@@ -490,12 +497,16 @@ typedef struct {
         size_t num_records;
         size_t max_num_records;
         size_t derived_state_length;
+        char *derived_state;
+        table_size_t *derived_state_offset;
         size_t max_derived_state_length;
+        size_t metadata_length;
+        size_t max_metadata_length;
+        char *metadata;
+        table_size_t *metadata_offset;
         node_id_t *node;
         site_id_t *site;
         mutation_id_t *parent;
-        char *derived_state;
-        table_size_t *derived_state_offset;
     } mutations;
 
     struct {
@@ -1005,15 +1016,20 @@ void site_table_print_state(site_table_t *self, FILE *out);
 
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_total_derived_state_length_increment);
+        size_t max_total_derived_state_length_increment,
+        size_t max_total_metadata_length_increment);
 int mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
-        mutation_id_t parent, const char *derived_state, table_size_t derived_state_length);
+        mutation_id_t parent,
+        const char *derived_state, table_size_t derived_state_length,
+        const char *metadata, table_size_t metadata_length);
 int mutation_table_set_columns(mutation_table_t *self, size_t num_rows,
         site_id_t *site, node_id_t *node, mutation_id_t *parent,
-        const char *derived_state, table_size_t *derived_state_length);
+        const char *derived_state, table_size_t *derived_state_length,
+        const char *metadata, table_size_t *metadata_length);
 int mutation_table_append_columns(mutation_table_t *self, size_t num_rows,
         site_id_t *site, node_id_t *node, mutation_id_t *parent,
-        const char *derived_state, table_size_t *derived_state_length);
+        const char *derived_state, table_size_t *derived_state_length,
+        const char *metadata, table_size_t *metadata_length);
 bool mutation_table_equal(mutation_table_t *self, mutation_table_t *other);
 int mutation_table_reset(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);

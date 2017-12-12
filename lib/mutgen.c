@@ -280,7 +280,7 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
             goto out;
         }
         ret = mutation_table_add_row(mutations, (site_id_t) j, mut->node,
-                MSP_NULL_MUTATION, mut->derived_state, 1);
+                MSP_NULL_MUTATION, mut->derived_state, 1, NULL, 0);
         if (ret != 0) {
             goto out;
         }

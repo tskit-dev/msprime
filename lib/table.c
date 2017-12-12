@@ -745,7 +745,8 @@ site_table_equal(site_table_t *self, site_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
-            && self->ancestral_state_length == other->ancestral_state_length) {
+            && self->ancestral_state_length == other->ancestral_state_length
+            && self->metadata_length == other->metadata_length) {
         ret = memcmp(self->position, other->position,
                 self->num_rows * sizeof(double)) == 0
             && memcmp(self->ancestral_state_offset, other->ancestral_state_offset,
@@ -785,7 +786,7 @@ site_table_free(site_table_t *self)
 void
 site_table_print_state(site_table_t *self, FILE *out)
 {
-    table_size_t j, k, offset, length;
+    table_size_t j, k;
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "site_table: %p:\n", (void *) self);
@@ -803,17 +804,15 @@ site_table_print_state(site_table_t *self, FILE *out)
     fprintf(out, "index\tposition\tancestral_state_offset\tancestral_state\t"
             "metadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
-        offset = self->ancestral_state_offset[j];
-        length = self->ancestral_state_offset[j + 1] - offset;
-        fprintf(out, "%d\t%f\t%d\t", (int) j, self->position[j], offset);
-        for (k = 0; k < length; k++) {
-            fprintf(out, "%c", self->ancestral_state[offset + k]);
+        fprintf(out, "%d\t%f\t%d\t", (int) j, self->position[j],
+                self->ancestral_state_offset[j]);
+        for (k = self->ancestral_state_offset[j];
+                k < self->ancestral_state_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->ancestral_state[k]);
         }
-        offset = self->metadata_offset[j];
-        fprintf(out, "\t%d\t", offset);
-        length = self->metadata_offset[j + 1] - offset;
-        for (k = 0; k < length; k++) {
-            fprintf(out, "%c", self->metadata[offset + k]);
+        fprintf(out, "\t%d\t", self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
         }
         fprintf(out, "\n");
     }
@@ -854,6 +853,11 @@ mutation_table_expand_main_columns(mutation_table_t *self, size_t additional_row
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->metadata_offset, new_size + 1,
+                sizeof(table_size_t));
+        if (ret != 0) {
+            goto out;
+        }
         self->max_rows = new_size;
     }
 out:
@@ -880,9 +884,30 @@ out:
     return ret;
 }
 
+static int
+mutation_table_expand_metadata(mutation_table_t *self, size_t additional_length)
+{
+    int ret = 0;
+    table_size_t increment = (table_size_t) GSL_MAX(additional_length,
+            self->max_metadata_length_increment);
+    table_size_t new_size = self->max_metadata_length + increment;
+
+    if ((self->metadata_length + additional_length)
+            > self->max_metadata_length) {
+        ret = expand_column((void **) &self->metadata, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_metadata_length = (table_size_t) new_size;
+    }
+out:
+    return ret;
+}
+
 int
 mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
-        size_t max_derived_state_length_increment)
+        size_t max_derived_state_length_increment,
+        size_t max_metadata_length_increment)
 {
     int ret = 0;
 
@@ -893,6 +918,9 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
     if (max_derived_state_length_increment == 0) {
         max_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
     }
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
     self->max_rows_increment = (table_size_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
@@ -900,6 +928,10 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         (table_size_t) max_derived_state_length_increment;
     self->max_derived_state_length = 0;
     self->derived_state_length = 0;
+    self->max_metadata_length_increment =
+        (table_size_t) max_metadata_length_increment;
+    self->max_metadata_length = 0;
+    self->metadata_length = 0;
     ret = mutation_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -908,34 +940,55 @@ mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
     if (ret != 0) {
         goto out;
     }
+    ret = mutation_table_expand_metadata(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
     self->derived_state_offset[0] = 0;
+    self->metadata_offset[0] = 0;
 out:
     return ret;
 }
 
 int
 mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
-        mutation_id_t parent, const char *derived_state, table_size_t derived_state_length)
+        mutation_id_t parent,
+        const char *derived_state, table_size_t derived_state_length,
+        const char *metadata, table_size_t metadata_length)
 {
-    int ret = 0;
-    table_size_t offset = (table_size_t) self->derived_state_length;
+    table_size_t derived_state_offset, metadata_offset;
+    int ret;
 
-    assert(self->derived_state_offset[self->num_rows] == offset);
     ret = mutation_table_expand_main_columns(self, 1);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_expand_derived_state(self, derived_state_length);
     if (ret != 0) {
         goto out;
     }
     self->site[self->num_rows] = site;
     self->node[self->num_rows] = node;
     self->parent[self->num_rows] = parent;
+
+    derived_state_offset = (table_size_t) self->derived_state_length;
+    assert(self->derived_state_offset[self->num_rows] == derived_state_offset);
+    ret = mutation_table_expand_derived_state(self, derived_state_length);
+    if (ret != 0) {
+        goto out;
+    }
     self->derived_state_length += derived_state_length;
-    memcpy(self->derived_state + offset, derived_state, derived_state_length);
+    memcpy(self->derived_state + derived_state_offset, derived_state,
+            derived_state_length);
+    self->derived_state_offset[self->num_rows + 1] = self->derived_state_length;
+
+    metadata_offset = (table_size_t) self->metadata_length;
+    assert(self->metadata_offset[self->num_rows] == metadata_offset);
+    ret = mutation_table_expand_metadata(self, metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    self->metadata_length += metadata_length;
+    memcpy(self->metadata + metadata_offset, metadata, metadata_length);
+    self->metadata_offset[self->num_rows + 1] = self->metadata_length;
+
     self->num_rows++;
-    self->derived_state_offset[self->num_rows] = self->derived_state_length;
 out:
     return ret;
 }
@@ -943,18 +996,62 @@ out:
 int
 mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
         node_id_t *node, mutation_id_t *parent,
-        const char *derived_state, table_size_t *derived_state_offset)
+        const char *derived_state, table_size_t *derived_state_offset,
+        const char *metadata, table_size_t *metadata_offset)
 {
     int ret = 0;
-    size_t derived_state_length = 0;
-    size_t j;
+    table_size_t j, derived_state_length, metadata_length;
 
-    if (site == NULL || node == NULL || derived_state == NULL
+    if (site  == NULL || node == NULL || derived_state == NULL
             || derived_state_offset == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    if ((metadata == NULL) != (metadata_offset == NULL)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
     ret = mutation_table_expand_main_columns(self, num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->site + self->num_rows, site, num_rows * sizeof(site_id_t));
+    memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
+    if (parent == NULL) {
+        /* If parent is NULL, set all parents to the null mutation */
+        memset(self->parent + self->num_rows, 0xff, num_rows * sizeof(mutation_id_t));
+    } else {
+        memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(mutation_id_t));
+    }
+
+    /* Metadata column */
+    if (metadata == NULL) {
+        for (j = 0; j < num_rows; j++) {
+            self->metadata_offset[self->num_rows + j + 1] = (table_size_t) self->metadata_length;
+        }
+    } else {
+        ret = check_offsets(num_rows, metadata_offset);
+        if (ret != 0) {
+            goto out;
+        }
+        metadata_length = metadata_offset[num_rows];
+        ret = mutation_table_expand_metadata(self, metadata_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->metadata + self->metadata_length, metadata,
+                metadata_length * sizeof(char));
+        for (j = 0; j < num_rows; j++) {
+            self->metadata_offset[self->num_rows + j] =
+                (table_size_t) self->metadata_length + metadata_offset[j];
+        }
+        self->metadata_length += metadata_length;
+    }
+    self->metadata_offset[self->num_rows + num_rows] = self->metadata_length;
+
+    /* Derived state column */
+    ret = check_offsets(num_rows, derived_state_offset);
     if (ret != 0) {
         goto out;
     }
@@ -963,27 +1060,16 @@ mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t
     if (ret != 0) {
         goto out;
     }
-    memcpy(self->site + self->num_rows, site, num_rows * sizeof(site_id_t));
-    memcpy(self->node + self->num_rows, node, num_rows * sizeof(node_id_t));
     memcpy(self->derived_state + self->derived_state_length, derived_state,
             derived_state_length * sizeof(char));
-    ret = check_offsets(num_rows, derived_state_offset);
-    if (ret != 0) {
-        goto out;
-    }
     for (j = 0; j < num_rows; j++) {
         self->derived_state_offset[self->num_rows + j] =
             (table_size_t) self->derived_state_length + derived_state_offset[j];
     }
-    if (parent == NULL) {
-        /* If parent is NULL, set all parents to the null mutation */
-        memset(self->parent + self->num_rows, 0xff, num_rows * sizeof(mutation_id_t));
-    } else {
-        memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(mutation_id_t));
-    }
+    self->derived_state_length += derived_state_length;
+    self->derived_state_offset[self->num_rows + num_rows] = self->derived_state_length;
+
     self->num_rows += (table_size_t) num_rows;
-    self->derived_state_length += (table_size_t) derived_state_length;
-    self->derived_state_offset[self->num_rows] = self->derived_state_length;
 out:
     return ret;
 }
@@ -991,7 +1077,8 @@ out:
 int
 mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *site,
         node_id_t *node, mutation_id_t *parent,
-        const char *derived_state, table_size_t *derived_state_offset)
+        const char *derived_state, table_size_t *derived_state_offset,
+        const char *metadata, table_size_t *metadata_offset)
 {
     int ret = 0;
 
@@ -1000,7 +1087,7 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *s
         goto out;
     }
     ret = mutation_table_append_columns(self, num_rows, site, node, parent,
-            derived_state, derived_state_offset);
+            derived_state, derived_state_offset, metadata, metadata_offset);
 out:
     return ret;
 }
@@ -1010,7 +1097,8 @@ mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
-            && self->derived_state_length == other->derived_state_length) {
+            && self->derived_state_length == other->derived_state_length
+            && self->metadata_length == other->metadata_length) {
         ret = memcmp(self->site, other->site, self->num_rows * sizeof(site_id_t)) == 0
             && memcmp(self->node, other->node, self->num_rows * sizeof(node_id_t)) == 0
             && memcmp(self->parent, other->parent,
@@ -1018,7 +1106,11 @@ mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
             && memcmp(self->derived_state_offset, other->derived_state_offset,
                     (self->num_rows + 1) * sizeof(table_size_t)) == 0
             && memcmp(self->derived_state, other->derived_state,
-                    self->derived_state_length * sizeof(char)) == 0;
+                    self->derived_state_length * sizeof(char)) == 0
+            && memcmp(self->metadata_offset, other->metadata_offset,
+                    (self->num_rows + 1) * sizeof(table_size_t)) == 0
+            && memcmp(self->metadata, other->metadata,
+                    self->metadata_length * sizeof(char)) == 0;
     }
     return ret;
 }
@@ -1029,6 +1121,8 @@ mutation_table_reset(mutation_table_t *self)
     self->num_rows = 0;
     self->derived_state_length = 0;
     self->derived_state_offset[0] = 0;
+    self->metadata_length = 0;
+    self->metadata_offset[0] = 0;
     return 0;
 }
 
@@ -1040,13 +1134,15 @@ mutation_table_free(mutation_table_t *self)
     msp_safe_free(self->parent);
     msp_safe_free(self->derived_state);
     msp_safe_free(self->derived_state_offset);
+    msp_safe_free(self->metadata);
+    msp_safe_free(self->metadata_offset);
     return 0;
 }
 
 void
 mutation_table_print_state(mutation_table_t *self, FILE *out)
 {
-    size_t j, k, offset;
+    size_t j, k;
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "mutation_table: %p:\n", (void *) self);
@@ -1056,16 +1152,24 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
             (int) self->derived_state_length,
             (int) self->max_derived_state_length,
             (int) self->max_derived_state_length_increment);
+    fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->metadata_length,
+            (int) self->max_metadata_length,
+            (int) self->max_metadata_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tsite\tnode\tparent\tderived_state_offset\tderived_state\n");
-    offset = 0;
+    fprintf(out,
+            "index\tsite\tnode\tparent\tderived_state_offset\tderived_state\t"
+            "metadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t%d\t%d\t%d\t", (int) j, self->site[j], self->node[j],
                 self->parent[j], self->derived_state_offset[j]);
         for (k = self->derived_state_offset[j];
                 k < self->derived_state_offset[j + 1]; k++) {
-            fprintf(out, "%c", self->derived_state[offset]);
-            offset++;
+            fprintf(out, "%c", self->derived_state[k]);
+        }
+        fprintf(out, "\t%d\t", self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
         }
         fprintf(out, "\n");
     }
@@ -1073,6 +1177,9 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
     assert(self->derived_state_offset[0] == 0);
     assert(self->derived_state_length
             == self->derived_state_offset[self->num_rows]);
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_length
+            == self->metadata_offset[self->num_rows]);
 }
 
 /*************************
@@ -2473,13 +2580,14 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
 
     /* Make a copy of the input mutations and clear the input table, ready for output. */
     ret = mutation_table_alloc(&self->input_mutations, mutations->num_rows,
-            mutations->derived_state_length);
+            mutations->derived_state_length, mutations->metadata_length);
     if (ret != 0) {
         goto out;
     }
     ret = mutation_table_set_columns(&self->input_mutations, mutations->num_rows,
             mutations->site, mutations->node, mutations->parent,
-            mutations->derived_state, mutations->derived_state_offset);
+            mutations->derived_state, mutations->derived_state_offset,
+            mutations->metadata, mutations->metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -2979,11 +3087,17 @@ simplifier_output_sites(simplifier_t *self)
                         input_mutation];
                     derived_state_length = self->input_mutations.derived_state_offset[
                         input_mutation + 1] - derived_state_offset;
+                    metadata_offset = self->input_mutations.metadata_offset[
+                        input_mutation];
+                    metadata_length = self->input_mutations.metadata_offset[
+                        input_mutation + 1] - metadata_offset;
                     ret = mutation_table_add_row(self->mutations,
                             (site_id_t) self->sites->num_rows,
                             mapped_node, mapped_parent,
                             self->input_mutations.derived_state + derived_state_offset,
-                            derived_state_length);
+                            derived_state_length,
+                            self->input_mutations.metadata + metadata_offset,
+                            metadata_length);
                     if (ret != 0) {
                         goto out;
                     }
