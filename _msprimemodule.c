@@ -8232,7 +8232,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     bool sites_lock_acquired = false;
     bool mutations_lock_acquired = false;
     double sequence_length = 0;
-    node_id_t *node_map_data;
+    node_id_t *node_map_data = NULL;
     static char *kwlist[] = {
         "samples", "nodes", "edges", "migrations",
         "sites", "mutations", "sequence_length", "node_map",
@@ -8304,10 +8304,9 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     if (filter_zero_mutation_sites) {
         flags |= MSP_FILTER_ZERO_MUTATION_SITES;
     }
-    node_map_data = NULL;
     if (node_map != NULL) {
         node_map_array = (PyArrayObject *) PyArray_FROM_OTF(node_map, NPY_INT32,
-                NPY_ARRAY_INOUT_ARRAY);
+                NPY_ARRAY_OUT_ARRAY);
         if (node_map_array == NULL) {
             goto out;
         }
@@ -8319,8 +8318,15 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         if (shape[0] != nodes->num_rows) {
             PyErr_SetString(PyExc_ValueError,
                     "node_map array must have samesize as nodes");
+            goto out;
         }
-        node_map_data = PyArray_DATA(node_map_array);
+        /* We have to malloc a temporary buffer here because we need to have
+         * guaranteed access to the node_map memory while we release the GIL. */
+        node_map_data = PyMem_Malloc(nodes->num_rows * sizeof(int32_t));
+        if (node_map_data == NULL) {
+            PyErr_NoMemory();
+            goto out;
+        }
     }
 
     /* If migrations, sites or mutations is NULL on the input, allocate an empty
@@ -8391,6 +8397,12 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    if (node_map_data != NULL) {
+        /* Need to copy the results back from the temporary buffer */
+        memcpy(PyArray_DATA(node_map_array), node_map_data,
+                nodes->num_rows * sizeof(int32_t));
+    }
+
     ret = Py_BuildValue("");
 out:
     /* Release the table locks IF we acquired them in this thread. */
@@ -8424,6 +8436,9 @@ out:
         mutation_table_free(mutations);
         PyMem_Free(mutations);
     }
+    /* if (node_map_data != NULL) { */
+    /*     PyMem_Free(node_map_data); */
+    /* } */
     return ret;
 #else
     PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
@@ -8444,6 +8459,7 @@ msprime_get_hdf5_version(PyObject *self)
     PyObject *ret = NULL;
     unsigned int major, minor, release;
 
+    /* Beware! This seems to leak memory, so don't call it repeatedly */
     status = H5get_libversion(&major, &minor, &release);
     if (status != 0) {
         PyErr_SetString(PyExc_SystemError, "Error getting HDF5 version");
