@@ -393,9 +393,10 @@ class TestHdf5Format(TestHdf5):
             ("site", int32), ("node", int32), ("parent", int32),
             ("derived_state", int8), ("derived_state_offset", uint32)]
         derived_state_offset = g["derived_state_offset"]
+        self.verify_metadata(g, ts.num_sites)
         if ts.num_mutations == 0:
             self.assertEqual(derived_state_offset.shape, (1,))
-            self.assertEqual(1, len(list(g.keys())))
+            self.assertNotIn("derived_state", list(g.keys()))
         else:
             for name, dtype in fields:
                 self.assertEqual(len(g[name].shape), 1)

@@ -420,12 +420,27 @@ out:
 }
 
 static PyObject *
+make_metadata(const char *metadata, Py_ssize_t length)
+{
+    const char *m = metadata == NULL? "": metadata;
+    return PyBytes_FromStringAndSize(m, length);
+}
+
+static PyObject *
 make_mutation(mutation_t *mutation)
 {
     PyObject *ret = NULL;
+    PyObject* metadata = NULL;
 
-    ret = Py_BuildValue("iis#ii", mutation->site, mutation->node, mutation->derived_state,
-            (Py_ssize_t) mutation->derived_state_length, mutation->parent, mutation->id);
+    metadata = make_metadata(mutation->metadata, (Py_ssize_t) mutation->metadata_length);
+    if (metadata == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("iis#iiO", mutation->site, mutation->node, mutation->derived_state,
+            (Py_ssize_t) mutation->derived_state_length, mutation->parent, mutation->id,
+            metadata);
+out:
+    Py_XDECREF(metadata);
     return ret;
 }
 
@@ -463,13 +478,6 @@ make_provenance(provenance_t *provenance)
             provenance->timestamp, (Py_ssize_t) provenance->timestamp_length,
             provenance->record, (Py_ssize_t) provenance->record_length);
     return ret;
-}
-
-static PyObject *
-make_metadata(const char *metadata, Py_ssize_t length)
-{
-    const char *m = metadata == NULL? "": metadata;
-    return PyBytes_FromStringAndSize(m, length);
 }
 
 static PyObject *

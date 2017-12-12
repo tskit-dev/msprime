@@ -2451,10 +2451,11 @@ class TestSparseTree(LowLevelTestCase):
                     self.assertTrue(st.get_left() <= position < st.get_right())
                     self.assertEqual(index, j)
                     self.assertEqual(metadata, b"")
-                    for site, node, derived_state, parent, mut_id in mutations:
+                    for site, node, derived_state, parent, mut_id, metadata in mutations:
                         self.assertEqual(site, index)
                         self.assertEqual(mutation_id, mut_id)
                         self.assertNotEqual(st.get_parent(node), NULL_NODE)
+                        self.assertEqual(metadata, b"")
                         mutation_id += 1
                     j += 1
             self.assertEqual(all_tree_sites, all_sites)
@@ -3178,8 +3179,9 @@ class TestTablesInterface(LowLevelTestCase):
 
         new_mutations = _msprime.MutationTable()
         for j in range(ts.get_num_mutations()):
-            site, node, derived_state, parent, mut_id = ts.get_mutation(j)
+            site, node, derived_state, parent, mut_id, metadata = ts.get_mutation(j)
             self.assertEqual(mut_id, new_mutations.num_rows)
+            self.assertEqual(metadata, b'')
             new_mutations.add_row(site, node, derived_state, parent)
         self.assertEqual(list(new_mutations.site), list(mutations.site))
         self.assertEqual(list(new_mutations.node), list(mutations.node))

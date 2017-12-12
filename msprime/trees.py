@@ -76,7 +76,7 @@ Site = collections.namedtuple(
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "derived_state", "parent", "id"])
+    ["site", "node", "derived_state", "parent", "id", "metadata"])
 
 
 # This is provided for backwards compatibility with the deprecated mutations()

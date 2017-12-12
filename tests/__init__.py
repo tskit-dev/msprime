@@ -223,7 +223,7 @@ class PythonTreeSequence(object):
             ["position", "ancestral_state", "index", "mutations", "metadata"])
         _Mutation = collections.namedtuple(
             "Mutation",
-            ["site", "node", "derived_state", "parent", "id"])
+            ["site", "node", "derived_state", "parent", "id", "metadata"])
         for j in range(tree_sequence.get_num_sites()):
             pos, ancestral_state, mutations, index, metadata = tree_sequence.get_site(j)
             self._sites.append(_Site(
@@ -861,7 +861,8 @@ class Simplifier(object):
                             site=len(self.site_table),
                             node=self.mutation_node_map[mut.id],
                             parent=mapped_parent,
-                            derived_state=mut.derived_state)
+                            derived_state=mut.derived_state,
+                            metadata=mut.metadata)
                 self.site_table.add_row(
                     position=site.position, ancestral_state=site.ancestral_state,
                     metadata=site.metadata)
