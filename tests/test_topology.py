@@ -2332,10 +2332,9 @@ class TestSimplify(unittest.TestCase):
         if compare_lib:
             lib_tables = ts.dump_tables()
             lib_node_map = np.empty(ts.num_nodes, dtype=np.int32)
-            msprime.simplify_tables(
+            lib_node_map = msprime.simplify_tables(
                 samples=samples, nodes=lib_tables.nodes, edges=lib_tables.edges,
                 sites=lib_tables.sites, mutations=lib_tables.mutations,
-                node_map=lib_node_map,
                 filter_zero_mutation_sites=filter_zero_mutation_sites,
                 sequence_length=ts.sequence_length)
             py_tables = new_ts.dump_tables()

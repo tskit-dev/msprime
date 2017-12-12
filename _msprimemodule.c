@@ -8217,9 +8217,8 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
-    PyObject *node_map = NULL;
     PyArrayObject *node_map_array = NULL;
-    npy_intp *shape;
+    npy_intp *shape, dims;
     size_t num_samples;
     simplifier_t *simplifier = NULL;
     int flags = 0;
@@ -8232,21 +8231,19 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     bool sites_lock_acquired = false;
     bool mutations_lock_acquired = false;
     double sequence_length = 0;
-    node_id_t *node_map_data = NULL;
     static char *kwlist[] = {
         "samples", "nodes", "edges", "migrations",
-        "sites", "mutations", "sequence_length", "node_map",
+        "sites", "mutations", "sequence_length",
         "filter_zero_mutation_sites", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!dOi", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!di", kwlist,
             &samples,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &sequence_length,
-            &node_map, &filter_zero_mutation_sites)) {
+            &sequence_length, &filter_zero_mutation_sites)) {
         goto out;
     }
     samples_array = (PyArrayObject *) PyArray_FROM_OTF(samples, NPY_INT32,
@@ -8304,30 +8301,6 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     if (filter_zero_mutation_sites) {
         flags |= MSP_FILTER_ZERO_MUTATION_SITES;
     }
-    if (node_map != NULL) {
-        node_map_array = (PyArrayObject *) PyArray_FROM_OTF(node_map, NPY_INT32,
-                NPY_ARRAY_OUT_ARRAY);
-        if (node_map_array == NULL) {
-            goto out;
-        }
-        if (PyArray_NDIM(node_map_array) != 1) {
-            PyErr_SetString(PyExc_ValueError, "node_map must 1D array");
-            goto out;
-        }
-        shape = PyArray_DIMS(node_map_array);
-        if (shape[0] != nodes->num_rows) {
-            PyErr_SetString(PyExc_ValueError,
-                    "node_map array must have samesize as nodes");
-            goto out;
-        }
-        /* We have to malloc a temporary buffer here because we need to have
-         * guaranteed access to the node_map memory while we release the GIL. */
-        node_map_data = PyMem_Malloc(nodes->num_rows * sizeof(int32_t));
-        if (node_map_data == NULL) {
-            PyErr_NoMemory();
-            goto out;
-        }
-    }
 
     /* If migrations, sites or mutations is NULL on the input, allocate an empty
      * table for convenience. */
@@ -8370,6 +8343,16 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+
+    /* Allocate a new array to hold the node map. Since we've allocated
+     * this array outside of the context of the interpreter, it _should_
+     * be safe to use a pointer to the underlying memory while the GIL
+     * is released. */
+    dims = nodes->num_rows;
+    node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
+    if (node_map_array == NULL) {
+        goto out;
+    }
     /* Allocate the simplifier and run */
     simplifier = PyMem_Malloc(sizeof(simplifier_t));
     if (simplifier == NULL) {
@@ -8389,7 +8372,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
     assert(py_nodes->locked);
     assert(py_edges->locked);
     Py_BEGIN_ALLOW_THREADS
-    err = simplifier_run(simplifier, node_map_data);
+    err = simplifier_run(simplifier, (node_id_t *) PyArray_DATA(node_map_array));
     Py_END_ALLOW_THREADS
     assert(py_nodes->locked);
     assert(py_edges->locked);
@@ -8397,13 +8380,8 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    if (node_map_data != NULL) {
-        /* Need to copy the results back from the temporary buffer */
-        memcpy(PyArray_DATA(node_map_array), node_map_data,
-                nodes->num_rows * sizeof(int32_t));
-    }
-
-    ret = Py_BuildValue("");
+    ret = (PyObject *) node_map_array;
+    node_map_array = NULL;
 out:
     /* Release the table locks IF we acquired them in this thread. */
     if (nodes_lock_acquired) {
@@ -8436,9 +8414,6 @@ out:
         mutation_table_free(mutations);
         PyMem_Free(mutations);
     }
-    /* if (node_map_data != NULL) { */
-    /*     PyMem_Free(node_map_data); */
-    /* } */
     return ret;
 #else
     PyErr_SetString(PyExc_SystemError, "Function not available without numpy");

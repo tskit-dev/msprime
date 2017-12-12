@@ -1014,10 +1014,11 @@ class TestSimplifyTables(unittest.TestCase):
             edges_before = tables.edges.copy()
             sites_before = tables.sites.copy()
             mutations_before = tables.mutations.copy()
-            msprime.simplify_tables(
+            node_map = msprime.simplify_tables(
                 samples=list(ts.samples()),
                 nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
                 mutations=tables.mutations)
+            self.assertEqual(node_map.shape, (len(nodes_before),))
             self.assertEqual(nodes_before, tables.nodes)
             self.assertEqual(edges_before, tables.edges)
             self.assertEqual(sites_before, tables.sites)

@@ -473,10 +473,9 @@ class TestSimplify(unittest.TestCase):
                 mutations = tables.mutations.copy()
                 sub_samples = random.sample(ts.samples(), min(nsamples, ts.num_samples))
 
-                node_map = np.zeros(ts.num_nodes, dtype=np.int32)
-                msprime.simplify_tables(
+                node_map = msprime.simplify_tables(
                     samples=sub_samples, nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations, node_map=node_map)
+                    sites=sites, mutations=mutations)
                 small_ts = msprime.load_tables(
                     nodes=nodes, edges=edges, sites=sites, mutations=mutations)
                 self.verify_simplify(ts, small_ts, sub_samples, node_map)

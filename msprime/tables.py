@@ -626,8 +626,14 @@ def simplify_tables(*args, **kwargs):
     Simplifies the tables, in place, to retain only the information necessary
     to reconstruct the tree sequence describing the given ``samples``.  This
     will change the ID of the nodes, so that the individual ``samples[k]]``
-    will have ID ``k`` in the result.  The resulting NodeTable will have only
-    the first ``len(samples)`` individuals marked as samples.
+    will have ID ``k`` in the result. The resulting NodeTable will have only
+    the first ``len(samples)`` individuals marked as samples. The mapping from
+    node IDs in the current set of tables to their equivalent values in the
+    simplified tables is returned as a numpy array. If an array ``a`` is
+    returned by this function and ``u`` is the ID of a node in the input
+    table, then ``a[u]`` is the ID of this node in the output table. For
+    any node ``u`` that is not mapped into the output tables, this mapping
+    will equal ``-1``.
 
     Tables operated on by this function must: be sorted (see ``sort_tables``),
     have children be born strictly after their parents, and the intervals on
@@ -643,6 +649,9 @@ def simplify_tables(*args, **kwargs):
     :param MutationTable mutations: The MutationTable to be simplified.
     :param bool filter_invariant_sites: Whether to remove sites that have no
         mutations from the output (default: True).
+    :return: A numpy array mapping node IDs in the input tables to their
+        corresponding node IDs in the output tables.
+    :rtype: numpy array (dtype=np.int32).
     """
     return _msprime.simplify_tables(*args, **kwargs)
 

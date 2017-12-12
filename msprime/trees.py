@@ -1762,19 +1762,11 @@ class TreeSequence(object):
         t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        if map_nodes:
-            node_map = np.empty(self.num_nodes, dtype=np.int32)
-            tables.simplify_tables(
-                samples=samples, sequence_length=self.sequence_length,
-                nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations, node_map=node_map,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
-        else:
-            tables.simplify_tables(
-                samples=samples, sequence_length=self.sequence_length,
-                nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
+        node_map = tables.simplify_tables(
+            samples=samples, sequence_length=self.sequence_length,
+            nodes=t.nodes, edges=t.edges,
+            sites=t.sites, mutations=t.mutations,
+            filter_zero_mutation_sites=filter_zero_mutation_sites)
         # TODO add simplify arguments here??
         t.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
