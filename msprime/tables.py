@@ -293,7 +293,7 @@ class SiteTable(_msprime.SiteTable):
         ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
             ret += "{}\t{:.8f}\t{}\t{}\n".format(
-                    j, position[j], ancestral_state[j], metadata[j])
+                j, position[j], ancestral_state[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -369,12 +369,14 @@ class MutationTable(_msprime.MutationTable):
         site = self.site
         node = self.node
         parent = self.parent
-        derived_state = unpack_strings(
-            self.derived_state, self.derived_state_offset)
-        ret = "id\tsite\tnode\tderived_state\tparent\n"
+        derived_state = unpack_strings(self.derived_state, self.derived_state_offset)
+        # TODO we should wrap this with a try-except, and fall back to printing
+        # something else if utf8 decoding fails.
+        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        ret = "id\tsite\tnode\tderived_state\tparent\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\t{}\t{}\n".format(
-                j, site[j], node[j], derived_state[j], parent[j])
+            ret += "{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                j, site[j], node[j], derived_state[j], parent[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -386,7 +388,9 @@ class MutationTable(_msprime.MutationTable):
                 np.array_equal(self.parent, other.parent) and
                 np.array_equal(self.derived_state, other.derived_state) and
                 np.array_equal(
-                    self.derived_state_offset, other.derived_state_offset))
+                    self.derived_state_offset, other.derived_state_offset) and
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
     def __ne__(self, other):
@@ -400,7 +404,8 @@ class MutationTable(_msprime.MutationTable):
         self.set_columns(
             site=state["site"], node=state["node"], parent=state["parent"],
             derived_state=state["derived_state"],
-            derived_state_offset=state["derived_state_offset"])
+            derived_state_offset=state["derived_state_offset"],
+            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -410,7 +415,8 @@ class MutationTable(_msprime.MutationTable):
         copy.set_columns(
             site=self.site, node=self.node, parent=self.parent,
             derived_state=self.derived_state,
-            derived_state_offset=self.derived_state_offset)
+            derived_state_offset=self.derived_state_offset,
+            metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
 
@@ -422,6 +428,8 @@ def _mutation_table_pickle(table):
         "parent": table.parent,
         "derived_state": table.derived_state,
         "derived_state_offset": table.derived_state_offset,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
     }
     return MutationTable, tuple(), state
 

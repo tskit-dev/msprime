@@ -2362,23 +2362,15 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {
-        "max_rows_increment", "max_derived_state_length_increment", NULL};
+    static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_derived_state_length_increment = 0;
 
     self->mutation_table = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|nn", kwlist,
-                &max_rows_increment, &max_derived_state_length_increment)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
     if (max_rows_increment < 0) {
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
-        goto out;
-    }
-    if (max_derived_state_length_increment < 0) {
-        PyErr_SetString(PyExc_ValueError,
-                "max_derived_state_length_increment must be positive");
         goto out;
     }
     self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
@@ -2386,8 +2378,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = mutation_table_alloc(self->mutation_table, (size_t) max_rows_increment,
-            (size_t) max_derived_state_length_increment);
+    err = mutation_table_alloc(self->mutation_table, (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2407,18 +2398,28 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     int parent = MSP_NULL_MUTATION;
     char *derived_state;
     Py_ssize_t derived_state_length;
-    static char *kwlist[] = {"site", "node", "derived_state", "parent", NULL};
+    PyObject *py_metadata = NULL;
+    char *metadata = NULL;
+    Py_ssize_t metadata_length = 0;
+    static char *kwlist[] = {"site", "node", "derived_state", "parent", "metadata", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "iis#|i", kwlist,
-                &site, &node, &derived_state, &derived_state_length, &parent)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "iis#|iO", kwlist,
+                &site, &node, &derived_state, &derived_state_length, &parent,
+                &py_metadata)) {
         goto out;
     }
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
+    if (py_metadata != NULL) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
+    }
     err = mutation_table_add_row(self->mutation_table, (site_id_t) site,
             (node_id_t) node, (mutation_id_t) parent,
-            derived_state, derived_state_length);
+            derived_state, derived_state_length,
+            metadata, metadata_length);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2427,7 +2428,6 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
-
 
 #ifdef HAVE_NUMPY
 
@@ -2439,6 +2439,7 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     int err;
     size_t num_rows = 0;
     size_t derived_state_length = 0;
+    size_t metadata_length = 0;
     PyObject *site_input = NULL;
     PyArrayObject *site_array = NULL;
     PyObject *derived_state_input = NULL;
@@ -2450,13 +2451,20 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     PyObject *parent_input = NULL;
     PyArrayObject *parent_array = NULL;
     mutation_id_t *parent_data;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    char *metadata_data;
+    uint32_t *metadata_offset_data;
 
     static char *kwlist[] = {"site", "node", "derived_state",
-        "derived_state_offset", "parent", NULL};
+        "derived_state_offset", "parent", "metadata", "metadata_offset", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|OOO", kwlist,
                 &site_input, &node_input, &derived_state_input,
-                &derived_state_offset_input, &parent_input)) {
+                &derived_state_offset_input, &parent_input,
+                &metadata_input, &metadata_offset_input)) {
         goto out;
     }
     site_array = table_read_column_array(site_input, NPY_INT32, &num_rows, false);
@@ -2477,6 +2485,7 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     if (node_array == NULL) {
         goto out;
     }
+
     parent_data = NULL;
     if (parent_input != NULL) {
         parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
@@ -2485,16 +2494,41 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
         }
         parent_data = PyArray_DATA(parent_array);
     }
+
+    metadata_data = NULL;
+    metadata_offset_data = NULL;
+    if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != NULL) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, false);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+
     if (method == SET_COLS) {
         err = mutation_table_set_columns(self->mutation_table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
-                PyArray_DATA(derived_state_offset_array));
+                PyArray_DATA(derived_state_offset_array),
+                metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
         err = mutation_table_append_columns(self->mutation_table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
-                PyArray_DATA(derived_state_offset_array));
+                PyArray_DATA(derived_state_offset_array),
+                metadata_data, metadata_offset_data);
     } else {
         assert(0);
     }
@@ -2507,6 +2541,8 @@ out:
     Py_XDECREF(site_array);
     Py_XDECREF(derived_state_array);
     Py_XDECREF(derived_state_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
     Py_XDECREF(node_array);
     Py_XDECREF(parent_array);
     return ret;
@@ -2554,19 +2590,6 @@ MutationTable_get_max_rows_increment(MutationTable *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows_increment);
-out:
-    return ret;
-}
-
-static PyObject *
-MutationTable_get_max_derived_state_length_increment(MutationTable *self, void *closure)
-{
-    PyObject *ret = NULL;
-    if (MutationTable_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) self->mutation_table->max_derived_state_length_increment);
 out:
     return ret;
 }
@@ -2670,15 +2693,43 @@ MutationTable_get_derived_state_offset(MutationTable *self, void *closure)
 out:
     return ret;
 }
+
+static PyObject *
+MutationTable_get_metadata(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->metadata_length, self->mutation_table->metadata,
+            NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_metadata_offset(MutationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(
+            self->mutation_table->num_rows + 1, self->mutation_table->metadata_offset,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
 #endif
 
 static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
         "The size increment"},
-    {"max_derived_state_length_increment",
-        (getter) MutationTable_get_max_derived_state_length_increment, NULL,
-        "The total derived_state increment"},
     {"num_rows",
         (getter) MutationTable_get_num_rows, NULL,
         "The number of rows in the table."},
@@ -2693,6 +2744,10 @@ static PyGetSetDef MutationTable_getsetters[] = {
         "The derived_state array"},
     {"derived_state_offset", (getter) MutationTable_get_derived_state_offset, NULL,
         "The derived_state_offset array"},
+    {"metadata", (getter) MutationTable_get_metadata, NULL,
+        "The metadata array"},
+    {"metadata_offset", (getter) MutationTable_get_metadata_offset, NULL,
+        "The metadata_offset array"},
 #endif
     {NULL}  /* Sentinel */
 };
@@ -8303,7 +8358,7 @@ msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         mutations_allocated = true;
-        err = mutation_table_alloc(mutations, 0, 0);
+        err = mutation_table_alloc(mutations, 0, 0, 0);
         if (err != 0) {
             handle_library_error(err);
             goto out;

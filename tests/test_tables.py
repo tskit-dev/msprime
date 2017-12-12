@@ -492,17 +492,16 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     table_class = msprime.SiteTable
 
 
-class TestMutationTable(unittest.TestCase, CommonTestsMixin):
+class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     columns = [
         Int32Column("site"),
         Int32Column("node"),
         Int32Column("parent")]
     ragged_list_columns = [
-        (CharColumn("derived_state"), UInt32Column("derived_state_offset"))]
+        (CharColumn("derived_state"), UInt32Column("derived_state_offset")),
+        (CharColumn("metadata"), UInt32Column("metadata_offset"))]
     equal_len_columns = [["site", "node"]]
-    input_parameters = [
-        ("max_rows_increment", 1024),
-        ("max_derived_state_length_increment", 1024)]
+    input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.MutationTable
 
 
