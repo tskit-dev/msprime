@@ -22,6 +22,8 @@ Tree sequence IO via the tables API.
 from __future__ import division
 from __future__ import print_function
 
+import datetime
+
 from six.moves import copyreg
 
 import _msprime
@@ -59,9 +61,14 @@ class NodeTable(_msprime.NodeTable):
         time = self.time
         flags = self.flags
         population = self.population
-        ret = "id\tis_sample\tpopulation\ttime\n"
+        metadata = unpack_bytes(self.metadata, self.metadata_offset)
+        ret = "id\tis_sample\tpopulation\ttime\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\t\t{:.14f}\n".format(j, flags[j], population[j], time[j])
+            # Not clear how we should deal with printing metadata out here.
+            # Probably try to decode as utf8, but printout as raw bytes if
+            # this fails??
+            ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
+                j, flags[j], population[j], time[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -71,8 +78,8 @@ class NodeTable(_msprime.NodeTable):
                 np.array_equal(self.flags, other.flags) and
                 np.array_equal(self.population, other.population) and
                 np.array_equal(self.time, other.time) and
-                np.array_equal(self.name, other.name) and
-                np.array_equal(self.name_length, other.name_length))
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
     def __ne__(self, other):
@@ -83,10 +90,9 @@ class NodeTable(_msprime.NodeTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             time=state["time"], flags=state["flags"], population=state["population"],
-            name=state["name"], name_length=state["name_length"])
+            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -95,7 +101,7 @@ class NodeTable(_msprime.NodeTable):
         copy = NodeTable()
         copy.set_columns(
             flags=self.flags, time=self.time, population=self.population,
-            name=self.name, name_length=self.name_length)
+            metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
 
@@ -105,8 +111,8 @@ def _pickle_node_table(table):
         "time": table.time,
         "flags": table.flags,
         "population": table.population,
-        "name": table.name,
-        "name_length": table.name_length,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
     }
     return NodeTable, tuple(), state
 
@@ -178,7 +184,6 @@ class EdgeTable(_msprime.EdgeTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             left=state["left"], right=state["right"], parent=state["parent"],
             child=state["child"])
@@ -238,7 +243,6 @@ class MigrationTable(_msprime.MigrationTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             left=state["left"], right=state["right"], node=state["node"],
             source=state["source"], dest=state["dest"], time=state["time"])
@@ -282,10 +286,14 @@ class SiteTable(_msprime.SiteTable):
     def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
-            self.ancestral_state, self.ancestral_state_length)
-        ret = "id\tposition\tancestral_state\n"
+            self.ancestral_state, self.ancestral_state_offset)
+        # TODO we should wrap this with a try-except, and fall back to printing
+        # something else if utf8 decoding fails.
+        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{:.8f}\t{}\n".format(j, position[j], ancestral_state[j])
+            ret += "{}\t{:.8f}\t{}\t{}\n".format(
+                j, position[j], ancestral_state[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -295,7 +303,9 @@ class SiteTable(_msprime.SiteTable):
                 np.array_equal(self.position, other.position) and
                 np.array_equal(self.ancestral_state, other.ancestral_state) and
                 np.array_equal(
-                    self.ancestral_state_length, other.ancestral_state_length))
+                    self.ancestral_state_offset, other.ancestral_state_offset) and
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
     def __ne__(self, other):
@@ -306,10 +316,12 @@ class SiteTable(_msprime.SiteTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
-            position=state["position"], ancestral_state=state["ancestral_state"],
-            ancestral_state_length=state["ancestral_state_length"])
+            position=state["position"],
+            ancestral_state=state["ancestral_state"],
+            ancestral_state_offset=state["ancestral_state_offset"],
+            metadata=state["metadata"],
+            metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -317,8 +329,11 @@ class SiteTable(_msprime.SiteTable):
         """
         copy = SiteTable()
         copy.set_columns(
-            position=self.position, ancestral_state=self.ancestral_state,
-            ancestral_state_length=self.ancestral_state_length)
+            position=self.position,
+            ancestral_state=self.ancestral_state,
+            ancestral_state_offset=self.ancestral_state_offset,
+            metadata=self.metadata,
+            metadata_offset=self.metadata_offset)
         return copy
 
 
@@ -327,7 +342,9 @@ def _site_table_pickle(table):
     state = {
         "position": table.position,
         "ancestral_state": table.ancestral_state,
-        "ancestral_state_length": table.ancestral_state_length,
+        "ancestral_state_offset": table.ancestral_state_offset,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
     }
     return SiteTable, tuple(), state
 
@@ -352,12 +369,14 @@ class MutationTable(_msprime.MutationTable):
         site = self.site
         node = self.node
         parent = self.parent
-        derived_state = unpack_strings(
-            self.derived_state, self.derived_state_length)
-        ret = "id\tsite\tnode\tderived_state\tparent\n"
+        derived_state = unpack_strings(self.derived_state, self.derived_state_offset)
+        # TODO we should wrap this with a try-except, and fall back to printing
+        # something else if utf8 decoding fails.
+        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        ret = "id\tsite\tnode\tderived_state\tparent\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\t{}\t{}\t{}\n".format(
-                j, site[j], node[j], derived_state[j], parent[j])
+            ret += "{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                j, site[j], node[j], derived_state[j], parent[j], metadata[j])
         return ret[:-1]
 
     def __eq__(self, other):
@@ -369,7 +388,9 @@ class MutationTable(_msprime.MutationTable):
                 np.array_equal(self.parent, other.parent) and
                 np.array_equal(self.derived_state, other.derived_state) and
                 np.array_equal(
-                    self.derived_state_length, other.derived_state_length))
+                    self.derived_state_offset, other.derived_state_offset) and
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
     def __ne__(self, other):
@@ -380,11 +401,11 @@ class MutationTable(_msprime.MutationTable):
 
     # Unpickle support
     def __setstate__(self, state):
-        self.__init__()
         self.set_columns(
             site=state["site"], node=state["node"], parent=state["parent"],
             derived_state=state["derived_state"],
-            derived_state_length=state["derived_state_length"])
+            derived_state_offset=state["derived_state_offset"],
+            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -394,7 +415,8 @@ class MutationTable(_msprime.MutationTable):
         copy.set_columns(
             site=self.site, node=self.node, parent=self.parent,
             derived_state=self.derived_state,
-            derived_state_length=self.derived_state_length)
+            derived_state_offset=self.derived_state_offset,
+            metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
 
@@ -405,9 +427,89 @@ def _mutation_table_pickle(table):
         "node": table.node,
         "parent": table.parent,
         "derived_state": table.derived_state,
-        "derived_state_length": table.derived_state_length,
+        "derived_state_offset": table.derived_state_offset,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
     }
     return MutationTable, tuple(), state
+
+
+class ProvenanceTable(_msprime.ProvenanceTable):
+    """
+    TODO Document
+    """
+    def add_row(self, record, timestamp=None):
+        """
+        Adds a new row to this ProvenanceTable consisting of the specified record and
+        timestamp. If timestamp is not specified, it is automatically generated from
+        the current time.
+
+        :param str record: A provenance record, describing the parameters and
+            environment used to generate the current set of tables.
+        :param str timestamp: A string timestamp. This should be in ISO8601 form.
+        """
+        if timestamp is None:
+            timestamp = datetime.datetime.now().isoformat()
+        # Note that the order of the positional arguments has been reversed
+        # from the low-level module, which is a bit confusing. However, we
+        # want the default behaviour here to be to add a row to the table at
+        # the current time as simply as possible.
+        super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
+
+    def __str__(self):
+        timestamp = unpack_strings(self.timestamp, self.timestamp_offset)
+        record = unpack_strings(self.record, self.record_offset)
+        ret = "id\ttimestamp\trecord\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\t{}\n".format(j, timestamp[j], record[j])
+        return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.timestamp, other.timestamp) and
+                np.array_equal(self.timestamp_offset, other.timestamp_offset) and
+                np.array_equal(self.record, other.record) and
+                np.array_equal(self.record_offset, other.record_offset))
+        return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __len__(self):
+        return self.num_rows
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.set_columns(
+            timestamp=state["timestamp"],
+            timestamp_offset=state["timestamp_offset"],
+            record=state["record"],
+            record_offset=state["record_offset"])
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = ProvenanceTable()
+        copy.set_columns(
+            timestamp=self.timestamp,
+            timestamp_offset=self.timestamp_offset,
+            record=self.record,
+            record_offset=self.record_offset)
+        return copy
+
+
+# Pickle support. See copyreg registration for this function below.
+def _provenance_table_pickle(table):
+    state = {
+        "timestamp": table.timestamp,
+        "timestamp_offset": table.timestamp_offset,
+        "record": table.record,
+        "record_offset": table.record_offset,
+    }
+    return ProvenanceTable, tuple(), state
 
 
 # Pickle support for the various tables. We are forced to use copyreg.pickle
@@ -419,6 +521,7 @@ copyreg.pickle(EdgeTable, _edge_table_pickle)
 copyreg.pickle(MigrationTable, _migration_table_pickle)
 copyreg.pickle(SiteTable, _site_table_pickle)
 copyreg.pickle(MutationTable, _mutation_table_pickle)
+copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
 class TableCollection(object):
@@ -427,12 +530,14 @@ class TableCollection(object):
     printing and comparisons of a collection of related tables.
     """
     def __init__(
-            self, nodes=None, edges=None, migrations=None, sites=None, mutations=None):
+            self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
+            provenances=None):
         self.nodes = nodes
         self.edges = edges
         self.migrations = migrations
         self.sites = sites
         self.mutations = mutations
+        self.provenances = provenances
 
     def asdict(self):
         """
@@ -444,7 +549,8 @@ class TableCollection(object):
             "edges": self.edges,
             "migrations": self.migrations,
             "sites": self.sites,
-            "mutations": self.mutations
+            "mutations": self.mutations,
+            "provenances": self.provenances
         }
 
     def __banner(self, title):
@@ -466,6 +572,8 @@ class TableCollection(object):
         s += str(self.mutations) + "\n"
         s += self.__banner("Migrations")
         s += str(self.migrations)
+        s += self.__banner("Provenances")
+        s += str(self.provenances)
         return s
 
     # TODO add support for __eq__ and __ne__
@@ -505,7 +613,12 @@ def sort_tables(*args, **kwargs):
     :param MutationTable mutations:
     :param int edge_start: The index in the edge table where sorting starts.
     """
-    return _msprime.sort_tables(*args, **kwargs)
+    kwargs_copy = dict(kwargs)
+    # If provenances is supplied as a keyword argument just ignore it. This is
+    # because we'll often call sort_tables(**t.asdict()), and the provenances
+    # entry breaks this pattern.
+    kwargs_copy.pop("provenances", None)
+    return _msprime.sort_tables(*args, **kwargs_copy)
 
 
 def simplify_tables(*args, **kwargs):
@@ -513,8 +626,14 @@ def simplify_tables(*args, **kwargs):
     Simplifies the tables, in place, to retain only the information necessary
     to reconstruct the tree sequence describing the given ``samples``.  This
     will change the ID of the nodes, so that the individual ``samples[k]]``
-    will have ID ``k`` in the result.  The resulting NodeTable will have only
-    the first ``len(samples)`` individuals marked as samples.
+    will have ID ``k`` in the result. The resulting NodeTable will have only
+    the first ``len(samples)`` individuals marked as samples. The mapping from
+    node IDs in the current set of tables to their equivalent values in the
+    simplified tables is returned as a numpy array. If an array ``a`` is
+    returned by this function and ``u`` is the ID of a node in the input
+    table, then ``a[u]`` is the ID of this node in the output table. For
+    any node ``u`` that is not mapped into the output tables, this mapping
+    will equal ``-1``.
 
     Tables operated on by this function must: be sorted (see ``sort_tables``),
     have children be born strictly after their parents, and the intervals on
@@ -530,30 +649,52 @@ def simplify_tables(*args, **kwargs):
     :param MutationTable mutations: The MutationTable to be simplified.
     :param bool filter_invariant_sites: Whether to remove sites that have no
         mutations from the output (default: True).
+    :return: A numpy array mapping node IDs in the input tables to their
+        corresponding node IDs in the output tables.
+    :rtype: numpy array (dtype=np.int32).
     """
     return _msprime.simplify_tables(*args, **kwargs)
 
 
-def pack_strings(strings):
+def pack_bytes(data):
     """
-    Packs the specified list of strings into a flattened numpy array of characters
+    Packs the specified list of bytes into a flattened numpy array of 8 bit integers
     and corresponding lengths.
     """
-    lengths = np.array([len(s) for s in strings], dtype=np.uint32)
-    encoded = ("".join(strings)).encode()
-    return np.fromstring(encoded, dtype=np.int8), lengths
+    n = len(data)
+    offsets = np.zeros(n + 1, dtype=np.uint32)
+    for j in range(n):
+        offsets[j + 1] = offsets[j] + len(data[j])
+    column = np.zeros(offsets[-1], dtype=np.int8)
+    for j, value in enumerate(data):
+        column[offsets[j]: offsets[j + 1]] = bytearray(value)
+    return column, offsets
 
 
-def unpack_strings(packed, length):
+def unpack_bytes(packed, offset):
     """
-    Unpacks a list of string from the specified numpy arrays of packed character
-    data and corresponding lengths.
+    Unpacks a list of bytes from the specified numpy arrays of packed byte
+    data and corresponding offsets.
     """
     # This could be done a lot more efficiently...
     ret = []
-    offset = 0
-    for l in length:
-        raw = packed[offset: offset + l].tostring()
-        ret.append(raw.decode())
-        offset += l
+    for j in range(offset.shape[0] - 1):
+        raw = packed[offset[j]: offset[j + 1]].tobytes()
+        ret.append(raw)
     return ret
+
+
+def pack_strings(strings, encoding="utf8"):
+    """
+    Packs the specified list of strings into a flattened numpy array of 8 bit integers
+    and corresponding lengths.
+    """
+    return pack_bytes([bytearray(s.encode(encoding)) for s in strings])
+
+
+def unpack_strings(packed, offset, encoding="utf8"):
+    """
+    Unpacks a list of strings from the specified numpy arrays of packed byte
+    data and corresponding offsets.
+    """
+    return [b.decode(encoding) for b in unpack_bytes(packed, offset)]

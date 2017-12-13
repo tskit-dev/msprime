@@ -55,6 +55,7 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
 
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(vargen_t));
+
     /* For now, the logic only supports infinite sites binary mutations. We need to
      * think about how to structure this API to support the general case (lots of
      * mutations happening along the tree) without making it too inefficient and
@@ -103,7 +104,7 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
     node_list_t *w, *tail;
     node_id_t sample_index;
     bool not_done;
-    list_len_t j;
+    table_size_t j;
     char derived;
     char ancestral = (char) (site->ancestral_state[0] - state_offset);
 

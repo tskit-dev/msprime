@@ -32,7 +32,7 @@ import sys
 import _msprime
 import msprime.tables as tables
 import msprime.trees as trees
-import msprime.environment as environment
+import msprime.provenance as provenance
 
 # Make the low-level generator appear like its from this module
 from _msprime import RandomGenerator
@@ -59,22 +59,6 @@ def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
-def get_provenance_dict(command, parameters):
-    """
-    Returns a dictionary encoding an execution of msprime.
-
-    Note: this format is incomplete and provisional.
-    """
-    document = {
-        "software": "msprime",
-        "version": environment.__version__,
-        "command": command,
-        "parameters": parameters,
-        "environment": environment.get_environment()
-    }
-    return document
-
-
 def harmonic_number(n):
     """
     Returns the nth Harmonic number.
@@ -93,23 +77,23 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(
-        sim, mutation_generator, num_replicates, provenance_dict):
+def _replicate_generator(sim, mutation_generator, num_replicates, provenance_dict):
     """
     Generator function for the many-replicates case of the simulate
     function.
     """
-    # TODO like in the single replicate case, we need to encode the
-    # simulation parameters so that particular simulations can be
-    # replicated. This will also involve encoding the state of the
-    # random generator.
-    provenance = [json.dumps(provenance_dict).encode()]
+    # TODO We should encode the replicate index in here with the rest of the
+    # parameters. This will provide sufficient information to reproduce the
+    # simulation if necessary. Much simpler than encoding the details of
+    # the random number generator.
+    provenance_record = json.dumps(provenance_dict)
+
     # Should use range here, but Python 2 makes this awkward...
     j = 0
     while j < num_replicates:
         j += 1
         sim.run()
-        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance)
+        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
         yield tree_sequence
         sim.reset()
 
@@ -303,7 +287,7 @@ def simulate(
     # The provenance API is very tentative, and only included now as a
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
-    provenance = get_provenance_dict("simulate", parameters)
+    provenance_dict = provenance.get_provenance_dict("simulate", parameters)
     if mutation_generator is None:
         mu = 0 if mutation_rate is None else mutation_rate
         mutation_generator = MutationGenerator(rng, mu)
@@ -312,9 +296,10 @@ def simulate(
             raise ValueError(
                 "Cannot specify both mutation_rate and mutation_generator")
     if num_replicates is None:
-        return next(_replicate_generator(sim, mutation_generator, 1, provenance))
+        return next(_replicate_generator(sim, mutation_generator, 1, provenance_dict))
     else:
-        return _replicate_generator(sim, mutation_generator, num_replicates, provenance)
+        return _replicate_generator(
+            sim, mutation_generator, num_replicates, provenance_dict)
 
 
 class Simulator(object):
@@ -356,8 +341,9 @@ class Simulator(object):
         self.node_table = tables.NodeTable(block_size)
         self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
-        self.mutation_type_table = tables.SiteTable(1)
+        self.site_table = tables.SiteTable()
         self.mutation_table = tables.MutationTable(block_size)
+        self.provenance_table = tables.ProvenanceTable()
 
     @property
     def num_loci(self):
@@ -565,7 +551,7 @@ class Simulator(object):
             self.ll_sim = self.create_ll_instance()
         self.ll_sim.run()
 
-    def get_tree_sequence(self, mutation_generator=None, provenance_strings=[]):
+    def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
@@ -575,13 +561,14 @@ class Simulator(object):
             recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
-                self.node_table, self.edge_table, self.mutation_type_table,
-                self.mutation_table)
+                self.node_table, self.edge_table, self.site_table, self.mutation_table)
+        self.provenance_table.reset()
+        if provenance_record is not None:
+            self.provenance_table.add_row(provenance_record)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
             self.node_table, self.edge_table, self.migration_table,
-            self.mutation_type_table, self.mutation_table,
-            provenance_strings=provenance_strings)
+            self.site_table, self.mutation_table, self.provenance_table)
         return trees.TreeSequence(ll_tree_sequence)
 
     def reset(self):

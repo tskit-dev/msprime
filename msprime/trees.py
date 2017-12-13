@@ -24,6 +24,7 @@ from __future__ import print_function
 
 import collections
 import itertools
+import json
 import sys
 
 try:
@@ -35,6 +36,7 @@ except ImportError:
 
 import _msprime
 import msprime.drawing as drawing
+import msprime.provenance as provenance
 import msprime.tables as tables
 
 from _msprime import NODE_IS_SAMPLE
@@ -69,12 +71,12 @@ Migration = collections.namedtuple(
 
 Site = collections.namedtuple(
     "Site",
-    ["position", "ancestral_state", "index", "mutations"])
+    ["position", "ancestral_state", "index", "mutations", "metadata"])
 
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "derived_state", "parent", "id"])
+    ["site", "node", "derived_state", "parent", "id", "metadata"])
 
 
 # This is provided for backwards compatibility with the deprecated mutations()
@@ -111,10 +113,12 @@ class SimpleContainer(object):
 
 class Node(SimpleContainer):
     def __init__(
-            self, time=0, population=NULL_POPULATION, name="", is_sample=False):
+            self, id_=None, time=0, population=NULL_POPULATION, metadata="",
+            is_sample=False):
+        self.id = id_
         self.time = time
         self.population = population
-        self.name = name
+        self.metadata = metadata
         self.flags = 0
         if is_sample:
             self.flags |= NODE_IS_SAMPLE
@@ -145,6 +149,13 @@ class Edgeset(SimpleContainer):
     def __repr__(self):
         return "{{left={:.3f}, right={:.3f}, parent={}, children={}}}".format(
             self.left, self.right, self.parent, self.children)
+
+
+class Provenance(SimpleContainer):
+    def __init__(self, id_=None, timestamp=None, record=None):
+        self.id = id_
+        self.timestamp = timestamp
+        self.record = record
 
 
 # TODO:
@@ -545,10 +556,11 @@ class SparseTree(object):
 
     def sites(self):
         for ll_site in self._ll_sparse_tree.get_sites():
-            pos, ancestral_state, mutations, index = ll_site
+            pos, ancestral_state, mutations, index, metadata = ll_site
             yield Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations])
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
 
     def mutations(self):
         """
@@ -1051,13 +1063,6 @@ class TreeSequence(object):
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
 
-    @property
-    def provenance(self):
-        return self.get_provenance()
-
-    def get_provenance(self):
-        return self._ll_tree_sequence.get_provenance_strings()
-
     def dump(self, path, zlib_compression=False):
         """
         Writes the tree sequence to the specified file path.
@@ -1084,7 +1089,7 @@ class TreeSequence(object):
 
     def dump_tables(
             self, nodes=None, edges=None, migrations=None, sites=None,
-            mutations=None):
+            mutations=None, provenances=None):
         """
         Copy the contents of the tables underlying the tree sequence to the
         specified objects.
@@ -1093,8 +1098,9 @@ class TreeSequence(object):
         :param EdgeTable edges: The EdgeTable to load the edges into.
         :param MigrationTable migrations: The MigrationTable to load the migrations into.
         :param SiteTable sites: The SiteTable to load the sites into.
-        :param MutationTable mutations: The NodeTable to load the mutations into.
-
+        :param MutationTable mutations: The MutationTable to load the mutations into.
+        :param ProvenanceTable mutations: The ProvenanceTable to load the provenances
+            into.
         :return: A :class:`.TableCollection` containing all tables underlying
             the tree sequence.
         :rtype: TableCollection
@@ -1111,15 +1117,18 @@ class TreeSequence(object):
             sites = tables.SiteTable()
         if mutations is None:
             mutations = tables.MutationTable()
+        if provenances is None:
+            provenances = tables.ProvenanceTable()
         self._ll_tree_sequence.dump_tables(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations)
+            mutations=mutations, provenances=provenances)
         return tables.TableCollection(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations)
+            mutations=mutations, provenances=provenances)
 
     def dump_text(
-            self, nodes=None, edges=None, sites=None, mutations=None, precision=6):
+            self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
+            precision=6):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
@@ -1129,17 +1138,20 @@ class TreeSequence(object):
         :param stream edges: The file-like object to write the EdgeTable to.
         :param stream sites: The file-like object to write the SiteTable to.
         :param stream mutations: The file-like object to write the MutationTable to.
+        :param stream provenances: The file-like object to write the ProvenanceTable to.
         :param int precision: The number of digits of precision.
         """
 
         if nodes is not None:
-            print("is_sample", "time", "population", sep="\t", file=nodes)
+            print("id", "is_sample", "time", "population", sep="\t", file=nodes)
             for node in self.nodes():
                 row = (
+                    "{id:d}\t"
                     "{is_sample:d}\t"
                     "{time:.{precision}f}\t"
                     "{population:d}\t").format(
-                        precision=precision, is_sample=node.is_sample(), time=node.time,
+                        precision=precision, id=node.id,
+                        is_sample=node.is_sample(), time=node.time,
                         population=node.population)
                 print(row, file=nodes)
 
@@ -1179,27 +1191,17 @@ class TreeSequence(object):
                             parent=mutation.parent)
                     print(row, file=mutations)
 
-    def dump_samples_text(self, samples, precision=6):
-        """
-        Writes a text representation of the entries in the NodeTable
-        corresponding to samples to the specified connections.
-
-        :param stream samples: The file-like object to write the subset of the NodeTable
-            describing the samples to, with an extra column, `id`.
-        :param int precision: The number of digits of precision.
-        """
-
-        print("id", "is_sample", "time", "population", sep="\t", file=samples)
-        for node_id in self.samples():
-            node = self.node(node_id)
-            row = (
-                "{node_id:d}\t"
-                "{is_sample:d}\t"
-                "{time:.{precision}f}\t"
-                "{population:d}").format(
-                    precision=precision, is_sample=node.is_sample(), time=node.time,
-                    population=node.population, node_id=node_id)
-            print(row, file=samples)
+        if provenances is not None:
+            print("id", "timestamp", "record", sep="\t", file=provenances)
+            for provenance in self.provenances():
+                row = (
+                    "{id}\t"
+                    "{timestamp}\t"
+                    "{record}\t").format(
+                        id=provenance.id,
+                        timestamp=provenance.timestamp,
+                        record=provenance.record)
+                print(row, file=provenances)
 
     # num_samples was originally called sample_size, and so we must keep sample_size
     # around as a deprecated alias.
@@ -1313,6 +1315,10 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_nodes()
 
+    @property
+    def num_provenances(self):
+        return self._ll_tree_sequence.get_num_provenances()
+
     # TODO deprecate
     def records(self):
         """
@@ -1350,6 +1356,10 @@ class TreeSequence(object):
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
+
+    def provenances(self):
+        for j in range(self.num_provenances):
+            yield self.provenance(j)
 
     def nodes(self):
         for j in range(self.num_nodes):
@@ -1400,10 +1410,12 @@ class TreeSequence(object):
 
     def sites(self):
         for j in range(self.num_sites):
-            pos, ancestral_state, mutations, index = self._ll_tree_sequence.get_site(j)
+            ll_site = self._ll_tree_sequence.get_site(j)
+            pos, ancestral_state, mutations, index, metadata = ll_site
             yield Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations])
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
 
     def mutations(self):
         """
@@ -1580,19 +1592,21 @@ class TreeSequence(object):
         iterator = _msprime.VariantGenerator(
             self._ll_tree_sequence, genotypes_buffer, as_bytes)
         if as_bytes:
-            for pos, ancestral_state, mutations, index in iterator:
+            for pos, ancestral_state, mutations, index, metadata in iterator:
                 site = Site(
                     position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations])
+                    mutations=[Mutation(*mutation) for mutation in mutations],
+                    metadata=metadata)
                 g = bytes(genotypes_buffer)
                 yield Variant(position=pos, site=site, index=index, genotypes=g)
         else:
             check_numpy()
             g = np.frombuffer(genotypes_buffer, "u1", n)
-            for pos, ancestral_state, mutations, index in iterator:
+            for pos, ancestral_state, mutations, index, metadata in iterator:
                 site = Site(
                     position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations])
+                    mutations=[Mutation(*mutation) for mutation in mutations],
+                    metadata=metadata)
                 yield Variant(position=pos, site=site, index=index, genotypes=g)
 
     def genotype_matrix(self):
@@ -1621,10 +1635,14 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_pairwise_diversity(samples)
 
     def node(self, u):
-        flags, time, population, name = self._ll_tree_sequence.get_node(u)
+        flags, time, population, metadata = self._ll_tree_sequence.get_node(u)
         return Node(
-            time=time, population=population, name=name,
+            id_=u, time=time, population=population, metadata=metadata,
             is_sample=flags & NODE_IS_SAMPLE)
+
+    def provenance(self, id_):
+        timestamp, record = self._ll_tree_sequence.get_provenance(id_)
+        return Provenance(id_=id_, timestamp=timestamp, record=record)
 
     def time(self, u):
         return self.get_time(u)
@@ -1744,28 +1762,18 @@ class TreeSequence(object):
         t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        if map_nodes:
-            node_map = np.empty(self.num_nodes, dtype=np.int32)
-            tables.simplify_tables(
-                samples=samples, sequence_length=self.sequence_length,
-                nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations, node_map=node_map,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
-        else:
-            tables.simplify_tables(
-                samples=samples, sequence_length=self.sequence_length,
-                nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
+        node_map = tables.simplify_tables(
+            samples=samples, sequence_length=self.sequence_length,
+            nodes=t.nodes, edges=t.edges,
+            sites=t.sites, mutations=t.mutations,
+            filter_zero_mutation_sites=filter_zero_mutation_sites)
+        # TODO add simplify arguments here??
+        t.provenances.add_row(record=json.dumps(
+            provenance.get_provenance_dict("simplify", [])))
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
-            mutations=t.mutations, sequence_length=self.sequence_length)
-        # FIXME provenance
-        # for provenance in self.get_provenance():
-        #     new_ts.add_provenance(provenance)
-        # parameters = {"TODO": "encode subset parameters"}
-        # new_ts_provenance = get_provenance_dict("simplify", parameters)
-        # new_ts.add_provenance(json.dumps(new_ts_provenance))
+            mutations=t.mutations, provenances=t.provenances,
+            sequence_length=self.sequence_length)
 
         if map_nodes:
             return new_ts, node_map

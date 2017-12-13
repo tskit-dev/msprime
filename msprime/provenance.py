@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 University of Oxford
+# Copyright (C) 2016-2017 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Common environment methods used to determine the state and versions
+Common provenance methods used to determine the state and versions
 of various dependencies and the OS.
 """
 from __future__ import print_function
@@ -35,6 +35,13 @@ except ImportError:
     pass
 
 
+# Getting the hdf5 version here on import because we seem to leak memory
+# if we call this function over and over again. Looks like a bug in the
+# underlying HDF5 lib.
+_hdf5_version = _msprime.get_hdf5_version()
+_gsl_version = _msprime.get_gsl_version()
+
+
 def get_environment():
     """
     Returns a dictionary describing the environment in which msprime
@@ -42,10 +49,10 @@ def get_environment():
     """
     env = {
         "hdf5": {
-            "version": _msprime.get_hdf5_version()
+            "version": _hdf5_version
         },
         "gsl": {
-            "version": _msprime.get_gsl_version()
+            "version": _gsl_version
         },
         "os": {
             "system": platform.system(),
@@ -60,3 +67,19 @@ def get_environment():
         }
     }
     return env
+
+
+def get_provenance_dict(command, parameters=None):
+    """
+    Returns a dictionary encoding an execution of msprime.
+
+    Note: this format is incomplete and provisional.
+    """
+    document = {
+        "software": "msprime",
+        "version": __version__,
+        "command": command,
+        "parameters": parameters,
+        "environment": get_environment()
+    }
+    return document

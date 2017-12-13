@@ -26,7 +26,7 @@ from __future__ import division
 from _msprime import FORWARD  # NOQA
 from _msprime import REVERSE  # NOQA
 
-from msprime.environment import __version__  # NOQA
+from msprime.provenance import __version__  # NOQA
 from msprime.formats import *  # NOQA
 from msprime.trees import *  # NOQA
 from msprime.simulations import *  # NOQA

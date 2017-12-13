@@ -72,6 +72,7 @@
 #define MSP_ERR_BAD_EDGE_INTERVAL                                   -41
 #define MSP_ERR_DUPLICATE_EDGES                                     -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
+#define MSP_ERR_BAD_OFFSET                                          -44
 
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47

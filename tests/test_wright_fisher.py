@@ -75,6 +75,7 @@ class WrightFisherSimulator(object):
         migrations = msprime.MigrationTable()
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
+        provenances = msprime.ProvenanceTable()
         mut_positions = {}
         if self.deep_history:
             # initial population
@@ -143,7 +144,8 @@ class WrightFisherSimulator(object):
             print(mutations)
             print("Migrations:")
             print(migrations)
-        return msprime.TableCollection(nodes, edges, migrations, sites, mutations)
+        return msprime.TableCollection(
+            nodes, edges, migrations, sites, mutations, provenances)
 
 
 def wf_sim(
@@ -156,7 +158,7 @@ def wf_sim(
 
 
 def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
-                        migrations=None):
+                        migrations=None, provenances=None):
     """
     Before loading the tables into a tree sequence, we need to add the mutation
     parent column.  Note that these must be sorted.
@@ -167,7 +169,7 @@ def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
     mutations.set_columns(
         site=mutations.site,
         derived_state=mutations.derived_state,
-        derived_state_length=mutations.derived_state_length,
+        derived_state_offset=mutations.derived_state_offset,
         node=mutations.node, parent=mp)
 
 
@@ -471,10 +473,9 @@ class TestSimplify(unittest.TestCase):
                 mutations = tables.mutations.copy()
                 sub_samples = random.sample(ts.samples(), min(nsamples, ts.num_samples))
 
-                node_map = np.zeros(ts.num_nodes, dtype=np.int32)
-                msprime.simplify_tables(
+                node_map = msprime.simplify_tables(
                     samples=sub_samples, nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations, node_map=node_map)
+                    sites=sites, mutations=mutations)
                 small_ts = msprime.load_tables(
                     nodes=nodes, edges=edges, sites=sites, mutations=mutations)
                 self.verify_simplify(ts, small_ts, sub_samples, node_map)
