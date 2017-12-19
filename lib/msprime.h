@@ -624,8 +624,16 @@ typedef struct {
 } hapgen_t;
 
 typedef struct {
+    site_t *site;
+    const char **alleles;
+    table_size_t *allele_lengths;
+    table_size_t num_alleles;
+    table_size_t max_alleles;
+    uint8_t *genotypes;
+} variant_t;
+
+typedef struct {
     size_t num_samples;
-    double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
     node_id_t *sample_index_map;
@@ -633,6 +641,7 @@ typedef struct {
     int finished;
     sparse_tree_t tree;
     int flags;
+    variant_t variant;
 } vargen_t;
 
 typedef struct {
@@ -846,6 +855,7 @@ size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_provenances(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_num_samples(tree_sequence_t *self);
+size_t tree_sequence_get_max_site_mutations(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 int tree_sequence_get_alphabet(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
@@ -935,6 +945,7 @@ void hapgen_print_state(hapgen_t *self, FILE *out);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
 int vargen_next(vargen_t *self, site_t **site, char *genotypes);
+int vargen_next_dev(vargen_t *self, variant_t **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 

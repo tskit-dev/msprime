@@ -2364,6 +2364,19 @@ out:
     return ret;
 }
 
+/* Returns the maximum number of mutations that occur at one site */
+size_t
+tree_sequence_get_max_site_mutations(tree_sequence_t *self)
+{
+    size_t max_mutations = 0;
+    size_t j;
+
+    for (j = 0; j < self->sites.num_records; j++) {
+        max_mutations = GSL_MAX(max_mutations, self->sites.site_mutations_length[j]);
+    }
+    return max_mutations;
+}
+
 int WARN_UNUSED
 tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
 {
