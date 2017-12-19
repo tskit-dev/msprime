@@ -149,15 +149,17 @@ out:
 }
 
 static int WARN_UNUSED
-vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
-        const char *ancestral_state, const char *derived_state)
+vcf_converter_write_record(vcf_converter_t *self, variant_t *variant)
 {
     int ret = MSP_ERR_GENERIC;
     int written;
     uint32_t j, k;
     size_t offset;
     unsigned int p = self->ploidy;
+    /* TODO update this to use "%.*s", len, alleles[0] etc to write out the
+     * alleles properly. */
     const char *template = "\t%lu\t.\tA\tT\t.\tPASS\t.\tGT\t";
+    unsigned long pos = self->positions[variant->site->id];
 
     /* CHROM was written at init time as it is constant */
     written = snprintf(self->record + self->contig_id_size,
@@ -170,7 +172,8 @@ vcf_converter_write_record(vcf_converter_t *self, unsigned long pos,
 
     for (j = 0; j < self->num_vcf_samples; j++) {
         for (k = 0; k < p; k++) {
-            self->vcf_genotypes[2 * p * j + 2 * k] = self->genotypes[j * p + k];
+            self->vcf_genotypes[2 * p * j + 2 * k] =
+                (char) ('0' + variant->genotypes[j * p + k]);
         }
     }
     assert(offset + self->vcf_genotypes_size < self->record_size);
@@ -220,19 +223,14 @@ vcf_converter_next(vcf_converter_t *self, char **record)
 {
     int ret = -1;
     int err;
-    site_t *site;
+    variant_t *variant;
 
-    ret = vargen_next(self->vargen, &site, self->genotypes);
+    ret = vargen_next(self->vargen, &variant);
     if (ret < 0) {
         goto out;
     }
     if (ret == 1) {
-        if (site->mutations_length != 1) {
-            ret = MSP_ERR_UNSUPPORTED_OPERATION;
-            goto out;
-        }
-        err = vcf_converter_write_record(self, self->positions[site->id],
-                site->ancestral_state, site->mutations[0].derived_state);
+        err = vcf_converter_write_record(self, variant);
         if (err != 0) {
             ret = err;
             goto out;

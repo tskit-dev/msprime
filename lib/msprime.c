@@ -276,6 +276,9 @@ msp_strerror(int err)
         case MSP_ERR_BAD_OFFSET:
             ret = "Bad offset provided in input array.";
             break;
+        case MSP_ERR_TOO_MANY_ALLELES:
+            ret = "Cannot have more than 255 alleles.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

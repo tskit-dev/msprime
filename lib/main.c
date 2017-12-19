@@ -601,7 +601,7 @@ print_variants(tree_sequence_t *ts)
         fatal_library_error(ret, "vargen_alloc");
     }
     j = 0;
-    while ((ret = vargen_next_dev(&vg, &var)) == 1) {
+    while ((ret = vargen_next(&vg, &var)) == 1) {
         printf("%.2f\t", var->site->position);
         for (j = 0; j < var->num_alleles; j++) {
             for (k = 0; k < var->allele_lengths[j]; k++) {

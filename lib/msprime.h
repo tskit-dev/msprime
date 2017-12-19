@@ -855,7 +855,6 @@ size_t tree_sequence_get_num_mutations(tree_sequence_t *self);
 size_t tree_sequence_get_num_provenances(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_num_samples(tree_sequence_t *self);
-size_t tree_sequence_get_max_site_mutations(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 int tree_sequence_get_alphabet(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
@@ -944,8 +943,7 @@ int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
-int vargen_next(vargen_t *self, site_t **site, char *genotypes);
-int vargen_next_dev(vargen_t *self, variant_t **variant);
+int vargen_next(vargen_t *self, variant_t **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 

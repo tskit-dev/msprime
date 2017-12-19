@@ -798,53 +798,38 @@ verify_vargen(tree_sequence_t *ts)
 {
     int ret;
     vargen_t vargen;
-    site_t *site;
     size_t num_samples = tree_sequence_get_num_samples(ts);
     size_t num_sites = tree_sequence_get_num_sites(ts);
-    char *genotypes = malloc((num_samples + 1) * sizeof(char));
+    variant_t *var;
     size_t j, k;
 
-    CU_ASSERT_FATAL(genotypes != NULL);
     ret = vargen_alloc(&vargen, ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
     j = 0;
-    while ((ret = vargen_next(&vargen, &site, genotypes)) == 1) {
-        CU_ASSERT_EQUAL(site->id, j);
-        for (k = 0; k < num_samples; k++) {
-            CU_ASSERT(genotypes[k] == 0 || genotypes[k] == 1);
+    while ((ret = vargen_next(&vargen, &var)) == 1) {
+        CU_ASSERT_EQUAL(var->site->id, j);
+        if (var->site->mutations_length == 0) {
+            CU_ASSERT_EQUAL(var->num_alleles, 1);
+        } else {
+            CU_ASSERT_TRUE(var->num_alleles > 1);
         }
-        j++;
-    }
-    if (ret != 0) {
-        tree_sequence_print_state(ts, stdout);
-    }
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL(j, num_sites);
-    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &site, genotypes), 0);
-    ret = vargen_free(&vargen);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = vargen_alloc(&vargen, ts, MSP_GENOTYPES_AS_CHAR);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    vargen_print_state(&vargen, _devnull);
-    j = 0;
-    genotypes[num_samples] = '\0';
-    while ((ret = vargen_next(&vargen, &site, genotypes)) == 1) {
-        CU_ASSERT_EQUAL(site->id, j);
-        for (k = 0; k < num_samples; k++) {
-            CU_ASSERT(genotypes[k] == '0' || genotypes[k] == '1');
+        CU_ASSERT_EQUAL(var->allele_lengths[0], var->site->ancestral_state_length);
+        CU_ASSERT_NSTRING_EQUAL_FATAL(var->alleles[0], var->site->ancestral_state,
+                var->allele_lengths[0]);
+        for (k = 0; k < var->num_alleles; k++) {
+            CU_ASSERT_TRUE(var->allele_lengths[k] > 0);
         }
-        CU_ASSERT_EQUAL_FATAL(genotypes[num_samples], '\0');
+        for (k = 0; k < num_samples; k++) {
+            CU_ASSERT(var->genotypes[k] <= var->num_alleles);
+        }
         j++;
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(j, num_sites);
-    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &site, genotypes), 0);
+    CU_ASSERT_EQUAL_FATAL(vargen_next(&vargen, &var), 0);
     ret = vargen_free(&vargen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    free(genotypes);
 }
 
 static void
@@ -1097,15 +1082,7 @@ verify_simplify_properties(tree_sequence_t *ts, tree_sequence_t *subset,
 
     sparse_tree_free(&subset_tree);
     sparse_tree_free(&full_tree);
-
-    /* Check some other operations on the subset */
-    if (tree_sequence_get_alphabet(subset) == MSP_ALPHABET_BINARY) {
-        /* TODO the binary alphabet is currently equivalent to strict
-         * infinite sites, so if have a site with a 1 ancestral state
-         * it will have the CHAR alphabet, which vargen doesn't support.
-         */
-        verify_vargen(subset);
-    }
+    verify_vargen(subset);
     verify_hapgen(subset);
 }
 
@@ -2221,8 +2198,8 @@ test_simplest_non_sample_leaf_records(void)
     node_id_t sample_ids[] = {0, 1};
     hapgen_t hapgen;
     vargen_t vargen;
-    char *haplotype, genotypes[64];
-    site_t *site;
+    char *haplotype;
+    variant_t *var;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 2);
@@ -2241,23 +2218,38 @@ test_simplest_non_sample_leaf_records(void)
     CU_ASSERT_STRING_EQUAL(haplotype, "0100");
     hapgen_free(&hapgen);
 
-    genotypes[2] = '\0';
-    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
+    ret = vargen_alloc(&vargen, &ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "10");
-    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 1);
+    CU_ASSERT_EQUAL(var->genotypes[1], 0);
+
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "01");
-    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 1);
+
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "00");
-    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 0);
+
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "00");
-    ret = vargen_next(&vargen, &site, genotypes);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 0);
+
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_free(&vargen);
 
@@ -2446,10 +2438,9 @@ test_simplest_back_mutations(void)
     hapgen_t hapgen;
     const char *haplotypes[] = {"0", "1", "0"};
     char *haplotype;
-    char genotypes[4];
     tree_sequence_t ts;
     vargen_t vargen;
-    site_t *site;
+    variant_t *var;
 
     tree_sequence_from_text(&ts, 0, nodes, edges, NULL, sites, mutations, NULL);
     CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 3);
@@ -2472,12 +2463,16 @@ test_simplest_back_mutations(void)
     ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    genotypes[3] = '\0';
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "010");
-    CU_ASSERT_EQUAL(site->id, 0);
-    CU_ASSERT_EQUAL(site->mutations_length, 2);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 1);
+    CU_ASSERT_EQUAL(var->genotypes[2], 0);
+    CU_ASSERT_EQUAL(var->site->id, 0);
+    CU_ASSERT_EQUAL(var->site->mutations_length, 2);
     vargen_free(&vargen);
 
     tree_sequence_free(&ts);
@@ -3977,22 +3972,81 @@ test_single_tree_vargen_char_alphabet(void)
         "0.4    A\n";
     const char *mutations =
         "0    0     T   -1\n"
-        "1    1     T   -1\n"
+        "1    1     TTTAAGGG   -1\n"
         "2    0     G   -1\n"
-        "2    1     A   -1\n"
+        "2    1     AT  -1\n"
         "2    2     T   -1\n"  // A bunch of different sample mutations
         "3    4     T   -1\n"
         "3    0     A   5\n"; // A back mutation from T -> A
     tree_sequence_t ts;
     vargen_t vargen;
+    variant_t *var;
 
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             sites, mutations, NULL);
     ret = vargen_alloc(&vargen, &ts, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
-    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    ret = vargen_next(&vargen, &var);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_EQUAL(var->site->position, 0.0);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_EQUAL(var->allele_lengths[0], 1);
+    CU_ASSERT_EQUAL(var->allele_lengths[1], 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "A", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "T", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 1);
+    CU_ASSERT_EQUAL(var->genotypes[1], 0);
+    CU_ASSERT_EQUAL(var->genotypes[2], 0);
+    CU_ASSERT_EQUAL(var->genotypes[3], 0);
+
+    ret = vargen_next(&vargen, &var);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_EQUAL(var->site->position, 0.1);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_EQUAL(var->allele_lengths[0], 1);
+    CU_ASSERT_EQUAL(var->allele_lengths[1], 8);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "A", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "TTTAAGGG", 8);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 1);
+    CU_ASSERT_EQUAL(var->genotypes[2], 0);
+    CU_ASSERT_EQUAL(var->genotypes[3], 0);
+
+    ret = vargen_next(&vargen, &var);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_EQUAL(var->site->position, 0.2);
+    CU_ASSERT_EQUAL(var->num_alleles, 4);
+    CU_ASSERT_EQUAL(var->allele_lengths[0], 1);
+    CU_ASSERT_EQUAL(var->allele_lengths[1], 1);
+    CU_ASSERT_EQUAL(var->allele_lengths[2], 2);
+    CU_ASSERT_EQUAL(var->allele_lengths[3], 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "C", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "G", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[2], "AT", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[3], "T", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 1);
+    CU_ASSERT_EQUAL(var->genotypes[1], 2);
+    CU_ASSERT_EQUAL(var->genotypes[2], 3);
+    CU_ASSERT_EQUAL(var->genotypes[3], 0);
+
+    ret = vargen_next(&vargen, &var);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    CU_ASSERT_EQUAL(var->site->position, 0.4);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_EQUAL(var->allele_lengths[0], 1);
+    CU_ASSERT_EQUAL(var->allele_lengths[1], 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "A", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "T", 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 1);
+    CU_ASSERT_EQUAL(var->genotypes[2], 0);
+    CU_ASSERT_EQUAL(var->genotypes[3], 0);
+
+    ret = vargen_next(&vargen, &var);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    vargen_free(&vargen);
     tree_sequence_free(&ts);
 }
 
@@ -4051,36 +4105,52 @@ test_single_tree_vargen_binary_alphabet(void)
 {
     int ret = 0;
     tree_sequence_t ts;
-    char genotypes[5];
-    site_t *site;
     vargen_t vargen;
+    variant_t *var;
 
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             single_tree_ex_sites, single_tree_ex_mutations, NULL);
-    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
+    ret = vargen_alloc(&vargen, &ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     vargen_print_state(&vargen, _devnull);
 
-    genotypes[4] = '\0';
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "0010");
-    CU_ASSERT_EQUAL(site->id, 0);
-    CU_ASSERT_EQUAL(site->mutations_length, 1);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 0);
+    CU_ASSERT_EQUAL(var->genotypes[2], 1);
+    CU_ASSERT_EQUAL(var->genotypes[3], 0);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->site->id, 0);
+    CU_ASSERT_EQUAL(var->site->mutations_length, 1);
 
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "0100");
-    CU_ASSERT_EQUAL(site->id, 1);
-    CU_ASSERT_EQUAL(site->mutations_length, 2);
+    CU_ASSERT_EQUAL(var->genotypes[0], 0);
+    CU_ASSERT_EQUAL(var->genotypes[1], 1);
+    CU_ASSERT_EQUAL(var->genotypes[2], 0);
+    CU_ASSERT_EQUAL(var->genotypes[3], 0);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->site->id, 1);
+    CU_ASSERT_EQUAL(var->site->mutations_length, 2);
 
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    CU_ASSERT_STRING_EQUAL(genotypes, "1111");
-    CU_ASSERT_EQUAL(site->id, 2);
-    CU_ASSERT_EQUAL(site->mutations_length, 4);
+    CU_ASSERT_EQUAL(var->genotypes[0], 1);
+    CU_ASSERT_EQUAL(var->genotypes[1], 1);
+    CU_ASSERT_EQUAL(var->genotypes[2], 1);
+    CU_ASSERT_EQUAL(var->genotypes[3], 1);
+    CU_ASSERT_EQUAL(var->num_alleles, 2);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "0", 1);
+    CU_ASSERT_NSTRING_EQUAL(var->alleles[1], "1", 1);
+    CU_ASSERT_EQUAL(var->site->id, 2);
+    CU_ASSERT_EQUAL(var->site->mutations_length, 4);
 
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = vargen_free(&vargen);
@@ -4249,8 +4319,7 @@ test_single_tree_inconsistent_mutations(void)
         "2    4     1\n"
         "2    0     1\n";
     tree_sequence_t ts;
-    char genotypes[5];
-    site_t *site;
+    variant_t *var;
     vargen_t vargen;
     hapgen_t hapgen;
     int ret;
@@ -4264,11 +4333,11 @@ test_single_tree_inconsistent_mutations(void)
 
     ret = vargen_alloc(&vargen, &ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    ret = vargen_next(&vargen, &site, genotypes);
+    ret = vargen_next(&vargen, &var);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
     ret = vargen_free(&vargen);
 
@@ -5327,12 +5396,6 @@ test_vargen_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 4) {
-            printf("\n\nFIXME multiple mutation vargen\n");
-            tree_sequence_free(examples[j]);
-            free(examples[j]);
-            continue;
-        }
         verify_vargen(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
