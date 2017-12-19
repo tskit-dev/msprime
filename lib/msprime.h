@@ -49,11 +49,6 @@
 #define MSP_DIR_FORWARD 1
 #define MSP_DIR_REVERSE -1
 
-#define MSP_GENOTYPES_AS_CHAR 1
-
-#define MSP_ALPHABET_BINARY 0
-#define MSP_ALPHABET_ASCII  1
-
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
 #define MSP_MODEL_SMC_PRIME 2
@@ -442,7 +437,6 @@ typedef struct {
     uint32_t initialised_magic;
     size_t num_trees;
     double sequence_length;
-    int alphabet;
     size_t num_samples;
     size_t max_num_samples;
     node_id_t *samples;
@@ -613,13 +607,8 @@ typedef struct {
     size_t num_sites;
     tree_sequence_t *tree_sequence;
     node_id_t *sample_index_map;
-    /* The haplotype binary matrix. This is an optimised special case. */
-    bool binary;
-    size_t words_per_row;
-    uint64_t *binary_haplotype_matrix;
     char *output_haplotype;
-    /* The general haplotype matrix. */
-    char *ascii_haplotype_matrix;
+    char *haplotype_matrix;
     sparse_tree_t tree;
 } hapgen_t;
 
@@ -856,7 +845,6 @@ size_t tree_sequence_get_num_provenances(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_num_samples(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
-int tree_sequence_get_alphabet(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);

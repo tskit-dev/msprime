@@ -85,7 +85,7 @@
 #define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -54
 #define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -55
 #define MSP_ERR_LENGTH_MISMATCH                                     -56
-#define MSP_ERR_BAD_ALPHABET                                        -57
+
 #define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
 #define MSP_ERR_UNSORTED_SITES                                      -59
 #define MSP_ERR_BAD_SITE_POSITION                                   -60

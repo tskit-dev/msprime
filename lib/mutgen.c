@@ -100,8 +100,10 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
 
     assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
-    if (! (alphabet == MSP_ALPHABET_BINARY || alphabet == MSP_ALPHABET_ASCII)) {
-        ret = MSP_ERR_BAD_ALPHABET;
+    /* TODO This is a bad interface anyway and needs to be fixed. Keep this
+     * for now to avoid breaking too much stuff */
+    if (! (alphabet == 0 || alphabet == 1)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     if (mutation_block_size == 0) {
@@ -202,7 +204,7 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     avl_tree_t positions;
     avl_node_t *avl_node;
 
-    if (self->alphabet == MSP_ALPHABET_BINARY) {
+    if (self->alphabet == 0) {
         mutation_types = binary_mutation_types;
         num_mutation_types = 1;
     } else {

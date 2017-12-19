@@ -40,6 +40,10 @@ FILE * _devnull;
 #define SIMPLE_BOTTLENECK 0
 #define INSTANTANEOUS_BOTTLENECK 1
 
+/* Defining this here for now to avoid breaking code, but this should be
+ * removed when we udpate the mutation generator inferface */
+#define MSP_ALPHABET_BINARY 0
+
 typedef struct {
     int type;
     double time;
@@ -2460,7 +2464,7 @@ test_simplest_back_mutations(void)
     }
     hapgen_free(&hapgen);
 
-    ret = vargen_alloc(&vargen, &ts, MSP_GENOTYPES_AS_CHAR);
+    ret = vargen_alloc(&vargen, &ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = vargen_next(&vargen, &var);
@@ -3228,57 +3232,6 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     mutation_table_free(&mutation_table);
 }
 
-static void
-test_alphabet_detection(void)
-{
-    tree_sequence_t ts;
-
-    /* Default to binary */
-    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
-            NULL, NULL, NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_BINARY);
-    tree_sequence_free(&ts);
-
-    /* All 0->1 mutations are binary */
-    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
-            "0  0", "0 0 1", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_BINARY);
-    tree_sequence_free(&ts);
-
-    /* A non-zero ancestral state means ASCII */
-    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
-            "0  1", "0 0 0", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_ASCII);
-    tree_sequence_free(&ts);
-
-    /* Back mutations are still binary */
-    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
-            "0  0", "0 0 1\n0 1 0", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 2);
-    CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_BINARY);
-    tree_sequence_free(&ts);
-
-    /* Any non-0 or 1 chars make it ASCII */
-    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
-            "0  0", "0 0 1\n0 1 A", NULL);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 1);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 2);
-    CU_ASSERT_EQUAL(tree_sequence_get_alphabet(&ts), MSP_ALPHABET_ASCII);
-    tree_sequence_free(&ts);
-
-}
 
 static void
 test_single_tree_good_records(void)
@@ -7012,7 +6965,6 @@ main(int argc, char **argv)
             test_simplest_overlapping_unary_edges_simplify},
         {"test_simplest_overlapping_unary_edges_internal_samples_simplify",
             test_simplest_overlapping_unary_edges_internal_samples_simplify},
-        {"test_alphabet_detection", test_alphabet_detection},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",
             test_single_nonbinary_tree_good_records},

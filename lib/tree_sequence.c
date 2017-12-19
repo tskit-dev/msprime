@@ -97,7 +97,6 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
 
     fprintf(out, "tree_sequence state\n");
     fprintf(out, "num_trees = %d\n", (int) self->num_trees);
-    fprintf(out, "alphabet = %d\n", (int) self->alphabet);
     fprintf(out, "sequence_length = %f\n", self->sequence_length);
     fprintf(out, "samples = (%d)\n", (int) self->num_samples);
     for (j = 0; j < self->num_samples; j++) {
@@ -658,7 +657,6 @@ tree_sequence_check(tree_sequence_t *self)
     int ret = MSP_ERR_GENERIC;
     node_id_t child, parent, last_parent, last_child;
     mutation_id_t parent_mut;
-    table_size_t length;
     size_t j;
     double left, last_left;
     double *time = self->nodes.time;
@@ -743,12 +741,6 @@ tree_sequence_check(tree_sequence_t *self)
 
     /* Check the sites */
     for (j = 0; j < self->sites.num_records; j++) {
-        length = self->sites.ancestral_state_offset[j + 1]
-            - self->sites.ancestral_state_offset[j];
-        if (length != 1) {
-            ret = MSP_ERR_BAD_ALPHABET;
-            goto out;
-        }
         if (self->sites.position[j] < 0
                 || self->sites.position[j] >= self->sequence_length) {
             ret = MSP_ERR_BAD_SITE_POSITION;
@@ -852,29 +844,17 @@ tree_sequence_init_sites(tree_sequence_t *self)
     site_id_t j;
     table_size_t k;
     int ret = 0;
-    bool binary = true;
     size_t offset = 0;
 
-    self->alphabet = MSP_ALPHABET_ASCII;
     for (k = 0; k < (table_size_t) self->mutations.num_records; k++) {
         ret = tree_sequence_get_mutation(self, (mutation_id_t) k,
                 self->sites.site_mutations_mem + k);
         if (ret != 0) {
             goto out;
         }
-        if (self->mutations.derived_state_offset[k] != k) {
-            ret = MSP_ERR_BAD_ALPHABET;
-        }
-        if (!(self->mutations.derived_state[k] == '0' ||
-               self->mutations.derived_state[k] == '1')) {
-            binary = false;
-        }
     }
     k = 0;
     for (j = 0; j < (site_id_t) self->sites.num_records; j++) {
-        if (self->sites.ancestral_state[self->sites.ancestral_state_offset[j]] != '0') {
-            binary = false;
-        }
         if (self->sites.position[j] < 0
                 || self->sites.position[j] >= self->sequence_length) {
             ret = MSP_ERR_BAD_SITE_POSITION;
@@ -899,9 +879,6 @@ tree_sequence_init_sites(tree_sequence_t *self)
         if (ret != 0) {
             goto out;
         }
-    }
-    if (binary) {
-        self->alphabet = MSP_ALPHABET_BINARY;
     }
 out:
     return ret;
@@ -2152,12 +2129,6 @@ double
 tree_sequence_get_sequence_length(tree_sequence_t *self)
 {
     return self->sequence_length;
-}
-
-int
-tree_sequence_get_alphabet(tree_sequence_t *self)
-{
-    return self->alphabet;
 }
 
 size_t

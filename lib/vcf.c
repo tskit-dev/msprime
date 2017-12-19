@@ -261,7 +261,7 @@ vcf_converter_alloc(vcf_converter_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = vargen_alloc(self->vargen, tree_sequence, MSP_GENOTYPES_AS_CHAR);
+    ret = vargen_alloc(self->vargen, tree_sequence, 0);
     if (ret != 0) {
         goto out;
     }
