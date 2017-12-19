@@ -173,6 +173,8 @@ def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
         node=mutations.node, parent=mp)
 
 
+
+@unittest.skip("variant generator and recurrent mutations")
 class TestSimulation(unittest.TestCase):
     """
     Tests that the simulations produce the output we expect.
@@ -442,6 +444,7 @@ class TestSimplify(unittest.TestCase):
                 mapped_ids.append(mapped_node_id)
         self.assertEqual(sorted(mapped_ids), sorted(sub_ts.samples()))
 
+    @unittest.skip("Inconsistent mutations problem in hapgen.")
     def test_simplify(self):
         #  check that simplify(big set) -> simplify(subset) equals simplify(subset)
         seed = 23

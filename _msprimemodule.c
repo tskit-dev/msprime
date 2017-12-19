@@ -3250,7 +3250,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            MSP_ALPHABET_BINARY, block_size);
+            0, block_size);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4388,7 +4388,7 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
     PyArrayObject *genotype_matrix = NULL;
     vargen_t *vg = NULL;
     char *V;
-    site_t *site;
+    variant_t *variant;
     size_t j;
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
@@ -4415,7 +4415,8 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
         goto out;
     }
     j = 0;
-    while ((err = vargen_next(vg, &site, V + (j * num_samples))) == 1) {
+    while ((err = vargen_next(vg, &variant)) == 1) {
+        memcpy(V + (j * num_samples), variant->genotypes, num_samples * sizeof(uint8_t));
         j++;
     }
     if (err != 0) {
@@ -5991,20 +5992,17 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", "as_char", NULL};
+    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", NULL};
     TreeSequence *tree_sequence = NULL;
     PyObject *genotypes_buffer = NULL;
-    int as_char = 0;
-    int flags = 0;
     size_t num_samples;
 
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
     self->genotypes_buffer = NULL;
     self->buffer_acquired = 0;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O|i", kwlist,
-            &TreeSequenceType, &tree_sequence, &genotypes_buffer,
-            &as_char)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O", kwlist,
+            &TreeSequenceType, &tree_sequence, &genotypes_buffer)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -6035,9 +6033,8 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    flags = as_char? MSP_GENOTYPES_AS_CHAR: 0;
     err = vargen_alloc(self->variant_generator,
-            self->tree_sequence->tree_sequence, flags);
+            self->tree_sequence->tree_sequence, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -6051,20 +6048,19 @@ static PyObject *
 VariantGenerator_next(VariantGenerator *self)
 {
     PyObject *ret = NULL;
-    site_t *site;
+    variant_t *var;
     int err;
-    char *genotypes = (char *) self->buffer.buf;
 
     if (VariantGenerator_check_state(self) != 0) {
         goto out;
     }
-    err = vargen_next(self->variant_generator, &site, genotypes);
+    err = vargen_next(self->variant_generator, &var);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        ret = make_site(site);
+        ret = make_site(var->site);
     }
 out:
     return ret;

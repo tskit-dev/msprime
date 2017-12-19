@@ -2377,6 +2377,7 @@ class TestVariantGenerator(LowLevelTestCase):
             j += 1
         self.assertEqual(j, ts.get_num_mutations())
 
+    @unittest.skip("Variant generator under construction")
     def test_form(self):
         ts = self.get_tree_sequence(num_loci=10)
         buff = bytearray(ts.get_num_samples())

@@ -1590,7 +1590,7 @@ class TreeSequence(object):
         n = self.num_samples
         genotypes_buffer = bytearray(n)
         iterator = _msprime.VariantGenerator(
-            self._ll_tree_sequence, genotypes_buffer, as_bytes)
+            self._ll_tree_sequence, genotypes_buffer)
         if as_bytes:
             for pos, ancestral_state, mutations, index, metadata in iterator:
                 site = Site(

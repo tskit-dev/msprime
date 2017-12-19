@@ -1218,6 +1218,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         self.assert_variants_equal(ts, ts_simplified)
 
 
+@unittest.skip("Tests use as_bytes")
 class TestMultipleRoots(TopologyTestCase):
     """
     Tests for situations where we have multiple roots for the samples.

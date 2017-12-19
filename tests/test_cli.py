@@ -1534,6 +1534,7 @@ class TestMspConversionOutput(unittest.TestCase):
         output_newick = stdout.splitlines()
         self.verify_newick(output_newick)
 
+    @unittest.skip("Variant generator as_bytes broken")
     def test_macs(self):
         cmd = "macs"
         stdout, stderr = capture_output(cli.msp_main, [

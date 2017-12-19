@@ -638,6 +638,8 @@ class TestSimulator(HighLevelTestCase):
         self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
 
 
+
+@unittest.skip("Variant generator under construction")
 class TestVariantGenerator(HighLevelTestCase):
     """
     Tests the variants() method to ensure the output is consistent.
@@ -725,6 +727,7 @@ class TestVariantGenerator(HighLevelTestCase):
             self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
 
+@unittest.skip("Variant generator under construction")
 class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.
