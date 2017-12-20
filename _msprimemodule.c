@@ -536,25 +536,53 @@ out:
     return ret;
 }
 
+#ifdef HAVE_NUMPY
+
+static PyObject *
+make_alleles(variant_t *variant)
+{
+    PyObject *ret = NULL;
+    PyObject *item, *t;
+    size_t j;
+
+    t = PyTuple_New(variant->num_alleles);
+    if (t == NULL) {
+        goto out;
+    }
+    for (j = 0; j < variant->num_alleles; j++) {
+        item = Py_BuildValue("s#", variant->alleles[j], variant->allele_lengths[j]);
+        if (item == NULL) {
+            Py_DECREF(t);
+            goto out;
+        }
+        PyTuple_SET_ITEM(t, j, item);
+    }
+    ret = t;
+out:
+    return ret;
+}
+
 static PyObject *
 make_variant(variant_t *variant, size_t num_samples)
 {
     PyObject *ret = NULL;
     npy_intp dims = num_samples;
     PyObject *site = make_site(variant->site);
-
+    PyObject *alleles = make_alleles(variant);
     PyArrayObject *genotypes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_UINT8);
 
-    if (genotypes == NULL) {
+    if (genotypes == NULL || alleles == NULL || site == NULL) {
         goto out;
     }
     memcpy(PyArray_DATA(genotypes), variant->genotypes, num_samples * sizeof(uint8_t));
-    ret = Py_BuildValue("OO", site, genotypes);
+    ret = Py_BuildValue("OOO", site, genotypes, alleles);
 out:
     Py_XDECREF(site);
     Py_XDECREF(genotypes);
+    Py_XDECREF(alleles);
     return ret;
 }
+#endif
 
 static PyObject *
 convert_sites(site_t *sites, size_t num_sites)

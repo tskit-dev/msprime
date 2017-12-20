@@ -2338,11 +2338,13 @@ class TestVariantGenerator(LowLevelTestCase):
             self.assertRaises(TypeError, _msprime.VariantGenerator, ts, bad_type)
 
         vg = _msprime.VariantGenerator(ts)
-        before = [(site, genotypes.tobytes()) for site, genotypes in vg]
+        before = [
+            (site, genotypes.tobytes(), alleles) for site, genotypes, alleles in vg]
         vg = _msprime.VariantGenerator(ts)
         del ts
         # We should keep a reference to the tree sequence.
-        after = [(site, genotypes.tobytes()) for site, genotypes in vg]
+        after = [
+            (site, genotypes.tobytes(), alleles) for site, genotypes, alleles in vg]
         self.assertEqual(before, after)
 
     def test_form(self):
@@ -2351,9 +2353,10 @@ class TestVariantGenerator(LowLevelTestCase):
         self.assertGreater(len(variants), 0)
         self.assertEqual(len(variants), ts.get_num_sites())
         sites = [ts.get_site(j) for j in range(ts.get_num_sites())]
-        self.assertEqual([site for site, _ in variants], sites)
-        for _, genotypes in _msprime.VariantGenerator(ts):
+        self.assertEqual([site for site, _, _ in variants], sites)
+        for _, genotypes, alleles in _msprime.VariantGenerator(ts):
             self.assertEqual(genotypes.shape, (ts.get_num_samples(), ))
+            self.assertEqual(alleles, ('0', '1'))
 
     def test_iterator(self):
         ts = self.get_tree_sequence()

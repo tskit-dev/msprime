@@ -648,7 +648,6 @@ class TestVariantGenerator(HighLevelTestCase):
         self.assertGreater(ts.get_num_mutations(), 10)
         return ts
 
-    @unittest.skip("Sort out as_bytes")
     def test_as_bytes(self):
         ts = self.get_tree_sequence()
         n = ts.get_sample_size()
@@ -706,6 +705,7 @@ class TestVariantGenerator(HighLevelTestCase):
             self.assertEqual(site.position, variant.position)
             self.assertEqual(site, variant.site)
             self.assertEqual(site.index, variant.index)
+            self.assertEqual(variant.alleles, ("0", "1"))
             self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
     def test_recurrent_mutations_errors(self):

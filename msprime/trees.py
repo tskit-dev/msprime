@@ -28,7 +28,7 @@ import json
 import sys
 
 try:
-    import numpy  # noqa
+    import numpy as np
     _numpy_imported = True
 except ImportError:
     _numpy_imported = False
@@ -87,15 +87,11 @@ DeprecatedMutation = collections.namedtuple(
 
 
 # This form was chosen to try to break as little of existing code as possible.
-# It seems likely that the `node` member was not used for much in this
-# iterator, so that it shouldn't break too much if we replace this with the
-# underlying site. The position and index values are retained for compatability,
-# although they are not redundant. There is a wider question about what the
-# genotypes values should be when we have non binary mutations, and whether
-# this is a viable long-term API.
+# The position and index values are retained for compatability,
+# although they are redundant.
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "site", "index", "genotypes"])
+    ["position", "site", "index", "genotypes", "alleles"])
 
 
 # TODO this interface is rubbish. Should have much better printing options.
@@ -1579,19 +1575,27 @@ class TreeSequence(object):
         :return: An iterator of all :math:`(x, u, j, g)` tuples defining
             the variants in this tree sequence.
         """
-        if as_bytes:
-            raise ValueError("as_bytes no supported")
-        # TODO finalise API and documnent. See comments for the Variant type
-        # for discussion on why the present form was chosen.
+        # See comments for the Variant type for discussion on why the
+        # present form was chosen.
         check_numpy()
         iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
-        for ll_site, genotypes in iterator:
+        for ll_site, genotypes, alleles in iterator:
             pos, ancestral_state, mutations, index, metadata = ll_site
             site = Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
                 mutations=[Mutation(*mutation) for mutation in mutations],
                 metadata=metadata)
-            v = Variant(position=pos, site=site, index=index, genotypes=genotypes)
+            if as_bytes:
+                if any(len(allele) > 1 for allele in alleles):
+                    raise ValueError(
+                        "as_bytes only supported for single-letter alleles")
+                bytes_genotypes = np.empty(self.num_samples, dtype=np.uint8)
+                lookup = np.array([ord(a[0]) for a in alleles], dtype=np.uint8)
+                bytes_genotypes[:] = lookup[genotypes]
+                genotypes = bytes_genotypes.tobytes()
+            v = Variant(
+                position=pos, site=site, index=index, genotypes=genotypes,
+                alleles=alleles)
             yield v
 
     def genotype_matrix(self):
