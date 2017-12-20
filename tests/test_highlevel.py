@@ -1286,7 +1286,8 @@ class TestTreeSequence(HighLevelTestCase):
                     self.assertEqual(mutation.node, mutations.node[mutation_index])
                     self.assertEqual(mutation.parent, mutations.parent[mutation_index])
                     self.assertEqual(mutation.id, mutation_index)
-                    self.assertEqual(derived_state[mutation_index], mutation.derived_state)
+                    self.assertEqual(
+                        derived_state[mutation_index], mutation.derived_state)
                     mutation_index += 1
                 some_sites = True
             self.assertEqual(mutation_index, len(mutations))
