@@ -638,7 +638,6 @@ class TestSimulator(HighLevelTestCase):
         self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
 
 
-@unittest.skip("Variant generator under construction")
 class TestVariantGenerator(HighLevelTestCase):
     """
     Tests the variants() method to ensure the output is consistent.
@@ -649,6 +648,7 @@ class TestVariantGenerator(HighLevelTestCase):
         self.assertGreater(ts.get_num_mutations(), 10)
         return ts
 
+    @unittest.skip("Sort out as_bytes")
     def test_as_bytes(self):
         ts = self.get_tree_sequence()
         n = ts.get_sample_size()
@@ -686,47 +686,47 @@ class TestVariantGenerator(HighLevelTestCase):
             G[v.index, :] = v.genotypes
         self.assertTrue(np.array_equal(G, ts.genotype_matrix()))
 
-    @unittest.skip("Recurrent mutations")
     def test_recurrent_mutations_over_samples(self):
         ts = self.get_tree_sequence()
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
         num_sites = 5
-        sites = [
-            msprime.Site(
-                index=j, ancestral_state="0",
+        for j in range(num_sites):
+            sites.add_row(
                 position=j * ts.sequence_length / num_sites,
-                mutations=[
-                    msprime.Mutation(site=j, node=u, derived_state="1")
-                    for u in range(ts.sample_size)])
-            for j in range(num_sites)]
-        ts = ts.copy(sites)
-        sites = list(ts.sites())
-        variants = list(ts.variants(as_bytes=True))
+                ancestral_state="0")
+            for u in range(ts.sample_size):
+                mutations.add_row(site=j, node=u, derived_state="1")
+        tables = ts.dump_tables()
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+        variants = list(ts.variants())
         self.assertEqual(len(variants), num_sites)
-        for site, variant in zip(sites, variants):
+        for site, variant in zip(ts.sites(), variants):
             self.assertEqual(site.position, variant.position)
             self.assertEqual(site, variant.site)
             self.assertEqual(site.index, variant.index)
-            self.assertEqual(variant.genotypes, b'1' * ts.sample_size)
-        # Now try without as_bytes
-        for variant in ts.variants():
             self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
-    @unittest.skip("Recurrent mutations")
     def test_recurrent_mutations_errors(self):
         ts = self.get_tree_sequence()
         tree = next(ts.trees())
+        tables = ts.dump_tables()
         for u in tree.nodes():
             for sample in tree.samples(u):
                 if sample != u:
-                    site = msprime.Site(
-                        index=0, ancestral_state="0", position=0, mutations=[
-                            msprime.Mutation(site=0, derived_state="1", node=u),
-                            msprime.Mutation(site=0, derived_state="1", node=sample)])
-            ts_new = ts.copy(sites=[site])
-            self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
+                    sites = msprime.SiteTable()
+                    mutations = msprime.MutationTable()
+                    sites.add_row(position=0, ancestral_state="0")
+                    mutations.add_row(site=len(sites) - 1, node=u, derived_state="1")
+                    mutations.add_row(
+                        site=len(sites) - 1, node=sample, derived_state="1")
+                    ts_new = msprime.load_tables(
+                        nodes=tables.nodes, edges=tables.edges, sites=sites,
+                        mutations=mutations)
+                    self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
 
-@unittest.skip("Variant generator under construction")
 class TestHaplotypeGenerator(HighLevelTestCase):
     """
     Tests the haplotype generation code.
@@ -788,37 +788,39 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         for ts in get_bottleneck_examples():
             self.verify_tree_sequence(ts)
 
-    @unittest.skip("Recurrent mutations")
     def test_recurrent_mutations_over_samples(self):
         for ts in get_bottleneck_examples():
             num_sites = 5
-            sites = [
-                msprime.Site(
-                    index=j, ancestral_state="0",
+            sites = msprime.SiteTable()
+            mutations = msprime.MutationTable()
+            for j in range(num_sites):
+                sites.add_row(
                     position=j * ts.sequence_length / num_sites,
-                    mutations=[
-                        msprime.Mutation(site=j, node=u, derived_state="1")
-                        for u in range(ts.sample_size)])
-                for j in range(num_sites)]
-            ts_new = ts.copy(sites)
+                    ancestral_state="0")
+                for u in range(ts.sample_size):
+                    mutations.add_row(site=j, node=u, derived_state="1")
+            tables = ts.dump_tables()
+            ts_new = msprime.load_tables(
+                nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
             ones = "1" * num_sites
             for h in ts_new.haplotypes():
                 self.assertEqual(ones, h)
 
-    @unittest.skip("Recurrent mutation error")
     def test_recurrent_mutations_errors(self):
         for ts in get_bottleneck_examples():
+            tables = ts.dump_tables()
             tree = next(ts.trees())
             for u in tree.children(tree.root):
-                sites = [
-                    msprime.Site(
-                        index=0, position=0, ancestral_state="0",
-                        mutations=[
-                            msprime.Mutation(site=0, node=tree.root, derived_state="1"),
-                            msprime.Mutation(site=0, node=u, derived_state="1"),
-                        ])]
-                ts_new = ts.copy(sites)
+                sites = msprime.SiteTable()
+                mutations = msprime.MutationTable()
+                sites.add_row(position=0, ancestral_state="0")
+                mutations.add_row(site=len(sites) - 1, node=u, derived_state="1")
+                mutations.add_row(site=len(sites) - 1, node=tree.root, derived_state="1")
+                ts_new = msprime.load_tables(
+                    nodes=tables.nodes, edges=tables.edges, sites=sites,
+                    mutations=mutations)
                 self.assertRaises(_msprime.LibraryError, list, ts_new.haplotypes())
+                ts_new.haplotypes()
 
     def test_back_mutations(self):
         for ts in get_back_mutation_examples():

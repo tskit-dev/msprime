@@ -161,10 +161,7 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     TreeSequence *tree_sequence;
-    PyObject *genotypes_buffer;
     vargen_t *variant_generator;
-    Py_buffer buffer;
-    int buffer_acquired;
 } VariantGenerator;
 
 typedef struct {
@@ -536,6 +533,26 @@ make_site(site_t *site)
 out:
     Py_XDECREF(mutations);
     Py_XDECREF(metadata);
+    return ret;
+}
+
+static PyObject *
+make_variant(variant_t *variant, size_t num_samples)
+{
+    PyObject *ret = NULL;
+    npy_intp dims = num_samples;
+    PyObject *site = make_site(variant->site);
+
+    PyArrayObject *genotypes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_UINT8);
+
+    if (genotypes == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(genotypes), variant->genotypes, num_samples * sizeof(uint8_t));
+    ret = Py_BuildValue("OO", site, genotypes);
+out:
+    Py_XDECREF(site);
+    Py_XDECREF(genotypes);
     return ret;
 }
 
@@ -5959,6 +5976,7 @@ static PyTypeObject HaplotypeGeneratorType = {
  * VariantGenerator
  *===================================================================
  */
+#ifdef HAVE_NUMPY
 
 static int
 VariantGenerator_check_state(VariantGenerator *self)
@@ -5980,10 +5998,6 @@ VariantGenerator_dealloc(VariantGenerator* self)
         self->variant_generator = NULL;
     }
     Py_XDECREF(self->tree_sequence);
-    Py_XDECREF(self->genotypes_buffer);
-    if (self->buffer_acquired) {
-        PyBuffer_Release(&self->buffer);
-    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -5992,40 +6006,18 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", "genotypes_buffer", NULL};
+    static char *kwlist[] = {"tree_sequence", NULL};
     TreeSequence *tree_sequence = NULL;
-    PyObject *genotypes_buffer = NULL;
-    size_t num_samples;
 
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
-    self->genotypes_buffer = NULL;
-    self->buffer_acquired = 0;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O", kwlist,
-            &TreeSequenceType, &tree_sequence, &genotypes_buffer)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TreeSequenceType, &tree_sequence)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
     Py_INCREF(self->tree_sequence);
-    self->genotypes_buffer = genotypes_buffer;
-    Py_INCREF(self->genotypes_buffer);
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
-        goto out;
-    }
-    num_samples = tree_sequence_get_num_samples(
-            self->tree_sequence->tree_sequence);
-    if (!PyObject_CheckBuffer(genotypes_buffer)) {
-        PyErr_SetString(PyExc_TypeError,
-            "genotypes buffer must support the Python buffer protocol.");
-        goto out;
-    }
-    if (PyObject_GetBuffer(genotypes_buffer, &self->buffer,
-                PyBUF_SIMPLE|PyBUF_WRITABLE) != 0) {
-        goto out;
-    }
-    self->buffer_acquired = 1;
-    if (num_samples * sizeof(uint8_t) > self->buffer.len) {
-        PyErr_SetString(PyExc_BufferError, "genotypes buffer is too small");
         goto out;
     }
     self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
@@ -6033,8 +6025,7 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(self->variant_generator,
-            self->tree_sequence->tree_sequence, 0);
+    err = vargen_alloc(self->variant_generator, self->tree_sequence->tree_sequence, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -6060,10 +6051,7 @@ VariantGenerator_next(VariantGenerator *self)
         goto out;
     }
     if (err == 1) {
-        /* Copy the genotypes into the local buffer */
-        memcpy(self->buffer.buf, var->genotypes,
-                self->variant_generator->num_samples * sizeof(char));
-        ret = make_site(var->site);
+        ret = make_variant(var, self->variant_generator->num_samples);
     }
 out:
     return ret;
@@ -6115,6 +6103,8 @@ static PyTypeObject VariantGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)VariantGenerator_init,      /* tp_init */
 };
+
+#endif
 
 /*===================================================================
  * LdCalculator
@@ -8678,6 +8668,7 @@ init_msprime(void)
     PyModule_AddObject(module, "HaplotypeGenerator",
             (PyObject *) &HaplotypeGeneratorType);
 
+#ifdef HAVE_NUMPY
     /* VariantGenerator type */
     VariantGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&VariantGeneratorType) < 0) {
@@ -8685,6 +8676,7 @@ init_msprime(void)
     }
     Py_INCREF(&VariantGeneratorType);
     PyModule_AddObject(module, "VariantGenerator", (PyObject *) &VariantGeneratorType);
+#endif
 
     /* LdCalculator type */
     LdCalculatorType.tp_new = PyType_GenericNew;

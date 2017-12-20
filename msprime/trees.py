@@ -28,7 +28,7 @@ import json
 import sys
 
 try:
-    import numpy as np
+    import numpy  # noqa
     _numpy_imported = True
 except ImportError:
     _numpy_imported = False
@@ -1571,12 +1571,6 @@ class TreeSequence(object):
         The default behaviour is to return a numpy array, which is
         substantially more efficient.
 
-        :warning: The same numpy array is used to represent genotypes between
-            iterations, so if you wish the store the results of this
-            iterator you **must** take a copy of the array. This warning
-            does not apply when ``as_bytes`` is True, as a new bytes object
-            is allocated for each variant.
-
         :param bool as_bytes: If True, the genotype values will be returned
             as a Python bytes object. This is useful in certain situations
             (i.e., directly printing the genotypes) or when numpy is
@@ -1585,29 +1579,20 @@ class TreeSequence(object):
         :return: An iterator of all :math:`(x, u, j, g)` tuples defining
             the variants in this tree sequence.
         """
+        if as_bytes:
+            raise ValueError("as_bytes no supported")
         # TODO finalise API and documnent. See comments for the Variant type
         # for discussion on why the present form was chosen.
-        n = self.num_samples
-        genotypes_buffer = bytearray(n)
-        iterator = _msprime.VariantGenerator(
-            self._ll_tree_sequence, genotypes_buffer)
-        if as_bytes:
-            for pos, ancestral_state, mutations, index, metadata in iterator:
-                site = Site(
-                    position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations],
-                    metadata=metadata)
-                g = bytes(genotypes_buffer)
-                yield Variant(position=pos, site=site, index=index, genotypes=g)
-        else:
-            check_numpy()
-            g = np.frombuffer(genotypes_buffer, "u1", n)
-            for pos, ancestral_state, mutations, index, metadata in iterator:
-                site = Site(
-                    position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations],
-                    metadata=metadata)
-                yield Variant(position=pos, site=site, index=index, genotypes=g)
+        check_numpy()
+        iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
+        for ll_site, genotypes in iterator:
+            pos, ancestral_state, mutations, index, metadata = ll_site
+            site = Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
+            v = Variant(position=pos, site=site, index=index, genotypes=genotypes)
+            yield v
 
     def genotype_matrix(self):
         return self._ll_tree_sequence.get_genotype_matrix()

@@ -111,6 +111,7 @@ vargen_update_site(vargen_t *self)
     variant_t *var = &self->variant;
     site_t *site = var->site;
     uint8_t *genotypes = var->genotypes;
+    node_id_t *sample_index_map = self->sample_index_map;
     uint8_t derived;
 
     /* Ancestral state is always allele 0 */
@@ -148,7 +149,7 @@ vargen_update_site(vargen_t *self)
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                sample_index = self->sample_index_map[w->node];
+                sample_index = sample_index_map[w->node];
                 assert(sample_index >= 0);
                 if (genotypes[sample_index] == derived) {
                     ret = MSP_ERR_INCONSISTENT_MUTATIONS;
