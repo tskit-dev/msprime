@@ -6060,6 +6060,9 @@ VariantGenerator_next(VariantGenerator *self)
         goto out;
     }
     if (err == 1) {
+        /* Copy the genotypes into the local buffer */
+        memcpy(self->buffer.buf, var->genotypes,
+                self->variant_generator->num_samples * sizeof(char));
         ret = make_site(var->site);
     }
 out:
