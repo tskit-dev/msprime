@@ -344,9 +344,9 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         for j in range(st.get_sample_size()):
             u = j
             while st.get_parent(u) != msprime.NULL_NODE:
-                l = st.get_time(st.get_parent(u)) - st.get_time(u)
-                self.assertGreater(l, 0.0)
-                self.assertEqual(st.get_branch_length(u), l)
+                length = st.get_time(st.get_parent(u)) - st.get_time(u)
+                self.assertGreater(length, 0.0)
+                self.assertEqual(st.get_branch_length(u), length)
                 u = st.get_parent(u)
 
     def verify_sparse_tree_structure(self, st):
@@ -636,7 +636,6 @@ class TestSimulator(HighLevelTestCase):
                 TypeError, msprime.Simulator, [(0, 0), (0, 0)], bad_type)
         self.assertRaises(ValueError, msprime.Simulator, [], recomb_map)
         self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
-
 
 
 @unittest.skip("Variant generator under construction")

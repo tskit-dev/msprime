@@ -526,8 +526,8 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         Checks that the specified non-empty iterator implements the
         iterator protocol correctly.
         """
-        l = list(iterator)
-        self.assertGreater(len(l), 0)
+        list_ = list(iterator)
+        self.assertGreater(len(list_), 0)
         for j in range(10):
             self.assertRaises(StopIteration, next, iterator)
 
@@ -2536,8 +2536,8 @@ class TestSparseTree(LowLevelTestCase):
             # Without initialisation we should be 0 samples for every node
             # that is not a sample.
             for j in range(st.get_num_nodes()):
-                l = 1 if j < ts.get_num_samples() else 0
-                self.assertEqual(st.get_num_samples(j), l)
+                count = 1 if j < ts.get_num_samples() else 0
+                self.assertEqual(st.get_num_samples(j), count)
                 self.assertEqual(st.get_num_tracked_samples(j), 0)
             # Now, try this for a tree sequence.
             for st in _msprime.SparseTreeIterator(st):
@@ -2710,12 +2710,12 @@ class TestSparseTree(LowLevelTestCase):
                 nodes=node_table, edges=edge_table, migrations=migration_table,
                 sites=site_table, mutations=mutation_table)
         self.assertRaises(_msprime.LibraryError, f, [(0.1, -1)])
-        l = ts.get_sequence_length()
+        length = ts.get_sequence_length()
         u = ts.get_num_nodes()
         for bad_node in [u, u + 1, 2 * u]:
             self.assertRaises(_msprime.LibraryError, f, [(0.1, bad_node)])
-        for bad_pos in [-1, l, l + 1]:
-            self.assertRaises(_msprime.LibraryError, f, [(l, 0)])
+        for bad_pos in [-1, length, length + 1]:
+            self.assertRaises(_msprime.LibraryError, f, [(length, 0)])
 
     def test_free(self):
         ts = self.get_tree_sequence()

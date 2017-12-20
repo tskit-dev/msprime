@@ -173,7 +173,6 @@ def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
         node=mutations.node, parent=mp)
 
 
-
 @unittest.skip("variant generator and recurrent mutations")
 class TestSimulation(unittest.TestCase):
     """
