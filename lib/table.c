@@ -3027,12 +3027,8 @@ simplifier_output_sites(simplifier_t *self)
     node_id_t mapped_node;
     bool keep_mutation, keep_site;
     bool filter_zero_mutation_sites = (self->flags & MSP_FILTER_ZERO_MUTATION_SITES);
-
-    /* TODO Implement the checks below for ancestral state and derived state properly when
-     * we've added the _offset columns to the tables. */
-    assert(self->input_sites.ancestral_state_length == self->input_sites.num_rows);
-    assert(self->input_mutations.derived_state_length
-            == self->input_mutations.num_rows);
+    char *derived_state, *ancestral_state;
+    int cmp;
 
     input_mutation = 0;
     num_output_mutations = 0;
@@ -3053,9 +3049,21 @@ simplifier_output_sites(simplifier_t *self)
                     /* If there is no parent and the ancestral state is equal to the
                      * derived state, then we remove this mutation.
                      */
-                    if (self->input_mutations.derived_state[input_mutation]
-                            == self->input_sites.ancestral_state[input_site]) {
-                        keep_mutation = false;
+                    derived_state = self->input_mutations.derived_state +
+                        self->input_mutations.derived_state_offset[input_mutation];
+                    derived_state_length =
+                        self->input_mutations.derived_state_offset[input_mutation + 1]
+                        - self->input_mutations.derived_state_offset[input_mutation];
+                    ancestral_state = self->input_sites.ancestral_state +
+                        self->input_sites.ancestral_state_offset[input_site];
+                    ancestral_state_length =
+                        self->input_sites.ancestral_state_offset[input_site + 1]
+                        - self->input_sites.ancestral_state_offset[input_site];
+                    if (ancestral_state_length == derived_state_length) {
+                        cmp = memcmp(derived_state, ancestral_state, derived_state_length);
+                        if (cmp == 0) {
+                            keep_mutation = false;
+                        }
                     }
                 }
                 if (keep_mutation) {

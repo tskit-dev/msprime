@@ -43,6 +43,7 @@ FILE * _devnull;
 /* Defining this here for now to avoid breaking code, but this should be
  * removed when we udpate the mutation generator inferface */
 #define MSP_ALPHABET_BINARY 0
+#define MSP_ALPHABET_ASCII 1
 
 typedef struct {
     int type;
@@ -534,20 +535,33 @@ static void
 unsort_sites(site_table_t *sites, mutation_table_t *mutations)
 {
     double position;
-    char ancestral_state;
-    size_t j;
+    char *ancestral_state = NULL;
+    size_t j, k, length;
 
+    /* printf("BEFORE\n"); */
+    /* site_table_print_state(sites, stdout); */
+    /* mutation_table_print_state(mutations, stdout); */
     if (sites->num_rows > 1) {
         /* Swap the first two sites */
         CU_ASSERT_EQUAL_FATAL(sites->ancestral_state_offset[0], 0);
-        CU_ASSERT_EQUAL_FATAL(sites->ancestral_state_offset[1], 1);
-        CU_ASSERT_EQUAL_FATAL(sites->ancestral_state_offset[2], 2);
+
         position = sites->position[0];
-        ancestral_state = sites->ancestral_state[0];
+        length = sites->ancestral_state_offset[1];
+        /* Save a copy of the first ancestral state */
+        ancestral_state = malloc(length);
+        CU_ASSERT_FATAL(ancestral_state != NULL);
+        memcpy(ancestral_state, sites->ancestral_state, length);
+        /* Now write the ancestral state for the site 1 here */
+        k = 0;
+        for (j = sites->ancestral_state_offset[1]; j < sites->ancestral_state_offset[2];
+                j++) {
+            sites->ancestral_state[k] = sites->ancestral_state[j];
+            k++;
+        }
+        sites->ancestral_state_offset[1] = k;
+        memcpy(sites->ancestral_state + k, ancestral_state, length);
         sites->position[0] = sites->position[1];
         sites->position[1] = position;
-        sites->ancestral_state[0] = sites->ancestral_state[1];
-        sites->ancestral_state[1] = ancestral_state;
 
         /* Update the mutations for these sites */
         j = 0;
@@ -561,7 +575,9 @@ unsort_sites(site_table_t *sites, mutation_table_t *mutations)
             j++;
         }
     }
+    msp_safe_free(ancestral_state);
 
+    /* printf("AFTER\n"); */
     /* site_table_print_state(sites, stdout); */
     /* mutation_table_print_state(mutations, stdout); */
 }
@@ -778,20 +794,40 @@ verify_hapgen(tree_sequence_t *ts)
     char *haplotype;
     size_t num_samples = tree_sequence_get_num_samples(ts);
     size_t num_sites = tree_sequence_get_num_sites(ts);
+    site_t site;
     size_t j;
+    int k;
+    bool single_char = true;
+
+    for (j = 0; j < num_sites; j++) {
+        ret = tree_sequence_get_site(ts, j, &site);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        if (site.ancestral_state_length != 1) {
+            single_char = false;
+        }
+        for (k = 0; k < site.mutations_length; k++) {
+            if (site.mutations[k].derived_state_length != 1) {
+                single_char = false;
+            }
+        }
+    }
 
     ret = hapgen_alloc(&hapgen, ts);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    hapgen_print_state(&hapgen, _devnull);
+    if (single_char) {
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        hapgen_print_state(&hapgen, _devnull);
 
-    for (j = 0; j < num_samples; j++) {
-        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(strlen(haplotype), num_sites);
-    }
-    for (j = num_samples; j < num_samples + 10; j++) {
-        ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+        for (j = 0; j < num_samples; j++) {
+            ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(strlen(haplotype), num_sites);
+        }
+        for (j = num_samples; j < num_samples + 10; j++) {
+            ret = hapgen_get_haplotype(&hapgen, j, &haplotype);
+            CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+        }
+    } else {
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NON_SINGLE_CHAR_MUTATION);
     }
     ret = hapgen_free(&hapgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -822,7 +858,7 @@ verify_vargen(tree_sequence_t *ts)
         CU_ASSERT_NSTRING_EQUAL_FATAL(var->alleles[0], var->site->ancestral_state,
                 var->allele_lengths[0]);
         for (k = 0; k < var->num_alleles; k++) {
-            CU_ASSERT_TRUE(var->allele_lengths[k] > 0);
+            CU_ASSERT_TRUE(var->allele_lengths[k] >= 0);
         }
         for (k = 0; k < num_samples; k++) {
             CU_ASSERT(var->genotypes[k] <= var->num_alleles);
@@ -914,63 +950,62 @@ verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
     sparse_tree_free(&tree);
 }
 
-/* When we keep all sites in simplify, the haplotypes for the subset of the
+/* When we keep all sites in simplify, the genotypes for the subset of the
  * samples should be the same as the original */
 static void
-verify_simplify_haplotypes(tree_sequence_t *ts, tree_sequence_t *subset,
+verify_simplify_genotypes(tree_sequence_t *ts, tree_sequence_t *subset,
         node_id_t *samples, uint32_t num_samples, node_id_t *node_map)
 {
     int ret;
     size_t m = tree_sequence_get_num_sites(ts);
-    size_t n = tree_sequence_get_num_samples(ts);
-    hapgen_t hapgen, subset_hapgen;
-    char *h;
-    char **haplotypes;
-    size_t j;
+    vargen_t vargen, subset_vargen;
+    variant_t *variant, *subset_variant;
+    size_t j, k;
     node_id_t *all_samples;
+    uint8_t a1, a2;
+    node_id_t *sample_index_map;
+
+    tree_sequence_get_sample_index_map(ts, &sample_index_map);
 
     /* tree_sequence_print_state(ts, stdout); */
+    /* tree_sequence_print_state(subset, stdout); */
 
-    ret = hapgen_alloc(&hapgen, ts);
-    /* printf("ret = %s\n", msp_strerror(ret)); */
+    ret = vargen_alloc(&vargen, ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = hapgen_alloc(&subset_hapgen, subset);
+    ret = vargen_alloc(&subset_vargen, subset, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(m, tree_sequence_get_num_sites(subset));
     tree_sequence_get_samples(ts, &all_samples);
 
-    /* printf("n = %d m = %d\n", (int) n, (int) m); */
-    /* tree_sequence_print_state(ts, stdout); */
-    /* printf("SUBSET\n"); */
-    /* tree_sequence_print_state(subset, stdout); */
-
-    haplotypes = calloc(tree_sequence_get_num_nodes(ts),  sizeof(char *));
-    CU_ASSERT_FATAL(haplotypes != NULL);
-    for (j = 0; j < n; j++) {
-        ret = hapgen_get_haplotype(&hapgen, j, &h);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        haplotypes[all_samples[j]] = malloc((m + 1) * sizeof(char));
-        CU_ASSERT_FATAL(haplotypes[all_samples[j]] != NULL);
-        strcpy(haplotypes[all_samples[j]], h);
-        /* printf("%d: %s\n", j, haplotypes[j]); */
-    }
-    for (j = 0; j < num_samples; j++) {
-        /* CU_ASSERT_EQUAL_FATAL(node_map[samples[j]], all_samples[j]); */
-        ret = hapgen_get_haplotype(&subset_hapgen, j, &h);
-        /* printf("new: %s\n", h); */
-        /* printf("old: %s\n", haplotypes[samples[j]]); */
-
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_STRING_EQUAL_FATAL(h, haplotypes[samples[j]]);
-    }
-    for (j = 0; j < tree_sequence_get_num_nodes(ts); j++) {
-        if (haplotypes[j] != NULL) {
-            free(haplotypes[j]);
+    for (j = 0; j < m; j++) {
+        ret = vargen_next(&vargen, &variant);
+        CU_ASSERT_EQUAL_FATAL(ret, 1);
+        ret = vargen_next(&subset_vargen, &subset_variant);
+        CU_ASSERT_EQUAL_FATAL(ret, 1);
+        CU_ASSERT_EQUAL(variant->site->id, j)
+        CU_ASSERT_EQUAL(subset_variant->site->id, j)
+        CU_ASSERT_EQUAL(variant->site->position, subset_variant->site->position);
+        for (k = 0; k < num_samples; k++) {
+            CU_ASSERT_FATAL(sample_index_map[samples[k]] < ts->num_samples);
+            a1 = variant->genotypes[sample_index_map[samples[k]]];
+            a2 = subset_variant->genotypes[k];
+            /* printf("a1 = %d, a2 = %d\n", a1, a2); */
+            /* printf("k = %d original node = %d " */
+            /*         "original_index = %d a1=%.*s a2=%.*s\n", */
+            /*         (int) k, samples[k], sample_index_map[samples[k]], */
+            /*         variant->allele_lengths[a1], variant->alleles[a1], */
+            /*         subset_variant->allele_lengths[a2], subset_variant->alleles[a2]); */
+            CU_ASSERT_FATAL(a1 < variant->num_alleles);
+            CU_ASSERT_FATAL(a2 < subset_variant->num_alleles);
+            CU_ASSERT_EQUAL_FATAL(variant->allele_lengths[a1],
+                    subset_variant->allele_lengths[a2]);
+            CU_ASSERT_NSTRING_EQUAL(
+                variant->alleles[a1], subset_variant->alleles[a2],
+                variant->allele_lengths[a1]);
         }
     }
-    free(haplotypes);
-    hapgen_free(&hapgen);
-    hapgen_free(&subset_hapgen);
+    vargen_free(&vargen);
+    vargen_free(&subset_vargen);
 }
 
 
@@ -1120,7 +1155,7 @@ verify_simplify(tree_sequence_t *ts)
                     node_map);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
-            verify_simplify_haplotypes(ts, &subset, sample, num_samples[j], node_map);
+            verify_simplify_genotypes(ts, &subset, sample, num_samples[j], node_map);
         }
     }
     tree_sequence_free(&subset);
@@ -1295,9 +1330,9 @@ get_example_nonbinary_tree_sequences(void)
     ret[1] = get_example_tree_sequence(10, 2, 100, 10.0, 1.0, 2.0,
             1, bottlenecks, MSP_ALPHABET_BINARY);
     ret[2] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
-            2, bottlenecks, MSP_ALPHABET_BINARY);
+            2, bottlenecks, MSP_ALPHABET_ASCII);
     ret[3] = get_example_tree_sequence(100, 0, 100, 1.0, 1.0, 0.0,
-            3, other_bottlenecks, MSP_ALPHABET_BINARY);
+            3, other_bottlenecks, MSP_ALPHABET_ASCII);
     ret[4] = NULL;
     return ret;
 }
@@ -1634,6 +1669,68 @@ make_decapitated_copy(tree_sequence_t *ts)
     return new_ts;
 }
 
+tree_sequence_t *
+make_multichar_mutations_copy(tree_sequence_t *ts)
+{
+    int ret;
+    tree_sequence_t *new_ts = malloc(sizeof(tree_sequence_t));
+    node_table_t nodes;
+    edge_table_t edges;
+    migration_table_t migrations;
+    mutation_table_t mutations;
+    provenance_table_t provenance;
+    site_table_t sites;
+    size_t j;
+    char *timestamp = "timestamp";
+    char *record = "make_multichar_mutations_copy";
+    char string[] = "ACCCTTAAGGAAGGCCGG";
+
+    CU_ASSERT_FATAL(new_ts != NULL);
+    ret = node_table_alloc(&nodes, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = edge_table_alloc(&edges, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&migrations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(&sites, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(&mutations, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&provenance, 0, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tree_sequence_dump_tables(ts, &nodes, &edges,
+            &migrations, NULL, NULL, &provenance, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < GSL_MIN(strlen(string), ts->num_samples); j++) {
+        ret = site_table_add_row(&sites,
+                j * (ts->sequence_length / strlen(string)),
+                string, j, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = mutation_table_add_row(&mutations, j, j, MSP_NULL_NODE,
+                string, j + 1, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+    ret = provenance_table_add_row(&provenance,
+            timestamp, strlen(timestamp), record, strlen(record));
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_initialise(new_ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
+            &sites, &mutations, &provenance, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    node_table_free(&nodes);
+    edge_table_free(&edges);
+    migration_table_free(&migrations);
+    site_table_free(&sites);
+    mutation_table_free(&mutations);
+    provenance_table_free(&provenance);
+
+    return new_ts;
+}
+
 tree_sequence_t **
 get_example_tree_sequences(int include_nonbinary)
 {
@@ -1648,14 +1745,15 @@ get_example_tree_sequences(int include_nonbinary)
     ret[1] = get_example_tree_sequence(2, 0, 1, 0.1, 1.0, 1.0, 0, NULL,
             MSP_ALPHABET_BINARY);
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 10.0, 0.0, 0, NULL,
-            MSP_ALPHABET_BINARY);
+            MSP_ALPHABET_ASCII);
     ret[3] = get_example_tree_sequence(10, 0, UINT32_MAX, 10.0,
-            9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_BINARY);
+            9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_ASCII);
     ret[4] = make_recurrent_and_back_mutations_copy(ret[0]);
     ret[5] = make_permuted_nodes_copy(ret[0]);
     ret[6] = make_gappy_copy(ret[0]);
     ret[7] = make_decapitated_copy(ret[0]);
-    k = 8;
+    ret[8] = make_multichar_mutations_copy(ret[0]);
+    k = 9;
     if (include_nonbinary) {
         nonbinary = get_example_nonbinary_tree_sequences();
         for (j = 0; nonbinary[j] != NULL; j++) {
