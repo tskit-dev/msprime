@@ -1404,14 +1404,17 @@ class TreeSequence(object):
             edges_in = [Edge(*e) for e in edge_tuples_in]
             yield interval, edges_out, edges_in
 
+    def site(self, index):
+        ll_site = self._ll_tree_sequence.get_site(index)
+        pos, ancestral_state, mutations, index, metadata = ll_site
+        return Site(
+            position=pos, ancestral_state=ancestral_state, index=index,
+            mutations=[Mutation(*mutation) for mutation in mutations],
+            metadata=metadata)
+
     def sites(self):
         for j in range(self.num_sites):
-            ll_site = self._ll_tree_sequence.get_site(j)
-            pos, ancestral_state, mutations, index, metadata = ll_site
-            yield Site(
-                position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations],
-                metadata=metadata)
+            yield self.site(j)
 
     def mutations(self):
         """

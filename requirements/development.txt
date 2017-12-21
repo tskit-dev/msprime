@@ -23,3 +23,6 @@ pyparsing < 2.1
 # on travis.
 pysam==0.9.1.4
 PyVCF
+
+# We use JSON-schema to test out metadata handling.
+python_jsonschema_objects

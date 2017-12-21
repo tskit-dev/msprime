@@ -19,6 +19,7 @@ test_script:
   - "pip install svgwrite"  # svgwrite isn't available in conda
   - "pip install PyVCF"  
   - "pip install newick"  
+  - "pip install python_jsonschema_objects"
 
   # There seems to be an issue here, where we're not using the correct 
   # version of Python.

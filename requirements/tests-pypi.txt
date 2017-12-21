@@ -15,3 +15,4 @@ pyparsing < 2.1
 # on travis.
 pysam==0.9.1.4
 PyVCF
+python_jsonschema_objects
