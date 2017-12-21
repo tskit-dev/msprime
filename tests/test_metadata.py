@@ -30,6 +30,7 @@ import unittest
 import pickle
 
 import numpy as np
+import python_jsonschema_objects as pjs
 
 import msprime
 
@@ -87,3 +88,104 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
         ts1.dump(self.temp_file)
         ts2 = msprime.load(self.temp_file)
         self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
+
+
+class ExampleMetadata(object):
+    """
+    Simple class that we can pickle/unpickle in metadata.
+    """
+    def __init__(self, one=None, two=None):
+        self.one = one
+        self.two = two
+
+
+class TestMetadataPickleDecoding(unittest.TestCase):
+    """
+    Tests in which use pickle.pickle to decode metadata in nodes, sites and mutations.
+    """
+
+    def test_nodes(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        metadata = ExampleMetadata(one="node1", two="node2")
+        pickled = pickle.dumps(metadata)
+        nodes.add_row(time=0.125, metadata=pickled)
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        node = ts.node(0)
+        self.assertEqual(node.time, 0.125)
+        self.assertEqual(node.metadata, pickled)
+        unpickled = pickle.loads(node.metadata)
+        self.assertEqual(unpickled.one, metadata.one)
+        self.assertEqual(unpickled.two, metadata.two)
+
+    def test_sites(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        metadata = ExampleMetadata(one="node1", two="node2")
+        pickled = pickle.dumps(metadata)
+        sites.add_row(position=0.1, ancestral_state="A", metadata=pickled)
+        ts = msprime.load_tables(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
+        site = ts.site(0)
+        self.assertEqual(site.position, 0.1)
+        self.assertEqual(site.ancestral_state, "A")
+        self.assertEqual(site.metadata, pickled)
+        unpickled = pickle.loads(site.metadata)
+        self.assertEqual(unpickled.one, metadata.one)
+        self.assertEqual(unpickled.two, metadata.two)
+
+    def test_mutations(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        metadata = ExampleMetadata(one="node1", two="node2")
+        pickled = pickle.dumps(metadata)
+        nodes.add_row(time=0)
+        sites.add_row(position=0.1, ancestral_state="A")
+        mutations.add_row(site=0, node=0, derived_state="T", metadata=pickled)
+        ts = msprime.load_tables(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+            sequence_length=1)
+        mutation = ts.site(0).mutations[0]
+        self.assertEqual(mutation.site, 0)
+        self.assertEqual(mutation.node, 0)
+        self.assertEqual(mutation.derived_state, "T")
+        self.assertEqual(mutation.metadata, pickled)
+        unpickled = pickle.loads(mutation.metadata)
+        self.assertEqual(unpickled.one, metadata.one)
+        self.assertEqual(unpickled.two, metadata.two)
+
+
+class TestJsonSchemaDecoding(unittest.TestCase):
+    """
+    Tests in which use json-schema to decode the metadata.
+    """
+    schema = """{
+        "title": "Example Metadata",
+        "type": "object",
+        "properties": {
+            "one": {"type": "string"},
+            "two": {"type": "string"}
+        },
+        "required": ["one", "two"]
+    }"""
+
+    def test_nodes(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        builder = pjs.ObjectBuilder(json.loads(self.schema))
+        ns = builder.build_classes()
+        metadata = ns.ExampleMetadata(one="node1", two="node2")
+        encoded = json.dumps(metadata.as_dict()).encode()
+        nodes.add_row(time=0.125, metadata=encoded)
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        node = ts.node(0)
+        self.assertEqual(node.time, 0.125)
+        self.assertEqual(node.metadata, encoded)
+        decoded = ns.ExampleMetadata.from_json(node.metadata.decode())
+        self.assertEqual(decoded.one, metadata.one)
+        self.assertEqual(decoded.two, metadata.two)
