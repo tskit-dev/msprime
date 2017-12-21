@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016 University of Oxford
+** Copyright (C) 2016-2017 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -24,6 +24,8 @@
 #include "err.h"
 #include "object_heap.h"
 #include "msprime.h"
+
+#define MAX_ALLELES UINT8_MAX
 
 void
 vargen_print_state(vargen_t *self, FILE *out)
@@ -56,25 +58,23 @@ vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags)
     assert(tree_sequence != NULL);
     memset(self, 0, sizeof(vargen_t));
 
-    /* For now, the logic only supports infinite sites binary mutations. We need to
-     * think about how to structure this API to support the general case (lots of
-     * mutations happening along the tree) without making it too inefficient and
-     * breaking too much code.
-     */
-    if (tree_sequence_get_alphabet(tree_sequence) != MSP_ALPHABET_BINARY) {
-        ret = MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED;
-        goto out;
-    }
     self->num_samples = tree_sequence_get_num_samples(tree_sequence);
-    self->sequence_length = tree_sequence_get_sequence_length(tree_sequence);
     self->num_sites = tree_sequence_get_num_sites(tree_sequence);
     self->tree_sequence = tree_sequence;
     self->flags = flags;
+    self->variant.genotypes = malloc(self->num_samples * sizeof(*self->variant.genotypes));
+    self->variant.alleles = malloc(MAX_ALLELES * sizeof(*self->variant.alleles));
+    self->variant.allele_lengths = malloc(MAX_ALLELES
+            * sizeof(*self->variant.allele_lengths));
+    if (self->variant.genotypes == NULL || self->variant.alleles == NULL
+            || self->variant.allele_lengths == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     ret = tree_sequence_get_sample_index_map(tree_sequence, &self->sample_index_map);
     if (ret != 0) {
         goto out;
     }
-
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_SAMPLE_LISTS);
     if (ret != 0) {
         goto out;
@@ -94,23 +94,63 @@ int
 vargen_free(vargen_t *self)
 {
     sparse_tree_free(&self->tree);
+    msp_safe_free(self->variant.genotypes);
+    msp_safe_free(self->variant.alleles);
+    msp_safe_free(self->variant.allele_lengths);
     return 0;
 }
 
 static int
-vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state_offset)
+vargen_update_site(vargen_t *self)
 {
     int ret = 0;
     node_list_t *w, *tail;
     node_id_t sample_index;
     bool not_done;
     table_size_t j;
-    char derived;
-    char ancestral = (char) (site->ancestral_state[0] - state_offset);
+    variant_t *var = &self->variant;
+    site_t *site = var->site;
+    uint8_t *genotypes = var->genotypes;
+    node_id_t *sample_index_map = self->sample_index_map;
+    uint8_t derived;
 
-    memset(genotypes, ancestral, self->num_samples);
+    /* Ancestral state is always allele 0 */
+    var->alleles[0] = site->ancestral_state;
+    var->allele_lengths[0] = site->ancestral_state_length;
+    var->num_alleles = 1;
+
+    /* The algorithm for generating the allelic state of every sample works by
+     * examining each mutation in order, and setting the state for all the
+     * samples under the mutation's node. For complex sites where there is
+     * more than one mutation, we depend on the ordering of mutations being
+     * correct. Specifically, any mutation that is above another mutation in
+     * the tree must be visited first. This is enforced using the mutation.parent
+     * field, where we require that a mutation's parent must appear before it
+     * in the list of mutations. This guarantees the correctness of this algorith.
+     */
+
+    memset(genotypes, 0, self->num_samples);
     for (j = 0; j < site->mutations_length; j++) {
-        derived = (char) (site->mutations[j].derived_state[0] - state_offset);
+        /* Compute the allele index for this derived state value. */
+        derived = 0;
+        while (derived < var->num_alleles) {
+            if (site->mutations[j].derived_state_length == var->allele_lengths[derived]
+                    && memcmp(site->mutations[j].derived_state, var->alleles[derived],
+                        var->allele_lengths[derived]) == 0) {
+                break;
+            }
+            derived++;
+        }
+        if (derived == var->num_alleles) {
+            if (var->num_alleles == MAX_ALLELES) {
+                ret = MSP_ERR_TOO_MANY_ALLELES;
+                goto out;
+            }
+            var->alleles[derived] = site->mutations[j].derived_state;
+            var->allele_lengths[derived] = site->mutations[j].derived_state_length;
+            var->num_alleles++;
+        }
+
         ret = sparse_tree_get_sample_list(&self->tree, site->mutations[j].node, &w, &tail);
         if (ret != 0) {
             goto out;
@@ -119,7 +159,7 @@ vargen_apply_tree_site(vargen_t *self, site_t *site, char *genotypes, char state
             not_done = true;
             while (not_done) {
                 assert(w != NULL);
-                sample_index = self->sample_index_map[w->node];
+                sample_index = sample_index_map[w->node];
                 assert(sample_index >= 0);
                 if (genotypes[sample_index] == derived) {
                     ret = MSP_ERR_INCONSISTENT_MUTATIONS;
@@ -136,17 +176,12 @@ out:
 }
 
 int
-vargen_next(vargen_t *self, site_t **site, char *genotypes)
+vargen_next(vargen_t *self, variant_t **variant)
 {
     int ret = 0;
 
     bool not_done = true;
-    site_t *s;
-    char offset = 0;
 
-    if (! (self->flags & MSP_GENOTYPES_AS_CHAR)) {
-       offset = '0';
-    }
     if (!self->finished) {
         while (not_done && self->tree_site_index == self->tree.sites_length) {
             ret = vargen_next_tree(self);
@@ -156,13 +191,13 @@ vargen_next(vargen_t *self, site_t **site, char *genotypes)
             not_done = ret == 1;
         }
         if (not_done) {
-            s = &self->tree.sites[self->tree_site_index];
-            ret = vargen_apply_tree_site(self, s, genotypes, offset);
+            self->variant.site = &self->tree.sites[self->tree_site_index];
+            ret = vargen_update_site(self);
             if (ret != 0) {
                 goto out;
             }
             self->tree_site_index++;
-            *site = s;
+            *variant = &self->variant;
             ret = 1;
         }
     }

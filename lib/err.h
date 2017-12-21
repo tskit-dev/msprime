@@ -73,7 +73,7 @@
 #define MSP_ERR_DUPLICATE_EDGES                                     -42
 #define MSP_ERR_NOT_INITIALISED                                     -43
 #define MSP_ERR_BAD_OFFSET                                          -44
-
+#define MSP_ERR_TOO_MANY_ALLELES                                    -45
 #define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
 #define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
 #define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
@@ -85,7 +85,7 @@
 #define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -54
 #define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -55
 #define MSP_ERR_LENGTH_MISMATCH                                     -56
-#define MSP_ERR_BAD_ALPHABET                                        -57
+
 #define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
 #define MSP_ERR_UNSORTED_SITES                                      -59
 #define MSP_ERR_BAD_SITE_POSITION                                   -60

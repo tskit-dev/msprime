@@ -87,15 +87,11 @@ DeprecatedMutation = collections.namedtuple(
 
 
 # This form was chosen to try to break as little of existing code as possible.
-# It seems likely that the `node` member was not used for much in this
-# iterator, so that it shouldn't break too much if we replace this with the
-# underlying site. The position and index values are retained for compatability,
-# although they are not redundant. There is a wider question about what the
-# genotypes values should be when we have non binary mutations, and whether
-# this is a viable long-term API.
+# The position and index values are retained for compatability,
+# although they are redundant.
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "site", "index", "genotypes"])
+    ["position", "site", "index", "genotypes", "alleles"])
 
 
 # TODO this interface is rubbish. Should have much better printing options.
@@ -1571,12 +1567,6 @@ class TreeSequence(object):
         The default behaviour is to return a numpy array, which is
         substantially more efficient.
 
-        :warning: The same numpy array is used to represent genotypes between
-            iterations, so if you wish the store the results of this
-            iterator you **must** take a copy of the array. This warning
-            does not apply when ``as_bytes`` is True, as a new bytes object
-            is allocated for each variant.
-
         :param bool as_bytes: If True, the genotype values will be returned
             as a Python bytes object. This is useful in certain situations
             (i.e., directly printing the genotypes) or when numpy is
@@ -1585,29 +1575,28 @@ class TreeSequence(object):
         :return: An iterator of all :math:`(x, u, j, g)` tuples defining
             the variants in this tree sequence.
         """
-        # TODO finalise API and documnent. See comments for the Variant type
-        # for discussion on why the present form was chosen.
-        n = self.num_samples
-        genotypes_buffer = bytearray(n)
-        iterator = _msprime.VariantGenerator(
-            self._ll_tree_sequence, genotypes_buffer, as_bytes)
-        if as_bytes:
-            for pos, ancestral_state, mutations, index, metadata in iterator:
-                site = Site(
-                    position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations],
-                    metadata=metadata)
-                g = bytes(genotypes_buffer)
-                yield Variant(position=pos, site=site, index=index, genotypes=g)
-        else:
-            check_numpy()
-            g = np.frombuffer(genotypes_buffer, "u1", n)
-            for pos, ancestral_state, mutations, index, metadata in iterator:
-                site = Site(
-                    position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations],
-                    metadata=metadata)
-                yield Variant(position=pos, site=site, index=index, genotypes=g)
+        # See comments for the Variant type for discussion on why the
+        # present form was chosen.
+        check_numpy()
+        iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
+        for ll_site, genotypes, alleles in iterator:
+            pos, ancestral_state, mutations, index, metadata = ll_site
+            site = Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
+            if as_bytes:
+                if any(len(allele) > 1 for allele in alleles):
+                    raise ValueError(
+                        "as_bytes only supported for single-letter alleles")
+                bytes_genotypes = np.empty(self.num_samples, dtype=np.uint8)
+                lookup = np.array([ord(a[0]) for a in alleles], dtype=np.uint8)
+                bytes_genotypes[:] = lookup[genotypes]
+                genotypes = bytes_genotypes.tobytes()
+            v = Variant(
+                position=pos, site=site, index=index, genotypes=genotypes,
+                alleles=alleles)
+            yield v
 
     def genotype_matrix(self):
         return self._ll_tree_sequence.get_genotype_matrix()

@@ -43,16 +43,14 @@
 /* Flags for simplify() */
 #define MSP_FILTER_ZERO_MUTATION_SITES 1
 
+/* Flags for dump tables */
+#define MSP_ALLOC_TABLES 1
+
 #define MSP_SAMPLE_COUNTS  1
 #define MSP_SAMPLE_LISTS   2
 
 #define MSP_DIR_FORWARD 1
 #define MSP_DIR_REVERSE -1
-
-#define MSP_GENOTYPES_AS_CHAR 1
-
-#define MSP_ALPHABET_BINARY 0
-#define MSP_ALPHABET_ASCII  1
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -62,8 +60,6 @@
 #define MSP_MODEL_DTWF 5
 
 #define MSP_NODE_IS_SAMPLE 1
-
-#define MAX_BRANCH_LENGTH_STRING 24
 
 /* The root node indicator */
 #define MSP_NULL_NODE (-1)
@@ -442,7 +438,6 @@ typedef struct {
     uint32_t initialised_magic;
     size_t num_trees;
     double sequence_length;
-    int alphabet;
     size_t num_samples;
     size_t max_num_samples;
     node_id_t *samples;
@@ -613,19 +608,22 @@ typedef struct {
     size_t num_sites;
     tree_sequence_t *tree_sequence;
     node_id_t *sample_index_map;
-    /* The haplotype binary matrix. This is an optimised special case. */
-    bool binary;
-    size_t words_per_row;
-    uint64_t *binary_haplotype_matrix;
     char *output_haplotype;
-    /* The general haplotype matrix. */
-    char *ascii_haplotype_matrix;
+    char *haplotype_matrix;
     sparse_tree_t tree;
 } hapgen_t;
 
 typedef struct {
+    site_t *site;
+    const char **alleles;
+    table_size_t *allele_lengths;
+    table_size_t num_alleles;
+    table_size_t max_alleles;
+    uint8_t *genotypes;
+} variant_t;
+
+typedef struct {
     size_t num_samples;
-    double sequence_length;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
     node_id_t *sample_index_map;
@@ -633,6 +631,7 @@ typedef struct {
     int finished;
     sparse_tree_t tree;
     int flags;
+    variant_t variant;
 } vargen_t;
 
 typedef struct {
@@ -847,7 +846,6 @@ size_t tree_sequence_get_num_provenances(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_num_samples(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
-int tree_sequence_get_alphabet(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 
 int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
@@ -934,7 +932,7 @@ int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
 int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
-int vargen_next(vargen_t *self, site_t **site, char *genotypes);
+int vargen_next(vargen_t *self, variant_t **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);
 

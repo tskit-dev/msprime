@@ -227,9 +227,6 @@ msp_strerror(int err)
         case MSP_ERR_LENGTH_MISMATCH:
             ret = "Mismatch in stored total column length and sum of row lengths";
             break;
-        case MSP_ERR_BAD_ALPHABET:
-            ret = "Unknown alphabet provided.";
-            break;
         case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
             ret = "Only single char mutations supported.";
             break;
@@ -275,6 +272,9 @@ msp_strerror(int err)
             break;
         case MSP_ERR_BAD_OFFSET:
             ret = "Bad offset provided in input array.";
+            break;
+        case MSP_ERR_TOO_MANY_ALLELES:
+            ret = "Cannot have more than 255 alleles.";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {

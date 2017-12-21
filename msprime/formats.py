@@ -268,26 +268,26 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
         children.append(record.children)
         time.append(record.time)
         population.append(record.population)
-    l = len(time)
+    length = len(time)
     trees = root.create_group("trees")
     trees.attrs["environment"] = json.dumps({"msprime_version": 0})
     trees.attrs["parameters"] = "{}"
-    trees.create_dataset("left", (l, ), data=left, dtype=float)
-    trees.create_dataset("right", (l, ), data=right, dtype=float)
-    trees.create_dataset("time", (l, ), data=time, dtype=float)
-    trees.create_dataset("node", (l, ), data=node, dtype="u4")
-    trees.create_dataset("population", (l, ), data=population, dtype="u1")
+    trees.create_dataset("left", (length, ), data=left, dtype=float)
+    trees.create_dataset("right", (length, ), data=right, dtype=float)
+    trees.create_dataset("time", (length, ), data=time, dtype=float)
+    trees.create_dataset("node", (length, ), data=node, dtype="u4")
+    trees.create_dataset("population", (length, ), data=population, dtype="u1")
     trees.create_dataset(
-        "children", (l, 2), data=children, dtype="u4")
+        "children", (length, 2), data=children, dtype="u4")
     samples = root.create_group("samples")
     population = []
     time = []
-    l = tree_sequence.get_sample_size()
-    for u in range(l):
+    length = tree_sequence.get_sample_size()
+    for u in range(length):
         time.append(tree_sequence.get_time(u))
         population.append(tree_sequence.get_population(u))
-    samples.create_dataset("time", (l, ), data=time, dtype=float)
-    samples.create_dataset("population", (l, ), data=population, dtype="u1")
+    samples.create_dataset("time", (length, ), data=time, dtype=float)
+    samples.create_dataset("population", (length, ), data=population, dtype="u1")
     if tree_sequence.get_num_mutations() > 0:
         node = []
         position = []
@@ -298,12 +298,12 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
                 raise ValueError("v2 does not support non-binary mutations")
             position.append(site.position)
             node.append(site.mutations[0].node)
-        l = len(node)
+        length = len(node)
         mutations = root.create_group("mutations")
         mutations.attrs["environment"] = json.dumps({"msprime_version": 0})
         mutations.attrs["parameters"] = "{}"
-        mutations.create_dataset("position", (l, ), data=position, dtype=float)
-        mutations.create_dataset("node", (l, ), data=node, dtype="u4")
+        mutations.create_dataset("position", (length, ), data=position, dtype=float)
+        mutations.create_dataset("node", (length, ), data=node, dtype="u4")
 
 
 def _dump_legacy_hdf5_v3(tree_sequence, root):
@@ -331,19 +331,22 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
         num_children.append(len(cr.children))
         time.append(cr.time)
     records_group = trees.create_group("records")
-    l = len(num_children)
-    records_group.create_dataset("left", (l, ), data=left, dtype="u4")
-    records_group.create_dataset("right", (l, ), data=right, dtype="u4")
-    records_group.create_dataset("node", (l, ), data=node, dtype="u4")
-    records_group.create_dataset("num_children", (l, ), data=num_children, dtype="u4")
+    length = len(num_children)
+    records_group.create_dataset("left", (length, ), data=left, dtype="u4")
+    records_group.create_dataset("right", (length, ), data=right, dtype="u4")
+    records_group.create_dataset("node", (length, ), data=node, dtype="u4")
+    records_group.create_dataset(
+        "num_children", (length, ), data=num_children, dtype="u4")
     records_group.create_dataset(
         "children", (len(children), ), data=children, dtype="u4")
 
     indexes_group = trees.create_group("indexes")
-    I = sorted(range(l), key=lambda j: (left[j], time[j]))
-    O = sorted(range(l), key=lambda j: (right[j], -time[j]))
-    indexes_group.create_dataset("insertion_order", (l, ), data=I, dtype="u4")
-    indexes_group.create_dataset("removal_order", (l, ), data=O, dtype="u4")
+    left_index = sorted(range(length), key=lambda j: (left[j], time[j]))
+    right_index = sorted(range(length), key=lambda j: (right[j], -time[j]))
+    indexes_group.create_dataset(
+        "insertion_order", (length, ), data=left_index, dtype="u4")
+    indexes_group.create_dataset(
+        "removal_order", (length, ), data=right_index, dtype="u4")
 
     nodes_group = trees.create_group("nodes")
     population = np.zeros(tree_sequence.num_nodes, dtype="u4")
@@ -355,9 +358,9 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
     for cr in tree_sequence.records():
         population[cr.node] = cr.population
         time[cr.node] = cr.time
-    l = tree_sequence.num_nodes
-    nodes_group.create_dataset("time", (l, ), data=time, dtype=float)
-    nodes_group.create_dataset("population", (l, ), data=population, dtype="u4")
+    length = tree_sequence.num_nodes
+    nodes_group.create_dataset("time", (length, ), data=time, dtype=float)
+    nodes_group.create_dataset("population", (length, ), data=population, dtype="u4")
 
     node = []
     position = []
@@ -368,11 +371,11 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
             raise ValueError("v3 does not support non-binary mutations")
         position.append(site.position)
         node.append(site.mutations[0].node)
-    l = len(position)
-    if l > 0:
+    length = len(position)
+    if length > 0:
         mutations = root.create_group("mutations")
-        mutations.create_dataset("position", (l, ), data=position, dtype=float)
-        mutations.create_dataset("node", (l, ), data=node, dtype="u4")
+        mutations.create_dataset("position", (length, ), data=position, dtype=float)
+        mutations.create_dataset("node", (length, ), data=node, dtype="u4")
 
 
 def dump_legacy(tree_sequence, filename, version=3):

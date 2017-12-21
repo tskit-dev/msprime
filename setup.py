@@ -134,7 +134,7 @@ class DefineMacros(object):
             else:
                 self._msprime_version = '"{}"'.format(version)
 
-        l = [
+        defines = [
             # We define this macro to ensure we're using the v18 versions of
             # the HDF5 API and not earlier deprecated versions.
             ("H5_NO_DEPRECATED_SYMBOLS", None),
@@ -142,15 +142,15 @@ class DefineMacros(object):
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
         if IS_WINDOWS:
-            l += [
+            defines += [
                 # These two are required for GSL to compile and link against the
                 # conda-forge version.
                 ("GSL_DLL", None), ("WIN32", None),
                 # This is needed for HDF5 to link properly.
                 ("H5_BUILT_AS_DYNAMIC_LIB", None)]
         if HAVE_NUMPY:
-            l += [("HAVE_NUMPY", None)]
-        return l[index]
+            defines += [("HAVE_NUMPY", None)]
+        return defines[index]
 
 
 configurator = PathConfigurator()

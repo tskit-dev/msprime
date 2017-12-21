@@ -40,34 +40,17 @@ class WrightFisherSimulator(object):
     for ngens generations, in which each individual survives with probability
     survival and only those who die are replaced.  The chromosome is 1.0
     Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
-    Setting `nloci` to something finite allows recurrent mutations.
-
-    Note that this does *not* compute the mutation parent column.
     """
-    def __init__(
-            self, N, survival=0.0, mutation_rate=0.0, seed=None, deep_history=True,
-            nloci=np.Inf, debug=False):
+    def __init__(self, N, survival=0.0, seed=None, deep_history=True, debug=False):
         self.N = N
         self.survival = survival
-        self.mutation_rate = mutation_rate
         self.deep_history = deep_history
         self.debug = debug
-        self.nloci = nloci
         if seed is not None:
             random.seed(seed)
 
     def random_breakpoint(self):
         return min(1.0, max(0.0, 2 * random.random() - 0.5))
-
-    def random_mutations(self):
-        nmuts = np.random.poisson(lam=self.mutation_rate)
-        muts = [random.random() for _ in range(nmuts)]
-        if np.isfinite(self.nloci):
-            muts = [np.floor(x * self.nloci)/self.nloci for x in muts]
-        return muts
-
-    def random_allele(self):
-        return random.choice(['A', 'C', 'G', 'T'])
 
     def run(self, ngens):
         nodes = msprime.NodeTable()
@@ -76,7 +59,6 @@ class WrightFisherSimulator(object):
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
         provenances = msprime.ProvenanceTable()
-        mut_positions = {}
         if self.deep_history:
             # initial population
             init_ts = msprime.simulate(self.N, recombination_rate=1.0)
@@ -107,7 +89,6 @@ class WrightFisherSimulator(object):
                     lparent, rparent = new_parents[k]
                     k += 1
                     bp = self.random_breakpoint()
-                    muts = self.random_mutations()
                     if self.debug:
                         print("--->", offspring, lparent, rparent, bp)
                     pop[j] = offspring
@@ -117,14 +98,6 @@ class WrightFisherSimulator(object):
                     if bp < 1.0:
                         edges.add_row(
                             left=bp, right=1.0, parent=rparent, child=offspring)
-                    for mut in muts:
-                        if mut not in mut_positions:
-                            mut_positions[mut] = sites.num_rows
-                            sites.add_row(
-                                position=mut, ancestral_state=self.random_allele())
-                        mutations.add_row(
-                            site=mut_positions[mut], node=offspring,
-                            derived_state=self.random_allele())
 
         if self.debug:
             print("Done! Final pop:")
@@ -138,39 +111,14 @@ class WrightFisherSimulator(object):
             print(nodes)
             print("Edges:")
             print(edges)
-            print("Sites:")
-            print(sites)
-            print("Mutations:")
-            print(mutations)
-            print("Migrations:")
-            print(migrations)
         return msprime.TableCollection(
             nodes, edges, migrations, sites, mutations, provenances)
 
 
-def wf_sim(
-        N, ngens, survival=0.0, mutation_rate=0.0, deep_history=True, debug=False,
-        nloci=np.Inf, seed=None):
+def wf_sim(N, ngens, survival=0.0, deep_history=True, debug=False, seed=None):
     sim = WrightFisherSimulator(
-        N, survival=survival, mutation_rate=mutation_rate, deep_history=deep_history,
-        debug=debug, nloci=nloci, seed=seed)
+        N, survival=survival, deep_history=deep_history, debug=debug, seed=seed)
     return sim.run(ngens)
-
-
-def add_mutation_parent(nodes=None, edges=None, sites=None, mutations=None,
-                        migrations=None, provenances=None):
-    """
-    Before loading the tables into a tree sequence, we need to add the mutation
-    parent column.  Note that these must be sorted.
-    """
-    ts = msprime.load_tables(nodes=nodes, edges=edges, sites=sites,
-                             mutations=mutations, migrations=migrations)
-    mp = tsutil.compute_mutation_parent(ts)
-    mutations.set_columns(
-        site=mutations.site,
-        derived_state=mutations.derived_state,
-        derived_state_offset=mutations.derived_state_offset,
-        node=mutations.node, parent=mp)
 
 
 class TestSimulation(unittest.TestCase):
@@ -266,15 +214,15 @@ class TestSimulation(unittest.TestCase):
     def test_with_mutations(self):
         N = 10
         ngens = 100
-        tables = wf_sim(
-            N=N, ngens=ngens, mutation_rate=1.0, deep_history=False,
-            seed=self.random_seed)
+        tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
+        msprime.sort_tables(**tables.asdict())
+        ts = msprime.load_tables(**tables.asdict())
+        ts = tsutil.jukes_cantor(ts, 10, 0.1, seed=self.random_seed)
+        tables = ts.tables
         self.assertGreater(tables.sites.num_rows, 0)
         self.assertGreater(tables.mutations.num_rows, 0)
         nodes = tables.nodes
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.sort_tables(**tables.asdict())
-        add_mutation_parent(**tables.asdict())
         msprime.simplify_tables(
             samples=samples, nodes=tables.nodes, edges=tables.edges,
             sites=tables.sites, mutations=tables.mutations)
@@ -291,18 +239,16 @@ class TestSimulation(unittest.TestCase):
         # actually with only ONE site, at 0.0
         N = 10
         ngens = 100
-        tables = wf_sim(
-            N=N, ngens=ngens, mutation_rate=10.0, deep_history=False,
-            nloci=1, seed=self.random_seed)
+        tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
+        msprime.sort_tables(**tables.asdict())
+        ts = msprime.load_tables(**tables.asdict())
+        ts = tsutil.jukes_cantor(ts, 1, 10, seed=self.random_seed)
+        tables = ts.tables
         self.assertEqual(tables.sites.num_rows, 1)
-        self.assertEqual(tables.sites.position, 0.0)
         self.assertGreater(tables.mutations.num_rows, 0)
         nodes = tables.nodes
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.sort_tables(**tables.asdict())
-        add_mutation_parent(**tables.asdict())
         # before simplify
-        ts = msprime.load_tables(**tables.asdict())
         for h in ts.haplotypes():
             self.assertEqual(len(h), 1)
         # after simplify
@@ -352,13 +298,12 @@ class TestSimplify(unittest.TestCase):
         """
         for N in [5, 10, 20]:
             for surv in [0.0, 0.5, 0.9]:
-                for mut in [0.0, 5.0]:
-                    for nloci in [np.inf, 3]:
-                        tables = wf_sim(
-                            N=N, ngens=N, survival=surv, seed=seed, mutation_rate=mut)
+                for mut in [0.01, 1.0]:
+                    for nloci in [1, 2, 3]:
+                        tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
                         msprime.sort_tables(**tables.asdict())
-                        add_mutation_parent(**tables.asdict())
                         ts = msprime.load_tables(**tables.asdict())
+                        ts = tsutil.jukes_cantor(ts, num_sites=nloci, mu=mut, seed=seed)
                         self.verify_simulation(ts, ngens=N)
                         yield ts
 

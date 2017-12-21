@@ -1136,7 +1136,7 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, mutation_rate, rng, MSP_ALPHABET_BINARY, 3);
+    ret = mutgen_alloc(&mutgen, mutation_rate, rng, 0, 3);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tree_sequence_initialise(&ts);
     CU_ASSERT_EQUAL(ret, 0);

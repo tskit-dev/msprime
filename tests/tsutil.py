@@ -107,6 +107,34 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
         provenances=tables.provenances)
 
 
+def insert_multichar_mutations(ts, seed=1, max_len=10):
+    """
+    Returns a copy of the specified tree sequence with mutations on a
+    randomly chosen branch.
+    branch.
+    ACGT, and then over every node in the tree we add mutation of length
+    equal to its position in the nodes iterator.
+    """
+    rng = random.Random(seed)
+    letters = ["A", "C", "T", "G"]
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    for tree in ts.trees():
+        site = len(sites)
+        ancestral_state = rng.choice(letters) * rng.randint(0, max_len)
+        sites.add_row(position=tree.interval[0], ancestral_state=ancestral_state)
+        u = rng.choice(list(tree.nodes()))
+        derived_state = ancestral_state
+        while ancestral_state == derived_state:
+            derived_state = rng.choice(letters) * rng.randint(0, max_len)
+        mutations.add_row(site=site, node=u, derived_state=derived_state)
+    tables = ts.tables
+    add_provenance(tables.provenances, "insert_multichar_mutations")
+    return msprime.load_tables(
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances)
+
+
 def permute_nodes(ts, node_map):
     """
     Returns a copy of the specified tree sequence such that the nodes are

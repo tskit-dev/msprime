@@ -142,21 +142,21 @@ class PythonSparseTree(object):
         if root is None:
             roots = self.roots
         for u in roots:
-            l = []
+            node_list = []
             if order == "preorder":
-                self._preorder_nodes(u, l)
+                self._preorder_nodes(u, node_list)
             elif order == "inorder":
-                self._inorder_nodes(u, l)
+                self._inorder_nodes(u, node_list)
             elif order == "postorder":
-                self._postorder_nodes(u, l)
+                self._postorder_nodes(u, node_list)
             elif order == "levelorder" or order == "breadthfirst":
                 # Returns nodes in their respective levels
-                # Nested list comprehension flattens l in order
-                self._levelorder_nodes(u, l, 0)
-                l = iter([i for level in l for i in level])
+                # Nested list comprehension flattens node_list in order
+                self._levelorder_nodes(u, node_list, 0)
+                node_list = iter([i for level in node_list for i in level])
             else:
                 raise ValueError("order not supported")
-            for v in l:
+            for v in node_list:
                 yield v
 
     def get_interval(self):

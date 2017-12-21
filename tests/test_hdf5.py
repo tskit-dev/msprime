@@ -85,6 +85,11 @@ def general_mutation_example():
         nodes=nodes, edges=edges, sites=sites, mutations=mutations)
 
 
+def multichar_mutation_example():
+    ts = msprime.simulate(10, recombination_rate=1, length=10, random_seed=2)
+    return tsutil.insert_multichar_mutations(ts)
+
+
 def migration_example():
     n = 10
     t = 1
@@ -515,6 +520,9 @@ class TestHdf5Format(TestHdf5):
 
     def test_general_mutation_example(self):
         self.verify_tree_dump_format(general_mutation_example())
+
+    def test_multichar_mutation_example(self):
+        self.verify_tree_dump_format(multichar_mutation_example())
 
 
 class TestHdf5FormatErrors(TestHdf5):
