@@ -4150,7 +4150,6 @@ test_single_tree_hapgen_binary_alphabet(void)
     tree_sequence_free(&ts);
 }
 
-
 static void
 test_single_tree_vargen_binary_alphabet(void)
 {
@@ -4210,6 +4209,68 @@ test_single_tree_vargen_binary_alphabet(void)
 }
 
 static void
+test_single_tree_vargen_max_alleles(void)
+{
+    int ret = 0;
+    tree_sequence_t ts;
+    vargen_t vargen;
+    variant_t *var;
+    int num_alleles = 256;
+    int j, k;
+    char alleles[num_alleles];
+    node_table_t nodes;
+    edge_table_t edges;
+    site_table_t sites;
+    mutation_table_t mutations;
+
+    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
+            NULL, NULL, NULL);
+    tree_sequence_dump_tables(&ts, &nodes, &edges, NULL, &sites, &mutations,
+            NULL, MSP_ALLOC_TABLES);
+    tree_sequence_free(&ts);
+    memset(alleles, 'X', num_alleles);
+    ret = site_table_add_row(&sites, 0, "Y", 1, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Add j mutations over a single node. */
+    for (j = 0; j < num_alleles; j++) {
+        /* When j = 0 we get a parent of -1, which is the NULL_NODE */
+        ret = mutation_table_add_row(&mutations, 0, 0, j - 1, alleles, j, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = tree_sequence_initialise(&ts);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_load_tables(&ts, 0, &nodes, &edges, NULL,
+                &sites, &mutations, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = vargen_alloc(&vargen, &ts, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        vargen_print_state(&vargen, _devnull);
+        ret = vargen_next(&vargen, &var);
+        /* We have j + 2 alleles. So, if j >= 254, we should fail */
+        if (j >= 254) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_TOO_MANY_ALLELES);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+            CU_ASSERT_NSTRING_EQUAL(var->alleles[0], "Y", 1);
+            for (k = 1; k < var->num_alleles; k++) {
+                CU_ASSERT_EQUAL(k - 1, var->allele_lengths[k]);
+                CU_ASSERT_NSTRING_EQUAL(var->alleles[k], alleles, var->allele_lengths[k]);
+            }
+            CU_ASSERT_EQUAL(var->num_alleles, j + 2);
+        }
+        ret = vargen_free(&vargen);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        tree_sequence_free(&ts);
+    }
+    node_table_free(&nodes);
+    edge_table_free(&edges);
+    site_table_free(&sites);
+    mutation_table_free(&mutations);
+}
+
+static void
 test_single_tree_simplify(void)
 {
     tree_sequence_t ts;
@@ -4225,21 +4286,8 @@ test_single_tree_simplify(void)
     tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             single_tree_ex_sites, single_tree_ex_mutations, NULL);
     verify_simplify(&ts);
-
-    /* Check the simplifier interface directly */
-    ret = node_table_alloc(&nodes, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edge_table_alloc(&edges, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
     ret = tree_sequence_dump_tables(&ts, &nodes, &edges,
-            &migrations, &sites, &mutations, NULL, 0);
+            &migrations, &sites, &mutations, NULL, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Set the max_buffered_edges to 1 to ensure we excercise the realloc */
@@ -7077,6 +7125,7 @@ main(int argc, char **argv)
         {"test_single_tree_hapgen_binary_alphabet", test_single_tree_hapgen_binary_alphabet},
         {"test_single_tree_vargen_char_alphabet", test_single_tree_vargen_char_alphabet},
         {"test_single_tree_vargen_binary_alphabet", test_single_tree_vargen_binary_alphabet},
+        {"test_single_tree_vargen_max_alleles", test_single_tree_vargen_max_alleles},
         {"test_single_tree_simplify", test_single_tree_simplify},
         {"test_single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},

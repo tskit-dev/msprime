@@ -119,6 +119,16 @@ vargen_update_site(vargen_t *self)
     var->allele_lengths[0] = site->ancestral_state_length;
     var->num_alleles = 1;
 
+    /* The algorithm for generating the allelic state of every sample works by
+     * examining each mutation in order, and setting the state for all the
+     * samples under the mutation's node. For complex sites where there is
+     * more than one mutation, we depend on the ordering of mutations being
+     * correct. Specifically, any mutation that is above another mutation in
+     * the tree must be visited first. This is enforced using the mutation.parent
+     * field, where we require that a mutation's parent must appear before it
+     * in the list of mutations. This guarantees the correctness of this algorith.
+     */
+
     memset(genotypes, 0, self->num_samples);
     for (j = 0; j < site->mutations_length; j++) {
         /* Compute the allele index for this derived state value. */

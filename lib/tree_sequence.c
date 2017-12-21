@@ -1180,7 +1180,6 @@ out:
     return ret;
 }
 
-
 int WARN_UNUSED
 tree_sequence_dump_tables(tree_sequence_t *self,
     node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
@@ -1192,6 +1191,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     double left, right;
     table_size_t offset, length, timestamp_offset, timestamp_length,
                record_offset, record_length;
+    bool alloc_tables = flags & MSP_ALLOC_TABLES;
 
     if (nodes == NULL || edges == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -1201,6 +1201,16 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     if ((sites != NULL) != (mutations != NULL)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
+    }
+    if (alloc_tables) {
+        ret = node_table_alloc(nodes, 0, 0);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = edge_table_alloc(edges, 0);
+        if (ret != 0) {
+            goto out;
+        }
     }
     ret = node_table_reset(nodes);
     if (ret != 0) {
@@ -1234,6 +1244,12 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     }
 
     if (migrations != NULL) {
+        if (alloc_tables) {
+            ret = migration_table_alloc(migrations, 0);
+            if (ret != 0) {
+                goto out;
+            }
+        }
         ret = migration_table_reset(migrations);
         if (ret != 0) {
             goto out;
@@ -1253,6 +1269,16 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     }
 
     if (sites != NULL) {
+        if (alloc_tables) {
+            ret = site_table_alloc(sites, 0, 0, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            ret = mutation_table_alloc(mutations, 0, 0, 0);
+            if (ret != 0) {
+                goto out;
+            }
+        }
         ret = site_table_reset(sites);
         if (ret != 0) {
             goto out;
@@ -1271,9 +1297,6 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                 goto out;
             }
         }
-    }
-
-    if (mutations != NULL) {
         ret = mutation_table_reset(mutations);
         if (ret != 0) {
             goto out;
@@ -1299,6 +1322,12 @@ tree_sequence_dump_tables(tree_sequence_t *self,
     }
 
     if (provenance != NULL) {
+        if (alloc_tables) {
+            ret = provenance_table_alloc(provenance, 0, 0, 0);
+            if (ret != 0) {
+                goto out;
+            }
+        }
         ret = provenance_table_reset(provenance);
         if (ret != 0) {
             goto out;

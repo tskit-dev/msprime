@@ -680,6 +680,37 @@ class TestVariantGenerator(HighLevelTestCase):
             self.assertTrue(all(0 <= var.genotypes))
             self.assertTrue(all(var.genotypes <= 1))
 
+    def test_many_alleles(self):
+        ts = self.get_tree_sequence()
+        tables = ts.dump_tables()
+        nodes = tables.nodes
+        edges = tables.edges
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        # This gives us a total of 360 permutations.
+        alleles = list(map("".join, itertools.permutations('ABCDEF', 4)))
+        self.assertGreater(len(alleles), 255)
+        sites.add_row(0, alleles[0])
+        parent = -1
+        num_alleles = 1
+        for allele in alleles[1:]:
+            ts = msprime.load_tables(
+                nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            if num_alleles > 255:
+                self.assertRaises(_msprime.LibraryError, next, ts.variants())
+            else:
+                var = next(ts.variants())
+                self.assertEqual(len(var.alleles), num_alleles)
+                self.assertEqual(list(var.alleles), alleles[:num_alleles])
+                self.assertEqual(
+                    var.alleles[var.genotypes[0]], alleles[num_alleles - 1])
+                for u in ts.samples():
+                    if u != 0:
+                        self.assertEqual(var.alleles[var.genotypes[u]], alleles[0])
+            mutations.add_row(0, 0, allele, parent=parent)
+            parent += 1
+            num_alleles += 1
+
     def test_site_information(self):
         ts = self.get_tree_sequence()
         for site, variant in zip(ts.sites(), ts.variants()):

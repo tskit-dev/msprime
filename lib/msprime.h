@@ -43,6 +43,9 @@
 /* Flags for simplify() */
 #define MSP_FILTER_ZERO_MUTATION_SITES 1
 
+/* Flags for dump tables */
+#define MSP_ALLOC_TABLES 1
+
 #define MSP_SAMPLE_COUNTS  1
 #define MSP_SAMPLE_LISTS   2
 
@@ -57,8 +60,6 @@
 #define MSP_MODEL_DTWF 5
 
 #define MSP_NODE_IS_SAMPLE 1
-
-#define MAX_BRANCH_LENGTH_STRING 24
 
 /* The root node indicator */
 #define MSP_NULL_NODE (-1)
