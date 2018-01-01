@@ -233,7 +233,7 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *metadata, table_size_t metadata_length)
 {
     assert(self->num_rows < self->max_rows);
-    assert(self->metadata_length + metadata_length < self->max_metadata_length);
+    assert(self->metadata_length + metadata_length <= self->max_metadata_length);
     memcpy(self->metadata + self->metadata_length, metadata, metadata_length);
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
