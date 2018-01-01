@@ -538,9 +538,6 @@ unsort_sites(site_table_t *sites, mutation_table_t *mutations)
     char *ancestral_state = NULL;
     size_t j, k, length;
 
-    /* printf("BEFORE\n"); */
-    /* site_table_print_state(sites, stdout); */
-    /* mutation_table_print_state(mutations, stdout); */
     if (sites->num_rows > 1) {
         /* Swap the first two sites */
         CU_ASSERT_EQUAL_FATAL(sites->ancestral_state_offset[0], 0);
@@ -576,12 +573,7 @@ unsort_sites(site_table_t *sites, mutation_table_t *mutations)
         }
     }
     msp_safe_free(ancestral_state);
-
-    /* printf("AFTER\n"); */
-    /* site_table_print_state(sites, stdout); */
-    /* mutation_table_print_state(mutations, stdout); */
 }
-
 
 static void
 verify_nodes_equal(node_t *n1, node_t *n2)

@@ -180,49 +180,6 @@ def get_decapitated_examples():
     yield tsutil.decapitate(ts, ts.num_edges // 4)
 
 
-def add_random_metadata(ts, seed=1, max_length=10):
-    """
-    Returns a copy of the specified tree sequence with random metadata assigned
-    to the nodes, sites and mutations.
-    """
-    tables = ts.dump_tables()
-    np.random.seed(seed)
-
-    length = np.random.randint(0, max_length, ts.num_nodes)
-    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
-    metadata = np.random.randint(-127, 127, offset[-1], dtype=np.int8)
-    nodes = tables.nodes
-    nodes.set_columns(
-        flags=nodes.flags, population=nodes.population, time=nodes.time,
-        metadata_offset=offset, metadata=metadata)
-
-    length = np.random.randint(0, max_length, ts.num_sites)
-    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
-    metadata = np.random.randint(-127, 127, offset[-1], dtype=np.int8)
-    sites = tables.sites
-    sites.set_columns(
-        position=sites.position,
-        ancestral_state=sites.ancestral_state,
-        ancestral_state_offset=sites.ancestral_state_offset,
-        metadata_offset=offset, metadata=metadata)
-
-    length = np.random.randint(0, max_length, ts.num_mutations)
-    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
-    metadata = np.random.randint(-127, 127, offset[-1], dtype=np.int8)
-    mutations = tables.mutations
-    mutations.set_columns(
-        site=mutations.site,
-        node=mutations.node,
-        parent=mutations.parent,
-        derived_state=mutations.derived_state,
-        derived_state_offset=mutations.derived_state_offset,
-        metadata_offset=offset, metadata=metadata)
-    ts = msprime.load_tables(
-        nodes=nodes, edges=tables.edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances, migrations=tables.migrations)
-    return ts
-
-
 def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=True):
     if gaps:
         for ts in get_decapitated_examples():
@@ -239,7 +196,7 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
                 recomb_map = msprime.RecombinationMap.uniform_map(m, rho, num_loci=m)
                 ts = msprime.simulate(
                     n, recombination_map=recomb_map, mutation_rate=0.1, random_seed=seed)
-                yield add_random_metadata(ts, seed=seed)
+                yield tsutil.add_random_metadata(ts, seed=seed)
                 seed += 1
     for ts in get_bottleneck_examples():
         yield ts
@@ -249,7 +206,7 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
         yield tsutil.insert_branch_mutations(ts, mutations_per_branch=2)
     ts = tsutil.insert_multichar_mutations(ts)
     yield ts
-    yield add_random_metadata(ts)
+    yield tsutil.add_random_metadata(ts)
 
 
 def get_bottleneck_examples():
@@ -1574,7 +1531,6 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(ts.num_edges, 1)
         self.assertEqual(ts.num_sites, 2)
         self.assertEqual(ts.num_mutations, 2)
-
 
     def test_empty_files(self):
         nodes_file = six.StringIO("is_sample\ttime\n")

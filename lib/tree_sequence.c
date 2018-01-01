@@ -479,6 +479,11 @@ tree_sequence_alloc(tree_sequence_t *self)
     size_t num_mutations = self->mutations.num_records;
     size_t num_nodes = self->nodes.num_records;
     size_t num_provenance_records = self->provenances.num_records;
+    size_t node_metadata_length = self->nodes.metadata_length;
+    size_t site_metadata_length = self->sites.metadata_length;
+    size_t mutation_metadata_length = self->mutations.metadata_length;
+    size_t ancestral_state_length = self->sites.ancestral_state_length;
+    size_t derived_state_length = self->mutations.derived_state_length;
 
     /* Force an allocation of at least one node, site and mutation record because of the
      * one-extra we always have for the offsets. This is an ugly hack,
@@ -489,6 +494,14 @@ tree_sequence_alloc(tree_sequence_t *self)
     self->mutations.num_records = GSL_MAX(1, num_mutations);
     self->nodes.num_records = GSL_MAX(1, num_nodes);
     self->provenances.num_records = GSL_MAX(1, num_provenance_records);
+    /* We must do the same for ancestral_state, derived_state and metadata
+     * lengths because we end up with NULL pointers otherwise (which can be
+     * awkward downstream, even if we have zero length values). */
+    self->nodes.metadata_length = GSL_MAX(1, node_metadata_length);
+    self->sites.metadata_length = GSL_MAX(1, site_metadata_length);
+    self->sites.ancestral_state_length = GSL_MAX(1, ancestral_state_length);
+    self->mutations.metadata_length = GSL_MAX(1, mutation_metadata_length);
+    self->mutations.derived_state_length = GSL_MAX(1, derived_state_length);
 
     ret = tree_sequence_alloc_trees(self);
     if (ret != 0) {
@@ -521,6 +534,11 @@ out:
     self->mutations.num_records = num_mutations;
     self->nodes.num_records = num_nodes;
     self->provenances.num_records = num_provenance_records;
+    self->nodes.metadata_length = node_metadata_length;
+    self->sites.metadata_length = site_metadata_length;
+    self->sites.ancestral_state_length = ancestral_state_length;
+    self->mutations.metadata_length = mutation_metadata_length;
+    self->mutations.derived_state_length = derived_state_length;
     return ret;
 }
 

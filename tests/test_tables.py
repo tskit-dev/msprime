@@ -34,6 +34,7 @@ import six
 
 import msprime
 import _msprime
+import tests.tsutil as tsutil
 
 
 def random_bytes(max_length):
@@ -600,7 +601,6 @@ class TestBytePacking(unittest.TestCase):
         self.assertEqual(data, unpickled)
 
 
-@unittest.skip("text site/mutations")
 class TestSortTables(unittest.TestCase):
     """
     Tests for the sort_tables method.
@@ -629,39 +629,33 @@ class TestSortTables(unittest.TestCase):
         randomised_sites = list(ts.sites())
         random.shuffle(randomised_sites)
         new_sites = msprime.SiteTable()
-        new_mutations = msprime.MutationTable()
+        # Maps original IDs into their indexes in the randomised table.
+        site_id_map = {}
+        randomised_mutations = []
         for s in randomised_sites:
-            new_sites.add_row(s.position, ancestral_state=s.ancestral_state)
-            randomised_mutations = list(s.mutations)
-            random.shuffle(randomised_mutations)
-            for m in randomised_mutations:
-                new_mutations.add_row(
-                    site=s.index, node=m.node, derived_state=m.derived_state)
+            site_id_map[s.index] = len(new_sites)
+            new_sites.add_row(
+                s.position, ancestral_state=s.ancestral_state, metadata=s.metadata)
+            randomised_mutations.extend(s.mutations)
+        new_mutations = msprime.MutationTable()
+        random.shuffle(randomised_mutations)
+        for m in randomised_mutations:
+            new_mutations.add_row(
+                site=site_id_map[m.site], node=m.node, derived_state=m.derived_state,
+                parent=m.parent, metadata=m.metadata)
         if ts.num_sites > 1:
             # Verify that import fails for randomised sites
             self.assertRaises(
                 _msprime.LibraryError, ts.load_tables, nodes=nodes, edges=edges,
                 sites=new_sites, mutations=new_mutations)
 
-        msprime.sort_tables(
-            nodes, new_edges, sites=new_sites, mutations=new_mutations)
-        # Verify the new and old edges are equal.
-        self.assertEqual(list(edges.left), list(new_edges.left))
-        self.assertEqual(list(edges.right), list(new_edges.right))
-        self.assertEqual(list(edges.parent), list(new_edges.parent))
-        self.assertEqual(list(edges.child), list(new_edges.child))
-        # sites
-        self.assertEqual(list(sites.position), list(new_sites.position))
-        self.assertEqual(list(sites.ancestral_state), list(new_sites.ancestral_state))
-        self.assertEqual(
-            list(sites.ancestral_state_offset), list(new_sites.ancestral_state_offset))
-        # mutations
-        self.assertEqual(list(mutations.site), list(new_mutations.site))
-        self.assertEqual(
-            list(mutations.derived_state), list(new_mutations.derived_state))
-        self.assertEqual(
-            list(mutations.derived_state_offset),
-            list(new_mutations.derived_state_offset))
+        msprime.sort_tables(nodes, new_edges, sites=new_sites, mutations=new_mutations)
+        # The nodes table should not be affected by sorting.
+        self.assertEqual(nodes, ts.tables.nodes)
+        # Edges, sites and mutations should be sorted back to their original state.
+        self.assertEqual(edges, new_edges)
+        self.assertEqual(sites, new_sites)
+        self.assertEqual(mutations, new_mutations)
 
         # make sure we can import a tree sequence both with and without the sites.
         ts_new = msprime.load_tables(nodes=nodes, edges=new_edges)
@@ -722,6 +716,11 @@ class TestSortTables(unittest.TestCase):
         self.verify_randomise_tables(ts)
         self.verify_edge_sort_offset(ts)
 
+    def test_single_tree_no_mutations_metadata(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        ts = tsutil.add_random_metadata(ts, self.random_seed)
+        self.verify_randomise_tables(ts)
+
     def test_many_trees_no_mutations(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
@@ -734,6 +733,23 @@ class TestSortTables(unittest.TestCase):
         self.verify_randomise_tables(ts)
         self.verify_edge_sort_offset(ts)
 
+    def test_single_tree_mutations_metadata(self):
+        ts = msprime.simulate(10, mutation_rate=2, random_seed=self.random_seed)
+        self.assertGreater(ts.num_sites, 2)
+        ts = tsutil.add_random_metadata(ts, self.random_seed)
+        self.verify_randomise_tables(ts)
+
+    def test_single_tree_multichar_mutations(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        ts = tsutil.insert_multichar_mutations(ts, self.random_seed)
+        self.verify_randomise_tables(ts)
+
+    def test_single_tree_multichar_mutations_metadata(self):
+        ts = msprime.simulate(10, random_seed=self.random_seed)
+        ts = tsutil.insert_multichar_mutations(ts, self.random_seed)
+        ts = tsutil.add_random_metadata(ts, self.random_seed)
+        self.verify_randomise_tables(ts)
+
     def test_many_trees_mutations(self):
         ts = msprime.simulate(
             10, recombination_rate=2, mutation_rate=2, random_seed=self.random_seed)
@@ -741,6 +757,19 @@ class TestSortTables(unittest.TestCase):
         self.assertGreater(ts.num_sites, 2)
         self.verify_randomise_tables(ts)
         self.verify_edge_sort_offset(ts)
+
+    def test_many_trees_multichar_mutations(self):
+        ts = msprime.simulate(10, recombination_rate=2, random_seed=self.random_seed)
+        self.assertGreater(ts.num_trees, 2)
+        ts = tsutil.insert_multichar_mutations(ts, self.random_seed)
+        self.verify_randomise_tables(ts)
+
+    def test_many_trees_multichar_mutations_metadata(self):
+        ts = msprime.simulate(10, recombination_rate=2, random_seed=self.random_seed)
+        self.assertGreater(ts.num_trees, 2)
+        ts = tsutil.insert_multichar_mutations(ts, self.random_seed)
+        ts = tsutil.add_random_metadata(ts, self.random_seed)
+        self.verify_randomise_tables(ts)
 
     def get_nonbinary_example(self, mutation_rate):
         ts = msprime.simulate(
@@ -768,50 +797,6 @@ class TestSortTables(unittest.TestCase):
         self.assertGreater(ts.num_sites, 2)
         self.verify_randomise_tables(ts)
         self.verify_edge_sort_offset(ts)
-
-    @unittest.skip("Text site/mutations")
-    def test_nonbinary_mutations(self):
-        # Test the sorting behaviour when we have ragged entries in the ancestral
-        # and derived states columns.
-        nodes = msprime.NodeTable()
-        nodes.add_row(time=0)
-        for num_mutations in [1, 10, 50, 100, 8192]:
-            edges = msprime.EdgeTable()
-            sites = msprime.SiteTable()
-            mutations = msprime.MutationTable()
-            # Create some awkward length ancestral and derived states.
-            random.seed(self.random_seed)
-            ancestral_states = []
-            derived_states = []
-            for j in range(num_mutations):
-                s = "".join(random.choice("ACTG") for _ in range(random.randint(0, 8)))
-                ancestral_states.append(s.encode())
-                sites.add_row(
-                    position=num_mutations - j, ancestral_state=ancestral_states[-1])
-                s = "".join(random.choice("ACTG") for _ in range(random.randint(0, 8)))
-                derived_states.append(s.encode())
-                mutations.add_row(site=j, node=0, derived_state=derived_states[-1])
-            msprime.sort_tables(nodes, edges, sites=sites, mutations=mutations)
-
-            self.assertEqual(len(ancestral_states), sites.num_rows)
-            ancestral_states.reverse()
-            sorted_ancestral_state = sites.ancestral_state
-            length = sites.ancestral_state_length
-            offset = 0
-            for j in range(sites.num_rows):
-                s = sorted_ancestral_state[offset: offset + length[j]].tostring()
-                self.assertEqual(s, ancestral_states[j])
-                offset += length[j]
-
-            self.assertEqual(len(derived_states), mutations.num_rows)
-            derived_states.reverse()
-            sorted_derived_state = mutations.derived_state
-            length = mutations.derived_state_length
-            offset = 0
-            for j in range(sites.num_rows):
-                s = sorted_derived_state[offset: offset + length[j]].tostring()
-                self.assertEqual(s, derived_states[j])
-                offset += length[j]
 
     def test_incompatible_edges(self):
         ts1 = msprime.simulate(10, random_seed=self.random_seed)
