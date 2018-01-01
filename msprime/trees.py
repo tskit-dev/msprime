@@ -848,8 +848,13 @@ def parse_nodes(source):
     is_sample_index = header.index("is_sample")
     time_index = header.index("time")
     population_index = None
+    metadata_index = None
     try:
         population_index = header.index("population")
+    except ValueError:
+        pass
+    try:
+        metadata_index = header.index("metadata")
     except ValueError:
         pass
     for line in source:
@@ -863,7 +868,11 @@ def parse_nodes(source):
             population = NULL_POPULATION
             if population_index is not None:
                 population = int(tokens[population_index])
-            table.add_row(flags=flags, time=time, population=population)
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tables.text_decode_metadata(tokens[metadata_index])
+            table.add_row(
+                flags=flags, time=time, population=population, metadata=metadata)
     return table
 
 
@@ -906,13 +915,22 @@ def parse_sites(source):
     header = source.readline().split()
     position_index = header.index("position")
     ancestral_state_index = header.index("ancestral_state")
+    metadata_index = None
+    try:
+        metadata_index = header.index("metadata")
+    except ValueError:
+        pass
     table = tables.SiteTable()
     for line in source:
         tokens = line.split()
         if len(tokens) > 0:
             position = float(tokens[position_index])
             ancestral_state = tokens[ancestral_state_index]
-            table.add_row(position=position, ancestral_state=ancestral_state)
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tables.text_decode_metadata(tokens[metadata_index])
+            table.add_row(
+                position=position, ancestral_state=ancestral_state, metadata=metadata)
     return table
 
 
@@ -934,6 +952,11 @@ def parse_mutations(source):
         parent_index = header.index("parent")
     except ValueError:
         pass
+    metadata_index = None
+    try:
+        metadata_index = header.index("metadata")
+    except ValueError:
+        pass
     table = tables.MutationTable()
     for line in source:
         tokens = line.split()
@@ -943,8 +966,12 @@ def parse_mutations(source):
             derived_state = tokens[derived_state_index]
             if parent_index is not None:
                 parent = int(tokens[parent_index])
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tables.text_decode_metadata(tokens[metadata_index])
             table.add_row(
-                site=site, node=node, derived_state=derived_state, parent=parent)
+                site=site, node=node, derived_state=derived_state, parent=parent,
+                metadata=metadata)
     return table
 
 
@@ -1154,16 +1181,20 @@ class TreeSequence(object):
         """
 
         if nodes is not None:
-            print("id", "is_sample", "time", "population", sep="\t", file=nodes)
+            print(
+                "id", "is_sample", "time", "population", "metadata", sep="\t",
+                file=nodes)
             for node in self.nodes():
                 row = (
                     "{id:d}\t"
                     "{is_sample:d}\t"
                     "{time:.{precision}f}\t"
-                    "{population:d}\t").format(
+                    "{population:d}\t"
+                    "{metadata}").format(
                         precision=precision, id=node.id,
                         is_sample=node.is_sample(), time=node.time,
-                        population=node.population)
+                        population=node.population,
+                        metadata=tables.text_encode_metadata(node.metadata))
                 print(row, file=nodes)
 
         if edges is not None:
@@ -1179,27 +1210,33 @@ class TreeSequence(object):
                 print(row, file=edges)
 
         if sites is not None:
-            print("position", "ancestral_state", sep="\t", file=sites)
+            print("position", "ancestral_state", "metadata", sep="\t", file=sites)
             for site in self.sites():
                 row = (
                     "{position:.{precision}f}\t"
-                    "{ancestral_state}").format(
+                    "{ancestral_state}\t"
+                    "{metadata}").format(
                         precision=precision, position=site.position,
-                        ancestral_state=site.ancestral_state)
+                        ancestral_state=site.ancestral_state,
+                        metadata=tables.text_encode_metadata(site.metadata))
                 print(row, file=sites)
 
         if mutations is not None:
-            print("site", "node", "derived_state", "parent", sep="\t", file=mutations)
+            print(
+                "site", "node", "derived_state", "parent", "metadata",
+                sep="\t", file=mutations)
             for site in self.sites():
                 for mutation in site.mutations:
                     row = (
                         "{site}\t"
                         "{node}\t"
                         "{derived_state}\t"
-                        "{parent}").format(
+                        "{parent}\t"
+                        "{metadata}").format(
                             site=mutation.site, node=mutation.node,
                             derived_state=mutation.derived_state,
-                            parent=mutation.parent)
+                            parent=mutation.parent,
+                            metadata=tables.text_encode_metadata(mutation.metadata))
                     print(row, file=mutations)
 
         if provenances is not None:
