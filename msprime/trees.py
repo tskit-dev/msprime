@@ -833,7 +833,7 @@ def load_tables(*args, **kwargs):
     return TreeSequence.load_tables(*args, **kwargs)
 
 
-def parse_nodes(source):
+def parse_nodes(source, sep=None):
     """
     Parse the specified file-like object and return a NodeTable instance.  The
     object must contain text with whitespace delimited columns, which are
@@ -844,7 +844,7 @@ def parse_nodes(source):
     """
     # Read the header and find the indexes of the required fields.
     table = tables.NodeTable()
-    header = source.readline().split()
+    header = source.readline().strip("\n").split(sep)
     is_sample_index = header.index("is_sample")
     time_index = header.index("time")
     population_index = None
@@ -858,8 +858,8 @@ def parse_nodes(source):
     except ValueError:
         pass
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 2:
             is_sample = int(tokens[is_sample_index])
             time = float(tokens[time_index])
             flags = 0
@@ -876,7 +876,7 @@ def parse_nodes(source):
     return table
 
 
-def parse_edges(source):
+def parse_edges(source, sep=None):
     """
     Parse the specified file-like object and return a EdgeTable instance.
     The object must contain text with whitespace delimited columns, which are
@@ -886,15 +886,15 @@ def parse_edges(source):
     requirements are described in :class:`EdgeTable`.
     """
     table = tables.EdgeTable()
-    header = source.readline().split()
+    header = source.readline().strip("\n").split(sep)
     left_index = header.index("left")
     right_index = header.index("right")
     parent_index = header.index("parent")
     children_index = header.index("child")
     table = tables.EdgeTable()
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 4:
             left = float(tokens[left_index])
             right = float(tokens[right_index])
             parent = int(tokens[parent_index])
@@ -904,7 +904,7 @@ def parse_edges(source):
     return table
 
 
-def parse_sites(source):
+def parse_sites(source, sep=None):
     """
     Parse the specified file-like object and return a SiteTable instance.  The
     object must contain text with whitespace delimited columns, which are
@@ -912,7 +912,7 @@ def parse_sites(source):
     ``ancestral_state``.  Further requirements are described in
     :class:`SiteTable`.
     """
-    header = source.readline().split()
+    header = source.readline().strip("\n").split(sep)
     position_index = header.index("position")
     ancestral_state_index = header.index("ancestral_state")
     metadata_index = None
@@ -922,8 +922,8 @@ def parse_sites(source):
         pass
     table = tables.SiteTable()
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 2:
             position = float(tokens[position_index])
             ancestral_state = tokens[ancestral_state_index]
             metadata = b''
@@ -934,7 +934,7 @@ def parse_sites(source):
     return table
 
 
-def parse_mutations(source):
+def parse_mutations(source, sep=None):
     """
     Parse the specified file-like object and return a MutationTable instance.
     The object must contain text with whitespace delimited columns, which are
@@ -942,7 +942,7 @@ def parse_mutations(source):
     ``derived_state``. An optional ``parent`` column may also be supplied.
     Further requirements are described in :class:`MutationTable`.
     """
-    header = source.readline().split()
+    header = source.readline().strip("\n").split(sep)
     site_index = header.index("site")
     node_index = header.index("node")
     derived_state_index = header.index("derived_state")
@@ -959,8 +959,8 @@ def parse_mutations(source):
         pass
     table = tables.MutationTable()
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 3:
             site = int(tokens[site_index])
             node = int(tokens[node_index])
             derived_state = tokens[derived_state_index]
@@ -975,7 +975,7 @@ def parse_mutations(source):
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0):
+def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=None):
     """
     Loads a tree sequence from the specified file paths. The files input here
     are in a simple whitespace delimited tabular format such as output by the
@@ -1045,6 +1045,9 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0):
         1       0       0
 
 
+    TODO: add description of the field separator argument, linking to the builtin
+    string.split function and describe when it is useful.
+
     :param stream nodes: The file-type object containing text describing a NodeTable.
     :param stream edges: The file-type object containing text
         describing a EdgeTable.
@@ -1053,18 +1056,19 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0):
         describing a MutationTable.
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
+    :param str sep: The field separator, as defined by the Python str.split function.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    node_table = parse_nodes(nodes)
-    edge_table = parse_edges(edges)
+    node_table = parse_nodes(nodes, sep=sep)
+    edge_table = parse_edges(edges, sep=sep)
     site_table = tables.SiteTable()
     mutation_table = tables.MutationTable()
     if sites is not None:
-        site_table = parse_sites(sites)
+        site_table = parse_sites(sites, sep=sep)
     if mutations is not None:
-        mutation_table = parse_mutations(mutations)
+        mutation_table = parse_mutations(mutations, sep=sep)
     tables.sort_tables(
         nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(

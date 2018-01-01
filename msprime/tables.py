@@ -580,7 +580,7 @@ class TableCollection(object):
         s += self.__banner("Mutations")
         s += str(self.mutations) + "\n"
         s += self.__banner("Migrations")
-        s += str(self.migrations)
+        s += str(self.migrations) + "\n"
         s += self.__banner("Provenances")
         s += str(self.provenances)
         return s

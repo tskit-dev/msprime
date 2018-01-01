@@ -217,7 +217,6 @@ def add_random_metadata(ts, seed=1, max_length=10):
         derived_state=mutations.derived_state,
         derived_state_offset=mutations.derived_state_offset,
         metadata_offset=offset, metadata=metadata)
-
     ts = msprime.load_tables(
         nodes=nodes, edges=tables.edges, sites=sites, mutations=mutations,
         provenances=tables.provenances, migrations=tables.migrations)
@@ -248,8 +247,9 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
     assert ts.num_trees > 1
     if back_mutations:
         yield tsutil.insert_branch_mutations(ts, mutations_per_branch=2)
-    print("SkIPPING MULTICHAR")
-    # yield tsutil.insert_multichar_mutations(ts)
+    ts = tsutil.insert_multichar_mutations(ts)
+    yield ts
+    yield add_random_metadata(ts)
 
 
 def get_bottleneck_examples():
@@ -1544,10 +1544,37 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             edges_file.seek(0)
             sites_file.seek(0)
             mutations_file.seek(0)
+            # We need to use sep="\t" here to ensure that we can correctly
+            # parse zero length ancestral/derived states.
             ts2 = msprime.load_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, sequence_length=ts1.sequence_length)
+                mutations=mutations_file, sequence_length=ts1.sequence_length, sep="\t")
             self.verify_approximate_equality(ts1, ts2)
+
+    def test_parse_sep(self):
+        # Try using : as a field separator to test the sep argument for load_text.
+        nodes = six.StringIO(
+            "is_sample:time\n"
+            "0:1\n"
+            "1:0\n")
+        edges = six.StringIO(
+            "left:right:parent:child\n"
+            "0:5:0:1")
+        sites = six.StringIO(
+            "position:ancestral_state:metadata\n"
+            "0:AAA:\n"
+            "1::")
+        mutations = six.StringIO(
+            "site:node:derived_state:parent:metadata\n"
+            "0:0:BBBB:-1:\n"
+            "1:1::-1:\n")
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, sep=":")
+        self.assertEqual(ts.num_nodes, 2)
+        self.assertEqual(ts.num_edges, 1)
+        self.assertEqual(ts.num_sites, 2)
+        self.assertEqual(ts.num_mutations, 2)
+
 
     def test_empty_files(self):
         nodes_file = six.StringIO("is_sample\ttime\n")
