@@ -5,8 +5,8 @@ Tree Sequence Formats
 #####################
 
 The correlated genealogical trees that describe the shared ancestry of set of
-samples are stored concisely in ``msprime`` as a sequence of coalescent events,
-represented by a collection of easy-to-understand tables.  These are output by
+samples are stored concisely in ``msprime`` as a collection of easy-to-understand tables.
+These are output by
 coalescent simulation in ``msprime`` or can be read in from another source.  To
 make this information as efficient and easy as possible to use, we store the
 data on disk in a `HDF5 <https://www.hdfgroup.org/HDF5/>`_ based file format.
@@ -379,151 +379,63 @@ the lines of (for ``ts`` a ``TreeSequence``)::
 HDF5 Format
 ***********
 
-The file format is broken into a number of groups. Each group contains
-datasets to define the data along with attributes to provide necessary
-contextual information.
+The file format is broken into a number of groups, and each group
+corresponds to one of the tables above (possibly including some extra
+information for efficiency). In general, each group will contain a dataset
+corresponding to a column in the table in question. All groups must be
+present.
 
-The root group contains one attributes, ``format_version``. This
-is a pair ``(major, minor)`` describing the file format version. This
-document describes version 9.0.
+To work around limitations in some versions of the HDF5 library, empty
+columns are **not** stored. For example, if there is no metadata associated
+with nodes, the ``metadata`` column in the node table will be empty, and
+the corresponding ``metadata`` dataset will not be present in the HDF5 file.
+
+The root group contains two attributes, ``format_version`` and ``sequence_length``.
+The ``format_version`` is a pair ``(major, minor)`` describing the file format version.
+This document describes version 10.0. The ``sequence_length`` attribute defines the
+coordinate space over which edges and sites are defined. This must be present
+and be greater than or equal to the largest coordinate present.
 
 ================    ==============      ======      ===========
 Path                Type                Dim         Description
 ================    ==============      ======      ===========
 /format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
+/sequence_length    H5T_IEEE_F64LE      1           The maximum value of a sequence coordinate.
 ================    ==============      ======      ===========
-
-
-
-Provenance dataset
-==================
-
-The provenance dataset records information relating the the provenance
-of a particular tree sequence file. When a tree sequence file is generated
-all the information required to reproduce the file should be encoded
-as a string and stored in this dataset. Subsequent modifications to the
-file should be also be recorded and appended to the list of strings.
-
-The format of these strings is implementation defined. In the
-current version of ``msprime`` provenance information is encoded
-as JSON. This information is incomplete, and will be updated in future
-versions.
-
-================    ==============      ======      ===========
-Path                Type                Dim         Description
-================    ==============      ======      ===========
-/provenance         H5T_STRING          Scalar      Provenance information.
-================    ==============      ======      ===========
-
-
-
-Mutations group
-===============
-
-The ``mutations`` group is optional, and describes the location of mutations
-with respect to tree nodes and their positions along the sequence. Each mutation
-consists of a node (which must be defined in the ``trees`` group) and a
-position. Positions are defined as a floating point value to allow us to
-express infinite sites mutations. A mutation position :math:`x` is defined on the same
-scale as the genomic coordinates for trees, and so we must have
-:math:`0 \leq x < L`, where :math:`L` is the largest value in the
-``/trees/breakpoints`` dataset.
-
-As for the coalescence records in the ``trees`` group, mutation records are
-stored as seperate vectors for efficiency reasons. Mutations must be stored
-in nondecreasing order of position.
-
-===================     ==============      =====
-Path                    Type                Dim
-===================     ==============      =====
-/mutations/node         H5T_STD_U32LE       M
-/mutations/position     H5T_IEEE_F64LE      M
-===================     ==============      =====
-
-
-
-Trees group
-===========
-
-The ``trees`` group is mandatory and describes the topology of the tree
-sequence. The ``trees`` group contains a number of nested groups and datasets,
-which we will describe in turn.
-
-
-
-Breakpoints dataset
--------------------
-
-The ``/trees/breakpoints`` dataset records the floating point positions of the
-breakpoints between trees in the tree sequence, and the flanking positions
-:math:`0` and :math:`L`. Positions in the ``/trees/records`` group refer to
-(zero based) indexes into this array. The first breakpoint must be zero, and
-they must be listed in increasing order.
-
-=======================     ==============
-Path                        Type
-=======================     ==============
-/trees/breakpoints          H5T_IEEE_F64LE
-=======================     ==============
-
 
 Nodes group
------------
+===========
 
-The ``/trees/nodes`` group records information about the individual
-nodes in a tree sequence. Leaf nodes (from :math:`0` to :math:`n - 1`)
-represent the samples and internal nodes (:math:`\geq n`) represent
-their ancestors. Each node corresponds to a particular individual that
-lived at some time time in the history of the sample. The ``nodes``
-group is used to record information about these individuals.
+The ``/nodes`` group stores the node table.
 
 =======================     ==============
 Path                        Type
 =======================     ==============
-/trees/nodes/population     H5T_STD_U32LE
-/trees/nodes/time           H5T_IEEE_F64LE
+/nodes/flags                H5T_STD_U32LE
+/nodes/population           H5T_STD_I32LE
+/nodes/time                 H5T_IEEE_F64LE
+/nodes/metadata             H5T_STD_I8LE
+/nodes/metadata_offset      H5T_STD_U32LE
 =======================     ==============
 
+Edges group
+===========
 
-Records group
--------------
+The ``/edges`` group stores the edge table.
 
-The ``/trees/records`` group stores the individual coalesence records.
-Each record consists of four pieces of information: the left and
-right coordinates of the coalescing interval, the list of child nodes
-and the parent node.
-
-The ``left`` and ``right`` datasets are indexes into the ``/trees/breakpoints``
-dataset and define the genomic interval over which the record applies. The
-interval is half-open, so that the left coordinate is inclusive and the right
-coordinate is exclusive.
-
-The ``node`` dataset records the parent node of the record, and is
-an index into the ``/trees/nodes`` group.
-
-The ``num_children`` dataset records the number of children for a particular
-record. The ``children`` dataset then records the actual child nodes for each
-coalescence record. This 1-dimensional array lists the child nodes for every
-record in order, and therefore by using the ``num_children`` array we can
-efficiently recover the actual children involved in each event. Within a given
-event, child nodes must be sorted in increasing order. The records must be
-listed in time increasing order.
-
-===================       ==============      ======
-Path                      Type                Dim
-===================       ==============      ======
-/trees/left               H5T_STD_U32LE       N
-/trees/right              H5T_STD_U32LE       N
-/trees/node               H5T_STD_U32LE       N
-/trees/num_children       H5T_STD_U32LE       N
-/trees/children           H5T_STD_U32LE       :math:`\leq 2 \times` N
-===================       ==============      ======
-
+===================       ==============
+Path                      Type
+===================       ==============
+/edges/left               H5T_IEEE_F64LE
+/edges/right              H5T_IEEE_F64LE
+/edges/parent             H5T_STD_I32LE
+/edges/child              H5T_STD_I32LE
+===================       ==============
 
 Indexes group
 -------------
 
-The ``/trees/indexes`` group records information required to efficiently
+The ``/edges/indexes`` group records information required to efficiently
 reconstruct the individual trees from the tree sequence. The
 ``insertion_order`` dataset contains the order in which records must be applied
 and the ``removal_order`` dataset the order in which records must be
@@ -532,9 +444,71 @@ removed for a left-to-right traversal of the trees.
 ==============================     ==============
 Path                               Type
 ==============================     ==============
-/trees/indexes/insertion_order     H5T_STD_U32LE
-/trees/indexes/removal_order       H5T_STD_U32LE
+/edges/indexes/insertion_order     H5T_STD_I32LE
+/edges/indexes/removal_order       H5T_STD_I32LE
 ==============================     ==============
+
+Sites group
+===========
+
+The sites group stores the site table.
+
+=============================   ==============
+Path                            Type
+=============================   ==============
+/sites/position                 H5T_IEEE_F64LE
+/sites/ancestral_state          H5T_STD_I8LE
+/sites/ancestral_state_offset   H5T_STD_U32LE
+/sites/metadata                 H5T_STD_I8LE
+/sites/metadata_offset          H5T_STD_U32LE
+=============================   ==============
+
+Mutations group
+===============
+
+The mutations group stores the mutation table.
+
+===============================  ==============
+Path                             Type
+===============================  ==============
+/mutations/site                  H5T_STD_I32LE
+/mutations/node                  H5T_STD_I32LE
+/mutations/parent                H5T_STD_I32LE
+/mutations/derived_state         H5T_STD_I8LE
+/mutations/derived_state_offset  H5T_STD_U32LE
+/mutations/metadata              H5T_STD_I8LE
+/mutations/metadata_offset       H5T_STD_U32LE
+===============================  ==============
+
+Migrations group
+================
+
+The ``/migrations`` group stores the migration table.
+
+===================       ==============
+Path                      Type
+===================       ==============
+/migrations/left          H5T_IEEE_F64LE
+/migrations/right         H5T_IEEE_F64LE
+/migrations/node          H5T_STD_I32LE
+/migrations/source        H5T_STD_I32LE
+/migrations/dest          H5T_STD_I32LE
+/migrations/time          H5T_IEEE_F64LE
+===================       ==============
+
+Proveances group
+================
+
+The provenances group stores the provenance table.
+
+===============================  ==============
+Path                             Type
+===============================  ==============
+/provenances/timestamp           H5T_STD_I8LE
+/provenances/timestamp_offset    H5T_STD_U32LE
+/provenances/record              H5T_STD_I8LE
+/provenances/record_offset       H5T_STD_U32LE
+===============================  ==============
 
 ***************
 Legacy Versions
