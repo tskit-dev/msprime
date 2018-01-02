@@ -119,14 +119,11 @@ def _pickle_node_table(table):
 
 class EdgeTable(_msprime.EdgeTable):
     """
-    TODO Update docs to relfect EDGES.
-
-
     Class for tables describing all edges in a tree sequence, of the form
         left	right	parent	child
         0.0     0.4     3       0
         0.0     0.4     3       2
-        0.4     1.0     3       0,
+        0.4     1.0     3       0
         0.4     1.0     3       1
         0.4     1.0     3       2
         0.0     0.4     4       1
@@ -603,15 +600,15 @@ def sort_tables(*args, **kwargs):
     are not affected. This parameter is provided to allow for efficient sorting
     when the user knows that the edges up to a given index are already sorted.
 
-    .. todo:: Update this documentation to describe the keyword arguments and
-       combinations that are allowed.
-
-    :param NodeTable nodes:
-    :param EdgeTable edges:
-    :param MigrationTable migrations:
-    :param SiteTable sites:
-    :param MutationTable mutations:
-    :param int edge_start: The index in the edge table where sorting starts.
+    :param NodeTable nodes: The tree sequence nodes (required).
+    :param EdgeTable edges: The tree sequence edges (required).
+    :param MigrationTable migrations: The tree sequence migrations (optional).
+    :param SiteTable sites: The tree sequence sites (optional, but required if
+         ``mutations`` is provided)
+    :param MutationTable mutations: The tree sequence mutations (optional, but
+         required if ``sites`` is provided).
+    :param int edge_start: The index in the edge table where sorting starts
+        (default=0; must be <= len(edges)).
     """
     kwargs_copy = dict(kwargs)
     # If provenances is supplied as a keyword argument just ignore it. This is
@@ -627,13 +624,14 @@ def simplify_tables(*args, **kwargs):
     to reconstruct the tree sequence describing the given ``samples``.  This
     will change the ID of the nodes, so that the individual ``samples[k]]``
     will have ID ``k`` in the result. The resulting NodeTable will have only
-    the first ``len(samples)`` individuals marked as samples. The mapping from
-    node IDs in the current set of tables to their equivalent values in the
-    simplified tables is returned as a numpy array. If an array ``a`` is
-    returned by this function and ``u`` is the ID of a node in the input
-    table, then ``a[u]`` is the ID of this node in the output table. For
-    any node ``u`` that is not mapped into the output tables, this mapping
-    will equal ``-1``.
+    the first ``len(samples)`` individuals marked as samples. The
+    ``sequence_length`` can be provided but is otherwise inferred from the
+    largest right edge. The mapping from node IDs in the current set of tables
+    to their equivalent values in the simplified tables is returned as a numpy
+    array. If an array ``a`` is returned by this function and ``u`` is the ID of
+    a node in the input table, then ``a[u]`` is the ID of this node in the
+    output table. For any node ``u`` that is not mapped into the output tables,
+    this mapping will equal ``-1``.
 
     Tables operated on by this function must: be sorted (see ``sort_tables``),
     have children be born strictly after their parents, and the intervals on
@@ -649,6 +647,7 @@ def simplify_tables(*args, **kwargs):
     :param MutationTable mutations: The MutationTable to be simplified.
     :param bool filter_invariant_sites: Whether to remove sites that have no
         mutations from the output (default: True).
+    :param float sequence_length: The length of the sequence.
     :return: A numpy array mapping node IDs in the input tables to their
         corresponding node IDs in the output tables.
     :rtype: numpy array (dtype=np.int32).

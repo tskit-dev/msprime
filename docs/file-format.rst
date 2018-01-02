@@ -327,7 +327,7 @@ them (both operate on the tables **in place**):
 ``TreeSequence.simplify()``, since it can be applied to tables not satisfying
 all criteria above (and that hence could not be loaded into a TreeSequence).
 
-.. autofunction:: msprime.simplify_tables(samples, nodes, edges[, migrations, sites, mutations])
+.. autofunction:: msprime.simplify_tables(samples, nodes, edges[, migrations, sites, mutations, filter_invariant_sites, sequence_length])
 
 
 NodeTable
