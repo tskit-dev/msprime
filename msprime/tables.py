@@ -55,25 +55,13 @@ def text_decode_metadata(encoded):
 
 class NodeTable(_msprime.NodeTable):
     """
-    Class for tables describing all nodes in the tree sequence, of the form
-        id     is_sample  population   time
-        0      1          0            0.0
-        1      1          1            0.0
-        2      0          0            0.0
-        3      1          0            0.5
-        4      0          2            2.1
-    Node IDs are *not* recorded; rather the `id` column shows the row index, so
-    that the `k`-th row describes the node whose ID is `k`.  `is_sample`
-    records whether the node is a sample (=1) or not (=0).  `population` is an
-    integer population ID, and `time` is the time since that individual was
-    born, as a float.
-
-    Requirements:
-        1. All birth times must be greater than or equal to zero.
-
-    It is not required that the `time` column be ordered or that all samples
-    must be at the top.
+    A table defining the nodes in a tree sequence. See the
+    :ref:`definitions <sec-node-table-definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    for the properties needed for a node table to be a part of a valid tree sequence.
     """
+
     def __str__(self):
         time = self.time
         flags = self.flags
@@ -134,28 +122,33 @@ def _pickle_node_table(table):
 class EdgeTable(_msprime.EdgeTable):
     """
     Class for tables describing all edges in a tree sequence, of the form
-        left	right	parent	child
-        0.0     0.4     3       0
-        0.0     0.4     3       2
-        0.4     1.0     3       0
-        0.4     1.0     3       1
-        0.4     1.0     3       2
-        0.0     0.4     4       1
-        0.0     0.4     4       3
+
+    left	right	parent	child
+    0.0     0.4     3       0
+    0.0     0.4     3       2
+    0.4     1.0     3       0
+    0.4     1.0     3       1
+    0.4     1.0     3       2
+    0.0     0.4     4       1
+    0.0     0.4     4       3
+
     These describe the half-open genomic interval affected: `[left, right)`,
     the `parent` and the `child` on that interval.
 
     Requirements: to describe a valid tree sequence, a `EdgeTable` (and
     corresponding `NodeTable`, to provide birth times) must satisfy:
-        1. any two edges that share a child must be nonoverlapping, and
-        2. the birth times of the `parent` in an edge must be strictly
-            greater than the birth times of the `child` in that edge.
+
+    1. any two edges that share a child must be nonoverlapping, and
+    2. the birth times of the `parent` in an edge must be strictly
+        greater than the birth times of the `child` in that edge.
+
     Furthermore, for algorithmic requirements
-        4. the smallest `left` coordinate must be 0.0,
-        5. the table must be sorted so that birth time of the `parent` increases
-            with table row, and
-        6. any two edges corresponding to the same `parent` must be
-            nonoverlapping.
+
+    4. the smallest `left` coordinate must be 0.0,
+    5. the table must be sorted so that birth time of the `parent` increases
+        with table row, and
+    6. any two edges corresponding to the same `parent` must be
+        nonoverlapping.
 
     It is an additional requirement that the complete ancestry of each sample
     must be specified, but this is harder to verify.
@@ -286,9 +279,11 @@ class SiteTable(_msprime.SiteTable):
     """
     Class for tables describing all sites at which mutations have occurred in a
     tree sequence, of the form
-        id	position	ancestral_state
-        0	0.1     	0
-        1	0.5     	0
+
+    id	position	ancestral_state
+    0	0.1     	0
+    1	0.5     	0
+
     Here ``id`` is not stored directly, but is determined by the row index in
     the table.  ``position`` is the position along the genome, and
     ``ancestral_state`` gives the allele at the root of the tree at that
@@ -363,10 +358,12 @@ class MutationTable(_msprime.MutationTable):
     """
     Class for tables describing all mutations that have occurred in a tree
     sequence, of the form
-        site	node	derived_state
-        0	4	1
-        1	3	1
-        1	2	0
+
+    site	node	derived_state
+    0	4	1
+    1	3	1
+    1	2	0
+
     Here ``site`` is the index in the SiteTable of the site at which the
     mutation occurred, ``node`` is the index in the NodeTable of the node who
     is the first node inheriting the mutation, and ``derived_state`` is the
@@ -611,6 +608,11 @@ def sort_tables(*args, **kwargs):
     greater than or equal to ``edge_start`` are sorted; rows before this index
     are not affected. This parameter is provided to allow for efficient sorting
     when the user knows that the edges up to a given index are already sorted.
+
+    This function is more general than ``TreeSequence.simplify()``, since it can
+    be applied to tables not satisfying the tree sequence
+    :ref:`sec-ordering-criteria`
+    (and that hence could not be loaded into a TreeSequence).
 
     :param NodeTable nodes: The tree sequence nodes (required).
     :param EdgeTable edges: The tree sequence edges (required).

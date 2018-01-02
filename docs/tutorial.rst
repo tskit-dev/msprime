@@ -849,3 +849,139 @@ Running this example we get::
     100%|████████████████████████████████████████████████| 4045/4045 [00:09<00:00, 440.29it/s]
     Found LD sites for 4045 doubleton mutations out of 60100
 
+
+*******************
+Working with Tables
+*******************
+
+Tables provide a convenient method for viewing, importing and exporting tree
+sequences.  ``msprime`` provides direct access to the the columns of a table as
+``numpy`` arrays: for instance, if ``n`` is a ``NodeTable``, then ``n.time``
+will return an array containing the birth times of the individuals in the
+table.  *However*, it is important to note that this is *not* a shallow copy:
+modifying ``n.time`` will not change the node table ``n``.  This may change in
+the future, but currently there are two ways to modify tables: ``.add_row()``
+and ``.set_columns()`` (and also ``.reset()``, which empties the table).
+
+The example node table above would be constructed using ``.add_row()`` as
+follows::
+
+    n = msprime.NodeTable()
+    sv = [True, True, True, False, False, False, False]
+    tv = [0.0, 0.0, 0.0, 0.4, 0.5, 0.7, 1.0]
+    pv = [0, 0, 0, 0, 0, 0, 0]
+    for s, t, p in zip(sv, tv, pv):
+        n.add_row(flags=s, population=p, time=t)
+
+    print(n)
+
+The ``.add_row()`` method is natural (and should be reasonably efficient) if
+new records appear one-by-one. In the example above it would have been more
+natural to use ``.set_columns()``::
+
+    n = msprime.NodeTable()
+    n.set_columns(flags=sv, population=pv, time=tv)
+
+
+Finally, here is an example where we add 1.4 to every ``time`` except the first
+in the NodeTable constructed above using ``numpy`` indexing::
+
+    fn = n.flags
+    pn = n.population
+    tn = n.time
+    tn[1:] = tn[1:] + 1.4
+    n.set_columns(flags=fn, population=pn, time=tn)
+
+
+
+
+Here is an example.  Consider the following sequence of trees::
+
+    time
+    ----
+    1.0                6
+    0.7               / \                                       5
+                     /   x                                     / \
+    0.5             /     4                 4                 /   4
+                   /     / \               / x               /   / \
+    0.4           /     /   \             /   3             /   /   \
+                 /     /     \           /   / \           /   /     \
+                /     /       \         /   /   x         /   /       \
+               /     /         \       /   /     \       /   /         \
+    0.0       0     1           2     1   0       2     0   1           2
+
+    position 0.0                  0.2               0.8                1.0
+
+First, we specify the nodes::
+
+    NodeTable:
+
+    id      is_sample    population   time
+    0       1            0            0
+    1       1            0            0
+    2       1            0            0
+    3       0            0            0.4
+    4       0            0            0.5
+    5       0            0            0.7
+    6       0            0            1.0
+
+Importantly, the first column, ``id``, is **not actually recorded**, and is
+only shown when printing out node tables (as here) for convenience. This has
+three samples: nodes 0, 1, and 2, and lists their birth times.  Then, we
+specify the edges::
+
+    EdgesetTable:
+
+    left    right   parent  children
+    0.2     0.8     3       0
+    0.2     0.8     3       2
+    0.0     0.2     4       1
+    0.0     0.2     4       2
+    0.2     0.8     4       1
+    0.2     0.8     4       3
+    0.8     1.0     4       1
+    0.8     1.0     4       2
+    0.8     1.0     5       0
+    0.8     1.0     5       4
+    0.0     0.2     6       0
+    0.0     0.2     6       4
+
+Since node 3 is most recent, the edgeset that says that nodes 0 and 2 inherit
+from node 3 on the interval between 0.2 and 0.8 comes first.  Next are the
+edges from node 4: there are three of these, for each of the three genomic
+intervals over which node 4 is ancestor to a distinct set of nodes.  At this
+point, we know the full tree on the middle interval.  Finally, edges
+specifying the common ancestor of 0 and 4 on the remaining intervals (parents 6
+and 5 respectively) allow us to construct all trees across the entire interval.
+
+In the depiction above, ``x`` denotes mutations. Suppose that the first
+mutation occurs at position 0.1 and the mutations in the second tree both
+occurred at the same position, at 0.5 (with a back mutation).  The positions
+are recorded in the sites table::
+
+    SiteTable:
+
+    id	position	ancestral_state
+    0	0.1     	0
+    1	0.5     	0
+
+As with node tables, the ``id`` column is **not** actually recorded, but is
+implied by the position in the table.  The acutal mutations are then recorded::
+
+    MutationTable:
+
+    site	node	derived_state
+    0	    4	    1
+    1	    3	    1
+    1	    2	    0
+
+This would then result in the following (two-locus) haplotypes for the three
+samples::
+
+    sample  haplotype
+    ------  ---------
+    0       01
+    1       10
+    2       11
+
+

@@ -188,3 +188,24 @@ population genetics statistics from a given :class:`.TreeSequence`.
 
 .. autoclass:: msprime.LdCalculator(tree_sequence)
     :members:
+
+***********
+Tables API
+***********
+
+.. autoclass:: msprime.NodeTable
+
+.. autoclass:: msprime.EdgeTable
+
+.. autoclass:: msprime.SiteTable
+
+.. autoclass:: msprime.MutationTable
+
+.. autofunction:: msprime.sort_tables(nodes, edges[, migrations, sites, mutations, edge_start])
+
+.. autofunction:: msprime.simplify_tables(samples, nodes, edges[, migrations, sites, mutations])
+
+.. autofunction:: msprime.load_tables
+
+.. autofunction:: msprime.load_text
+
