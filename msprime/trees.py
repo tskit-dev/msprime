@@ -819,6 +819,21 @@ def load(path):
 
 
 def load_tables(*args, **kwargs):
+    """
+    Loads a tree sequence from the table objects provided.  If sequence_length
+    is 0 or not provided, it is inferred to be equal to the largest right value
+    in the edges.
+
+    :param NodeTable nodes: The NodeTable.
+    :param EdgeTable edges: The EdgeTable.
+    :param float sequence_length: The length of the sequence.
+    :param MigrationTable migrations: The MigrationTable.
+    :param SiteTable sites: The SiteTable.
+    :param MutationTable mutations: The MutationTable.
+    :param ProvenanceTable provenances: The ProvenanceTable.
+    :return: A :class:`msprime.TreeSequence` consistent with the tables.
+    :rtype: TreeSequence
+    """
     return TreeSequence.load_tables(*args, **kwargs)
 
 
@@ -1099,7 +1114,7 @@ class TreeSequence(object):
         :param MigrationTable migrations: The MigrationTable to load the migrations into.
         :param SiteTable sites: The SiteTable to load the sites into.
         :param MutationTable mutations: The MutationTable to load the mutations into.
-        :param ProvenanceTable mutations: The ProvenanceTable to load the provenances
+        :param ProvenanceTable provenances: The ProvenanceTable to load the provenances
             into.
         :return: A :class:`.TableCollection` containing all tables underlying
             the tree sequence.
