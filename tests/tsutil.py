@@ -26,6 +26,8 @@ from __future__ import division
 import json
 import random
 
+import numpy as np
+
 import msprime.provenance as provenance
 import msprime
 
@@ -109,11 +111,8 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
 
 def insert_multichar_mutations(ts, seed=1, max_len=10):
     """
-    Returns a copy of the specified tree sequence with mutations on a
-    randomly chosen branch.
-    branch.
-    ACGT, and then over every node in the tree we add mutation of length
-    equal to its position in the nodes iterator.
+    Returns a copy of the specified tree sequence with multiple chararacter
+    mutations on a randomly chosen branch in every tree.
     """
     rng = random.Random(seed)
     letters = ["A", "C", "T", "G"]
@@ -219,6 +218,52 @@ def single_childify(ts):
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
         provenances=tables.provenances)
     return new_ts
+
+
+def add_random_metadata(ts, seed=1, max_length=10):
+    """
+    Returns a copy of the specified tree sequence with random metadata assigned
+    to the nodes, sites and mutations.
+    """
+    tables = ts.dump_tables()
+    np.random.seed(seed)
+
+    length = np.random.randint(0, max_length, ts.num_nodes)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    # Older versions of numpy didn't have a dtype argument for randint, so
+    # must use astype instead.
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    nodes = tables.nodes
+    nodes.set_columns(
+        flags=nodes.flags, population=nodes.population, time=nodes.time,
+        metadata_offset=offset, metadata=metadata)
+
+    length = np.random.randint(0, max_length, ts.num_sites)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    sites = tables.sites
+    sites.set_columns(
+        position=sites.position,
+        ancestral_state=sites.ancestral_state,
+        ancestral_state_offset=sites.ancestral_state_offset,
+        metadata_offset=offset, metadata=metadata)
+
+    length = np.random.randint(0, max_length, ts.num_mutations)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    mutations = tables.mutations
+    mutations.set_columns(
+        site=mutations.site,
+        node=mutations.node,
+        parent=mutations.parent,
+        derived_state=mutations.derived_state,
+        derived_state_offset=mutations.derived_state_offset,
+        metadata_offset=offset, metadata=metadata)
+    add_provenance(tables.provenances, "add_random_metadata")
+    ts = msprime.load_tables(
+        nodes=nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances, migrations=tables.migrations)
+    return ts
 
 
 def jiggle_samples(ts):

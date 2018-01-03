@@ -22,6 +22,7 @@ Tree sequence IO via the tables API.
 from __future__ import division
 from __future__ import print_function
 
+import base64
 import datetime
 
 from six.moves import copyreg
@@ -34,6 +35,22 @@ try:
     import numpy as np
 except ImportError:
     pass
+
+
+def text_encode_metadata(metadata):
+    """
+    Returns the specified metadata bytes object encoded as an ASCII-safe
+    string.
+    """
+    return base64.b64encode(metadata).decode('utf8')
+
+
+def text_decode_metadata(encoded):
+    """
+    Decodes the specified ASCII encoding of binary metadata and returns the
+    resulting bytes.
+    """
+    return base64.b64decode(encoded.encode('utf8'))
 
 
 class NodeTable(_msprime.NodeTable):
@@ -64,11 +81,8 @@ class NodeTable(_msprime.NodeTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tis_sample\tpopulation\ttime\tmetadata\n"
         for j in range(self.num_rows):
-            # Not clear how we should deal with printing metadata out here.
-            # Probably try to decode as utf8, but printout as raw bytes if
-            # this fails??
             ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
-                j, flags[j], population[j], time[j], metadata[j])
+                j, flags[j], population[j], time[j], text_encode_metadata(metadata[j]))
         return ret[:-1]
 
     def __eq__(self, other):
@@ -284,13 +298,12 @@ class SiteTable(_msprime.SiteTable):
         position = self.position
         ancestral_state = unpack_strings(
             self.ancestral_state, self.ancestral_state_offset)
-        # TODO we should wrap this with a try-except, and fall back to printing
-        # something else if utf8 decoding fails.
-        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
             ret += "{}\t{:.8f}\t{}\t{}\n".format(
-                j, position[j], ancestral_state[j], metadata[j])
+                j, position[j], ancestral_state[j],
+                text_encode_metadata(metadata[j]))
         return ret[:-1]
 
     def __eq__(self, other):
@@ -367,13 +380,12 @@ class MutationTable(_msprime.MutationTable):
         node = self.node
         parent = self.parent
         derived_state = unpack_strings(self.derived_state, self.derived_state_offset)
-        # TODO we should wrap this with a try-except, and fall back to printing
-        # something else if utf8 decoding fails.
-        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tsite\tnode\tderived_state\tparent\tmetadata\n"
         for j in range(self.num_rows):
             ret += "{}\t{}\t{}\t{}\t{}\t{}\n".format(
-                j, site[j], node[j], derived_state[j], parent[j], metadata[j])
+                j, site[j], node[j], derived_state[j], parent[j],
+                text_encode_metadata(metadata[j]))
         return ret[:-1]
 
     def __eq__(self, other):
@@ -568,7 +580,7 @@ class TableCollection(object):
         s += self.__banner("Mutations")
         s += str(self.mutations) + "\n"
         s += self.__banner("Migrations")
-        s += str(self.migrations)
+        s += str(self.migrations) + "\n"
         s += self.__banner("Provenances")
         s += str(self.provenances)
         return s

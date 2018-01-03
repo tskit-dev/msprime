@@ -189,20 +189,24 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
     if internal_samples:
         for ts in get_internal_samples_examples():
             yield ts
+    seed = 1
     for n in [2, 3, 10, 100]:
         for m in [1, 2, 32]:
             for rho in [0, 0.1, 0.5]:
                 recomb_map = msprime.RecombinationMap.uniform_map(m, rho, num_loci=m)
                 ts = msprime.simulate(
-                    n, recombination_map=recomb_map, mutation_rate=0.1)
-                yield ts
+                    n, recombination_map=recomb_map, mutation_rate=0.1, random_seed=seed)
+                yield tsutil.add_random_metadata(ts, seed=seed)
+                seed += 1
     for ts in get_bottleneck_examples():
         yield ts
     ts = msprime.simulate(15, length=4, recombination_rate=1)
     assert ts.num_trees > 1
     if back_mutations:
         yield tsutil.insert_branch_mutations(ts, mutations_per_branch=2)
-    yield tsutil.insert_multichar_mutations(ts)
+    ts = tsutil.insert_multichar_mutations(ts)
+    yield ts
+    yield tsutil.add_random_metadata(ts)
 
 
 def get_bottleneck_examples():
@@ -1356,34 +1360,14 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_nodes) - 1, ts.num_nodes)
         self.assertEqual(
             list(output_nodes[0].split()),
-            ["id", "is_sample", "time", "population"])
+            ["id", "is_sample", "time", "population", "metadata"])
         for node, line in zip(ts.nodes(), output_nodes[1:]):
             splits = line.split("\t")
             self.assertEqual(str(node.id), splits[0])
             self.assertEqual(str(node.is_sample()), splits[1])
             self.assertEqual(convert(node.time), splits[2])
             self.assertEqual(str(node.population), splits[3])
-
-    def verify_samples_format(self, ts, samples_file, precision):
-        """
-        Verifies that the samples we output have the correct form:
-        same as nodes, but with first column equal to 'id'.
-        """
-        def convert(v):
-            return "{:.{}f}".format(v, precision)
-        output_nodes = samples_file.read().splitlines()
-        self.assertEqual(len(output_nodes) - 1, len(ts.samples()))
-        self.assertEqual(
-            list(output_nodes[0].split()),
-            ["id", "is_sample", "time", "population"])
-        sample_nodes = [ts.node(x) for x in ts.samples()]
-        for node_id, node, line in zip(ts.samples(), sample_nodes,
-                                       output_nodes[1:]):
-            splits = line.split("\t")
-            self.assertEqual(str(node_id), splits[0])
-            self.assertEqual(str(node.is_sample()), splits[1])
-            self.assertEqual(convert(node.time), splits[2])
-            self.assertEqual(str(node.population), splits[3])
+            self.assertEqual(msprime.text_encode_metadata(node.metadata), splits[4])
 
     def verify_edges_format(self, ts, edges_file, precision):
         """
@@ -1413,14 +1397,16 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_sites) - 1, ts.num_sites)
         self.assertEqual(
             list(output_sites[0].split()),
-            ["position", "ancestral_state"])
+            ["position", "ancestral_state", "metadata"])
         for site, line in zip(ts.sites(), output_sites[1:]):
             splits = line.split("\t")
             self.assertEqual(convert(site.position), splits[0])
+            self.assertEqual(site.ancestral_state, splits[1])
+            self.assertEqual(msprime.text_encode_metadata(site.metadata), splits[2])
 
     def verify_mutations_format(self, ts, mutations_file, precision):
         """
-        Verifies that the mutationss we output have the correct form.
+        Verifies that the mutations we output have the correct form.
         """
         def convert(v):
             return "{:.{}f}".format(v, precision)
@@ -1428,13 +1414,15 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_mutations) - 1, ts.num_mutations)
         self.assertEqual(
             list(output_mutations[0].split()),
-            ["site", "node", "derived_state", "parent"])
+            ["site", "node", "derived_state", "parent", "metadata"])
         mutations = [mut for site in ts.sites() for mut in site.mutations]
         for mutation, line in zip(mutations, output_mutations[1:]):
             splits = line.split("\t")
             self.assertEqual(str(mutation.site), splits[0])
             self.assertEqual(str(mutation.node), splits[1])
             self.assertEqual(str(mutation.derived_state), splits[2])
+            self.assertEqual(str(mutation.parent), splits[3])
+            self.assertEqual(msprime.text_encode_metadata(mutation.metadata), splits[4])
 
     def test_output_format(self):
         for ts in get_example_tree_sequences():
@@ -1485,13 +1473,11 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(ts1.num_edges, checked)
 
         checked = 0
-        # TODO add in checks for metadata here when we implement it in the
-        # the text format.
         for s1, s2 in zip(ts1.sites(), ts2.sites()):
             checked += 1
             self.assertAlmostEqual(s1.position, s2.position)
             self.assertAlmostEqual(s1.ancestral_state, s2.ancestral_state)
-            # self.assertAlmostEqual(s1.metadata, s2.metadata)
+            self.assertEqual(s1.metadata, s2.metadata)
             self.assertEqual(s1.mutations, s2.mutations)
         self.assertEqual(ts1.num_sites, checked)
 
@@ -1502,7 +1488,6 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             check += 1
         self.assertEqual(check, ts1.get_num_trees())
 
-    @unittest.skip("text metadata")
     def test_text_record_round_trip(self):
         for ts1 in get_example_tree_sequences():
             nodes_file = six.StringIO()
@@ -1516,10 +1501,36 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             edges_file.seek(0)
             sites_file.seek(0)
             mutations_file.seek(0)
+            # We need to use sep="\t" here to ensure that we can correctly
+            # parse zero length ancestral/derived states.
             ts2 = msprime.load_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, sequence_length=ts1.sequence_length)
+                mutations=mutations_file, sequence_length=ts1.sequence_length, sep="\t")
             self.verify_approximate_equality(ts1, ts2)
+
+    def test_parse_sep(self):
+        # Try using : as a field separator to test the sep argument for load_text.
+        nodes = six.StringIO(
+            "is_sample:time\n"
+            "0:1\n"
+            "1:0\n")
+        edges = six.StringIO(
+            "left:right:parent:child\n"
+            "0:5:0:1")
+        sites = six.StringIO(
+            "position:ancestral_state:metadata\n"
+            "0:AAA:\n"
+            "1::")
+        mutations = six.StringIO(
+            "site:node:derived_state:parent:metadata\n"
+            "0:0:BBBB:-1:\n"
+            "1:1::-1:\n")
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, sep=":")
+        self.assertEqual(ts.num_nodes, 2)
+        self.assertEqual(ts.num_edges, 1)
+        self.assertEqual(ts.num_sites, 2)
+        self.assertEqual(ts.num_mutations, 2)
 
     def test_empty_files(self):
         nodes_file = six.StringIO("is_sample\ttime\n")
