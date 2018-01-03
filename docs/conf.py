@@ -20,18 +20,26 @@ import shlex
 # documentation build on readthedocs, so we mock the module. Follows
 # the recommended pattern at
 # http://docs.readthedocs.org/en/latest/faq.html
-try:
-    from unittest.mock import MagicMock
-except ImportError:
-    from mock import Mock as MagicMock
+
+from unittest.mock import MagicMock
+
+_table_classes = [
+    "NodeTable", "EdgeTable", "MigrationTable", "SiteTable", "MutationTable",
+    "ProvenanceTable"]
+
 
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
-        return MagicMock()
+        # To get the documentation to build correctly for the table classes
+        # we need to jump through this hoop.
+        if name in _table_classes:
+            return MagicMock
+        else:
+            return MagicMock()
 
-# MOCK_MODULES = ["_msprime"]
-# sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+MOCK_MODULES = ["_msprime"]
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the

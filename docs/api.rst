@@ -194,6 +194,7 @@ Tables API
 ***********
 
 .. autoclass:: msprime.NodeTable
+    :members:
 
 .. autoclass:: msprime.EdgeTable
 

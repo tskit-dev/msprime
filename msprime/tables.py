@@ -60,6 +60,13 @@ class NodeTable(_msprime.NodeTable):
     in this table and the
     :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
     for the properties needed for a node table to be a part of a valid tree sequence.
+
+    TODO add warning here about the attributes returning copies of the data.
+
+    :ivar time: The array of time values.
+    :vartype time: numpy.ndarray, dtype=np.float64
+    :ivar flags: The arrays of flags values.
+    :vartype flags: numpy.ndarray, dtype=np.uint32
     """
 
     def __str__(self):
