@@ -893,7 +893,7 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
     unsigned int flags = 0;
     double time = 0;
     int population = -1;
-    PyObject *py_metadata = NULL;
+    PyObject *py_metadata = Py_None;
     char *metadata = "";
     Py_ssize_t metadata_length = 0;
     static char *kwlist[] = {"flags", "time", "population", "metadata", NULL};
@@ -905,18 +905,18 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    if (py_metadata != NULL) {
+    if (py_metadata != Py_None) {
         if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
             goto out;
         }
     }
     err = node_table_add_row(self->node_table, (uint32_t) flags, time,
             (population_id_t) population, metadata, metadata_length);
-    if (err != 0) {
+    if (err < 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("");
+    ret = Py_BuildValue("i", err);
 out:
     return ret;
 }
@@ -937,11 +937,11 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
     PyArrayObject *time_array = NULL;
     PyObject *flags_input = NULL;
     PyArrayObject *flags_array = NULL;
-    PyObject *population_input = NULL;
+    PyObject *population_input = Py_None;
     PyArrayObject *population_array = NULL;
-    PyObject *metadata_input = NULL;
+    PyObject *metadata_input = Py_None;
     PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = NULL;
+    PyObject *metadata_offset_input = Py_None;
     PyArrayObject *metadata_offset_array = NULL;
     static char *kwlist[] = {"flags", "time", "population", "metadata", "metadata_offset", NULL};
 
@@ -961,7 +961,7 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
     if (time_array == NULL) {
         goto out;
     }
-    if (population_input != NULL) {
+    if (population_input != Py_None) {
         population_array = table_read_column_array(population_input, NPY_INT32,
                 &num_rows, true);
         if (population_array == NULL) {
@@ -969,12 +969,12 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         }
         population_data = PyArray_DATA(population_array);
     }
-    if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
         PyErr_SetString(PyExc_TypeError,
                 "metadata and metadata_offset must be specified together");
         goto out;
     }
-    if (metadata_input != NULL) {
+    if (metadata_input != Py_None) {
         metadata_array = table_read_column_array(metadata_input, NPY_INT8,
                 &metadata_length, false);
         if (metadata_array == NULL) {
@@ -1310,11 +1310,11 @@ EdgeTable_add_row(EdgeTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = edge_table_add_row(self->edge_table, left, right, parent, child);
-    if (err != 0) {
+    if (err < 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("");
+    ret = Py_BuildValue("i", err);
 out:
     return ret;
 }
@@ -1650,6 +1650,33 @@ out:
     return ret;
 }
 
+static PyObject *
+MigrationTable_add_row(MigrationTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    double left, right, time;
+    int node, source, dest;
+    static char *kwlist[] = {"left", "right", "node", "source", "dest", "time", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ddiiid", kwlist,
+                &left, &right, &node, &source, &dest, &time)) {
+        goto out;
+    }
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = migration_table_add_row(self->migration_table, left, right, node,
+            source, dest, time);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
 #ifdef HAVE_NUMPY
 
 static PyObject *
@@ -1902,6 +1929,8 @@ static PyGetSetDef MigrationTable_getsetters[] = {
 };
 
 static PyMethodDef MigrationTable_methods[] = {
+    {"add_row", (PyCFunction) MigrationTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
@@ -2026,7 +2055,7 @@ SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
     double position;
     char *ancestral_state = NULL;
     Py_ssize_t ancestral_state_length = 0;
-    PyObject *py_metadata = NULL;
+    PyObject *py_metadata = Py_None;
     char *metadata = NULL;
     Py_ssize_t metadata_length = 0;
     static char *kwlist[] = {"position", "ancestral_state", "metadata", NULL};
@@ -2038,18 +2067,18 @@ SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    if (py_metadata != NULL) {
+    if (py_metadata != Py_None) {
         if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
             goto out;
         }
     }
     err = site_table_add_row(self->site_table, position, ancestral_state,
             ancestral_state_length, metadata, metadata_length);
-    if (err != 0) {
+    if (err < 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("");
+    ret = Py_BuildValue("i", err);
 out:
     return ret;
 }
@@ -2070,9 +2099,9 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
     PyArrayObject *ancestral_state_array = NULL;
     PyObject *ancestral_state_offset_input = NULL;
     PyArrayObject *ancestral_state_offset_array = NULL;
-    PyObject *metadata_input = NULL;
+    PyObject *metadata_input = Py_None;
     PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = NULL;
+    PyObject *metadata_offset_input = Py_None;
     PyArrayObject *metadata_offset_array = NULL;
     char *metadata_data;
     uint32_t *metadata_offset_data;
@@ -2104,12 +2133,12 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
 
     metadata_data = NULL;
     metadata_offset_data = NULL;
-    if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
         PyErr_SetString(PyExc_TypeError,
                 "metadata and metadata_offset must be specified together");
         goto out;
     }
-    if (metadata_input != NULL) {
+    if (metadata_input != Py_None) {
         metadata_array = table_read_column_array(metadata_input, NPY_INT8,
                 &metadata_length, false);
         if (metadata_array == NULL) {
@@ -2473,11 +2502,11 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
             (node_id_t) node, (mutation_id_t) parent,
             derived_state, derived_state_length,
             metadata, metadata_length);
-    if (err != 0) {
+    if (err < 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("");
+    ret = Py_BuildValue("i", err);
 out:
     return ret;
 }
@@ -2501,12 +2530,12 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     PyArrayObject *derived_state_offset_array = NULL;
     PyObject *node_input = NULL;
     PyArrayObject *node_array = NULL;
-    PyObject *parent_input = NULL;
+    PyObject *parent_input = Py_None;
     PyArrayObject *parent_array = NULL;
     mutation_id_t *parent_data;
-    PyObject *metadata_input = NULL;
+    PyObject *metadata_input = Py_None;
     PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = NULL;
+    PyObject *metadata_offset_input = Py_None;
     PyArrayObject *metadata_offset_array = NULL;
     char *metadata_data;
     uint32_t *metadata_offset_data;
@@ -2540,7 +2569,7 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     }
 
     parent_data = NULL;
-    if (parent_input != NULL) {
+    if (parent_input != Py_None) {
         parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
         if (parent_array == NULL) {
             goto out;
@@ -2550,12 +2579,12 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
 
     metadata_data = NULL;
     metadata_offset_data = NULL;
-    if ((metadata_input == NULL) != (metadata_offset_input == NULL)) {
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
         PyErr_SetString(PyExc_TypeError,
                 "metadata and metadata_offset must be specified together");
         goto out;
     }
-    if (metadata_input != NULL) {
+    if (metadata_input != Py_None) {
         metadata_array = table_read_column_array(metadata_input, NPY_INT8,
                 &metadata_length, false);
         if (metadata_array == NULL) {
@@ -2947,11 +2976,11 @@ ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
     }
     err = provenance_table_add_row(self->provenance_table,
             timestamp, timestamp_length, record, record_length);
-    if (err != 0) {
+    if (err < 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = Py_BuildValue("");
+    ret = Py_BuildValue("i", err);
 out:
     return ret;
 }

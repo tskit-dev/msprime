@@ -296,7 +296,7 @@ parse_nodes(const char *text, node_table_t *node_table)
         }
         ret = node_table_add_row(node_table, flags, time, population, name,
                 strlen(name));
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
     }
 }
 
@@ -355,7 +355,7 @@ parse_edges(const char *text, edge_table_t *edge_table)
             CU_ASSERT_FATAL(q != NULL);
             child = atoi(q);
             ret = edge_table_add_row(edge_table, left, right, parent, child);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_FATAL(ret >= 0);
             q = strtok(NULL, ",");
         }
         CU_ASSERT_FATAL(q == NULL);
@@ -396,7 +396,7 @@ parse_sites(const char *text, site_table_t *site_table)
         strncpy(ancestral_state, p, MAX_LINE);
         ret = site_table_add_row(site_table, position, ancestral_state,
                 strlen(ancestral_state), NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
     }
 }
 
@@ -444,7 +444,7 @@ parse_mutations(const char *text, mutation_table_t *mutation_table)
         }
         ret = mutation_table_add_row(mutation_table, site, node, parent,
                 derived_state, strlen(derived_state), NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
     }
 }
 
@@ -1271,7 +1271,7 @@ get_example_tree_sequence(uint32_t num_samples,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_add_row(provenance,
             timestamp, strlen(timestamp), record, strlen(record));
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = tree_sequence_load_tables(tree_seq, 0, nodes, edges, migrations,
             sites, mutations, provenance, 0);
     /* edge_table_print_state(edges, stdout); */
@@ -1379,7 +1379,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
         /* add some fake metadata here to make sure we have cases with site metadata
          * in our examples */
         ret = site_table_add_row(&sites, tree.left, "0", 1, "recurrent", 9);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
         for (root = tree.left_root; root != MSP_NULL_NODE; root = tree.right_sib[root]) {
             /* Traverse down the tree and put a mutation on every branch. */
             memset(mutation, 0xff, tree_sequence_get_num_nodes(ts) * sizeof(mutation_id_t));
@@ -1405,7 +1405,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
                                 parent, state[u] == 0? "0": "1", 1,
                                 metadata, strlen(metadata));
                         parent = mutation[u];
-                        CU_ASSERT_EQUAL_FATAL(ret, 0);
+                        CU_ASSERT_FATAL(ret >= 0);
                     }
                 }
             }
@@ -1421,7 +1421,7 @@ make_recurrent_and_back_mutations_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_add_row(&provenance,
             timestamp, strlen(timestamp), record, strlen(record));
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
             &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1496,7 +1496,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = edge_table_add_row(&edges, edge.left, edge.right,
                 node_map[edge.parent], node_map[edge.child]);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
     }
     for (j = 0; j < mutations.num_rows; j++) {
         mutations.node[j] = node_map[mutations.node[j]];
@@ -1507,7 +1507,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_add_row(&provenance,
             timestamp, strlen(timestamp), record, strlen(record));
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
             &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1568,20 +1568,20 @@ make_gappy_copy(tree_sequence_t *ts)
         left = edge.left + gap_size;
         right = edge.right + gap_size;
         ret = edge_table_add_row(&edges, left, right, edge.parent, edge.child);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
     }
     for (j = 0; j < mutations.num_rows; j++) {
         sites.position[j] += gap_size;
     }
     /* Add a site into the gap at the end. */
     ret = site_table_add_row(&sites, ts->sequence_length + 0.5, "0", 1, "end-gap", 7);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = mutation_table_add_row(&mutations, sites.num_rows - 1, 0, MSP_NULL_MUTATION,
             "1", 1, NULL, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = provenance_table_add_row(&provenance,
             timestamp, strlen(timestamp), record, strlen(record));
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, ts->sequence_length + 1,
@@ -1645,7 +1645,7 @@ make_decapitated_copy(tree_sequence_t *ts)
 
     ret = provenance_table_add_row(&provenance,
             timestamp, strlen(timestamp), record, strlen(record));
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
@@ -1699,14 +1699,14 @@ make_multichar_mutations_copy(tree_sequence_t *ts)
         ret = site_table_add_row(&sites,
                 j * (ts->sequence_length / strlen(string)),
                 string, j, NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
         ret = mutation_table_add_row(&mutations, j, j, MSP_NULL_NODE,
                 string, j + 1, NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
     }
     ret = provenance_table_add_row(&provenance,
             timestamp, strlen(timestamp), record, strlen(record));
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
     ret = tree_sequence_initialise(new_ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(new_ts, 0, &nodes, &edges, &migrations,
@@ -4222,19 +4222,19 @@ test_single_tree_vargen_max_alleles(void)
     tree_sequence_free(&ts);
     memset(alleles, 'X', num_alleles);
     ret = site_table_add_row(&sites, 0, "Y", 1, NULL, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(ret >= 0);
 
     /* Add j mutations over a single node. */
     for (j = 0; j < num_alleles; j++) {
         /* When j = 0 we get a parent of -1, which is the NULL_NODE */
         ret = mutation_table_add_row(&mutations, 0, 0, j - 1, alleles, j, NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
 
         ret = tree_sequence_initialise(&ts);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_load_tables(&ts, 0, &nodes, &edges, NULL,
                 &sites, &mutations, NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(ret >= 0);
 
         ret = vargen_alloc(&vargen, &ts, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6204,7 +6204,7 @@ test_node_table(void)
 
     for (j = 0; j < num_rows; j++) {
         ret = node_table_add_row(&table, j, j, j, test_metadata, test_metadata_length);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.flags[j], j);
         CU_ASSERT_EQUAL(table.time[j], j);
         CU_ASSERT_EQUAL(table.population[j], j);
@@ -6345,7 +6345,7 @@ test_edge_table(void)
 
     for (j = 0; j < num_rows; j++) {
         ret = edge_table_add_row(&table, j, j, j, j);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.left[j], j);
         CU_ASSERT_EQUAL(table.right[j], j);
         CU_ASSERT_EQUAL(table.parent[j], j);
@@ -6436,7 +6436,7 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 1);
 
     ret = site_table_add_row(&table, 1, "AA", 2, "{}", 2);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_EQUAL(table.position[1], 1);
     CU_ASSERT_EQUAL(table.ancestral_state_offset[2], 3);
     CU_ASSERT_EQUAL(table.metadata_offset[1], 0);
@@ -6445,7 +6445,7 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 2);
 
     ret = site_table_add_row(&table, 2, "A", 1, "metadata", 8);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 2);
     CU_ASSERT_EQUAL(table.position[1], 1);
     CU_ASSERT_EQUAL(table.ancestral_state_offset[3], 4);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 4);
@@ -6615,7 +6615,7 @@ test_mutation_table(void)
     for (j = 0; j < num_rows; j++) {
         k = GSL_MIN(j + 1, max_len);
         ret = mutation_table_add_row(&table, j, j, j, c, k, c, k);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.site[j], j);
         CU_ASSERT_EQUAL(table.node[j], j);
         CU_ASSERT_EQUAL(table.parent[j], j);
@@ -6814,7 +6814,7 @@ test_migration_table(void)
 
     for (j = 0; j < num_rows; j++) {
         ret = migration_table_add_row(&table, j, j, j, j, j, j);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.left[j], j);
         CU_ASSERT_EQUAL(table.right[j], j);
         CU_ASSERT_EQUAL(table.node[j], j);
@@ -6934,7 +6934,7 @@ test_provenance_table(void)
     for (j = 0; j < num_rows; j++) {
         ret = provenance_table_add_row(&table, test_timestamp, test_timestamp_length,
                 test_record, test_record_length);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.timestamp_length, (j + 1) * test_timestamp_length);
         CU_ASSERT_EQUAL(table.timestamp_offset[j + 1], table.timestamp_length);
         CU_ASSERT_EQUAL(table.record_length, (j + 1) * test_record_length);

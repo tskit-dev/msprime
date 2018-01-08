@@ -2738,7 +2738,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
         scaled_time = self->model.model_time_to_generations(&self->model, node->time);
         ret = node_table_add_row(nodes, node->flags, scaled_time, node->population,
                 NULL, 0);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
     }
@@ -2757,7 +2757,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
             right = recomb_map_genetic_to_phys(recomb_map, right);
         }
         ret = edge_table_add_row(edges, left, right, edge->parent, edge->child);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
     }
@@ -2778,10 +2778,11 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
         scaled_time = self->model.model_time_to_generations(&self->model, migration->time);
         ret = migration_table_add_row(migrations, left, right, migration->node,
                 migration->source, migration->dest, scaled_time);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
     }
+    ret = 0;
 out:
     return ret;
 }

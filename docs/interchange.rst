@@ -83,6 +83,14 @@ edge
 Here are the formal requirements for a set of nodes and edges to make sense,
 and to allow ``msprime``'s algorithms to work properly.
 
+.. _sec-encoding-ragged-columns:
+
+Encoding ragged columns
+=======================
+
+    **todo: This section will define how to work with ragged columns. It's not clear
+    yet where it should be placed.**
+
 
 .. _sec-node-table-definition:
 

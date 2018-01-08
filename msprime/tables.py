@@ -61,12 +61,22 @@ class NodeTable(_msprime.NodeTable):
     :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
     for the properties needed for a node table to be a part of a valid tree sequence.
 
-    TODO add warning here about the attributes returning copies of the data.
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
+
+        **NOTE:** this behaviour may change in future.
 
     :ivar time: The array of time values.
     :vartype time: numpy.ndarray, dtype=np.float64
-    :ivar flags: The arrays of flags values.
+    :ivar flags: The array of flags values.
     :vartype flags: numpy.ndarray, dtype=np.uint32
+    :ivar population: The array of population IDs.
+    :vartype population: numpy.ndarray, dtype=np.int32
+    :ivar metadata: The flattened array of binary metadata values.
+    :vartype metadata: numpy.ndarray, dtype=np.int8
+    :ivar metadata_offset: The array of offsets into the metadata column.
+    :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
     def __str__(self):
@@ -112,6 +122,85 @@ class NodeTable(_msprime.NodeTable):
             flags=self.flags, time=self.time, population=self.population,
             metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
+
+    def add_row(self, flags=0, time=0, population=-1, metadata=None):
+        """
+        Adds a new row to this :class:`NodeTable` and returns the ID of the
+        corresponding node.
+
+        :param int flags: The bitwise flags for the new node.
+        :param float time: The birth time for the new node.
+        :param int population: The ID of the population in which the new node was born.
+            Defaults to the :const:`.NULL_POPULATION`.
+        :param bytes metadata: The binary-encoded metadata for the new node. If not
+            specified or None, a zero-length byte string is stored.
+        :return: The ID of the newly added node.
+        :rtype: int
+        """
+        return super(NodeTable, self).add_row(flags, time, population, metadata)
+
+    def set_columns(
+            self, flags, time, population=None, metadata=None, metadata_offset=None):
+        """
+        Sets the values for each column in this NodeTable using the values in
+        the specified arrays. Overwrites the current state of the table.
+
+        The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
+        which is equal to the number of nodes the table will contain. The
+        ``metadata`` and ``metadata_offset`` must be supplied together, and
+        meet the requirements for :ref:`sec-encoding-ragged-columns`.
+
+        :param flags: The bitwise flags for each node. Required.
+        :type flags: numpy.ndarray, dtype=np.uint32
+        :param time: The time values for each node. Required.
+        :type time: numpy.ndarray, dtype=np.float64
+        :param population: The population values for each node. If not specified
+            or None, the :const:`.NULL_POPULATION` value is stored for each node.
+        :type population: numpy.ndarray, dtype=np.int32
+        :param population: The population values for each node. If not specified
+            or None, the :const:`.NULL_POPULATION` value is stored for each node.
+        :type population: numpy.ndarray, dtype=np.int32
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
+        super(NodeTable, self).set_columns(
+            flags, time, population=population, metadata=metadata,
+            metadata_offset=metadata_offset)
+
+    def append_columns(
+            self, flags, time, population=None, metadata=None, metadata_offset=None):
+        """
+        Appends the specified arrays to the columns in this table.
+
+        The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
+        which is equal to the number of nodes that will be added to the table. The
+        ``metadata`` and ``metadata_offset`` must be supplied together, and
+        meet the requirements for :ref:`sec-encoding-ragged-columns`.
+
+        :param flags: The bitwise flags for each node. Required.
+        :type flags: numpy.ndarray, dtype=np.uint32
+        :param time: The time values for each node. Required.
+        :type time: numpy.ndarray, dtype=np.float64
+        :param population: The population values for each node. If not specified
+            or None, the :const:`.NULL_POPULATION` value is stored for each node.
+        :type population: numpy.ndarray, dtype=np.int32
+        :param population: The population values for each node. If not specified
+            or None, the :const:`.NULL_POPULATION` value is stored for each node.
+        :type population: numpy.ndarray, dtype=np.int32
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
+        super(NodeTable, self).append_columns(
+            flags, time, population=population,
+            metadata=metadata, metadata_offset=metadata_offset)
 
 
 # Pickle support. See copyreg registration for this function below.
@@ -467,7 +556,7 @@ class ProvenanceTable(_msprime.ProvenanceTable):
         # from the low-level module, which is a bit confusing. However, we
         # want the default behaviour here to be to add a row to the table at
         # the current time as simply as possible.
-        super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
+        return super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
 
     def __str__(self):
         timestamp = unpack_strings(self.timestamp, self.timestamp_offset)
@@ -660,7 +749,7 @@ def simplify_tables(*args, **kwargs):
     tables need not satisfy remaining requirements to specify a valid tree
     sequence (but the resulting tables will).
 
-    :param list samples: A list of Node IDs of individuals to retain as samples.
+    :param list[int] samples: A list of Node IDs of individuals to retain as samples.
     :param NodeTable nodes: The NodeTable to be simplified.
     :param EdgeTable edges: The EdgeTable to be simplified.
     :param MigrationTable migrations: The MigrationTable to be simplified.

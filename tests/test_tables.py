@@ -201,6 +201,26 @@ class CommonTestsMixin(object):
             array = getattr(table, col.name)
             self.assertEqual(array.shape, (0,))
 
+    def test_add_row_data(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+            table = self.table_class()
+            for j in range(num_rows):
+                kwargs = {col: data[j] for col, data in input_data.items()}
+                for col in self.string_colnames:
+                    kwargs[col] = "x"
+                for col in self.binary_colnames:
+                    kwargs[col] = b"x"
+                k = table.add_row(**kwargs)
+                self.assertEqual(k, j)
+            for colname, input_array in input_data.items():
+                output_array = getattr(table, colname)
+                self.assertEqual(input_array.shape, output_array.shape)
+                self.assertTrue(np.all(input_array == output_array))
+            table.reset()
+            self.assertEqual(table.num_rows, 0)
+            self.assertEqual(len(table), 0)
+
     def test_set_columns_data(self):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {col.name: col.get_input(num_rows) for col in self.columns}
@@ -440,6 +460,13 @@ class MetadataTestsMixin(object):
             self.assertEqual(len(list(table.metadata)), 0)
             self.assertEqual(
                 list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
+            # Supplying None is the same not providing the column.
+            input_data["metadata"] = None
+            input_data["metadata_offset"] = None
+            table.set_columns(**input_data)
+            self.assertEqual(len(list(table.metadata)), 0)
+            self.assertEqual(
+                list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
 
 
 class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
@@ -449,9 +476,20 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         DoubleColumn("time"),
         Int32Column("population")]
     ragged_list_columns = [(CharColumn("metadata"),  UInt32Column("metadata_offset"))]
+    string_colnames = []
+    binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["time", "flags", "population"]]
     table_class = msprime.NodeTable
+
+    def test_add_row_defaults(self):
+        t = msprime.NodeTable()
+        self.assertEqual(t.add_row(), 0)
+        self.assertEqual(t.time[0], 0)
+        self.assertEqual(t.flags[0], 0)
+        self.assertEqual(t.population[0], msprime.NULL_POPULATION)
+        self.assertEqual(len(t.metadata), 0)
+        self.assertEqual(t.metadata_offset[0], 0)
 
     def test_optional_population(self):
         for num_rows in [0, 10, 100]:
@@ -468,6 +506,10 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
             self.assertEqual(list(table.time), time)
             self.assertEqual(list(table.metadata), list(metadata))
             self.assertEqual(list(table.metadata_offset), list(metadata_offset))
+            table.set_columns(flags=flags, time=time, population=None)
+            self.assertEqual(list(table.population), [-1 for _ in range(num_rows)])
+            self.assertEqual(list(table.flags), flags)
+            self.assertEqual(list(table.time), time)
 
 
 class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
@@ -478,6 +520,8 @@ class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("parent"),
         Int32Column("child")]
     equal_len_columns = [["left", "right", "parent", "child"]]
+    string_colnames = []
+    binary_colnames = []
     ragged_list_columns = []
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.EdgeTable
@@ -489,6 +533,8 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         (CharColumn("ancestral_state"), UInt32Column("ancestral_state_offset")),
         (CharColumn("metadata"), UInt32Column("metadata_offset"))]
     equal_len_columns = [["position"]]
+    string_colnames = ["ancestral_state"]
+    binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.SiteTable
 
@@ -502,6 +548,8 @@ class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin)
         (CharColumn("derived_state"), UInt32Column("derived_state_offset")),
         (CharColumn("metadata"), UInt32Column("metadata_offset"))]
     equal_len_columns = [["site", "node"]]
+    string_colnames = ["derived_state"]
+    binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.MutationTable
 
@@ -515,6 +563,8 @@ class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("dest"),
         DoubleColumn("time")]
     ragged_list_columns = []
+    string_colnames = []
+    binary_colnames = []
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable
@@ -526,6 +576,8 @@ class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
         (CharColumn("timestamp"), UInt32Column("timestamp_offset")),
         (CharColumn("record"), UInt32Column("record_offset"))]
     equal_len_columns = [[]]
+    string_colnames = ["record", "timestamp"]
+    binary_colnames = []
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.ProvenanceTable
 

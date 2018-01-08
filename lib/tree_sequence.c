@@ -1240,7 +1240,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
         ret = node_table_add_row(nodes, self->nodes.flags[j],
                 self->nodes.time[j], self->nodes.population[j],
                 self->nodes.metadata + offset, length);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
     }
@@ -1256,7 +1256,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
         right = self->edges.right[j];
         ret = edge_table_add_row(edges, left, right, self->edges.parent[j],
                 self->edges.child[j]);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
     }
@@ -1280,7 +1280,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                     self->migrations.source[j],
                     self->migrations.dest[j],
                     self->migrations.time[j]);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }
@@ -1311,7 +1311,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                         + self->sites.metadata_offset[j],
                     self->sites.metadata_offset[j + 1]
                         - self->sites.metadata_offset[j]);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }
@@ -1333,7 +1333,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                         + self->mutations.metadata_offset[j],
                     self->mutations.metadata_offset[j + 1]
                         - self->mutations.metadata_offset[j]);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }
@@ -1358,7 +1358,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
             ret = provenance_table_add_row(provenance,
                     self->provenances.timestamp + timestamp_offset, timestamp_length,
                     self->provenances.record + record_offset, record_length);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }

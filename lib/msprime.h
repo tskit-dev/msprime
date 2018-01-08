@@ -71,9 +71,12 @@
 #define MSP_INITIALISED_MAGIC 0x1234567
 
 typedef int32_t node_id_t;
+typedef int32_t edge_id_t;
 typedef int32_t population_id_t;
 typedef int32_t site_id_t;
 typedef int32_t mutation_id_t;
+typedef int32_t migration_id_t;
+typedef int32_t provenance_id_t;
 typedef uint32_t table_size_t;
 
 typedef struct {
@@ -971,7 +974,7 @@ int sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *mig
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
         size_t max_name_length_increment);
-int node_table_add_row(node_table_t *self, uint32_t flags, double time,
+node_id_t node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *name, size_t name_length);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
         population_id_t *population, char *name, table_size_t *name_length);
@@ -983,7 +986,7 @@ void node_table_print_state(node_table_t *self, FILE *out);
 bool node_table_equal(node_table_t *self, node_table_t *other);
 
 int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
-int edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,
+edge_id_t edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,
         node_id_t child);
 int edge_table_set_columns(edge_table_t *self, size_t num_rows, double *left,
         double *right, node_id_t *parent, node_id_t *child);
@@ -997,7 +1000,7 @@ bool edge_table_equal(edge_table_t *self, edge_table_t *other);
 int site_table_alloc(site_table_t *self, size_t max_rows_increment,
         size_t max_ancestral_state_length_increment,
         size_t max_metadata_length_increment);
-int site_table_add_row(site_table_t *self, double position,
+site_id_t site_table_add_row(site_table_t *self, double position,
         const char *ancestral_state, table_size_t ancestral_state_length,
         const char *metadata, table_size_t metadata_length);
 
@@ -1016,8 +1019,8 @@ void mutation_table_print_state(mutation_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         size_t max_total_derived_state_length_increment,
         size_t max_total_metadata_length_increment);
-int mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
-        mutation_id_t parent,
+mutation_id_t mutation_table_add_row(mutation_table_t *self, site_id_t site,
+        node_id_t node, mutation_id_t parent,
         const char *derived_state, table_size_t derived_state_length,
         const char *metadata, table_size_t metadata_length);
 int mutation_table_set_columns(mutation_table_t *self, size_t num_rows,
@@ -1034,8 +1037,9 @@ int mutation_table_free(mutation_table_t *self);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
 
 int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
-int migration_table_add_row(migration_table_t *self, double left, double right,
-        node_id_t node, population_id_t source, population_id_t dest, double time);
+migration_id_t migration_table_add_row(migration_table_t *self, double left,
+        double right, node_id_t node, population_id_t source,
+        population_id_t dest, double time);
 int migration_table_set_columns(migration_table_t *self, size_t num_rows,
         double *left, double *right, node_id_t *node, population_id_t *source,
         population_id_t *dest, double *time);
@@ -1058,7 +1062,7 @@ void simplifier_print_state(simplifier_t *self, FILE *out);
 int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
         size_t max_timestamp_length_increment,
         size_t max_provenance_length_increment);
-int provenance_table_add_row(provenance_table_t *self,
+provenance_id_t provenance_table_add_row(provenance_table_t *self,
         const char *timestamp, size_t timestamp_length,
         const char *record, size_t record_length);
 int provenance_table_set_columns(provenance_table_t *self, size_t num_rows,

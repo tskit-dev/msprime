@@ -319,7 +319,7 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 intersphinx_mapping = {
-    'https://docs.python.org/': None,
+    'https://docs.python.org/3/': None,
     # Disabling numpy lookup as scipy.org not reachable.
-    # 'numpy': ('http://docs.scipy.org/doc/numpy/', None)}
+    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
 }
