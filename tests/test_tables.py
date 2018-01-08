@@ -60,17 +60,17 @@ class Column(object):
 
 class Int32Column(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.int32)
+        return 1 + np.arange(n, dtype=np.int32)
 
 
 class UInt8Column(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.uint8)
+        return 2 + np.arange(n, dtype=np.uint8)
 
 
 class UInt32Column(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.uint32)
+        return 3 + np.arange(n, dtype=np.uint32)
 
 
 class CharColumn(Column):
@@ -80,7 +80,7 @@ class CharColumn(Column):
 
 class DoubleColumn(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.float64)
+        return 4 + np.arange(n, dtype=np.float64)
 
 
 class CommonTestsMixin(object):
@@ -220,6 +220,24 @@ class CommonTestsMixin(object):
             table.reset()
             self.assertEqual(table.num_rows, 0)
             self.assertEqual(len(table), 0)
+
+    def test_add_row_round_trip(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, offset_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[offset_col.name] = np.arange(num_rows + 1, dtype=np.uint32)
+            t1 = self.table_class()
+            t1.set_columns(**input_data)
+            for colname, input_array in input_data.items():
+                output_array = getattr(t1, colname)
+                self.assertEqual(input_array.shape, output_array.shape)
+                self.assertTrue(np.all(input_array == output_array))
+            t2 = self.table_class()
+            for row in list(t1):
+                t2.add_row(**row._asdict())
+            self.assertEqual(t1, t2)
 
     def test_set_columns_data(self):
         for num_rows in [0, 10, 100, 1000]:
@@ -541,6 +559,21 @@ class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.EdgeTable
 
+    def test_simple_example(self):
+        t = msprime.EdgeTable()
+        t.add_row(left=0, right=1, parent=2, child=3)
+        t.add_row(1, 2, 3, 4)
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, 2, 3))
+        self.assertEqual(t[1], (1, 2, 3, 4))
+        self.assertEqual(t[0].left, 0)
+        self.assertEqual(t[0].right, 1)
+        self.assertEqual(t[0].parent, 2)
+        self.assertEqual(t[0].child, 3)
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
+
 
 class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     columns = [DoubleColumn("position")]
@@ -552,6 +585,20 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.SiteTable
+
+    def test_simple_example(self):
+        t = msprime.SiteTable()
+        t.add_row(position=0, ancestral_state="1", metadata=b"2")
+        t.add_row(1, "2", b"3")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, "1", b"2"))
+        self.assertEqual(t[1], (1, "2", b"3"))
+        self.assertEqual(t[0].position, 0)
+        self.assertEqual(t[0].ancestral_state, "1")
+        self.assertEqual(t[0].metadata, b"2")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
@@ -567,6 +614,22 @@ class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin)
     binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.MutationTable
+
+    def test_simple_example(self):
+        t = msprime.MutationTable()
+        t.add_row(site=0, node=1, derived_state="2", parent=3, metadata=b"4")
+        t.add_row(1, 2, "3", 4, b"5")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, "2", 3, b"4"))
+        self.assertEqual(t[1], (1, 2, "3", 4, b"5"))
+        self.assertEqual(t[0].site, 0)
+        self.assertEqual(t[0].node, 1)
+        self.assertEqual(t[0].derived_state, "2")
+        self.assertEqual(t[0].parent, 3)
+        self.assertEqual(t[0].metadata, b"4")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
@@ -584,6 +647,23 @@ class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable
 
+    def test_simple_example(self):
+        t = msprime.MigrationTable()
+        t.add_row(left=0, right=1, node=2, source=3, dest=4, time=5)
+        t.add_row(1, 2, 3, 4, 5, 6)
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, 2, 3, 4, 5))
+        self.assertEqual(t[1], (1, 2, 3, 4, 5, 6))
+        self.assertEqual(t[0].left, 0)
+        self.assertEqual(t[0].right, 1)
+        self.assertEqual(t[0].node, 2)
+        self.assertEqual(t[0].source, 3)
+        self.assertEqual(t[0].dest, 4)
+        self.assertEqual(t[0].time, 5)
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
+
 
 class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
     columns = []
@@ -595,6 +675,19 @@ class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
     binary_colnames = []
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.ProvenanceTable
+
+    def test_simple_example(self):
+        t = msprime.ProvenanceTable()
+        t.add_row(timestamp="0", record="1")
+        t.add_row("2", "1")  # The orders are reversed for default timestamp.
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], ("0", "1"))
+        self.assertEqual(t[1], ("1", "2"))
+        self.assertEqual(t[0].timestamp, "0")
+        self.assertEqual(t[0].record, "1")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestStringPacking(unittest.TestCase):

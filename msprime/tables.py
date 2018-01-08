@@ -59,6 +59,31 @@ NodeTableRow = collections.namedtuple(
     ["flags", "time", "population", "metadata"])
 
 
+EdgeTableRow = collections.namedtuple(
+    "EdgeTableRow",
+    ["left", "right", "parent", "child"])
+
+
+MigrationTableRow = collections.namedtuple(
+    "MigrationTableRow",
+    ["left", "right", "node", "source", "dest", "time"])
+
+
+SiteTableRow = collections.namedtuple(
+    "SiteTableRow",
+    ["position", "ancestral_state", "metadata"])
+
+
+MutationTableRow = collections.namedtuple(
+    "MutationTableRow",
+    ["site", "node", "derived_state", "parent", "metadata"])
+
+
+ProvenanceTableRow = collections.namedtuple(
+    "ProvenanceTableRow",
+    ["timestamp", "record"])
+
+
 class NodeTable(_msprime.NodeTable):
     """
     A table defining the nodes in a tree sequence. See the
@@ -311,6 +336,11 @@ class EdgeTable(_msprime.EdgeTable):
     def __len__(self):
         return self.num_rows
 
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return EdgeTableRow(*self.get_row(index))
+
     # Unpickle support
     def __setstate__(self, state):
         self.set_columns(
@@ -369,6 +399,11 @@ class MigrationTable(_msprime.MigrationTable):
 
     def __len__(self):
         return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return MigrationTableRow(*self.get_row(index))
 
     # Unpickle support
     def __setstate__(self, state):
@@ -443,6 +478,12 @@ class SiteTable(_msprime.SiteTable):
 
     def __len__(self):
         return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        pos, ancestral_state, _, _, metadata = self.get_row(index)
+        return SiteTableRow(pos, ancestral_state, metadata)
 
     # Unpickle support
     def __setstate__(self, state):
@@ -530,6 +571,12 @@ class MutationTable(_msprime.MutationTable):
     def __len__(self):
         return self.num_rows
 
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        site, node, derived_state, parent, _, metadata = self.get_row(index)
+        return MutationTableRow(site, node, derived_state, parent, metadata)
+
     # Unpickle support
     def __setstate__(self, state):
         self.set_columns(
@@ -610,6 +657,11 @@ class ProvenanceTable(_msprime.ProvenanceTable):
 
     def __len__(self):
         return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return ProvenanceTableRow(*self.get_row(index))
 
     # Unpickle support
     def __setstate__(self, state):

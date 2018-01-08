@@ -1205,7 +1205,7 @@ static PyGetSetDef NodeTable_getsetters[] = {
 static PyMethodDef NodeTable_methods[] = {
     {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
-    {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS|METH_KEYWORDS,
+    {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) NodeTable_append_columns,
@@ -1347,6 +1347,33 @@ EdgeTable_add_row(EdgeTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+static PyObject *
+EdgeTable_get_row(EdgeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    edge_t edge;
+
+    if (EdgeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->edge_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    edge.left = self->edge_table->left[row_id];
+    edge.right = self->edge_table->right[row_id];
+    edge.parent = self->edge_table->parent[row_id];
+    edge.child = self->edge_table->child[row_id];
+    ret = make_edge(&edge);
 out:
     return ret;
 }
@@ -1566,6 +1593,8 @@ static PyGetSetDef EdgeTable_getsetters[] = {
 static PyMethodDef EdgeTable_methods[] = {
     {"add_row", (PyCFunction) EdgeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"get_row", (PyCFunction) EdgeTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) EdgeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
@@ -1705,6 +1734,35 @@ MigrationTable_add_row(MigrationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_get_row(MigrationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    migration_t migration;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->migration_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    migration.left = self->migration_table->left[row_id];
+    migration.right = self->migration_table->right[row_id];
+    migration.node = self->migration_table->node[row_id];
+    migration.source = self->migration_table->source[row_id];
+    migration.dest = self->migration_table->dest[row_id];
+    migration.time = self->migration_table->time[row_id];
+    ret = make_migration(&migration);
 out:
     return ret;
 }
@@ -1963,6 +2021,8 @@ static PyGetSetDef MigrationTable_getsetters[] = {
 static PyMethodDef MigrationTable_methods[] = {
     {"add_row", (PyCFunction) MigrationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"get_row", (PyCFunction) MigrationTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
@@ -2111,6 +2171,39 @@ SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+static PyObject *
+SiteTable_get_row(SiteTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    site_t site;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->site_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    site.position = self->site_table->position[row_id];
+    site.ancestral_state = self->site_table->ancestral_state
+        + self->site_table->ancestral_state_offset[row_id];
+    site.ancestral_state_length = self->site_table->ancestral_state_offset[row_id + 1]
+        - self->site_table->ancestral_state_offset[row_id];
+    site.metadata = self->site_table->metadata
+        + self->site_table->metadata_offset[row_id];
+    site.metadata_length = self->site_table->metadata_offset[row_id + 1]
+        - self->site_table->metadata_offset[row_id];
+    site.mutations_length = 0;
+    ret = make_site(&site);
 out:
     return ret;
 }
@@ -2386,6 +2479,8 @@ static PyGetSetDef SiteTable_getsetters[] = {
 static PyMethodDef SiteTable_methods[] = {
     {"add_row", (PyCFunction) SiteTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"get_row", (PyCFunction) SiteTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
@@ -2539,6 +2634,40 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_get_row(MutationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    mutation_t mutation;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->mutation_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    mutation.site = self->mutation_table->site[row_id];
+    mutation.node = self->mutation_table->node[row_id];
+    mutation.parent = self->mutation_table->parent[row_id];
+    mutation.derived_state = self->mutation_table->derived_state
+        + self->mutation_table->derived_state_offset[row_id];
+    mutation.derived_state_length = self->mutation_table->derived_state_offset[row_id + 1]
+        - self->mutation_table->derived_state_offset[row_id];
+    mutation.metadata = self->mutation_table->metadata
+        + self->mutation_table->metadata_offset[row_id];
+    mutation.metadata_length = self->mutation_table->metadata_offset[row_id + 1]
+        - self->mutation_table->metadata_offset[row_id];
+    ret = make_mutation(&mutation);
 out:
     return ret;
 }
@@ -2869,6 +2998,8 @@ static PyGetSetDef MutationTable_getsetters[] = {
 static PyMethodDef MutationTable_methods[] = {
     {"add_row", (PyCFunction) MutationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"get_row", (PyCFunction) MutationTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
@@ -3013,6 +3144,38 @@ ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+
+static PyObject *
+ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    provenance_t provenance;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->provenance_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    provenance.timestamp = self->provenance_table->timestamp
+        + self->provenance_table->timestamp_offset[row_id];
+    provenance.timestamp_length = self->provenance_table->timestamp_offset[row_id + 1]
+        - self->provenance_table->timestamp_offset[row_id];
+    provenance.record = self->provenance_table->record
+        + self->provenance_table->record_offset[row_id];
+    provenance.record_length = self->provenance_table->record_offset[row_id + 1]
+        - self->provenance_table->record_offset[row_id];
+    ret = make_provenance(&provenance);
 out:
     return ret;
 }
@@ -3240,6 +3403,8 @@ static PyGetSetDef ProvenanceTable_getsetters[] = {
 static PyMethodDef ProvenanceTable_methods[] = {
     {"add_row", (PyCFunction) ProvenanceTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"get_row", (PyCFunction) ProvenanceTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) ProvenanceTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,
