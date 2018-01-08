@@ -921,6 +921,36 @@ out:
     return ret;
 }
 
+static PyObject *
+NodeTable_get_row(NodeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    node_t node;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->node_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    node.time = self->node_table->time[row_id];
+    node.flags = self->node_table->flags[row_id];
+    node.population = self->node_table->population[row_id];
+    node.metadata = self->node_table->metadata
+        + self->node_table->metadata_offset[row_id];
+    node.metadata_length = self->node_table->metadata_offset[row_id + 1]
+        - self->node_table->metadata_offset[row_id];
+    ret = make_node(&node);
+out:
+    return ret;
+}
+
 #ifdef HAVE_NUMPY
 
 static PyObject *
@@ -1175,6 +1205,8 @@ static PyGetSetDef NodeTable_getsetters[] = {
 static PyMethodDef NodeTable_methods[] = {
     {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS|METH_KEYWORDS,
+        "Returns the kth row in this table."},
 #ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) NodeTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,

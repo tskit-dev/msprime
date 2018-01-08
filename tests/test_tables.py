@@ -482,6 +482,21 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     equal_len_columns = [["time", "flags", "population"]]
     table_class = msprime.NodeTable
 
+    def test_simple_example(self):
+        t = msprime.NodeTable()
+        t.add_row(flags=0, time=1, population=2, metadata=b"123")
+        t.add_row(flags=1, time=2, population=3, metadata=b"456")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, 2, b"123"))
+        self.assertEqual(t[1], (1, 2, 3, b"456"))
+        self.assertEqual(t[0].flags, 0)
+        self.assertEqual(t[0].time, 1)
+        self.assertEqual(t[0].population, 2)
+        self.assertEqual(t[0].metadata, b"123")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
+
     def test_add_row_defaults(self):
         t = msprime.NodeTable()
         self.assertEqual(t.add_row(), 0)

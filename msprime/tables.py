@@ -23,6 +23,7 @@ from __future__ import division
 from __future__ import print_function
 
 import base64
+import collections
 import datetime
 
 from six.moves import copyreg
@@ -53,6 +54,11 @@ def text_decode_metadata(encoded):
     return base64.b64decode(encoded.encode('utf8'))
 
 
+NodeTableRow = collections.namedtuple(
+    "NodeTableRow",
+    ["flags", "time", "population", "metadata"])
+
+
 class NodeTable(_msprime.NodeTable):
     """
     A table defining the nodes in a tree sequence. See the
@@ -60,6 +66,24 @@ class NodeTable(_msprime.NodeTable):
     in this table and the
     :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
     for the properties needed for a node table to be a part of a valid tree sequence.
+
+    Example::
+
+        >>> t = msprime.NodeTable()
+        >>> t.add_row(flags=0, time=1)
+        0
+        >>> t.add_row(flags=1, time=2)
+        1
+        >>> print(t)
+        id      flags   population      time    metadata
+        0       0       -1      1.00000000000000
+        1       1       -1      2.00000000000000
+        >>> print(t[0])
+        NodeTableRow(flags=0, time=1.0, population=-1, metadata=b'')
+        >>> print(t[-1])
+        NodeTableRow(flags=1, time=2.0, population=-1, metadata=b'')
+        >>> len(t)
+        2
 
     :warning: The numpy arrays returned by table attribute accesses are **copies**
         of the underlying data. In particular, this means that you cannot edit
@@ -84,7 +108,7 @@ class NodeTable(_msprime.NodeTable):
         flags = self.flags
         population = self.population
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
-        ret = "id\tis_sample\tpopulation\ttime\tmetadata\n"
+        ret = "id\tflags\tpopulation\ttime\tmetadata\n"
         for j in range(self.num_rows):
             ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
                 j, flags[j], population[j], time[j], text_encode_metadata(metadata[j]))
@@ -106,6 +130,11 @@ class NodeTable(_msprime.NodeTable):
 
     def __len__(self):
         return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return NodeTableRow(*self.get_row(index))
 
     # Unpickle support
     def __setstate__(self, state):
