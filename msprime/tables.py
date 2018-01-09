@@ -767,7 +767,9 @@ class TableCollection(object):
 #############################################
 
 
-def sort_tables(*args, **kwargs):
+def sort_tables(
+        nodes, edges, migrations=None, sites=None, mutations=None,
+        provenances=None, edge_start=0):
     """
     Sorts the given tables in place, as follows:
 
@@ -798,18 +800,25 @@ def sort_tables(*args, **kwargs):
          ``mutations`` is provided)
     :param MutationTable mutations: The tree sequence mutations (optional, but
          required if ``sites`` is provided).
+    :param ProvenanceTable provenances: Ignored. This argument is provided to
+        support calling the function like ``sort_tables(**tables.asdict())``.
     :param int edge_start: The index in the edge table where sorting starts
         (default=0; must be <= len(edges)).
     """
-    kwargs_copy = dict(kwargs)
-    # If provenances is supplied as a keyword argument just ignore it. This is
-    # because we'll often call sort_tables(**t.asdict()), and the provenances
-    # entry breaks this pattern.
-    kwargs_copy.pop("provenances", None)
-    return _msprime.sort_tables(*args, **kwargs_copy)
+    # TODO update the low-level module to accept None and remove this
+    kwargs = {"nodes": nodes, "edges": edges, "edge_start": edge_start}
+    if migrations is not None:
+        kwargs["migrations"] = migrations
+    if sites is not None:
+        kwargs["sites"] = sites
+    if mutations is not None:
+        kwargs["mutations"] = mutations
+    return _msprime.sort_tables(**kwargs)
 
 
-def simplify_tables(*args, **kwargs):
+def simplify_tables(
+        samples, nodes, edges, migrations=None, sites=None, mutations=None,
+        sequence_length=0, filter_zero_mutation_sites=True):
     """
     Simplifies the tables, in place, to retain only the information necessary
     to reconstruct the tree sequence describing the given ``samples``.  This
@@ -836,14 +845,25 @@ def simplify_tables(*args, **kwargs):
     :param MigrationTable migrations: The MigrationTable to be simplified.
     :param SiteTable sites: The SiteTable to be simplified.
     :param MutationTable mutations: The MutationTable to be simplified.
-    :param bool filter_invariant_sites: Whether to remove sites that have no
+    :param bool filter_zero_mutation_sites: Whether to remove sites that have no
         mutations from the output (default: True).
     :param float sequence_length: The length of the sequence.
     :return: A numpy array mapping node IDs in the input tables to their
         corresponding node IDs in the output tables.
     :rtype: numpy array (dtype=np.int32).
     """
-    return _msprime.simplify_tables(*args, **kwargs)
+    # TODO update the low-level module to accept None and remove this
+    kwargs = {
+        "samples": samples, "nodes": nodes, "edges": edges,
+        "sequence_length": sequence_length,
+        "filter_zero_mutation_sites": filter_zero_mutation_sites}
+    if migrations is not None:
+        kwargs["migrations"] = migrations
+    if sites is not None:
+        kwargs["sites"] = sites
+    if mutations is not None:
+        kwargs["mutations"] = mutations
+    return _msprime.simplify_tables(**kwargs)
 
 
 def pack_bytes(data):

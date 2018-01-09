@@ -147,6 +147,10 @@ The :class:`.TreeSequence` class represents a sequence of correlated trees
 output by a simulation. The :class:`.SparseTree` class represents a single
 tree in this sequence.
 
++++++++++
+Constants
++++++++++
+
 .. data:: msprime.NULL_NODE = -1
 
     Special reserved value, representing the null node. If the parent of a
@@ -171,10 +175,35 @@ tree in this sequence.
     Constant representing the reverse direction of travel (i.e.,
     decreasing coordinate values).
 
+++++++++++++
+Loading data
+++++++++++++
+
+There are several methods for loading data into the msprime API. The simplest
+and most convenient is the use the :func:`msprime.load` function to load
+a :ref:`HDF ancestry file <sec-hdf5-file-format>`. For small scale data
+and debugging, it is often convenient to use the :func:`msprime.load_text`
+to read data in the :ref:`text file format <sec-text-file-format>`.
+The :func:`msprime.load_tables` function efficiently loads large volumes
+of data using the :ref:`Tables API <sec-tables-api>`.
+
+
 .. autofunction:: msprime.load
+
+.. autofunction:: msprime.load_text
+
+.. autofunction:: msprime.load_tables
+
+++++++++++++++++++
+TreeSequence class
+++++++++++++++++++
 
 .. autoclass:: msprime.TreeSequence()
     :members:
+
+++++++++++++++++
+SparseTree class
+++++++++++++++++
 
 .. autoclass:: msprime.SparseTree()
     :members:
@@ -193,6 +222,10 @@ population genetics statistics from a given :class:`.TreeSequence`.
 Tables API
 ***********
 
++++++++++++++
+Table classes
++++++++++++++
+
 .. autoclass:: msprime.NodeTable
     :members:
 
@@ -202,11 +235,14 @@ Tables API
 
 .. autoclass:: msprime.MutationTable
 
-.. autofunction:: msprime.sort_tables(nodes, edges[, migrations, sites, mutations, edge_start])
++++++++++++++++
+Table functions
++++++++++++++++
 
-.. autofunction:: msprime.simplify_tables(samples, nodes, edges[, migrations, sites, mutations])
+.. autofunction:: msprime.sort_tables
 
-.. autofunction:: msprime.load_tables
+.. autofunction:: msprime.simplify_tables
 
-.. autofunction:: msprime.load_text
+.. autofunction:: msprime.parse_nodes
 
+.. autofunction:: msprime.parse_edges

@@ -1042,7 +1042,7 @@ class TestSortTables(unittest.TestCase):
         # Verify that tables are OK.
         msprime.sort_tables(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-        for bad_type in [None, "", 1]:
+        for bad_type in [[], "", 1]:
             self.assertRaises(
                 TypeError, msprime.sort_tables,
                 nodes=nodes, edges=edges, sites=sites, mutations=mutations,

@@ -801,8 +801,8 @@ class SparseTree(object):
 
 def load(path):
     """
-    Loads a tree sequence from the specified file path. This
-    file must be in the HDF5 file format produced by the
+    Loads a tree sequence from the specified file path. This file must be in the
+    :ref:`HDF5 file format <sec-hdf5-file-format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
     :param str path: The file path of the HDF5 file containing the
@@ -814,7 +814,9 @@ def load(path):
     return TreeSequence.load(path)
 
 
-def load_tables(*args, **kwargs):
+def load_tables(
+        nodes, edges, migrations=None, sites=None, mutations=None,
+        provenances=None, sequence_length=0):
     """
     Loads a tree sequence from the table objects provided.  If sequence_length
     is 0 or not provided, it is inferred to be equal to the largest right value
@@ -830,7 +832,17 @@ def load_tables(*args, **kwargs):
     :return: A :class:`msprime.TreeSequence` consistent with the tables.
     :rtype: TreeSequence
     """
-    return TreeSequence.load_tables(*args, **kwargs)
+    # TODO update the low-level module to accept None and remove this
+    kwargs = {"nodes": nodes, "edges": edges, "sequence_length": sequence_length}
+    if migrations is not None:
+        kwargs["migrations"] = migrations
+    if sites is not None:
+        kwargs["sites"] = sites
+    if mutations is not None:
+        kwargs["mutations"] = mutations
+    if provenances is not None:
+        kwargs["provenances"] = provenances
+    return TreeSequence.load_tables(**kwargs)
 
 
 def parse_nodes(source, sep=None):
@@ -993,58 +1005,6 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=N
     parsable by :func:`parse_sites` and :func:`parse_mutations`, respecively.
     Further requirements are described in :class:`SiteTable` and
     :class:`MutationTable`.
-
-    An example of a simple tree sequence for four samples with
-    three distinct trees is as follows.
-
-    nodes::
-
-        is_sample   time    population
-        1           0.0     0
-        1           0.0     0
-        1           0.0     0
-        1           0.0     0
-        0           0.071   0
-        0           0.090   0
-        0           0.170   0
-        0           0.202   0
-        0           0.253   0
-
-    edges::
-
-        left    right   node    children
-        2       10      4       2,3
-        0       2       5       1,3
-        2       10      5       1,4
-        0       7       6       0,5
-        7       10      7       0,5
-        0       2       8       2,6
-
-
-    This example is equivalent to the tree sequence illustrated in Figure 4 of
-    the `PLoS Computational Biology paper
-    <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
-    time order (since this is a backwards-in-time tree sequence), but they may
-    be allocated in any order. In particular, left-to-right tree sequences are
-    fully supported.
-
-    An example of a ``sites`` and ``mutations`` file for the tree sequence
-    defined in the previous example is as follows.
-
-    sites::
-
-        position    ancestral_state
-        0.1         0
-        8.5         0
-
-    mutations::
-
-        site    node    derived_state
-        0       3       1
-        1       6       1
-        1       0       0
-
-
     TODO: add description of the field separator argument, linking to the builtin
     string.split function and describe when it is useful.
 

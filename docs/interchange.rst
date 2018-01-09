@@ -13,7 +13,7 @@ genealogical data to and from the msprime API. We begin by defining
 the basic concepts that we need and the structure of the tables in the
 `Data model`_ section. We then describe the tabular text formats that can
 be used as simple interchange mechanism for small amounts of data in the
-`Text table formats`_ section. The `Tables API`_ section then describes
+`Text file formats`_ section. The `Tables API`_ section then describes
 the efficient Python API for table interchange using numpy arrays. Finally,
 we describe the HDF5-based file format using by msprime to efficiently
 store tree sequences in the `HDF5 file format`_ section.
@@ -324,9 +324,62 @@ Valid tree sequence requirements
 sequence**.
 
 
-******************
-Text table formats
-******************
+.. _sec-text-file-format:
+
+*****************
+Text file formats
+*****************
+
+
+An example of a simple tree sequence for four samples with
+three distinct trees is as follows.
+
+nodes::
+
+    is_sample   time    population
+    1           0.0     0
+    1           0.0     0
+    1           0.0     0
+    1           0.0     0
+    0           0.071   0
+    0           0.090   0
+    0           0.170   0
+    0           0.202   0
+    0           0.253   0
+
+edges::
+
+    left    right   node    children
+    2       10      4       2,3
+    0       2       5       1,3
+    2       10      5       1,4
+    0       7       6       0,5
+    7       10      7       0,5
+    0       2       8       2,6
+
+
+This example is equivalent to the tree sequence illustrated in Figure 4 of
+the `PLoS Computational Biology paper
+<http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
+time order (since this is a backwards-in-time tree sequence), but they may
+be allocated in any order. In particular, left-to-right tree sequences are
+fully supported.
+
+An example of a ``sites`` and ``mutations`` file for the tree sequence
+defined in the previous example is as follows.
+
+sites::
+
+    position    ancestral_state
+    0.1         0
+    8.5         0
+
+mutations::
+
+    site    node    derived_state
+    0       3       1
+    1       6       1
+    1       0       0
 
 
 .. _sec-tables-api:
