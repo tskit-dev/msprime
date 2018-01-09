@@ -92,24 +92,6 @@ class NodeTable(_msprime.NodeTable):
     :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
     for the properties needed for a node table to be a part of a valid tree sequence.
 
-    Example::
-
-        >>> t = msprime.NodeTable()
-        >>> t.add_row(flags=0, time=1)
-        0
-        >>> t.add_row(flags=1, time=2)
-        1
-        >>> print(t)
-        id      flags   population      time    metadata
-        0       0       -1      1.00000000000000
-        1       1       -1      2.00000000000000
-        >>> print(t[0])
-        NodeTableRow(flags=0, time=1.0, population=-1, metadata=b'')
-        >>> print(t[-1])
-        NodeTableRow(flags=1, time=2.0, population=-1, metadata=b'')
-        >>> len(t)
-        2
-
     :warning: The numpy arrays returned by table attribute accesses are **copies**
         of the underlying data. In particular, this means that you cannot edit
         the values in the columns by updating the attribute arrays.
@@ -122,9 +104,11 @@ class NodeTable(_msprime.NodeTable):
     :vartype flags: numpy.ndarray, dtype=np.uint32
     :ivar population: The array of population IDs.
     :vartype population: numpy.ndarray, dtype=np.int32
-    :ivar metadata: The flattened array of binary metadata values.
+    :ivar metadata: The flattened array of binary metadata values. See
+        :ref:`sec-encoding-ragged-columns` for more details.
     :vartype metadata: numpy.ndarray, dtype=np.int8
-    :ivar metadata_offset: The array of offsets into the metadata column.
+    :ivar metadata_offset: The array of offsets into the metadata column. See
+        :ref:`sec-encoding-ragged-columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
@@ -771,16 +755,9 @@ def sort_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
         provenances=None, edge_start=0):
     """
-    Sorts the given tables in place, as follows:
-
-    Edges are ordered by
-
-    - time of parent, then
-    - parent node ID, then
-    - child node ID, then
-    - left endpoint.
-
-    Sites are ordered by position, and Mutations are ordered by site.
+    Sorts the given tables **in place**, ensuring that all tree
+    sequence :ref:`ordering requirements <sec-ordering-requirements>` are
+    met.
 
     If the ``edge_start`` parameter is provided, this specifies the index
     in the edge table where sorting should start. Only rows with index
@@ -788,10 +765,21 @@ def sort_tables(
     are not affected. This parameter is provided to allow for efficient sorting
     when the user knows that the edges up to a given index are already sorted.
 
-    This function is more general than ``TreeSequence.simplify()``, since it can
-    be applied to tables not satisfying the tree sequence
-    :ref:`sec-ordering-criteria`
-    (and that hence could not be loaded into a TreeSequence).
+    The input node table is not affected by this function.
+
+    Edges are sorted as follows:
+
+    - time of parent, then
+    - parent node ID, then
+    - child node ID, then
+    - left endpoint.
+
+    Sites are sorted by position.
+
+    Mutations are sorted by site ID.
+
+    Migrations and provenances are not currently affected by this function.
+    However, this behaviour is likely to change in the future.
 
     :param NodeTable nodes: The tree sequence nodes (required).
     :param EdgeTable edges: The tree sequence edges (required).
@@ -820,7 +808,7 @@ def simplify_tables(
         samples, nodes, edges, migrations=None, sites=None, mutations=None,
         sequence_length=0, filter_zero_mutation_sites=True):
     """
-    Simplifies the tables, in place, to retain only the information necessary
+    Simplifies the tables, **in place**, to retain only the information necessary
     to reconstruct the tree sequence describing the given ``samples``.  This
     will change the ID of the nodes, so that the individual ``samples[k]]``
     will have ID ``k`` in the result. The resulting NodeTable will have only

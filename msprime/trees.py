@@ -847,10 +847,10 @@ def load_tables(
 
 def parse_nodes(source, sep=None):
     """
-    Parse the specified file-like object and return a NodeTable instance.  The
-    object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``is_sample``, ``time``, and
-    optionally, ``population``.  Further requirements are described in
+    Parse the specified file-like object and return a :class:`NodeTable`
+    instance. The object must contain text with whitespace delimited columns,
+    which are labeled with headers and contain columns ``is_sample``, ``time``,
+    and optionally, ``population``.  Further requirements are described in
     :class:`NodeTable`.  Note that node ``id`` is not included, but implied by
     order in the file.
     """
@@ -890,7 +890,7 @@ def parse_nodes(source, sep=None):
 
 def parse_edges(source, sep=None):
     """
-    Parse the specified file-like object and return a EdgeTable instance.
+    Parse the specified file-like object and return a :class:`EdgeTable` instance.
     The object must contain text with whitespace delimited columns, which are
     labeled with headers and contain columns ``left``, ``right``, ``parent``,
     and ``child``. Several edges may specified at the same time using a single
@@ -918,9 +918,9 @@ def parse_edges(source, sep=None):
 
 def parse_sites(source, sep=None):
     """
-    Parse the specified file-like object and return a SiteTable instance.  The
-    object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``position`` and
+    Parse the specified file-like object and return a :class:`SiteTable`
+    instance.  The object must contain text with whitespace delimited columns,
+    which are labeled with headers and contain columns ``position`` and
     ``ancestral_state``.  Further requirements are described in
     :class:`SiteTable`.
     """
@@ -948,9 +948,9 @@ def parse_sites(source, sep=None):
 
 def parse_mutations(source, sep=None):
     """
-    Parse the specified file-like object and return a MutationTable instance.
-    The object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``site``, ``node``, and
+    Parse the specified file-like object and return a :class:`MutationTable`
+    instance. The object must contain text with whitespace delimited columns,
+    which are labeled with headers and contain columns ``site``, ``node``, and
     ``derived_state``. An optional ``parent`` column may also be supplied.
     Further requirements are described in :class:`MutationTable`.
     """
@@ -1005,8 +1005,17 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=N
     parsable by :func:`parse_sites` and :func:`parse_mutations`, respecively.
     Further requirements are described in :class:`SiteTable` and
     :class:`MutationTable`.
+
+    After parsing the tables, :func:`sort_tables` is called to ensure that
+    the loaded tables satisfy the tree sequence :ref:`ordering requirements
+    <sec-ordering-requirements>`. Note that this may result in the IDs of various
+    entities changing from their positions in the input file.
+
     TODO: add description of the field separator argument, linking to the builtin
     string.split function and describe when it is useful.
+
+    TODO: update introduction above to point to the general description of
+    tables and the text file format.
 
     :param stream nodes: The file-type object containing text describing a NodeTable.
     :param stream edges: The file-type object containing text

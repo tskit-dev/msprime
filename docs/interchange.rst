@@ -138,6 +138,22 @@ metadata            char                Node :ref:`sec-metadata-definition`
 Edge Table
 ==========
 
+=====   =====   ======  =====
+left	right	parent	child
+=====   =====   ======  =====
+0.0     0.4     3       0
+0.0     0.4     3       2
+0.4     1.0     3       0
+0.4     1.0     3       1
+0.4     1.0     3       2
+0.0     0.4     4       1
+0.0     0.4     4       3
+=====   =====   ======  =====
+
+Each row in an edge table describes the half-open genomic interval
+affected `[left, right)`, the `parent` and the `child` on that interval.
+
+
 ================    ==============      ===========
 Column              Type                Description
 ================    ==============      ===========
@@ -270,39 +286,6 @@ record              char                Provenance record.
 ================    ==============      ===========
 
 
-.. _sec-structural-criteria:
-
-Structural criteria
-===================
-
-To disallow time travel and multiple inheritance:
-
-1. Offspring must be born after their parents (and hence, no loops).
-2. The set of intervals on which each individual is a child must be disjoint.
-
-and for algorithmic reasons:
-
-3. The leftmost endpoint of each chromosome is 0.0.
-4. Node times must be strictly greater than zero.
-
-
-.. _sec-ordering-criteria:
-
-Ordering criteria
-=================
-
-
-5. Edges must be sorted in nondecreasing time order.
-6. The set of intervals on which each individual is a parent must be disjoint.
-
-A set of tables satisfying requirements 1-4 can be transformed into a completely
-valid set of tables by applying first ``sort_tables()`` (which ensures 5)
-and then ``simplify_tables()`` (which ensures 6).
-
-Note that since each node time is equal to the (birth) time of the
-corresponding parent, time is measured in clock time (not meioses).
-
-
 .. todo: move this to somewhere else.
 .. In addition to genealogical relationships, ``msprime`` generates and stores
 .. mutations.  Associating these with nodes means that a variant shared by many
@@ -322,6 +305,47 @@ Valid tree sequence requirements
 
 **Explain and list the requirements for a set of tables to form a valid tree
 sequence**.
+
+.. _sec-structural-requirements:
+
+Structural requirements
+-----------------------
+
+To disallow time travel and multiple inheritance:
+
+1. Offspring must be born after their parents (and hence, no loops).
+2. The set of intervals on which each individual is a child must be disjoint.
+
+and for algorithmic reasons:
+
+3. The leftmost endpoint of each chromosome is 0.0.
+4. Node times must be strictly greater than zero.
+
+
+.. _sec-ordering-requirements:
+
+Ordering requirements
+---------------------
+
+Edges are ordered by
+
+- time of parent, then
+- parent node ID, then
+- child node ID, then
+- left endpoint.
+
+Sites are ordered by position, and Mutations are ordered by site.
+
+5. Edges must be sorted in nondecreasing time order.
+6. The set of intervals on which each individual is a parent must be disjoint.
+
+A set of tables satisfying requirements 1-4 can be transformed into a completely
+valid set of tables by applying first ``sort_tables()`` (which ensures 5)
+and then ``simplify_tables()`` (which ensures 6).
+
+Note that since each node time is equal to the (birth) time of the
+corresponding parent, time is measured in clock time (not meioses).
+
 
 
 .. _sec-text-file-format:

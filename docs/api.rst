@@ -222,6 +222,41 @@ population genetics statistics from a given :class:`.TreeSequence`.
 Tables API
 ***********
 
+The :ref:`tables API <sec-tables-api>` provides an efficient way of working
+with and interchanging :ref:`tree sequence data <sec-data-model>`. Each table
+class (e.g, :class:`.NodeTable`, :class:`.EdgeTable`) has a specific set of
+columns with fixed types, and a set of methods for setting and getting the data
+in these columns. The number of rows in the table ``t`` is given by ``len(t)``.
+Each table supports accessing the data either by row or column. To access the
+row ``j`` in table ``t`` simply use ``t[j]``. The value returned by such an
+access is an instance of :func:`collections.namedtuple`, and therefore supports
+either positional access or access via named attributes. To access the data in
+a column, we can use standard attribute access which will return a numpy array
+of the data. For example::
+
+    >>> import msprime
+    >>> t = msprime.EdgeTable()
+    >>> t.add_row(left=0, right=1, parent=10, child=11)
+    0
+    >>> t.add_row(left=1, right=2, parent=9, child=11)
+    1
+    >>> print(t)
+    id      left            right           parent  child
+    0       0.00000000      1.00000000      10      11
+    1       1.00000000      2.00000000      9       11
+    >>> t[0]
+    EdgeTableRow(left=0.0, right=1.0, parent=10, child=11)
+    >>> t[-1]
+    EdgeTableRow(left=1.0, right=2.0, parent=9, child=11)
+    >>> t.left
+    array([ 0.,  1.])
+    >>> t.parent
+    array([10,  9], dtype=int32)
+    >>> len(t)
+    2
+    >>>
+
+
 +++++++++++++
 Table classes
 +++++++++++++
@@ -231,9 +266,13 @@ Table classes
 
 .. autoclass:: msprime.EdgeTable
 
+.. autoclass:: msprime.MigrationTable
+
 .. autoclass:: msprime.SiteTable
 
 .. autoclass:: msprime.MutationTable
+
+.. autoclass:: msprime.ProvenanceTable
 
 +++++++++++++++
 Table functions
@@ -246,3 +285,7 @@ Table functions
 .. autofunction:: msprime.parse_nodes
 
 .. autofunction:: msprime.parse_edges
+
+.. autofunction:: msprime.parse_sites
+
+.. autofunction:: msprime.parse_mutations
