@@ -162,7 +162,7 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
 {
     int ret;
 
-    ret = node_table_reset(self);
+    ret = node_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -265,7 +265,7 @@ out:
 }
 
 int
-node_table_reset(node_table_t *self)
+node_table_clear(node_table_t *self)
 {
     self->num_rows = 0;
     self->metadata_length = 0;
@@ -410,7 +410,7 @@ edge_table_set_columns(edge_table_t *self,
 {
     int ret = 0;
 
-    ret = edge_table_reset(self);
+    ret = edge_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -443,7 +443,7 @@ out:
 }
 
 int
-edge_table_reset(edge_table_t *self)
+edge_table_clear(edge_table_t *self)
 {
     self->num_rows = 0;
     return 0;
@@ -732,7 +732,7 @@ site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
 {
     int ret = 0;
 
-    ret = site_table_reset(self);
+    ret = site_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -764,7 +764,7 @@ site_table_equal(site_table_t *self, site_table_t *other)
 }
 
 int
-site_table_reset(site_table_t *self)
+site_table_clear(site_table_t *self)
 {
     self->num_rows = 0;
     self->ancestral_state_length = 0;
@@ -1085,7 +1085,7 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *s
 {
     int ret = 0;
 
-    ret = mutation_table_reset(self);
+    ret = mutation_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -1119,7 +1119,7 @@ mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
 }
 
 int
-mutation_table_reset(mutation_table_t *self)
+mutation_table_clear(mutation_table_t *self)
 {
     self->num_rows = 0;
     self->derived_state_length = 0;
@@ -1281,7 +1281,7 @@ migration_table_set_columns(migration_table_t *self, size_t num_rows, double *le
 {
     int ret;
 
-    ret = migration_table_reset(self);
+    ret = migration_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -1314,7 +1314,7 @@ out:
 }
 
 int
-migration_table_reset(migration_table_t *self)
+migration_table_clear(migration_table_t *self)
 {
     self->num_rows = 0;
     return 0;
@@ -1467,7 +1467,7 @@ provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
 {
     int ret;
 
-    ret = provenance_table_reset(self);
+    ret = provenance_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -1583,7 +1583,7 @@ out:
 }
 
 int
-provenance_table_reset(provenance_table_t *self)
+provenance_table_clear(provenance_table_t *self)
 {
     self->num_rows = 0;
     self->timestamp_length = 0;
@@ -2580,7 +2580,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_reset(self->nodes);
+    ret = node_table_clear(self->nodes);
     if (ret != 0) {
         goto out;
     }
@@ -2594,7 +2594,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = edge_table_reset(self->edges);
+    ret = edge_table_clear(self->edges);
     if (ret != 0) {
         goto out;
     }
@@ -2621,7 +2621,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_reset(self->sites);
+    ret = site_table_clear(self->sites);
     if (ret != 0) {
         goto out;
     }
@@ -2639,7 +2639,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_reset(self->mutations);
+    ret = mutation_table_clear(self->mutations);
     if (ret != 0) {
         goto out;
     }

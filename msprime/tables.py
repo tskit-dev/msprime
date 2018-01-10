@@ -161,6 +161,16 @@ class NodeTable(_msprime.NodeTable):
             metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(NodeTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
+
     def add_row(self, flags=0, time=0, population=-1, metadata=None):
         """
         Adds a new row to this :class:`NodeTable` and returns the ID of the
@@ -181,7 +191,7 @@ class NodeTable(_msprime.NodeTable):
             self, flags, time, population=None, metadata=None, metadata_offset=None):
         """
         Sets the values for each column in this NodeTable using the values in
-        the specified arrays. Overwrites the current state of the table.
+        the specified arrays. Overwrites any data currently stored in the table.
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes the table will contain. The
@@ -212,7 +222,8 @@ class NodeTable(_msprime.NodeTable):
     def append_columns(
             self, flags, time, population=None, metadata=None, metadata_offset=None):
         """
-        Appends the specified arrays to the columns in this table.
+        Appends the specified arrays to the end of the columns of this table.
+        This allows many new rows to be added at once.
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes that will be added to the table. The
@@ -340,6 +351,16 @@ class EdgeTable(_msprime.EdgeTable):
             left=self.left, right=self.right, parent=self.parent, child=self.child)
         return copy
 
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(EdgeTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
+
 
 # Pickle support. See copyreg registration for this function below.
 def _edge_table_pickle(table):
@@ -404,6 +425,16 @@ class MigrationTable(_msprime.MigrationTable):
             left=self.left, right=self.right, node=self.node, source=self.source,
             dest=self.dest, time=self.time)
         return copy
+
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(MigrationTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
 
 
 # Pickle support. See copyreg registration for this function below.
@@ -490,6 +521,16 @@ class SiteTable(_msprime.SiteTable):
             metadata=self.metadata,
             metadata_offset=self.metadata_offset)
         return copy
+
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(SiteTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
 
 
 # Pickle support. See copyreg registration for this function below.
@@ -581,6 +622,16 @@ class MutationTable(_msprime.MutationTable):
             metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(MutationTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
+
 
 # Pickle support. See copyreg registration for this function below.
 def _mutation_table_pickle(table):
@@ -666,6 +717,16 @@ class ProvenanceTable(_msprime.ProvenanceTable):
             record=self.record,
             record_offset=self.record_offset)
         return copy
+
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(ProvenanceTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
 
 
 # Pickle support. See copyreg registration for this function below.

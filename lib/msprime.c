@@ -2729,7 +2729,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     migration_t *migration;
 
     /* Add the nodes */
-    ret = node_table_reset(nodes);
+    ret = node_table_clear(nodes);
     if (ret != 0) {
         goto out;
     }
@@ -2744,7 +2744,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     }
 
     /* Add the edges */
-    ret = edge_table_reset(edges);
+    ret = edge_table_clear(edges);
     if (ret != 0) {
         goto out;
     }
@@ -2763,7 +2763,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     }
 
     /* Add in the migrations */
-    ret = migration_table_reset(migrations);
+    ret = migration_table_clear(migrations);
     if (ret != 0) {
         goto out;
     }

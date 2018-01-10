@@ -1490,7 +1490,7 @@ make_permuted_nodes_copy(tree_sequence_t *ts)
         nodes.population[node_map[j]] = node.population;
         /* Assume all metadata is 0 length */
     }
-    edge_table_reset(&edges);
+    edge_table_clear(&edges);
     for (j = 0; j < tree_sequence_get_num_edges(ts); j++) {
         ret = tree_sequence_get_edge(ts, j, &edge);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1560,7 +1560,7 @@ make_gappy_copy(tree_sequence_t *ts)
     ret = tree_sequence_dump_tables(ts, &nodes, &edges,
             &migrations, &sites, &mutations, &provenance, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    edge_table_reset(&edges);
+    edge_table_clear(&edges);
     for (j = 0; j < tree_sequence_get_num_edges(ts); j++) {
         ret = tree_sequence_get_edge(ts, j, &edge);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6216,7 +6216,7 @@ test_node_table(void)
         CU_ASSERT_NSTRING_EQUAL(metadata_copy, test_metadata, test_metadata_length);
     }
     node_table_print_state(&table, _devnull);
-    node_table_reset(&table);
+    node_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
 
@@ -6398,7 +6398,7 @@ test_edge_table(void)
     ret = edge_table_set_columns(&table, num_rows, left, right, parent, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    edge_table_reset(&table);
+    edge_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
 
     edge_table_free(&table);
@@ -6454,7 +6454,7 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 3);
 
     site_table_print_state(&table, _devnull);
-    site_table_reset(&table);
+    site_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 0);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
@@ -6574,7 +6574,7 @@ test_site_table(void)
             metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
 
-    ret = site_table_reset(&table);
+    ret = site_table_clear(&table);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 0);
@@ -6782,7 +6782,7 @@ test_mutation_table(void)
             derived_state, derived_state_offset, NULL, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
 
-    mutation_table_reset(&table);
+    mutation_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.derived_state_length, 0);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
@@ -6895,7 +6895,7 @@ test_migration_table(void)
             dest, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    migration_table_reset(&table);
+    migration_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
 
     migration_table_free(&table);
@@ -6949,7 +6949,7 @@ test_provenance_table(void)
         CU_ASSERT_NSTRING_EQUAL(record_copy, test_record, test_record_length);
     }
     provenance_table_print_state(&table, _devnull);
-    provenance_table_reset(&table);
+    provenance_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.timestamp_length, 0);
     CU_ASSERT_EQUAL(table.record_length, 0);

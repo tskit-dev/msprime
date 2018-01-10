@@ -1058,7 +1058,7 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
 #endif
 
 static PyObject *
-NodeTable_reset(NodeTable *self)
+NodeTable_clear(NodeTable *self)
 {
     PyObject *ret = NULL;
     int err;
@@ -1066,7 +1066,7 @@ NodeTable_reset(NodeTable *self)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    err = node_table_reset(self->node_table);
+    err = node_table_clear(self->node_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1214,7 +1214,7 @@ static PyMethodDef NodeTable_methods[] = {
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
 #endif
-    {"reset", (PyCFunction) NodeTable_reset, METH_NOARGS,
+    {"clear", (PyCFunction) NodeTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
 };
@@ -1456,7 +1456,7 @@ EdgeTable_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds)
 #endif
 
 static PyObject *
-EdgeTable_reset(EdgeTable *self)
+EdgeTable_clear(EdgeTable *self)
 {
     PyObject *ret = NULL;
     int err;
@@ -1464,7 +1464,7 @@ EdgeTable_reset(EdgeTable *self)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    err = edge_table_reset(self->edge_table);
+    err = edge_table_clear(self->edge_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1601,7 +1601,7 @@ static PyMethodDef EdgeTable_methods[] = {
     {"append_columns", (PyCFunction) EdgeTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
 #endif
-    {"reset", (PyCFunction) EdgeTable_reset, METH_NOARGS,
+    {"clear", (PyCFunction) EdgeTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
 };
@@ -1860,7 +1860,7 @@ MigrationTable_append_columns(MigrationTable *self, PyObject *args, PyObject *kw
 #endif
 
 static PyObject *
-MigrationTable_reset(MigrationTable *self)
+MigrationTable_clear(MigrationTable *self)
 {
     PyObject *ret = NULL;
     int err;
@@ -1868,7 +1868,7 @@ MigrationTable_reset(MigrationTable *self)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    err = migration_table_reset(self->migration_table);
+    err = migration_table_clear(self->migration_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2029,7 +2029,7 @@ static PyMethodDef MigrationTable_methods[] = {
     {"append_columns", (PyCFunction) MigrationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
 #endif
-    {"reset", (PyCFunction) MigrationTable_reset, METH_NOARGS,
+    {"clear", (PyCFunction) MigrationTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
 };
@@ -2318,7 +2318,7 @@ SiteTable_append_columns(SiteTable *self, PyObject *args, PyObject *kwds)
 #endif
 
 static PyObject *
-SiteTable_reset(SiteTable *self)
+SiteTable_clear(SiteTable *self)
 {
     PyObject *ret = NULL;
     int err;
@@ -2326,7 +2326,7 @@ SiteTable_reset(SiteTable *self)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    err = site_table_reset(self->site_table);
+    err = site_table_clear(self->site_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2487,7 +2487,7 @@ static PyMethodDef SiteTable_methods[] = {
     {"append_columns", (PyCFunction) SiteTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
 #endif
-    {"reset", (PyCFunction) SiteTable_reset, METH_NOARGS,
+    {"clear", (PyCFunction) SiteTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
 };
@@ -2807,7 +2807,7 @@ MutationTable_append_columns(MutationTable *self, PyObject *args, PyObject *kwds
 #endif
 
 static PyObject *
-MutationTable_reset(MutationTable *self)
+MutationTable_clear(MutationTable *self)
 {
     PyObject *ret = NULL;
     int err;
@@ -2815,7 +2815,7 @@ MutationTable_reset(MutationTable *self)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    err = mutation_table_reset(self->mutation_table);
+    err = mutation_table_clear(self->mutation_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3006,7 +3006,7 @@ static PyMethodDef MutationTable_methods[] = {
     {"append_columns", (PyCFunction) MutationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified  arrays into the columns."},
 #endif
-    {"reset", (PyCFunction) MutationTable_reset, METH_NOARGS,
+    {"clear", (PyCFunction) MutationTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
 };
@@ -3268,7 +3268,7 @@ ProvenanceTable_set_columns(ProvenanceTable *self, PyObject *args, PyObject *kwd
 #endif
 
 static PyObject *
-ProvenanceTable_reset(ProvenanceTable *self)
+ProvenanceTable_clear(ProvenanceTable *self)
 {
     PyObject *ret = NULL;
     int err;
@@ -3276,7 +3276,7 @@ ProvenanceTable_reset(ProvenanceTable *self)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    err = provenance_table_reset(self->provenance_table);
+    err = provenance_table_clear(self->provenance_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3412,7 +3412,7 @@ static PyMethodDef ProvenanceTable_methods[] = {
     {"set_columns", (PyCFunction) ProvenanceTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
 #endif
-    {"reset", (PyCFunction) ProvenanceTable_reset, METH_NOARGS,
+    {"clear", (PyCFunction) ProvenanceTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
 };

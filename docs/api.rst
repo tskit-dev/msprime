@@ -230,7 +230,7 @@ in these columns. The number of rows in the table ``t`` is given by ``len(t)``.
 Each table supports accessing the data either by row or column. To access the
 row ``j`` in table ``t`` simply use ``t[j]``. The value returned by such an
 access is an instance of :func:`collections.namedtuple`, and therefore supports
-either positional access or access via named attributes. To access the data in
+either positional or named attribute access. To access the data in
 a column, we can use standard attribute access which will return a numpy array
 of the data. For example::
 

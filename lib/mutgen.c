@@ -267,11 +267,11 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
     infinite_sites_mutation_t *mut;
     size_t j;
 
-    ret = site_table_reset(sites);
+    ret = site_table_clear(sites);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_reset(mutations);
+    ret = mutation_table_clear(mutations);
     if (ret != 0) {
         goto out;
     }

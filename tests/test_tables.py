@@ -217,7 +217,7 @@ class CommonTestsMixin(object):
                 output_array = getattr(table, colname)
                 self.assertEqual(input_array.shape, output_array.shape)
                 self.assertTrue(np.all(input_array == output_array))
-            table.reset()
+            table.clear()
             self.assertEqual(table.num_rows, 0)
             self.assertEqual(len(table), 0)
 
@@ -255,7 +255,7 @@ class CommonTestsMixin(object):
                     output_array = getattr(table, colname)
                     self.assertEqual(input_array.shape, output_array.shape)
                     self.assertTrue(np.all(input_array == output_array))
-                table.reset()
+                table.clear()
                 self.assertEqual(table.num_rows, 0)
                 self.assertEqual(len(table), 0)
                 for colname in input_data.keys():
@@ -373,7 +373,7 @@ class CommonTestsMixin(object):
             t2.set_columns(**input_data)
             self.assertEqual(t1, t2)
             self.assertEqual(t2, t2)
-            t2.reset()
+            t2.clear()
             self.assertNotEqual(t1, t2)
             self.assertNotEqual(t2, t1)
             # Check each column in turn to see if we are correctly checking values.
@@ -859,7 +859,7 @@ class TestSortTables(unittest.TestCase):
                 _msprime.LibraryError, ts.load_tables, nodes=tables.nodes,
                 edges=new_edges)
             # Sorting from the correct index should give us back the original table.
-            new_edges.reset()
+            new_edges.clear()
             for e in all_edges:
                 new_edges.add_row(e.left, e.right, e.parent, e.child)
             msprime.sort_tables(

@@ -1230,7 +1230,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
             goto out;
         }
     }
-    ret = node_table_reset(nodes);
+    ret = node_table_clear(nodes);
     if (ret != 0) {
         goto out;
     }
@@ -1247,7 +1247,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
 
     /* TODO these calls to x_table_add_row could be replaced with set_columns which would
      * be much more efficient. */
-    ret = edge_table_reset(edges);
+    ret = edge_table_clear(edges);
     if (ret != 0) {
         goto out;
     }
@@ -1268,7 +1268,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                 goto out;
             }
         }
-        ret = migration_table_reset(migrations);
+        ret = migration_table_clear(migrations);
         if (ret != 0) {
             goto out;
         }
@@ -1297,7 +1297,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                 goto out;
             }
         }
-        ret = site_table_reset(sites);
+        ret = site_table_clear(sites);
         if (ret != 0) {
             goto out;
         }
@@ -1315,7 +1315,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                 goto out;
             }
         }
-        ret = mutation_table_reset(mutations);
+        ret = mutation_table_clear(mutations);
         if (ret != 0) {
             goto out;
         }
@@ -1346,7 +1346,7 @@ tree_sequence_dump_tables(tree_sequence_t *self,
                 goto out;
             }
         }
-        ret = provenance_table_reset(provenance);
+        ret = provenance_table_clear(provenance);
         if (ret != 0) {
             goto out;
         }
