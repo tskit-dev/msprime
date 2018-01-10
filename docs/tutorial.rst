@@ -954,6 +954,7 @@ point, we know the full tree on the middle interval.  Finally, edges
 specifying the common ancestor of 0 and 4 on the remaining intervals (parents 6
 and 5 respectively) allow us to construct all trees across the entire interval.
 
+
 In the depiction above, ``x`` denotes mutations. Suppose that the first
 mutation occurs at position 0.1 and the mutations in the second tree both
 occurred at the same position, at 0.5 (with a back mutation).  The positions
@@ -983,5 +984,50 @@ samples::
     0       01
     1       10
     2       11
+
+
+***************************
+Stuff copied from elsewhere
+***************************
+
+In addition to genealogical relationships, ``msprime`` generates and stores
+mutations.  Associating these with nodes means that a variant shared by many
+individuals need only be stored once, allowing retrieval and processing of
+variant information much more efficiently than if every individual's genotype
+was stored directly.
+
+
+Rather than storing a position on the genome directly, a ``mutation``
+stores the index of a ``site``, that describes that position.  This is to
+allow efficient processing of multiple mutations at the same genomic
+position.  A ``site`` records a position on the genome where a mutation has
+occurred along with the ancestral state (i.e., the state at the root of the
+tree at that position)::
+
+    id	position	ancestral_state
+    0	0.1	        0
+
+As with nodes, the ``id`` is not stored directly, but is implied by its
+index in the site table.
+
+
+This type records a mutation that has occurred at some point in the
+genealogical history.  Each mutation is associated with a particular
+``node`` (i.e., a particular ancestor), so that any sample which inherits
+from that node will also inherit that mutation, unless another mutation
+intervenes.  The type records::
+
+    site	node	derived_state
+    0	    14	    1
+
+Here ``site`` is the index of the ``site`` at which the mutation occurred,
+``node`` records the ID of the ancestral node associated with the mutation,
+and ``derived_state`` is the allele that any sample inheriting from that
+node at this site will have if another mutation does not intervene.  The
+``node`` is not necessarily the ancestor in whom the mutation occurred, but
+rather the ancestor at the bottom of the branch in the tree at that site on
+which the mutation occurred.
+
+
 
 

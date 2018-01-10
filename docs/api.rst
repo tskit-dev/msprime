@@ -218,11 +218,14 @@ population genetics statistics from a given :class:`.TreeSequence`.
 .. autoclass:: msprime.LdCalculator(tree_sequence)
     :members:
 
+
+.. _sec-tables-api:
+
 ***********
 Tables API
 ***********
 
-The :ref:`tables API <sec-tables-api>` provides an efficient way of working
+The :ref:`tables API <sec-binary-interchange>` provides an efficient way of working
 with and interchanging :ref:`tree sequence data <sec-data-model>`. Each table
 class (e.g, :class:`.NodeTable`, :class:`.EdgeTable`) has a specific set of
 columns with fixed types, and a set of methods for setting and getting the data

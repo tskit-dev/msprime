@@ -13,7 +13,7 @@ genealogical data to and from the msprime API. We begin by defining
 the basic concepts that we need and the structure of the tables in the
 `Data model`_ section. We then describe the tabular text formats that can
 be used as simple interchange mechanism for small amounts of data in the
-`Text file formats`_ section. The `Tables API`_ section then describes
+`Text file formats`_ section. The `Binary interchange`_ section then describes
 the efficient Python API for table interchange using numpy arrays. Finally,
 we describe the HDF5-based file format using by msprime to efficiently
 store tree sequences in the `HDF5 file format`_ section.
@@ -25,104 +25,92 @@ store tree sequences in the `HDF5 file format`_ section.
 Data model
 **********
 
-To begin, here are definitions of some key ideas encountered later.  This will
-define the terminology, as well as giving properties of the tables that these
-are stored in.
-
-
-.. These are properties that can be assumed when writing methods
-.. that operate on an ``msprime`` tree sequence; the function ``sort_tables`` is
-.. provided to put unsorted tables in the proper order.
-
-Defintions
-==========
-
-First are those that describe genealogical relationships:
+To begin, here are definitions of some key ideas encountered later.
 
 tree
     A "gene tree", i.e., the genealogical tree describing how each of the
-    individuals at the tips of the tree are related to each other.  A "tree
-    sequence" contains information sufficient to reconstruct the genealogical
-    tree relating all samples to each other at any point along the genome.
+    individuals at the tips of the tree are related to each other.
+
+tree sequence
+    A "succinct tree sequence" (or tree sequence, for brevity) is an efficient
+    encoding of a sequence of correlated trees. A tree sequence efficiently
+    captures the structure shared by adjacent trees, (essentially) storing only
+    what differs between them.
 
 node
     Each branching point in each tree is associated with a particular ancestor,
     called "nodes".  Since each node represents a certain ancestor, it has a
     unique ``time``, thought of as her birth time, which determines the height
-    of any branching points she is associated with.  A given node will be
-    associated with branching points of all trees across a region if that node
-    is the most recent common ancestor to the subtending tips across that
-    region.  For each node, we record::
+    of any branching points she is associated with.
 
-        (flags, population, time)
-
-    where ``flags`` records information about the ancestor; ``population`` is
-    the integer ID of the ancestor's (birth) population, and ``time`` is how
-    long ago the ancestor was born.  Each node also has a unique (integer) ID,
-    but this is *not* recorded explicitly - rather, the individual's ID is
-    given by their position in the tree sequence's node table.
-
-samples
+sample
     Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
-    genome.  These are a special kind of node, having ``flags`` set to 1 (as a
-    binary mask).
+    genome. (See :ref:`sec-node-table-definition` for information on how the sample
+    status a node is encoded in the ``flags`` column.)
 
 edge
-    Tree sequences are constructed by specifying over which segments of genome
-    which nodes inherit from which other nodes.  This information is stored by
-    recording::
-
-        (left, right, parent, child)
-
-    where each node in ``child`` inherits from the node ``parent``
+    The topology of a tree sequence is defined by a set of **edges**. Each
+    edge is a tuple ``(left, right, parent, child)``, which records a
+    parent-child relationship among a pair of nodes on the
     on the half-open interval of chromosome ``[left, right)``.
 
+site
+    Tree sequences can define the mutational state of nodes as well as their
+    topological relationships. A **site** is thought of as some position along
+    the genome at which variation occurs. Each site is associated with
+    a unique position and ancestral state.
 
-Here are the formal requirements for a set of nodes and edges to make sense,
-and to allow ``msprime``'s algorithms to work properly.
+mutation
+    A mutation records the change of state at a particular site 'above'
+    a particular node (more precisely, along the branch between the node
+    in question and its parent). Each mutation is associated with a specific
+    site (which defines the position along the genome), a node (which defines
+    where it occurs within the tree at this position), and a derived state
+    (which defines the mutational state inherited by all nodes in the subtree
+    rooted at the focal node). In more complex situations in which we have
+    back or recurrent mutations, a mutation must also specify it's 'parent'
+    mutation.
 
-.. _sec-encoding-ragged-columns:
+ID
+    In the set of interconnected tables that we define here, we refer
+    throughout to the IDs of particular entities. The ID of an
+    entity (e.g., a node) is defined by the position of the corresponding
+    row in the table. These positions are zero indexed. For example, if we
+    refer to node with ID zero, this corresponds to the node defined by the
+    first row in the node table.
 
-Encoding ragged columns
-=======================
+Sequence length
+    This value defines the coordinate space in which the edges and site positions
+    are defined. This is most often assumed to be equal to the largest
+    ``right`` coordinate in the edge table, but there are situations in which
+    we might wish to specify the sequence length explicitly.
 
-    **todo: This section will define how to work with ragged columns. It's not clear
-    yet where it should be placed.**
+.. todo:: Define migration and provenance types.
+
+A tree sequence can be stored in a collection of six tables: Node, Edge, Site,
+Mutation, Migration, and Provenance. The first two store the genealogical
+relationships that define the trees; the next two describe where mutations fall
+on those trees; the Migration table describes how lineages move across space;
+and the Provenance table contains information on where the data came from.
+In the following sections we define these components of a tree sequence in
+more detail.
+
+Table definitions
+=================
 
 
 .. _sec-node-table-definition:
 
 Node Table
-==========
+----------
 
-.. todo Clear up distinction between flags and is_sample.
-
-Example table:
-
-===    =========  ==========   ====
-id     is_sample  population   time
-===    =========  ==========   ====
-0      1          0            0.0
-1      1          1            0.0
-2      0          0            0.0
-3      1          0            0.5
-4      0          2            2.1
-===    =========  ==========   ====
-
-Node IDs are *not* recorded; rather the `id` column shows the row index, so
-that the `k`-th row describes the node whose ID is `k`.  `is_sample`
-records whether the node is a sample (=1) or not (=0).  `population` is an
-integer population ID, and `time` is the time since that individual was
-born, as a float.
-
-Requirements:
-
-1. All birth times must be greater than or equal to zero.
-
-It is not required that the `time` column be ordered or that all samples
-must be at the top.
+A **node** defines a specific ancestor that was born at some time in
+the past. Every vertex in the marginal trees of a tree sequence corresponds
+to exactly one node, and a node may be present in many trees. The
+node table contains four columns, of which ``flags`` and ``time`` are
+mandatory:
 
 ================    ==============      ===========
 Column              Type                Description
@@ -130,29 +118,48 @@ Column              Type                Description
 flags               uint32              Bitwise flags.
 time                double              Birth time of node
 population          int32               Birth population of node.
-metadata            char                Node :ref:`sec-metadata-definition`
+metadata            binary              Node :ref:`sec-metadata-definition`
 ================    ==============      ===========
+
+The ``time`` column records the birth time of the individual in question,
+and is a floating point value. Similarly,
+the ``population`` column records the ID of the population where this
+individual was born. If not provided, ``population`` defaults to the
+null ID (-1).
+
+The ``flags`` column stores information about a particular node, and
+is composed of 32 bitwise boolean values. Currently, the only flag defined
+is ``IS_SAMPLE = 1``, which defines the sample status of nodes. Marking
+a particular node as a sample means, for example, that the mutational state
+of the node will be included in the genotypes produced by
+:meth:``TreeSequence.variants``.
+
+For convenience, the :ref:`text format <sec-text-file-format>` for nodes
+decomposes the ``flags`` value into it's separate values. Thus, in the
+text format we have a column for ``is_sample``, which corresponds to the
+the ``flags`` column in the underlying table. As more flags values are
+defined, these will be added to the text file format.
+
+The ``metadata`` column provides a location for client code to store
+information about each node. See the :ref:`sec-metadata-definition` section for
+more details on how metadata columns should be used.
+
+.. note::
+    The distinction between ``flags`` and ``metadata`` is that flags
+    holds information about a node that the library understands, whereas
+    metadata holds information about a node that the library *does not*
+    understand. Metadata is for storing auxiliarly information that is
+    not necessary for the core tree sequence algorithms.
+
 
 .. _sec-edge-table-definition:
 
 Edge Table
-==========
+----------
 
-=====   =====   ======  =====
-left	right	parent	child
-=====   =====   ======  =====
-0.0     0.4     3       0
-0.0     0.4     3       2
-0.4     1.0     3       0
-0.4     1.0     3       1
-0.4     1.0     3       2
-0.0     0.4     4       1
-0.0     0.4     4       3
-=====   =====   ======  =====
-
-Each row in an edge table describes the half-open genomic interval
-affected `[left, right)`, the `parent` and the `child` on that interval.
-
+An **edge** defines a parent-child relationship between a pair of nodes
+over a specific sequence interval. The edge table contains four columns,
+all of which are mandatory:
 
 ================    ==============      ===========
 Column              Type                Description
@@ -163,11 +170,63 @@ parent              int32               Parent node ID.
 child               int32               Child node ID.
 ================    ==============      ===========
 
+Each row in an edge table describes the half-open genomic interval
+affected ``[left, right)``, the ``parent`` and the ``child`` on that interval.
+The ``left`` and ``right`` columns are defined using double precision
+floating point values for flexibility. The ``parent`` and ``child``
+columns specify integer IDs in the associated :ref:`sec-node-table-definition`.
+
+
+.. _sec-site-table-definition:
+
+Site Table
+----------
+
+A **site** defines a particular location along the genome in which
+we are interested in observing the mutational state. The site table
+contains three columns, of which ``position`` and ``ancestral_state``
+are mandatory.
+
+================    ==============      ===========
+Column              Type                Description
+================    ==============      ===========
+position            double              Position of site in genome coordinates.
+ancestral_state     text                The state at the root of the tree.
+metadata            binary              Site :ref:`sec-metadata-definition`.
+================    ==============      ===========
+
+The ``position`` column is a floating point value defining the location
+of the site in question along the genome.
+
+The ``ancestral_state`` column specifies the mutational state at the root
+of the tree, thus defining the state that nodes inherit (unless mutations
+occur). The column stores text character data of arbitrary length.
+
+The ``metadata`` column provides a location for client code to store
+information about each site. See the :ref:`sec-metadata-definition` section for
+more details on how metadata columns should be used.
+
+
+.. _sec-mutation-table-definition:
+
+Mutation Table
+--------------
+
+================    ==============      ===========
+Column              Type                Description
+================    ==============      ===========
+site                int32               The ID of the site the mutation occurs at.
+node                int32               The node this mutation occurs at.
+parent              int32               The ID of the parent mutation.
+derived_state       char                The mutational state at the defined node.
+metadata            char                Mutation :ref:`sec-metadata-definition`.
+================    ==============      ===========
+
 
 .. _sec-migration-table-definition:
 
 Migration Table
-===============
+---------------
 
 In simulations, trees can be thought of as spread across space, and it is
 helpful for inferring demographic history to record this history.  This is
@@ -207,76 +266,11 @@ time                double              Time of migration event.
 ================    ==============      ===========
 
 
-.. _sec-site-table-definition:
-
-Site Table
-==========
-
-Rather than storing a position on the genome directly, a ``mutation``
-stores the index of a ``site``, that describes that position.  This is to
-allow efficient processing of multiple mutations at the same genomic
-position.  A ``site`` records a position on the genome where a mutation has
-occurred along with the ancestral state (i.e., the state at the root of the
-tree at that position)::
-
-    id	position	ancestral_state
-    0	0.1	        0
-
-As with nodes, the ``id`` is not stored directly, but is implied by its
-index in the site table.
-
-
-To allow for efficent algorithms, it is required that
-
-8. Sites are sorted by increasing position,
-9. and mutations are sorted by site.
-
-================    ==============      ===========
-Column              Type                Description
-================    ==============      ===========
-position            double              Position of site in genome coordinates.
-ancestral_state     char                The state at the root of the tree.
-metadata            char                Site :ref:`sec-metadata-definition`.
-================    ==============      ===========
-
-
-.. _sec-mutation-table-definition:
-
-Mutation Table
-==============
-
-This type records a mutation that has occurred at some point in the
-genealogical history.  Each mutation is associated with a particular
-``node`` (i.e., a particular ancestor), so that any sample which inherits
-from that node will also inherit that mutation, unless another mutation
-intervenes.  The type records::
-
-    site	node	derived_state
-    0	    14	    1
-
-Here ``site`` is the index of the ``site`` at which the mutation occurred,
-``node`` records the ID of the ancestral node associated with the mutation,
-and ``derived_state`` is the allele that any sample inheriting from that
-node at this site will have if another mutation does not intervene.  The
-``node`` is not necessarily the ancestor in whom the mutation occurred, but
-rather the ancestor at the bottom of the branch in the tree at that site on
-which the mutation occurred.
-
-================    ==============      ===========
-Column              Type                Description
-================    ==============      ===========
-site                int32               The ID of the site the mutation occurs at.
-node                int32               The node this mutation occurs at.
-parent              int32               The ID of the parent mutation.
-derived_state       char                The mutational state at the defined node.
-metadata            char                Site :ref:`sec-metadata-definition`.
-================    ==============      ===========
-
 
 .. _sec-provenance-table-definition:
 
 Provenance Table
-================
+----------------
 
 ================    ==============      ===========
 Column              Type                Description
@@ -286,12 +280,6 @@ record              char                Provenance record.
 ================    ==============      ===========
 
 
-.. todo: move this to somewhere else.
-.. In addition to genealogical relationships, ``msprime`` generates and stores
-.. mutations.  Associating these with nodes means that a variant shared by many
-.. individuals need only be stored once, allowing retrieval and processing of
-.. variant information much more efficiently than if every individual's genotype
-.. was stored directly.
 
 .. _sec-metadata-definition:
 
@@ -310,6 +298,9 @@ sequence**.
 
 Structural requirements
 -----------------------
+
+
+1. All birth times must be greater than or equal to zero.
 
 To disallow time travel and multiple inheritance:
 
@@ -347,6 +338,10 @@ Note that since each node time is equal to the (birth) time of the
 corresponding parent, time is measured in clock time (not meioses).
 
 
+To allow for efficent algorithms, it is required that
+
+8. Sites are sorted by increasing position,
+9. and mutations are sorted by site.
 
 .. _sec-text-file-format:
 
@@ -406,17 +401,34 @@ mutations::
     1       0       0
 
 
-.. _sec-tables-api:
+.. _sec-binary-interchange:
 
-**********
-Tables API
-**********
+******************
+Binary interchange
+******************
 
+In this section we describe the high-level details of the API for interchanging
+table data via numpy arrays. Please see the :ref:`sec-tables-api` for detailed
+description of the functions and methods.
+
+
+.. _sec-encoding-ragged-columns:
+
+Encoding ragged columns
+=======================
+
+    **todo: This section will define how to work with ragged columns. It's not clear
+    This has been referred to from elsewhere, but we should probably rename it**
 
 .. _sec-variable-length-columns:
 
 Variable length columns
 =======================
+
+.. Keeping this for now as we're referring to it below. Merge these two into one
+   section and get rid of duplicate refs.
+
+
 
 .. Sorting and simplifying tables
 .. ==============================
