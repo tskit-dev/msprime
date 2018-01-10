@@ -256,6 +256,36 @@ of the data. For example::
     2
     >>>
 
+Tables also support the :mod:`pickle` protocol, and so can be easily
+serialised and deserialised (for example, when performing parallel
+computations using the :mod:`multiprocessing` module). ::
+
+    >>> serialised = pickle.dumps(t)
+    >>> t2 = pickle.loads(serialised)
+    >>> print(t2)
+    id      left            right           parent  child
+    0       0.00000000      1.00000000      10      11
+    1       1.00000000      2.00000000      9       11
+
+However, pickling will not be as efficient as storing tables
+in the native :ref:`HDF5 format <sec-hdf5-file-format>`.
+
+Tables support the equality operator ``==`` based on the data
+held in the columns::
+
+    >>> t == t2
+    True
+    >>> t is t2
+    False
+    >>> t2.add_row(0, 1, 2, 3)
+    2
+    >>> print(t2)
+    id      left            right           parent  child
+    0       0.00000000      1.00000000      10      11
+    1       1.00000000      2.00000000      9       11
+    2       0.00000000      1.00000000      2       3
+    >>> t == t2
+    False
 
 +++++++++++++
 Table classes
