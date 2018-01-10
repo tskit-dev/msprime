@@ -22,7 +22,7 @@ msp
 
 The ``msp`` program provides a convenient interface to the :ref:`msprime API
 <sec-api>`. It is based on subcommands that either generate or consume a
-:ref:`history file <sec-file-format>`. The ``simulate`` subcommand runs a
+:ref:`history file <sec-hdf5-file-format>`. The ``simulate`` subcommand runs a
 simulation storing the results in a file. The other commands are concerned with
 converting this file into other formats.
 
@@ -51,6 +51,10 @@ to the file provided as an argument.
     The rationale for this change is simplify running simulations on a
     variety of sequence lengths, so that we need to change only parameter
     and not three simultaneously.
+
+
+
+.. _sec-msp-upgrade:
 
 +++++++++++
 msp upgrade

@@ -3067,7 +3067,7 @@ class TestTablesInterface(LowLevelTestCase):
             self.assertRaises(TypeError, table.add_row, flags=bad_type)
             self.assertRaises(TypeError, table.add_row, population=bad_type)
             self.assertRaises(TypeError, table.add_row, time=bad_type)
-        for bad_type in [234, None, []]:
+        for bad_type in [234, []]:
             self.assertRaises(TypeError, table.add_row, metadata=bad_type)
 
     def test_edge_table_add_row(self):
@@ -3170,7 +3170,7 @@ class TestTablesInterface(LowLevelTestCase):
     def test_site_table_add_row_errors(self):
         table = _msprime.SiteTable()
         self.assertRaises(TypeError, table.add_row)
-        for bad_type in [None, [], {}]:
+        for bad_type in [[], {}]:
             self.assertRaises(
                 TypeError, table.add_row, position=bad_type, ancestral_state="1")
             self.assertRaises(

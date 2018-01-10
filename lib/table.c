@@ -162,7 +162,7 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
 {
     int ret;
 
-    ret = node_table_reset(self);
+    ret = node_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -228,7 +228,7 @@ out:
     return ret;
 }
 
-static int
+static node_id_t
 node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *metadata, table_size_t metadata_length)
 {
@@ -241,10 +241,10 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
     self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
     self->metadata_length += metadata_length;
     self->num_rows++;
-    return 0;
+    return (node_id_t) self->num_rows - 1;
 }
 
-int
+node_id_t
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
         population_id_t population, const char *metadata, size_t metadata_length)
 {
@@ -265,7 +265,7 @@ out:
 }
 
 int
-node_table_reset(node_table_t *self)
+node_table_clear(node_table_t *self)
 {
     self->num_rows = 0;
     self->metadata_length = 0;
@@ -384,7 +384,7 @@ out:
     return ret;
 }
 
-int
+edge_id_t
 edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,
         node_id_t child)
 {
@@ -398,6 +398,7 @@ edge_table_add_row(edge_table_t *self, double left, double right, node_id_t pare
     self->right[self->num_rows] = right;
     self->parent[self->num_rows] = parent;
     self->child[self->num_rows] = child;
+    ret = (edge_id_t) self->num_rows;
     self->num_rows++;
 out:
     return ret;
@@ -409,7 +410,7 @@ edge_table_set_columns(edge_table_t *self,
 {
     int ret = 0;
 
-    ret = edge_table_reset(self);
+    ret = edge_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -442,7 +443,7 @@ out:
 }
 
 int
-edge_table_reset(edge_table_t *self)
+edge_table_clear(edge_table_t *self)
 {
     self->num_rows = 0;
     return 0;
@@ -611,7 +612,7 @@ out:
     return ret;
 }
 
-int
+site_id_t
 site_table_add_row(site_table_t *self, double position,
         const char *ancestral_state, table_size_t ancestral_state_length,
         const char *metadata, table_size_t metadata_length)
@@ -646,6 +647,7 @@ site_table_add_row(site_table_t *self, double position,
     memcpy(self->metadata + metadata_offset, metadata, metadata_length);
     self->metadata_offset[self->num_rows + 1] = self->metadata_length;
 
+    ret = (site_id_t) self->num_rows;
     self->num_rows++;
 out:
     return ret;
@@ -730,7 +732,7 @@ site_table_set_columns(site_table_t *self, size_t num_rows, double *position,
 {
     int ret = 0;
 
-    ret = site_table_reset(self);
+    ret = site_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -762,7 +764,7 @@ site_table_equal(site_table_t *self, site_table_t *other)
 }
 
 int
-site_table_reset(site_table_t *self)
+site_table_clear(site_table_t *self)
 {
     self->num_rows = 0;
     self->ancestral_state_length = 0;
@@ -950,7 +952,7 @@ out:
     return ret;
 }
 
-int
+mutation_id_t
 mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
         mutation_id_t parent,
         const char *derived_state, table_size_t derived_state_length,
@@ -988,6 +990,7 @@ mutation_table_add_row(mutation_table_t *self, site_id_t site, node_id_t node,
     memcpy(self->metadata + metadata_offset, metadata, metadata_length);
     self->metadata_offset[self->num_rows + 1] = self->metadata_length;
 
+    ret = (mutation_id_t) self->num_rows;
     self->num_rows++;
 out:
     return ret;
@@ -1082,7 +1085,7 @@ mutation_table_set_columns(mutation_table_t *self, size_t num_rows, site_id_t *s
 {
     int ret = 0;
 
-    ret = mutation_table_reset(self);
+    ret = mutation_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -1116,7 +1119,7 @@ mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
 }
 
 int
-mutation_table_reset(mutation_table_t *self)
+mutation_table_clear(mutation_table_t *self)
 {
     self->num_rows = 0;
     self->derived_state_length = 0;
@@ -1278,7 +1281,7 @@ migration_table_set_columns(migration_table_t *self, size_t num_rows, double *le
 {
     int ret;
 
-    ret = migration_table_reset(self);
+    ret = migration_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -1288,7 +1291,7 @@ out:
     return ret;
 }
 
-int
+migration_id_t
 migration_table_add_row(migration_table_t *self, double left, double right,
         node_id_t node, population_id_t source, population_id_t dest, double time)
 {
@@ -1304,13 +1307,14 @@ migration_table_add_row(migration_table_t *self, double left, double right,
     self->source[self->num_rows] = source;
     self->dest[self->num_rows] = dest;
     self->time[self->num_rows] = time;
+    ret = (migration_id_t) self->num_rows;
     self->num_rows++;
 out:
     return ret;
 }
 
 int
-migration_table_reset(migration_table_t *self)
+migration_table_clear(migration_table_t *self)
 {
     self->num_rows = 0;
     return 0;
@@ -1463,7 +1467,7 @@ provenance_table_set_columns(provenance_table_t *self, size_t num_rows,
 {
     int ret;
 
-    ret = provenance_table_reset(self);
+    ret = provenance_table_clear(self);
     if (ret != 0) {
         goto out;
     }
@@ -1531,11 +1535,13 @@ out:
     return ret;
 }
 
-static int
+static provenance_id_t
 provenance_table_add_row_internal(provenance_table_t *self,
         const char *timestamp, table_size_t timestamp_length,
         const char *record, table_size_t record_length)
 {
+    int ret = 0;
+
     assert(self->num_rows < self->max_rows);
     assert(self->timestamp_length + timestamp_length < self->max_timestamp_length);
     memcpy(self->timestamp + self->timestamp_length, timestamp, timestamp_length);
@@ -1545,11 +1551,12 @@ provenance_table_add_row_internal(provenance_table_t *self,
     memcpy(self->record + self->record_length, record, record_length);
     self->record_offset[self->num_rows + 1] = self->record_length + record_length;
     self->record_length += record_length;
+    ret = (provenance_id_t) self->num_rows;
     self->num_rows++;
-    return 0;
+    return ret;
 }
 
-int
+provenance_id_t
 provenance_table_add_row(provenance_table_t *self,
         const char *timestamp, size_t timestamp_length,
         const char *record, size_t record_length)
@@ -1576,7 +1583,7 @@ out:
 }
 
 int
-provenance_table_reset(provenance_table_t *self)
+provenance_table_clear(provenance_table_t *self)
 {
     self->num_rows = 0;
     self->timestamp_length = 0;
@@ -2232,9 +2239,10 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
     ret = node_table_add_row_internal(self->nodes, flags,
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
             self->input_nodes.metadata + offset, length);
-    if (ret != 0) {
+    if (ret < 0) {
         goto out;
     }
+    ret = 0;
 out:
     return ret;
 }
@@ -2255,11 +2263,12 @@ simplifier_flush_edges(simplifier_t *self)
         for (j = 0; j < num_output_edges; j++) {
             e = self->edge_buffer[j];
             ret = edge_table_add_row(self->edges, e.left, e.right, e.parent, e.child);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }
     }
+    ret = 0;
     self->num_buffered_edges = 0;
 out:
     return ret;
@@ -2571,7 +2580,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_reset(self->nodes);
+    ret = node_table_clear(self->nodes);
     if (ret != 0) {
         goto out;
     }
@@ -2585,7 +2594,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = edge_table_reset(self->edges);
+    ret = edge_table_clear(self->edges);
     if (ret != 0) {
         goto out;
     }
@@ -2612,7 +2621,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_reset(self->sites);
+    ret = site_table_clear(self->sites);
     if (ret != 0) {
         goto out;
     }
@@ -2630,7 +2639,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_reset(self->mutations);
+    ret = mutation_table_clear(self->mutations);
     if (ret != 0) {
         goto out;
     }
@@ -3145,7 +3154,7 @@ simplifier_output_sites(simplifier_t *self)
                             derived_state_length,
                             self->input_mutations.metadata + metadata_offset,
                             metadata_length);
-                    if (ret != 0) {
+                    if (ret < 0) {
                         goto out;
                     }
                 }
@@ -3162,7 +3171,7 @@ simplifier_output_sites(simplifier_t *self)
                     ancestral_state_length,
                     self->input_sites.metadata + metadata_offset,
                     metadata_length);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
 
@@ -3171,6 +3180,7 @@ simplifier_output_sites(simplifier_t *self)
         input_mutation = site_end;
     }
     assert(input_mutation == num_input_mutations);
+    ret = 0;
 out:
     return ret;
 }

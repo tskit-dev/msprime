@@ -801,8 +801,8 @@ class SparseTree(object):
 
 def load(path):
     """
-    Loads a tree sequence from the specified file path. This
-    file must be in the HDF5 file format produced by the
+    Loads a tree sequence from the specified file path. This file must be in the
+    :ref:`HDF5 file format <sec-hdf5-file-format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
     :param str path: The file path of the HDF5 file containing the
@@ -814,7 +814,9 @@ def load(path):
     return TreeSequence.load(path)
 
 
-def load_tables(*args, **kwargs):
+def load_tables(
+        nodes, edges, migrations=None, sites=None, mutations=None,
+        provenances=None, sequence_length=0):
     """
     Loads a tree sequence from the table objects provided.  If sequence_length
     is 0 or not provided, it is inferred to be equal to the largest right value
@@ -830,15 +832,25 @@ def load_tables(*args, **kwargs):
     :return: A :class:`msprime.TreeSequence` consistent with the tables.
     :rtype: TreeSequence
     """
-    return TreeSequence.load_tables(*args, **kwargs)
+    # TODO update the low-level module to accept None and remove this
+    kwargs = {"nodes": nodes, "edges": edges, "sequence_length": sequence_length}
+    if migrations is not None:
+        kwargs["migrations"] = migrations
+    if sites is not None:
+        kwargs["sites"] = sites
+    if mutations is not None:
+        kwargs["mutations"] = mutations
+    if provenances is not None:
+        kwargs["provenances"] = provenances
+    return TreeSequence.load_tables(**kwargs)
 
 
 def parse_nodes(source, sep=None):
     """
-    Parse the specified file-like object and return a NodeTable instance.  The
-    object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``is_sample``, ``time``, and
-    optionally, ``population``.  Further requirements are described in
+    Parse the specified file-like object and return a :class:`NodeTable`
+    instance. The object must contain text with whitespace delimited columns,
+    which are labeled with headers and contain columns ``is_sample``, ``time``,
+    and optionally, ``population``.  Further requirements are described in
     :class:`NodeTable`.  Note that node ``id`` is not included, but implied by
     order in the file.
     """
@@ -878,7 +890,7 @@ def parse_nodes(source, sep=None):
 
 def parse_edges(source, sep=None):
     """
-    Parse the specified file-like object and return a EdgeTable instance.
+    Parse the specified file-like object and return a :class:`EdgeTable` instance.
     The object must contain text with whitespace delimited columns, which are
     labeled with headers and contain columns ``left``, ``right``, ``parent``,
     and ``child``. Several edges may specified at the same time using a single
@@ -906,9 +918,9 @@ def parse_edges(source, sep=None):
 
 def parse_sites(source, sep=None):
     """
-    Parse the specified file-like object and return a SiteTable instance.  The
-    object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``position`` and
+    Parse the specified file-like object and return a :class:`SiteTable`
+    instance.  The object must contain text with whitespace delimited columns,
+    which are labeled with headers and contain columns ``position`` and
     ``ancestral_state``.  Further requirements are described in
     :class:`SiteTable`.
     """
@@ -936,9 +948,9 @@ def parse_sites(source, sep=None):
 
 def parse_mutations(source, sep=None):
     """
-    Parse the specified file-like object and return a MutationTable instance.
-    The object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``site``, ``node``, and
+    Parse the specified file-like object and return a :class:`MutationTable`
+    instance. The object must contain text with whitespace delimited columns,
+    which are labeled with headers and contain columns ``site``, ``node``, and
     ``derived_state``. An optional ``parent`` column may also be supplied.
     Further requirements are described in :class:`MutationTable`.
     """
@@ -994,59 +1006,16 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=N
     Further requirements are described in :class:`SiteTable` and
     :class:`MutationTable`.
 
-    An example of a simple tree sequence for four samples with
-    three distinct trees is as follows.
-
-    nodes::
-
-        is_sample   time    population
-        1           0.0     0
-        1           0.0     0
-        1           0.0     0
-        1           0.0     0
-        0           0.071   0
-        0           0.090   0
-        0           0.170   0
-        0           0.202   0
-        0           0.253   0
-
-    edges::
-
-        left    right   node    children
-        2       10      4       2,3
-        0       2       5       1,3
-        2       10      5       1,4
-        0       7       6       0,5
-        7       10      7       0,5
-        0       2       8       2,6
-
-
-    This example is equivalent to the tree sequence illustrated in Figure 4 of
-    the `PLoS Computational Biology paper
-    <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
-    time order (since this is a backwards-in-time tree sequence), but they may
-    be allocated in any order. In particular, left-to-right tree sequences are
-    fully supported.
-
-    An example of a ``sites`` and ``mutations`` file for the tree sequence
-    defined in the previous example is as follows.
-
-    sites::
-
-        position    ancestral_state
-        0.1         0
-        8.5         0
-
-    mutations::
-
-        site    node    derived_state
-        0       3       1
-        1       6       1
-        1       0       0
-
+    After parsing the tables, :func:`sort_tables` is called to ensure that
+    the loaded tables satisfy the tree sequence :ref:`ordering requirements
+    <sec-ordering-requirements>`. Note that this may result in the IDs of various
+    entities changing from their positions in the input file.
 
     TODO: add description of the field separator argument, linking to the builtin
     string.split function and describe when it is useful.
+
+    TODO: update introduction above to point to the general description of
+    tables and the text file format.
 
     :param stream nodes: The file-type object containing text describing a NodeTable.
     :param stream edges: The file-type object containing text

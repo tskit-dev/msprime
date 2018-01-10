@@ -60,17 +60,17 @@ class Column(object):
 
 class Int32Column(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.int32)
+        return 1 + np.arange(n, dtype=np.int32)
 
 
 class UInt8Column(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.uint8)
+        return 2 + np.arange(n, dtype=np.uint8)
 
 
 class UInt32Column(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.uint32)
+        return 3 + np.arange(n, dtype=np.uint32)
 
 
 class CharColumn(Column):
@@ -80,7 +80,7 @@ class CharColumn(Column):
 
 class DoubleColumn(Column):
     def get_input(self, n):
-        return np.arange(n, dtype=np.float64)
+        return 4 + np.arange(n, dtype=np.float64)
 
 
 class CommonTestsMixin(object):
@@ -201,6 +201,44 @@ class CommonTestsMixin(object):
             array = getattr(table, col.name)
             self.assertEqual(array.shape, (0,))
 
+    def test_add_row_data(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+            table = self.table_class()
+            for j in range(num_rows):
+                kwargs = {col: data[j] for col, data in input_data.items()}
+                for col in self.string_colnames:
+                    kwargs[col] = "x"
+                for col in self.binary_colnames:
+                    kwargs[col] = b"x"
+                k = table.add_row(**kwargs)
+                self.assertEqual(k, j)
+            for colname, input_array in input_data.items():
+                output_array = getattr(table, colname)
+                self.assertEqual(input_array.shape, output_array.shape)
+                self.assertTrue(np.all(input_array == output_array))
+            table.clear()
+            self.assertEqual(table.num_rows, 0)
+            self.assertEqual(len(table), 0)
+
+    def test_add_row_round_trip(self):
+        for num_rows in [0, 10, 100]:
+            input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+            for list_col, offset_col in self.ragged_list_columns:
+                value = list_col.get_input(num_rows)
+                input_data[list_col.name] = value
+                input_data[offset_col.name] = np.arange(num_rows + 1, dtype=np.uint32)
+            t1 = self.table_class()
+            t1.set_columns(**input_data)
+            for colname, input_array in input_data.items():
+                output_array = getattr(t1, colname)
+                self.assertEqual(input_array.shape, output_array.shape)
+                self.assertTrue(np.all(input_array == output_array))
+            t2 = self.table_class()
+            for row in list(t1):
+                t2.add_row(**row._asdict())
+            self.assertEqual(t1, t2)
+
     def test_set_columns_data(self):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {col.name: col.get_input(num_rows) for col in self.columns}
@@ -217,7 +255,7 @@ class CommonTestsMixin(object):
                     output_array = getattr(table, colname)
                     self.assertEqual(input_array.shape, output_array.shape)
                     self.assertTrue(np.all(input_array == output_array))
-                table.reset()
+                table.clear()
                 self.assertEqual(table.num_rows, 0)
                 self.assertEqual(len(table), 0)
                 for colname in input_data.keys():
@@ -335,7 +373,7 @@ class CommonTestsMixin(object):
             t2.set_columns(**input_data)
             self.assertEqual(t1, t2)
             self.assertEqual(t2, t2)
-            t2.reset()
+            t2.clear()
             self.assertNotEqual(t1, t2)
             self.assertNotEqual(t2, t1)
             # Check each column in turn to see if we are correctly checking values.
@@ -440,6 +478,13 @@ class MetadataTestsMixin(object):
             self.assertEqual(len(list(table.metadata)), 0)
             self.assertEqual(
                 list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
+            # Supplying None is the same not providing the column.
+            input_data["metadata"] = None
+            input_data["metadata_offset"] = None
+            table.set_columns(**input_data)
+            self.assertEqual(len(list(table.metadata)), 0)
+            self.assertEqual(
+                list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
 
 
 class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
@@ -449,9 +494,35 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         DoubleColumn("time"),
         Int32Column("population")]
     ragged_list_columns = [(CharColumn("metadata"),  UInt32Column("metadata_offset"))]
+    string_colnames = []
+    binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["time", "flags", "population"]]
     table_class = msprime.NodeTable
+
+    def test_simple_example(self):
+        t = msprime.NodeTable()
+        t.add_row(flags=0, time=1, population=2, metadata=b"123")
+        t.add_row(flags=1, time=2, population=3, metadata=b"456")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, 2, b"123"))
+        self.assertEqual(t[1], (1, 2, 3, b"456"))
+        self.assertEqual(t[0].flags, 0)
+        self.assertEqual(t[0].time, 1)
+        self.assertEqual(t[0].population, 2)
+        self.assertEqual(t[0].metadata, b"123")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
+
+    def test_add_row_defaults(self):
+        t = msprime.NodeTable()
+        self.assertEqual(t.add_row(), 0)
+        self.assertEqual(t.time[0], 0)
+        self.assertEqual(t.flags[0], 0)
+        self.assertEqual(t.population[0], msprime.NULL_POPULATION)
+        self.assertEqual(len(t.metadata), 0)
+        self.assertEqual(t.metadata_offset[0], 0)
 
     def test_optional_population(self):
         for num_rows in [0, 10, 100]:
@@ -468,6 +539,10 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
             self.assertEqual(list(table.time), time)
             self.assertEqual(list(table.metadata), list(metadata))
             self.assertEqual(list(table.metadata_offset), list(metadata_offset))
+            table.set_columns(flags=flags, time=time, population=None)
+            self.assertEqual(list(table.population), [-1 for _ in range(num_rows)])
+            self.assertEqual(list(table.flags), flags)
+            self.assertEqual(list(table.time), time)
 
 
 class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
@@ -478,9 +553,26 @@ class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("parent"),
         Int32Column("child")]
     equal_len_columns = [["left", "right", "parent", "child"]]
+    string_colnames = []
+    binary_colnames = []
     ragged_list_columns = []
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.EdgeTable
+
+    def test_simple_example(self):
+        t = msprime.EdgeTable()
+        t.add_row(left=0, right=1, parent=2, child=3)
+        t.add_row(1, 2, 3, 4)
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, 2, 3))
+        self.assertEqual(t[1], (1, 2, 3, 4))
+        self.assertEqual(t[0].left, 0)
+        self.assertEqual(t[0].right, 1)
+        self.assertEqual(t[0].parent, 2)
+        self.assertEqual(t[0].child, 3)
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
@@ -489,8 +581,24 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         (CharColumn("ancestral_state"), UInt32Column("ancestral_state_offset")),
         (CharColumn("metadata"), UInt32Column("metadata_offset"))]
     equal_len_columns = [["position"]]
+    string_colnames = ["ancestral_state"]
+    binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.SiteTable
+
+    def test_simple_example(self):
+        t = msprime.SiteTable()
+        t.add_row(position=0, ancestral_state="1", metadata=b"2")
+        t.add_row(1, "2", b"3")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, "1", b"2"))
+        self.assertEqual(t[1], (1, "2", b"3"))
+        self.assertEqual(t[0].position, 0)
+        self.assertEqual(t[0].ancestral_state, "1")
+        self.assertEqual(t[0].metadata, b"2")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
@@ -502,8 +610,26 @@ class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin)
         (CharColumn("derived_state"), UInt32Column("derived_state_offset")),
         (CharColumn("metadata"), UInt32Column("metadata_offset"))]
     equal_len_columns = [["site", "node"]]
+    string_colnames = ["derived_state"]
+    binary_colnames = ["metadata"]
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.MutationTable
+
+    def test_simple_example(self):
+        t = msprime.MutationTable()
+        t.add_row(site=0, node=1, derived_state="2", parent=3, metadata=b"4")
+        t.add_row(1, 2, "3", 4, b"5")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, "2", 3, b"4"))
+        self.assertEqual(t[1], (1, 2, "3", 4, b"5"))
+        self.assertEqual(t[0].site, 0)
+        self.assertEqual(t[0].node, 1)
+        self.assertEqual(t[0].derived_state, "2")
+        self.assertEqual(t[0].parent, 3)
+        self.assertEqual(t[0].metadata, b"4")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
@@ -515,9 +641,28 @@ class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
         Int32Column("dest"),
         DoubleColumn("time")]
     ragged_list_columns = []
+    string_colnames = []
+    binary_colnames = []
     input_parameters = [("max_rows_increment", 1024)]
     equal_len_columns = [["left", "right", "node", "source", "dest", "time"]]
     table_class = msprime.MigrationTable
+
+    def test_simple_example(self):
+        t = msprime.MigrationTable()
+        t.add_row(left=0, right=1, node=2, source=3, dest=4, time=5)
+        t.add_row(1, 2, 3, 4, 5, 6)
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (0, 1, 2, 3, 4, 5))
+        self.assertEqual(t[1], (1, 2, 3, 4, 5, 6))
+        self.assertEqual(t[0].left, 0)
+        self.assertEqual(t[0].right, 1)
+        self.assertEqual(t[0].node, 2)
+        self.assertEqual(t[0].source, 3)
+        self.assertEqual(t[0].dest, 4)
+        self.assertEqual(t[0].time, 5)
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
@@ -526,8 +671,23 @@ class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
         (CharColumn("timestamp"), UInt32Column("timestamp_offset")),
         (CharColumn("record"), UInt32Column("record_offset"))]
     equal_len_columns = [[]]
+    string_colnames = ["record", "timestamp"]
+    binary_colnames = []
     input_parameters = [("max_rows_increment", 1024)]
     table_class = msprime.ProvenanceTable
+
+    def test_simple_example(self):
+        t = msprime.ProvenanceTable()
+        t.add_row(timestamp="0", record="1")
+        t.add_row("2", "1")  # The orders are reversed for default timestamp.
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], ("0", "1"))
+        self.assertEqual(t[1], ("1", "2"))
+        self.assertEqual(t[0].timestamp, "0")
+        self.assertEqual(t[0].record, "1")
+        self.assertEqual(t[0], t[-2])
+        self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, -3)
 
 
 class TestStringPacking(unittest.TestCase):
@@ -699,7 +859,7 @@ class TestSortTables(unittest.TestCase):
                 _msprime.LibraryError, ts.load_tables, nodes=tables.nodes,
                 edges=new_edges)
             # Sorting from the correct index should give us back the original table.
-            new_edges.reset()
+            new_edges.clear()
             for e in all_edges:
                 new_edges.add_row(e.left, e.right, e.parent, e.child)
             msprime.sort_tables(
@@ -882,7 +1042,7 @@ class TestSortTables(unittest.TestCase):
         # Verify that tables are OK.
         msprime.sort_tables(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-        for bad_type in [None, "", 1]:
+        for bad_type in [[], "", 1]:
             self.assertRaises(
                 TypeError, msprime.sort_tables,
                 nodes=nodes, edges=edges, sites=sites, mutations=mutations,

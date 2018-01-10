@@ -20,15 +20,23 @@ import shlex
 # documentation build on readthedocs, so we mock the module. Follows
 # the recommended pattern at
 # http://docs.readthedocs.org/en/latest/faq.html
-try:
-    from unittest.mock import MagicMock
-except ImportError:
-    from mock import Mock as MagicMock
+
+from unittest.mock import MagicMock
+
+_table_classes = [
+    "NodeTable", "EdgeTable", "MigrationTable", "SiteTable", "MutationTable",
+    "ProvenanceTable"]
+
 
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
-        return MagicMock()
+        # To get the documentation to build correctly for the table classes
+        # we need to jump through this hoop.
+        if name in _table_classes:
+            return MagicMock
+        else:
+            return MagicMock()
 
 MOCK_MODULES = ["_msprime"]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
@@ -74,7 +82,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'msprime'
-copyright = u'2015-2016, Jerome Kelleher'
+copyright = u'2015-2017, Jerome Kelleher'
 author = u'Jerome Kelleher'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -311,7 +319,7 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 intersphinx_mapping = {
-    'https://docs.python.org/': None,
+    'https://docs.python.org/3/': None,
     # Disabling numpy lookup as scipy.org not reachable.
-    # 'numpy': ('http://docs.scipy.org/doc/numpy/', None)}
+    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
 }
