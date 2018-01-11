@@ -198,7 +198,7 @@ class TestDrawText(TestTreeDraw):
         0       1       6       4
         0       1       6       5
         """)
-        ts = msprime.load_text(nodes, edges)
+        ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
@@ -221,7 +221,7 @@ class TestDrawText(TestTreeDraw):
         0       1       5       3
         0       1       5       4
         """)
-        ts = msprime.load_text(nodes, edges)
+        ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
@@ -275,7 +275,7 @@ class TestDrawUnicode(TestDrawText):
             " 2 \n"
             "┏┻┓\n"
             "0 1")
-        ts = msprime.load_text(nodes, edges)
+        ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         self.verify_text_rendering(t, tree)
 
@@ -297,7 +297,7 @@ class TestDrawUnicode(TestDrawText):
             "  3  \n"
             "┏━╋━┓\n"
             "0 1 2\n")
-        ts = msprime.load_text(nodes, edges)
+        ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         self.verify_text_rendering(t, tree)
 
@@ -321,7 +321,7 @@ class TestDrawUnicode(TestDrawText):
             "   4   \n"
             "┏━┳┻┳━┓\n"
             "0 1 2 3\n")
-        ts = msprime.load_text(nodes, edges)
+        ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         self.verify_text_rendering(t, tree)
 
@@ -343,7 +343,7 @@ class TestDrawUnicode(TestDrawText):
             "1\n"
             "┃\n"
             "0\n")
-        ts = msprime.load_text(nodes, edges)
+        ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         self.verify_text_rendering(t, tree)
 

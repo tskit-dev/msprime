@@ -845,7 +845,7 @@ def load_tables(
     return TreeSequence.load_tables(**kwargs)
 
 
-def parse_nodes(source, sep=None):
+def parse_nodes(source, strict=True):
     """
     Parse the specified file-like object and return a :class:`NodeTable`
     instance. The object must contain text with whitespace delimited columns,
@@ -854,6 +854,9 @@ def parse_nodes(source, sep=None):
     :class:`NodeTable`.  Note that node ``id`` is not included, but implied by
     order in the file.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     # Read the header and find the indexes of the required fields.
     table = tables.NodeTable()
     header = source.readline().strip("\n").split(sep)
@@ -888,7 +891,7 @@ def parse_nodes(source, sep=None):
     return table
 
 
-def parse_edges(source, sep=None):
+def parse_edges(source, strict=True):
     """
     Parse the specified file-like object and return a :class:`EdgeTable` instance.
     The object must contain text with whitespace delimited columns, which are
@@ -897,6 +900,9 @@ def parse_edges(source, sep=None):
     line by making the ``child`` field a comma-separated list. Further
     requirements are described in :class:`EdgeTable`.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     table = tables.EdgeTable()
     header = source.readline().strip("\n").split(sep)
     left_index = header.index("left")
@@ -916,7 +922,7 @@ def parse_edges(source, sep=None):
     return table
 
 
-def parse_sites(source, sep=None):
+def parse_sites(source, strict=True):
     """
     Parse the specified file-like object and return a :class:`SiteTable`
     instance.  The object must contain text with whitespace delimited columns,
@@ -924,6 +930,9 @@ def parse_sites(source, sep=None):
     ``ancestral_state``.  Further requirements are described in
     :class:`SiteTable`.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     header = source.readline().strip("\n").split(sep)
     position_index = header.index("position")
     ancestral_state_index = header.index("ancestral_state")
@@ -946,7 +955,7 @@ def parse_sites(source, sep=None):
     return table
 
 
-def parse_mutations(source, sep=None):
+def parse_mutations(source, strict=True):
     """
     Parse the specified file-like object and return a :class:`MutationTable`
     instance. The object must contain text with whitespace delimited columns,
@@ -954,6 +963,9 @@ def parse_mutations(source, sep=None):
     ``derived_state``. An optional ``parent`` column may also be supplied.
     Further requirements are described in :class:`MutationTable`.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     header = source.readline().strip("\n").split(sep)
     site_index = header.index("site")
     node_index = header.index("node")
@@ -987,7 +999,7 @@ def parse_mutations(source, sep=None):
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=None):
+def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, strict=True):
     """
     Loads a tree sequence from the specified file paths. The files input here
     are in a simple whitespace delimited tabular format such as output by the
@@ -1030,14 +1042,14 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=N
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    node_table = parse_nodes(nodes, sep=sep)
-    edge_table = parse_edges(edges, sep=sep)
+    node_table = parse_nodes(nodes, strict=strict)
+    edge_table = parse_edges(edges, strict=strict)
     site_table = tables.SiteTable()
     mutation_table = tables.MutationTable()
     if sites is not None:
-        site_table = parse_sites(sites, sep=sep)
+        site_table = parse_sites(sites, strict=strict)
     if mutations is not None:
-        mutation_table = parse_mutations(mutations, sep=sep)
+        mutation_table = parse_mutations(mutations, strict=strict)
     tables.sort_tables(
         nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
