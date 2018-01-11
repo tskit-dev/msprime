@@ -1077,7 +1077,7 @@ class TestSortMutations(unittest.TestCase):
         """)
         ts = msprime.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+            sequence_length=1, strict=False)
         # Load text automatically calls sort tables, so we can test the
         # output directly.
         sites = ts.tables.sites
@@ -1111,7 +1111,7 @@ class TestSortMutations(unittest.TestCase):
         """)
         ts = msprime.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+            sequence_length=1, strict=False)
         # Load text automatically calls sort tables, so we can test the
         # output directly.
         sites = ts.tables.sites
@@ -1141,7 +1141,7 @@ class TestSortMutations(unittest.TestCase):
         self.assertRaises(
             IndexError, msprime.load_text,
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+            sequence_length=1, strict=False)
 
 
 class TestSimplifyTables(unittest.TestCase):

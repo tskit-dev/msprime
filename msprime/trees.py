@@ -818,18 +818,33 @@ def load_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
         provenances=None, sequence_length=0):
     """
-    Loads a tree sequence from the table objects provided.  If sequence_length
-    is 0 or not provided, it is inferred to be equal to the largest right value
-    in the edges.
+    Loads the tree sequence data from the specified table objects, and
+    returns the resulting :class:`.TreeSequence` object. These tables
+    must fulfil the properties required for an input tree sequence as
+    described in the :ref:`sec-valid-tree-sequence-requirements` section.
 
-    :param NodeTable nodes: The NodeTable.
-    :param EdgeTable edges: The EdgeTable.
-    :param float sequence_length: The length of the sequence.
-    :param MigrationTable migrations: The MigrationTable.
-    :param SiteTable sites: The SiteTable.
-    :param MutationTable mutations: The MutationTable.
-    :param ProvenanceTable provenances: The ProvenanceTable.
-    :return: A :class:`msprime.TreeSequence` consistent with the tables.
+    The ``sequence_length`` parameter determines the
+    :attr:`.TreeSequence.sequence_length` of the returned tree sequence. If it
+    is 0 or not specified, the value is taken to be the maximum right
+    coordinate of the input edges. This parameter is useful in degenerate
+    situations (such as when there are zero edges), but can usually be ignored.
+
+    :param NodeTable nodes: The :ref:`node table <sec-node-table-definition>`
+        (required).
+    :param EdgeTable edges: The :ref:`edge table <sec-edge-table-definition>`
+        (required).
+    :param MigrationTable migrations: The :ref:`migration table
+        <sec-migration-table-definition>` (optional).
+    :param SiteTable sites: The :ref:`site table <sec-site-table-definition>`
+        (optional; but if supplied, ``mutations`` must also be specified).
+    :param MutationTable mutations: The :ref:`mutation table
+        <sec-mutation-table-definition>` (optional; but if supplied, ``sites``
+        must also be specified).
+    :param ProvenanceTable provenances: The :ref:`provenance table
+        <sec-provenance-table-definition>` (optional).
+    :param float sequence_length: The sequence length of the returned tree sequence. If
+        not supplied or zero this will be inferred from the set of edges.
+    :return: A :class:`.TreeSequence` consistent with the specified tables.
     :rtype: TreeSequence
     """
     # TODO update the low-level module to accept None and remove this
@@ -845,15 +860,24 @@ def load_tables(
     return TreeSequence.load_tables(**kwargs)
 
 
-def parse_nodes(source, sep=None):
+def parse_nodes(source, strict=True):
     """
-    Parse the specified file-like object and return a :class:`NodeTable`
-    instance. The object must contain text with whitespace delimited columns,
-    which are labeled with headers and contain columns ``is_sample``, ``time``,
-    and optionally, ``population``.  Further requirements are described in
-    :class:`NodeTable`.  Note that node ``id`` is not included, but implied by
-    order in the file.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a node table and returns the corresponding :class:`NodeTable`
+    instance. See the :ref:`node text format <sec-node-text-format>` section
+    for the details of the required format and the
+    :ref:`node table definition <sec-node-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     # Read the header and find the indexes of the required fields.
     table = tables.NodeTable()
     header = source.readline().strip("\n").split(sep)
@@ -888,15 +912,24 @@ def parse_nodes(source, sep=None):
     return table
 
 
-def parse_edges(source, sep=None):
+def parse_edges(source, strict=True):
     """
-    Parse the specified file-like object and return a :class:`EdgeTable` instance.
-    The object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``left``, ``right``, ``parent``,
-    and ``child``. Several edges may specified at the same time using a single
-    line by making the ``child`` field a comma-separated list. Further
-    requirements are described in :class:`EdgeTable`.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a edge table and returns the corresponding :class:`EdgeTable`
+    instance. See the :ref:`edge text format <sec-edge-text-format>` section
+    for the details of the required format and the
+    :ref:`edge table definition <sec-edge-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     table = tables.EdgeTable()
     header = source.readline().strip("\n").split(sep)
     left_index = header.index("left")
@@ -916,14 +949,24 @@ def parse_edges(source, sep=None):
     return table
 
 
-def parse_sites(source, sep=None):
+def parse_sites(source, strict=True):
     """
-    Parse the specified file-like object and return a :class:`SiteTable`
-    instance.  The object must contain text with whitespace delimited columns,
-    which are labeled with headers and contain columns ``position`` and
-    ``ancestral_state``.  Further requirements are described in
-    :class:`SiteTable`.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a site table and returns the corresponding :class:`SiteTable`
+    instance. See the :ref:`site text format <sec-site-text-format>` section
+    for the details of the required format and the
+    :ref:`site table definition <sec-site-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     header = source.readline().strip("\n").split(sep)
     position_index = header.index("position")
     ancestral_state_index = header.index("ancestral_state")
@@ -946,14 +989,24 @@ def parse_sites(source, sep=None):
     return table
 
 
-def parse_mutations(source, sep=None):
+def parse_mutations(source, strict=True):
     """
-    Parse the specified file-like object and return a :class:`MutationTable`
-    instance. The object must contain text with whitespace delimited columns,
-    which are labeled with headers and contain columns ``site``, ``node``, and
-    ``derived_state``. An optional ``parent`` column may also be supplied.
-    Further requirements are described in :class:`MutationTable`.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a mutation table and returns the corresponding :class:`MutationTable`
+    instance. See the :ref:`mutation text format <sec-mutation-text-format>` section
+    for the details of the required format and the
+    :ref:`mutation table definition <sec-mutation-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     header = source.readline().strip("\n").split(sep)
     site_index = header.index("site")
     node_index = header.index("node")
@@ -987,57 +1040,68 @@ def parse_mutations(source, sep=None):
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, sep=None):
+def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, strict=True):
     """
-    Loads a tree sequence from the specified file paths. The files input here
-    are in a simple whitespace delimited tabular format such as output by the
-    :meth:`.TreeSequence.dump_text` method.  This method is intended as a
+    Parses the tree sequence data from the specified file-like objects, and
+    returns the resulting :class:`.TreeSequence` object. The format
+    for these files is documented in the :ref:`sec-text-file-format` section,
+    and is produced by the :meth:`.TreeSequence.dump_text` method. Further
+    properties required for an input tree sequence are described in the
+    :ref:`sec-valid-tree-sequence-requirements` section. This method is intended as a
     convenient interface for importing external data into msprime; the HDF5
-    based file format using by :meth:`msprime.load` will be many times more
-    efficient that using the text based formats.
+    based file format using by :meth:`msprime.load` is many times more
+    efficient than this text format.
 
-    ``nodes`` and ``edges`` must be a file-like object containing text with
-    whitespace delimited columns,  parsable by :func:`parse_nodes` and
-    :func:`parse_edges`, respectively.  Further requirements are described
-    in :class:`NodeTable` and :class:`EdgeTable`.
+    The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
+    objects containing text with whitespace delimited columns,  parsable by
+    :func:`parse_nodes` and :func:`parse_edges`, respectively. ``sites`` and
+    ``mutations`` are optional, and must be parsable by :func:`parse_sites` and
+    :func:`parse_mutations`, respectively.
 
-    ``sites`` and ``mutations`` are optional, but if included must be similar,
-    parsable by :func:`parse_sites` and :func:`parse_mutations`, respecively.
-    Further requirements are described in :class:`SiteTable` and
-    :class:`MutationTable`.
+    The ``sequence_length`` parameter determines the
+    :attr:`.TreeSequence.sequence_length` of the returned tree sequence. If it
+    is 0 or not specified, the value is taken to be the maximum right
+    coordinate of the input edges. This parameter is useful in degenerate
+    situations (such as when there are zero edges), but can usually be ignored.
+
+    The ``strict`` parameter controls the field delimiting algorithm that
+    is used. If ``strict`` is True (the default), we require exactly one
+    tab character separating each field. If ``strict`` is False, a more relaxed
+    whitespace delimiting algorithm is used, such that any run of whitespace
+    is regarded as a field separator. In most situations, ``strict=False``
+    is more convenient, but it can lead to error in certain situations. For
+    example, if a deletion is encoded in the mutation table this will not
+    be parseable when ``strict=False``.
 
     After parsing the tables, :func:`sort_tables` is called to ensure that
     the loaded tables satisfy the tree sequence :ref:`ordering requirements
     <sec-ordering-requirements>`. Note that this may result in the IDs of various
     entities changing from their positions in the input file.
 
-    TODO: add description of the field separator argument, linking to the builtin
-    string.split function and describe when it is useful.
-
-    TODO: update introduction above to point to the general description of
-    tables and the text file format.
-
-    :param stream nodes: The file-type object containing text describing a NodeTable.
-    :param stream edges: The file-type object containing text
-        describing a EdgeTable.
-    :param stream sites: The file-type object containing text describing a SiteTable.
-    :param stream mutations: The file-type object containing text
-        describing a MutationTable.
+    :param stream nodes: The file-like object containing text describing a
+        :class:`.NodeTable`.
+    :param stream edges: The file-like object containing text
+        describing an :class:`.EdgeTable`.
+    :param stream sites: The file-like object containing text describing a
+        :class:`.SiteTable`.
+    :param stream mutations: The file-like object containing text
+        describing a :class:`MutationTable`.
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
-    :param str sep: The field separator, as defined by the Python str.split function.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    node_table = parse_nodes(nodes, sep=sep)
-    edge_table = parse_edges(edges, sep=sep)
+    node_table = parse_nodes(nodes, strict=strict)
+    edge_table = parse_edges(edges, strict=strict)
     site_table = tables.SiteTable()
     mutation_table = tables.MutationTable()
     if sites is not None:
-        site_table = parse_sites(sites, sep=sep)
+        site_table = parse_sites(sites, strict=strict)
     if mutations is not None:
-        mutation_table = parse_mutations(mutations, sep=sep)
+        mutation_table = parse_mutations(mutations, strict=strict)
     tables.sort_tables(
         nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
@@ -1248,9 +1312,6 @@ class TreeSequence(object):
 
     @property
     def sequence_length(self):
-        return self.get_sequence_length()
-
-    def get_sequence_length(self):
         """
         Returns the sequence length in this tree sequence. This defines the
         genomic scale over which tree coordinates are defined. Given a
@@ -1262,6 +1323,9 @@ class TreeSequence(object):
         :return: The length of the sequence in this tree sequence in bases.
         :rtype: float
         """
+        return self.get_sequence_length()
+
+    def get_sequence_length(self):
         return self._ll_tree_sequence.get_sequence_length()
 
     @property

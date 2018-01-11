@@ -877,7 +877,7 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         9       2       1
         """)
         ts = msprime.load_text(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         branch_tsc = msprime.BranchLengthStatCalculator(ts)
         py_branch_tsc = PythonBranchLengthStatCalculator(ts)
         site_tsc = msprime.SiteStatCalculator(ts)
@@ -940,10 +940,8 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         self.assertAlmostEqual(py_site_tsc.tree_stat(A, f), site_true_Y)
 
     def test_case_odds_and_ends(self):
-        """
-        Tests having (a) the first site after the first window, and
-        (b) no samples having the ancestral state.
-        """
+        # Tests having (a) the first site after the first window, and
+        # (b) no samples having the ancestral state.
         nodes = six.StringIO("""\
         id      is_sample   time
         0       1           0
@@ -966,7 +964,7 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         0       1       2               -1
         """)
         ts = msprime.load_text(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         site_tsc = msprime.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
@@ -1032,7 +1030,7 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         2       2       3               6
         """)
         ts = msprime.load_text(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         site_tsc = msprime.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
@@ -1148,7 +1146,7 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         2       9       0               5
         """)
         ts = msprime.load_text(nodes=nodes, edges=edges, sites=sites,
-                               mutations=mutations)
+                               mutations=mutations, strict=False)
         branch_tsc = msprime.BranchLengthStatCalculator(ts)
         py_branch_tsc = PythonBranchLengthStatCalculator(ts)
         site_tsc = msprime.SiteStatCalculator(ts)

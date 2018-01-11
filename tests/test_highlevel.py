@@ -1250,7 +1250,8 @@ class TestTreeSequence(HighLevelTestCase):
                     open(sites_file) as sites,\
                     open(mutations_file) as mutations:
                 ts = msprime.load_text(
-                    nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+                    nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+                    strict=False)
             samples = list(ts.samples())
             self.verify_simplify_equality(ts, samples)
             j += 1
@@ -1501,36 +1502,10 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             edges_file.seek(0)
             sites_file.seek(0)
             mutations_file.seek(0)
-            # We need to use sep="\t" here to ensure that we can correctly
-            # parse zero length ancestral/derived states.
             ts2 = msprime.load_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, sequence_length=ts1.sequence_length, sep="\t")
+                mutations=mutations_file, sequence_length=ts1.sequence_length)
             self.verify_approximate_equality(ts1, ts2)
-
-    def test_parse_sep(self):
-        # Try using : as a field separator to test the sep argument for load_text.
-        nodes = six.StringIO(
-            "is_sample:time\n"
-            "0:1\n"
-            "1:0\n")
-        edges = six.StringIO(
-            "left:right:parent:child\n"
-            "0:5:0:1")
-        sites = six.StringIO(
-            "position:ancestral_state:metadata\n"
-            "0:AAA:\n"
-            "1::")
-        mutations = six.StringIO(
-            "site:node:derived_state:parent:metadata\n"
-            "0:0:BBBB:-1:\n"
-            "1:1::-1:\n")
-        ts = msprime.load_text(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations, sep=":")
-        self.assertEqual(ts.num_nodes, 2)
-        self.assertEqual(ts.num_edges, 1)
-        self.assertEqual(ts.num_sites, 2)
-        self.assertEqual(ts.num_mutations, 2)
 
     def test_empty_files(self):
         nodes_file = six.StringIO("is_sample\ttime\n")
@@ -2343,7 +2318,7 @@ class TestMutationParent(unittest.TestCase):
     2       4       1               8
     """)
     ts = msprime.load_text(nodes=nodes, edges=edges,
-                           sites=sites, mutations=mutations)
+                           sites=sites, mutations=mutations, strict=False)
     tabs = ts.dump_tables()
 
     def test_interface(self):
