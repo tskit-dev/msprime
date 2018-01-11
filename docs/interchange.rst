@@ -349,11 +349,38 @@ To allow for efficent algorithms, it is required that
 Text file formats
 *****************
 
+The tree sequence text file format is based on a simple whitespace
+delimited approach. Each table corresponds to a single file, and is
+composed of a number of whitespace delimited columns. The first
+line of each file must be a **header** giving the names of each column.
+Subsequent rows must contain data for each of these columns, following
+the usual conventions. Each table has a set of mandatory and optional columns which are
+described below. The columns can be provided in any order, and extra columns
+can be included in the file. Note, in particular, that this means that
+an ``id`` column may be present in any of these files, but it will be
+ignored (IDs are always determined by the position of the row in a table).
 
-An example of a simple tree sequence for four samples with
-three distinct trees is as follows.
+.. todo::
+    Update the examples in this section to be a very simple tree sequence
+    with (say) 4 nodes and two trees, and include a picture. This
+    example can also be used in the binary interchange section also.
 
-nodes::
+.. _sec-node-text-format:
+
+Node text format
+================
+
+The node text format must contain the columns ``is_sample`` and
+``time``. Optionally, there may also be a ``population`` and
+``metadata`` columns. See the :ref:`node table definitions
+<sec-node-table-definition>` for details on these columns.
+
+Note that we do not have a ``flags`` column in the text file format, but
+instead use ``is_sample`` (which may be 0 or 1). Currently, ``IS_SAMPLE`` is
+the only flag value defined for nodes, and as more flags are defined we will
+allow for extra columns in the text format.
+
+An example node table::
 
     is_sample   time    population
     1           0.0     0
@@ -366,39 +393,59 @@ nodes::
     0           0.202   0
     0           0.253   0
 
-edges::
 
-    left    right   node    children
-    2       10      4       2,3
-    0       2       5       1,3
-    2       10      5       1,4
-    0       7       6       0,5
-    7       10      7       0,5
-    0       2       8       2,6
+.. _sec-edge-text-format:
+
+Edge text format
+================
+
+The edge text format must contain the columns ``left``,
+``right``, ``parent`` and ``child``.
+See the :ref:`edge table definitions
+<sec-edge-table-definition>` for details on these columns.
+
+An example edge table::
+
+    left    right   parent  child
+    2       10      4       2
+    0       10      5       1
+    0       7       6       0
+    7       10      7       0
+    0       2       8       2
 
 
-This example is equivalent to the tree sequence illustrated in Figure 4 of
-the `PLoS Computational Biology paper
-<http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
-time order (since this is a backwards-in-time tree sequence), but they may
-be allocated in any order. In particular, left-to-right tree sequences are
-fully supported.
+.. _sec-site-text-format:
 
-An example of a ``sites`` and ``mutations`` file for the tree sequence
-defined in the previous example is as follows.
+Site text format
+================
+
+The site text format must contain the columns ``position`` and
+``ancestral_state``. The ``metadata`` column may also be optionally
+present. See the :ref:`site table definitions
+<sec-site-table-definition>` for details on these columns.
 
 sites::
 
     position    ancestral_state
-    0.1         0
-    8.5         0
+    0.1         A
+    8.5         AT
+
+.. _sec-mutation-text-format:
+
+Mutation text format
+====================
+
+The mutation text format must contain the columns ``site``,
+``node`` and ``derived_state``. The ``parent`` and ``metadata`` columns
+may also be optionally present. See the :ref:`mutation table definitions
+<sec-site-table-definition>` for details on these columns.
 
 mutations::
 
     site    node    derived_state
-    0       3       1
-    1       6       1
-    1       0       0
+    0       3       G
+    1       6       T
+    1       0       A
 
 
 .. _sec-binary-interchange:
