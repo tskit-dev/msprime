@@ -1549,6 +1549,18 @@ class TreeSequence(object):
         for t in self.trees():
             yield t.get_interval()[1]
 
+    def first(self):
+        """
+        Returns the first tree in this :class:`.TreeSequence`. To iterate over all
+        trees in the sequence, use the :meth:`.trees` method.
+
+        Currently does not support the extra options for the :meth:`.trees` method.
+
+        :return: The first tree in this tree sequence.
+        :rtype: :class:`.SparseTree`.
+        """
+        return next(self.trees())
+
     def trees(
             self, tracked_samples=None, sample_counts=True, sample_lists=False,
             tracked_leaves=None, leaf_counts=None, leaf_lists=None):
