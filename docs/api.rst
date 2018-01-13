@@ -298,14 +298,19 @@ Table classes
     :members:
 
 .. autoclass:: msprime.EdgeTable
+    :members:
 
 .. autoclass:: msprime.MigrationTable
+    :members:
 
 .. autoclass:: msprime.SiteTable
+    :members:
 
 .. autoclass:: msprime.MutationTable
+    :members:
 
 .. autoclass:: msprime.ProvenanceTable
+    :members:
 
 +++++++++++++++
 Table functions

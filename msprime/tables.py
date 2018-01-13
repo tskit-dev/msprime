@@ -190,7 +190,7 @@ class NodeTable(_msprime.NodeTable):
     def set_columns(
             self, flags, time, population=None, metadata=None, metadata_offset=None):
         """
-        Sets the values for each column in this NodeTable using the values in
+        Sets the values for each column in this :class:`.NodeTable` using the values in
         the specified arrays. Overwrites any data currently stored in the table.
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
@@ -222,8 +222,8 @@ class NodeTable(_msprime.NodeTable):
     def append_columns(
             self, flags, time, population=None, metadata=None, metadata_offset=None):
         """
-        Appends the specified arrays to the end of the columns of this table.
-        This allows many new rows to be added at once.
+        Appends the specified arrays to the end of the columns in this
+        :class:`NodeTable`. This allows many new rows to be added at once.
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes that will be added to the table. The
@@ -266,43 +266,26 @@ def _pickle_node_table(table):
 
 class EdgeTable(_msprime.EdgeTable):
     """
-    Class for tables describing all edges in a tree sequence, of the form
+    A table defining the edges in a tree sequence. See the
+    :ref:`definitions <sec-edge-table-definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    for the properties needed for an edge table to be a part of a valid tree sequence.
 
-    left	right	parent	child
-    0.0     0.4     3       0
-    0.0     0.4     3       2
-    0.4     1.0     3       0
-    0.4     1.0     3       1
-    0.4     1.0     3       2
-    0.0     0.4     4       1
-    0.0     0.4     4       3
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
 
-    These describe the half-open genomic interval affected: `[left, right)`,
-    the `parent` and the `child` on that interval.
+        **NOTE:** this behaviour may change in future.
 
-    Requirements: to describe a valid tree sequence, a `EdgeTable` (and
-    corresponding `NodeTable`, to provide birth times) must satisfy:
-
-    1. any two edges that share a child must be nonoverlapping, and
-    2. the birth times of the `parent` in an edge must be strictly
-        greater than the birth times of the `child` in that edge.
-
-    Furthermore, for algorithmic requirements
-
-    4. the smallest `left` coordinate must be 0.0,
-    5. the table must be sorted so that birth time of the `parent` increases
-        with table row, and
-    6. any two edges corresponding to the same `parent` must be
-        nonoverlapping.
-
-    It is an additional requirement that the complete ancestry of each sample
-    must be specified, but this is harder to verify.
-
-    It is not required that all records corresponding to the same parent be
-    adjacent in the table.
-
-    `simplify_tables()` may be used to convert noncontradictory tables
-    into tables satisfying the full set of requirements.
+    :ivar left: The array of left coordinates.
+    :vartype left: numpy.ndarray, dtype=np.float64
+    :ivar right: The array of right coordinates.
+    :vartype right: numpy.ndarray, dtype=np.float64
+    :ivar parent: The array of parent node IDs.
+    :vartype parent: numpy.ndarray, dtype=np.int32
+    :ivar child: The array of child node IDs.
+    :vartype child: numpy.ndarray, dtype=np.int32
     """
     def __str__(self):
         left = self.left
@@ -360,6 +343,59 @@ class EdgeTable(_msprime.EdgeTable):
     def reset(self):
         # Deprecated alias for clear
         self.clear()
+
+    def add_row(self, left, right, parent, child):
+        """
+        Adds a new row to this :class:`EdgeTable` and returns the ID of the
+        corresponding edge.
+
+        :param float left: The left coordinate (inclusive).
+        :param float right: The right coordinate (exclusive).
+        :param int parent: The ID of parent node.
+        :param int child: The ID of child node.
+        :return: The ID of the newly added edge.
+        :rtype: int
+        """
+        return super(EdgeTable, self).add_row(left, right, parent, child)
+
+    def set_columns(self, left, right, parent, child):
+        """
+        Sets the values for each column in this :class:`.EdgeTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        All four parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of edges the table will contain).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param parent: The parent node IDs.
+        :type parent: numpy.ndarray, dtype=np.int32
+        :param child: The child node IDs.
+        :type child: numpy.ndarray, dtype=np.int32
+        """
+        super(EdgeTable, self).set_columns(left, right, parent, child)
+
+    def append_columns(self, left, right, parent, child):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`EdgeTable`. This allows many new rows to be added at once.
+
+        All four parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of additional edges to
+        add to the table).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param parent: The parent node IDs.
+        :type parent: numpy.ndarray, dtype=np.int32
+        :param child: The child node IDs.
+        :type child: numpy.ndarray, dtype=np.int32
+        """
+        super(EdgeTable, self).append_columns(left, right, parent, child)
 
 
 # Pickle support. See copyreg registration for this function below.
