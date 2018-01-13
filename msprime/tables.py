@@ -410,6 +410,34 @@ def _edge_table_pickle(table):
 
 
 class MigrationTable(_msprime.MigrationTable):
+    """
+    A table defining the migrations in a tree sequence. See the
+    :ref:`definitions <sec-migration-table-definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    for the properties needed for a migration table to be a part of a valid tree
+    sequence.
+
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
+
+        **NOTE:** this behaviour may change in future.
+
+    :ivar left: The array of left coordinates.
+    :vartype left: numpy.ndarray, dtype=np.float64
+    :ivar right: The array of right coordinates.
+    :vartype right: numpy.ndarray, dtype=np.float64
+    :ivar node: The array of node IDs.
+    :vartype node: numpy.ndarray, dtype=np.int32
+    :ivar source: The array of source population IDs.
+    :vartype source: numpy.ndarray, dtype=np.int32
+    :ivar dest: The array of destination population IDs.
+    :vartype dest: numpy.ndarray, dtype=np.int32
+    :ivar time: The array of time values.
+    :vartype time: numpy.ndarray, dtype=np.float64
+    """
+
     def __str__(self):
         left = self.left
         right = self.right
@@ -471,6 +499,70 @@ class MigrationTable(_msprime.MigrationTable):
     def reset(self):
         # Deprecated alias for clear
         self.clear()
+
+    def add_row(self, left, right, node, source, dest, time):
+        """
+        Adds a new row to this :class:`MigrationTable` and returns the ID of the
+        corresponding migration.
+
+        :param float left: The left coordinate (inclusive).
+        :param float right: The right coordinate (exclusive).
+        :param int node: The node ID.
+        :param int source: The ID of the source population.
+        :param int dest: The ID of the destination population.
+        :param float time: The time of the migration event.
+        :return: The ID of the newly added migration.
+        :rtype: int
+        """
+        return super(MigrationTable, self).add_row(left, right, node, source, dest, time)
+
+    def set_columns(self, left, right, node, source, dest, time):
+        """
+        Sets the values for each column in this :class:`.MigrationTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        All six parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of migrations the table will contain).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param node: The node IDs.
+        :type node: numpy.ndarray, dtype=np.int32
+        :param source: The source population IDs.
+        :type source: numpy.ndarray, dtype=np.int32
+        :param dest: The destination population IDs.
+        :type dest: numpy.ndarray, dtype=np.int32
+        :param time: The time of each migration.
+        :type time: numpy.ndarray, dtype=np.int64
+        """
+        super(MigrationTable, self).set_columns(left, right, node, source, dest, time)
+
+    def append_columns(self, left, right, node, source, dest, time):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`MigrationTable`. This allows many new rows to be added at once.
+
+        All six parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of additional migrations
+        to add to the table).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param node: The node IDs.
+        :type node: numpy.ndarray, dtype=np.int32
+        :param source: The source population IDs.
+        :type source: numpy.ndarray, dtype=np.int32
+        :param dest: The destination population IDs.
+        :type dest: numpy.ndarray, dtype=np.int32
+        :param time: The time of each migration.
+        :type time: numpy.ndarray, dtype=np.int64
+        """
+        super(MigrationTable, self).append_columns(
+            left, right, node, source, dest, time)
 
 
 # Pickle support. See copyreg registration for this function below.
