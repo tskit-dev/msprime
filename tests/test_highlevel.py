@@ -1031,6 +1031,13 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_samples(ts)
 
+    def test_first(self):
+        for ts in get_example_tree_sequences():
+            t1 = ts.first()
+            t2 = next(ts.trees())
+            self.assertFalse(t1 is t2)
+            self.assertEqual(t1.parent_dict, t2.parent_dict)
+
     def test_trees_interface(self):
         ts = list(get_example_tree_sequences())[0]
         # The defaults should make sense and count samples.
