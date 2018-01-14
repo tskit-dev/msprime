@@ -280,11 +280,37 @@ record              char                Provenance record.
 ================    ==============      ===========
 
 
-
 .. _sec-metadata-definition:
 
 Metadata
 ========
+
+Users of the tables API sometimes need to store auxiliary information for
+the various entities defined here. For example, in a forwards-time simulation,
+the simulation engine may wish to store the time at which a particular mutation
+arose or some other pertinent information. If we are representing real data,
+we may wish to store information derived from a VCF INFO field, or associate
+information relating to samples or populations. The columns defined in tables
+here are deliberately minimal: we define columns only for information which
+the library itself can use. All other information is considered to be
+**metadata**, and is stored in the ``metadata`` columns of the various
+tables.
+
+Arbitrary binary data can be stored in ``metadata`` columns, and the
+``msprime`` library makes no attempt to interpret this information. How the
+information held in this field is encoded is entirely the choice of client code.
+
+To ensure that metadata can be safely interchanged using the :ref:`sec-text-file-format`,
+each row is `base 64 encoded <https://en.wikipedia.org/wiki/Base64>`_. Thus,
+binary information can be safely printed and exchanged, but may not be
+human readable.
+
+.. todo::
+    We plan on providing more sophisticated tools for working with metadata
+    in future, including the auto decoding metadata via pluggable
+    functions and the ability to store metadata schemas so that metadata
+    is self-describing.
+
 
 .. _sec-valid-tree-sequence-requirements:
 
@@ -458,84 +484,77 @@ In this section we describe the high-level details of the API for interchanging
 table data via numpy arrays. Please see the :ref:`sec-tables-api` for detailed
 description of the functions and methods.
 
+The tables API is based on **columnar** storage of the data. In memory, each
+table is organised as a number of blocks of contiguous storage, one for
+each column. There are many advantages to this approach, but the key
+property for us is that allows for very efficient transfer of data
+in and out of tables. Rather than inserting data into tables row-by-row
+(which can be done using the ``add_row`` methods), it is much more
+efficient to add many rows at the same time by providing pointers to blocks of
+contigous memory. By taking
+this approach, we can work with tables containing gigabytes of data very
+efficiently.
+
+We use the `numpy Array API <https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.html>`_
+to allow us to define and work with numeric arrays of the required types.
+Node IDs, for example, are defined using 32 bit integers. Thus, the
+``parent`` column of an :ref:`sec-edge-table-definition`'s with ``n`` rows
+is a block ``4n`` bytes.
+
+This approach is very straightforward for columns in which each row contains
+a fixed number of values. However, dealing with columns containing a
+**variable** number of values is more problematic.
 
 .. _sec-encoding-ragged-columns:
 
 Encoding ragged columns
 =======================
 
-    **todo: This section will define how to work with ragged columns. It's not clear
-    This has been referred to from elsewhere, but we should probably rename it**
+A **ragged** column is a column in which the rows are not of a fixed length.
+For example, :ref:`sec-metadata-definition` columns contain binary of data of arbitrary
+length. To encode such columns in the tables API, we store **two** columns:
+one contains the flattened array of data and another stores the **offsets**
+of each row into this flattened array. Consider an example::
 
-.. _sec-variable-length-columns:
+    >>> s = msprime.SiteTable()
+    >>> s.add_row(0, "A")
+    >>> s.add_row(0, "")
+    >>> s.add_row(0, "TTT")
+    >>> s.add_row(0, "G")
+    >>> print(s)
+    id      position        ancestral_state metadata
+    0       0.00000000      A
+    1       0.00000000
+    2       0.00000000      TTT
+    3       0.00000000      G
+    >>> s.ancestral_state
+    array([65, 84, 84, 84, 71], dtype=int8)
+    >>> s.ancestral_state.tobytes()
+    b'ATTTG'
+    >>> s.ancestral_state_offset
+    array([0, 1, 1, 4, 5], dtype=uint32)
+    >>> s.ancestral_state[s.ancestral_state_offset[2]: s.ancestral_state_offset[3]].tobytes()
+    b'TTT'
 
-Variable length columns
-=======================
+In this example we create a :ref:`sec-site-table-definition` with four rows,
+and then print out this table. We can see that the second row has the
+empty string as its ``ancestral_state``, and the third row's
+``ancestral_state`` is ``TTT``. When we print out the tables ``ancestral_state``
+column, we see that its a numpy array of length 5: this is the
+flattened array of `ASCII encoded <https://en.wikipedia.org/wiki/ASCII>`_
+values for these rows. When we decode these bytes using the
+numpy ``tobytes`` method, we get the string 'ATTTG'. This flattened array
+can now be transferred efficiently in memory like any other column. We
+then use the ``ancestral_state_offset`` column to allow us find the
+individual rows. For a row ``j``::
 
-.. Keeping this for now as we're referring to it below. Merge these two into one
-   section and get rid of duplicate refs.
+    ancestral_state[ancestral_state_offset[j]: ancestral_state_offset[j + 1]]
 
+gives us the array of bytes for the ancestral state in that row.
 
-
-.. Sorting and simplifying tables
-.. ==============================
-
-.. Tables that are noncontradictory but do not satisfy all algorithmic requirements
-.. listed above may be converted to a TreeSequence by first sorting, then simplifying
-.. them (both operate on the tables **in place**):
-
-.. .. autofunction:: msprime.sort_tables(nodes, edges[, migrations, sites, mutations, edge_start])
-
-.. **Note:** the following function is more general than
-.. ``TreeSequence.simplify()``, since it can be applied to tables not satisfying
-.. all criteria above (and that hence could not be loaded into a TreeSequence).
-
-
-
-.. NodeTable
-.. =========
-
-.. .. autoclass:: msprime.NodeTable
-
-
-.. EdgeTable
-.. ============
-
-.. .. autoclass:: msprime.EdgeTable
-
-
-.. SiteTable
-.. =========
-
-.. .. autoclass:: msprime.SiteTable
-
-
-.. MutationTable
-.. =============
-
-.. .. autoclass:: msprime.MutationTable
-
-
-.. Import and export
-.. =================
-
-.. This section describes how to extract tables from a ``TreeSequence``, and how
-.. to construct a ``TreeSequence`` from tables.  Since tree sequences are
-.. immutible, often the best way to modify a ``TreeSequence`` is something along
-.. the lines of (for ``ts`` a ``TreeSequence``)::
-
-..     nodes = msprime.NodeTable()
-..     edges = msprime.EdgeTable()
-..     ts.dump_tables(nodes=nodes, edges=edges)
-..     # (modify nodes and edges)
-..     ts.load_tables(nodes=nodes, edges=edges)
-
-
-.. .. automethod:: msprime.TreeSequence.load_tables
-
-.. .. automethod:: msprime.TreeSequence.dump_tables
-..    :noindex:
-
+Note that for a table with ``n`` rows, any offset column must have ``n + 1``
+values. The values in this column must be non-decreasing, and cannot exceed
+the length of the ragged column in question.
 
 .. _sec-hdf5-file-format:
 
@@ -561,7 +580,7 @@ with nodes, the ``metadata`` column in the node table will be empty, and
 the corresponding ``metadata`` dataset will not be present in the HDF5 file.
 
 Variable length data is handled in the same manner as the
-:ref:`Tables API <sec-variable-length-columns>`
+:ref:`Tables API <sec-encoding-ragged-columns>`
 above: we store two arrays, one containing the flattened data, and another
 storing offsets into this array.
 

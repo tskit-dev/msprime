@@ -290,6 +290,128 @@ held in the columns::
     >>> t == t2
     False
 
+
+
+.. _sec-tables-api-text-columns:
+
+++++++++++++
+Text columns
+++++++++++++
+
+As described in the :ref:`sec-encoding-ragged-columns`, working with
+variable length columns is somewhat more involved. Columns
+encoding text data store the **encoded bytes** of the flattened
+strings, and the offsets into this column in two separate
+arrays.
+
+Consider the following example::
+
+    >>> t = msprime.SiteTable()
+    >>> t.add_row(0, "A")
+    >>> t.add_row(1, "BB")
+    >>> t.add_row(2, "")
+    >>> t.add_row(3, "CCC")
+    >>> print(t)
+    id      position        ancestral_state metadata
+    0       0.00000000      A
+    1       1.00000000      BB
+    2       2.00000000
+    3       3.00000000      CCC
+    >>> t[0]
+    SiteTableRow(position=0.0, ancestral_state='A', metadata=b'')
+    >>> t[1]
+    SiteTableRow(position=1.0, ancestral_state='BB', metadata=b'')
+    >>> t[2]
+    SiteTableRow(position=2.0, ancestral_state='', metadata=b'')
+    >>> t[3]
+    SiteTableRow(position=3.0, ancestral_state='CCC', metadata=b'')
+
+Here we create a :class:`.SiteTable` and add four rows, each with a different
+``ancestral_state``. We can then access this information from each
+row in a straightforward manner. Working with the data in the columns
+is a little trickier, however::
+
+    >>> t.ancestral_state
+    array([65, 66, 66, 67, 67, 67], dtype=int8)
+    >>> t.ancestral_state_offset
+    array([0, 1, 3, 3, 6], dtype=uint32)
+    >>> msprime.unpack_strings(t.ancestral_state, t.ancestral_state_offset)
+    ['A', 'BB', '', 'CCC']
+
+Here, the ``ancestral_state`` array is the UTF8 encoded bytes of the flattened
+strings, and the ``ancestral_state_offset`` is the offset into this array
+for each row. The :func:`.unpack_strings` function, however, is a convient
+way to recover the original strings from this encoding. We can also use the
+:func:`.pack_strings` to insert data using this approach::
+
+    >>> a, off = msprime.pack_strings(["0", "12", ""])
+    >>> t.set_columns(position=[0, 1, 2], ancestral_state=a, ancestral_state_offset=off)
+    >>> print(t)
+    id      position        ancestral_state metadata
+    0       0.00000000      0
+    1       1.00000000      12
+    2       2.00000000
+
+.. _sec-tables-api-binary-columns:
+
+++++++++++++++
+Binary columns
+++++++++++++++
+
+Columns storing binary data are handled in a very similar manner to
+:ref:`sec-tables-api-text-columns`. The difference between the two is
+only raw :class:`bytes` values are accepted: no character encoding or
+decoding is done on the data. Consider the following example::
+
+
+    >>> t = msprime.NodeTable()
+    >>> t.add_row(metadata=b"raw bytes")
+    >>> t.add_row(metadata=pickle.dumps({"x": 1.1}))
+    >>> t[0].metadata
+    b'raw bytes'
+    >>> t[1].metadata
+    b'\x80\x03}q\x00X\x01\x00\x00\x00xq\x01G?\xf1\x99\x99\x99\x99\x99\x9as.'
+    >>> pickle.loads(t[1].metadata)
+    {'x': 1.1}
+    >>> print(t)
+    id      flags   population      time    metadata
+    0       0       -1      0.00000000000000        cmF3IGJ5dGVz
+    1       0       -1      0.00000000000000        gAN9cQBYAQAAAHhxAUc/8ZmZmZmZmnMu
+    >>> t.metadata
+    array([ 114,   97,  119,   32,   98,  121,  116,  101,  115, -128,    3,
+            125,  113,    0,   88,    1,    0,    0,    0,  120,  113,    1,
+             71,   63,  -15, -103, -103, -103, -103, -103, -102,  115,   46], dtype=int8)
+    >>> t.metadata_offset
+    array([ 0,  9, 33], dtype=uint32)
+
+
+Here we add two rows to a :class:`.NodeTable`, with different
+:ref:`metadata <sec-metadata-definition>`. The first row contains a simple
+byte string, and the second contains a Python dictionary serialised using
+:mod:`pickle`. We then show several different (and seemingly incompatible!)
+different views on the same data.
+
+When we access the data in a row (e.g., ``t[0].metadata``) we are returned
+a Python bytes object containing precisely the bytes that were inserted.
+The pickled dictionary is encoded in 24 bytes containing unprintable
+characters, and when we unpickle it using :func:`pickle.loads`, we obtain
+the original dictionary.
+
+When we print the table, however, we see some data which is seemingly
+unrelated to the original contents. This is because the binary data is
+`base64 encoded <https://en.wikipedia.org/wiki/Base64>`_ to ensure
+that it is print-safe (and doesn't break your terminal). (See the
+:ref:`sec-metadata-definition` section for more information on the
+use of base64 encoding.).
+
+Finally, when we print the ``metadata`` column, we see the raw byte values
+encoded as signed integers. As for :ref:`sec-tables-api-text-columns`,
+the ``metadata_offset`` column encodes the offsets into this array. So, we
+see that the metadata value is 9 bytes long and the second is 24.
+
+The :func:`pack_bytes` and :func:`unpack_bytes` functions are also useful
+for encoding data in these columns.
+
 +++++++++++++
 Table classes
 +++++++++++++
@@ -327,3 +449,11 @@ Table functions
 .. autofunction:: msprime.parse_sites
 
 .. autofunction:: msprime.parse_mutations
+
+.. autofunction:: msprime.pack_strings
+
+.. autofunction:: msprime.unpack_strings
+
+.. autofunction:: msprime.pack_bytes
+
+.. autofunction:: msprime.unpack_bytes
