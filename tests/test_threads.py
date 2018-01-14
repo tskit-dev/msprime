@@ -25,6 +25,7 @@ from __future__ import division
 import sys
 import threading
 import unittest
+import platform
 
 import numpy as np
 
@@ -32,6 +33,7 @@ import msprime
 import tests.tsutil as tsutil
 
 IS_PY2 = sys.version_info[0] < 3
+IS_WINDOWS = platform.system() == "Windows"
 
 
 def run_threads(worker, num_threads):
@@ -171,7 +173,10 @@ class TestLdCalculatorReplicates(unittest.TestCase):
             self.assertEqual(results[j][0], m - j - 1)
 
 
-@unittest.skipIf(IS_PY2, "Cannot test thread support on Py2.")
+# @unittest.skipIf(IS_PY2, "Cannot test thread support on Py2.")
+# Temporarily skipping these on windows too. See
+# https://github.com/jeromekelleher/msprime/issues/344
+@unittest.skipIf(IS_PY2 or IS_WINDOWS, "Cannot test thread support on Py2.")
 class TestTables(unittest.TestCase):
     """
     Tests to ensure that attempts to access tables in threads correctly
