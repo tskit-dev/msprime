@@ -580,18 +580,32 @@ def _migration_table_pickle(table):
 
 class SiteTable(_msprime.SiteTable):
     """
-    Class for tables describing all sites at which mutations have occurred in a
-    tree sequence, of the form
+    A table defining the sites in a tree sequence. See the
+    :ref:`definitions <sec-site-table-definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    for the properties needed for a site table to be a part of a valid tree
+    sequence.
 
-    id	position	ancestral_state
-    0	0.1     	0
-    1	0.5     	0
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
 
-    Here ``id`` is not stored directly, but is determined by the row index in
-    the table.  ``position`` is the position along the genome, and
-    ``ancestral_state`` gives the allele at the root of the tree at that
-    position.
+        **NOTE:** this behaviour may change in future.
+
+    :ivar position: The array of site position coordinates.
+    :vartype position: numpy.ndarray, dtype=np.float64
+    :ivar ancestral_state: The flattened array of ancestral state strings.
+    :vartype ancestral_state: numpy.ndarray, dtype=np.int8
+    :ivar ancestral_state_offset: The offsets of rows in the ancestral_state
+        array.
+    :vartype ancestral_state_offset: numpy.ndarray, dtype=np.uint32
+    :ivar metadata: The flattened array of metadata binary byte strings.
+    :vartype metadata: numpy.ndarray, dtype=np.int8
+    :ivar metadata_offset: The offsets of rows in the metadata array.
+    :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
+
     def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
@@ -659,6 +673,56 @@ class SiteTable(_msprime.SiteTable):
     def reset(self):
         # Deprecated alias for clear
         self.clear()
+
+    def add_row(self, position, ancestral_state, metadata=None):
+        """
+        Adds a new row to this :class:`SiteTable` and returns the ID of the
+        corresponding site.
+
+        :param float position: The position of this site in genome coordinates.
+        :param str ancestral_state: The state of this site at the root of the tree.
+        :param bytes metadata: The binary metadata for this site.
+        :return: The ID of the newly added site.
+        :rtype: int
+        """
+        return super(SiteTable, self).add_row(position, ancestral_state, metadata)
+
+    def set_columns(
+            self, position, ancestral_state, ancestral_state_offset,
+            metadata=None, metadata_offset=None):
+        """
+        Sets the values for each column in this :class:`.SiteTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        The ``position``, ``ancestral_state`` and ``ancestral_state_offset``
+        parameters are mandatory, and must be 1D numpy arrays. The length
+        of the ``position`` array determines the number of rows in table.
+
+        :param position: The position of each site in genome coordinates.
+        :type position: numpy.ndarray, dtype=np.float64
+        """
+        super(SiteTable, self).set_columns(
+            position, ancestral_state=ancestral_state,
+            ancestral_state_offset=ancestral_state_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
+    def append_columns(
+            self, position, ancestral_state, ancestral_state_offset,
+            metadata=None, metadata_offset=None):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`SiteTable`. This allows many new rows to be added at once.
+
+        The ``position``, ``ancestral_state`` and ``ancestral_state_offset``
+        parameters are mandatory, and must be 1D numpy arrays. The length
+        of the ``position`` array determines the number of additional rows
+        to add the table.
+
+        """
+        super(SiteTable, self).append_columns(
+            position, ancestral_state=ancestral_state,
+            ancestral_state_offset=ancestral_state_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
 
 
 # Pickle support. See copyreg registration for this function below.
