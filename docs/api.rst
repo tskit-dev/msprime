@@ -352,14 +352,72 @@ way to recover the original strings from this encoding. We can also use the
     1       1.00000000      12
     2       2.00000000
 
-.. _sec-tables-api-binary-columns:
+When inserting many rows with standard infinite sites mutations (i.e.,
+ancestral state is "0"), it is more efficient to construct the
+numpy arrays directly than to create a list of strings and use
+:func:`.pack_strings`. When doing this, it is important to note that
+it is the **encoded** byte values that are stored; by default, we
+use UTF8 (which corresponds to ASCII for simple printable characters).::
+
+    >>> t_s = msprime.SiteTable()
+    >>> m = 10
+    >>> a = ord("0") + np.zeros(m, dtype=np.int8)
+    >>> off = np.arange(m + 1, dtype=np.uint32)
+    >>> t_s.set_columns(position=np.arange(m), ancestral_state=a, ancestral_state_offset=off)
+    >>> print(t_s)
+    id      position        ancestral_state metadata
+    0       0.00000000      0
+    1       1.00000000      0
+    2       2.00000000      0
+    3       3.00000000      0
+    4       4.00000000      0
+    5       5.00000000      0
+    6       6.00000000      0
+    7       7.00000000      0
+    8       8.00000000      0
+    9       9.00000000      0
+    >>> t_s.ancestral_state
+    array([48, 48, 48, 48, 48, 48, 48, 48, 48, 48], dtype=int8)
+    >>> t_s.ancestral_state_offset
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10], dtype=uint32)
+
+Here we create 10 sites at regular positions, each with ancestral state equal to
+"0". Note that we use ``ord("0")`` to get the ASCII code for "0" (48), and create
+10 copies of this by adding it to an array of zeros.
+
+Mutations can be handled similarly::
+
+    >>> t_m = msprime.MutationTable()
+    >>> site = np.arange(m, dtype=np.int32)
+    >>> d = ord("1") + np.zeros(m, dtype=np.int8)
+    >>> off = np.arange(m + 1, dtype=np.uint32)
+    >>> node = np.zeros(m, dtype=np.int32)
+    >>> t_m.set_columns(site=site, node=node, derived_state=d, derived_state_offset=off)
+    >>> print(t_m)
+    id      site    node    derived_state   parent  metadata
+    0       0       0       1       -1
+    1       1       0       1       -1
+    2       2       0       1       -1
+    3       3       0       1       -1
+    4       4       0       1       -1
+    5       5       0       1       -1
+    6       6       0       1       -1
+    7       7       0       1       -1
+    8       8       0       1       -1
+    9       9       0       1       -1
+    >>>
+
+
+.. _sec_tables_api_binary_columns:
 
 ++++++++++++++
 Binary columns
 ++++++++++++++
 
-Columns storing binary data are handled in a very similar manner to
-:ref:`sec-tables-api-text-columns`. The difference between the two is
+Columns storing binary data take the same approach as
+:ref:`sec-tables-api-text-columns` to encoding
+:ref:`variable length data <sec-encoding-ragged-columns>`.
+The difference between the two is
 only raw :class:`bytes` values are accepted: no character encoding or
 decoding is done on the data. Consider the following example::
 
