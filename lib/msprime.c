@@ -150,11 +150,11 @@ msp_strerror(int err)
             ret = "All edges for a given parent must be contiguous";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_CHILD:
-            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+            ret = "Edges must be listed in (time[parent], child, left) order;"
                 " child order violated";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_LEFT:
-            ret = "Edges must be listed in (time[parent], parent, child, left) order;"
+            ret = "Edges must be listed in (time[parent], child, left) order;"
                 " left order violated";
             break;
         case MSP_ERR_NULL_PARENT:
