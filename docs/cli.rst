@@ -1,28 +1,28 @@
-.. _sec-cli:
+.. _sec_cli:
 
 ======================
 Command line interface
 ======================
 
-Two command-line applications are provided with ``msprime``: :ref:`sec-msp` and
-:ref:`sec-mspms`. The :command:`msp` program is an experimental interface for
+Two command_line applications are provided with ``msprime``: :ref:`sec_msp` and
+:ref:`sec_mspms`. The :command:`msp` program is an experimental interface for
 interacting with the library, and is a POSIX compliant command line
 interface. The :command:`mspms` program is a fully-:command:`ms` compatible
 interface. This is useful for those who wish to get started quickly with using
 the library, and also as a means of plugging ``msprime`` into existing work
 flows. However, there is a substantial overhead involved in translating data
 from ``msprime``'s native history file into legacy formats, and so new code
-should use the :ref:`Python API <sec-api>` where possible.
+should use the :ref:`Python API <sec_api>` where possible.
 
-.. _sec-msp:
+.. _sec_msp:
 
 ***
 msp
 ***
 
 The ``msp`` program provides a convenient interface to the :ref:`msprime API
-<sec-api>`. It is based on subcommands that either generate or consume a
-:ref:`history file <sec-hdf5-file-format>`. The ``simulate`` subcommand runs a
+<sec_api>`. It is based on subcommands that either generate or consume a
+:ref:`history file <sec_hdf5_file_format>`. The ``simulate`` subcommand runs a
 simulation storing the results in a file. The other commands are concerned with
 converting this file into other formats.
 
@@ -54,7 +54,7 @@ to the file provided as an argument.
 
 
 
-.. _sec-msp-upgrade:
+.. _sec_msp_upgrade:
 
 +++++++++++
 msp upgrade
@@ -105,7 +105,7 @@ sequence in newick format.
 .. todo::
     Document the nodes, edges, sites and mutations commands.
 
-.. _sec-mspms:
+.. _sec_mspms:
 
 *****
 mspms
@@ -116,7 +116,7 @@ command line interface to the ``msprime`` library. This interface should
 be useful for legacy applications, where it can be used as a drop-in
 replacement for :command:`ms`. This interface is not recommended for new applications,
 particularly if the simulated trees are required as part of the output
-as Newick is very inefficient. The :ref:`Python API <sec-api>` is the recommended interface,
+as Newick is very inefficient. The :ref:`Python API <sec_api>` is the recommended interface,
 providing direct access to the structures used within ``msprime``.
 
 

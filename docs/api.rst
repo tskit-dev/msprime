@@ -1,11 +1,11 @@
-.. _sec-api:
+.. _sec_api:
 
 =================
 API Documentation
 =================
 
 This is the API documentation for ``msprime``, and provides detailed information
-on the Python programming interface. See the :ref:`sec-tutorial` for an
+on the Python programming interface. See the :ref:`sec_tutorial` for an
 introduction to using this API to run simulations and analyse the results.
 
 ****************
@@ -181,11 +181,11 @@ Loading data
 
 There are several methods for loading data into the msprime API. The simplest
 and most convenient is the use the :func:`msprime.load` function to load
-a :ref:`HDF ancestry file <sec-hdf5-file-format>`. For small scale data
+a :ref:`HDF ancestry file <sec_hdf5_file_format>`. For small scale data
 and debugging, it is often convenient to use the :func:`msprime.load_text`
-to read data in the :ref:`text file format <sec-text-file-format>`.
+to read data in the :ref:`text file format <sec_text_file_format>`.
 The :func:`msprime.load_tables` function efficiently loads large volumes
-of data using the :ref:`Tables API <sec-tables-api>`.
+of data using the :ref:`Tables API <sec_tables_api>`.
 
 
 .. autofunction:: msprime.load
@@ -219,14 +219,14 @@ population genetics statistics from a given :class:`.TreeSequence`.
     :members:
 
 
-.. _sec-tables-api:
+.. _sec_tables_api:
 
 ***********
 Tables API
 ***********
 
-The :ref:`tables API <sec-binary-interchange>` provides an efficient way of working
-with and interchanging :ref:`tree sequence data <sec-data-model>`. Each table
+The :ref:`tables API <sec_binary_interchange>` provides an efficient way of working
+with and interchanging :ref:`tree sequence data <sec_data_model>`. Each table
 class (e.g, :class:`.NodeTable`, :class:`.EdgeTable`) has a specific set of
 columns with fixed types, and a set of methods for setting and getting the data
 in these columns. The number of rows in the table ``t`` is given by ``len(t)``.
@@ -271,7 +271,7 @@ computations using the :mod:`multiprocessing` module). ::
     1       1.00000000      2.00000000      9       11
 
 However, pickling will not be as efficient as storing tables
-in the native :ref:`HDF5 format <sec-hdf5-file-format>`.
+in the native :ref:`HDF5 format <sec_hdf5_file_format>`.
 
 Tables support the equality operator ``==`` based on the data
 held in the columns::
@@ -292,13 +292,13 @@ held in the columns::
 
 
 
-.. _sec-tables-api-text-columns:
+.. _sec_tables_api_text_columns:
 
 ++++++++++++
 Text columns
 ++++++++++++
 
-As described in the :ref:`sec-encoding-ragged-columns`, working with
+As described in the :ref:`sec_encoding_ragged_columns`, working with
 variable length columns is somewhat more involved. Columns
 encoding text data store the **encoded bytes** of the flattened
 strings, and the offsets into this column in two separate
@@ -415,8 +415,8 @@ Binary columns
 ++++++++++++++
 
 Columns storing binary data take the same approach as
-:ref:`sec-tables-api-text-columns` to encoding
-:ref:`variable length data <sec-encoding-ragged-columns>`.
+:ref:`sec_tables_api_text_columns` to encoding
+:ref:`variable length data <sec_encoding_ragged_columns>`.
 The difference between the two is
 only raw :class:`bytes` values are accepted: no character encoding or
 decoding is done on the data. Consider the following example::
@@ -444,7 +444,7 @@ decoding is done on the data. Consider the following example::
 
 
 Here we add two rows to a :class:`.NodeTable`, with different
-:ref:`metadata <sec-metadata-definition>`. The first row contains a simple
+:ref:`metadata <sec_metadata_definition>`. The first row contains a simple
 byte string, and the second contains a Python dictionary serialised using
 :mod:`pickle`. We then show several different (and seemingly incompatible!)
 different views on the same data.
@@ -459,11 +459,11 @@ When we print the table, however, we see some data which is seemingly
 unrelated to the original contents. This is because the binary data is
 `base64 encoded <https://en.wikipedia.org/wiki/Base64>`_ to ensure
 that it is print-safe (and doesn't break your terminal). (See the
-:ref:`sec-metadata-definition` section for more information on the
+:ref:`sec_metadata_definition` section for more information on the
 use of base64 encoding.).
 
 Finally, when we print the ``metadata`` column, we see the raw byte values
-encoded as signed integers. As for :ref:`sec-tables-api-text-columns`,
+encoded as signed integers. As for :ref:`sec_tables_api_text_columns`,
 the ``metadata_offset`` column encodes the offsets into this array. So, we
 see that the metadata value is 9 bytes long and the second is 24.
 

@@ -1,4 +1,4 @@
-.. _sec-interchange:
+.. _sec_interchange:
 
 #########################
 Tree sequence interchange
@@ -19,7 +19,7 @@ we describe the HDF5-based file format using by msprime to efficiently
 store tree sequences in the `HDF5 file format`_ section.
 
 
-.. _sec-data-model:
+.. _sec_data_model:
 
 **********
 Data model
@@ -47,7 +47,7 @@ sample
     Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
-    genome. (See :ref:`sec-node-table-definition` for information on how the sample
+    genome. (See :ref:`sec_node_table_definition` for information on how the sample
     status a node is encoded in the ``flags`` column.)
 
 edge
@@ -101,7 +101,7 @@ Table definitions
 =================
 
 
-.. _sec-node-table-definition:
+.. _sec_node_table_definition:
 
 Node Table
 ----------
@@ -118,7 +118,7 @@ Column              Type                Description
 flags               uint32              Bitwise flags.
 time                double              Birth time of node
 population          int32               Birth population of node.
-metadata            binary              Node :ref:`sec-metadata-definition`
+metadata            binary              Node :ref:`sec_metadata_definition`
 ================    ==============      ===========
 
 The ``time`` column records the birth time of the individual in question,
@@ -134,14 +134,14 @@ a particular node as a sample means, for example, that the mutational state
 of the node will be included in the genotypes produced by
 :meth:``TreeSequence.variants``.
 
-For convenience, the :ref:`text format <sec-text-file-format>` for nodes
+For convenience, the :ref:`text format <sec_text_file_format>` for nodes
 decomposes the ``flags`` value into it's separate values. Thus, in the
 text format we have a column for ``is_sample``, which corresponds to the
 the ``flags`` column in the underlying table. As more flags values are
 defined, these will be added to the text file format.
 
 The ``metadata`` column provides a location for client code to store
-information about each node. See the :ref:`sec-metadata-definition` section for
+information about each node. See the :ref:`sec_metadata_definition` section for
 more details on how metadata columns should be used.
 
 .. note::
@@ -152,7 +152,7 @@ more details on how metadata columns should be used.
     not necessary for the core tree sequence algorithms.
 
 
-.. _sec-edge-table-definition:
+.. _sec_edge_table_definition:
 
 Edge Table
 ----------
@@ -174,10 +174,10 @@ Each row in an edge table describes the half-open genomic interval
 affected ``[left, right)``, the ``parent`` and the ``child`` on that interval.
 The ``left`` and ``right`` columns are defined using double precision
 floating point values for flexibility. The ``parent`` and ``child``
-columns specify integer IDs in the associated :ref:`sec-node-table-definition`.
+columns specify integer IDs in the associated :ref:`sec_node_table_definition`.
 
 
-.. _sec-site-table-definition:
+.. _sec_site_table_definition:
 
 Site Table
 ----------
@@ -192,7 +192,7 @@ Column              Type                Description
 ================    ==============      ===========
 position            double              Position of site in genome coordinates.
 ancestral_state     text                The state at the root of the tree.
-metadata            binary              Site :ref:`sec-metadata-definition`.
+metadata            binary              Site :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
 The ``position`` column is a floating point value defining the location
@@ -203,11 +203,11 @@ of the tree, thus defining the state that nodes inherit (unless mutations
 occur). The column stores text character data of arbitrary length.
 
 The ``metadata`` column provides a location for client code to store
-information about each site. See the :ref:`sec-metadata-definition` section for
+information about each site. See the :ref:`sec_metadata_definition` section for
 more details on how metadata columns should be used.
 
 
-.. _sec-mutation-table-definition:
+.. _sec_mutation_table_definition:
 
 Mutation Table
 --------------
@@ -219,11 +219,11 @@ site                int32               The ID of the site the mutation occurs a
 node                int32               The node this mutation occurs at.
 parent              int32               The ID of the parent mutation.
 derived_state       char                The mutational state at the defined node.
-metadata            char                Mutation :ref:`sec-metadata-definition`.
+metadata            char                Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
 
-.. _sec-migration-table-definition:
+.. _sec_migration_table_definition:
 
 Migration Table
 ---------------
@@ -267,7 +267,7 @@ time                double              Time of migration event.
 
 
 
-.. _sec-provenance-table-definition:
+.. _sec_provenance_table_definition:
 
 Provenance Table
 ----------------
@@ -280,7 +280,7 @@ record              char                Provenance record.
 ================    ==============      ===========
 
 
-.. _sec-metadata-definition:
+.. _sec_metadata_definition:
 
 Metadata
 ========
@@ -300,7 +300,7 @@ Arbitrary binary data can be stored in ``metadata`` columns, and the
 ``msprime`` library makes no attempt to interpret this information. How the
 information held in this field is encoded is entirely the choice of client code.
 
-To ensure that metadata can be safely interchanged using the :ref:`sec-text-file-format`,
+To ensure that metadata can be safely interchanged using the :ref:`sec_text_file_format`,
 each row is `base 64 encoded <https://en.wikipedia.org/wiki/Base64>`_. Thus,
 binary information can be safely printed and exchanged, but may not be
 human readable.
@@ -312,7 +312,7 @@ human readable.
     is self-describing.
 
 
-.. _sec-valid-tree-sequence-requirements:
+.. _sec_valid_tree_sequence_requirements:
 
 Valid tree sequence requirements
 ================================
@@ -320,7 +320,7 @@ Valid tree sequence requirements
 **Explain and list the requirements for a set of tables to form a valid tree
 sequence**.
 
-.. _sec-structural-requirements:
+.. _sec_structural_requirements:
 
 Structural requirements
 -----------------------
@@ -339,7 +339,7 @@ and for algorithmic reasons:
 4. Node times must be strictly greater than zero.
 
 
-.. _sec-ordering-requirements:
+.. _sec_ordering_requirements:
 
 Ordering requirements
 ---------------------
@@ -369,7 +369,7 @@ To allow for efficent algorithms, it is required that
 8. Sites are sorted by increasing position,
 9. and mutations are sorted by site.
 
-.. _sec-text-file-format:
+.. _sec_text_file_format:
 
 *****************
 Text file formats
@@ -391,7 +391,7 @@ ignored (IDs are always determined by the position of the row in a table).
     with (say) 4 nodes and two trees, and include a picture. This
     example can also be used in the binary interchange section also.
 
-.. _sec-node-text-format:
+.. _sec_node_text_format:
 
 Node text format
 ================
@@ -399,7 +399,7 @@ Node text format
 The node text format must contain the columns ``is_sample`` and
 ``time``. Optionally, there may also be a ``population`` and
 ``metadata`` columns. See the :ref:`node table definitions
-<sec-node-table-definition>` for details on these columns.
+<sec_node_table_definition>` for details on these columns.
 
 Note that we do not have a ``flags`` column in the text file format, but
 instead use ``is_sample`` (which may be 0 or 1). Currently, ``IS_SAMPLE`` is
@@ -420,15 +420,15 @@ An example node table::
     0           0.253   0
 
 
-.. _sec-edge-text-format:
+.. _sec_edge_text_format:
 
 Edge text format
 ================
 
 The edge text format must contain the columns ``left``,
 ``right``, ``parent`` and ``child``.
-See the :ref:`edge table definitions
-<sec-edge-table-definition>` for details on these columns.
+See the :ref:`edge table definitions <sec_edge_table_definition>`
+for details on these columns.
 
 An example edge table::
 
@@ -440,15 +440,16 @@ An example edge table::
     0       2       8       2
 
 
-.. _sec-site-text-format:
+.. _sec_site_text_format:
 
 Site text format
 ================
 
 The site text format must contain the columns ``position`` and
 ``ancestral_state``. The ``metadata`` column may also be optionally
-present. See the :ref:`site table definitions
-<sec-site-table-definition>` for details on these columns.
+present. See the
+:ref:`site table definitions <sec_site_table_definition>`
+for details on these columns.
 
 sites::
 
@@ -456,15 +457,16 @@ sites::
     0.1         A
     8.5         AT
 
-.. _sec-mutation-text-format:
+.. _sec_mutation_text_format:
 
 Mutation text format
 ====================
 
 The mutation text format must contain the columns ``site``,
 ``node`` and ``derived_state``. The ``parent`` and ``metadata`` columns
-may also be optionally present. See the :ref:`mutation table definitions
-<sec-site-table-definition>` for details on these columns.
+may also be optionally present. See the
+:ref:`mutation table definitions <sec_site_table_definition>`
+for details on these columns.
 
 mutations::
 
@@ -474,14 +476,14 @@ mutations::
     1       0       A
 
 
-.. _sec-binary-interchange:
+.. _sec_binary_interchange:
 
 ******************
 Binary interchange
 ******************
 
 In this section we describe the high-level details of the API for interchanging
-table data via numpy arrays. Please see the :ref:`sec-tables-api` for detailed
+table data via numpy arrays. Please see the :ref:`sec_tables_api` for detailed
 description of the functions and methods.
 
 The tables API is based on **columnar** storage of the data. In memory, each
@@ -498,20 +500,20 @@ efficiently.
 We use the `numpy Array API <https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.html>`_
 to allow us to define and work with numeric arrays of the required types.
 Node IDs, for example, are defined using 32 bit integers. Thus, the
-``parent`` column of an :ref:`sec-edge-table-definition`'s with ``n`` rows
+``parent`` column of an :ref:`sec_edge_table_definition`'s with ``n`` rows
 is a block ``4n`` bytes.
 
 This approach is very straightforward for columns in which each row contains
 a fixed number of values. However, dealing with columns containing a
 **variable** number of values is more problematic.
 
-.. _sec-encoding-ragged-columns:
+.. _sec_encoding_ragged_columns:
 
 Encoding ragged columns
 =======================
 
 A **ragged** column is a column in which the rows are not of a fixed length.
-For example, :ref:`sec-metadata-definition` columns contain binary of data of arbitrary
+For example, :ref:`sec_metadata_definition` columns contain binary of data of arbitrary
 length. To encode such columns in the tables API, we store **two** columns:
 one contains the flattened array of data and another stores the **offsets**
 of each row into this flattened array. Consider an example::
@@ -536,7 +538,7 @@ of each row into this flattened array. Consider an example::
     >>> s.ancestral_state[s.ancestral_state_offset[2]: s.ancestral_state_offset[3]].tobytes()
     b'TTT'
 
-In this example we create a :ref:`sec-site-table-definition` with four rows,
+In this example we create a :ref:`sec_site_table_definition` with four rows,
 and then print out this table. We can see that the second row has the
 empty string as its ``ancestral_state``, and the third row's
 ``ancestral_state`` is ``TTT``. When we print out the tables ``ancestral_state``
@@ -553,10 +555,10 @@ individual rows. For a row ``j``::
 gives us the array of bytes for the ancestral state in that row.
 
 Note that for a table with ``n`` rows, any offset column must have ``n + 1``
-values. The values in this column must be non-decreasing, and cannot exceed
+values. The values in this column must be nondecreasing, and cannot exceed
 the length of the ragged column in question.
 
-.. _sec-hdf5-file-format:
+.. _sec_hdf5_file_format:
 
 ****************
 HDF5 file format
@@ -580,7 +582,7 @@ with nodes, the ``metadata`` column in the node table will be empty, and
 the corresponding ``metadata`` dataset will not be present in the HDF5 file.
 
 Variable length data is handled in the same manner as the
-:ref:`Tables API <sec-encoding-ragged-columns>`
+:ref:`Tables API <sec_encoding_ragged_columns>`
 above: we store two arrays, one containing the flattened data, and another
 storing offsets into this array.
 
@@ -600,7 +602,7 @@ Path                Type                Dim         Description
 Nodes group
 ===========
 
-The ``/nodes`` group stores the :ref:`sec-node-table-definition`.
+The ``/nodes`` group stores the :ref:`sec_node_table_definition`.
 
 =======================     ==============
 Path                        Type
@@ -615,7 +617,7 @@ Path                        Type
 Edges group
 ===========
 
-The ``/edges`` group stores the :ref:`sec-edge-table-definition`.
+The ``/edges`` group stores the :ref:`sec_edge_table_definition`.
 
 ===================       ==============
 Path                      Type
@@ -645,7 +647,7 @@ Path                               Type
 Sites group
 ===========
 
-The sites group stores the :ref:`sec-site-table-definition`.
+The sites group stores the :ref:`sec_site_table_definition`.
 
 =============================   ==============
 Path                            Type
@@ -660,7 +662,7 @@ Path                            Type
 Mutations group
 ===============
 
-The mutations group stores the :ref:`sec-mutation-table-definition`.
+The mutations group stores the :ref:`sec_mutation_table_definition`.
 
 ===============================  ==============
 Path                             Type
@@ -677,7 +679,7 @@ Path                             Type
 Migrations group
 ================
 
-The ``/migrations`` group stores the :ref:`sec-migration-table-definition`.
+The ``/migrations`` group stores the :ref:`sec_migration_table_definition`.
 
 ===================       ==============
 Path                      Type
@@ -693,7 +695,7 @@ Path                      Type
 Provenances group
 =================
 
-The provenances group stores the :ref:`sec-provenance-table-definition`.
+The provenances group stores the :ref:`sec_provenance_table_definition`.
 
 ===============================  ==============
 Path                             Type
@@ -709,7 +711,7 @@ Legacy Versions
 ===============
 
 Tree sequence files written by older versions of msprime are not readable by
-newer versions of msprime. For major releases of msprime, :ref:`sec-msp-upgrade`
+newer versions of msprime. For major releases of msprime, :ref:`sec_msp_upgrade`
 will convert older tree sequence files to the latest version.
 
 However many changes to the tree sequence format are not part of major

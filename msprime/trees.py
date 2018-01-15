@@ -802,7 +802,7 @@ class SparseTree(object):
 def load(path):
     """
     Loads a tree sequence from the specified file path. This file must be in the
-    :ref:`HDF5 file format <sec-hdf5-file-format>` produced by the
+    :ref:`HDF5 file format <sec_hdf5_file_format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
     :param str path: The file path of the HDF5 file containing the
@@ -821,7 +821,7 @@ def load_tables(
     Loads the tree sequence data from the specified table objects, and
     returns the resulting :class:`.TreeSequence` object. These tables
     must fulfil the properties required for an input tree sequence as
-    described in the :ref:`sec-valid-tree-sequence-requirements` section.
+    described in the :ref:`sec_valid_tree_sequence_requirements` section.
 
     The ``sequence_length`` parameter determines the
     :attr:`.TreeSequence.sequence_length` of the returned tree sequence. If it
@@ -829,19 +829,19 @@ def load_tables(
     coordinate of the input edges. This parameter is useful in degenerate
     situations (such as when there are zero edges), but can usually be ignored.
 
-    :param NodeTable nodes: The :ref:`node table <sec-node-table-definition>`
+    :param NodeTable nodes: The :ref:`node table <sec_node_table_definition>`
         (required).
-    :param EdgeTable edges: The :ref:`edge table <sec-edge-table-definition>`
+    :param EdgeTable edges: The :ref:`edge table <sec_edge_table_definition>`
         (required).
     :param MigrationTable migrations: The :ref:`migration table
-        <sec-migration-table-definition>` (optional).
-    :param SiteTable sites: The :ref:`site table <sec-site-table-definition>`
+        <sec_migration_table_definition>` (optional).
+    :param SiteTable sites: The :ref:`site table <sec_site_table_definition>`
         (optional; but if supplied, ``mutations`` must also be specified).
     :param MutationTable mutations: The :ref:`mutation table
-        <sec-mutation-table-definition>` (optional; but if supplied, ``sites``
+        <sec_mutation_table_definition>` (optional; but if supplied, ``sites``
         must also be specified).
     :param ProvenanceTable provenances: The :ref:`provenance table
-        <sec-provenance-table-definition>` (optional).
+        <sec_provenance_table_definition>` (optional).
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
     :return: A :class:`.TreeSequence` consistent with the specified tables.
@@ -864,9 +864,9 @@ def parse_nodes(source, strict=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a node table and returns the corresponding :class:`NodeTable`
-    instance. See the :ref:`node text format <sec-node-text-format>` section
+    instance. See the :ref:`node text format <sec_node_text_format>` section
     for the details of the required format and the
-    :ref:`node table definition <sec-node-table-definition>` section for the
+    :ref:`node table definition <sec_node_table_definition>` section for the
     required properties of the contents.
 
     See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
@@ -916,9 +916,9 @@ def parse_edges(source, strict=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a edge table and returns the corresponding :class:`EdgeTable`
-    instance. See the :ref:`edge text format <sec-edge-text-format>` section
+    instance. See the :ref:`edge text format <sec_edge_text_format>` section
     for the details of the required format and the
-    :ref:`edge table definition <sec-edge-table-definition>` section for the
+    :ref:`edge table definition <sec_edge_table_definition>` section for the
     required properties of the contents.
 
     See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
@@ -953,9 +953,9 @@ def parse_sites(source, strict=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a site table and returns the corresponding :class:`SiteTable`
-    instance. See the :ref:`site text format <sec-site-text-format>` section
+    instance. See the :ref:`site text format <sec_site_text_format>` section
     for the details of the required format and the
-    :ref:`site table definition <sec-site-table-definition>` section for the
+    :ref:`site table definition <sec_site_table_definition>` section for the
     required properties of the contents.
 
     See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
@@ -993,9 +993,9 @@ def parse_mutations(source, strict=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a mutation table and returns the corresponding :class:`MutationTable`
-    instance. See the :ref:`mutation text format <sec-mutation-text-format>` section
+    instance. See the :ref:`mutation text format <sec_mutation_text_format>` section
     for the details of the required format and the
-    :ref:`mutation table definition <sec-mutation-table-definition>` section for the
+    :ref:`mutation table definition <sec_mutation_table_definition>` section for the
     required properties of the contents.
 
     See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
@@ -1044,10 +1044,10 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
     """
     Parses the tree sequence data from the specified file-like objects, and
     returns the resulting :class:`.TreeSequence` object. The format
-    for these files is documented in the :ref:`sec-text-file-format` section,
+    for these files is documented in the :ref:`sec_text_file_format` section,
     and is produced by the :meth:`.TreeSequence.dump_text` method. Further
     properties required for an input tree sequence are described in the
-    :ref:`sec-valid-tree-sequence-requirements` section. This method is intended as a
+    :ref:`sec_valid_tree_sequence_requirements` section. This method is intended as a
     convenient interface for importing external data into msprime; the HDF5
     based file format using by :meth:`msprime.load` is many times more
     efficient than this text format.
@@ -1075,7 +1075,7 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
 
     After parsing the tables, :func:`sort_tables` is called to ensure that
     the loaded tables satisfy the tree sequence :ref:`ordering requirements
-    <sec-ordering-requirements>`. Note that this may result in the IDs of various
+    <sec_ordering_requirements>`. Note that this may result in the IDs of various
     entities changing from their positions in the input file.
 
     :param stream nodes: The file-like object containing text describing a

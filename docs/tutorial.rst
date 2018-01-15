@@ -1,12 +1,12 @@
-.. _sec-tutorial:
+.. _sec_tutorial:
 
 ========
 Tutorial
 ========
 
 This is the tutorial for the Python interface to the ``msprime``
-library. Detailed :ref:`sec-api` is also available for this
-library. An :program:`ms`-compatible :ref:`command line interface <sec-cli>`
+library. Detailed :ref:`sec_api` is also available for this
+library. An :program:`ms`_compatible :ref:`command line interface <sec_cli>`
 is also available if you wish to use ``msprime`` directly within
 an existing work flow.
 
@@ -113,7 +113,7 @@ The ``length`` parameter specifies the length of the simulated sequence
 in bases, and may be a floating point number. If ``length`` is not
 supplied, it is assumed to be 1. The ``recombination_rate``
 parameter specifies the rate of crossing over per base per generation,
-and is zero by default. See the :ref:`sec-api` for a discussion of the precise
+and is zero by default. See the :ref:`sec_api` for a discussion of the precise
 recombination model used.
 
 Here, we simulate the trees across over a 10kb region with a recombination
@@ -732,7 +732,7 @@ used here.)
    :width: 800px
    :alt: An example LD matrix plot.
 
-.. _sec-tutorial-threads:
+.. _sec_tutorial_threads:
 
 ********************
 Working with threads

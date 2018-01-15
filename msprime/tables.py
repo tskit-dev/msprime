@@ -87,9 +87,9 @@ ProvenanceTableRow = collections.namedtuple(
 class NodeTable(_msprime.NodeTable):
     """
     A table defining the nodes in a tree sequence. See the
-    :ref:`definitions <sec-node-table-definition>` for details on the columns
+    :ref:`definitions <sec_node_table_definition>` for details on the columns
     in this table and the
-    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
     for the properties needed for a node table to be a part of a valid tree sequence.
 
     :warning: The numpy arrays returned by table attribute accesses are **copies**
@@ -196,7 +196,7 @@ class NodeTable(_msprime.NodeTable):
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes the table will contain. The
         ``metadata`` and ``metadata_offset`` must be supplied together, and
-        meet the requirements for :ref:`sec-encoding-ragged-columns`.
+        meet the requirements for :ref:`sec_encoding_ragged_columns`.
         See :ref:`sec_tables_api_binary_columns`
 
         :param flags: The bitwise flags for each node. Required.
@@ -229,7 +229,7 @@ class NodeTable(_msprime.NodeTable):
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes that will be added to the table. The
         ``metadata`` and ``metadata_offset`` must be supplied together, and
-        meet the requirements for :ref:`sec-encoding-ragged-columns`.
+        meet the requirements for :ref:`sec_encoding_ragged_columns`.
 
         :param flags: The bitwise flags for each node. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
@@ -268,9 +268,9 @@ def _pickle_node_table(table):
 class EdgeTable(_msprime.EdgeTable):
     """
     A table defining the edges in a tree sequence. See the
-    :ref:`definitions <sec-edge-table-definition>` for details on the columns
+    :ref:`definitions <sec_edge_table_definition>` for details on the columns
     in this table and the
-    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
     for the properties needed for an edge table to be a part of a valid tree sequence.
 
     :warning: The numpy arrays returned by table attribute accesses are **copies**
@@ -413,9 +413,9 @@ def _edge_table_pickle(table):
 class MigrationTable(_msprime.MigrationTable):
     """
     A table defining the migrations in a tree sequence. See the
-    :ref:`definitions <sec-migration-table-definition>` for details on the columns
+    :ref:`definitions <sec_migration_table_definition>` for details on the columns
     in this table and the
-    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
     for the properties needed for a migration table to be a part of a valid tree
     sequence.
 
@@ -582,9 +582,9 @@ def _migration_table_pickle(table):
 class SiteTable(_msprime.SiteTable):
     """
     A table defining the sites in a tree sequence. See the
-    :ref:`definitions <sec-site-table-definition>` for details on the columns
+    :ref:`definitions <sec_site_table_definition>` for details on the columns
     in this table and the
-    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
     for the properties needed for a site table to be a part of a valid tree
     sequence.
 
@@ -1010,7 +1010,7 @@ def sort_tables(
         provenances=None, edge_start=0):
     """
     Sorts the given tables **in place**, ensuring that all tree
-    sequence :ref:`ordering requirements <sec-ordering-requirements>` are
+    sequence :ref:`ordering requirements <sec_ordering_requirements>` are
     met.
 
     If the ``edge_start`` parameter is provided, this specifies the index
