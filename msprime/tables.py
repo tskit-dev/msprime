@@ -195,9 +195,9 @@ class NodeTable(_msprime.NodeTable):
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes the table will contain. The
-        ``metadata`` and ``metadata_offset`` must be supplied together, and
+        ``metadata`` and ``metadata_offset`` parameters must be supplied together, and
         meet the requirements for :ref:`sec_encoding_ragged_columns`.
-        See :ref:`sec_tables_api_binary_columns`
+        See :ref:`sec_tables_api_binary_columns` for more information.
 
         :param flags: The bitwise flags for each node. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
@@ -228,8 +228,9 @@ class NodeTable(_msprime.NodeTable):
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes that will be added to the table. The
-        ``metadata`` and ``metadata_offset`` must be supplied together, and
+        ``metadata`` and ``metadata_offset`` parameters must be supplied together, and
         meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        See :ref:`sec_tables_api_binary_columns` for more information.
 
         :param flags: The bitwise flags for each node. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
@@ -597,13 +598,16 @@ class SiteTable(_msprime.SiteTable):
     :ivar position: The array of site position coordinates.
     :vartype position: numpy.ndarray, dtype=np.float64
     :ivar ancestral_state: The flattened array of ancestral state strings.
+        See :ref:`sec_tables_api_text_columns` for more details.
     :vartype ancestral_state: numpy.ndarray, dtype=np.int8
     :ivar ancestral_state_offset: The offsets of rows in the ancestral_state
-        array.
+        array. See :ref:`sec_tables_api_text_columns` for more details.
     :vartype ancestral_state_offset: numpy.ndarray, dtype=np.uint32
-    :ivar metadata: The flattened array of metadata binary byte strings.
+    :ivar metadata: The flattened array of binary metadata values. See
+        :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata: numpy.ndarray, dtype=np.int8
-    :ivar metadata_offset: The offsets of rows in the metadata array.
+    :ivar metadata_offset: The array of offsets into the metadata column. See
+        :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
@@ -682,7 +686,8 @@ class SiteTable(_msprime.SiteTable):
 
         :param float position: The position of this site in genome coordinates.
         :param str ancestral_state: The state of this site at the root of the tree.
-        :param bytes metadata: The binary metadata for this site.
+        :param bytes metadata: The binary-encoded metadata for the new node. If not
+            specified or None, a zero-length byte string is stored.
         :return: The ID of the newly added site.
         :rtype: int
         """
@@ -698,9 +703,27 @@ class SiteTable(_msprime.SiteTable):
         The ``position``, ``ancestral_state`` and ``ancestral_state_offset``
         parameters are mandatory, and must be 1D numpy arrays. The length
         of the ``position`` array determines the number of rows in table.
+        The ``ancestral_state`` and ``ancestral_state_offset`` parameters must
+        be supplied together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_text_columns` for more information). The
+        ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_binary_columns` for more information).
 
         :param position: The position of each site in genome coordinates.
         :type position: numpy.ndarray, dtype=np.float64
+        :param ancestral_state: The flattened ancestral_state array. Required.
+        :type ancestral_state: numpy.ndarray, dtype=np.int8
+        :param ancestral_state_offset: The offsets into the ``ancestral_state`` array.
+        :type ancestral_state_offset: numpy.ndarray, dtype=np.uint32.
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
         super(SiteTable, self).set_columns(
             position, ancestral_state=ancestral_state,
@@ -718,7 +741,27 @@ class SiteTable(_msprime.SiteTable):
         parameters are mandatory, and must be 1D numpy arrays. The length
         of the ``position`` array determines the number of additional rows
         to add the table.
+        The ``ancestral_state`` and ``ancestral_state_offset`` parameters must
+        be supplied together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_text_columns` for more information). The
+        ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_binary_columns` for more information).
 
+        :param position: The position of each site in genome coordinates.
+        :type position: numpy.ndarray, dtype=np.float64
+        :param ancestral_state: The flattened ancestral_state array. Required.
+        :type ancestral_state: numpy.ndarray, dtype=np.int8
+        :param ancestral_state_offset: The offsets into the ``ancestral_state`` array.
+        :type ancestral_state_offset: numpy.ndarray, dtype=np.uint32.
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
         super(SiteTable, self).append_columns(
             position, ancestral_state=ancestral_state,
