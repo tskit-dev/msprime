@@ -1,4 +1,4 @@
-.. _sec-introduction:
+.. _sec_introduction:
 
 ============
 Introduction
@@ -18,9 +18,9 @@ scenarios. The library is a reimplementation of Hudson's seminal
    chromosome sized regions for hundreds of thousands of samples.
 
 2. ``msprime`` is primarily designed to be used through its
-   :ref:`Python API <sec-api>` to simplify the workflow associated with
+   :ref:`Python API <sec_api>` to simplify the workflow associated with
    running and analysing simulations. (However, we do provide an
-   ``ms``-compatible :ref:`command line interface <sec-cli>` to
+   ``ms``_compatible :ref:`command line interface <sec_cli>` to
    plug in to existing workflows.) For many simulations we first
    write a script to generate the command line parameters we
    want to run, then fork shell processes to run the simulations,
@@ -31,7 +31,7 @@ scenarios. The library is a reimplementation of Hudson's seminal
 3. ``msprime`` does not use Newick trees for interchange as they
    are extremely inefficient in terms of the time required to
    generate and parse, as well as the space required to store them.
-   Instead, we use a :ref:`well-defined <sec-hdf5-file-format>` format using the
+   Instead, we use a :ref:`well_defined <sec_hdf5_file_format>` format using the
    powerful `HDF5 <https://www.hdfgroup.org/HDF5/>`_ standard. This
    format allows us to store genealogical data very concisely,
    particularly for large sample sizes.
