@@ -23,9 +23,18 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
+import json
 import random
 
+import numpy as np
+
+import msprime.provenance as provenance
 import msprime
+
+
+def add_provenance(provenance_table, method_name):
+    d = provenance.get_provenance_dict("tsutil.{}".format(method_name))
+    provenance_table.add_row(json.dumps(d))
 
 
 def subsample_sites(ts, num_sites):
@@ -46,6 +55,7 @@ def subsample_sites(ts, num_sites):
                 t.mutations.add_row(
                     site=site_id, derived_state=mutation.derived_state,
                     node=mutation.node, parent=mutation.parent)
+    add_provenance(t.provenances, "subsample_sites")
     return msprime.load_tables(**t.asdict())
 
 
@@ -58,9 +68,10 @@ def decapitate(ts, num_edges):
     t.edges.set_columns(
         left=t.edges.left[:num_edges], right=t.edges.right[:num_edges],
         parent=t.edges.parent[:num_edges], child=t.edges.child[:num_edges])
+    add_provenance(t.provenances, "decapitate")
     return msprime.load_tables(
         nodes=t.nodes, edges=t.edges, sites=t.sites, mutations=t.mutations,
-        sequence_length=ts.sequence_length)
+        provenances=t.provenances, sequence_length=ts.sequence_length)
 
 
 def insert_branch_mutations(ts, mutations_per_branch=1):
@@ -92,8 +103,35 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                             parent=parent)
                         parent = mutation[u]
     tables = ts.tables
+    add_provenance(tables.provenances, "insert_branch_mutations")
     return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances)
+
+
+def insert_multichar_mutations(ts, seed=1, max_len=10):
+    """
+    Returns a copy of the specified tree sequence with multiple chararacter
+    mutations on a randomly chosen branch in every tree.
+    """
+    rng = random.Random(seed)
+    letters = ["A", "C", "T", "G"]
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    for tree in ts.trees():
+        site = len(sites)
+        ancestral_state = rng.choice(letters) * rng.randint(0, max_len)
+        sites.add_row(position=tree.interval[0], ancestral_state=ancestral_state)
+        u = rng.choice(list(tree.nodes()))
+        derived_state = ancestral_state
+        while ancestral_state == derived_state:
+            derived_state = rng.choice(letters) * rng.randint(0, max_len)
+        mutations.add_row(site=site, node=u, derived_state=derived_state)
+    tables = ts.tables
+    add_provenance(tables.provenances, "insert_multichar_mutations")
+    return msprime.load_tables(
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances)
 
 
 def permute_nodes(ts, node_map):
@@ -110,7 +148,7 @@ def permute_nodes(ts, node_map):
     for j in range(ts.num_nodes):
         old_node = old_nodes[reverse_map[j]]
         new_nodes.add_row(
-            flags=old_node.flags, name=old_node.name,
+            flags=old_node.flags, metadata=old_node.metadata,
             population=old_node.population, time=old_node.time)
     new_edges = msprime.EdgeTable()
     for edge in ts.edges():
@@ -128,8 +166,11 @@ def permute_nodes(ts, node_map):
                 node=node_map[mutation.node])
     msprime.sort_tables(
         nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
+    provenances = ts.dump_tables().provenances
+    add_provenance(provenances, "permute_nodes")
     return msprime.load_tables(
-        nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
+        nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations,
+        provenances=provenances)
 
 
 def insert_redundant_breakpoints(ts):
@@ -140,10 +181,9 @@ def insert_redundant_breakpoints(ts):
     tables.edges.reset()
     for r in ts.edges():
         x = r.left + (r.right - r.left) / 2
-        tables.edges.add_row(
-            left=r.left, right=x, child=r.child, parent=r.parent)
-        tables.edges.add_row(
-            left=x, right=r.right, child=r.child, parent=r.parent)
+        tables.edges.add_row(left=r.left, right=x, child=r.child, parent=r.parent)
+        tables.edges.add_row(left=x, right=r.right, child=r.child, parent=r.parent)
+    add_provenance(tables.provenances, "insert_redundant_breakpoints")
     new_ts = msprime.load_tables(**tables.asdict())
     assert new_ts.num_edges == 2 * ts.num_edges
     return new_ts
@@ -173,9 +213,57 @@ def single_childify(ts):
             left=edge.left, right=edge.right, parent=edge.parent, child=u)
     msprime.sort_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+    add_provenance(tables.provenances, "insert_redundant_breakpoints")
     new_ts = msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances)
     return new_ts
+
+
+def add_random_metadata(ts, seed=1, max_length=10):
+    """
+    Returns a copy of the specified tree sequence with random metadata assigned
+    to the nodes, sites and mutations.
+    """
+    tables = ts.dump_tables()
+    np.random.seed(seed)
+
+    length = np.random.randint(0, max_length, ts.num_nodes)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    # Older versions of numpy didn't have a dtype argument for randint, so
+    # must use astype instead.
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    nodes = tables.nodes
+    nodes.set_columns(
+        flags=nodes.flags, population=nodes.population, time=nodes.time,
+        metadata_offset=offset, metadata=metadata)
+
+    length = np.random.randint(0, max_length, ts.num_sites)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    sites = tables.sites
+    sites.set_columns(
+        position=sites.position,
+        ancestral_state=sites.ancestral_state,
+        ancestral_state_offset=sites.ancestral_state_offset,
+        metadata_offset=offset, metadata=metadata)
+
+    length = np.random.randint(0, max_length, ts.num_mutations)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    mutations = tables.mutations
+    mutations.set_columns(
+        site=mutations.site,
+        node=mutations.node,
+        parent=mutations.parent,
+        derived_state=mutations.derived_state,
+        derived_state_offset=mutations.derived_state_offset,
+        metadata_offset=offset, metadata=metadata)
+    add_provenance(tables.provenances, "add_random_metadata")
+    ts = msprime.load_tables(
+        nodes=nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances, migrations=tables.migrations)
+    return ts
 
 
 def jiggle_samples(ts):
@@ -192,7 +280,9 @@ def jiggle_samples(ts):
     flags[:n // 2] = 0
     flags[oldest_parent - n // 2: oldest_parent] = 1
     nodes.set_columns(flags, nodes.time)
-    return msprime.load_tables(nodes=nodes, edges=tables.edges)
+    add_provenance(tables.provenances, "jiggle_samples")
+    return msprime.load_tables(
+        nodes=nodes, edges=tables.edges, provenances=tables.provenances)
 
 
 def generate_site_mutations(tree, position, mu, site_table, mutation_table,
@@ -249,8 +339,10 @@ def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
         generate_site_mutations(t, position, mu, sites, mutations,
                                 multiple_per_node=multiple_per_node)
     tables = ts.dump_tables()
+    add_provenance(tables.provenances, "jukes_cantor")
     new_ts = msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances)
     return new_ts
 
 

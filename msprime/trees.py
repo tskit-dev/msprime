@@ -24,6 +24,7 @@ from __future__ import print_function
 
 import collections
 import itertools
+import json
 import sys
 
 try:
@@ -35,6 +36,7 @@ except ImportError:
 
 import _msprime
 import msprime.drawing as drawing
+import msprime.provenance as provenance
 import msprime.tables as tables
 
 from _msprime import NODE_IS_SAMPLE
@@ -69,12 +71,12 @@ Migration = collections.namedtuple(
 
 Site = collections.namedtuple(
     "Site",
-    ["position", "ancestral_state", "index", "mutations"])
+    ["position", "ancestral_state", "index", "mutations", "metadata"])
 
 
 Mutation = collections.namedtuple(
     "Mutation",
-    ["site", "node", "derived_state", "parent", "id"])
+    ["site", "node", "derived_state", "parent", "id", "metadata"])
 
 
 # This is provided for backwards compatibility with the deprecated mutations()
@@ -85,15 +87,11 @@ DeprecatedMutation = collections.namedtuple(
 
 
 # This form was chosen to try to break as little of existing code as possible.
-# It seems likely that the `node` member was not used for much in this
-# iterator, so that it shouldn't break too much if we replace this with the
-# underlying site. The position and index values are retained for compatability,
-# although they are not redundant. There is a wider question about what the
-# genotypes values should be when we have non binary mutations, and whether
-# this is a viable long-term API.
+# The position and index values are retained for compatability,
+# although they are redundant.
 Variant = collections.namedtuple(
     "Variant",
-    ["position", "site", "index", "genotypes"])
+    ["position", "site", "index", "genotypes", "alleles"])
 
 
 # TODO this interface is rubbish. Should have much better printing options.
@@ -111,10 +109,12 @@ class SimpleContainer(object):
 
 class Node(SimpleContainer):
     def __init__(
-            self, time=0, population=NULL_POPULATION, name="", is_sample=False):
+            self, id_=None, time=0, population=NULL_POPULATION, metadata="",
+            is_sample=False):
+        self.id = id_
         self.time = time
         self.population = population
-        self.name = name
+        self.metadata = metadata
         self.flags = 0
         if is_sample:
             self.flags |= NODE_IS_SAMPLE
@@ -145,6 +145,13 @@ class Edgeset(SimpleContainer):
     def __repr__(self):
         return "{{left={:.3f}, right={:.3f}, parent={}, children={}}}".format(
             self.left, self.right, self.parent, self.children)
+
+
+class Provenance(SimpleContainer):
+    def __init__(self, id_=None, timestamp=None, record=None):
+        self.id = id_
+        self.timestamp = timestamp
+        self.record = record
 
 
 # TODO:
@@ -205,9 +212,9 @@ class SparseTree(object):
 
         :return: The sum of all the branch lengths in this tree.
         """
-        root = self.get_root()
+        roots = self.roots
         return sum(
-            self.get_branch_length(u) for u in self.nodes() if u != root)
+            self.get_branch_length(u) for u in self.nodes() if u not in roots)
 
     def mrca(self, u, v):
         return self.get_mrca(u, v)
@@ -545,10 +552,11 @@ class SparseTree(object):
 
     def sites(self):
         for ll_site in self._ll_sparse_tree.get_sites():
-            pos, ancestral_state, mutations, index = ll_site
+            pos, ancestral_state, mutations, index, metadata = ll_site
             yield Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations])
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
 
     def mutations(self):
         """
@@ -793,8 +801,8 @@ class SparseTree(object):
 
 def load(path):
     """
-    Loads a tree sequence from the specified file path. This
-    file must be in the HDF5 file format produced by the
+    Loads a tree sequence from the specified file path. This file must be in the
+    :ref:`HDF5 file format <sec-hdf5-file-format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
     :param str path: The file path of the HDF5 file containing the
@@ -806,32 +814,88 @@ def load(path):
     return TreeSequence.load(path)
 
 
-def load_tables(*args, **kwargs):
-    return TreeSequence.load_tables(*args, **kwargs)
+def load_tables(
+        nodes, edges, migrations=None, sites=None, mutations=None,
+        provenances=None, sequence_length=0):
+    """
+    Loads the tree sequence data from the specified table objects, and
+    returns the resulting :class:`.TreeSequence` object. These tables
+    must fulfil the properties required for an input tree sequence as
+    described in the :ref:`sec-valid-tree-sequence-requirements` section.
+
+    The ``sequence_length`` parameter determines the
+    :attr:`.TreeSequence.sequence_length` of the returned tree sequence. If it
+    is 0 or not specified, the value is taken to be the maximum right
+    coordinate of the input edges. This parameter is useful in degenerate
+    situations (such as when there are zero edges), but can usually be ignored.
+
+    :param NodeTable nodes: The :ref:`node table <sec-node-table-definition>`
+        (required).
+    :param EdgeTable edges: The :ref:`edge table <sec-edge-table-definition>`
+        (required).
+    :param MigrationTable migrations: The :ref:`migration table
+        <sec-migration-table-definition>` (optional).
+    :param SiteTable sites: The :ref:`site table <sec-site-table-definition>`
+        (optional; but if supplied, ``mutations`` must also be specified).
+    :param MutationTable mutations: The :ref:`mutation table
+        <sec-mutation-table-definition>` (optional; but if supplied, ``sites``
+        must also be specified).
+    :param ProvenanceTable provenances: The :ref:`provenance table
+        <sec-provenance-table-definition>` (optional).
+    :param float sequence_length: The sequence length of the returned tree sequence. If
+        not supplied or zero this will be inferred from the set of edges.
+    :return: A :class:`.TreeSequence` consistent with the specified tables.
+    :rtype: TreeSequence
+    """
+    # TODO update the low-level module to accept None and remove this
+    kwargs = {"nodes": nodes, "edges": edges, "sequence_length": sequence_length}
+    if migrations is not None:
+        kwargs["migrations"] = migrations
+    if sites is not None:
+        kwargs["sites"] = sites
+    if mutations is not None:
+        kwargs["mutations"] = mutations
+    if provenances is not None:
+        kwargs["provenances"] = provenances
+    return TreeSequence.load_tables(**kwargs)
 
 
-def parse_nodes(source):
+def parse_nodes(source, strict=True):
     """
-    Parse the specified file-like object and return a NodeTable instance.  The
-    object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``is_sample``, ``time``, and
-    optionally, ``population``.  Further requirements are described in
-    :class:`NodeTable`.  Note that node ``id`` is not included, but implied by
-    order in the file.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a node table and returns the corresponding :class:`NodeTable`
+    instance. See the :ref:`node text format <sec-node-text-format>` section
+    for the details of the required format and the
+    :ref:`node table definition <sec-node-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     # Read the header and find the indexes of the required fields.
     table = tables.NodeTable()
-    header = source.readline().split()
+    header = source.readline().strip("\n").split(sep)
     is_sample_index = header.index("is_sample")
     time_index = header.index("time")
     population_index = None
+    metadata_index = None
     try:
         population_index = header.index("population")
     except ValueError:
         pass
+    try:
+        metadata_index = header.index("metadata")
+    except ValueError:
+        pass
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 2:
             is_sample = int(tokens[is_sample_index])
             time = float(tokens[time_index])
             flags = 0
@@ -840,29 +904,42 @@ def parse_nodes(source):
             population = NULL_POPULATION
             if population_index is not None:
                 population = int(tokens[population_index])
-            table.add_row(flags=flags, time=time, population=population)
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tables.text_decode_metadata(tokens[metadata_index])
+            table.add_row(
+                flags=flags, time=time, population=population, metadata=metadata)
     return table
 
 
-def parse_edges(source):
+def parse_edges(source, strict=True):
     """
-    Parse the specified file-like object and return a EdgeTable instance.
-    The object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``left``, ``right``, ``parent``,
-    and ``child``. Several edges may specified at the same time using a single
-    line by making the ``child`` field a comma-separated list. Further
-    requirements are described in :class:`EdgeTable`.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a edge table and returns the corresponding :class:`EdgeTable`
+    instance. See the :ref:`edge text format <sec-edge-text-format>` section
+    for the details of the required format and the
+    :ref:`edge table definition <sec-edge-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
+    sep = None
+    if strict:
+        sep = "\t"
     table = tables.EdgeTable()
-    header = source.readline().split()
+    header = source.readline().strip("\n").split(sep)
     left_index = header.index("left")
     right_index = header.index("right")
     parent_index = header.index("parent")
     children_index = header.index("child")
     table = tables.EdgeTable()
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 4:
             left = float(tokens[left_index])
             right = float(tokens[right_index])
             parent = int(tokens[parent_index])
@@ -872,36 +949,65 @@ def parse_edges(source):
     return table
 
 
-def parse_sites(source):
+def parse_sites(source, strict=True):
     """
-    Parse the specified file-like object and return a SiteTable instance.  The
-    object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``position`` and
-    ``ancestral_state``.  Further requirements are described in
-    :class:`SiteTable`.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a site table and returns the corresponding :class:`SiteTable`
+    instance. See the :ref:`site text format <sec-site-text-format>` section
+    for the details of the required format and the
+    :ref:`site table definition <sec-site-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
-    header = source.readline().split()
+    sep = None
+    if strict:
+        sep = "\t"
+    header = source.readline().strip("\n").split(sep)
     position_index = header.index("position")
     ancestral_state_index = header.index("ancestral_state")
+    metadata_index = None
+    try:
+        metadata_index = header.index("metadata")
+    except ValueError:
+        pass
     table = tables.SiteTable()
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 2:
             position = float(tokens[position_index])
             ancestral_state = tokens[ancestral_state_index]
-            table.add_row(position=position, ancestral_state=ancestral_state)
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tables.text_decode_metadata(tokens[metadata_index])
+            table.add_row(
+                position=position, ancestral_state=ancestral_state, metadata=metadata)
     return table
 
 
-def parse_mutations(source):
+def parse_mutations(source, strict=True):
     """
-    Parse the specified file-like object and return a MutationTable instance.
-    The object must contain text with whitespace delimited columns, which are
-    labeled with headers and contain columns ``site``, ``node``, and
-    ``derived_state``. An optional ``parent`` column may also be supplied.
-    Further requirements are described in :class:`MutationTable`.
+    Parse the specified file-like object containing a whitespace delimited
+    description of a mutation table and returns the corresponding :class:`MutationTable`
+    instance. See the :ref:`mutation text format <sec-mutation-text-format>` section
+    for the details of the required format and the
+    :ref:`mutation table definition <sec-mutation-table-definition>` section for the
+    required properties of the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     """
-    header = source.readline().split()
+    sep = None
+    if strict:
+        sep = "\t"
+    header = source.readline().strip("\n").split(sep)
     site_index = header.index("site")
     node_index = header.index("node")
     derived_state_index = header.index("derived_state")
@@ -911,110 +1017,91 @@ def parse_mutations(source):
         parent_index = header.index("parent")
     except ValueError:
         pass
+    metadata_index = None
+    try:
+        metadata_index = header.index("metadata")
+    except ValueError:
+        pass
     table = tables.MutationTable()
     for line in source:
-        tokens = line.split()
-        if len(tokens) > 0:
+        tokens = line.split(sep)
+        if len(tokens) >= 3:
             site = int(tokens[site_index])
             node = int(tokens[node_index])
             derived_state = tokens[derived_state_index]
             if parent_index is not None:
                 parent = int(tokens[parent_index])
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tables.text_decode_metadata(tokens[metadata_index])
             table.add_row(
-                site=site, node=node, derived_state=derived_state, parent=parent)
+                site=site, node=node, derived_state=derived_state, parent=parent,
+                metadata=metadata)
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0):
+def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, strict=True):
     """
-    Loads a tree sequence from the specified file paths. The files input here
-    are in a simple whitespace delimited tabular format such as output by the
-    :meth:`.TreeSequence.dump_text` method.  This method is intended as a
+    Parses the tree sequence data from the specified file-like objects, and
+    returns the resulting :class:`.TreeSequence` object. The format
+    for these files is documented in the :ref:`sec-text-file-format` section,
+    and is produced by the :meth:`.TreeSequence.dump_text` method. Further
+    properties required for an input tree sequence are described in the
+    :ref:`sec-valid-tree-sequence-requirements` section. This method is intended as a
     convenient interface for importing external data into msprime; the HDF5
-    based file format using by :meth:`msprime.load` will be many times more
-    efficient that using the text based formats.
+    based file format using by :meth:`msprime.load` is many times more
+    efficient than this text format.
 
-    ``nodes`` and ``edges`` must be a file-like object containing text with
-    whitespace delimited columns,  parsable by :func:`parse_nodes` and
-    :func:`parse_edges`, respectively.  Further requirements are described
-    in :class:`NodeTable` and :class:`EdgeTable`.
+    The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
+    objects containing text with whitespace delimited columns,  parsable by
+    :func:`parse_nodes` and :func:`parse_edges`, respectively. ``sites`` and
+    ``mutations`` are optional, and must be parsable by :func:`parse_sites` and
+    :func:`parse_mutations`, respectively.
 
-    ``sites`` and ``mutations`` are optional, but if included must be similar,
-    parsable by :func:`parse_sites` and :func:`parse_mutations`, respecively.
-    Further requirements are described in :class:`SiteTable` and
-    :class:`MutationTable`.
+    The ``sequence_length`` parameter determines the
+    :attr:`.TreeSequence.sequence_length` of the returned tree sequence. If it
+    is 0 or not specified, the value is taken to be the maximum right
+    coordinate of the input edges. This parameter is useful in degenerate
+    situations (such as when there are zero edges), but can usually be ignored.
 
-    An example of a simple tree sequence for four samples with
-    three distinct trees is as follows.
+    The ``strict`` parameter controls the field delimiting algorithm that
+    is used. If ``strict`` is True (the default), we require exactly one
+    tab character separating each field. If ``strict`` is False, a more relaxed
+    whitespace delimiting algorithm is used, such that any run of whitespace
+    is regarded as a field separator. In most situations, ``strict=False``
+    is more convenient, but it can lead to error in certain situations. For
+    example, if a deletion is encoded in the mutation table this will not
+    be parseable when ``strict=False``.
 
-    nodes::
+    After parsing the tables, :func:`sort_tables` is called to ensure that
+    the loaded tables satisfy the tree sequence :ref:`ordering requirements
+    <sec-ordering-requirements>`. Note that this may result in the IDs of various
+    entities changing from their positions in the input file.
 
-        is_sample   time    population
-        1           0.0     0
-        1           0.0     0
-        1           0.0     0
-        1           0.0     0
-        0           0.071   0
-        0           0.090   0
-        0           0.170   0
-        0           0.202   0
-        0           0.253   0
-
-    edges::
-
-        left    right   node    children
-        2       10      4       2,3
-        0       2       5       1,3
-        2       10      5       1,4
-        0       7       6       0,5
-        7       10      7       0,5
-        0       2       8       2,6
-
-
-    This example is equivalent to the tree sequence illustrated in Figure 4 of
-    the `PLoS Computational Biology paper
-    <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_. Nodes are given here in
-    time order (since this is a backwards-in-time tree sequence), but they may
-    be allocated in any order. In particular, left-to-right tree sequences are
-    fully supported.
-
-    An example of a ``sites`` and ``mutations`` file for the tree sequence
-    defined in the previous example is as follows.
-
-    sites::
-
-        position    ancestral_state
-        0.1         0
-        8.5         0
-
-    mutations::
-
-        site    node    derived_state
-        0       3       1
-        1       6       1
-        1       0       0
-
-
-    :param stream nodes: The file-type object containing text describing a NodeTable.
-    :param stream edges: The file-type object containing text
-        describing a EdgeTable.
-    :param stream sites: The file-type object containing text describing a SiteTable.
-    :param stream mutations: The file-type object containing text
-        describing a MutationTable.
+    :param stream nodes: The file-like object containing text describing a
+        :class:`.NodeTable`.
+    :param stream edges: The file-like object containing text
+        describing an :class:`.EdgeTable`.
+    :param stream sites: The file-like object containing text describing a
+        :class:`.SiteTable`.
+    :param stream mutations: The file-like object containing text
+        describing a :class:`MutationTable`.
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    node_table = parse_nodes(nodes)
-    edge_table = parse_edges(edges)
+    node_table = parse_nodes(nodes, strict=strict)
+    edge_table = parse_edges(edges, strict=strict)
     site_table = tables.SiteTable()
     mutation_table = tables.MutationTable()
     if sites is not None:
-        site_table = parse_sites(sites)
+        site_table = parse_sites(sites, strict=strict)
     if mutations is not None:
-        mutation_table = parse_mutations(mutations)
+        mutation_table = parse_mutations(mutations, strict=strict)
     tables.sort_tables(
         nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
@@ -1051,13 +1138,6 @@ class TreeSequence(object):
         ts.load_tables(**kwargs)
         return TreeSequence(ts)
 
-    @property
-    def provenance(self):
-        return self.get_provenance()
-
-    def get_provenance(self):
-        return self._ll_tree_sequence.get_provenance_strings()
-
     def dump(self, path, zlib_compression=False):
         """
         Writes the tree sequence to the specified file path.
@@ -1084,7 +1164,7 @@ class TreeSequence(object):
 
     def dump_tables(
             self, nodes=None, edges=None, migrations=None, sites=None,
-            mutations=None):
+            mutations=None, provenances=None):
         """
         Copy the contents of the tables underlying the tree sequence to the
         specified objects.
@@ -1093,8 +1173,9 @@ class TreeSequence(object):
         :param EdgeTable edges: The EdgeTable to load the edges into.
         :param MigrationTable migrations: The MigrationTable to load the migrations into.
         :param SiteTable sites: The SiteTable to load the sites into.
-        :param MutationTable mutations: The NodeTable to load the mutations into.
-
+        :param MutationTable mutations: The MutationTable to load the mutations into.
+        :param ProvenanceTable provenances: The ProvenanceTable to load the provenances
+            into.
         :return: A :class:`.TableCollection` containing all tables underlying
             the tree sequence.
         :rtype: TableCollection
@@ -1111,15 +1192,18 @@ class TreeSequence(object):
             sites = tables.SiteTable()
         if mutations is None:
             mutations = tables.MutationTable()
+        if provenances is None:
+            provenances = tables.ProvenanceTable()
         self._ll_tree_sequence.dump_tables(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations)
+            mutations=mutations, provenances=provenances)
         return tables.TableCollection(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations)
+            mutations=mutations, provenances=provenances)
 
     def dump_text(
-            self, nodes=None, edges=None, sites=None, mutations=None, precision=6):
+            self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
+            precision=6):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
@@ -1129,18 +1213,25 @@ class TreeSequence(object):
         :param stream edges: The file-like object to write the EdgeTable to.
         :param stream sites: The file-like object to write the SiteTable to.
         :param stream mutations: The file-like object to write the MutationTable to.
+        :param stream provenances: The file-like object to write the ProvenanceTable to.
         :param int precision: The number of digits of precision.
         """
 
         if nodes is not None:
-            print("is_sample", "time", "population", sep="\t", file=nodes)
+            print(
+                "id", "is_sample", "time", "population", "metadata", sep="\t",
+                file=nodes)
             for node in self.nodes():
                 row = (
+                    "{id:d}\t"
                     "{is_sample:d}\t"
                     "{time:.{precision}f}\t"
-                    "{population:d}\t").format(
-                        precision=precision, is_sample=node.is_sample(), time=node.time,
-                        population=node.population)
+                    "{population:d}\t"
+                    "{metadata}").format(
+                        precision=precision, id=node.id,
+                        is_sample=node.is_sample(), time=node.time,
+                        population=node.population,
+                        metadata=tables.text_encode_metadata(node.metadata))
                 print(row, file=nodes)
 
         if edges is not None:
@@ -1156,50 +1247,46 @@ class TreeSequence(object):
                 print(row, file=edges)
 
         if sites is not None:
-            print("position", "ancestral_state", sep="\t", file=sites)
+            print("position", "ancestral_state", "metadata", sep="\t", file=sites)
             for site in self.sites():
                 row = (
                     "{position:.{precision}f}\t"
-                    "{ancestral_state}").format(
+                    "{ancestral_state}\t"
+                    "{metadata}").format(
                         precision=precision, position=site.position,
-                        ancestral_state=site.ancestral_state)
+                        ancestral_state=site.ancestral_state,
+                        metadata=tables.text_encode_metadata(site.metadata))
                 print(row, file=sites)
 
         if mutations is not None:
-            print("site", "node", "derived_state", "parent", sep="\t", file=mutations)
+            print(
+                "site", "node", "derived_state", "parent", "metadata",
+                sep="\t", file=mutations)
             for site in self.sites():
                 for mutation in site.mutations:
                     row = (
                         "{site}\t"
                         "{node}\t"
                         "{derived_state}\t"
-                        "{parent}").format(
+                        "{parent}\t"
+                        "{metadata}").format(
                             site=mutation.site, node=mutation.node,
                             derived_state=mutation.derived_state,
-                            parent=mutation.parent)
+                            parent=mutation.parent,
+                            metadata=tables.text_encode_metadata(mutation.metadata))
                     print(row, file=mutations)
 
-    def dump_samples_text(self, samples, precision=6):
-        """
-        Writes a text representation of the entries in the NodeTable
-        corresponding to samples to the specified connections.
-
-        :param stream samples: The file-like object to write the subset of the NodeTable
-            describing the samples to, with an extra column, `id`.
-        :param int precision: The number of digits of precision.
-        """
-
-        print("id", "is_sample", "time", "population", sep="\t", file=samples)
-        for node_id in self.samples():
-            node = self.node(node_id)
-            row = (
-                "{node_id:d}\t"
-                "{is_sample:d}\t"
-                "{time:.{precision}f}\t"
-                "{population:d}").format(
-                    precision=precision, is_sample=node.is_sample(), time=node.time,
-                    population=node.population, node_id=node_id)
-            print(row, file=samples)
+        if provenances is not None:
+            print("id", "timestamp", "record", sep="\t", file=provenances)
+            for provenance in self.provenances():
+                row = (
+                    "{id}\t"
+                    "{timestamp}\t"
+                    "{record}\t").format(
+                        id=provenance.id,
+                        timestamp=provenance.timestamp,
+                        record=provenance.record)
+                print(row, file=provenances)
 
     # num_samples was originally called sample_size, and so we must keep sample_size
     # around as a deprecated alias.
@@ -1225,9 +1312,6 @@ class TreeSequence(object):
 
     @property
     def sequence_length(self):
-        return self.get_sequence_length()
-
-    def get_sequence_length(self):
         """
         Returns the sequence length in this tree sequence. This defines the
         genomic scale over which tree coordinates are defined. Given a
@@ -1239,6 +1323,9 @@ class TreeSequence(object):
         :return: The length of the sequence in this tree sequence in bases.
         :rtype: float
         """
+        return self.get_sequence_length()
+
+    def get_sequence_length(self):
         return self._ll_tree_sequence.get_sequence_length()
 
     @property
@@ -1313,6 +1400,10 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_nodes()
 
+    @property
+    def num_provenances(self):
+        return self._ll_tree_sequence.get_num_provenances()
+
     # TODO deprecate
     def records(self):
         """
@@ -1350,6 +1441,10 @@ class TreeSequence(object):
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
+
+    def provenances(self):
+        for j in range(self.num_provenances):
+            yield self.provenance(j)
 
     def nodes(self):
         for j in range(self.num_nodes):
@@ -1398,12 +1493,17 @@ class TreeSequence(object):
             edges_in = [Edge(*e) for e in edge_tuples_in]
             yield interval, edges_out, edges_in
 
+    def site(self, index):
+        ll_site = self._ll_tree_sequence.get_site(index)
+        pos, ancestral_state, mutations, index, metadata = ll_site
+        return Site(
+            position=pos, ancestral_state=ancestral_state, index=index,
+            mutations=[Mutation(*mutation) for mutation in mutations],
+            metadata=metadata)
+
     def sites(self):
         for j in range(self.num_sites):
-            pos, ancestral_state, mutations, index = self._ll_tree_sequence.get_site(j)
-            yield Site(
-                position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[Mutation(*mutation) for mutation in mutations])
+            yield self.site(j)
 
     def mutations(self):
         """
@@ -1448,6 +1548,18 @@ class TreeSequence(object):
         yield 0
         for t in self.trees():
             yield t.get_interval()[1]
+
+    def first(self):
+        """
+        Returns the first tree in this :class:`.TreeSequence`. To iterate over all
+        trees in the sequence, use the :meth:`.trees` method.
+
+        Currently does not support the extra options for the :meth:`.trees` method.
+
+        :return: The first tree in this tree sequence.
+        :rtype: :class:`.SparseTree`.
+        """
+        return next(self.trees())
 
     def trees(
             self, tracked_samples=None, sample_counts=True, sample_lists=False,
@@ -1559,12 +1671,6 @@ class TreeSequence(object):
         The default behaviour is to return a numpy array, which is
         substantially more efficient.
 
-        :warning: The same numpy array is used to represent genotypes between
-            iterations, so if you wish the store the results of this
-            iterator you **must** take a copy of the array. This warning
-            does not apply when ``as_bytes`` is True, as a new bytes object
-            is allocated for each variant.
-
         :param bool as_bytes: If True, the genotype values will be returned
             as a Python bytes object. This is useful in certain situations
             (i.e., directly printing the genotypes) or when numpy is
@@ -1573,27 +1679,31 @@ class TreeSequence(object):
         :return: An iterator of all :math:`(x, u, j, g)` tuples defining
             the variants in this tree sequence.
         """
-        # TODO finalise API and documnent. See comments for the Variant type
-        # for discussion on why the present form was chosen.
-        n = self.num_samples
-        genotypes_buffer = bytearray(n)
-        iterator = _msprime.VariantGenerator(
-            self._ll_tree_sequence, genotypes_buffer, as_bytes)
-        if as_bytes:
-            for pos, ancestral_state, mutations, index in iterator:
-                site = Site(
-                    position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations])
-                g = bytes(genotypes_buffer)
-                yield Variant(position=pos, site=site, index=index, genotypes=g)
-        else:
-            check_numpy()
-            g = np.frombuffer(genotypes_buffer, "u1", n)
-            for pos, ancestral_state, mutations, index in iterator:
-                site = Site(
-                    position=pos, ancestral_state=ancestral_state, index=index,
-                    mutations=[Mutation(*mutation) for mutation in mutations])
-                yield Variant(position=pos, site=site, index=index, genotypes=g)
+        # See comments for the Variant type for discussion on why the
+        # present form was chosen.
+        check_numpy()
+        iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
+        for ll_site, genotypes, alleles in iterator:
+            pos, ancestral_state, mutations, index, metadata = ll_site
+            site = Site(
+                position=pos, ancestral_state=ancestral_state, index=index,
+                mutations=[Mutation(*mutation) for mutation in mutations],
+                metadata=metadata)
+            if as_bytes:
+                if any(len(allele) > 1 for allele in alleles):
+                    raise ValueError(
+                        "as_bytes only supported for single-letter alleles")
+                bytes_genotypes = np.empty(self.num_samples, dtype=np.uint8)
+                lookup = np.array([ord(a[0]) for a in alleles], dtype=np.uint8)
+                bytes_genotypes[:] = lookup[genotypes]
+                genotypes = bytes_genotypes.tobytes()
+            v = Variant(
+                position=pos, site=site, index=index, genotypes=genotypes,
+                alleles=alleles)
+            yield v
+
+    def genotype_matrix(self):
+        return self._ll_tree_sequence.get_genotype_matrix()
 
     def pairwise_diversity(self, samples=None):
         return self.get_pairwise_diversity(samples)
@@ -1618,10 +1728,14 @@ class TreeSequence(object):
         return self._ll_tree_sequence.get_pairwise_diversity(samples)
 
     def node(self, u):
-        flags, time, population, name = self._ll_tree_sequence.get_node(u)
+        flags, time, population, metadata = self._ll_tree_sequence.get_node(u)
         return Node(
-            time=time, population=population, name=name,
+            id_=u, time=time, population=population, metadata=metadata,
             is_sample=flags & NODE_IS_SAMPLE)
+
+    def provenance(self, id_):
+        timestamp, record = self._ll_tree_sequence.get_provenance(id_)
+        return Provenance(id_=id_, timestamp=timestamp, record=record)
 
     def time(self, u):
         return self.get_time(u)
@@ -1746,28 +1860,18 @@ class TreeSequence(object):
         t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        if map_nodes:
-            node_map = np.empty(self.num_nodes, dtype=np.int32)
-            tables.simplify_tables(
-                samples=samples, sequence_length=self.sequence_length,
-                nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations, node_map=node_map,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
-        else:
-            tables.simplify_tables(
-                samples=samples, sequence_length=self.sequence_length,
-                nodes=t.nodes, edges=t.edges,
-                sites=t.sites, mutations=t.mutations,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
+        node_map = tables.simplify_tables(
+            samples=samples, sequence_length=self.sequence_length,
+            nodes=t.nodes, edges=t.edges,
+            sites=t.sites, mutations=t.mutations,
+            filter_zero_mutation_sites=filter_zero_mutation_sites)
+        # TODO add simplify arguments here??
+        t.provenances.add_row(record=json.dumps(
+            provenance.get_provenance_dict("simplify", [])))
         new_ts = load_tables(
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
-            mutations=t.mutations, sequence_length=self.sequence_length)
-        # FIXME provenance
-        # for provenance in self.get_provenance():
-        #     new_ts.add_provenance(provenance)
-        # parameters = {"TODO": "encode subset parameters"}
-        # new_ts_provenance = get_provenance_dict("simplify", parameters)
-        # new_ts.add_provenance(json.dumps(new_ts_provenance))
+            mutations=t.mutations, provenances=t.provenances,
+            sequence_length=self.sequence_length)
 
         if map_nodes:
             return new_ts, node_map

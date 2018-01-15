@@ -142,21 +142,21 @@ class PythonSparseTree(object):
         if root is None:
             roots = self.roots
         for u in roots:
-            l = []
+            node_list = []
             if order == "preorder":
-                self._preorder_nodes(u, l)
+                self._preorder_nodes(u, node_list)
             elif order == "inorder":
-                self._inorder_nodes(u, l)
+                self._inorder_nodes(u, node_list)
             elif order == "postorder":
-                self._postorder_nodes(u, l)
+                self._postorder_nodes(u, node_list)
             elif order == "levelorder" or order == "breadthfirst":
                 # Returns nodes in their respective levels
-                # Nested list comprehension flattens l in order
-                self._levelorder_nodes(u, l, 0)
-                l = iter([i for level in l for i in level])
+                # Nested list comprehension flattens node_list in order
+                self._levelorder_nodes(u, node_list, 0)
+                node_list = iter([i for level in node_list for i in level])
             else:
                 raise ValueError("order not supported")
-            for v in l:
+            for v in node_list:
                 yield v
 
     def get_interval(self):
@@ -220,15 +220,16 @@ class PythonTreeSequence(object):
         self._sites = []
         _Site = collections.namedtuple(
             "Site",
-            ["position", "ancestral_state", "index", "mutations"])
+            ["position", "ancestral_state", "index", "mutations", "metadata"])
         _Mutation = collections.namedtuple(
             "Mutation",
-            ["site", "node", "derived_state", "parent", "id"])
+            ["site", "node", "derived_state", "parent", "id", "metadata"])
         for j in range(tree_sequence.get_num_sites()):
-            pos, ancestral_state, mutations, index = tree_sequence.get_site(j)
+            pos, ancestral_state, mutations, index, metadata = tree_sequence.get_site(j)
             self._sites.append(_Site(
                 position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[_Mutation(*mut) for mut in mutations]))
+                mutations=[_Mutation(*mut) for mut in mutations],
+                metadata=metadata))
 
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
@@ -727,7 +728,8 @@ class Simplifier(object):
             flags |= msprime.NODE_IS_SAMPLE
         self.node_id_map[input_id] = len(self.node_table)
         self.node_table.add_row(
-            flags=flags, time=node.time, population=node.population)
+            flags=flags, time=node.time, population=node.population,
+            metadata=node.metadata)
 
     def flush_edges(self):
         """
@@ -859,9 +861,11 @@ class Simplifier(object):
                             site=len(self.site_table),
                             node=self.mutation_node_map[mut.id],
                             parent=mapped_parent,
-                            derived_state=mut.derived_state)
+                            derived_state=mut.derived_state,
+                            metadata=mut.metadata)
                 self.site_table.add_row(
-                    position=site.position, ancestral_state=site.ancestral_state)
+                    position=site.position, ancestral_state=site.ancestral_state,
+                    metadata=site.metadata)
 
     def simplify(self):
         # print("START")

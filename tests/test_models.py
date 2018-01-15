@@ -115,7 +115,8 @@ class TestModelParsing(unittest.TestCase):
         simulation_models = [
             ("hudson", msprime.StandardCoalescent),
             ("smc", msprime.SmcApproxCoalescent),
-            ("smc_prime", msprime.SmcPrimeApproxCoalescent)
+            ("smc_prime", msprime.SmcPrimeApproxCoalescent),
+            ("dtwf", msprime.DiscreteTimeWrightFisher)
         ]
         for name, model in simulation_models:
             sim = msprime.simulator_factory(sample_size=10, model=name.upper())
@@ -131,6 +132,7 @@ class TestModelParsing(unittest.TestCase):
             msprime.StandardCoalescent(),
             msprime.SmcApproxCoalescent(),
             msprime.SmcPrimeApproxCoalescent(),
+            msprime.DiscreteTimeWrightFisher(),
             msprime.BetaCoalescent(),
             msprime.DiracCoalescent(),
         ]
@@ -227,6 +229,12 @@ class TestMultipleMergerModels(unittest.TestCase):
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
+
+    def test_dtwf(self):
+        model = msprime.DiscreteTimeWrightFisher()
+        ts = msprime.simulate(sample_size=10, model=model)
+        self.assertTrue(ts is not None)
+        self.verify_non_binary(ts)
 
 
 class TestUnsupportedDemographicEvents(unittest.TestCase):

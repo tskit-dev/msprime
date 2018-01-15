@@ -100,8 +100,10 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
 
     assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
-    if (! (alphabet == MSP_ALPHABET_BINARY || alphabet == MSP_ALPHABET_ASCII)) {
-        ret = MSP_ERR_BAD_ALPHABET;
+    /* TODO This is a bad interface anyway and needs to be fixed. Keep this
+     * for now to avoid breaking too much stuff */
+    if (! (alphabet == 0 || alphabet == 1)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     if (mutation_block_size == 0) {
@@ -202,7 +204,7 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     avl_tree_t positions;
     avl_node_t *avl_node;
 
-    if (self->alphabet == MSP_ALPHABET_BINARY) {
+    if (self->alphabet == 0) {
         mutation_types = binary_mutation_types;
         num_mutation_types = 1;
     } else {
@@ -265,26 +267,27 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
     infinite_sites_mutation_t *mut;
     size_t j;
 
-    ret = site_table_reset(sites);
+    ret = site_table_clear(sites);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_reset(mutations);
+    ret = mutation_table_clear(mutations);
     if (ret != 0) {
         goto out;
     }
     for (j = 0; j < self->num_mutations; j++) {
         mut = self->mutations + j;
-        ret = site_table_add_row(sites, mut->position, mut->ancestral_state, 1);
-        if (ret != 0) {
+        ret = site_table_add_row(sites, mut->position, mut->ancestral_state, 1, NULL, 0);
+        if (ret < 0) {
             goto out;
         }
         ret = mutation_table_add_row(mutations, (site_id_t) j, mut->node,
-                MSP_NULL_MUTATION, mut->derived_state, 1);
-        if (ret != 0) {
+                MSP_NULL_MUTATION, mut->derived_state, 1, NULL, 0);
+        if (ret < 0) {
             goto out;
         }
     }
+    ret = 0;
 out:
     return ret;
 }

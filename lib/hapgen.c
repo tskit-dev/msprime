@@ -25,7 +25,6 @@
 #include "object_heap.h"
 #include "msprime.h"
 
-#define HG_WORD_SIZE 64
 
 /* Ensure the tree is in a consistent state */
 static void
@@ -37,75 +36,34 @@ hapgen_check_state(hapgen_t *self)
 void
 hapgen_print_state(hapgen_t *self, FILE *out)
 {
-    size_t j, k;
+    size_t j;
 
     fprintf(out, "Hapgen state\n");
     fprintf(out, "num_samples = %d\n", (int) self->num_samples);
     fprintf(out, "num_sites = %d\n", (int) self->num_sites);
-    fprintf(out, "binary = %d\n", self->binary);
-    if (self->binary) {
-        fprintf(out, "words_per_row = %d\n", (int) self->words_per_row);
-        fprintf(out, "binary_haplotype matrix\n");
-        for (j = 0; j < self->num_samples; j++) {
-            for (k = 0; k < self->words_per_row; k++) {
-                fprintf(out, "%llu ", (unsigned long long)
-                        self->binary_haplotype_matrix[j * self->words_per_row + k]);
-            }
-            fprintf(out, "\n");
-        }
-    } else {
-        fprintf(out, "haplotype matrix\n");
-        for (j = 0; j < self->num_samples; j++) {
-            fprintf(out, "%s\n",
-                self->ascii_haplotype_matrix + (j * (self->num_sites + 1)));
-        }
+    fprintf(out, "haplotype matrix\n");
+    for (j = 0; j < self->num_samples; j++) {
+        fprintf(out, "%s\n",
+            self->haplotype_matrix + (j * (self->num_sites + 1)));
     }
     hapgen_check_state(self);
 }
 
-static inline int
-hapgen_set_bit(hapgen_t *self, size_t row, size_t column, const char *derived_state)
-{
-    int ret = 0;
-    /* get the word that column falls in */
-    size_t word = column / HG_WORD_SIZE;
-    size_t bit = column % HG_WORD_SIZE;
-    size_t index = row * self->words_per_row + word;
-    int current_value = (self->binary_haplotype_matrix[index] & (1ULL << bit)) != 0;
-    int new_state = derived_state[0] - '0';
-
-    if (current_value == new_state) {
-        ret = MSP_ERR_INCONSISTENT_MUTATIONS;
-        goto out;
-    }
-    self->binary_haplotype_matrix[index] ^= 1Ull << bit;
-out:
-    return ret;
-}
-
-static inline int
-hapgen_set_state(hapgen_t *self, size_t row, size_t column, const char *state)
-{
-    int ret = 0;
-    size_t index = row * (self->num_sites + 1) + column;
-
-    self->ascii_haplotype_matrix[index] = state[0];
-    return ret;
-}
 
 static inline int
 hapgen_update_sample(hapgen_t * self, node_id_t sample_id, site_id_t site,
         const char *derived_state)
 {
     int ret = 0;
-    node_id_t sample_index = self->sample_index_map[sample_id];
+    size_t sample_index = (size_t) self->sample_index_map[sample_id];
+    size_t index = sample_index * (self->num_sites + 1) + (size_t) site;
 
-    assert(sample_index >= 0);
-    if (self->binary) {
-        ret = hapgen_set_bit(self, (size_t) sample_index, (size_t) site, derived_state);
-    } else {
-        ret = hapgen_set_state(self, (size_t) sample_index, (size_t) site, derived_state);
+    if (self->haplotype_matrix[index] == derived_state[0]) {
+        ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+        goto out;
     }
+    self->haplotype_matrix[index] = derived_state[0];
+out:
     return ret;
 }
 
@@ -115,7 +73,7 @@ hapgen_apply_tree_site(hapgen_t *self, site_t *site)
     int ret = 0;
     node_list_t *w, *tail;
     bool not_done;
-    list_len_t j;
+    table_size_t j;
     const char *derived_state;
 
     for (j = 0; j < site->mutations_length; j++) {
@@ -149,8 +107,8 @@ static int
 hapgen_generate_all_haplotypes(hapgen_t *self)
 {
     int ret = 0;
-    list_len_t j;
-    list_len_t num_sites = 0;
+    table_size_t j;
+    table_size_t num_sites = 0;
     site_t *sites = NULL;
     sparse_tree_t *t = &self->tree;
 
@@ -188,49 +146,34 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     if (ret != 0) {
         goto out;
     }
-    self->binary = tree_sequence_get_alphabet(tree_sequence) == MSP_ALPHABET_BINARY;
     ret = sparse_tree_alloc(&self->tree, tree_sequence, MSP_SAMPLE_LISTS);
     if (ret != 0) {
         goto out;
     }
-    if (self->binary) {
-        /* set up the haplotype binary matrix */
-        /* The number of words per row is the number of mutations divided by 64 */
-        self->words_per_row = (self->num_sites / HG_WORD_SIZE) + 1;
-        self->binary_haplotype_matrix = calloc(self->words_per_row * self->num_samples,
-                sizeof(uint64_t));
-        /* We malloc an extra few bytes here to simplify the conversion algorithm */
-        self->output_haplotype = malloc(self->words_per_row * HG_WORD_SIZE + 1);
-        if (self->binary_haplotype_matrix == NULL || self->output_haplotype == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
+    self->haplotype_matrix = malloc(
+            self->num_samples * (self->num_sites + 1) * sizeof(char));
+    if (self->haplotype_matrix == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Set the NULL string ends. */
+    for (j = 0; j < self->num_samples; j++) {
+        self->haplotype_matrix[
+            (j + 1) * (self->num_sites + 1) - 1] = '\0';
+    }
+    /* For each site set the ancestral type */
+    for (k = 0; k < self->num_sites; k++) {
+        ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) k, &site);
+        if (ret != 0) {
             goto out;
         }
-    } else {
-        self->ascii_haplotype_matrix = malloc(
-                self->num_samples * (self->num_sites + 1) * sizeof(char));
-        if (self->ascii_haplotype_matrix == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
+        if (site.ancestral_state_length != 1) {
+            ret = MSP_ERR_NON_SINGLE_CHAR_MUTATION;
             goto out;
         }
-        /* Set the NULL string ends. */
         for (j = 0; j < self->num_samples; j++) {
-            self->ascii_haplotype_matrix[
-                (j + 1) * (self->num_sites + 1) - 1] = '\0';
-        }
-        /* For each site set the ancestral type */
-        for (k = 0; k < self->num_sites; k++) {
-            ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) k, &site);
-            if (ret != 0) {
-                goto out;
-            }
-            if (site.ancestral_state_length != 1) {
-                ret = MSP_ERR_NON_SINGLE_CHAR_MUTATION;
-                goto out;
-            }
-            for (j = 0; j < self->num_samples; j++) {
-                self->ascii_haplotype_matrix[j * (self->num_sites + 1) + k] =
-                    site.ancestral_state[0];
-            }
+            self->haplotype_matrix[j * (self->num_sites + 1) + k] =
+                site.ancestral_state[0];
         }
     }
     ret = hapgen_generate_all_haplotypes(self);
@@ -241,15 +184,8 @@ out:
 int
 hapgen_free(hapgen_t *self)
 {
-    if (self->binary_haplotype_matrix != NULL) {
-        free(self->binary_haplotype_matrix);
-    }
-    if (self->output_haplotype != NULL) {
-        free(self->output_haplotype);
-    }
-    if (self->ascii_haplotype_matrix != NULL) {
-        free(self->ascii_haplotype_matrix);
-    }
+    msp_safe_free(self->output_haplotype);
+    msp_safe_free(self->haplotype_matrix);
     sparse_tree_free(&self->tree);
     return 0;
 }
@@ -258,29 +194,12 @@ int
 hapgen_get_haplotype(hapgen_t *self, node_id_t sample_index, char **haplotype)
 {
     int ret = 0;
-    size_t j, k, l, word_index;
-    uint64_t word;
 
     if (sample_index >= (node_id_t) self->num_samples) {
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    if (self->binary) {
-        l = 0;
-        for (j = 0; j < self->words_per_row; j++) {
-            word_index = ((size_t) sample_index) * self->words_per_row + j;
-            word = self->binary_haplotype_matrix[word_index];
-            for (k = 0; k < HG_WORD_SIZE; k++) {
-                self->output_haplotype[l] = (word >> k) & 1ULL ? '1': '0';
-                l++;
-            }
-        }
-        self->output_haplotype[self->num_sites] = '\0';
-        *haplotype = self->output_haplotype;
-    } else {
-        *haplotype = self->ascii_haplotype_matrix
-            + ((size_t) sample_index) * (self->num_sites + 1);
-    }
+    *haplotype = self->haplotype_matrix + ((size_t) sample_index) * (self->num_sites + 1);
 out:
     return ret;
 }

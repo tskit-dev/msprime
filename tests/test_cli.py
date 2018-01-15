@@ -1231,6 +1231,30 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.history_file, history_file)
         self.assertEqual(args.precision, 9)
 
+    def test_provenances_default_values(self):
+        parser = cli.get_msp_parser()
+        cmd = "provenances"
+        history_file = "test.hdf5"
+        args = parser.parse_args([cmd, history_file])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.human, False)
+
+    def test_provenances_short_args(self):
+        parser = cli.get_msp_parser()
+        cmd = "provenances"
+        history_file = "test.hdf5"
+        args = parser.parse_args([cmd, history_file, "-H"])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.human, True)
+
+    def test_provenances_long_args(self):
+        parser = cli.get_msp_parser()
+        cmd = "provenances"
+        history_file = "test.hdf5"
+        args = parser.parse_args([cmd, history_file, "--human"])
+        self.assertEqual(args.history_file, history_file)
+        self.assertEqual(args.human, True)
+
     def test_vcf_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "vcf"
@@ -1430,6 +1454,28 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertEqual(len(stderr), 0)
         output_mutations = stdout.splitlines()
         self.verify_mutations(output_mutations, precision)
+
+    def verify_provenances(self, output_provenances):
+        with tempfile.TemporaryFile("w+") as f:
+            self._tree_sequence.dump_text(provenances=f)
+            f.seek(0)
+            output = f.read().splitlines()
+        self.assertEqual(output, output_provenances)
+
+    def test_provenances(self):
+        cmd = "provenances"
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._history_file])
+        self.assertEqual(len(stderr), 0)
+        output_provenances = stdout.splitlines()
+        self.verify_provenances(output_provenances)
+
+    def test_provenances_human(self):
+        cmd = "provenances"
+        stdout, stderr = capture_output(cli.msp_main, [cmd, "-H", self._history_file])
+        self.assertEqual(len(stderr), 0)
+        output_provenances = stdout.splitlines()
+        # TODO Check the actual output here.
+        self.assertGreater(len(output_provenances), 0)
 
     def verify_vcf(self, output_vcf):
         with tempfile.TemporaryFile("w+") as f:

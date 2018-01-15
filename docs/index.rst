@@ -20,7 +20,7 @@ Contents:
    tutorial
    api
    cli
-   file-format
+   interchange
    development
    CITATION
 

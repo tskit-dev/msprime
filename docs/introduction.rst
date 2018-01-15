@@ -31,7 +31,7 @@ scenarios. The library is a reimplementation of Hudson's seminal
 3. ``msprime`` does not use Newick trees for interchange as they
    are extremely inefficient in terms of the time required to
    generate and parse, as well as the space required to store them.
-   Instead, we use a :ref:`well-defined <sec-file-format>` format using the
+   Instead, we use a :ref:`well-defined <sec-hdf5-file-format>` format using the
    powerful `HDF5 <https://www.hdfgroup.org/HDF5/>`_ standard. This
    format allows us to store genealogical data very concisely,
    particularly for large sample sizes.

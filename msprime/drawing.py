@@ -59,30 +59,30 @@ def draw_tree(
         if height is None:
             height = 200
         td = SvgTreeDrawer(
-                tree, width=width, height=height, show_times=times,
-                show_mutation_locations=mutation_locations,
-                show_mutation_labels=mutation_labels,
-                show_internal_node_labels=internal_node_labels,
-                show_leaf_node_labels=leaf_node_labels,
-                node_label_text=node_label_text)
+            tree, width=width, height=height, show_times=times,
+            show_mutation_locations=mutation_locations,
+            show_mutation_labels=mutation_labels,
+            show_internal_node_labels=internal_node_labels,
+            show_leaf_node_labels=leaf_node_labels,
+            node_label_text=node_label_text)
     elif fmt == "ascii":
         td = AsciiTreeDrawer(
-                tree, width=width, height=height, show_times=times,
-                show_mutation_locations=mutation_locations,
-                show_mutation_labels=mutation_labels,
-                show_internal_node_labels=internal_node_labels,
-                node_label_text=node_label_text,
-                show_leaf_node_labels=leaf_node_labels)
+            tree, width=width, height=height, show_times=times,
+            show_mutation_locations=mutation_locations,
+            show_mutation_labels=mutation_labels,
+            show_internal_node_labels=internal_node_labels,
+            node_label_text=node_label_text,
+            show_leaf_node_labels=leaf_node_labels)
     elif fmt == "unicode":
         if IS_PY2:
             raise ValueError("Unicode tree drawing not supported on Python 2")
         td = UnicodeTreeDrawer(
-                tree, width=width, height=height, show_times=times,
-                show_mutation_locations=mutation_locations,
-                show_mutation_labels=mutation_labels,
-                show_internal_node_labels=internal_node_labels,
-                node_label_text=node_label_text,
-                show_leaf_node_labels=leaf_node_labels)
+            tree, width=width, height=height, show_times=times,
+            show_mutation_locations=mutation_locations,
+            show_mutation_labels=mutation_labels,
+            show_internal_node_labels=internal_node_labels,
+            node_label_text=node_label_text,
+            show_leaf_node_labels=leaf_node_labels)
     return td.draw()
 
 
