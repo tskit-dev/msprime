@@ -105,10 +105,10 @@ class NodeTable(_msprime.NodeTable):
     :ivar population: The array of population IDs.
     :vartype population: numpy.ndarray, dtype=np.int32
     :ivar metadata: The flattened array of binary metadata values. See
-        :ref:`sec-encoding-ragged-columns` for more details.
+        :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata: numpy.ndarray, dtype=np.int8
     :ivar metadata_offset: The array of offsets into the metadata column. See
-        :ref:`sec-encoding-ragged-columns` for more details.
+        :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
@@ -197,6 +197,7 @@ class NodeTable(_msprime.NodeTable):
         which is equal to the number of nodes the table will contain. The
         ``metadata`` and ``metadata_offset`` must be supplied together, and
         meet the requirements for :ref:`sec-encoding-ragged-columns`.
+        See :ref:`sec_tables_api_binary_columns`
 
         :param flags: The bitwise flags for each node. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
