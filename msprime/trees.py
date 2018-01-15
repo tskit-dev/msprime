@@ -1075,8 +1075,8 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
 
     After parsing the tables, :func:`sort_tables` is called to ensure that
     the loaded tables satisfy the tree sequence :ref:`ordering requirements
-    <sec_ordering_requirements>`. Note that this may result in the IDs of various
-    entities changing from their positions in the input file.
+    <sec_valid_tree_sequence_requirements>`. Note that this may result in the
+    IDs of various entities changing from their positions in the input file.
 
     :param stream nodes: The file-like object containing text describing a
         :class:`.NodeTable`.

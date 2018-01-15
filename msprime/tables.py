@@ -1174,8 +1174,9 @@ def sort_tables(
         provenances=None, edge_start=0):
     """
     Sorts the given tables **in place**, ensuring that all tree
-    sequence :ref:`ordering requirements <sec_ordering_requirements>` are
-    met.
+    sequence ordering requirements are met. See
+    the :ref:`sec_valid_tree_sequence_requirements` section for details on these
+    requirements.
 
     If the ``edge_start`` parameter is provided, this specifies the index
     in the edge table where sorting should start. Only rows with index
