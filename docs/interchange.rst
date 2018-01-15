@@ -89,8 +89,14 @@ Sequence length
 
 .. todo:: Define migration and provenance types.
 
-A tree sequence can be stored in a collection of six tables: Node, Edge, Site,
-Mutation, Migration, and Provenance. The first two store the genealogical
+A tree sequence can be stored in a collection of six tables:
+:ref:`Node <sec_node_table_definition>`,
+:ref:`Edge <sec_edge_table_definition>`,
+:ref:`Site <sec_site_table_definition>`,
+:ref:`Mutation <sec_mutation_table_definition>`,
+:ref:`Migration <sec_migration_table_definition>`, and
+:ref:`Provenance <sec_provenance_table_definition>`.
+The first two store the genealogical
 relationships that define the trees; the next two describe where mutations fall
 on those trees; the Migration table describes how lineages move across space;
 and the Provenance table contains information on where the data came from.
@@ -132,12 +138,15 @@ is composed of 32 bitwise boolean values. Currently, the only flag defined
 is ``IS_SAMPLE = 1``, which defines the sample status of nodes. Marking
 a particular node as a sample means, for example, that the mutational state
 of the node will be included in the genotypes produced by
-:meth:``TreeSequence.variants``.
+:meth:`.TreeSequence.variants`.
+
+See the :ref:`sec_node_requirements` section for details on the properties
+required for a valid set of nodes.
 
 For convenience, the :ref:`text format <sec_text_file_format>` for nodes
-decomposes the ``flags`` value into it's separate values. Thus, in the
+decomposes the ``flags`` value into its separate values. Thus, in the
 text format we have a column for ``is_sample``, which corresponds to the
-the ``flags`` column in the underlying table. As more flags values are
+``flags`` column in the underlying table. As more flags values are
 defined, these will be added to the text file format.
 
 The ``metadata`` column provides a location for client code to store
@@ -171,11 +180,13 @@ child               int32               Child node ID.
 ================    ==============      ===========
 
 Each row in an edge table describes the half-open genomic interval
-affected ``[left, right)``, the ``parent`` and the ``child`` on that interval.
+affected ``[left, right)``, and the ``parent`` and ``child`` on that interval.
 The ``left`` and ``right`` columns are defined using double precision
 floating point values for flexibility. The ``parent`` and ``child``
 columns specify integer IDs in the associated :ref:`sec_node_table_definition`.
 
+See the :ref:`sec_edge_requirements` section for details on the properties
+required for a valid set of edges.
 
 .. _sec_site_table_definition:
 
@@ -206,11 +217,17 @@ The ``metadata`` column provides a location for client code to store
 information about each site. See the :ref:`sec_metadata_definition` section for
 more details on how metadata columns should be used.
 
+See the :ref:`sec_site_requirements` section for details on the properties
+required for a valid set of sites.
 
 .. _sec_mutation_table_definition:
 
 Mutation Table
 --------------
+
+A **mutation** defines a change of mutational state on a tree at a particular site.
+The mutation table contains five columns, of which ``site``, ``node`` and
+``derived_state`` are mandatory.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -222,6 +239,29 @@ derived_state       char                The mutational state at the defined node
 metadata            char                Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
+The ``site`` column is an integer value defining the ID of the
+:ref:`site <sec_site_table_definition>` at which this mutation occured.
+
+The ``node`` column is an integer value defining the ID of the
+first :ref:`node <sec_node_table_definition>` in the tree to inherit this mutation.
+
+The ``derived_state`` column specifies the mutational state at the specified node,
+thus defining the state that nodes in the subtree inherit (unless further mutations
+occur). The column stores text character data of arbitrary length.
+
+The ``parent`` column is an integer value defining the ID of the
+mutation from which this mutation inherits. If there is no mutation at the
+site in question on the path back to root, then this field is set to the
+null ID (-1). (The ``parent`` column is only required in situations
+where there are multiple mutations at a given site. For
+simple infinite sites mutations, it can be ignored.)
+
+The ``metadata`` column provides a location for client code to store
+information about each site. See the :ref:`sec_metadata_definition` section for
+more details on how metadata columns should be used.
+
+See the :ref:`sec_mutation_requirements` section for details on the properties
+required for a valid set of mutations.
 
 .. _sec_migration_table_definition:
 
@@ -229,30 +269,12 @@ Migration Table
 ---------------
 
 In simulations, trees can be thought of as spread across space, and it is
-helpful for inferring demographic history to record this history.  This is
-stored using the following type.
-
-migration
-    Migrations are performed by individual ancestors, but most likely not by an
-    individual tracked as a ``node`` (as in a discrete-deme model they are
-    unlikely to be both a migrant and a most recent common ancestor).  So,
-    ``msprime`` records when a segment of ancestry has moved between
-    populations::
-
-        left    right   node    source  dest    time
-        0.0     0.3     3       0       1       2.1
-
-    This ``migration`` records that the ancestor who was alive 2.1 time units
-    in the past from which ``node`` 3 inherited the segment of genome between
-    0.0 and 0.3 migrated from population 0 to population 1.
-
-A valid ``migration``:
-
-1. Has ``time`` strictly between the time of its ``node`` and the time of any
-   ancestral node from which that node inherits on the segment ``[left,
-   right)``.
-2. Has the ``population`` of any such ancestor matching ``source``, if another
-   ``migration`` does not intervene.
+helpful for inferring demographic history to record this history.
+Migrations are performed by individual ancestors, but most likely not by an
+individual tracked as a ``node`` (as in a discrete-deme model they are
+unlikely to be both a migrant and a most recent common ancestor).  So,
+``msprime`` records when a segment of ancestry has moved between
+populations.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -266,11 +288,28 @@ time                double              Time of migration event.
 ================    ==============      ===========
 
 
+The ``left`` and ``right`` columns are floating point values defining the
+half-open segment of genome affected.
+
+
+.. todo::
+    Document the remaining fields
+
+See the :ref:`sec_migration_requirements` section for details on the properties
+required for a valid set of mutations.
+
+..     This ``migration`` records that the ancestor who was alive 2.1 time units
+..     in the past from which ``node`` 3 inherited the segment of genome between
+..     0.0 and 0.3 migrated from population 0 to population 1.
+
 
 .. _sec_provenance_table_definition:
 
 Provenance Table
 ----------------
+
+.. todo::
+    Document the provenance table.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -317,57 +356,140 @@ human readable.
 Valid tree sequence requirements
 ================================
 
-**Explain and list the requirements for a set of tables to form a valid tree
-sequence**.
-
-.. _sec_structural_requirements:
-
-Structural requirements
------------------------
-
-
-1. All birth times must be greater than or equal to zero.
-
-To disallow time travel and multiple inheritance:
-
-1. Offspring must be born after their parents (and hence, no loops).
-2. The set of intervals on which each individual is a child must be disjoint.
-
-and for algorithmic reasons:
-
-3. The leftmost endpoint of each chromosome is 0.0.
-4. Node times must be strictly greater than zero.
+Arbitrary data can be stored in tables using the classes in the
+:ref:`sec_tables_api`. However, only tables that fulfil a set of
+requirements represent a valid :class:`.TreeSequence` object, and
+can be loaded using :func:`.load_tables`. In this
+section we list these requirements, and explain their rationale.
+Violations of most of these requirements are detected when the
+user attempts to load a tree sequence via :func:`.load` or
+:func:`.load_tables`, raising an informative error message. Some
+more complex requirements may not be detectable at load-time,
+and errors may not occur until certain operations are attempted.
+These are documented below.
 
 
-.. _sec_ordering_requirements:
+.. _sec_node_requirements:
 
-Ordering requirements
+Node requirements
+-----------------
+
+Nodes are the most basic type in a tree sequence, and are not defined with
+respect to any other tables. Therefore, the requirements for nodes are
+trivial.
+
+- Node times must be non-negative.
+
+There are no requirements regarding the ordering of nodes with respect to time
+or any other field. Sorting a set of tables using :func:`.sort_tables` has
+no effect on the nodes.
+
+.. _sec_edge_requirements:
+
+Edge requirements
+-----------------
+
+Given a valid set of nodes and a sequence length :math:`L`, the simple
+requirements for each edge are:
+
+- We must have :math:`0 \leq` ``left`` :math:`<` ``right`` :math:`\leq L`;
+- ``parent`` and ``child`` must be valid node IDs;
+- ``time[parent]`` > ``time[child]``;
+- edges must be unique (i.e., no duplicate edges are allowed).
+
+The first requirement simply ensures that the interval makes sense. The
+third requirement ensures that we cannot have loops, since time is
+always increasing as we ascend the tree.
+
+Semantically, to ensure a valid tree sequence there is one further requirement:
+
+- The set of intervals on which each node is a child must be disjoint.
+
+This guarantees that we cannot have contradictory edges (i.e.,
+where a node ``a`` is a child of both ``b`` and ``c``), and ensures that
+at each point on the sequence we have a well-formed forest of trees.
+Because this is a more complex semantic requirement, it is **not** detected
+at load time. This error is detected during tree traversal, via, e.g.,
+the :meth:`.TreeSequence.trees` iterator.
+
+In the interest of algorithmic efficiency, edges must have the following
+sortedness properties:
+
+- All edges for a given parent must be contiguous;
+- Edges must be listed in nondecreasing order of ``parent`` time;
+- Within the edges for a given ``parent``, edges must be sorted
+  first by ``child`` ID and then by ``left`` coordinate.
+
+Violations of these requirements are detected at load time.
+The :func:`.sort_tables` function will ensure that these sortedness
+properties are fulfilled.
+
+.. _sec_site_requirements:
+
+Site requirements
+-----------------
+
+Given a valid set of nodes and a sequence length :math:`L`, the simple
+requirements for a valid set of sites are:
+
+- We must have :math:`0 \leq` ``position`` :math:`< L`;
+- ``position`` values must be unique.
+
+For simplicity and algorithmic efficiency, sites must also:
+
+- Be sorted in increasing order of ``position``.
+
+Violations of these requirements are detected at load time.
+The :func:`.sort_tables` function ensures that sites are sorted
+according to these criteria.
+
+.. _sec_mutation_requirements:
+
+Mutation requirements
 ---------------------
 
-Edges are ordered by
+Given a valid set of nodes, edges and sites, the
+requirements for a valid set of mutations are:
 
-- time of parent, then
-- parent node ID, then
-- child node ID, then
-- left endpoint.
+- ``site`` must refer to a valid site ID;
+- ``node`` must refer to a valid node ID;
+- ``parent`` must either be the null ID (-1) or a valid mutation ID within the
+  current table
 
-Sites are ordered by position, and Mutations are ordered by site.
+For simplicity and algorithmic efficiency, mutations must also:
 
-5. Edges must be sorted in nondecreasing time order.
-6. The set of intervals on which each individual is a parent must be disjoint.
+- be sorted by site ID;
+- when there are multiple mutations per site, parent mutations must occur
+  **before** their children (i.e. if a mutation with ID :math:`x` has
+  ``parent`` with ID :math:`y`, then we must have :math:`y < x`).
 
-A set of tables satisfying requirements 1-4 can be transformed into a completely
-valid set of tables by applying first ``sort_tables()`` (which ensures 5)
-and then ``simplify_tables()`` (which ensures 6).
+Violations of these sorting requirements are detected at load time.
+The :func:`.sort_tables` function ensures that mutationsare sorted
+according to these criteria.
 
-Note that since each node time is equal to the (birth) time of the
-corresponding parent, time is measured in clock time (not meioses).
+Mutations also have the requirement that they must result in a
+change of state. For example, if we have a site with ancestral state
+of "A" and a single mutation with derived state "A", then this
+mutation does not result in any change of state. This error is
+raised at run-time when we reconstruct sample genotypes, for example
+in the :meth:`.TreeSequence.variants` iterator.
 
+.. _sec_migration_requirements:
 
-To allow for efficent algorithms, it is required that
+Migration requirements
+----------------------
 
-8. Sites are sorted by increasing position,
-9. and mutations are sorted by site.
+.. todo::
+    Add requirements for valid migrations.
+
+.. A valid ``migration``:
+
+.. 1. Has ``time`` strictly between the time of its ``node`` and the time of any
+..    ancestral node from which that node inherits on the segment ``[left,
+..    right)``.
+.. 2. Has the ``population`` of any such ancestor matching ``source``, if another
+..    ``migration`` does not intervene.
+
 
 .. _sec_text_file_format:
 
