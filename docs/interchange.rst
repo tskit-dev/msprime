@@ -103,6 +103,8 @@ and the Provenance table contains information on where the data came from.
 In the following sections we define these components of a tree sequence in
 more detail.
 
+.. _sec_table_definitions:
+
 Table definitions
 =================
 
