@@ -490,7 +490,6 @@ Table classes
     :members:
 
 .. autoclass:: msprime.ProvenanceTable
-    :members:
 
 +++++++++++++++
 Table functions

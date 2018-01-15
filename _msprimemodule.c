@@ -2607,7 +2607,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     int parent = MSP_NULL_MUTATION;
     char *derived_state;
     Py_ssize_t derived_state_length;
-    PyObject *py_metadata = NULL;
+    PyObject *py_metadata = Py_None;
     char *metadata = NULL;
     Py_ssize_t metadata_length = 0;
     static char *kwlist[] = {"site", "node", "derived_state", "parent", "metadata", NULL};
@@ -2620,7 +2620,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    if (py_metadata != NULL) {
+    if (py_metadata != Py_None) {
         if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
             goto out;
         }
