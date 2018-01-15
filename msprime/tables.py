@@ -87,9 +87,9 @@ ProvenanceTableRow = collections.namedtuple(
 class NodeTable(_msprime.NodeTable):
     """
     A table defining the nodes in a tree sequence. See the
-    :ref:`definitions <sec-node-table-definition>` for details on the columns
+    :ref:`definitions <sec_node_table_definition>` for details on the columns
     in this table and the
-    :ref:`tree sequence requirements <sec-valid-tree-sequence-requirements>` section
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
     for the properties needed for a node table to be a part of a valid tree sequence.
 
     :warning: The numpy arrays returned by table attribute accesses are **copies**
@@ -105,10 +105,10 @@ class NodeTable(_msprime.NodeTable):
     :ivar population: The array of population IDs.
     :vartype population: numpy.ndarray, dtype=np.int32
     :ivar metadata: The flattened array of binary metadata values. See
-        :ref:`sec-encoding-ragged-columns` for more details.
+        :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata: numpy.ndarray, dtype=np.int8
     :ivar metadata_offset: The array of offsets into the metadata column. See
-        :ref:`sec-encoding-ragged-columns` for more details.
+        :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
@@ -190,13 +190,14 @@ class NodeTable(_msprime.NodeTable):
     def set_columns(
             self, flags, time, population=None, metadata=None, metadata_offset=None):
         """
-        Sets the values for each column in this NodeTable using the values in
+        Sets the values for each column in this :class:`.NodeTable` using the values in
         the specified arrays. Overwrites any data currently stored in the table.
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes the table will contain. The
-        ``metadata`` and ``metadata_offset`` must be supplied together, and
-        meet the requirements for :ref:`sec-encoding-ragged-columns`.
+        ``metadata`` and ``metadata_offset`` parameters must be supplied together, and
+        meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        See :ref:`sec_tables_api_binary_columns` for more information.
 
         :param flags: The bitwise flags for each node. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
@@ -222,13 +223,14 @@ class NodeTable(_msprime.NodeTable):
     def append_columns(
             self, flags, time, population=None, metadata=None, metadata_offset=None):
         """
-        Appends the specified arrays to the end of the columns of this table.
-        This allows many new rows to be added at once.
+        Appends the specified arrays to the end of the columns in this
+        :class:`NodeTable`. This allows many new rows to be added at once.
 
         The ``flags``, ``time`` and ``population`` arrays must all be of the same length,
         which is equal to the number of nodes that will be added to the table. The
-        ``metadata`` and ``metadata_offset`` must be supplied together, and
-        meet the requirements for :ref:`sec-encoding-ragged-columns`.
+        ``metadata`` and ``metadata_offset`` parameters must be supplied together, and
+        meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        See :ref:`sec_tables_api_binary_columns` for more information.
 
         :param flags: The bitwise flags for each node. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
@@ -266,43 +268,26 @@ def _pickle_node_table(table):
 
 class EdgeTable(_msprime.EdgeTable):
     """
-    Class for tables describing all edges in a tree sequence, of the form
+    A table defining the edges in a tree sequence. See the
+    :ref:`definitions <sec_edge_table_definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
+    for the properties needed for an edge table to be a part of a valid tree sequence.
 
-    left	right	parent	child
-    0.0     0.4     3       0
-    0.0     0.4     3       2
-    0.4     1.0     3       0
-    0.4     1.0     3       1
-    0.4     1.0     3       2
-    0.0     0.4     4       1
-    0.0     0.4     4       3
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
 
-    These describe the half-open genomic interval affected: `[left, right)`,
-    the `parent` and the `child` on that interval.
+        **NOTE:** this behaviour may change in future.
 
-    Requirements: to describe a valid tree sequence, a `EdgeTable` (and
-    corresponding `NodeTable`, to provide birth times) must satisfy:
-
-    1. any two edges that share a child must be nonoverlapping, and
-    2. the birth times of the `parent` in an edge must be strictly
-        greater than the birth times of the `child` in that edge.
-
-    Furthermore, for algorithmic requirements
-
-    4. the smallest `left` coordinate must be 0.0,
-    5. the table must be sorted so that birth time of the `parent` increases
-        with table row, and
-    6. any two edges corresponding to the same `parent` must be
-        nonoverlapping.
-
-    It is an additional requirement that the complete ancestry of each sample
-    must be specified, but this is harder to verify.
-
-    It is not required that all records corresponding to the same parent be
-    adjacent in the table.
-
-    `simplify_tables()` may be used to convert noncontradictory tables
-    into tables satisfying the full set of requirements.
+    :ivar left: The array of left coordinates.
+    :vartype left: numpy.ndarray, dtype=np.float64
+    :ivar right: The array of right coordinates.
+    :vartype right: numpy.ndarray, dtype=np.float64
+    :ivar parent: The array of parent node IDs.
+    :vartype parent: numpy.ndarray, dtype=np.int32
+    :ivar child: The array of child node IDs.
+    :vartype child: numpy.ndarray, dtype=np.int32
     """
     def __str__(self):
         left = self.left
@@ -361,6 +346,59 @@ class EdgeTable(_msprime.EdgeTable):
         # Deprecated alias for clear
         self.clear()
 
+    def add_row(self, left, right, parent, child):
+        """
+        Adds a new row to this :class:`EdgeTable` and returns the ID of the
+        corresponding edge.
+
+        :param float left: The left coordinate (inclusive).
+        :param float right: The right coordinate (exclusive).
+        :param int parent: The ID of parent node.
+        :param int child: The ID of child node.
+        :return: The ID of the newly added edge.
+        :rtype: int
+        """
+        return super(EdgeTable, self).add_row(left, right, parent, child)
+
+    def set_columns(self, left, right, parent, child):
+        """
+        Sets the values for each column in this :class:`.EdgeTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        All four parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of edges the table will contain).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param parent: The parent node IDs.
+        :type parent: numpy.ndarray, dtype=np.int32
+        :param child: The child node IDs.
+        :type child: numpy.ndarray, dtype=np.int32
+        """
+        super(EdgeTable, self).set_columns(left, right, parent, child)
+
+    def append_columns(self, left, right, parent, child):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`EdgeTable`. This allows many new rows to be added at once.
+
+        All four parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of additional edges to
+        add to the table).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param parent: The parent node IDs.
+        :type parent: numpy.ndarray, dtype=np.int32
+        :param child: The child node IDs.
+        :type child: numpy.ndarray, dtype=np.int32
+        """
+        super(EdgeTable, self).append_columns(left, right, parent, child)
+
 
 # Pickle support. See copyreg registration for this function below.
 def _edge_table_pickle(table):
@@ -374,6 +412,34 @@ def _edge_table_pickle(table):
 
 
 class MigrationTable(_msprime.MigrationTable):
+    """
+    A table defining the migrations in a tree sequence. See the
+    :ref:`definitions <sec_migration_table_definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
+    for the properties needed for a migration table to be a part of a valid tree
+    sequence.
+
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
+
+        **NOTE:** this behaviour may change in future.
+
+    :ivar left: The array of left coordinates.
+    :vartype left: numpy.ndarray, dtype=np.float64
+    :ivar right: The array of right coordinates.
+    :vartype right: numpy.ndarray, dtype=np.float64
+    :ivar node: The array of node IDs.
+    :vartype node: numpy.ndarray, dtype=np.int32
+    :ivar source: The array of source population IDs.
+    :vartype source: numpy.ndarray, dtype=np.int32
+    :ivar dest: The array of destination population IDs.
+    :vartype dest: numpy.ndarray, dtype=np.int32
+    :ivar time: The array of time values.
+    :vartype time: numpy.ndarray, dtype=np.float64
+    """
+
     def __str__(self):
         left = self.left
         right = self.right
@@ -436,6 +502,70 @@ class MigrationTable(_msprime.MigrationTable):
         # Deprecated alias for clear
         self.clear()
 
+    def add_row(self, left, right, node, source, dest, time):
+        """
+        Adds a new row to this :class:`MigrationTable` and returns the ID of the
+        corresponding migration.
+
+        :param float left: The left coordinate (inclusive).
+        :param float right: The right coordinate (exclusive).
+        :param int node: The node ID.
+        :param int source: The ID of the source population.
+        :param int dest: The ID of the destination population.
+        :param float time: The time of the migration event.
+        :return: The ID of the newly added migration.
+        :rtype: int
+        """
+        return super(MigrationTable, self).add_row(left, right, node, source, dest, time)
+
+    def set_columns(self, left, right, node, source, dest, time):
+        """
+        Sets the values for each column in this :class:`.MigrationTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        All six parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of migrations the table will contain).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param node: The node IDs.
+        :type node: numpy.ndarray, dtype=np.int32
+        :param source: The source population IDs.
+        :type source: numpy.ndarray, dtype=np.int32
+        :param dest: The destination population IDs.
+        :type dest: numpy.ndarray, dtype=np.int32
+        :param time: The time of each migration.
+        :type time: numpy.ndarray, dtype=np.int64
+        """
+        super(MigrationTable, self).set_columns(left, right, node, source, dest, time)
+
+    def append_columns(self, left, right, node, source, dest, time):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`MigrationTable`. This allows many new rows to be added at once.
+
+        All six parameters are mandatory, and must be numpy arrays of the
+        same length (which is equal to the number of additional migrations
+        to add to the table).
+
+        :param left: The left coordinates (inclusive).
+        :type left: numpy.ndarray, dtype=np.float64
+        :param right: The right coordinates (exclusive).
+        :type right: numpy.ndarray, dtype=np.float64
+        :param node: The node IDs.
+        :type node: numpy.ndarray, dtype=np.int32
+        :param source: The source population IDs.
+        :type source: numpy.ndarray, dtype=np.int32
+        :param dest: The destination population IDs.
+        :type dest: numpy.ndarray, dtype=np.int32
+        :param time: The time of each migration.
+        :type time: numpy.ndarray, dtype=np.int64
+        """
+        super(MigrationTable, self).append_columns(
+            left, right, node, source, dest, time)
+
 
 # Pickle support. See copyreg registration for this function below.
 def _migration_table_pickle(table):
@@ -452,18 +582,35 @@ def _migration_table_pickle(table):
 
 class SiteTable(_msprime.SiteTable):
     """
-    Class for tables describing all sites at which mutations have occurred in a
-    tree sequence, of the form
+    A table defining the sites in a tree sequence. See the
+    :ref:`definitions <sec_site_table_definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
+    for the properties needed for a site table to be a part of a valid tree
+    sequence.
 
-    id	position	ancestral_state
-    0	0.1     	0
-    1	0.5     	0
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
 
-    Here ``id`` is not stored directly, but is determined by the row index in
-    the table.  ``position`` is the position along the genome, and
-    ``ancestral_state`` gives the allele at the root of the tree at that
-    position.
+        **NOTE:** this behaviour may change in future.
+
+    :ivar position: The array of site position coordinates.
+    :vartype position: numpy.ndarray, dtype=np.float64
+    :ivar ancestral_state: The flattened array of ancestral state strings.
+        See :ref:`sec_tables_api_text_columns` for more details.
+    :vartype ancestral_state: numpy.ndarray, dtype=np.int8
+    :ivar ancestral_state_offset: The offsets of rows in the ancestral_state
+        array. See :ref:`sec_tables_api_text_columns` for more details.
+    :vartype ancestral_state_offset: numpy.ndarray, dtype=np.uint32
+    :ivar metadata: The flattened array of binary metadata values. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata: numpy.ndarray, dtype=np.int8
+    :ivar metadata_offset: The array of offsets into the metadata column. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
+
     def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
@@ -532,6 +679,95 @@ class SiteTable(_msprime.SiteTable):
         # Deprecated alias for clear
         self.clear()
 
+    def add_row(self, position, ancestral_state, metadata=None):
+        """
+        Adds a new row to this :class:`SiteTable` and returns the ID of the
+        corresponding site.
+
+        :param float position: The position of this site in genome coordinates.
+        :param str ancestral_state: The state of this site at the root of the tree.
+        :param bytes metadata: The binary-encoded metadata for the new node. If not
+            specified or None, a zero-length byte string is stored.
+        :return: The ID of the newly added site.
+        :rtype: int
+        """
+        return super(SiteTable, self).add_row(position, ancestral_state, metadata)
+
+    def set_columns(
+            self, position, ancestral_state, ancestral_state_offset,
+            metadata=None, metadata_offset=None):
+        """
+        Sets the values for each column in this :class:`.SiteTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        The ``position``, ``ancestral_state`` and ``ancestral_state_offset``
+        parameters are mandatory, and must be 1D numpy arrays. The length
+        of the ``position`` array determines the number of rows in table.
+        The ``ancestral_state`` and ``ancestral_state_offset`` parameters must
+        be supplied together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_text_columns` for more information). The
+        ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_binary_columns` for more information).
+
+        :param position: The position of each site in genome coordinates.
+        :type position: numpy.ndarray, dtype=np.float64
+        :param ancestral_state: The flattened ancestral_state array. Required.
+        :type ancestral_state: numpy.ndarray, dtype=np.int8
+        :param ancestral_state_offset: The offsets into the ``ancestral_state`` array.
+        :type ancestral_state_offset: numpy.ndarray, dtype=np.uint32.
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
+        super(SiteTable, self).set_columns(
+            position, ancestral_state=ancestral_state,
+            ancestral_state_offset=ancestral_state_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
+    def append_columns(
+            self, position, ancestral_state, ancestral_state_offset,
+            metadata=None, metadata_offset=None):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`SiteTable`. This allows many new rows to be added at once.
+
+        The ``position``, ``ancestral_state`` and ``ancestral_state_offset``
+        parameters are mandatory, and must be 1D numpy arrays. The length
+        of the ``position`` array determines the number of additional rows
+        to add the table.
+        The ``ancestral_state`` and ``ancestral_state_offset`` parameters must
+        be supplied together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_text_columns` for more information). The
+        ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_binary_columns` for more information).
+
+        :param position: The position of each site in genome coordinates.
+        :type position: numpy.ndarray, dtype=np.float64
+        :param ancestral_state: The flattened ancestral_state array. Required.
+        :type ancestral_state: numpy.ndarray, dtype=np.int8
+        :param ancestral_state_offset: The offsets into the ``ancestral_state`` array.
+        :type ancestral_state_offset: numpy.ndarray, dtype=np.uint32.
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
+        super(SiteTable, self).append_columns(
+            position, ancestral_state=ancestral_state,
+            ancestral_state_offset=ancestral_state_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
 
 # Pickle support. See copyreg registration for this function below.
 def _site_table_pickle(table):
@@ -547,22 +783,39 @@ def _site_table_pickle(table):
 
 class MutationTable(_msprime.MutationTable):
     """
-    Class for tables describing all mutations that have occurred in a tree
-    sequence, of the form
+    A table defining the mutations in a tree sequence. See the
+    :ref:`definitions <sec_mutation_table_definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
+    for the properties needed for a mutation table to be a part of a valid tree
+    sequence.
 
-    site	node	derived_state
-    0	4	1
-    1	3	1
-    1	2	0
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
 
-    Here ``site`` is the index in the SiteTable of the site at which the
-    mutation occurred, ``node`` is the index in the NodeTable of the node who
-    is the first node inheriting the mutation, and ``derived_state`` is the
-    allele resulting from this mutation.
+        **NOTE:** this behaviour may change in future.
 
-    It is required that mutations occurring at the same node are sorted in
-    reverse time order.
+    :ivar site: The array of site IDs.
+    :vartype site: numpy.ndarray, dtype=np.int32
+    :ivar node: The array of node IDs.
+    :vartype node: numpy.ndarray, dtype=np.int32
+    :ivar derived_state: The flattened array of derived state strings.
+        See :ref:`sec_tables_api_text_columns` for more details.
+    :vartype derived_state: numpy.ndarray, dtype=np.int8
+    :ivar derived_state_offset: The offsets of rows in the derived_state
+        array. See :ref:`sec_tables_api_text_columns` for more details.
+    :vartype derived_state_offset: numpy.ndarray, dtype=np.uint32
+    :ivar parent: The array of parent mutation IDs.
+    :vartype parent: numpy.ndarray, dtype=np.int32
+    :ivar metadata: The flattened array of binary metadata values. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata: numpy.ndarray, dtype=np.int8
+    :ivar metadata_offset: The array of offsets into the metadata column. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
+
     def __str__(self):
         site = self.site
         node = self.node
@@ -632,6 +885,109 @@ class MutationTable(_msprime.MutationTable):
         # Deprecated alias for clear
         self.clear()
 
+    def add_row(self, site, node, derived_state, parent=-1, metadata=None):
+        """
+        Adds a new row to this :class:`MutationTable` and returns the ID of the
+        corresponding mutation.
+
+        :param int site: The ID of the site that this mutation occurs at.
+        :param int node: The ID of the first node inheriting this mutation.
+        :param str derived_state: The state of the site at this mutation's node.
+        :param int parent: The ID of the parent mutation. If not specified,
+            defaults to the :attr:`NULL_MUTATION`.
+        :param bytes metadata: The binary-encoded metadata for the new node. If not
+            specified or None, a zero-length byte string is stored.
+        :return: The ID of the newly added mutation.
+        :rtype: int
+        """
+        return super(MutationTable, self).add_row(
+                site, node, derived_state, parent, metadata)
+
+    def set_columns(
+            self, site, node, derived_state, derived_state_offset,
+            parent=None, metadata=None, metadata_offset=None):
+        """
+        Sets the values for each column in this :class:`.MutationTable` using the values
+        in the specified arrays. Overwrites any data currently stored in the table.
+
+        The ``site``, ``node``, ``derived_state`` and ``derived_state_offset``
+        parameters are mandatory, and must be 1D numpy arrays. The
+        ``site`` and ``node`` (also ``parent``, if supplied) arrays
+        must be of equal length, and determine the number of rows in the table.
+        The ``derived_state`` and ``derived_state_offset`` parameters must
+        be supplied together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_text_columns` for more information). The
+        ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_binary_columns` for more information).
+
+        :param site: The ID of the site each mutation occurs at.
+        :type site: numpy.ndarray, dtype=np.int32
+        :param node: The ID of the node each mutation is associated with.
+        :type node: numpy.ndarray, dtype=np.int32
+        :param derived_state: The flattened derived_state array. Required.
+        :type derived_state: numpy.ndarray, dtype=np.int8
+        :param derived_state_offset: The offsets into the ``derived_state`` array.
+        :type derived_state_offset: numpy.ndarray, dtype=np.uint32.
+        :param parent: The ID of the parent mutation for each mutation.
+        :type parent: numpy.ndarray, dtype=np.int32
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
+        super(MutationTable, self).set_columns(
+            site=site, node=node, parent=parent,
+            derived_state=derived_state, derived_state_offset=derived_state_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
+    def append_columns(
+            self, site, node, derived_state, derived_state_offset,
+            parent=None, metadata=None, metadata_offset=None):
+        """
+        Appends the specified arrays to the end of the columns of this
+        :class:`MutationTable`. This allows many new rows to be added at once.
+
+        The ``site``, ``node``, ``derived_state`` and ``derived_state_offset``
+        parameters are mandatory, and must be 1D numpy arrays. The
+        ``site`` and ``node`` (also ``parent``, if supplied) arrays
+        must be of equal length, and determine the number of additional
+        rows to add to the table.
+        The ``derived_state`` and ``derived_state_offset`` parameters must
+        be supplied together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_text_columns` for more information). The
+        ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for
+        :ref:`sec_encoding_ragged_columns` (see
+        :ref:`sec_tables_api_binary_columns` for more information).
+
+        :param site: The ID of the site each mutation occurs at.
+        :type site: numpy.ndarray, dtype=np.int32
+        :param node: The ID of the node each mutation is associated with.
+        :type node: numpy.ndarray, dtype=np.int32
+        :param derived_state: The flattened derived_state array. Required.
+        :type derived_state: numpy.ndarray, dtype=np.int8
+        :param derived_state_offset: The offsets into the ``derived_state`` array.
+        :type derived_state_offset: numpy.ndarray, dtype=np.uint32.
+        :param parent: The ID of the parent mutation for each mutation.
+        :type parent: numpy.ndarray, dtype=np.int32
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
+        super(MutationTable, self).append_columns(
+            site=site, node=node, parent=parent,
+            derived_state=derived_state, derived_state_offset=derived_state_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
 
 # Pickle support. See copyreg registration for this function below.
 def _mutation_table_pickle(table):
@@ -649,7 +1005,8 @@ def _mutation_table_pickle(table):
 
 class ProvenanceTable(_msprime.ProvenanceTable):
     """
-    TODO Document
+    .. todo::
+        This class is provisional, and the API may change in the future.
     """
     def add_row(self, record, timestamp=None):
         """
@@ -817,8 +1174,9 @@ def sort_tables(
         provenances=None, edge_start=0):
     """
     Sorts the given tables **in place**, ensuring that all tree
-    sequence :ref:`ordering requirements <sec-ordering-requirements>` are
-    met.
+    sequence ordering requirements are met. See
+    the :ref:`sec_valid_tree_sequence_requirements` section for details on these
+    requirements.
 
     If the ``edge_start`` parameter is provided, this specifies the index
     in the edge table where sorting should start. Only rows with index
@@ -918,7 +1276,13 @@ def simplify_tables(
 def pack_bytes(data):
     """
     Packs the specified list of bytes into a flattened numpy array of 8 bit integers
-    and corresponding lengths.
+    and corresponding offsets. See :ref:`sec_encoding_ragged_columns` for details
+    of this encoding.
+
+    :param list[bytes] data: The list of bytes values to encode.
+    :return: The tuple (packed, offset) of numpy arrays representing the flattened
+        input data and offsets.
+    :rtype: numpy.array (dtype=np.int8), numpy.array (dtype=np.uint32).
     """
     n = len(data)
     offsets = np.zeros(n + 1, dtype=np.uint32)
@@ -933,7 +1297,13 @@ def pack_bytes(data):
 def unpack_bytes(packed, offset):
     """
     Unpacks a list of bytes from the specified numpy arrays of packed byte
-    data and corresponding offsets.
+    data and corresponding offsets. See :ref:`sec_encoding_ragged_columns` for details
+    of this encoding.
+
+    :param numpy.ndarray packed: The flattened array of byte values.
+    :param numpy.ndarray offset: The array of offsets into the ``packed`` array.
+    :return: The list of bytes values unpacked from the parameter arrays.
+    :rtype: list[bytes]
     """
     # This could be done a lot more efficiently...
     ret = []
@@ -946,7 +1316,17 @@ def unpack_bytes(packed, offset):
 def pack_strings(strings, encoding="utf8"):
     """
     Packs the specified list of strings into a flattened numpy array of 8 bit integers
-    and corresponding lengths.
+    and corresponding offsets using the specified text encoding.
+    See :ref:`sec_encoding_ragged_columns` for details of this encoding of
+    columns of variable length data.
+
+    :param list[str] data: The list of strings to encode.
+    :param str encoding: The text encoding to use when converting string data
+        to bytes. See the :mod:`codecs` module for information on available
+        string encodings.
+    :return: The tuple (packed, offset) of numpy arrays representing the flattened
+        input data and offsets.
+    :rtype: numpy.array (dtype=np.int8), numpy.array (dtype=np.uint32).
     """
     return pack_bytes([bytearray(s.encode(encoding)) for s in strings])
 
@@ -954,6 +1334,16 @@ def pack_strings(strings, encoding="utf8"):
 def unpack_strings(packed, offset, encoding="utf8"):
     """
     Unpacks a list of strings from the specified numpy arrays of packed byte
-    data and corresponding offsets.
+    data and corresponding offsets using the specified text encoding.
+    See :ref:`sec_encoding_ragged_columns` for details of this encoding of
+    columns of variable length data.
+
+    :param numpy.ndarray packed: The flattened array of byte values.
+    :param numpy.ndarray offset: The array of offsets into the ``packed`` array.
+    :param str encoding: The text encoding to use when converting string data
+        to bytes. See the :mod:`codecs` module for information on available
+        string encodings.
+    :return: The list of strings unpacked from the parameter arrays.
+    :rtype: list[str]
     """
     return [b.decode(encoding) for b in unpack_bytes(packed, offset)]

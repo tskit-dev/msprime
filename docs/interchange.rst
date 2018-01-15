@@ -1,4 +1,4 @@
-.. _sec-interchange:
+.. _sec_interchange:
 
 #########################
 Tree sequence interchange
@@ -19,7 +19,7 @@ we describe the HDF5-based file format using by msprime to efficiently
 store tree sequences in the `HDF5 file format`_ section.
 
 
-.. _sec-data-model:
+.. _sec_data_model:
 
 **********
 Data model
@@ -47,7 +47,7 @@ sample
     Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
-    genome. (See :ref:`sec-node-table-definition` for information on how the sample
+    genome. (See :ref:`sec_node_table_definition` for information on how the sample
     status a node is encoded in the ``flags`` column.)
 
 edge
@@ -89,19 +89,27 @@ Sequence length
 
 .. todo:: Define migration and provenance types.
 
-A tree sequence can be stored in a collection of six tables: Node, Edge, Site,
-Mutation, Migration, and Provenance. The first two store the genealogical
+A tree sequence can be stored in a collection of six tables:
+:ref:`Node <sec_node_table_definition>`,
+:ref:`Edge <sec_edge_table_definition>`,
+:ref:`Site <sec_site_table_definition>`,
+:ref:`Mutation <sec_mutation_table_definition>`,
+:ref:`Migration <sec_migration_table_definition>`, and
+:ref:`Provenance <sec_provenance_table_definition>`.
+The first two store the genealogical
 relationships that define the trees; the next two describe where mutations fall
 on those trees; the Migration table describes how lineages move across space;
 and the Provenance table contains information on where the data came from.
 In the following sections we define these components of a tree sequence in
 more detail.
 
+.. _sec_table_definitions:
+
 Table definitions
 =================
 
 
-.. _sec-node-table-definition:
+.. _sec_node_table_definition:
 
 Node Table
 ----------
@@ -118,7 +126,7 @@ Column              Type                Description
 flags               uint32              Bitwise flags.
 time                double              Birth time of node
 population          int32               Birth population of node.
-metadata            binary              Node :ref:`sec-metadata-definition`
+metadata            binary              Node :ref:`sec_metadata_definition`
 ================    ==============      ===========
 
 The ``time`` column records the birth time of the individual in question,
@@ -132,16 +140,19 @@ is composed of 32 bitwise boolean values. Currently, the only flag defined
 is ``IS_SAMPLE = 1``, which defines the sample status of nodes. Marking
 a particular node as a sample means, for example, that the mutational state
 of the node will be included in the genotypes produced by
-:meth:``TreeSequence.variants``.
+:meth:`.TreeSequence.variants`.
 
-For convenience, the :ref:`text format <sec-text-file-format>` for nodes
-decomposes the ``flags`` value into it's separate values. Thus, in the
+See the :ref:`sec_node_requirements` section for details on the properties
+required for a valid set of nodes.
+
+For convenience, the :ref:`text format <sec_text_file_format>` for nodes
+decomposes the ``flags`` value into its separate values. Thus, in the
 text format we have a column for ``is_sample``, which corresponds to the
-the ``flags`` column in the underlying table. As more flags values are
+``flags`` column in the underlying table. As more flags values are
 defined, these will be added to the text file format.
 
 The ``metadata`` column provides a location for client code to store
-information about each node. See the :ref:`sec-metadata-definition` section for
+information about each node. See the :ref:`sec_metadata_definition` section for
 more details on how metadata columns should be used.
 
 .. note::
@@ -152,7 +163,7 @@ more details on how metadata columns should be used.
     not necessary for the core tree sequence algorithms.
 
 
-.. _sec-edge-table-definition:
+.. _sec_edge_table_definition:
 
 Edge Table
 ----------
@@ -171,13 +182,15 @@ child               int32               Child node ID.
 ================    ==============      ===========
 
 Each row in an edge table describes the half-open genomic interval
-affected ``[left, right)``, the ``parent`` and the ``child`` on that interval.
+affected ``[left, right)``, and the ``parent`` and ``child`` on that interval.
 The ``left`` and ``right`` columns are defined using double precision
 floating point values for flexibility. The ``parent`` and ``child``
-columns specify integer IDs in the associated :ref:`sec-node-table-definition`.
+columns specify integer IDs in the associated :ref:`sec_node_table_definition`.
 
+See the :ref:`sec_edge_requirements` section for details on the properties
+required for a valid set of edges.
 
-.. _sec-site-table-definition:
+.. _sec_site_table_definition:
 
 Site Table
 ----------
@@ -192,7 +205,7 @@ Column              Type                Description
 ================    ==============      ===========
 position            double              Position of site in genome coordinates.
 ancestral_state     text                The state at the root of the tree.
-metadata            binary              Site :ref:`sec-metadata-definition`.
+metadata            binary              Site :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
 The ``position`` column is a floating point value defining the location
@@ -203,14 +216,20 @@ of the tree, thus defining the state that nodes inherit (unless mutations
 occur). The column stores text character data of arbitrary length.
 
 The ``metadata`` column provides a location for client code to store
-information about each site. See the :ref:`sec-metadata-definition` section for
+information about each site. See the :ref:`sec_metadata_definition` section for
 more details on how metadata columns should be used.
 
+See the :ref:`sec_site_requirements` section for details on the properties
+required for a valid set of sites.
 
-.. _sec-mutation-table-definition:
+.. _sec_mutation_table_definition:
 
 Mutation Table
 --------------
+
+A **mutation** defines a change of mutational state on a tree at a particular site.
+The mutation table contains five columns, of which ``site``, ``node`` and
+``derived_state`` are mandatory.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -219,40 +238,45 @@ site                int32               The ID of the site the mutation occurs a
 node                int32               The node this mutation occurs at.
 parent              int32               The ID of the parent mutation.
 derived_state       char                The mutational state at the defined node.
-metadata            char                Mutation :ref:`sec-metadata-definition`.
+metadata            char                Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
+The ``site`` column is an integer value defining the ID of the
+:ref:`site <sec_site_table_definition>` at which this mutation occured.
 
-.. _sec-migration-table-definition:
+The ``node`` column is an integer value defining the ID of the
+first :ref:`node <sec_node_table_definition>` in the tree to inherit this mutation.
+
+The ``derived_state`` column specifies the mutational state at the specified node,
+thus defining the state that nodes in the subtree inherit (unless further mutations
+occur). The column stores text character data of arbitrary length.
+
+The ``parent`` column is an integer value defining the ID of the
+mutation from which this mutation inherits. If there is no mutation at the
+site in question on the path back to root, then this field is set to the
+null ID (-1). (The ``parent`` column is only required in situations
+where there are multiple mutations at a given site. For
+simple infinite sites mutations, it can be ignored.)
+
+The ``metadata`` column provides a location for client code to store
+information about each site. See the :ref:`sec_metadata_definition` section for
+more details on how metadata columns should be used.
+
+See the :ref:`sec_mutation_requirements` section for details on the properties
+required for a valid set of mutations.
+
+.. _sec_migration_table_definition:
 
 Migration Table
 ---------------
 
 In simulations, trees can be thought of as spread across space, and it is
-helpful for inferring demographic history to record this history.  This is
-stored using the following type.
-
-migration
-    Migrations are performed by individual ancestors, but most likely not by an
-    individual tracked as a ``node`` (as in a discrete-deme model they are
-    unlikely to be both a migrant and a most recent common ancestor).  So,
-    ``msprime`` records when a segment of ancestry has moved between
-    populations::
-
-        left    right   node    source  dest    time
-        0.0     0.3     3       0       1       2.1
-
-    This ``migration`` records that the ancestor who was alive 2.1 time units
-    in the past from which ``node`` 3 inherited the segment of genome between
-    0.0 and 0.3 migrated from population 0 to population 1.
-
-A valid ``migration``:
-
-1. Has ``time`` strictly between the time of its ``node`` and the time of any
-   ancestral node from which that node inherits on the segment ``[left,
-   right)``.
-2. Has the ``population`` of any such ancestor matching ``source``, if another
-   ``migration`` does not intervene.
+helpful for inferring demographic history to record this history.
+Migrations are performed by individual ancestors, but most likely not by an
+individual tracked as a ``node`` (as in a discrete-deme model they are
+unlikely to be both a migrant and a most recent common ancestor).  So,
+``msprime`` records when a segment of ancestry has moved between
+populations.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -266,11 +290,28 @@ time                double              Time of migration event.
 ================    ==============      ===========
 
 
+The ``left`` and ``right`` columns are floating point values defining the
+half-open segment of genome affected.
 
-.. _sec-provenance-table-definition:
+
+.. todo::
+    Document the remaining fields
+
+See the :ref:`sec_migration_requirements` section for details on the properties
+required for a valid set of mutations.
+
+..     This ``migration`` records that the ancestor who was alive 2.1 time units
+..     in the past from which ``node`` 3 inherited the segment of genome between
+..     0.0 and 0.3 migrated from population 0 to population 1.
+
+
+.. _sec_provenance_table_definition:
 
 Provenance Table
 ----------------
+
+.. todo::
+    Document the provenance table.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -280,70 +321,179 @@ record              char                Provenance record.
 ================    ==============      ===========
 
 
-
-.. _sec-metadata-definition:
+.. _sec_metadata_definition:
 
 Metadata
 ========
 
-.. _sec-valid-tree-sequence-requirements:
+Users of the tables API sometimes need to store auxiliary information for
+the various entities defined here. For example, in a forwards-time simulation,
+the simulation engine may wish to store the time at which a particular mutation
+arose or some other pertinent information. If we are representing real data,
+we may wish to store information derived from a VCF INFO field, or associate
+information relating to samples or populations. The columns defined in tables
+here are deliberately minimal: we define columns only for information which
+the library itself can use. All other information is considered to be
+**metadata**, and is stored in the ``metadata`` columns of the various
+tables.
+
+Arbitrary binary data can be stored in ``metadata`` columns, and the
+``msprime`` library makes no attempt to interpret this information. How the
+information held in this field is encoded is entirely the choice of client code.
+
+To ensure that metadata can be safely interchanged using the :ref:`sec_text_file_format`,
+each row is `base 64 encoded <https://en.wikipedia.org/wiki/Base64>`_. Thus,
+binary information can be safely printed and exchanged, but may not be
+human readable.
+
+.. todo::
+    We plan on providing more sophisticated tools for working with metadata
+    in future, including the auto decoding metadata via pluggable
+    functions and the ability to store metadata schemas so that metadata
+    is self-describing.
+
+
+.. _sec_valid_tree_sequence_requirements:
 
 Valid tree sequence requirements
 ================================
 
-**Explain and list the requirements for a set of tables to form a valid tree
-sequence**.
-
-.. _sec-structural-requirements:
-
-Structural requirements
------------------------
-
-
-1. All birth times must be greater than or equal to zero.
-
-To disallow time travel and multiple inheritance:
-
-1. Offspring must be born after their parents (and hence, no loops).
-2. The set of intervals on which each individual is a child must be disjoint.
-
-and for algorithmic reasons:
-
-3. The leftmost endpoint of each chromosome is 0.0.
-4. Node times must be strictly greater than zero.
+Arbitrary data can be stored in tables using the classes in the
+:ref:`sec_tables_api`. However, only tables that fulfil a set of
+requirements represent a valid :class:`.TreeSequence` object, and
+can be loaded using :func:`.load_tables`. In this
+section we list these requirements, and explain their rationale.
+Violations of most of these requirements are detected when the
+user attempts to load a tree sequence via :func:`.load` or
+:func:`.load_tables`, raising an informative error message. Some
+more complex requirements may not be detectable at load-time,
+and errors may not occur until certain operations are attempted.
+These are documented below.
 
 
-.. _sec-ordering-requirements:
+.. _sec_node_requirements:
 
-Ordering requirements
+Node requirements
+-----------------
+
+Nodes are the most basic type in a tree sequence, and are not defined with
+respect to any other tables. Therefore, the requirements for nodes are
+trivial.
+
+- Node times must be non-negative.
+
+There are no requirements regarding the ordering of nodes with respect to time
+or any other field. Sorting a set of tables using :func:`.sort_tables` has
+no effect on the nodes.
+
+.. _sec_edge_requirements:
+
+Edge requirements
+-----------------
+
+Given a valid set of nodes and a sequence length :math:`L`, the simple
+requirements for each edge are:
+
+- We must have :math:`0 \leq` ``left`` :math:`<` ``right`` :math:`\leq L`;
+- ``parent`` and ``child`` must be valid node IDs;
+- ``time[parent]`` > ``time[child]``;
+- edges must be unique (i.e., no duplicate edges are allowed).
+
+The first requirement simply ensures that the interval makes sense. The
+third requirement ensures that we cannot have loops, since time is
+always increasing as we ascend the tree.
+
+Semantically, to ensure a valid tree sequence there is one further requirement:
+
+- The set of intervals on which each node is a child must be disjoint.
+
+This guarantees that we cannot have contradictory edges (i.e.,
+where a node ``a`` is a child of both ``b`` and ``c``), and ensures that
+at each point on the sequence we have a well-formed forest of trees.
+Because this is a more complex semantic requirement, it is **not** detected
+at load time. This error is detected during tree traversal, via, e.g.,
+the :meth:`.TreeSequence.trees` iterator.
+
+In the interest of algorithmic efficiency, edges must have the following
+sortedness properties:
+
+- All edges for a given parent must be contiguous;
+- Edges must be listed in nondecreasing order of ``parent`` time;
+- Within the edges for a given ``parent``, edges must be sorted
+  first by ``child`` ID and then by ``left`` coordinate.
+
+Violations of these requirements are detected at load time.
+The :func:`.sort_tables` function will ensure that these sortedness
+properties are fulfilled.
+
+.. _sec_site_requirements:
+
+Site requirements
+-----------------
+
+Given a valid set of nodes and a sequence length :math:`L`, the simple
+requirements for a valid set of sites are:
+
+- We must have :math:`0 \leq` ``position`` :math:`< L`;
+- ``position`` values must be unique.
+
+For simplicity and algorithmic efficiency, sites must also:
+
+- Be sorted in increasing order of ``position``.
+
+Violations of these requirements are detected at load time.
+The :func:`.sort_tables` function ensures that sites are sorted
+according to these criteria.
+
+.. _sec_mutation_requirements:
+
+Mutation requirements
 ---------------------
 
-Edges are ordered by
+Given a valid set of nodes, edges and sites, the
+requirements for a valid set of mutations are:
 
-- time of parent, then
-- parent node ID, then
-- child node ID, then
-- left endpoint.
+- ``site`` must refer to a valid site ID;
+- ``node`` must refer to a valid node ID;
+- ``parent`` must either be the null ID (-1) or a valid mutation ID within the
+  current table
 
-Sites are ordered by position, and Mutations are ordered by site.
+For simplicity and algorithmic efficiency, mutations must also:
 
-5. Edges must be sorted in nondecreasing time order.
-6. The set of intervals on which each individual is a parent must be disjoint.
+- be sorted by site ID;
+- when there are multiple mutations per site, parent mutations must occur
+  **before** their children (i.e. if a mutation with ID :math:`x` has
+  ``parent`` with ID :math:`y`, then we must have :math:`y < x`).
 
-A set of tables satisfying requirements 1-4 can be transformed into a completely
-valid set of tables by applying first ``sort_tables()`` (which ensures 5)
-and then ``simplify_tables()`` (which ensures 6).
+Violations of these sorting requirements are detected at load time.
+The :func:`.sort_tables` function ensures that mutationsare sorted
+according to these criteria.
 
-Note that since each node time is equal to the (birth) time of the
-corresponding parent, time is measured in clock time (not meioses).
+Mutations also have the requirement that they must result in a
+change of state. For example, if we have a site with ancestral state
+of "A" and a single mutation with derived state "A", then this
+mutation does not result in any change of state. This error is
+raised at run-time when we reconstruct sample genotypes, for example
+in the :meth:`.TreeSequence.variants` iterator.
+
+.. _sec_migration_requirements:
+
+Migration requirements
+----------------------
+
+.. todo::
+    Add requirements for valid migrations.
+
+.. A valid ``migration``:
+
+.. 1. Has ``time`` strictly between the time of its ``node`` and the time of any
+..    ancestral node from which that node inherits on the segment ``[left,
+..    right)``.
+.. 2. Has the ``population`` of any such ancestor matching ``source``, if another
+..    ``migration`` does not intervene.
 
 
-To allow for efficent algorithms, it is required that
-
-8. Sites are sorted by increasing position,
-9. and mutations are sorted by site.
-
-.. _sec-text-file-format:
+.. _sec_text_file_format:
 
 *****************
 Text file formats
@@ -365,7 +515,7 @@ ignored (IDs are always determined by the position of the row in a table).
     with (say) 4 nodes and two trees, and include a picture. This
     example can also be used in the binary interchange section also.
 
-.. _sec-node-text-format:
+.. _sec_node_text_format:
 
 Node text format
 ================
@@ -373,7 +523,7 @@ Node text format
 The node text format must contain the columns ``is_sample`` and
 ``time``. Optionally, there may also be a ``population`` and
 ``metadata`` columns. See the :ref:`node table definitions
-<sec-node-table-definition>` for details on these columns.
+<sec_node_table_definition>` for details on these columns.
 
 Note that we do not have a ``flags`` column in the text file format, but
 instead use ``is_sample`` (which may be 0 or 1). Currently, ``IS_SAMPLE`` is
@@ -394,15 +544,15 @@ An example node table::
     0           0.253   0
 
 
-.. _sec-edge-text-format:
+.. _sec_edge_text_format:
 
 Edge text format
 ================
 
 The edge text format must contain the columns ``left``,
 ``right``, ``parent`` and ``child``.
-See the :ref:`edge table definitions
-<sec-edge-table-definition>` for details on these columns.
+See the :ref:`edge table definitions <sec_edge_table_definition>`
+for details on these columns.
 
 An example edge table::
 
@@ -414,15 +564,16 @@ An example edge table::
     0       2       8       2
 
 
-.. _sec-site-text-format:
+.. _sec_site_text_format:
 
 Site text format
 ================
 
 The site text format must contain the columns ``position`` and
 ``ancestral_state``. The ``metadata`` column may also be optionally
-present. See the :ref:`site table definitions
-<sec-site-table-definition>` for details on these columns.
+present. See the
+:ref:`site table definitions <sec_site_table_definition>`
+for details on these columns.
 
 sites::
 
@@ -430,15 +581,16 @@ sites::
     0.1         A
     8.5         AT
 
-.. _sec-mutation-text-format:
+.. _sec_mutation_text_format:
 
 Mutation text format
 ====================
 
 The mutation text format must contain the columns ``site``,
 ``node`` and ``derived_state``. The ``parent`` and ``metadata`` columns
-may also be optionally present. See the :ref:`mutation table definitions
-<sec-site-table-definition>` for details on these columns.
+may also be optionally present. See the
+:ref:`mutation table definitions <sec_site_table_definition>`
+for details on these columns.
 
 mutations::
 
@@ -448,96 +600,89 @@ mutations::
     1       0       A
 
 
-.. _sec-binary-interchange:
+.. _sec_binary_interchange:
 
 ******************
 Binary interchange
 ******************
 
 In this section we describe the high-level details of the API for interchanging
-table data via numpy arrays. Please see the :ref:`sec-tables-api` for detailed
+table data via numpy arrays. Please see the :ref:`sec_tables_api` for detailed
 description of the functions and methods.
 
+The tables API is based on **columnar** storage of the data. In memory, each
+table is organised as a number of blocks of contiguous storage, one for
+each column. There are many advantages to this approach, but the key
+property for us is that allows for very efficient transfer of data
+in and out of tables. Rather than inserting data into tables row-by-row
+(which can be done using the ``add_row`` methods), it is much more
+efficient to add many rows at the same time by providing pointers to blocks of
+contigous memory. By taking
+this approach, we can work with tables containing gigabytes of data very
+efficiently.
 
-.. _sec-encoding-ragged-columns:
+We use the `numpy Array API <https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.html>`_
+to allow us to define and work with numeric arrays of the required types.
+Node IDs, for example, are defined using 32 bit integers. Thus, the
+``parent`` column of an :ref:`sec_edge_table_definition`'s with ``n`` rows
+is a block ``4n`` bytes.
+
+This approach is very straightforward for columns in which each row contains
+a fixed number of values. However, dealing with columns containing a
+**variable** number of values is more problematic.
+
+.. _sec_encoding_ragged_columns:
 
 Encoding ragged columns
 =======================
 
-    **todo: This section will define how to work with ragged columns. It's not clear
-    This has been referred to from elsewhere, but we should probably rename it**
+A **ragged** column is a column in which the rows are not of a fixed length.
+For example, :ref:`sec_metadata_definition` columns contain binary of data of arbitrary
+length. To encode such columns in the tables API, we store **two** columns:
+one contains the flattened array of data and another stores the **offsets**
+of each row into this flattened array. Consider an example::
 
-.. _sec-variable-length-columns:
+    >>> s = msprime.SiteTable()
+    >>> s.add_row(0, "A")
+    >>> s.add_row(0, "")
+    >>> s.add_row(0, "TTT")
+    >>> s.add_row(0, "G")
+    >>> print(s)
+    id      position        ancestral_state metadata
+    0       0.00000000      A
+    1       0.00000000
+    2       0.00000000      TTT
+    3       0.00000000      G
+    >>> s.ancestral_state
+    array([65, 84, 84, 84, 71], dtype=int8)
+    >>> s.ancestral_state.tobytes()
+    b'ATTTG'
+    >>> s.ancestral_state_offset
+    array([0, 1, 1, 4, 5], dtype=uint32)
+    >>> s.ancestral_state[s.ancestral_state_offset[2]: s.ancestral_state_offset[3]].tobytes()
+    b'TTT'
 
-Variable length columns
-=======================
+In this example we create a :ref:`sec_site_table_definition` with four rows,
+and then print out this table. We can see that the second row has the
+empty string as its ``ancestral_state``, and the third row's
+``ancestral_state`` is ``TTT``. When we print out the tables ``ancestral_state``
+column, we see that its a numpy array of length 5: this is the
+flattened array of `ASCII encoded <https://en.wikipedia.org/wiki/ASCII>`_
+values for these rows. When we decode these bytes using the
+numpy ``tobytes`` method, we get the string 'ATTTG'. This flattened array
+can now be transferred efficiently in memory like any other column. We
+then use the ``ancestral_state_offset`` column to allow us find the
+individual rows. For a row ``j``::
 
-.. Keeping this for now as we're referring to it below. Merge these two into one
-   section and get rid of duplicate refs.
+    ancestral_state[ancestral_state_offset[j]: ancestral_state_offset[j + 1]]
 
+gives us the array of bytes for the ancestral state in that row.
 
+Note that for a table with ``n`` rows, any offset column must have ``n + 1``
+values. The values in this column must be nondecreasing, and cannot exceed
+the length of the ragged column in question.
 
-.. Sorting and simplifying tables
-.. ==============================
-
-.. Tables that are noncontradictory but do not satisfy all algorithmic requirements
-.. listed above may be converted to a TreeSequence by first sorting, then simplifying
-.. them (both operate on the tables **in place**):
-
-.. .. autofunction:: msprime.sort_tables(nodes, edges[, migrations, sites, mutations, edge_start])
-
-.. **Note:** the following function is more general than
-.. ``TreeSequence.simplify()``, since it can be applied to tables not satisfying
-.. all criteria above (and that hence could not be loaded into a TreeSequence).
-
-
-
-.. NodeTable
-.. =========
-
-.. .. autoclass:: msprime.NodeTable
-
-
-.. EdgeTable
-.. ============
-
-.. .. autoclass:: msprime.EdgeTable
-
-
-.. SiteTable
-.. =========
-
-.. .. autoclass:: msprime.SiteTable
-
-
-.. MutationTable
-.. =============
-
-.. .. autoclass:: msprime.MutationTable
-
-
-.. Import and export
-.. =================
-
-.. This section describes how to extract tables from a ``TreeSequence``, and how
-.. to construct a ``TreeSequence`` from tables.  Since tree sequences are
-.. immutible, often the best way to modify a ``TreeSequence`` is something along
-.. the lines of (for ``ts`` a ``TreeSequence``)::
-
-..     nodes = msprime.NodeTable()
-..     edges = msprime.EdgeTable()
-..     ts.dump_tables(nodes=nodes, edges=edges)
-..     # (modify nodes and edges)
-..     ts.load_tables(nodes=nodes, edges=edges)
-
-
-.. .. automethod:: msprime.TreeSequence.load_tables
-
-.. .. automethod:: msprime.TreeSequence.dump_tables
-..    :noindex:
-
-
-.. _sec-hdf5-file-format:
+.. _sec_hdf5_file_format:
 
 ****************
 HDF5 file format
@@ -561,7 +706,7 @@ with nodes, the ``metadata`` column in the node table will be empty, and
 the corresponding ``metadata`` dataset will not be present in the HDF5 file.
 
 Variable length data is handled in the same manner as the
-:ref:`Tables API <sec-variable-length-columns>`
+:ref:`Tables API <sec_encoding_ragged_columns>`
 above: we store two arrays, one containing the flattened data, and another
 storing offsets into this array.
 
@@ -581,7 +726,7 @@ Path                Type                Dim         Description
 Nodes group
 ===========
 
-The ``/nodes`` group stores the :ref:`sec-node-table-definition`.
+The ``/nodes`` group stores the :ref:`sec_node_table_definition`.
 
 =======================     ==============
 Path                        Type
@@ -596,7 +741,7 @@ Path                        Type
 Edges group
 ===========
 
-The ``/edges`` group stores the :ref:`sec-edge-table-definition`.
+The ``/edges`` group stores the :ref:`sec_edge_table_definition`.
 
 ===================       ==============
 Path                      Type
@@ -626,7 +771,7 @@ Path                               Type
 Sites group
 ===========
 
-The sites group stores the :ref:`sec-site-table-definition`.
+The sites group stores the :ref:`sec_site_table_definition`.
 
 =============================   ==============
 Path                            Type
@@ -641,7 +786,7 @@ Path                            Type
 Mutations group
 ===============
 
-The mutations group stores the :ref:`sec-mutation-table-definition`.
+The mutations group stores the :ref:`sec_mutation_table_definition`.
 
 ===============================  ==============
 Path                             Type
@@ -658,7 +803,7 @@ Path                             Type
 Migrations group
 ================
 
-The ``/migrations`` group stores the :ref:`sec-migration-table-definition`.
+The ``/migrations`` group stores the :ref:`sec_migration_table_definition`.
 
 ===================       ==============
 Path                      Type
@@ -674,7 +819,7 @@ Path                      Type
 Provenances group
 =================
 
-The provenances group stores the :ref:`sec-provenance-table-definition`.
+The provenances group stores the :ref:`sec_provenance_table_definition`.
 
 ===============================  ==============
 Path                             Type
@@ -690,7 +835,7 @@ Legacy Versions
 ===============
 
 Tree sequence files written by older versions of msprime are not readable by
-newer versions of msprime. For major releases of msprime, :ref:`sec-msp-upgrade`
+newer versions of msprime. For major releases of msprime, :ref:`sec_msp_upgrade`
 will convert older tree sequence files to the latest version.
 
 However many changes to the tree sequence format are not part of major
