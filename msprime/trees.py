@@ -1883,3 +1883,12 @@ class TreeSequence(object):
         raise NotImplementedError(
             "This method is no longer supported. Please use the SparseTree.newick"
             " method instead")
+
+    def draw(self, path=None, width=None, height=None, format=None):
+        # Experimental.
+        output = drawing.draw_tree_sequence(
+            self, format=format, width=width, height=height)
+        if path is not None:
+            with open(path, "w") as f:
+                f.write(output)
+        return output

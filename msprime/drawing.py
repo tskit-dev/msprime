@@ -86,6 +86,26 @@ def draw_tree(
     return td.draw()
 
 
+def draw_tree_sequence(tree_sequence, width=None, height=None, format=None):
+    if format is None:
+        format = "SVG"
+    fmt = format.lower()
+    supported_formats = ["svg"]
+    if fmt not in supported_formats:
+        raise ValueError("Unknown format '{}'. Supported formats are {}".format(
+            format, supported_formats))
+    if fmt == "svg":
+        if not _svgwrite_imported:
+            raise ImportError(
+                "svgwrite is not installed. try `pip install svgwrite`")
+        if width is None:
+            width = 200
+        if height is None:
+            height = 200
+        td = SvgTreeSequenceDrawer(tree_sequence, width=width, height=height)
+    return td.draw()
+
+
 class TreeDrawer(object):
     """
     A class to draw sparse trees in SVG format.
@@ -106,7 +126,7 @@ class TreeDrawer(object):
             self, tree, width=None, height=None, show_times=False,
             show_mutation_locations=True, show_mutation_labels=False,
             show_internal_node_labels=True, show_leaf_node_labels=True,
-            node_label_text=None):
+            node_label_text=None, y_coords=None):
         self._tree = tree
         self._show_times = show_times
         self._show_mutation_locations = show_mutation_locations
@@ -124,7 +144,10 @@ class TreeDrawer(object):
         if node_label_text is not None:
             for node, label in node_label_text.items():
                 self._node_label_text[node] = label
+
         self._assign_coordinates()
+        if y_coords is not None:
+            self._y_coords = y_coords
 
 
 class SvgTreeDrawer(TreeDrawer):
@@ -185,9 +208,13 @@ class SvgTreeDrawer(TreeDrawer):
         dwg = svgwrite.Drawing(size=(self._width, self._height), debug=True)
         lines = dwg.add(dwg.g(id='lines', stroke='black'))
         labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
+        self.draw_tree(dwg, lines, labels)
+        return dwg.tostring()
+
+    def draw_tree(self, dwg, lines, labels, xoff=0):
         for u in self._tree.nodes():
             v = self._tree.get_parent(u)
-            x = self._x_coords[u], self._y_coords[u]
+            x = xoff + self._x_coords[u], self._y_coords[u]
             dwg.add(dwg.circle(center=x, r=3))
             dx = [0]
             dy = None
@@ -209,7 +236,7 @@ class SvgTreeDrawer(TreeDrawer):
                     "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
                     dy=dy))
             if self._tree.parent(u) != NULL_NODE:
-                y = self._x_coords[v], self._y_coords[v]
+                y = xoff + self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, (x[0], y[1])))
                 lines.add(dwg.line((x[0], y[1]), y))
         for x, mutation in self._mutations:
@@ -221,7 +248,6 @@ class SvgTreeDrawer(TreeDrawer):
                 dx = [8 * r]
                 dy = [-2 * r]
                 labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
-        return dwg.tostring()
 
 
 class TextTreeDrawer(TreeDrawer):
@@ -365,3 +391,76 @@ class UnicodeTreeDrawer(TextTreeDrawer):
 
     def draw(self):
         return self._draw().tounicode()
+
+
+class TreeSequenceDrawer(object):
+    """
+    Superclass of tree sequence drawer objects.
+    """
+    def __init__(self, tree_sequence, width, height):
+        self.tree_sequence = tree_sequence
+        self.width = width
+        self.height = height
+        # Get the distinct time values and work out the y coordinates
+        # of each node.
+        self.node_y = {}
+        times = sorted(set(node.time for node in tree_sequence.nodes()))
+        time_map = {}
+        y_pad = 10
+        x_pad = 10
+        self.bottom_space = 80
+        dy = (height - 2 * y_pad - self.bottom_space) / len(times)
+        y = height - y_pad - self.bottom_space
+        for t in times:
+            time_map[t] = y
+            y -= dy
+        for node in tree_sequence.nodes():
+            self.node_y[node.id] = time_map[node.time]
+
+        # Now work out the bounds for each tree box. The tree box corresponds
+        # to the actual coordinates that the tree covers.
+        unit = (width - 2 * x_pad) / tree_sequence.sequence_length
+        self.tree_box_left = [
+            x_pad + t.interval[0] * unit for t in tree_sequence.trees()]
+        self.tree_box_left.append(width - x_pad)
+        # The tree width is the same for all trees and determined by the size of the
+        # smallest tree box.
+        self.tree_width = unit
+        if tree_sequence.num_trees > 1:
+            self.tree_width = min(
+                self.tree_box_left[j] - self.tree_box_left[j - 1]
+                for j in range(1, tree_sequence.num_trees + 1))
+
+
+class SvgTreeSequenceDrawer(TreeSequenceDrawer):
+
+    def draw(self):
+        dwg = svgwrite.Drawing(size=(self.width, self.height), debug=True)
+        lines = dwg.add(dwg.g(id='lines', stroke='black'))
+        labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
+        for j, tree in enumerate(self.tree_sequence.trees()):
+            x1, x2 = self.tree_box_left[j], self.tree_box_left[j + 1]
+            mid = x1 + (x2 - x1) / 2
+            xoff = mid - self.tree_width / 2
+            # Place the tree in the middle of the box.
+            print("tree", x1, x2, xoff, self.tree_width)
+            tree_drawer = SvgTreeDrawer(
+                tree, width=self.tree_width, height=self.height, y_coords=self.node_y,
+                show_leaf_node_labels=True)
+            tree_drawer.draw_tree(dwg, lines, labels, xoff=xoff)
+        # Draw the genomic scale
+        x1, x2 = self.tree_box_left[0], self.tree_box_left[-1]
+        y = self.height - self.bottom_space / 2
+        lines.add(dwg.line((x1, y), (x2, y)))
+        tick_top = y - 5
+        tick_bot = y + 5
+        dy = 12,
+        seq_coords = [tree.interval[0] for tree in self.tree_sequence.trees()]
+        seq_coords += [self.tree_sequence.sequence_length]
+        for x, coord in zip(self.tree_box_left, seq_coords):
+            lines.add(dwg.line((x, tick_top), (x, tick_bot)))
+            labels.add(dwg.text("{}".format(int(coord)), (x, tick_bot), dy=dy))
+        x = self.width / 2
+        y = self.height
+        labels.add(dwg.text("Genome coordinates", (x, y), font_size=18))
+        return dwg.tostring()
