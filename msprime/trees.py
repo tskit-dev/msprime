@@ -1848,17 +1848,23 @@ class TreeSequence(object):
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
         also return a numpy array mapping the node IDs in this tree sequence to
-        their node IDs in the simplified tree tree sequence. If a node u is not
+        their node IDs in the simplified tree tree sequence. If a node ``u`` is not
         present in the new tree sequence, the value of this mapping will be
         NULL_NODE (-1).
 
-        **TODO** Document the details of how node IDs are transformed.
+        In the returned tree sequence, the node with ID ``0`` corresponds to
+        ``samples[0]``, node ``1`` corresponds to ``samples[1]``, and so on. Node
+        IDs in the returned tree sequence are then allocated sequentially
+        in time order. Note that this does **not** necessarily mean that nodes
+        in the returned tree sequence will be in strict time order (as we
+        may have internal or ancient samples).
 
         If you wish to convert a set of tables that do not satisfy all
         requirements for building a TreeSequence, then use
-        ``simplify_tables()``.
+        :func:`.simplify_tables()`.
 
-        :param list samples: The list of nodes for which to retain information.
+        :param list samples: The list of nodes for which to retain information. This
+            may be a numpy array (or array-like) object (dtype=np.int32).
         :param bool filter_zero_mutation_sites: If True, remove any sites that have
             no mutations in the simplified tree sequence. Defaults to True.
         :param bool map_nodes: If True, return a tuple containing the resulting
@@ -1887,7 +1893,6 @@ class TreeSequence(object):
             nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
             mutations=t.mutations, provenances=t.provenances,
             sequence_length=self.sequence_length)
-
         if map_nodes:
             return new_ts, node_map
         else:
