@@ -759,6 +759,7 @@ class SparseTree(object):
         :param str order: The traversal ordering. Currently 'preorder',
             'inorder', 'postorder' and 'levelorder' ('breadthfirst')
             are supported.
+        :return: An iterator over the nodes in the tree in some traversal order.
         :rtype: iterator
         """
         methods = {
@@ -780,6 +781,20 @@ class SparseTree(object):
                 yield v
 
     def newick(self, precision=14, time_scale=1):
+        """
+        Returns a `newick encoding <https://en.wikipedia.org/wiki/Newick_format>`_
+        of this tree. Leaf nodes are labelled with their numerical ID + 1,
+        and internal nodes are not labelled.
+
+        This method is currently primarily for ms-compatibility and
+        is not intended as a consistent means of data interchange.
+
+        :param int precision: The numerical precision with which branch lengths are
+            printed.
+        :param float time_scale: A value which all branch lengths are multiplied by.
+        :return: A newick representation of this tree.
+        :rtype: str
+        """
         s = self._ll_sparse_tree.get_newick(precision=precision, time_scale=time_scale)
         if not IS_PY2:
             s = s.decode()
