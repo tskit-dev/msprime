@@ -177,49 +177,52 @@ class SparseTree(object):
     def __init__(self, ll_sparse_tree):
         self._ll_sparse_tree = ll_sparse_tree
 
-    def branch_length(self, u):
-        return self.get_branch_length(u)
-
     def get_branch_length(self, u):
+        # Deprecated alias for branch_length
+        return self.branch_length(u)
+
+    def branch_length(self, u):
         """
         Returns the length of the branch (in generations) joining the
         specified node to its parent. This is equivalent to
 
-        >>> tree.get_time(tree.get_parent(u)) - tree.get_time(u)
+        >>> tree.time(tree.parent(u)) - tree.time(u)
 
         Note that this is not related to the value returned by
-        :meth:`.get_length`, which describes the length of the interval
+        :attr:`.length`, which describes the length of the interval
         covered by the tree in genomic coordinates.
 
         :param int u: The node of interest.
         :return: The branch length from u to its parent.
         :rtype: float
         """
-        return self.get_time(self.get_parent(u)) - self.get_time(u)
+        return self.time(self.get_parent(u)) - self.time(u)
+
+    def get_total_branch_length(self):
+        # Deprecated alias for total_branch_length
+        return self.total_branch_length
 
     @property
     def total_branch_length(self):
-        return self.get_total_branch_length()
-
-    def get_total_branch_length(self):
         """
         Returns the sum of all the branch lengths in this tree (in
         units of generations). This is equivalent to
 
         >>> sum(
-        >>>    tree.get_branch_length(u) for u in tree.nodes()
-        >>>    if u != tree.get_root())
+        >>>    tree.branch_length(u) for u in tree.nodes()
+        >>>    if u not in self.roots)
 
         :return: The sum of all the branch lengths in this tree.
+        :rtype: float
         """
-        roots = self.roots
         return sum(
-            self.get_branch_length(u) for u in self.nodes() if u not in roots)
-
-    def mrca(self, u, v):
-        return self.get_mrca(u, v)
+            self.get_branch_length(u) for u in self.nodes() if u not in self.roots)
 
     def get_mrca(self, u, v):
+        # Deprecated alias for mrca
+        return self.mrca(u, v)
+
+    def mrca(self, u, v):
         """
         Returns the most recent common ancestor of the specified nodes.
 
@@ -230,15 +233,16 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_mrca(u, v)
 
-    def tmrca(self, u, v):
-        return self.get_tmrca(u, v)
-
     def get_tmrca(self, u, v):
+        # Deprecated alias for tmrca
+        return self.tmrca(u, v)
+
+    def tmrca(self, u, v):
         """
         Returns the time of the most recent common ancestor of the specified
         nodes. This is equivalent to::
 
-            tree.get_time(tree.get_mrca(u, v))
+        >>> tree.time(tree.mrca(u, v))
 
         :param int u: The first node.
         :param int v: The second node.
@@ -247,10 +251,11 @@ class SparseTree(object):
         """
         return self.get_time(self.get_mrca(u, v))
 
-    def parent(self, u):
-        return self.get_parent(u)
-
     def get_parent(self, u):
+        # Deprecated alias for parent
+        return self.parent(u)
+
+    def parent(self, u):
         """
         Returns the parent of the specified node. Returns
         the :const:`.NULL_NODE` if u is the root or is not a node in
@@ -261,6 +266,8 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_parent(u)
+
+    # Quintuply linked tree structure.
 
     def left_child(self, u):
         return self._ll_sparse_tree.get_left_child(u)
@@ -274,26 +281,31 @@ class SparseTree(object):
     def right_sib(self, u):
         return self._ll_sparse_tree.get_right_sib(u)
 
-    def children(self, u):
-        return self.get_children(u)
+    # TODO do we also have right_root?
+    @property
+    def left_root(self):
+        return self._ll_sparse_tree.get_left_root()
 
     def get_children(self, u):
+        # Deprecated alias for self.children
+        return self.children(u)
+
+    def children(self, u):
         """
-        Returns the children of the specified node as a tuple :math:`(v, w)`.
-        For internal nodes, this tuple is always in sorted order such that
-        :math:`v < w`. If u is a leaf or is not a node in the current tree,
-        return the empty tuple.
+        Returns the children of the specified node ``u`` as a tuple of integer node IDs.
+        If ``u`` is a leaf, return the empty tuple.
 
         :param int u: The node of interest.
-        :return: The children of u as a pair of integers
-        :rtype: tuple
+        :return: The children of ``u`` as a tuple of integers
+        :rtype: tuple(int)
         """
         return self._ll_sparse_tree.get_children(u)
 
-    def time(self, u):
-        return self.get_time(u)
-
     def get_time(self, u):
+        # Deprecated alias for self.time
+        return self.time(u)
+
+    def time(self, u):
         """
         Returns the time of the specified node in generations.
 
@@ -303,10 +315,11 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_time(u)
 
-    def population(self, u):
-        return self.get_population(u)
-
     def get_population(self, u):
+        # Deprecated alias for self.population
+        return self.population(u)
+
+    def population(self, u):
         """
         Returns the population associated with the specified node. If the
         specified node is not a member of this tree or population level
@@ -392,6 +405,7 @@ class SparseTree(object):
 
         Requires O(number of roots) time.
 
+        :return: The list of roots in this tree.
         :rtype: list
         """
         roots = []
@@ -401,6 +415,10 @@ class SparseTree(object):
             u = self.right_sib(u)
         return roots
 
+    def get_root(self):
+        # Deprecated alias for self.root
+        return self.root
+
     @property
     def root(self):
         """
@@ -409,41 +427,34 @@ class SparseTree(object):
 
         :return: The root node.
         :rtype: int
-        :raises: ValueError if this tree contains more than one root.
+        :raises: :class:`ValueError` if this tree contains more than one root.
         """
         root = self.left_root
         if root != NULL_NODE and self.right_sib(root) != NULL_NODE:
             raise ValueError("More than one root exists. Use tree.roots instead")
         return root
 
-    def get_root(self):
-        # Deprecated alias for self.root
-        return self.root
-
-    @property
-    def left_root(self):
-        return self._ll_sparse_tree.get_left_root()
+    def get_index(self):
+        # Deprecated alias for self.index
+        return self.index
 
     @property
     def index(self):
-        return self.get_index()
-
-    def get_index(self):
         """
         Returns the index this tree occupies in the parent tree sequence.
-        This index is zero based, so the first tree in the sequence has index
-        0.
+        This index is zero based, so the first tree in the sequence has index 0.
 
         :return: The index of this tree.
         :rtype: int
         """
         return self._ll_sparse_tree.get_index()
 
+    def get_interval(self):
+        # Deprecated alias for self.interval
+        return self.interval
+
     @property
     def interval(self):
-        return self.get_interval()
-
-    def get_interval(self):
         """
         Returns the coordinates of the genomic interval that this tree
         represents the history of. The interval is returned as a tuple
@@ -459,21 +470,22 @@ class SparseTree(object):
         """
         return self._ll_sparse_tree.get_left(), self._ll_sparse_tree.get_right()
 
+    def get_length(self):
+        # Deprecated alias for self.length
+        return self.length
+
     @property
     def length(self):
-        return self.get_length()
-
-    def get_length(self):
         """
         Returns the length of the genomic interval that this tree represents.
         This is defined as :math:`r - l`, where :math:`(l, r)` is the genomic
-        interval returned by :meth:`.get_interval`.
+        interval returned by :attr:`.interval`.
 
         :return: The length of the genomic interval covered by this tree.
         :rtype: int
         """
-        l, r = self.get_interval()
-        return r - l
+        left, right = self.get_interval()
+        return right - left
 
     # The sample_size (or num_samples) is really a property of the tree sequence,
     # and so we should provide access to this via a tree.tree_sequence.num_samples
@@ -484,11 +496,12 @@ class SparseTree(object):
     # samples below a particular node. The best thing to do is probably to
     # undocument the sample_size property, but keep it around for ever.
 
+    def get_sample_size(self):
+        # Deprecated alias for self.sample_size
+        return self.sample_size
+
     @property
     def sample_size(self):
-        return self.get_sample_size()
-
-    def get_sample_size(self):
         """
         Returns the sample size for this tree. This is the number of sample
         nodes in the tree.
@@ -537,20 +550,33 @@ class SparseTree(object):
                 f.write(output)
         return output
 
+    def get_num_mutations(self):
+        return self.num_mutations
+
     @property
     def num_mutations(self):
-        return self.get_num_mutations()
-
-    def get_num_mutations(self):
         """
-        Returns the number of mutations on this tree.
+        Returns the total number of mutations across all sites on this tree.
 
-        :return: The number of mutations on this tree.
+        :return: The total number of mutations over all sites on this tree.
         :rtype: int
         """
         return sum(len(site.mutations) for site in self.sites())
 
+    @property
+    def num_sites(self):
+        """
+        Returns the number of sites on this tree.
+
+        :return: The number of sites on this tree.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_num_sites()
+
     def sites(self):
+        """
+        TODO document
+        """
         for ll_site in self._ll_sparse_tree.get_sites():
             pos, ancestral_state, mutations, index, metadata = ll_site
             yield Site(
@@ -653,10 +679,11 @@ class SparseTree(object):
         # length of the leaves() iterator as one would expect.
         return self.num_samples(u)
 
-    def num_samples(self, u=None):
-        return self.get_num_samples(u)
-
     def get_num_samples(self, u=None):
+        # Deprecated alias for num_samples.
+        return self.num_samples(u)
+
+    def num_samples(self, u=None):
         """
         Returns the number of samples in this tree underneath the specified
         node (including the node itself). If u is not specified return
@@ -681,10 +708,11 @@ class SparseTree(object):
         # avoid breaking existing code and should not be used in new code.
         return self.num_tracked_samples(u)
 
-    def num_tracked_samples(self, u=None):
-        return self.get_num_tracked_samples(u)
-
     def get_num_tracked_samples(self, u=None):
+        # Deprecated alias for num_tracked_samples
+        return self.num_tracked_samples(u)
+
+    def num_tracked_samples(self, u=None):
         """
         Returns the number of samples in the set specified in the
         ``tracked_samples`` parameter of the :meth:`.TreeSequence.trees` method
