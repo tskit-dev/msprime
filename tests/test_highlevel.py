@@ -1333,6 +1333,11 @@ class TestTreeSequence(HighLevelTestCase):
                         derived_state[mutation_index], mutation.derived_state)
                     mutation_index += 1
                 some_sites = True
+            total_sites = 0
+            for tree in ts.trees():
+                self.assertEqual(len(list(tree.sites())), tree.num_sites)
+                total_sites += tree.num_sites
+            self.assertEqual(ts.num_sites, total_sites)
             self.assertEqual(mutation_index, len(mutations))
         self.assertTrue(some_sites)
 
