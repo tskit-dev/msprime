@@ -135,6 +135,9 @@ class Site(SimpleContainer):
     """
     A :ref:`site <sec_site_table_definition>` in a tree sequence.
 
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
     :ivar id: The integer ID of this site. Varies from 0 to
         :attr:`.TreeSequence.num_sites` - 1.
     :vartype id: int
@@ -147,6 +150,10 @@ class Site(SimpleContainer):
     :vartype ancestral_state: str
     :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this site.
     :vartype metadata: bytes
+    :ivar mutations: The list of mutations at this site. Mutations
+        within a site are returned in the order they are specified in the
+        underlying :class:`.MutationTable`.
+    :vartype mutations: list[:class:`.Mutation`]
     """
     # NOTE want to put mutations in here, but there's an obscure problem with
     # sphinx.
