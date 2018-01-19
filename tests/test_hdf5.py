@@ -170,7 +170,7 @@ class TestLoadLegacyExamples(TestHdf5):
             for site in t.sites():
                 self.assertTrue(left <= site.position < right)
                 for mut in site.mutations:
-                    self.assertEqual(mut.site, site.index)
+                    self.assertEqual(mut.site, site.id)
 
     def test_msprime_v_0_4_0(self):
         ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5")
@@ -417,7 +417,7 @@ class TestHdf5Format(TestHdf5):
             j = 0
             for s in ts.sites():
                 for mutation in s.mutations:
-                    self.assertEqual(site[j], s.index)
+                    self.assertEqual(site[j], s.id)
                     self.assertEqual(mutation.site, site[j])
                     self.assertEqual(mutation.node, node[j])
                     self.assertEqual(mutation.parent, parent[j])

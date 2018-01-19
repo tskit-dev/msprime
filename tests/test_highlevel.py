@@ -753,7 +753,7 @@ class TestVariantGenerator(HighLevelTestCase):
         for site, variant in zip(ts.sites(), variants):
             self.assertEqual(site.position, variant.position)
             self.assertEqual(site, variant.site)
-            self.assertEqual(site.index, variant.index)
+            self.assertEqual(site.id, variant.index)
             self.assertEqual(variant.alleles, ("0", "1"))
             self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
@@ -1322,9 +1322,9 @@ class TestTreeSequence(HighLevelTestCase):
                 self.assertGreater(site.position, previous_pos)
                 previous_pos = site.position
                 self.assertEqual(ancestral_state[index], site.ancestral_state)
-                self.assertEqual(site.index, index)
+                self.assertEqual(site.id, index)
                 for mutation in site.mutations:
-                    self.assertEqual(mutation.site, site.index)
+                    self.assertEqual(mutation.site, site.id)
                     self.assertEqual(mutation.site, mutations.site[mutation_index])
                     self.assertEqual(mutation.node, mutations.node[mutation_index])
                     self.assertEqual(mutation.parent, mutations.parent[mutation_index])
@@ -1349,7 +1349,7 @@ class TestTreeSequence(HighLevelTestCase):
             for site in ts.sites():
                 for mut in site.mutations:
                     other_mutations.append(msprime.DeprecatedMutation(
-                        position=site.position, node=mut.node, index=site.index))
+                        position=site.position, node=mut.node, index=site.id))
             self.assertEqual(mutations, other_mutations)
 
     def test_removed_methods(self):

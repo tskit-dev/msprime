@@ -47,7 +47,7 @@ def subsample_sites(ts, num_sites):
     t.mutations.reset()
     sites_to_keep = set(random.sample(list(range(ts.num_sites)), num_sites))
     for site in ts.sites():
-        if site.index in sites_to_keep:
+        if site.id in sites_to_keep:
             site_id = len(t.sites)
             t.sites.add_row(
                 position=site.position, ancestral_state=site.ancestral_state)
@@ -162,7 +162,7 @@ def permute_nodes(ts, node_map):
             position=site.position, ancestral_state=site.ancestral_state)
         for mutation in site.mutations:
             new_mutations.add_row(
-                site=site.index, derived_state=mutation.derived_state,
+                site=site.id, derived_state=mutation.derived_state,
                 node=node_map[mutation.node])
     msprime.sort_tables(
         nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
