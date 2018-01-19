@@ -132,6 +132,24 @@ class Edge(SimpleContainer):
 
 
 class Site(SimpleContainer):
+    """
+    A :ref:`site <sec_site_table_definition>` in a tree sequence.
+
+    :ivar id: The integer ID of this site. Varies from 0 to
+        :attr:`.TreeSequence.num_sites` - 1.
+    :vartype id: int
+    :ivar position: The floating point location of this site in genome coordinates.
+        Ranges from 0 (inclusive) to :attr:`.TreeSequence.sequence_length`
+        (exclusive).
+    :vartype position: int
+    :ivar ancestral_state: The ancestral state at this site (i.e., the state
+        inheritied by nodes, unless mutations occur).
+    :vartype ancestral_state: str
+    :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this site.
+    :vartype metadata: bytes
+    """
+    # NOTE want to put mutations in here, but there's an obscure problem with
+    # sphinx.
     def __init__(self, id_, position, ancestral_state, mutations, metadata):
         self.id = id_
         self.position = position
@@ -580,7 +598,13 @@ class SparseTree(object):
 
     def sites(self):
         """
-        TODO document
+        Returns an iterator over all the :ref:`sites <sec_site_table_definition>`
+        in this tree. Sites are returned in order of increasing ID
+        (and also position). See the :class:`Site` class for details on
+        the available fields for each site.
+
+        :return: An iterator over all sites in this tree.
+        :rtype: iter(:class:`.Site`)
         """
         for ll_site in self._ll_sparse_tree.get_sites():
             pos, ancestral_state, mutations, id_, metadata = ll_site
@@ -1413,6 +1437,12 @@ class TreeSequence(object):
 
     @property
     def num_sites(self):
+        """
+        Returns the number of sites in this tree sequence.
+
+        :return: The number of sites in this tree sequence.
+        :rtype: int
+        """
         return self.get_num_sites()
 
     def get_num_sites(self):
@@ -1542,6 +1572,12 @@ class TreeSequence(object):
             yield interval, edges_out, edges_in
 
     def site(self, id_):
+        """
+        Returns the :ref:`site <sec_site_table_definition>` in this tree sequence
+        with the specified ID.
+
+        :rtype: :class:`.Site`
+        """
         ll_site = self._ll_tree_sequence.get_site(id_)
         pos, ancestral_state, mutations, id_, metadata = ll_site
         return Site(
@@ -1550,6 +1586,15 @@ class TreeSequence(object):
             metadata=metadata)
 
     def sites(self):
+        """
+        Returns an iterator over all the :ref:`sites <sec_site_table_definition>`
+        in this tree sequence. Sites are returned in order of increasing ID
+        (and also position). See the :class:`Site` class for details on
+        the available fields for each site.
+
+        :return: An iterator over all sites.
+        :rtype: iter(:class:`.Site`)
+        """
         for j in range(self.num_sites):
             yield self.site(j)
 
