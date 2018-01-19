@@ -69,10 +69,6 @@ Migration = collections.namedtuple(
 # make proper classes where possible. Also, need to standardise on 'id'
 # rather than index throughout.
 
-Site = collections.namedtuple(
-    "Site",
-    ["position", "ancestral_state", "index", "mutations", "metadata"])
-
 
 Mutation = collections.namedtuple(
     "Mutation",
@@ -133,6 +129,15 @@ class Edge(SimpleContainer):
     def __repr__(self):
         return "{{left={:.3f}, right={:.3f}, parent={}, child={}}}".format(
             self.left, self.right, self.parent, self.child)
+
+
+class Site(SimpleContainer):
+    def __init__(self, id_, position, ancestral_state, mutations, metadata):
+        self.id = id_
+        self.position = position
+        self.ancestral_state = ancestral_state
+        self.mutations = mutations
+        self.metadata = metadata
 
 
 class Edgeset(SimpleContainer):
@@ -578,9 +583,9 @@ class SparseTree(object):
         TODO document
         """
         for ll_site in self._ll_sparse_tree.get_sites():
-            pos, ancestral_state, mutations, index, metadata = ll_site
+            pos, ancestral_state, mutations, id_, metadata = ll_site
             yield Site(
-                position=pos, ancestral_state=ancestral_state, index=index,
+                id_=id_, position=pos, ancestral_state=ancestral_state,
                 mutations=[Mutation(*mutation) for mutation in mutations],
                 metadata=metadata)
 
@@ -1536,11 +1541,11 @@ class TreeSequence(object):
             edges_in = [Edge(*e) for e in edge_tuples_in]
             yield interval, edges_out, edges_in
 
-    def site(self, index):
-        ll_site = self._ll_tree_sequence.get_site(index)
-        pos, ancestral_state, mutations, index, metadata = ll_site
+    def site(self, id_):
+        ll_site = self._ll_tree_sequence.get_site(id_)
+        pos, ancestral_state, mutations, id_, metadata = ll_site
         return Site(
-            position=pos, ancestral_state=ancestral_state, index=index,
+            id_=id_, position=pos, ancestral_state=ancestral_state,
             mutations=[Mutation(*mutation) for mutation in mutations],
             metadata=metadata)
 
@@ -1573,7 +1578,7 @@ class TreeSequence(object):
         for site in self.sites():
             for mutation in site.mutations:
                 yield DeprecatedMutation(
-                    position=site.position, node=mutation.node, index=site.index)
+                    position=site.position, node=mutation.node, index=site.id)
 
     def breakpoints(self):
         """
@@ -1727,9 +1732,9 @@ class TreeSequence(object):
         check_numpy()
         iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
         for ll_site, genotypes, alleles in iterator:
-            pos, ancestral_state, mutations, index, metadata = ll_site
+            pos, ancestral_state, mutations, id_, metadata = ll_site
             site = Site(
-                position=pos, ancestral_state=ancestral_state, index=index,
+                id_=id_, position=pos, ancestral_state=ancestral_state,
                 mutations=[Mutation(*mutation) for mutation in mutations],
                 metadata=metadata)
             if as_bytes:
@@ -1741,7 +1746,7 @@ class TreeSequence(object):
                 bytes_genotypes[:] = lookup[genotypes]
                 genotypes = bytes_genotypes.tobytes()
             v = Variant(
-                position=pos, site=site, index=index, genotypes=genotypes,
+                position=pos, site=site, index=id_, genotypes=genotypes,
                 alleles=alleles)
             yield v
 

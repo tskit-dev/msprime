@@ -218,16 +218,13 @@ class PythonTreeSequence(object):
         self._num_samples = tree_sequence.get_num_samples()
         self._breakpoints = breakpoints
         self._sites = []
-        _Site = collections.namedtuple(
-            "Site",
-            ["position", "ancestral_state", "index", "mutations", "metadata"])
         _Mutation = collections.namedtuple(
             "Mutation",
             ["site", "node", "derived_state", "parent", "id", "metadata"])
         for j in range(tree_sequence.get_num_sites()):
-            pos, ancestral_state, mutations, index, metadata = tree_sequence.get_site(j)
-            self._sites.append(_Site(
-                position=pos, ancestral_state=ancestral_state, index=index,
+            pos, ancestral_state, mutations, id_, metadata = tree_sequence.get_site(j)
+            self._sites.append(msprime.Site(
+                id_=id_, position=pos, ancestral_state=ancestral_state,
                 mutations=[_Mutation(*mut) for mut in mutations],
                 metadata=metadata))
 
