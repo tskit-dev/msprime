@@ -217,7 +217,16 @@ in the :ref:`sec_data_model`. These classes are not intended to be instantiated
 directly, but are the return types for the various iterators provided by the
 :class:`.TreeSequence` and :class:`.SparseTree` classes.
 
+.. autoclass:: msprime.Node()
+    :members:
+
+.. autoclass:: msprime.Edge()
+    :members:
+
 .. autoclass:: msprime.Site()
+    :members:
+
+.. autoclass:: msprime.Mutation()
     :members:
 
 

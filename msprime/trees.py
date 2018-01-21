@@ -70,11 +70,6 @@ Migration = collections.namedtuple(
 # rather than index throughout.
 
 
-Mutation = collections.namedtuple(
-    "Mutation",
-    ["site", "node", "derived_state", "parent", "id", "metadata"])
-
-
 # This is provided for backwards compatibility with the deprecated mutations()
 # iterator.
 DeprecatedMutation = collections.namedtuple(
@@ -104,22 +99,58 @@ class SimpleContainer(object):
 
 
 class Node(SimpleContainer):
+    """
+    A :ref:`node <sec_node_table_definition>` in a tree sequence.
+
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
+    TODO: should population be an object??
+
+    :ivar id: The integer ID of this node. Varies from 0 to
+        :attr:`.TreeSequence.num_nodes` - 1.
+    :vartype id: int
+    :ivar flags: The bitwise flags for this node.
+    :vartype flags: int
+    :ivar time: The birth time of the individual represented by this node.
+    :vartype float: float
+    :ivar population: The population that this node was born in.
+    :vartype population: int
+    :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this node.
+    :vartype metadata: bytes
+    """
     def __init__(
-            self, id_=None, time=0, population=NULL_POPULATION, metadata="",
-            is_sample=False):
+            self, id_=None, flags=0, time=0, population=NULL_POPULATION, metadata=""):
         self.id = id_
         self.time = time
         self.population = population
         self.metadata = metadata
-        self.flags = 0
-        if is_sample:
-            self.flags |= NODE_IS_SAMPLE
+        self.flags = flags
 
     def is_sample(self):
+        """
+        Returns True if this node is a sample. This value is derived from the
+        ``flag`` variable.
+
+        :rtype: bool
+        """
         return self.flags & NODE_IS_SAMPLE
 
 
 class Edge(SimpleContainer):
+    """
+    A :ref:`edge <sec_edge_table_definition>` in a tree sequence.
+
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
+    TODO: add parent and child.
+
+    :ivar left: The left coordinate of this edge.
+    :vartype left: float
+    :ivar right: The right coordinate of this edge.
+    :vartype right: float
+    """
     def __init__(self, left, right, parent, child):
         self.left = left
         self.right = right
@@ -155,14 +186,29 @@ class Site(SimpleContainer):
         underlying :class:`.MutationTable`.
     :vartype mutations: list[:class:`.Mutation`]
     """
-    # NOTE want to put mutations in here, but there's an obscure problem with
-    # sphinx.
     def __init__(self, id_, position, ancestral_state, mutations, metadata):
         self.id = id_
         self.position = position
         self.ancestral_state = ancestral_state
         self.mutations = mutations
         self.metadata = metadata
+
+
+# class Mutation(SimpleContainer):
+#     """
+#     A :ref:`mutation <sec_mutation_table_definition>` in a tree sequence.
+#     """
+#     def __init__(self, id_, site, node, derived_state, parent, metadata):
+#         self.id = id_
+#         self.site = site
+#         self.node = node
+#         self.derived_state = derived_state
+#         self.parent = parent
+#         self.metadata = metadata
+
+Mutation = collections.namedtuple(
+    "Mutation",
+    ["site", "node", "derived_state", "parent", "id", "metadata"])
 
 
 class Edgeset(SimpleContainer):
@@ -204,8 +250,19 @@ class SparseTree(object):
     obtained as part of a :class:`.TreeSequence` using the
     :meth:`.trees` method.
     """
-    def __init__(self, ll_sparse_tree):
+    def __init__(self, ll_sparse_tree, tree_sequence):
         self._ll_sparse_tree = ll_sparse_tree
+        self._tree_sequence = tree_sequence
+
+    @property
+    def tree_sequence(self):
+        """
+        Returns the tree sequence that this tree is from.
+
+        :return: The parent tree sequence for this tree.
+        :rtype: :class:`.TreeSequence`
+        """
+        return self._tree_sequence
 
     def get_branch_length(self, u):
         # Deprecated alias for branch_length
@@ -613,12 +670,10 @@ class SparseTree(object):
         :return: An iterator over all sites in this tree.
         :rtype: iter(:class:`.Site`)
         """
+        # TODO change the low-level API to just return the IDs of the sites.
         for ll_site in self._ll_sparse_tree.get_sites():
-            pos, ancestral_state, mutations, id_, metadata = ll_site
-            yield Site(
-                id_=id_, position=pos, ancestral_state=ancestral_state,
-                mutations=[Mutation(*mutation) for mutation in mutations],
-                metadata=metadata)
+            _, _, _, id_, _ = ll_site
+            yield self.tree_sequence.site(id_)
 
     def mutations(self):
         """
@@ -1409,29 +1464,21 @@ class TreeSequence(object):
 
     @property
     def num_edges(self):
-        return self._ll_tree_sequence.get_num_edges()
-
-    @property
-    def num_records(self):
-        return self.get_num_records()
-
-    # TODO deprecate
-    def get_num_records(self):
         """
-        Returns the number of coalescence records in this tree sequence.
-        See the :meth:`.records` method for details on these objects.
+        Returns the number of :ref:`edges <sec_edge_table_definition>` in this
+        tree sequence.
 
-        :return: The number of coalescence records defining this tree
-            sequence.
+        :return: The number of edges in this tree sequence.
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_edges()
 
+    def get_num_trees(self):
+        # Deprecated alias for self.num_trees
+        return self.num_trees
+
     @property
     def num_trees(self):
-        return self.get_num_trees()
-
-    def get_num_trees(self):
         """
         Returns the number of distinct trees in this tree sequence. This
         is equal to the number of trees returned by the :meth:`.trees`
@@ -1441,6 +1488,10 @@ class TreeSequence(object):
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_trees()
+
+    def get_num_sites(self):
+        # Deprecated alias for self.num_sites
+        return self._ll_tree_sequence.get_num_sites()
 
     @property
     def num_sites(self):
@@ -1452,76 +1503,46 @@ class TreeSequence(object):
         """
         return self.get_num_sites()
 
-    def get_num_sites(self):
-        return self._ll_tree_sequence.get_num_sites()
+    def get_num_mutations(self):
+        # Deprecated alias for self.num_mutations
+        return self.num_mutations
 
     @property
     def num_mutations(self):
-        return self.get_num_mutations()
-
-    def get_num_mutations(self):
         """
-        Returns the number of mutations in this tree sequence. See
-        the :meth:`msprime.TreeSequence.mutations` method for details on how
-        mutations are defined.
+        Returns the number of :ref:`mutations <sec_mutation_table_definition>`
+        in this tree sequence.
 
         :return: The number of mutations in this tree sequence.
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_mutations()
 
+    def get_num_nodes(self):
+        # Deprecated alias for self.num_nodes
+        return self.num_nodes
+
     @property
     def num_nodes(self):
-        return self.get_num_nodes()
-
-    def get_num_nodes(self):
         """
-        Returns the number of nodes in this tree sequence. This 1 + the
-        largest value :math:`u` such that `u` is a node in any of the
-        constituent trees.
+        Returns the number of :ref:`nodes <sec_node_table_definition>` in
+        this tree sequence.
 
-        :return: The total number of nodes in this tree sequence.
+        :return: The number of nodes in this tree sequence.
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_nodes()
 
     @property
     def num_provenances(self):
+        """
+        Returns the number of :ref:`provenances <sec_provenance_table_definition>`
+        in this tree sequence.
+
+        :return: The number of provenances in this tree sequence.
+        :rtype: int
+        """
         return self._ll_tree_sequence.get_num_provenances()
-
-    # TODO deprecate
-    def records(self):
-        """
-        Returns an iterator over the coalescence records in this tree
-        sequence in time-sorted order. Each record is a tuple
-        :math:`(l, r, u, c, t, d)` defining the assignment of a tree node
-        across an interval. The range of this record is the half-open
-        genomic interval :math:`[l, r)`, such that it applies to all
-        positions :math:`l \leq x < r`. Each record represents the
-        assignment of a pair of children :math:`c` to a parent
-        parent :math:`u`. This assignment happens at :math:`t` generations
-        in the past within the population with ID :math:`d`. If population
-        information was not stored for this tree sequence then the
-        population ID will be :const:`.NULL_POPULATION`.
-
-        Each record returned is an instance of :func:`collections.namedtuple`,
-        and may be accessed via the attributes ``left``, ``right``, ``node``,
-        ``children``, ``time`` and ``population``, as well as the usual
-        positional approach. For example, if we wished to print out the genomic
-        length of each record, we could write::
-
-        >>> for record in tree_sequence.records():
-        >>>     print(record.right - record.left)
-
-        :return: An iterator of all :math:`(l, r, u, c, t, d)` tuples defining
-            the coalescence records in this tree sequence.
-        :rtype: iter
-        """
-        t = [node.time for node in self.nodes()]
-        pop = [node.population for node in self.nodes()]
-        for e in self.edgesets():
-            yield CoalescenceRecord(
-                e.left, e.right, e.parent, e.children, t[e.parent], pop[e.parent])
 
     def migrations(self):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
@@ -1536,6 +1557,18 @@ class TreeSequence(object):
             yield self.node(j)
 
     def edges(self):
+        """
+        Returns an iterator over all the :ref:`edges <sec_edge_table_definition>`
+        in this tree sequence. Edges are returned in the order required
+        for a :ref:`valid tree sequence <sec_valid_tree_sequence_requirements>`. So,
+        edges are guaranteed to be ordered such that (a) all parents with a
+        given ID are contiguous; (b) edges are returned in non-descreasing
+        order of parent time; (c) within the edges for a given parent, edges
+        are sorted first by child ID and then by left coordinate.
+
+        :return: An iterator over all edges.
+        :rtype: iter(:class:`.Edge`)
+        """
         for j in range(self.num_edges):
             left, right, parent, child = self._ll_tree_sequence.get_edge(j)
             yield Edge(left=left, right=right, parent=parent, child=child)
@@ -1577,20 +1610,6 @@ class TreeSequence(object):
             edges_out = [Edge(*e) for e in edge_tuples_out]
             edges_in = [Edge(*e) for e in edge_tuples_in]
             yield interval, edges_out, edges_in
-
-    def site(self, id_):
-        """
-        Returns the :ref:`site <sec_site_table_definition>` in this tree sequence
-        with the specified ID.
-
-        :rtype: :class:`.Site`
-        """
-        ll_site = self._ll_tree_sequence.get_site(id_)
-        pos, ancestral_state, mutations, id_, metadata = ll_site
-        return Site(
-            id_=id_, position=pos, ancestral_state=ancestral_state,
-            mutations=[Mutation(*mutation) for mutation in mutations],
-            metadata=metadata)
 
     def sites(self):
         """
@@ -1666,8 +1685,7 @@ class TreeSequence(object):
             tracked_leaves=None, leaf_counts=None, leaf_lists=None):
         """
         Returns an iterator over the trees in this tree sequence. Each value
-        returned in this iterator is an instance of
-        :class:`.SparseTree`.
+        returned in this iterator is an instance of :class:`.SparseTree`.
 
         The ``sample_counts`` and ``sample_lists`` parameters control the
         features that are enabled for the resulting trees. If ``sample_counts``
@@ -1721,7 +1739,7 @@ class TreeSequence(object):
             kwargs["tracked_samples"] = tracked_samples
         ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
         iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
-        sparse_tree = SparseTree(ll_sparse_tree)
+        sparse_tree = SparseTree(ll_sparse_tree, self)
         for _ in iterator:
             yield sparse_tree
 
@@ -1805,10 +1823,11 @@ class TreeSequence(object):
     def genotype_matrix(self):
         return self._ll_tree_sequence.get_genotype_matrix()
 
-    def pairwise_diversity(self, samples=None):
-        return self.get_pairwise_diversity(samples)
-
     def get_pairwise_diversity(self, samples=None):
+        # Deprecated alias for self.pairwise_diversity
+        return self.pairwise_diversity(samples)
+
+    def pairwise_diversity(self, samples=None):
         """
         Returns the value of pi, the pairwise nucleotide site diversity,
         which is the average number of mutations that differ between a randomly
@@ -1816,8 +1835,7 @@ class TreeSequence(object):
         diversity within this set.
 
         :param iterable samples: The set of samples within which we calculate
-            the diversity. If None, calculate diversity within the entire
-            sample.
+            the diversity. If None, calculate diversity within the entire sample.
         :return: The pairwise nucleotide site diversity.
         :rtype: float
         """
@@ -1827,18 +1845,34 @@ class TreeSequence(object):
             samples = list(samples)
         return self._ll_tree_sequence.get_pairwise_diversity(samples)
 
-    def node(self, u):
-        flags, time, population, metadata = self._ll_tree_sequence.get_node(u)
+    def node(self, id_):
+        """
+        Returns the :ref:`node <sec_node_table_definition>` in this tree sequence
+        with the specified ID.
+
+        :rtype: :class:`.Node`
+        """
+        flags, time, population, metadata = self._ll_tree_sequence.get_node(id_)
         return Node(
-            id_=u, time=time, population=population, metadata=metadata,
-            is_sample=flags & NODE_IS_SAMPLE)
+            id_=id_, flags=flags, time=time, population=population, metadata=metadata)
+
+    def site(self, id_):
+        """
+        Returns the :ref:`site <sec_site_table_definition>` in this tree sequence
+        with the specified ID.
+
+        :rtype: :class:`.Site`
+        """
+        ll_site = self._ll_tree_sequence.get_site(id_)
+        pos, ancestral_state, mutations, _, metadata = ll_site
+        return Site(
+            id_=id_, position=pos, ancestral_state=ancestral_state,
+            mutations=[Mutation(*mutation) for mutation in mutations],
+            metadata=metadata)
 
     def provenance(self, id_):
         timestamp, record = self._ll_tree_sequence.get_provenance(id_)
         return Provenance(id_=id_, timestamp=timestamp, record=record)
-
-    def time(self, u):
-        return self.get_time(u)
 
     def get_time(self, u):
         """
@@ -1852,9 +1886,6 @@ class TreeSequence(object):
             raise ValueError("ID out of bounds")
         node = self.node(u)
         return node.time
-
-    def population(self, u):
-        return self.get_population(u)
 
     def get_population(self, u):
         """
@@ -1871,10 +1902,11 @@ class TreeSequence(object):
         node = self.node(u)
         return node.population
 
-    def samples(self, population_id=None):
-        return self.get_samples(population_id)
-
     def get_samples(self, population_id=None):
+        # Deprecated alias for samples()
+        return self.samples(population_id)
+
+    def samples(self, population_id=None):
         """
         Returns the samples matching the specified population ID.
 
@@ -1982,6 +2014,60 @@ class TreeSequence(object):
             return new_ts, node_map
         else:
             return new_ts
+
+    ############################################
+    #
+    # Deprecated APIs. These are either already unsupported, or will be unsupported in a
+    # later release.
+    #
+    ############################################
+
+    # TODO deprecate
+    def get_num_records(self):
+        """
+        Returns the number of coalescence records in this tree sequence.
+        See the :meth:`.records` method for details on these objects.
+
+        :return: The number of coalescence records defining this tree
+            sequence.
+        :rtype: int
+        """
+        # TODO this is incorrect
+        return self._ll_tree_sequence.get_num_edges()
+
+    # TODO deprecate
+    def records(self):
+        """
+        Returns an iterator over the coalescence records in this tree
+        sequence in time-sorted order. Each record is a tuple
+        :math:`(l, r, u, c, t, d)` defining the assignment of a tree node
+        across an interval. The range of this record is the half-open
+        genomic interval :math:`[l, r)`, such that it applies to all
+        positions :math:`l \leq x < r`. Each record represents the
+        assignment of a pair of children :math:`c` to a parent
+        parent :math:`u`. This assignment happens at :math:`t` generations
+        in the past within the population with ID :math:`d`. If population
+        information was not stored for this tree sequence then the
+        population ID will be :const:`.NULL_POPULATION`.
+
+        Each record returned is an instance of :func:`collections.namedtuple`,
+        and may be accessed via the attributes ``left``, ``right``, ``node``,
+        ``children``, ``time`` and ``population``, as well as the usual
+        positional approach. For example, if we wished to print out the genomic
+        length of each record, we could write::
+
+        >>> for record in tree_sequence.records():
+        >>>     print(record.right - record.left)
+
+        :return: An iterator of all :math:`(l, r, u, c, t, d)` tuples defining
+            the coalescence records in this tree sequence.
+        :rtype: iter
+        """
+        t = [node.time for node in self.nodes()]
+        pop = [node.population for node in self.nodes()]
+        for e in self.edgesets():
+            yield CoalescenceRecord(
+                e.left, e.right, e.parent, e.children, t[e.parent], pop[e.parent])
 
     # Unsupported old methods.
     def diffs(self):

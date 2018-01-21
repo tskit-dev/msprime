@@ -1046,6 +1046,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(t.get_num_samples(0), 1)
             self.assertEqual(t.get_num_tracked_samples(0), 0)
             self.assertEqual(list(t.samples(0)), [0])
+            self.assertIs(t.tree_sequence, ts)
 
         for t in ts.trees(sample_counts=False):
             self.assertEqual(t.get_num_samples(0), 1)
@@ -1264,13 +1265,12 @@ class TestTreeSequence(HighLevelTestCase):
             j += 1
         self.assertGreater(j, 1)
 
-    def test_apis(self):
+    def test_deprecated_apis(self):
         ts = msprime.simulate(10, random_seed=1)
         self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
         self.assertEqual(ts.get_sample_size(), ts.sample_size)
         self.assertEqual(ts.get_sample_size(), ts.num_samples)
         self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
-        self.assertEqual(ts.num_edges, ts.num_records)
         self.assertEqual(ts.get_num_trees(), ts.num_trees)
         self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
         self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
@@ -1278,11 +1278,6 @@ class TestTreeSequence(HighLevelTestCase):
         samples = ts.samples()
         self.assertEqual(
             ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
-        for s in samples:
-            self.assertEqual(ts.get_time(s), ts.time(s))
-            p = ts.get_population(s)
-            self.assertEqual(p, ts.population(s))
-            self.assertEqual(ts.get_samples(p), ts.samples(p))
         self.assertEqual(ts.get_samples(), ts.samples())
 
     def test_generate_mutations_on_tree_sequence(self):
