@@ -2074,8 +2074,8 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(first_ts.num_nodes, 9)
         self.assertEqual(ts.num_nodes, 6)
-        self.assertEqual(first_ts.time(3), 0.2)
-        self.assertEqual(ts.time(2), 0.2)
+        self.assertEqual(first_ts.node(3).time, 0.2)
+        self.assertEqual(ts.node(2).time, 0.2)
         # check topologies agree:
         tree_dicts = [t.parent_dict for t in first_ts.trees()]
         for a, t in zip(true_trees, tree_dicts):
@@ -2140,10 +2140,10 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.num_nodes, 9)
-        self.assertEqual(ts.time(0), 0.0)
-        self.assertEqual(ts.time(1), 0.1)
-        self.assertEqual(ts.time(2), 0.1)
-        self.assertEqual(ts.time(3), 0.2)
+        self.assertEqual(ts.node(0).time, 0.0)
+        self.assertEqual(ts.node(1).time, 0.1)
+        self.assertEqual(ts.node(2).time, 0.1)
+        self.assertEqual(ts.node(3).time, 0.2)
         # check topologies agree:
         tree_dicts = [t.parent_dict for t in ts.trees()]
         for a, t in zip(true_trees, tree_dicts):
@@ -2198,10 +2198,10 @@ class TestWithVisuals(TopologyTestCase):
         self.assertEqual(ts.sample_size, 4)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.num_nodes, 9)
-        self.assertEqual(ts.time(0), 0.0)
-        self.assertEqual(ts.time(1), 0.1)
-        self.assertEqual(ts.time(2), 0.1)
-        self.assertEqual(ts.time(3), 0.2)
+        self.assertEqual(ts.node(0).time, 0.0)
+        self.assertEqual(ts.node(1).time, 0.1)
+        self.assertEqual(ts.node(2).time, 0.1)
+        self.assertEqual(ts.node(3).time, 0.2)
         # check topologies agree:
         tree_dicts = [t.parent_dict for t in ts.trees()]
         for a, t in zip(true_trees, tree_dicts):
