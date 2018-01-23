@@ -237,7 +237,7 @@ def simulate(
         populations are defined in the ``population_configurations``
         parameter, then the migration matrix must be an
         :math:`N\\times N` matrix consisting of :math:`N` lists of
-        length :math:`N`.
+        length :math:`N` or an :math`N\\times N` numpy array.
     :param list demographic_events: The list of demographic events to
         simulate. Demographic events describe changes to the populations
         in the past. Events should be supplied in non-decreasing
@@ -447,7 +447,10 @@ class Simulator(object):
                 "population_configurations argument.")
         N = len(self.population_configurations)
         if not isinstance(migration_matrix, list):
-            raise TypeError(err)
+            try:
+                migration_matrix = [list(row) for row in migration_matrix]
+            except TypeError:
+                raise TypeError(err)
         if len(migration_matrix) != N:
             raise ValueError(err)
         for row in migration_matrix:
