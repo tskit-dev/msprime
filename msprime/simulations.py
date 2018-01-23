@@ -274,7 +274,8 @@ def simulate(
     seed = random_seed
     if random_seed is None:
         seed = _get_random_seed()
-    rng = RandomGenerator(seed)
+    # To support numpy integer inputs here too we convert to integer.
+    rng = RandomGenerator(int(seed))
     sim = simulator_factory(
         sample_size=sample_size, random_generator=rng,
         Ne=Ne, length=length,
