@@ -1943,11 +1943,17 @@ class TestSimulatorFactory(unittest.TestCase):
                 [(j + k) * int(j != k) for j in range(N)] for k in range(N)]
             sim = f(hl_matrix)
             self.assertEqual(sim.migration_matrix, hl_matrix)
+            # Try with equivalent numpy array.
+            sim = f(np.array(hl_matrix))
+            self.assertEqual(sim.migration_matrix, hl_matrix)
             ll_sim = sim.create_ll_instance()
             ll_matrix = [v for row in hl_matrix for v in row]
             self.assertEqual(ll_sim.get_migration_matrix(), ll_matrix)
-            for bad_type in ["", {}, 234]:
+            for bad_type in [234, 1.2]:
                 self.assertRaises(TypeError, f, bad_type)
+            # Iterables should raise a value error.
+            for bad_type in [{}, ""]:
+                self.assertRaises(ValueError, f, bad_type)
             # Now check for the structure of the matrix.
             hl_matrix[0][0] = "bad value"
             sim = f(hl_matrix)
@@ -1956,6 +1962,11 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(TypeError, f, hl_matrix)
             hl_matrix[0] = []
             self.assertRaises(ValueError, f, hl_matrix)
+            # Simple numpy array.
+            hl_matrix = np.ones((N, N))
+            np.fill_diagonal(hl_matrix, 0)
+            sim = f(hl_matrix)
+            self.assertTrue(np.array_equal(np.array(sim.migration_matrix), hl_matrix))
 
     def test_default_migration_matrix(self):
         sim = msprime.simulator_factory(10)
