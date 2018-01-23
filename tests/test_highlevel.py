@@ -2092,6 +2092,13 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sequence_length(), 1)
         self.assertEqual(len(list(ts.provenances())), 1)
 
+    def test_numpy_random_seed(self):
+        seed = np.array([12345], dtype=np.int64)[0]
+        self.assertEqual(seed.dtype, np.int64)
+        ts1 = msprime.simulate(10, random_seed=seed)
+        ts2 = msprime.simulate(10, random_seed=seed)
+        self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
+
     def verify_provenance(self, provenance):
         """
         Checks that the specified provenance object has the right sort of
