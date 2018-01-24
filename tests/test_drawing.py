@@ -431,10 +431,7 @@ class TestDrawSvg(TestTreeDraw):
         labels = {u: "XXX" for u in t.nodes()}
         svg = t.draw(format="svg", node_labels=labels)
         self.verify_basic_svg(svg)
-        j = 0
-        for _ in t.nodes():
-            j = svg[j:].find("XXX")
-            self.assertNotEqual(j, -1)
+        self.assertEqual(svg.count("XXX"), t.num_nodes)
 
     def test_one_label(self):
         t = self.get_binary_tree()
@@ -449,3 +446,19 @@ class TestDrawSvg(TestTreeDraw):
         svg = t.draw(format="svg", node_labels=labels)
         self.verify_basic_svg(svg)
         # Can't really test for much here if we don't understand the SVG
+
+    def test_one_node_colour(self):
+        t = self.get_binary_tree()
+        colour = "rgb(0, 1, 2)"
+        colours = {0: colour}
+        svg = t.draw(format="svg", node_colours=colours)
+        self.verify_basic_svg(svg)
+        self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
+
+    def test_all_nodes_colour(self):
+        t = self.get_binary_tree()
+        colours = {u: "rgb({}, {}, {})".format(u, u, u) for u in t.nodes()}
+        svg = t.draw(format="svg", node_colours=colours)
+        self.verify_basic_svg(svg)
+        for colour in colours.values():
+            self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
