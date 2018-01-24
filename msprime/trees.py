@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2015-2017 University of Oxford
 #
@@ -669,25 +670,61 @@ class SparseTree(object):
 
     def draw(
             self, path=None, width=None, height=None,
-            node_labels=None, format=None):
+            node_labels=None, node_colours=None, format=None):
         """
-        Returns a representation of this tree in SVG format.
+        Returns a drawing of this tree.
 
-        :param str path: The path to the file to write the SVG. If None, do not
+        When working in a Jupyter notebook, use the ``IPython.display.SVG``
+        function to display the SVG output from this function inline in the notebook::
+
+            >>> SVG(tree.draw())
+
+        The unicode format uses unicode `box drawing characters
+        <https://en.wikipedia.org/wiki/Box-drawing_character>`_ to render the tree.
+        This allows rendered trees to be printed out to the terminal::
+
+            >>> print(tree.draw(format="unicode"))
+              6
+            ┏━┻━┓
+            ┃   5
+            ┃ ┏━┻┓
+            ┃ ┃  4
+            ┃ ┃ ┏┻┓
+            3 0 1 2
+
+        The ``node_labels`` argument allows the user to specify custom labels
+        for nodes, or no labels at all::
+
+            >>> print(tree.draw(format="unicode", node_labels={}))
+              ┃
+            ┏━┻━┓
+            ┃   ┃
+            ┃ ┏━┻┓
+            ┃ ┃  ┃
+            ┃ ┃ ┏┻┓
+            ┃ ┃ ┃ ┃
+
+        :param str path: The path to the file to write the output. If None, do not
             write to file.
-        :param int width: The width of the image in pixels.
-        :param int height: The height of the image in pixels.
+        :param int width: The width of the image in pixels. If not specified, either
+            defaults to the minimum size required to depict the tree (text formats)
+            or 200 pixels.
+        :param int height: The height of the image in pixels. If not specified, either
+            defaults to the minimum size required to depict the tree (text formats)
+            or 200 pixels.
         :param map node_labels: If specified, show custom labels for the nodes
             that are present in the map. Any nodes not specified in the map will
-            have an empty string as the label.
+            not have a node label.
+        :param map node_colours: If specified, show custom colours for nodes. (Only
+            supported in the SVG format.)
         :param str format: The format of the returned image. Currently supported
             are 'svg', 'ascii' and 'unicode'.
-        :return: A representation of this tree in SVG format.
+        :return: A representation of this tree in the requested format.
         :rtype: str
         """
         output = drawing.draw_tree(
             self, format=format, width=width, height=height,
-            node_labels=node_labels)
+            node_labels=node_labels, node_colours=node_colours)
         if path is not None:
             with open(path, "w") as f:
                 f.write(output)

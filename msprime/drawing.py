@@ -37,7 +37,8 @@ IS_PY2 = sys.version_info[0] < 3
 NULL_NODE = -1
 
 
-def draw_tree(tree, width=None, height=None, node_labels=None, format=None):
+def draw_tree(
+        tree, width=None, height=None, node_labels=None, node_colours=None, format=None):
     # See tree.draw() for documentation on these arguments.
     if format is None:
         format = "SVG"
@@ -62,7 +63,9 @@ def draw_tree(tree, width=None, height=None, node_labels=None, format=None):
             raise ValueError("Unicode tree drawing not supported on Python 2")
         cls = UnicodeTreeDrawer
 
-    td = cls(tree, width=width, height=height, node_labels=node_labels)
+    td = cls(
+        tree, width=width, height=height, node_labels=node_labels,
+        node_colours=node_colours)
     return td.draw()
 
 
@@ -82,7 +85,8 @@ class TreeDrawer(object):
             ret = int(round(x))
         return ret
 
-    def __init__(self, tree, width=None, height=None, node_labels=None):
+    def __init__(
+            self, tree, width=None, height=None, node_labels=None, node_colours=None):
         self._tree = tree
         self._num_leaves = len(list(tree.leaves()))
         self._width = width
@@ -90,6 +94,7 @@ class TreeDrawer(object):
         self._x_coords = {}
         self._y_coords = {}
         self._node_labels = {}
+        self._node_colours = {}
         for u in tree.nodes():
             if node_labels is None:
                 self._node_labels[u] = str(u)
@@ -98,6 +103,9 @@ class TreeDrawer(object):
         if node_labels is not None:
             for node, label in node_labels.items():
                 self._node_labels[node] = label
+        if node_colours is not None:
+            for node, colour in node_colours.items():
+                self._node_colours[node] = colour
         self._assign_coordinates()
 
 
@@ -162,7 +170,10 @@ class SvgTreeDrawer(TreeDrawer):
         for u in self._tree.nodes():
             v = self._tree.get_parent(u)
             x = self._x_coords[u], self._y_coords[u]
-            dwg.add(dwg.circle(center=x, r=3))
+            colour = "black"
+            if self._node_colours.get(u, None) is not None:
+                colour = self._node_colours[u]
+            dwg.add(dwg.circle(center=x, r=3, fill=colour))
             dx = [0]
             dy = None
             if self._tree.is_leaf(u):
