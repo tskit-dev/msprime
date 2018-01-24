@@ -753,7 +753,7 @@ class TestVariantGenerator(HighLevelTestCase):
         for site, variant in zip(ts.sites(), variants):
             self.assertEqual(site.position, variant.position)
             self.assertEqual(site, variant.site)
-            self.assertEqual(site.index, variant.index)
+            self.assertEqual(site.id, variant.index)
             self.assertEqual(variant.alleles, ("0", "1"))
             self.assertTrue(np.all(variant.genotypes == np.ones(ts.sample_size)))
 
@@ -1046,6 +1046,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(t.get_num_samples(0), 1)
             self.assertEqual(t.get_num_tracked_samples(0), 0)
             self.assertEqual(list(t.samples(0)), [0])
+            self.assertIs(t.tree_sequence, ts)
 
         for t in ts.trees(sample_counts=False):
             self.assertEqual(t.get_num_samples(0), 1)
@@ -1264,13 +1265,12 @@ class TestTreeSequence(HighLevelTestCase):
             j += 1
         self.assertGreater(j, 1)
 
-    def test_apis(self):
+    def test_deprecated_apis(self):
         ts = msprime.simulate(10, random_seed=1)
         self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)
         self.assertEqual(ts.get_sample_size(), ts.sample_size)
         self.assertEqual(ts.get_sample_size(), ts.num_samples)
         self.assertEqual(ts.get_sequence_length(), ts.sequence_length)
-        self.assertEqual(ts.num_edges, ts.num_records)
         self.assertEqual(ts.get_num_trees(), ts.num_trees)
         self.assertEqual(ts.get_num_mutations(), ts.num_mutations)
         self.assertEqual(ts.get_num_nodes(), ts.num_nodes)
@@ -1278,11 +1278,6 @@ class TestTreeSequence(HighLevelTestCase):
         samples = ts.samples()
         self.assertEqual(
             ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
-        for s in samples:
-            self.assertEqual(ts.get_time(s), ts.time(s))
-            p = ts.get_population(s)
-            self.assertEqual(p, ts.population(s))
-            self.assertEqual(ts.get_samples(p), ts.samples(p))
         self.assertEqual(ts.get_samples(), ts.samples())
 
     def test_generate_mutations_on_tree_sequence(self):
@@ -1318,13 +1313,17 @@ class TestTreeSequence(HighLevelTestCase):
                 mutations.derived_state, mutations.derived_state_offset)
 
             for index, site in enumerate(ts.sites()):
+                s2 = ts.site(site.id)
+                self.assertEqual(s2, site)
                 self.assertEqual(site.position, sites.position[index])
                 self.assertGreater(site.position, previous_pos)
                 previous_pos = site.position
                 self.assertEqual(ancestral_state[index], site.ancestral_state)
-                self.assertEqual(site.index, index)
+                self.assertEqual(site.id, index)
                 for mutation in site.mutations:
-                    self.assertEqual(mutation.site, site.index)
+                    m2 = ts.mutation(mutation.id)
+                    self.assertEqual(m2, mutation)
+                    self.assertEqual(mutation.site, site.id)
                     self.assertEqual(mutation.site, mutations.site[mutation_index])
                     self.assertEqual(mutation.node, mutations.node[mutation_index])
                     self.assertEqual(mutation.parent, mutations.parent[mutation_index])
@@ -1349,7 +1348,7 @@ class TestTreeSequence(HighLevelTestCase):
             for site in ts.sites():
                 for mut in site.mutations:
                     other_mutations.append(msprime.DeprecatedMutation(
-                        position=site.position, node=mut.node, index=site.index))
+                        position=site.position, node=mut.node, index=site.id))
             self.assertEqual(mutations, other_mutations)
 
     def test_removed_methods(self):

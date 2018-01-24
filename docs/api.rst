@@ -194,19 +194,47 @@ of data using the :ref:`Tables API <sec_tables_api>`.
 
 .. autofunction:: msprime.load_tables
 
-++++++++++++++++++
-TreeSequence class
-++++++++++++++++++
+
++++++++++++++++++
+Top level-classes
++++++++++++++++++
+
+These classes are the interfaces used to interact with the trees
+and mutational information stored in a tree sequence.
 
 .. autoclass:: msprime.TreeSequence()
     :members:
 
-++++++++++++++++
-SparseTree class
-++++++++++++++++
-
 .. autoclass:: msprime.SparseTree()
     :members:
+
+++++++++++++++++++++++++
+Simple container classes
+++++++++++++++++++++++++
+
+These classes are simple shallow containers representing the entities defined
+in the :ref:`sec_data_model`. These classes are not intended to be instantiated
+directly, but are the return types for the various iterators provided by the
+:class:`.TreeSequence` and :class:`.SparseTree` classes.
+
+.. autoclass:: msprime.Node()
+    :members:
+
+.. autoclass:: msprime.Edge()
+    :members:
+
+.. autoclass:: msprime.Site()
+    :members:
+
+.. autoclass:: msprime.Mutation()
+    :members:
+
+.. autoclass:: msprime.Variant()
+    :members:
+
+.. autoclass:: msprime.Migration()
+    :members:
+
 
 **********************
 Calculating statistics

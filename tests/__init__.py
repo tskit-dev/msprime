@@ -23,7 +23,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import collections
 import heapq
 import random
 import sys
@@ -218,49 +217,47 @@ class PythonTreeSequence(object):
         self._num_samples = tree_sequence.get_num_samples()
         self._breakpoints = breakpoints
         self._sites = []
-        _Site = collections.namedtuple(
-            "Site",
-            ["position", "ancestral_state", "index", "mutations", "metadata"])
-        _Mutation = collections.namedtuple(
-            "Mutation",
-            ["site", "node", "derived_state", "parent", "id", "metadata"])
+
+        def make_mutation(id_):
+            site, node, derived_state, parent, metadata = tree_sequence.get_mutation(id_)
+            return msprime.Mutation(
+                id_=id_, site=site, node=node, derived_state=derived_state,
+                parent=parent, metadata=metadata)
         for j in range(tree_sequence.get_num_sites()):
-            pos, ancestral_state, mutations, index, metadata = tree_sequence.get_site(j)
-            self._sites.append(_Site(
-                position=pos, ancestral_state=ancestral_state, index=index,
-                mutations=[_Mutation(*mut) for mut in mutations],
+            pos, ancestral_state, ll_mutations, id_, metadata = tree_sequence.get_site(j)
+            self._sites.append(msprime.Site(
+                id_=id_, position=pos, ancestral_state=ancestral_state,
+                mutations=[make_mutation(ll_mut) for ll_mut in ll_mutations],
                 metadata=metadata))
 
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
         sequence_length = self._tree_sequence.get_sequence_length()
-        edges = [self._tree_sequence.get_edge(j) for j in range(M)]
-        l = [edge[0] for edge in edges]
-        r = [edge[1] for edge in edges]
-        p = [edge[2] for edge in edges]
-        c = [edge[3] for edge in edges]
-        t = [self._tree_sequence.get_node(edge[2])[1] for edge in edges]
-        I = sorted(range(M), key=lambda j: (l[j], t[j], p[j], c[j]))
-        O = sorted(range(M), key=lambda j: (r[j], -t[j], -p[j], -c[j]))
+        edges = [msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
+        time = [self._tree_sequence.get_node(edge.parent)[1] for edge in edges]
+        in_order = sorted(range(M), key=lambda j: (
+            edges[j].left, time[j], edges[j].parent, edges[j].child))
+        out_order = sorted(range(M), key=lambda j: (
+            edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
         j = 0
         k = 0
         left = 0
         while j < M or left < sequence_length:
             e_out = []
             e_in = []
-            while k < M and r[O[k]] == left:
-                h = O[k]
-                e_out.append(msprime.Edge(l[h], r[h], p[h], c[h]))
+            while k < M and edges[out_order[k]].right == left:
+                h = out_order[k]
+                e_out.append(edges[h])
                 k += 1
-            while j < M and l[I[j]] == left:
-                h = I[j]
-                e_in.append(msprime.Edge(l[h], r[h], p[h], c[h]))
+            while j < M and edges[in_order[j]].left == left:
+                h = in_order[j]
+                e_in.append(edges[h])
                 j += 1
             right = sequence_length
             if j < M:
-                right = min(right, l[I[j]])
+                right = min(right, edges[in_order[j]].left)
             if k < M:
-                right = min(right, r[O[k]])
+                right = min(right, edges[out_order[k]].right)
             yield (left, right), e_out, e_in
             left = right
 
@@ -272,10 +269,10 @@ class PythonTreeSequence(object):
         t = [
             self._tree_sequence.get_node(j)[1]
             for j in range(self._tree_sequence.get_num_nodes())]
-        I = sorted(
+        in_order = sorted(
             range(M), key=lambda j: (
                 edges[j].left, t[edges[j].parent], edges[j].parent, edges[j].child))
-        O = sorted(
+        out_order = sorted(
             range(M), key=lambda j: (
                 edges[j].right, -t[edges[j].parent], -edges[j].parent, -edges[j].child))
         j = 0
@@ -307,9 +304,9 @@ class PythonTreeSequence(object):
 
         st.left = 0
         while j < M or st.left < sequence_length:
-            while k < M and edges[O[k]].right == st.left:
-                p = edges[O[k]].parent
-                c = edges[O[k]].child
+            while k < M and edges[out_order[k]].right == st.left:
+                p = edges[out_order[k]].parent
+                c = edges[out_order[k]].child
                 k += 1
 
                 lsib = st.left_sib[c]
@@ -368,9 +365,9 @@ class PythonTreeSequence(object):
                     st.right_sib[c] = st.left_root
                     st.left_root = c
 
-            while j < M and edges[I[j]].left == st.left:
-                p = edges[I[j]].parent
-                c = edges[I[j]].child
+            while j < M and edges[in_order[j]].left == st.left:
+                p = edges[in_order[j]].parent
+                c = edges[in_order[j]].child
                 j += 1
 
                 # print("insert ", c, "->", p)
@@ -421,9 +418,9 @@ class PythonTreeSequence(object):
 
             st.right = sequence_length
             if j < M:
-                st.right = min(st.right, edges[I[j]].left)
+                st.right = min(st.right, edges[in_order[j]].left)
             if k < M:
-                st.right = min(st.right, edges[O[k]].right)
+                st.right = min(st.right, edges[out_order[k]].right)
             assert st.left_root != msprime.NULL_NODE
             while st.left_sib[st.left_root] != msprime.NULL_NODE:
                 st.left_root = st.left_sib[st.left_root]
@@ -619,13 +616,13 @@ class MRCACalculator(object):
         if j == self.__beta[x]:
             xhat = x
         else:
-            l = self.__lambda[self.__alpha[x] & ((1 << h) - 1)]
-            xhat = self.__tau[((self.__beta[x] >> l) | 1) << l]
+            ell = self.__lambda[self.__alpha[x] & ((1 << h) - 1)]
+            xhat = self.__tau[((self.__beta[x] >> ell) | 1) << ell]
         if j == self.__beta[y]:
             yhat = y
         else:
-            l = self.__lambda[self.__alpha[y] & ((1 << h) - 1)]
-            yhat = self.__tau[((self.__beta[y] >> l) | 1) << l]
+            ell = self.__lambda[self.__alpha[y] & ((1 << h) - 1)]
+            yhat = self.__tau[((self.__beta[y] >> ell) | 1) << ell]
         if self.__pi[xhat] <= self.__pi[yhat]:
             z = xhat
         else:
@@ -981,10 +978,10 @@ class Simplifier(object):
             # print("LOOP HEAD")
             # self.print_heaps(H)
             alpha = None
-            l = H[0][0]
+            left = H[0][0]
             X = []
             r = self.sequence_length + 1
-            while len(H) > 0 and H[0][0] == l:
+            while len(H) > 0 and H[0][0] == left:
                 x = heapq.heappop(H)[1]
                 X.append(x)
                 r = min(r, x.right)
@@ -1014,10 +1011,10 @@ class Simplifier(object):
                         self.record_node(input_id)
                 # output node ID
                 u = self.node_id_map[input_id]
-                alpha = self.alloc_segment(l, r, u)
+                alpha = self.alloc_segment(left, r, u)
                 # Update the heaps and add edges
                 for x in X:
-                    self.record_edge(l, r, u, x.node)
+                    self.record_edge(left, r, u, x.node)
                     if x.right == r:
                         self.free_segment(x)
                         if x.next is not None:

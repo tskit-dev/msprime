@@ -433,8 +433,8 @@ make_mutation(mutation_t *mutation)
     if (metadata == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("iis#iiO", mutation->site, mutation->node, mutation->derived_state,
-            (Py_ssize_t) mutation->derived_state_length, mutation->parent, mutation->id,
+    ret = Py_BuildValue("iis#iO", mutation->site, mutation->node, mutation->derived_state,
+            (Py_ssize_t) mutation->derived_state_length, mutation->parent,
             metadata);
 out:
     Py_XDECREF(metadata);
@@ -442,7 +442,7 @@ out:
 }
 
 static PyObject *
-make_mutation_list(mutation_t *mutations, size_t length)
+make_mutation_id_list(mutation_t *mutations, size_t length)
 {
     PyObject *ret = NULL;
     PyObject *t;
@@ -454,7 +454,7 @@ make_mutation_list(mutation_t *mutations, size_t length)
         goto out;
     }
     for (j = 0; j < length; j++) {
-        item = make_mutation(&mutations[j]);
+        item = Py_BuildValue("i", mutations[j].id);
         if (item == NULL) {
             Py_DECREF(t);
             goto out;
@@ -522,7 +522,7 @@ make_site(site_t *site)
     if (metadata == NULL) {
         goto out;
     }
-    mutations = make_mutation_list(site->mutations, site->mutations_length);
+    mutations = make_mutation_id_list(site->mutations, site->mutations_length);
     if (mutations == NULL) {
         goto out;
     }
@@ -567,17 +567,15 @@ make_variant(variant_t *variant, size_t num_samples)
 {
     PyObject *ret = NULL;
     npy_intp dims = num_samples;
-    PyObject *site = make_site(variant->site);
     PyObject *alleles = make_alleles(variant);
     PyArrayObject *genotypes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_UINT8);
 
-    if (genotypes == NULL || alleles == NULL || site == NULL) {
+    if (genotypes == NULL || alleles == NULL) {
         goto out;
     }
     memcpy(PyArray_DATA(genotypes), variant->genotypes, num_samples * sizeof(uint8_t));
-    ret = Py_BuildValue("OOO", site, genotypes, alleles);
+    ret = Py_BuildValue("iOO", variant->site->id, genotypes, alleles);
 out:
-    Py_XDECREF(site);
     Py_XDECREF(genotypes);
     Py_XDECREF(alleles);
     return ret;

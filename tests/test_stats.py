@@ -42,7 +42,7 @@ def get_r2_matrix(ts):
         for sA in t1.sites():
             assert len(sA.mutations) == 1
             mA = sA.mutations[0]
-            A[sA.index, sA.index] = 1
+            A[sA.id, sA.id] = 1
             fA = t1.get_num_samples(mA.node) / n
             samples = list(t1.samples(mA.node))
             for t2 in ts.trees(tracked_samples=samples):
@@ -54,8 +54,8 @@ def get_r2_matrix(ts):
                         fAB = t2.get_num_tracked_samples(mB.node) / n
                         D = fAB - fA * fB
                         r2 = D * D / (fA * fB * (1 - fA) * (1 - fB))
-                        A[sA.index, sB.index] = r2
-                        A[sB.index, sA.index] = r2
+                        A[sA.id, sB.id] = r2
+                        A[sB.id, sA.id] = r2
     return A
 
 
@@ -147,7 +147,7 @@ class TestLdCalculator(unittest.TestCase):
         # TODO change this to use branch_mutations from tsutil.
         sites = [
             msprime.Site(
-                position=j, index=j, ancestral_state="0",
+                position=j, id_=j, ancestral_state="0",
                 mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
             for j in range(self.num_test_sites)]
         ts = ts.copy(sites)

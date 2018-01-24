@@ -793,7 +793,7 @@ class TestSortTables(unittest.TestCase):
         site_id_map = {}
         randomised_mutations = []
         for s in randomised_sites:
-            site_id_map[s.index] = len(new_sites)
+            site_id_map[s.id] = len(new_sites)
             new_sites.add_row(
                 s.position, ancestral_state=s.ancestral_state, metadata=s.metadata)
             randomised_mutations.extend(s.mutations)
