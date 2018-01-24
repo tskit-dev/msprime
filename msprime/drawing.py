@@ -166,7 +166,9 @@ class SvgTreeDrawer(TreeDrawer):
         """
         dwg = svgwrite.Drawing(size=(self._width, self._height), debug=True)
         lines = dwg.add(dwg.g(id='lines', stroke='black'))
-        labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
+        left_labels = dwg.add(dwg.g(font_size=14, text_anchor="start"))
+        right_labels = dwg.add(dwg.g(font_size=14, text_anchor="end"))
+        mid_labels = dwg.add(dwg.g(font_size=14, text_anchor="middle"))
         for u in self._tree.nodes():
             v = self._tree.get_parent(u)
             x = self._x_coords[u], self._y_coords[u]
@@ -175,28 +177,50 @@ class SvgTreeDrawer(TreeDrawer):
                 colour = self._node_colours[u]
             dwg.add(dwg.circle(center=x, r=3, fill=colour))
             dx = [0]
-            dy = None
+            dy = [-5]
+            labels = mid_labels
             if self._tree.is_leaf(u):
                 dy = [20]
-            elif self._tree.parent(u) == NULL_NODE:
-                dy = [-5]
-            else:
-                dx = [-10]
-                dy = [-5]
+            elif self._tree.parent(u) != NULL_NODE:
+                if self._tree.left_sib(u) == NULL_NODE:
+                    # Would like to have a slight x offset here, but it doesn't seem
+                    # to do anything.
+                    # dx = [-5]
+                    labels = right_labels
+                else:
+                    dx = [5]
+                    labels = left_labels
             if self._node_labels[u] is not None:
                 labels.add(dwg.text(self._node_labels[u], x, dx=dx, dy=dy))
             if self._tree.parent(u) != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, (x[0], y[1])))
                 lines.add(dwg.line((x[0], y[1]), y))
+
+        # Experimental stuff to render the mutation labels. Not working very
+        # well at the moment.
+        # left_labels = dwg.add(dwg.g(
+        #     font_size=14, text_anchor="start", font_style="italic",
+        #     alignment_baseline="middle"))
+        # right_labels = dwg.add(dwg.g(
+        #     font_size=14, text_anchor="end", font_style="italic",
+        #     alignment_baseline="middle"))
         for x, mutation in self._mutations:
             r = 3
             dwg.add(dwg.rect(
                 insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
-            # if self._show_mutation_labels:
-            #     dx = [8 * r]
-            #     dy = [-2 * r]
-            #     labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
+            # dx = [5]
+            # dy = [0]
+            # if self._tree.left_sib(mutation.node) == NULL_NODE:
+            #     # Would like to have a slight x offset here, but it doesn't seem
+            #     # to do anything.
+            #     # dx = [-5]
+            #     labels = right_labels
+            # else:
+            #     labels = left_labels
+            # dx = [8 * r]
+            # dy = [-2 * r]
+            # labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
         return dwg.tostring()
 
 
