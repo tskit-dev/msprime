@@ -1313,12 +1313,16 @@ class TestTreeSequence(HighLevelTestCase):
                 mutations.derived_state, mutations.derived_state_offset)
 
             for index, site in enumerate(ts.sites()):
+                s2 = ts.site(site.id)
+                self.assertEqual(s2, site)
                 self.assertEqual(site.position, sites.position[index])
                 self.assertGreater(site.position, previous_pos)
                 previous_pos = site.position
                 self.assertEqual(ancestral_state[index], site.ancestral_state)
                 self.assertEqual(site.id, index)
                 for mutation in site.mutations:
+                    m2 = ts.mutation(mutation.id)
+                    self.assertEqual(m2, mutation)
                     self.assertEqual(mutation.site, site.id)
                     self.assertEqual(mutation.site, mutations.site[mutation_index])
                     self.assertEqual(mutation.node, mutations.node[mutation_index])

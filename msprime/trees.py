@@ -175,9 +175,9 @@ class Site(SimpleContainer):
     :ivar position: The floating point location of this site in genome coordinates.
         Ranges from 0 (inclusive) to :attr:`.TreeSequence.sequence_length`
         (exclusive).
-    :vartype position: int
+    :vartype position: float
     :ivar ancestral_state: The ancestral state at this site (i.e., the state
-        inheritied by nodes, unless mutations occur).
+        inherited by nodes, unless mutations occur).
     :vartype ancestral_state: str
     :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this site.
     :vartype metadata: bytes
@@ -194,21 +194,41 @@ class Site(SimpleContainer):
         self.metadata = metadata
 
 
-# class Mutation(SimpleContainer):
-#     """
-#     A :ref:`mutation <sec_mutation_table_definition>` in a tree sequence.
-#     """
-#     def __init__(self, id_, site, node, derived_state, parent, metadata):
-#         self.id = id_
-#         self.site = site
-#         self.node = node
-#         self.derived_state = derived_state
-#         self.parent = parent
-#         self.metadata = metadata
+class Mutation(SimpleContainer):
+    """
+    A :ref:`mutation <sec_mutation_table_definition>` in a tree sequence.
 
-Mutation = collections.namedtuple(
-    "Mutation",
-    ["site", "node", "derived_state", "parent", "id", "metadata"])
+    :ivar id: The integer ID of this mutation. Varies from 0 to
+        :attr:`.TreeSequence.num_mutations` - 1.
+    :vartype id: int
+    :ivar site: The integer ID of the site that this mutation occurs at. To obtain
+        further information about a site with a given ID use
+        :meth:`.TreeSequence.site`.
+    :vartype site: int
+    :ivar node: The integer ID of the the first node that inherits this mutation.
+        To obtain further information about a node with a given ID, use
+        :meth:`.TreeSequence.node`.
+    :vartype node: int
+    :ivar derived_state: The derived state for this mutation. This is the state
+        inherited by nodes in the subtree rooted at this mutation's node, unless
+        another mutation occurs.
+    :vartype ancestral_state: str
+    :ivar parent: The integer ID of this mutation's parent mutation. When multiple
+        mutations occur at a site along a path in the tree, mutations must
+        record the mutation that is immediately above them.
+        To obtain further information about a mutation with a given ID, use
+        :meth:`.TreeSequence.mutation`.
+    :vartype node: int
+    :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this site.
+    :vartype metadata: bytes
+    """
+    def __init__(self, id_, site, node, derived_state, parent, metadata):
+        self.id = id_
+        self.site = site
+        self.node = node
+        self.derived_state = derived_state
+        self.parent = parent
+        self.metadata = metadata
 
 
 class Edgeset(SimpleContainer):
@@ -1801,12 +1821,9 @@ class TreeSequence(object):
         # present form was chosen.
         check_numpy()
         iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
-        for ll_site, genotypes, alleles in iterator:
-            pos, ancestral_state, mutations, id_, metadata = ll_site
-            site = Site(
-                id_=id_, position=pos, ancestral_state=ancestral_state,
-                mutations=[Mutation(*mutation) for mutation in mutations],
-                metadata=metadata)
+        for site_id, genotypes, alleles in iterator:
+            # TODO change the iterator to just return the site ID.
+            site = self.site(site_id)
             if as_bytes:
                 if any(len(allele) > 1 for allele in alleles):
                     raise ValueError(
@@ -1815,8 +1832,9 @@ class TreeSequence(object):
                 lookup = np.array([ord(a[0]) for a in alleles], dtype=np.uint8)
                 bytes_genotypes[:] = lookup[genotypes]
                 genotypes = bytes_genotypes.tobytes()
+            # TODO fix this.
             v = Variant(
-                position=pos, site=site, index=id_, genotypes=genotypes,
+                position=site.position, site=site, index=site.id, genotypes=genotypes,
                 alleles=alleles)
             yield v
 
@@ -1856,6 +1874,18 @@ class TreeSequence(object):
         return Node(
             id_=id_, flags=flags, time=time, population=population, metadata=metadata)
 
+    def mutation(self, id_):
+        """
+        Returns the :ref:`mutation <sec_mutation_table_definition>` in this tree sequence
+        with the specified ID.
+
+        :rtype: :class:`.Mutation`
+        """
+        ll_mut = self._ll_tree_sequence.get_mutation(id_)
+        return Mutation(
+            id_=id_, site=ll_mut[0], node=ll_mut[1], derived_state=ll_mut[2],
+            parent=ll_mut[3], metadata=ll_mut[4])
+
     def site(self, id_):
         """
         Returns the :ref:`site <sec_site_table_definition>` in this tree sequence
@@ -1864,11 +1894,11 @@ class TreeSequence(object):
         :rtype: :class:`.Site`
         """
         ll_site = self._ll_tree_sequence.get_site(id_)
-        pos, ancestral_state, mutations, _, metadata = ll_site
+        pos, ancestral_state, ll_mutations, _, metadata = ll_site
+        mutations = [self.mutation(mut_id) for mut_id in ll_mutations]
         return Site(
             id_=id_, position=pos, ancestral_state=ancestral_state,
-            mutations=[Mutation(*mutation) for mutation in mutations],
-            metadata=metadata)
+            mutations=mutations, metadata=metadata)
 
     def provenance(self, id_):
         timestamp, record = self._ll_tree_sequence.get_provenance(id_)

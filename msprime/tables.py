@@ -852,7 +852,7 @@ class MutationTable(_msprime.MutationTable):
     def __getitem__(self, index):
         if index < 0:
             index += len(self)
-        site, node, derived_state, parent, _, metadata = self.get_row(index)
+        site, node, derived_state, parent, metadata = self.get_row(index)
         return MutationTableRow(site, node, derived_state, parent, metadata)
 
     # Unpickle support
