@@ -37,11 +37,7 @@ IS_PY2 = sys.version_info[0] < 3
 NULL_NODE = -1
 
 
-def draw_tree(
-        tree, width=None, height=None, times=False,
-        mutation_locations=True, mutation_labels=False,
-        internal_node_labels=True, leaf_node_labels=True, show_times=None,
-        node_label_text=None, format=None):
+def draw_tree(tree, width=None, height=None, node_labels=None, format=None):
     # See tree.draw() for documentation on these arguments.
     if format is None:
         format = "SVG"
@@ -58,31 +54,15 @@ def draw_tree(
             width = 200
         if height is None:
             height = 200
-        td = SvgTreeDrawer(
-            tree, width=width, height=height, show_times=times,
-            show_mutation_locations=mutation_locations,
-            show_mutation_labels=mutation_labels,
-            show_internal_node_labels=internal_node_labels,
-            show_leaf_node_labels=leaf_node_labels,
-            node_label_text=node_label_text)
+        cls = SvgTreeDrawer
     elif fmt == "ascii":
-        td = AsciiTreeDrawer(
-            tree, width=width, height=height, show_times=times,
-            show_mutation_locations=mutation_locations,
-            show_mutation_labels=mutation_labels,
-            show_internal_node_labels=internal_node_labels,
-            node_label_text=node_label_text,
-            show_leaf_node_labels=leaf_node_labels)
+        cls = AsciiTreeDrawer
     elif fmt == "unicode":
         if IS_PY2:
             raise ValueError("Unicode tree drawing not supported on Python 2")
-        td = UnicodeTreeDrawer(
-            tree, width=width, height=height, show_times=times,
-            show_mutation_locations=mutation_locations,
-            show_mutation_labels=mutation_labels,
-            show_internal_node_labels=internal_node_labels,
-            node_label_text=node_label_text,
-            show_leaf_node_labels=leaf_node_labels)
+        cls = UnicodeTreeDrawer
+
+    td = cls(tree, width=width, height=height, node_labels=node_labels)
     return td.draw()
 
 
@@ -102,28 +82,22 @@ class TreeDrawer(object):
             ret = int(round(x))
         return ret
 
-    def __init__(
-            self, tree, width=None, height=None, show_times=False,
-            show_mutation_locations=True, show_mutation_labels=False,
-            show_internal_node_labels=True, show_leaf_node_labels=True,
-            node_label_text=None):
+    def __init__(self, tree, width=None, height=None, node_labels=None):
         self._tree = tree
-        self._show_times = show_times
-        self._show_mutation_locations = show_mutation_locations
-        self._show_mutation_labels = show_mutation_labels
-        self._show_internal_node_labels = show_internal_node_labels
-        self._show_leaf_node_labels = show_leaf_node_labels
         self._num_leaves = len(list(tree.leaves()))
         self._width = width
         self._height = height
         self._x_coords = {}
         self._y_coords = {}
-        self._node_label_text = {}
+        self._node_labels = {}
         for u in tree.nodes():
-            self._node_label_text[u] = str(u)
-        if node_label_text is not None:
-            for node, label in node_label_text.items():
-                self._node_label_text[node] = label
+            if node_labels is None:
+                self._node_labels[u] = str(u)
+            else:
+                self._node_labels[u] = None
+        if node_labels is not None:
+            for node, label in node_labels.items():
+                self._node_labels[node] = label
         self._assign_coordinates()
 
 
@@ -198,29 +172,20 @@ class SvgTreeDrawer(TreeDrawer):
             else:
                 dx = [-10]
                 dy = [-5]
-            condition = (
-                (self._tree.is_leaf(u) and self._show_leaf_node_labels) or
-                (self._tree.is_internal(u) and self._show_internal_node_labels))
-            if condition:
-                labels.add(dwg.text(self._node_label_text[u], x, dx=dx, dy=dy))
-            if self._show_times and self._tree.is_internal(u):
-                dx[0] += 25
-                labels.add(dwg.text(
-                    "t = {:.2f}".format(self._tree.get_time(u)), x, dx=dx,
-                    dy=dy))
+            if self._node_labels[u] is not None:
+                labels.add(dwg.text(self._node_labels[u], x, dx=dx, dy=dy))
             if self._tree.parent(u) != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, (x[0], y[1])))
                 lines.add(dwg.line((x[0], y[1]), y))
         for x, mutation in self._mutations:
             r = 3
-            if self._show_mutation_locations:
-                dwg.add(dwg.rect(
-                    insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
-            if self._show_mutation_labels:
-                dx = [8 * r]
-                dy = [-2 * r]
-                labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
+            dwg.add(dwg.rect(
+                insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
+            # if self._show_mutation_labels:
+            #     dx = [8 * r]
+            #     dy = [-2 * r]
+            #     labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
         return dwg.tostring()
 
 
@@ -262,7 +227,9 @@ class TextTreeDrawer(TreeDrawer):
         for root in self._tree.roots:
             for u in self._tree.nodes(root, order="postorder"):
                 if self._tree.is_leaf(u):
-                    label_size = len(self._node_label_text[u])
+                    label_size = 1
+                    if self._node_labels[u] is not None:
+                        label_size = len(self._node_labels[u])
                     self._x_coords[u] = x
                     x += label_size + 1
                 else:
@@ -287,7 +254,7 @@ class TextTreeDrawer(TreeDrawer):
             col = self._x_coords[u]
             row = self._y_coords[u]
             j = row * w + col
-            label = self._convert_text(self._node_label_text[u])
+            label = self._convert_text(self._node_labels[u])
             n = len(label)
             canvas[j: j + n] = label
             if self._tree.is_internal(u):
@@ -336,6 +303,8 @@ class AsciiTreeDrawer(TextTreeDrawer):
     mid_up_down_char = ord('+')
 
     def _convert_text(self, text):
+        if text is None:
+            text = "|"  # vertical line char
         return array.array(self.array_type, text.encode())
 
     def draw(self):
@@ -361,6 +330,8 @@ class UnicodeTreeDrawer(TextTreeDrawer):
     mid_up_down_char = "\u254b"
 
     def _convert_text(self, text):
+        if text is None:
+            text = self.vertical_line_char
         return array.array(self.array_type, text)
 
     def draw(self):
