@@ -229,6 +229,11 @@ directly, but are the return types for the various iterators provided by the
 .. autoclass:: msprime.Mutation()
     :members:
 
+.. autoclass:: msprime.Variant()
+    :members:
+
+.. autoclass:: msprime.Migration()
+    :members:
 
 
 **********************

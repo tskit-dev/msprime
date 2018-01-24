@@ -59,12 +59,6 @@ CoalescenceRecord = collections.namedtuple(
     "CoalescenceRecord",
     ["left", "right", "node", "children", "time", "population"])
 
-
-Migration = collections.namedtuple(
-    "Migration",
-    ["left", "right", "node", "source", "dest", "time"])
-
-
 # TODO We need to get rid of the these namedtuples where possible and
 # make proper classes where possible. Also, need to standardise on 'id'
 # rather than index throughout.
@@ -77,15 +71,8 @@ DeprecatedMutation = collections.namedtuple(
     ["position", "node", "index"])
 
 
-# This form was chosen to try to break as little of existing code as possible.
-# The position and index values are retained for compatability,
-# although they are redundant.
-Variant = collections.namedtuple(
-    "Variant",
-    ["position", "site", "index", "genotypes", "alleles"])
-
-
 # TODO this interface is rubbish. Should have much better printing options.
+# TODO we should be use __slots__ here probably.
 class SimpleContainer(object):
 
     def __eq__(self, other):
@@ -105,8 +92,6 @@ class Node(SimpleContainer):
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
 
-    TODO: should population be an object??
-
     :ivar id: The integer ID of this node. Varies from 0 to
         :attr:`.TreeSequence.num_nodes` - 1.
     :vartype id: int
@@ -114,7 +99,7 @@ class Node(SimpleContainer):
     :vartype flags: int
     :ivar time: The birth time of the individual represented by this node.
     :vartype float: float
-    :ivar population: The population that this node was born in.
+    :ivar population: The integer ID of the population that this node was born in.
     :vartype population: int
     :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this node.
     :vartype metadata: bytes
@@ -139,17 +124,23 @@ class Node(SimpleContainer):
 
 class Edge(SimpleContainer):
     """
-    A :ref:`edge <sec_edge_table_definition>` in a tree sequence.
+    An :ref:`edge <sec_edge_table_definition>` in a tree sequence.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
-
-    TODO: add parent and child.
 
     :ivar left: The left coordinate of this edge.
     :vartype left: float
     :ivar right: The right coordinate of this edge.
     :vartype right: float
+    :ivar parent: The integer ID of the parent node for this edge.
+        To obtain further information about a node with a given ID, use
+        :meth:`.TreeSequence.node`.
+    :vartype parent: int
+    :ivar child: The integer ID of the child node for this edge.
+        To obtain further information about a node with a given ID, use
+        :meth:`.TreeSequence.node`.
+    :vartype child: int
     """
     def __init__(self, left, right, parent, child):
         self.left = left
@@ -198,6 +189,9 @@ class Mutation(SimpleContainer):
     """
     A :ref:`mutation <sec_mutation_table_definition>` in a tree sequence.
 
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
     :ivar id: The integer ID of this mutation. Varies from 0 to
         :attr:`.TreeSequence.num_mutations` - 1.
     :vartype id: int
@@ -212,13 +206,13 @@ class Mutation(SimpleContainer):
     :ivar derived_state: The derived state for this mutation. This is the state
         inherited by nodes in the subtree rooted at this mutation's node, unless
         another mutation occurs.
-    :vartype ancestral_state: str
+    :vartype derived_state: str
     :ivar parent: The integer ID of this mutation's parent mutation. When multiple
         mutations occur at a site along a path in the tree, mutations must
         record the mutation that is immediately above them.
         To obtain further information about a mutation with a given ID, use
         :meth:`.TreeSequence.mutation`.
-    :vartype node: int
+    :vartype parent: int
     :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this site.
     :vartype metadata: bytes
     """
@@ -229,6 +223,63 @@ class Mutation(SimpleContainer):
         self.derived_state = derived_state
         self.parent = parent
         self.metadata = metadata
+
+
+class Migration(SimpleContainer):
+    """
+    A :ref:`migration <sec_migration_table_definition>` in a tree sequence.
+
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
+    :ivar left: The left end of the genomic interval covered by this
+        migration (inclusive).
+    :vartype left: float
+    :ivar right: The right end of the genomic interval covered by this migration
+        (exclusive).
+    :vartype right: float
+    :ivar node: The integer ID of the node involved in this migration event.
+        To obtain further information about a node with a given ID, use
+        :meth:`.TreeSequence.node`.
+    :vartype node: int
+    :ivar source: The source population ID.
+    :vartype source: int
+    :ivar dest: The destination population ID.
+    :vartype dest: int
+    :ivar time: The time at which this migration occured at.
+    :vartype time: float
+    """
+    def __init__(self, left, right, node, source, dest, time):
+        self.left = left
+        self.right = right
+        self.node = node
+        self.source = source
+        self.dest = dest
+        self.time = time
+
+
+class Variant(SimpleContainer):
+    """
+    A variant is represents the observed variation among the samples
+    for a given site.
+
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
+    :ivar site: The site object for this variant.
+    :vartype site: :class:`.Site`
+    :ivar alleles:
+    :vartype alleles:
+    :ivar genotypes:
+    :vartype genotypes:
+    """
+    def __init__(self, site, alleles, genotypes):
+        self.site = site
+        self.alleles = alleles
+        self.genotypes = genotypes
+        # Deprecated aliases to avoid breaking existing code.
+        self.position = site.position
+        self.index = site.id
 
 
 class Edgeset(SimpleContainer):
@@ -250,8 +301,6 @@ class Provenance(SimpleContainer):
         self.record = record
 
 
-# TODO:
-# - Pickle and copy support
 class SparseTree(object):
     """
     A SparseTree is a single tree in a :class:`.TreeSequence`. In a sparse tree
@@ -1822,7 +1871,6 @@ class TreeSequence(object):
         check_numpy()
         iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
         for site_id, genotypes, alleles in iterator:
-            # TODO change the iterator to just return the site ID.
             site = self.site(site_id)
             if as_bytes:
                 if any(len(allele) > 1 for allele in alleles):
@@ -1832,11 +1880,7 @@ class TreeSequence(object):
                 lookup = np.array([ord(a[0]) for a in alleles], dtype=np.uint8)
                 bytes_genotypes[:] = lookup[genotypes]
                 genotypes = bytes_genotypes.tobytes()
-            # TODO fix this.
-            v = Variant(
-                position=site.position, site=site, index=site.id, genotypes=genotypes,
-                alleles=alleles)
-            yield v
+            yield Variant(site, alleles, genotypes)
 
     def genotype_matrix(self):
         return self._ll_tree_sequence.get_genotype_matrix()
