@@ -23,7 +23,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import collections
 import heapq
 import random
 import sys
@@ -218,14 +217,17 @@ class PythonTreeSequence(object):
         self._num_samples = tree_sequence.get_num_samples()
         self._breakpoints = breakpoints
         self._sites = []
-        _Mutation = collections.namedtuple(
-            "Mutation",
-            ["site", "node", "derived_state", "parent", "id", "metadata"])
+
+        def make_mutation(id_):
+            site, node, derived_state, parent, metadata = tree_sequence.get_mutation(id_)
+            return msprime.Mutation(
+                id_=id_, site=site, node=node, derived_state=derived_state,
+                parent=parent, metadata=metadata)
         for j in range(tree_sequence.get_num_sites()):
-            pos, ancestral_state, mutations, id_, metadata = tree_sequence.get_site(j)
+            pos, ancestral_state, ll_mutations, id_, metadata = tree_sequence.get_site(j)
             self._sites.append(msprime.Site(
                 id_=id_, position=pos, ancestral_state=ancestral_state,
-                mutations=[_Mutation(*mut) for mut in mutations],
+                mutations=[make_mutation(ll_mut) for ll_mut in ll_mutations],
                 metadata=metadata))
 
     def edge_diffs(self):

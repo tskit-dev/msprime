@@ -2352,7 +2352,7 @@ class TestVariantGenerator(LowLevelTestCase):
         variants = list(_msprime.VariantGenerator(ts))
         self.assertGreater(len(variants), 0)
         self.assertEqual(len(variants), ts.get_num_sites())
-        sites = [ts.get_site(j) for j in range(ts.get_num_sites())]
+        sites = list(range(ts.get_num_sites()))
         self.assertEqual([site for site, _, _ in variants], sites)
         for _, genotypes, alleles in _msprime.VariantGenerator(ts):
             self.assertEqual(genotypes.shape, (ts.get_num_samples(), ))
@@ -2410,7 +2410,9 @@ class TestSparseTree(LowLevelTestCase):
                     self.assertTrue(st.get_left() <= position < st.get_right())
                     self.assertEqual(index, j)
                     self.assertEqual(metadata, b"")
-                    for site, node, derived_state, parent, mut_id, metadata in mutations:
+                    for mut_id in mutations:
+                        site, node, derived_state, parent, metadata = \
+                            ts.get_mutation(mut_id)
                         self.assertEqual(site, index)
                         self.assertEqual(mutation_id, mut_id)
                         self.assertNotEqual(st.get_parent(node), NULL_NODE)
@@ -3138,8 +3140,8 @@ class TestTablesInterface(LowLevelTestCase):
 
         new_mutations = _msprime.MutationTable()
         for j in range(ts.get_num_mutations()):
-            site, node, derived_state, parent, mut_id, metadata = ts.get_mutation(j)
-            self.assertEqual(mut_id, new_mutations.num_rows)
+            site, node, derived_state, parent, metadata = ts.get_mutation(j)
+            self.assertEqual(j, new_mutations.num_rows)
             self.assertEqual(metadata, b'')
             new_mutations.add_row(site, node, derived_state, parent)
         self.assertEqual(list(new_mutations.site), list(mutations.site))
