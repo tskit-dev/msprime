@@ -229,12 +229,20 @@ class TestDrawText(TestTreeDraw):
     def test_labels(self):
         t = self.get_binary_tree()
         labels = {u: self.example_label for u in t.nodes()}
-        text = t.draw(format=self.drawing_format, node_label_text=labels)
+        text = t.draw(format=self.drawing_format, node_labels=labels)
         self.verify_basic_text(text)
         j = 0
         for _ in t.nodes():
             j = text[j:].find(self.example_label)
             self.assertNotEqual(j, -1)
+
+    def test_no_labels(self):
+        t = self.get_binary_tree()
+        labels = {}
+        text = t.draw(format=self.drawing_format, node_labels=labels)
+        self.verify_basic_text(text)
+        for u in t.nodes():
+            self.assertEqual(text.find(str(u)), -1)
 
 
 @unittest.skipIf(IS_PY2, "Unicode tree drawing not supported on Python 2")
@@ -245,8 +253,7 @@ class TestDrawUnicode(TestDrawText):
     drawing_format = "unicode"
     example_label = "\u20ac" * 10  # euro symbol
 
-    def verify_text_rendering(self, tree, drawn_tree, debug=False):
-        drawn = tree.draw(format="unicode")
+    def verify_text_rendering(self, drawn, drawn_tree, debug=False):
         if debug:
             print("Drawn:")
             print(drawn)
@@ -277,7 +284,8 @@ class TestDrawUnicode(TestDrawText):
             "0 1")
         ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
-        self.verify_text_rendering(t, tree)
+        drawn = t.draw(format="unicode")
+        self.verify_text_rendering(drawn, tree)
 
     def test_trident_tree(self):
         nodes = six.StringIO("""\
@@ -299,7 +307,8 @@ class TestDrawUnicode(TestDrawText):
             "0 1 2\n")
         ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
-        self.verify_text_rendering(t, tree)
+        drawn = t.draw(format="unicode")
+        self.verify_text_rendering(drawn, tree)
 
     def test_pitchfork_tree(self):
         nodes = six.StringIO("""\
@@ -323,7 +332,20 @@ class TestDrawUnicode(TestDrawText):
             "0 1 2 3\n")
         ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
-        self.verify_text_rendering(t, tree)
+        # No labels
+        tree = (
+            "   ┃   \n"
+            "┏━┳┻┳━┓\n"
+            "┃ ┃ ┃ ┃\n")
+        drawn = t.draw(format="unicode", node_labels={})
+        self.verify_text_rendering(drawn, tree)
+        # Some lables
+        tree = (
+            "   ┃   \n"
+            "┏━┳┻┳━┓\n"
+            "0 ┃ ┃ 3\n")
+        drawn = t.draw(format="unicode", node_labels={0: "0", 3: "3"})
+        self.verify_text_rendering(drawn, tree)
 
     def test_stick_tree(self):
         nodes = six.StringIO("""\
@@ -345,7 +367,8 @@ class TestDrawUnicode(TestDrawText):
             "0\n")
         ts = msprime.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
-        self.verify_text_rendering(t, tree)
+        drawn = t.draw(format="unicode")
+        self.verify_text_rendering(drawn, tree)
 
 
 class TestDrawSvg(TestTreeDraw):
@@ -406,19 +429,36 @@ class TestDrawSvg(TestTreeDraw):
     def test_labels(self):
         t = self.get_binary_tree()
         labels = {u: "XXX" for u in t.nodes()}
-        svg = t.draw(format="svg", node_label_text=labels)
+        svg = t.draw(format="svg", node_labels=labels)
         self.verify_basic_svg(svg)
-        j = 0
-        for _ in t.nodes():
-            j = svg[j:].find("XXX")
-            self.assertNotEqual(j, -1)
+        self.assertEqual(svg.count("XXX"), t.num_nodes)
 
-    def test_boolean_flags(self):
-        flags = [
-            "times", "mutation_locations", "mutation_labels", "internal_node_labels",
-            "leaf_node_labels", "show_times"]
+    def test_one_label(self):
         t = self.get_binary_tree()
-        for flag in flags:
-            for boolean in [True, False]:
-                svg = t.draw(**{flag: boolean})
-                self.verify_basic_svg(svg)
+        labels = {0: "XXX"}
+        svg = t.draw(format="svg", node_labels=labels)
+        self.verify_basic_svg(svg)
+        self.assertEqual(svg.count("XXX"), 1)
+
+    def test_no_labels(self):
+        t = self.get_binary_tree()
+        labels = {}
+        svg = t.draw(format="svg", node_labels=labels)
+        self.verify_basic_svg(svg)
+        # Can't really test for much here if we don't understand the SVG
+
+    def test_one_node_colour(self):
+        t = self.get_binary_tree()
+        colour = "rgb(0, 1, 2)"
+        colours = {0: colour}
+        svg = t.draw(format="svg", node_colours=colours)
+        self.verify_basic_svg(svg)
+        self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
+
+    def test_all_nodes_colour(self):
+        t = self.get_binary_tree()
+        colours = {u: "rgb({}, {}, {})".format(u, u, u) for u in t.nodes()}
+        svg = t.draw(format="svg", node_colours=colours)
+        self.verify_basic_svg(svg)
+        for colour in colours.values():
+            self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
