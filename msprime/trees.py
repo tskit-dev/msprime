@@ -670,7 +670,9 @@ class SparseTree(object):
 
     def draw(
             self, path=None, width=None, height=None,
-            node_labels=None, node_colours=None, format=None):
+            node_labels=None, node_colours=None,
+            mutation_labels=None, mutation_colours=None,
+            format=None):
         """
         Returns a drawing of this tree.
 
@@ -724,7 +726,8 @@ class SparseTree(object):
         """
         output = drawing.draw_tree(
             self, format=format, width=width, height=height,
-            node_labels=node_labels, node_colours=node_colours)
+            node_labels=node_labels, node_colours=node_colours,
+            mutation_labels=mutation_labels, mutation_colours=mutation_colours)
         if path is not None:
             with open(path, "w") as f:
                 f.write(output)

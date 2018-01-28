@@ -38,7 +38,8 @@ NULL_NODE = -1
 
 
 def draw_tree(
-        tree, width=None, height=None, node_labels=None, node_colours=None, format=None):
+        tree, width=None, height=None, node_labels=None, node_colours=None,
+        mutation_labels=None, mutation_colours=None, format=None):
     # See tree.draw() for documentation on these arguments.
     if format is None:
         format = "SVG"
@@ -64,8 +65,9 @@ def draw_tree(
         cls = UnicodeTreeDrawer
 
     td = cls(
-        tree, width=width, height=height, node_labels=node_labels,
-        node_colours=node_colours)
+        tree, width=width, height=height,
+        node_labels=node_labels, node_colours=node_colours,
+        mutation_labels=mutation_labels, mutation_colours=mutation_colours)
     return td.draw()
 
 
@@ -86,7 +88,8 @@ class TreeDrawer(object):
         return ret
 
     def __init__(
-            self, tree, width=None, height=None, node_labels=None, node_colours=None):
+            self, tree, width=None, height=None, node_labels=None, node_colours=None,
+            mutation_labels=None, mutation_colours=None):
         self._tree = tree
         self._num_leaves = len(list(tree.leaves()))
         self._width = width
@@ -95,6 +98,10 @@ class TreeDrawer(object):
         self._y_coords = {}
         self._node_labels = {}
         self._node_colours = {}
+        self._mutation_labels = {}
+        self._mutation_colours = {}
+
+        # Set the node labels and colours.
         for u in tree.nodes():
             if node_labels is None:
                 self._node_labels[u] = str(u)
@@ -106,6 +113,21 @@ class TreeDrawer(object):
         if node_colours is not None:
             for node, colour in node_colours.items():
                 self._node_colours[node] = colour
+
+        # Set the mutation labels.
+        for site in tree.sites():
+            for mutation in site.mutations:
+                if mutation_labels is None:
+                    self._mutation_labels[mutation.id] = str(mutation.id)
+                else:
+                    self._mutation_labels[mutation.id] = None
+        if mutation_labels is not None:
+            for mutation, label in mutation_labels.items():
+                self._mutation_labels[mutation] = label
+        if mutation_colours is not None:
+            for mutation, colour in mutation_colours.items():
+                self._mutation_colours[mutation] = colour
+
         self._assign_coordinates()
 
 
@@ -119,15 +141,13 @@ class SvgTreeDrawer(TreeDrawer):
         t = 1
         if self._tree.num_roots > 0:
             t = max(self._tree.time(root) for root in self._tree.roots)
-        # Do we have any mutations over the root?
-        mutations_over_root = False
-        for site in self._tree.sites():
-            for mut in site.mutations:
-                if self._tree.parent(mut.node) == NULL_NODE:
-                    mutations_over_root = True
-                    break
+        # Do we have any mutations over a root?
+        mutations_over_root = any(
+            self._tree.parent(mut.node) == NULL_NODE for mut in self._tree.mutations())
         root_branch_length = 0
         if mutations_over_root:
+            # Allocate a fixed about of space to show the mutations on the
+            # 'root branch'
             root_branch_length = self._height / 10
         self._y_scale = (self._height - root_branch_length - 2 * y_padding) / t
         self._y_coords[-1] = y_padding
@@ -146,13 +166,16 @@ class SvgTreeDrawer(TreeDrawer):
         for child, mutations in node_mutations.items():
             n = len(mutations)
             parent = self._tree.parent(child)
-            x = self._x_coords[child]
-            y1 = self._y_coords[child]
-            y2 = self._y_coords[parent]
-            chunk = (y2 - y1) / (n + 1)
-            for k, mutation in enumerate(mutations):
-                z = x, self._discretise(y1 + (k + 1) * chunk)
-                self._mutations.append((z, mutation))
+            # Ignore any mutations that are above non-roots that are
+            # not in the current tree.
+            if child in self._x_coords:
+                x = self._x_coords[child]
+                y1 = self._y_coords[child]
+                y2 = self._y_coords[parent]
+                chunk = (y2 - y1) / (n + 1)
+                for k, mutation in enumerate(mutations):
+                    z = x, self._discretise(y1 + (k + 1) * chunk)
+                    self._mutations.append((z, mutation))
 
     def _assign_x_coordinates(self, node):
         """
@@ -216,16 +239,21 @@ class SvgTreeDrawer(TreeDrawer):
             alignment_baseline="middle"))
         for x, mutation in self._mutations:
             r = 3
+            colour = "red"
+            if self._mutation_colours.get(mutation.id, None) is not None:
+                colour = self._mutation_colours[mutation.id]
             dwg.add(dwg.rect(
-                insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
+                insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill=colour))
             dx = 5
             if self._tree.left_sib(mutation.node) == NULL_NODE:
                 dx *= -1
                 labels = right_labels
             else:
                 labels = left_labels
-            dy = 1.5 * r
-            labels.add(dwg.text("{}".format(mutation.site), (x[0] + dx, x[1] + dy)))
+            if self._mutation_labels[mutation.id] is not None:
+                dy = 1.5 * r
+                labels.add(dwg.text(
+                    self._mutation_labels[mutation.id], (x[0] + dx, x[1] + dy)))
         return dwg.tostring()
 
 
