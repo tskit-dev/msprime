@@ -1,4 +1,26 @@
 ********************
+[0.5.0] - TBC
+********************
+
+**Breaking changes**:
+
+- Addition of the concept of a 'Site' and generalisation of mutations
+  from simple infinite sites mutations to arbirary state changes along
+  the tree. A mutation now occurs at a specific site (which has a position)
+  rather than having an explicit position field.
+
+- The SparseTree.mutations() and TreeSequence.mutations() iterators no
+  longer support tuple-like access to values. For example, code like
+
+    for x, u, j in ts.mutations():
+        print("mutation at position", x, "node = ", u)
+
+  will no longer work. Code using the old ``mutation.position`` and
+  ``mutation.index`` will still work through deprecated aliases,
+  but new code should use a more cite-centric approach.
+
+
+********************
 [0.4.0] - 2016-10-16
 ********************
 

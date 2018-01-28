@@ -1546,18 +1546,18 @@ class TestMspConversionOutput(unittest.TestCase):
             len(output), 2 + self._tree_sequence.get_num_mutations())
         n = self._tree_sequence.get_sample_size()
         m = self._tree_sequence.get_sequence_length()
-        mutations = list(self._tree_sequence.mutations())
+        sites = list(self._tree_sequence.sites())
         haplotypes = list(self._tree_sequence.haplotypes())
-        for site, line in enumerate(output[2:]):
+        for site_id, line in enumerate(output[2:]):
             splits = line.split()
             self.assertEqual(splits[0], "SITE:")
-            self.assertEqual(int(splits[1]), site)
-            position = mutations[site][0] / m
+            self.assertEqual(int(splits[1]), site_id)
+            position = sites[site_id].position / m
             self.assertAlmostEqual(float(splits[2]), position)
             col = splits[4]
             self.assertEqual(len(col), n)
             for j in range(n):
-                self.assertEqual(col[j], haplotypes[j][site])
+                self.assertEqual(col[j], haplotypes[j][site_id])
 
 
 @unittest.skipIf(not _h5py_available, "h5py not installed, skipping upgrade tests")

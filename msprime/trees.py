@@ -770,30 +770,30 @@ class SparseTree(object):
 
     def mutations(self):
         """
-        Returns an iterator over the mutations in this tree. Each
-        mutation is represented as a tuple :math:`(x, u, j)` where :math:`x`
-        is the position of the mutation in the sequence in chromosome
-        coordinates, :math:`u` is the node over which the mutation
-        occurred and :math:`j` is the zero-based index of the mutation within
-        the overall tree sequence. Mutations are returned in non-decreasing
-        order of position and increasing index.
+        Returns an iterator over all the
+        :ref:`mutations <sec_mutation_table_definition>` in this tree.
+        Mutations are returned in order of nondecreasing site ID.
+        See the :class:`Mutation` class for details on the available fields for
+        each mutation.
 
-        Each mutation returned is an instance of
-        :func:`collections.namedtuple`, and may be accessed via the attributes
-        ``position``, ``node`` and ``index`` as well as the usual positional
-        approach. This is the recommended interface for working with mutations
-        as it is both more readable and also ensures that code is forward
-        compatible with future extensions.
+        The returned iterator is equivalent to iterating over all sites
+        and all mutations in each site, i.e.::
 
-        :return: An iterator of all :math:`(x, u, j)` tuples defining
-            the mutations in this tree.
-        :rtype: iter
+            >>> for site in tree.sites():
+            >>>     for mutation in site.mutations:
+            >>>         yield mutation
+
+        :return: An iterator over all mutations in this tree.
+        :rtype: iter(:class:`.Mutation`)
         """
-        # TODO deprecate
         for site in self.sites():
             for mutation in site.mutations:
-                yield DeprecatedMutation(
-                    position=site.position, node=mutation.node, index=site.index)
+                # Add in attributes for the older deprecated way of defining
+                # mutations. These attributes will be removed in future releases
+                # and are deliberately undocumented in version 0.5.0.
+                mutation.position = site.position
+                mutation.index = site.id
+                yield mutation
 
     def get_leaves(self, u):
         # Deprecated alias for samples. See the discussion in the get_num_leaves
@@ -1719,30 +1719,30 @@ class TreeSequence(object):
 
     def mutations(self):
         """
-        Returns an iterator over the mutations in this tree sequence. Each
-        mutation is represented as a tuple :math:`(x, u, j)` where :math:`x`
-        is the position of the mutation in the sequence in chromosome
-        coordinates, :math:`u` is the node over which the mutation
-        occurred and :math:`j` is the zero-based index of the mutation within
-        the overall tree sequence. Mutations are returned in non-decreasing
-        order of position and increasing index.
+        Returns an iterator over all the
+        :ref:`mutations <sec_mutation_table_definition>` in this tree sequence.
+        Mutations are returned in order of nondecreasing site ID.
+        See the :class:`Mutation` class for details on the available fields for
+        each mutation.
 
-        Each mutation returned is an instance of
-        :func:`collections.namedtuple`, and may be accessed via the attributes
-        ``position``, ``node`` and ``index`` as well as the usual positional
-        approach. This is the recommended interface for working with mutations
-        as it is both more readable and also ensures that code is forward
-        compatible with future extensions.
+        The returned iterator is equivalent to iterating over all sites
+        and all mutations in each site, i.e.::
 
-        :return: An iterator of all :math:`(x, u, j)` tuples defining
-            the mutations in this tree sequence.
-        :rtype: iter
+            >>> for site in tree_sequence.sites():
+            >>>     for mutation in site.mutations:
+            >>>         yield mutation
+
+        :return: An iterator over all mutations in this tree sequence.
+        :rtype: iter(:class:`.Mutation`)
         """
-        # TODO deprecate
         for site in self.sites():
             for mutation in site.mutations:
-                yield DeprecatedMutation(
-                    position=site.position, node=mutation.node, index=site.id)
+                # Add in attributes for the older deprecated way of defining
+                # mutations. These attributes will be removed in future releases
+                # and are deliberately undocumented in version 0.5.0.
+                mutation.position = site.position
+                mutation.index = site.id
+                yield mutation
 
     def breakpoints(self):
         """

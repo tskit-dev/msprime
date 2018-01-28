@@ -1340,16 +1340,31 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(mutation_index, len(mutations))
         self.assertTrue(some_sites)
 
+    def verify_mutations(self, ts):
+        other_mutations = []
+        for site in ts.sites():
+            for mutation in site.mutations:
+                other_mutations.append(mutation)
+        mutations = list(ts.mutations())
+        self.assertEqual(ts.num_mutations, len(other_mutations))
+        self.assertEqual(ts.num_mutations, len(mutations))
+        for mut, other_mut in zip(mutations, other_mutations):
+            # We cannot compare these directly as the mutations obtained
+            # from the mutations iterator will have extra deprecated
+            # attributes.
+            self.assertEqual(mut.id, other_mut.id)
+            self.assertEqual(mut.site, other_mut.site)
+            self.assertEqual(mut.parent, other_mut.parent)
+            self.assertEqual(mut.node, other_mut.node)
+            self.assertEqual(mut.metadata, other_mut.metadata)
+            # Check the deprecated attrs.
+            self.assertEqual(mut.position, ts.site(mut.site).position)
+            self.assertEqual(mut.index, mut.site)
+
     def test_sites_mutations(self):
         # Check that the mutations iterator returns the correct values.
         for ts in get_example_tree_sequences():
-            mutations = list(ts.mutations())
-            other_mutations = []
-            for site in ts.sites():
-                for mut in site.mutations:
-                    other_mutations.append(msprime.DeprecatedMutation(
-                        position=site.position, node=mut.node, index=site.id))
-            self.assertEqual(mutations, other_mutations)
+            self.verify_mutations(ts)
 
     def test_removed_methods(self):
         ts = next(get_example_tree_sequences())
@@ -1550,6 +1565,36 @@ class TestSparseTree(HighLevelTestCase):
     def get_tree(self, sample_lists=False):
         ts = msprime.simulate(10, random_seed=1, mutation_rate=1)
         return next(ts.trees(sample_lists=sample_lists))
+
+    def verify_mutations(self, tree):
+        self.assertGreater(tree.num_mutations, 0)
+        other_mutations = []
+        for site in tree.sites():
+            for mutation in site.mutations:
+                other_mutations.append(mutation)
+        mutations = list(tree.mutations())
+        self.assertEqual(tree.num_mutations, len(other_mutations))
+        self.assertEqual(tree.num_mutations, len(mutations))
+        for mut, other_mut in zip(mutations, other_mutations):
+            # We cannot compare these directly as the mutations obtained
+            # from the mutations iterator will have extra deprecated
+            # attributes.
+            self.assertEqual(mut.id, other_mut.id)
+            self.assertEqual(mut.site, other_mut.site)
+            self.assertEqual(mut.parent, other_mut.parent)
+            self.assertEqual(mut.node, other_mut.node)
+            self.assertEqual(mut.metadata, other_mut.metadata)
+            # Check the deprecated attrs.
+            self.assertEqual(mut.position, tree.tree_sequence.site(mut.site).position)
+            self.assertEqual(mut.index, mut.site)
+
+    def test_simple_mutations(self):
+        tree = self.get_tree()
+        self.verify_mutations(tree)
+
+    def test_complex_mutations(self):
+        ts = tsutil.insert_branch_mutations(msprime.simulate(10, random_seed=1))
+        self.verify_mutations(ts.first())
 
     def test_str(self):
         t = self.get_tree()
