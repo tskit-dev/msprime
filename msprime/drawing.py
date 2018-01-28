@@ -119,7 +119,18 @@ class SvgTreeDrawer(TreeDrawer):
         t = 1
         if self._tree.num_roots > 0:
             t = max(self._tree.time(root) for root in self._tree.roots)
-        self._y_scale = (self._height - 2 * y_padding) / t
+        # Do we have any mutations over the root?
+        mutations_over_root = False
+        for site in self._tree.sites():
+            for mut in site.mutations:
+                if self._tree.parent(mut.node) == NULL_NODE:
+                    mutations_over_root = True
+                    break
+        root_branch_length = 0
+        if mutations_over_root:
+            root_branch_length = self._height / 10
+        self._y_scale = (self._height - root_branch_length - 2 * y_padding) / t
+        self._y_coords[-1] = y_padding
         for u in self._tree.nodes():
             scaled_t = self._tree.get_time(u) * self._y_scale
             self._y_coords[u] = self._height - scaled_t - y_padding
@@ -176,22 +187,20 @@ class SvgTreeDrawer(TreeDrawer):
             if self._node_colours.get(u, None) is not None:
                 colour = self._node_colours[u]
             dwg.add(dwg.circle(center=x, r=3, fill=colour))
-            dx = [0]
-            dy = [-5]
+            dx = 0
+            dy = -5
             labels = mid_labels
             if self._tree.is_leaf(u):
-                dy = [20]
+                dy = 20
             elif self._tree.parent(u) != NULL_NODE:
+                dx = 5
                 if self._tree.left_sib(u) == NULL_NODE:
-                    # Would like to have a slight x offset here, but it doesn't seem
-                    # to do anything.
-                    # dx = [-5]
+                    dx *= -1
                     labels = right_labels
                 else:
-                    dx = [5]
                     labels = left_labels
             if self._node_labels[u] is not None:
-                labels.add(dwg.text(self._node_labels[u], x, dx=dx, dy=dy))
+                labels.add(dwg.text(self._node_labels[u], (x[0] + dx, x[1] + dy)))
             if self._tree.parent(u) != NULL_NODE:
                 y = self._x_coords[v], self._y_coords[v]
                 lines.add(dwg.line(x, (x[0], y[1])))
@@ -199,28 +208,24 @@ class SvgTreeDrawer(TreeDrawer):
 
         # Experimental stuff to render the mutation labels. Not working very
         # well at the moment.
-        # left_labels = dwg.add(dwg.g(
-        #     font_size=14, text_anchor="start", font_style="italic",
-        #     alignment_baseline="middle"))
-        # right_labels = dwg.add(dwg.g(
-        #     font_size=14, text_anchor="end", font_style="italic",
-        #     alignment_baseline="middle"))
+        left_labels = dwg.add(dwg.g(
+            font_size=14, text_anchor="start", font_style="italic",
+            alignment_baseline="middle"))
+        right_labels = dwg.add(dwg.g(
+            font_size=14, text_anchor="end", font_style="italic",
+            alignment_baseline="middle"))
         for x, mutation in self._mutations:
             r = 3
             dwg.add(dwg.rect(
                 insert=(x[0] - r, x[1] - r), size=(2 * r, 2 * r), fill="red"))
-            # dx = [5]
-            # dy = [0]
-            # if self._tree.left_sib(mutation.node) == NULL_NODE:
-            #     # Would like to have a slight x offset here, but it doesn't seem
-            #     # to do anything.
-            #     # dx = [-5]
-            #     labels = right_labels
-            # else:
-            #     labels = left_labels
-            # dx = [8 * r]
-            # dy = [-2 * r]
-            # labels.add(dwg.text("{}".format(mutation.site), x, dx=dx, dy=dy))
+            dx = 5
+            if self._tree.left_sib(mutation.node) == NULL_NODE:
+                dx *= -1
+                labels = right_labels
+            else:
+                labels = left_labels
+            dy = 1.5 * r
+            labels.add(dwg.text("{}".format(mutation.site), (x[0] + dx, x[1] + dy)))
         return dwg.tostring()
 
 
