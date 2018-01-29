@@ -102,14 +102,14 @@ def get_population_samples(*args):
 
 
 def get_population_parameters_change_event(
-        time=0.0, population_id=-1, initial_size=None, growth_rate=None):
+        time=0.0, population=-1, initial_size=None, growth_rate=None):
     """
     Returns a population change event for the specified values.
     """
     ret = {
         "type": "population_parameters_change",
         "time": time,
-        "population_id": population_id
+        "population": population
     }
     if initial_size is not None:
         ret["initial_size"] = initial_size
@@ -118,20 +118,20 @@ def get_population_parameters_change_event(
     return ret
 
 
-def get_size_change_event(time=0.0, size=1.0, population_id=-1):
+def get_size_change_event(time=0.0, size=1.0, population=-1):
     """
     Returns a size change demographic event.
     """
     return get_population_parameters_change_event(
-        time, population_id, initial_size=size, growth_rate=0)
+        time, population, initial_size=size, growth_rate=0)
 
 
-def get_growth_rate_change_event(time=0.0, growth_rate=1.0, population_id=-1):
+def get_growth_rate_change_event(time=0.0, growth_rate=1.0, population=-1):
     """
     Returns a growth_rate change demographic event.
     """
     return get_population_parameters_change_event(
-        time, population_id, growth_rate=growth_rate)
+        time, population, growth_rate=growth_rate)
 
 
 def get_migration_rate_change_event(
@@ -147,8 +147,7 @@ def get_migration_rate_change_event(
     }
 
 
-def get_mass_migration_event(
-        time=0.0, source=0, destination=1, proportion=1):
+def get_mass_migration_event(time=0.0, source=0, dest=1, proportion=1):
     """
     Returns a mass_migration demographic event.
     """
@@ -156,33 +155,33 @@ def get_mass_migration_event(
         "type": "mass_migration",
         "time": time,
         "source": source,
-        "destination": destination,
+        "dest": dest,
         "proportion": proportion
     }
 
 
 def get_simple_bottleneck_event(
-        time=0.0, population_id=0, proportion=1):
+        time=0.0, population=0, proportion=1):
     """
     Returns a simple bottleneck demographic event.
     """
     return {
         "type": "simple_bottleneck",
         "time": time,
-        "population_id": population_id,
+        "population": population,
         "proportion": proportion
     }
 
 
 def get_instantaneous_bottleneck_event(
-        time=0.0, population_id=0, strength=10):
+        time=0.0, population=0, strength=10):
     """
     Returns a instantaneous bottleneck demographic event.
     """
     return {
         "type": "instantaneous_bottleneck",
         "time": time,
-        "population_id": population_id,
+        "population": population,
         "strength": strength
     }
 
@@ -240,10 +239,10 @@ def get_random_demographic_events(num_populations, num_events):
     for j in range(num_events):
         events.append(get_size_change_event(
             time=random.random(), size=random.random(),
-            population_id=random.randint(-1, num_populations - 1)))
+            population=random.randint(-1, num_populations - 1)))
         events.append(get_growth_rate_change_event(
             time=random.random(), growth_rate=random.random(),
-            population_id=random.randint(-1, num_populations - 1)))
+            population=random.randint(-1, num_populations - 1)))
         if num_populations > 1:
             matrix_index = 0
             if random.random() < 0.5:
@@ -257,20 +256,20 @@ def get_random_demographic_events(num_populations, num_events):
                 matrix_index=matrix_index))
             # Add a mass migration event.
             source = random.randint(0, num_populations - 1)
-            destination = source
-            while destination == source:
-                destination = random.randint(0, num_populations - 1)
+            dest = source
+            while dest == source:
+                dest = random.randint(0, num_populations - 1)
             # We use proportion of 0 or 1 so that we can test deterministically
             events.append(get_mass_migration_event(
                 time=random.random(), proportion=random.choice([0, 1]),
-                source=source, destination=destination))
+                source=source, dest=dest))
             # Add some bottlenecks
             events.append(get_simple_bottleneck_event(
                 time=random.random(), proportion=random.uniform(0, 0.25),
-                population_id=random.randint(0, num_populations - 1)))
+                population=random.randint(0, num_populations - 1)))
             events.append(get_instantaneous_bottleneck_event(
                 time=random.random(), strength=random.uniform(0, 0.01),
-                population_id=random.randint(0, num_populations - 1)))
+                population=random.randint(0, num_populations - 1)))
 
     sorted_events = sorted(events, key=lambda x: x["time"])
     return sorted_events
@@ -1067,9 +1066,9 @@ class TestSimulationState(LowLevelTestCase):
                 pass
             else:
                 self.assertEqual(event_type, "population_parameters_change")
-                population_id = event["population_id"]
-                indexes = [population_id]
-                if population_id == -1:
+                population = event["population"]
+                indexes = [population]
+                if population == -1:
                     indexes = range(N)
                 initial_size = event.get("initial_size", None)
                 growth_rate = event.get("growth_rate", None)
@@ -1444,27 +1443,27 @@ class TestSimulator(LowLevelTestCase):
             for generator in event_generators:
                 event = generator(time=bad_type)
                 self.assertRaises(TypeError, f, [event])
-            event = get_size_change_event(population_id=bad_type)
+            event = get_size_change_event(population=bad_type)
             self.assertRaises(TypeError, f, [event])
             event = get_size_change_event(size=bad_type)
             self.assertRaises(TypeError, f, [event])
 
-            event = get_instantaneous_bottleneck_event(population_id=bad_type)
+            event = get_instantaneous_bottleneck_event(population=bad_type)
             self.assertRaises(TypeError, f, [event])
             event = get_instantaneous_bottleneck_event(strength=bad_type)
             self.assertRaises(TypeError, f, [event])
 
-            event = get_simple_bottleneck_event(population_id=bad_type)
+            event = get_simple_bottleneck_event(population=bad_type)
             self.assertRaises(TypeError, f, [event])
             event = get_simple_bottleneck_event(proportion=bad_type)
             self.assertRaises(TypeError, f, [event])
 
-            event = get_mass_migration_event(source=bad_type, destination=0)
+            event = get_mass_migration_event(source=bad_type, dest=0)
             self.assertRaises(TypeError, f, [event])
-            event = get_mass_migration_event(source=0, destination=bad_type)
+            event = get_mass_migration_event(source=0, dest=bad_type)
             self.assertRaises(TypeError, f, [event])
             event = get_mass_migration_event(
-                source=0, destination=1, proportion=bad_type)
+                source=0, dest=1, proportion=bad_type)
             self.assertRaises(TypeError, f, [event])
 
             event = get_migration_rate_change_event(matrix_index=bad_type)
@@ -1473,9 +1472,9 @@ class TestSimulator(LowLevelTestCase):
                 matrix_index=0, migration_rate=bad_type)
             self.assertRaises(TypeError, f, [event])
 
-            event = get_growth_rate_change_event(population_id=bad_type)
+            event = get_growth_rate_change_event(population=bad_type)
             self.assertRaises(TypeError, f, [event])
-            event = get_growth_rate_change_event(population_id=0, growth_rate=bad_type)
+            event = get_growth_rate_change_event(population=0, growth_rate=bad_type)
             self.assertRaises(TypeError, f, [event])
 
     def test_bad_demographic_event_values(self):
@@ -1503,19 +1502,19 @@ class TestSimulator(LowLevelTestCase):
         for event_generator in event_generators:
             for bad_pop_id in [-2, 1, 10**6]:
                 event = event_generator(
-                    population_id=bad_pop_id)
+                    population=bad_pop_id)
                 self.assertRaises(_msprime.InputError, f, [event])
             for k in range(1, 4):
-                event = event_generator(population_id=k)
+                event = event_generator(population=k)
                 self.assertRaises(_msprime.InputError, f, [event], k)
                 events = [event_generator(), event]
                 self.assertRaises(_msprime.InputError, f, events, k)
         for bad_pop_id in [-2, 1, 10**6]:
             event = get_mass_migration_event(source=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
-            event = get_mass_migration_event(destination=bad_pop_id)
+            event = get_mass_migration_event(dest=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
-            event = get_simple_bottleneck_event(population_id=bad_pop_id)
+            event = get_simple_bottleneck_event(population=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
         # Negative size values not allowed
         size_change_event = get_size_change_event(size=-5)
@@ -1539,7 +1538,7 @@ class TestSimulator(LowLevelTestCase):
                 event = event_generator(matrix_index=j * k + j)
                 self.assertRaises(_msprime.InputError, f, [event], k)
         # Tests specific for mass_migration and bottleneck
-        event = get_mass_migration_event(source=0, destination=0)
+        event = get_mass_migration_event(source=0, dest=0)
         self.assertRaises(_msprime.InputError, f, [event])
         for bad_proportion in [-1, 1.1, 1e7]:
             event = get_mass_migration_event(proportion=bad_proportion)
@@ -1709,7 +1708,7 @@ class TestSimulator(LowLevelTestCase):
             demographic_events=[
                 get_migration_rate_change_event(t),
                 get_mass_migration_event(
-                    t + dt, source=0, destination=1, proportion=1)],
+                    t + dt, source=0, dest=1, proportion=1)],
             migration_matrix=[0, 0, 0, 0])
         sim.run(t)
         pop_sizes_before = [0, 0]
@@ -1735,10 +1734,9 @@ class TestSimulator(LowLevelTestCase):
                 get_population_configuration(),
                 get_population_configuration()],
             demographic_events=[
-                get_simple_bottleneck_event(t1, population_id=0, proportion=1),
-                get_simple_bottleneck_event(t2, population_id=1, proportion=1),
-                get_mass_migration_event(
-                    t3, source=0, destination=1, proportion=1)],
+                get_simple_bottleneck_event(t1, population=0, proportion=1),
+                get_simple_bottleneck_event(t2, population=1, proportion=1),
+                get_mass_migration_event(t3, source=0, dest=1, proportion=1)],
             migration_matrix=[0, 0, 0, 0])
         sim.run(t1)
         pop_sizes = [0, 0]

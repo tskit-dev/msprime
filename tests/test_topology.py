@@ -632,7 +632,7 @@ class TestUnaryNodes(TopologyTestCase):
 
     def test_nonbinary_tree_sequence_unary_nodes(self):
         demographic_events = [
-            msprime.SimpleBottleneck(time=1.0, proportion=0.95)]
+            msprime.SimpleBottleneck(time=1.0, population=0, proportion=0.95)]
         ts = msprime.simulate(
             20, recombination_rate=10, mutation_rate=5,
             demographic_events=demographic_events, random_seed=self.random_seed)
@@ -771,7 +771,7 @@ class TestGeneralSamples(TopologyTestCase):
 
     def test_nonbinary_tree_sequence_permuted_nodes(self):
         demographic_events = [
-            msprime.SimpleBottleneck(time=1.0, proportion=0.95)]
+            msprime.SimpleBottleneck(time=1.0, population=0, proportion=0.95)]
         ts = msprime.simulate(
             20, recombination_rate=10, mutation_rate=5,
             demographic_events=demographic_events, random_seed=self.random_seed)

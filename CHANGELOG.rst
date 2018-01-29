@@ -20,6 +20,16 @@
   but new code should use a more cite-centric approach.
 
 
+**Deprecated aliases**:
+
+- Changed ``population_id`` to ``population`` in various DemographicEvent
+  classes for consistency. The old ``population_id`` argument is kept as a
+  deprecated alias.
+
+- Changed ``destination`` to ``dest`` in MassMigrationEvent. The old
+  ``destination`` argument is retained as a deprecated alias.
+
+
 ********************
 [0.4.0] - 2016-10-16
 ********************

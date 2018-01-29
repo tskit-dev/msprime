@@ -215,9 +215,9 @@ def get_bottleneck_examples():
     trees.
     """
     bottlenecks = [
-        msprime.SimpleBottleneck(0.01, proportion=0.05),
-        msprime.SimpleBottleneck(0.02, proportion=0.25),
-        msprime.SimpleBottleneck(0.03, proportion=1)]
+        msprime.SimpleBottleneck(0.01, 0, proportion=0.05),
+        msprime.SimpleBottleneck(0.02, 0, proportion=0.25),
+        msprime.SimpleBottleneck(0.03, 0, proportion=1)]
     for n in [3, 10, 100]:
         ts = msprime.simulate(
             n, length=100, recombination_rate=1,
@@ -837,6 +837,33 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         for ts in get_bottleneck_examples():
             self.verify_tree_sequence(ts)
 
+    def test_acgt_mutations(self):
+        ts = msprime.simulate(10, mutation_rate=10)
+        self.assertGreater(ts.num_sites, 0)
+        tables = ts.tables
+        sites = tables.sites
+        mutations = tables.mutations
+        sites.set_columns(
+            position=sites.position,
+            ancestral_state=np.zeros(ts.num_sites, dtype=np.int8) + ord("A"),
+            ancestral_state_offset=np.arange(ts.num_sites + 1, dtype=np.uint32))
+        mutations.set_columns(
+            site=mutations.site,
+            node=mutations.node,
+            derived_state=np.zeros(ts.num_sites, dtype=np.int8) + ord("T"),
+            derived_state_offset=np.arange(ts.num_sites + 1, dtype=np.uint32))
+        tsp = msprime.load_tables(**tables.asdict())
+        H = [h.replace("0", "A").replace("1", "T") for h in ts.haplotypes()]
+        self.assertEqual(H, list(tsp.haplotypes()))
+
+    def test_multiletter_mutations(self):
+        ts = msprime.simulate(10)
+        tables = ts.tables
+        sites = tables.sites
+        sites.add_row(0, "ACTG")
+        tsp = msprime.load_tables(**tables.asdict())
+        self.assertRaises(_msprime.LibraryError, list, tsp.haplotypes())
+
     def test_recurrent_mutations_over_samples(self):
         for ts in get_bottleneck_examples():
             num_sites = 5
@@ -1030,6 +1057,16 @@ class TestTreeSequence(HighLevelTestCase):
     def test_samples(self):
         for ts in get_example_tree_sequences():
             self.verify_samples(ts)
+            pops = set(node.population for node in ts.nodes())
+            for pop in pops:
+                subsample = ts.samples(pop)
+                self.assertEqual(subsample, ts.samples(population=pop))
+                self.assertEqual(subsample, ts.samples(population_id=pop))
+                self.assertEqual(
+                    subsample,
+                    [node.id for node in ts.nodes()
+                        if node.population == pop and node.is_sample()])
+            self.assertRaises(ValueError, ts.samples, population=0, population_id=0)
 
     def test_first(self):
         for ts in get_example_tree_sequences():
@@ -2332,7 +2369,7 @@ class TestNodeOrdering(HighLevelTestCase):
         ts = msprime.simulate(
             sample_size=20, recombination_rate=10,
             demographic_events=[
-                msprime.SimpleBottleneck(time=0.5, proportion=1)])
+                msprime.SimpleBottleneck(time=0.5, population=0, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
         for t in ts.trees():

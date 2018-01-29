@@ -677,17 +677,17 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(events[0].type, "population_parameters_change")
         self.assertEqual(events[0].growth_rate, 2.0 / 4)
         self.assertEqual(events[0].time, 0.1 * 4)
-        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[0].population, 0)
         events = f("2 1 -T -I 2 1 1 -eg 0.1 1 2 -eg 0.2 2 3")
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].type, "population_parameters_change")
         self.assertEqual(events[0].growth_rate, 2.0 / 4)
         self.assertEqual(events[0].time, 0.1 * 4)
-        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[0].population, 0)
         self.assertEqual(events[1].type, "population_parameters_change")
         self.assertEqual(events[1].growth_rate, 3.0 / 4)
         self.assertEqual(events[1].time, 0.2 * 4)
-        self.assertEqual(events[1].population_id, 1)
+        self.assertEqual(events[1].population, 1)
 
     def test_population_size_change(self):
         def f(args):
@@ -699,19 +699,19 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(events[0].initial_size, 2.0)
         self.assertEqual(events[0].growth_rate, 0)
         self.assertEqual(events[0].time, 0.1 * 4)
-        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[0].population, 0)
         events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].type, "population_parameters_change")
         self.assertEqual(events[0].initial_size, 2.0)
         self.assertEqual(events[0].growth_rate, 0)
         self.assertEqual(events[0].time, 0.1 * 4)
-        self.assertEqual(events[0].population_id, 0)
+        self.assertEqual(events[0].population, 0)
         self.assertEqual(events[1].type, "population_parameters_change")
         self.assertEqual(events[1].initial_size, 3.0)
         self.assertEqual(events[1].growth_rate, 0)
         self.assertEqual(events[1].time, 0.2 * 4)
-        self.assertEqual(events[1].population_id, 1)
+        self.assertEqual(events[1].population, 1)
 
     def test_migration_rate_change(self):
         def check(args, results):
@@ -784,7 +784,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0] * 4)
                 self.assertEqual(event.source, result[1])
-                self.assertEqual(event.destination, result[2])
+                self.assertEqual(event.dest, result[2])
                 # We also have to set the migration rates to 0 for the
                 # population that didn't exist before now.
                 k += 1
@@ -816,7 +816,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0] * 4)
                 self.assertEqual(event.source, result[1])
-                self.assertEqual(event.destination, result[2])
+                self.assertEqual(event.dest, result[2])
                 self.assertEqual(event.proportion, result[3])
         check(2, "2 1 -T -es 2.2 1 1", [(2.2, 0, 1, 0)])
         check(
@@ -1333,8 +1333,7 @@ class TestMspArgumentParser(unittest.TestCase):
         cmd = "upgrade"
         source = "in.hdf5"
         destination = "out.hdf5"
-        args = parser.parse_args([
-            cmd, source, destination])
+        args = parser.parse_args([cmd, source, destination])
         self.assertEqual(args.source, source)
         self.assertEqual(args.destination, destination)
         self.assertEqual(args.remove_duplicate_positions, False)

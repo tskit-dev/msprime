@@ -46,7 +46,7 @@ class TestTreeDraw(unittest.TestCase):
 
     def get_nonbinary_tree(self):
         demographic_events = [
-            msprime.SimpleBottleneck(time=0.1, proportion=0.5)]
+            msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.5)]
         ts = msprime.simulate(
             10, recombination_rate=5, mutation_rate=10,
             demographic_events=demographic_events, random_seed=1)
