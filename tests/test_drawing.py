@@ -31,6 +31,7 @@ import xml.etree
 
 import six
 import msprime
+import tests.tsutil as tsutil
 
 IS_PY2 = sys.version_info[0] < 3
 
@@ -69,6 +70,27 @@ class TestTreeDraw(unittest.TestCase):
             if t.num_roots > 1:
                 return t
         assert False
+
+    def get_mutations_over_roots_tree(self):
+        ts = msprime.simulate(15, random_seed=1)
+        ts = tsutil.decapitate(ts, 20)
+        tables = ts.tables
+        sites = msprime.SiteTable()
+        mutations = msprime.MutationTable()
+        delta = 1.0 / (ts.num_nodes + 1)
+        x = 0
+        for node in range(ts.num_nodes):
+            site_id = sites.add_row(x, ancestral_state="0")
+            x += delta
+            mutations.add_row(site_id, node=node, derived_state="1")
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edges=tables.edges,
+            sites=sites, mutations=mutations)
+        tree = ts.first()
+        assert any(
+            tree.parent(mut.node) == msprime.NULL_NODE
+            for mut in tree.mutations())
+        return tree
 
     def get_unary_node_tree(self):
         ts = msprime.simulate(2, random_seed=1)
@@ -168,6 +190,11 @@ class TestDrawText(TestTreeDraw):
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
+    def test_draw_mutations_over_roots(self):
+        t = self.get_mutations_over_roots_tree()
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
     def test_draw_unary(self):
         t = self.get_unary_node_tree()
         text = t.draw(format=self.drawing_format)
@@ -226,7 +253,7 @@ class TestDrawText(TestTreeDraw):
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
-    def test_labels(self):
+    def test_node_labels(self):
         t = self.get_binary_tree()
         labels = {u: self.example_label for u in t.nodes()}
         text = t.draw(format=self.drawing_format, node_labels=labels)
@@ -236,7 +263,7 @@ class TestDrawText(TestTreeDraw):
             j = text[j:].find(self.example_label)
             self.assertNotEqual(j, -1)
 
-    def test_no_labels(self):
+    def test_no_node_labels(self):
         t = self.get_binary_tree()
         labels = {}
         text = t.draw(format=self.drawing_format, node_labels=labels)
@@ -409,6 +436,11 @@ class TestDrawSvg(TestTreeDraw):
         svg = t.draw()
         self.verify_basic_svg(svg)
 
+    def test_draw_mutations_over_roots(self):
+        t = self.get_mutations_over_roots_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
     def test_draw_unary(self):
         t = self.get_unary_node_tree()
         svg = t.draw()
@@ -426,21 +458,21 @@ class TestDrawSvg(TestTreeDraw):
         svg = t.draw(width=w, height=h)
         self.verify_basic_svg(svg, w, h)
 
-    def test_labels(self):
+    def test_node_labels(self):
         t = self.get_binary_tree()
         labels = {u: "XXX" for u in t.nodes()}
         svg = t.draw(format="svg", node_labels=labels)
         self.verify_basic_svg(svg)
         self.assertEqual(svg.count("XXX"), t.num_nodes)
 
-    def test_one_label(self):
+    def test_one_node_label(self):
         t = self.get_binary_tree()
         labels = {0: "XXX"}
         svg = t.draw(format="svg", node_labels=labels)
         self.verify_basic_svg(svg)
         self.assertEqual(svg.count("XXX"), 1)
 
-    def test_no_labels(self):
+    def test_no_node_labels(self):
         t = self.get_binary_tree()
         labels = {}
         svg = t.draw(format="svg", node_labels=labels)
@@ -459,6 +491,45 @@ class TestDrawSvg(TestTreeDraw):
         t = self.get_binary_tree()
         colours = {u: "rgb({}, {}, {})".format(u, u, u) for u in t.nodes()}
         svg = t.draw(format="svg", node_colours=colours)
+        self.verify_basic_svg(svg)
+        for colour in colours.values():
+            self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
+
+    def test_mutation_labels(self):
+        t = self.get_binary_tree()
+        labels = {u.id: "XXX" for u in t.mutations()}
+        svg = t.draw(format="svg", mutation_labels=labels)
+        self.verify_basic_svg(svg)
+        self.assertEqual(svg.count("XXX"), t.num_mutations)
+
+    def test_one_mutation_label(self):
+        t = self.get_binary_tree()
+        labels = {0: "XXX"}
+        svg = t.draw(format="svg", mutation_labels=labels)
+        self.verify_basic_svg(svg)
+        self.assertEqual(svg.count("XXX"), 1)
+
+    def test_no_mutation_labels(self):
+        t = self.get_binary_tree()
+        labels = {}
+        svg = t.draw(format="svg", mutation_labels=labels)
+        self.verify_basic_svg(svg)
+        # Can't really test for much here if we don't understand the SVG
+
+    def test_one_mutation_colour(self):
+        t = self.get_binary_tree()
+        colour = "rgb(0, 1, 2)"
+        colours = {0: colour}
+        svg = t.draw(format="svg", mutation_colours=colours)
+        self.verify_basic_svg(svg)
+        self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
+
+    def test_all_mutations_colour(self):
+        t = self.get_binary_tree()
+        colours = {
+            mut.id: "rgb({}, {}, {})".format(mut.id, mut.id, mut.id)
+            for mut in t.mutations()}
+        svg = t.draw(format="svg", mutation_colours=colours)
         self.verify_basic_svg(svg)
         for colour in colours.values():
             self.assertEqual(svg.count('fill="{}"'.format(colour)), 1)
