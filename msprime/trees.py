@@ -1670,7 +1670,29 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_num_provenances()
 
+    @property
+    def num_migrations(self):
+        """
+        Returns the number of :ref:`migrations <sec_migration_table_definition>`
+        in this tree sequence.
+
+        :return: The number of migrations in this tree sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_migrations()
+
     def migrations(self):
+        """
+        Returns an iterator over all the
+        :ref:`migrations <sec_migration_table_definition>`
+        in this tree sequence.
+
+        .. todo::
+            Define the order and properties of the returned migrations.
+
+        :return: An iterator over all migrations.
+        :rtype: iter(:class:`.Migration`)
+        """
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
 
@@ -1679,6 +1701,13 @@ class TreeSequence(object):
             yield self.provenance(j)
 
     def nodes(self):
+        """
+        Returns an iterator over all the :ref:`nodes <sec_node_table_definition>`
+        in this tree sequence.
+
+        :return: An iterator over all nodes.
+        :rtype: iter(:class:`.Node`)
+        """
         for j in range(self.num_nodes):
             yield self.node(j)
 

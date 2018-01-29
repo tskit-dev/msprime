@@ -576,6 +576,7 @@ class TestMigrationRecords(unittest.TestCase):
             demographic_events=demographic_events,
             random_seed=1, record_migrations=True)
         migrations = list(ts.migrations())
+        self.assertEqual(len(migrations), ts.num_migrations)
         self.assertEqual(len(migrations), 2)
         m0 = migrations[0]
         m1 = migrations[1]
