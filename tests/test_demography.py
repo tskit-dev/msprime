@@ -48,6 +48,31 @@ class TestBadDemographicParameters(unittest.TestCase):
                 ValueError, msprime.PopulationConfiguration, sample_size=bad_size)
 
 
+class TestDeprecatedParameters(unittest.TestCase):
+    """
+    Tests to check that aliased parameters are handled correctly.
+    """
+    def test_mass_migration_dest(self):
+        self.assertRaises(
+            ValueError, msprime.MassMigration, time=0, source=0, dest=0, destination=0)
+        for j in range(10):
+            e = msprime.MassMigration(time=0.1, source=0, dest=j, proportion=0.5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.source, 0)
+            self.assertEqual(e.dest, j)
+            self.assertEqual(e.proportion, 0.5)
+            e = msprime.MassMigration(0.1, 0, j, 0.5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.source, 0)
+            self.assertEqual(e.dest, j)
+            self.assertEqual(e.proportion, 0.5)
+            e = msprime.MassMigration(time=0.1, source=0, destination=j, proportion=0.5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.source, 0)
+            self.assertEqual(e.dest, j)
+            self.assertEqual(e.proportion, 0.5)
+
+
 class TestGrowthRates(unittest.TestCase):
     """
     Tests to see the growth rates we calculate give us the
@@ -279,7 +304,7 @@ class TestDemographyDebugger(unittest.TestCase):
         demographic_events = [
             msprime.PopulationParametersChange(0.1, initial_size=2),
             msprime.PopulationParametersChange(0.1, growth_rate=10),
-            msprime.MassMigration(0.2, source=1, destination=0),
+            msprime.MassMigration(0.2, source=1, dest=0),
             msprime.MigrationRateChange(0.2, rate=0),
             msprime.MigrationRateChange(0.4, matrix_index=(0, 1), rate=1),
             msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1),
@@ -301,8 +326,8 @@ class TestCoalescenceLocations(unittest.TestCase):
         ]
         t = 5
         demographic_events = [
-            msprime.MassMigration(time=t, source=0, destination=2),
-            msprime.MassMigration(time=t, source=1, destination=2),
+            msprime.MassMigration(time=t, source=0, dest=2),
+            msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -331,8 +356,8 @@ class TestCoalescenceLocations(unittest.TestCase):
             msprime.PopulationConfiguration(0),
         ]
         demographic_events = [
-            msprime.MassMigration(time=t, source=0, destination=2),
-            msprime.MassMigration(time=t, source=1, destination=2),
+            msprime.MassMigration(time=t, source=0, dest=2),
+            msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -405,9 +430,9 @@ class TestCoalescenceLocations(unittest.TestCase):
         ]
         # We migrate the lineages to the next step by step.
         demographic_events = [
-            msprime.MassMigration(time=t1, source=0, destination=1),
-            msprime.MassMigration(time=t2, source=1, destination=2),
-            msprime.MassMigration(time=t3, source=2, destination=3),
+            msprime.MassMigration(time=t1, source=0, dest=1),
+            msprime.MassMigration(time=t2, source=1, dest=2),
+            msprime.MassMigration(time=t3, source=2, dest=3),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -448,9 +473,9 @@ class TestCoalescenceLocations(unittest.TestCase):
         ]
         # We migrate the lineages to the next step by step.
         demographic_events = [
-            msprime.MassMigration(time=t1, source=0, destination=1),
-            msprime.MassMigration(time=t2, source=1, destination=2),
-            msprime.MassMigration(time=t3, source=2, destination=3),
+            msprime.MassMigration(time=t1, source=0, dest=1),
+            msprime.MassMigration(time=t2, source=1, dest=2),
+            msprime.MassMigration(time=t3, source=2, dest=3),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -508,7 +533,7 @@ class TestCoalescenceLocations(unittest.TestCase):
             ] + [msprime.PopulationConfiguration(1)]
         t = 5
         demographic_events = [
-            msprime.MassMigration(time=t, source=0, destination=num_demes - 1),
+            msprime.MassMigration(time=t, source=0, dest=num_demes - 1),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -538,8 +563,8 @@ class TestCoalescenceLocations(unittest.TestCase):
             msprime.InstantaneousBottleneck(time=t1, population_id=0, strength=strength),
             msprime.InstantaneousBottleneck(time=t2, population_id=1, strength=strength),
             msprime.InstantaneousBottleneck(time=t3, population_id=2, strength=strength),
-            msprime.MassMigration(time=t4, source=2, destination=0),
-            msprime.MassMigration(time=t4, source=1, destination=0)
+            msprime.MassMigration(time=t4, source=2, dest=0),
+            msprime.MassMigration(time=t4, source=1, dest=0)
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -568,8 +593,8 @@ class TestMigrationRecords(unittest.TestCase):
         ]
         t = 5
         demographic_events = [
-            msprime.MassMigration(time=t, source=0, destination=2),
-            msprime.MassMigration(time=t, source=1, destination=2),
+            msprime.MassMigration(time=t, source=0, dest=2),
+            msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -608,7 +633,7 @@ class TestTimeUnits(unittest.TestCase):
         # have a very strong negative growth rate, resulting in almost instant
         # coalescence.
         demographic_events = [
-            msprime.MassMigration(time=g, source=1, destination=0),
+            msprime.MassMigration(time=g, source=1, dest=0),
             msprime.PopulationParametersChange(time=g, growth_rate=1000),
         ]
         reps = msprime.simulate(
@@ -638,7 +663,7 @@ class TestTimeUnits(unittest.TestCase):
         # have a very strong bottleneck, resulting in almost instant
         # coalescence.
         demographic_events = [
-            msprime.MassMigration(time=g, source=1, destination=0),
+            msprime.MassMigration(time=g, source=1, dest=0),
             msprime.PopulationParametersChange(time=g, initial_size=1e-3),
         ]
         reps = msprime.simulate(
@@ -664,7 +689,7 @@ class TestTimeUnits(unittest.TestCase):
         # have a very strong bottleneck, resulting in instant
         # coalescence.
         demographic_events = [
-            msprime.MassMigration(time=t, source=1, destination=0),
+            msprime.MassMigration(time=t, source=1, dest=0),
             msprime.InstantaneousBottleneck(time=t, strength=100)
         ]
         reps = msprime.simulate(
@@ -805,39 +830,39 @@ class TestLowLevelConversions(unittest.TestCase):
 
     def test_mass_migration_time(self):
         for g in [0.1, 1, 100, 1e6]:
-            event = msprime.MassMigration(time=g, source=0, destination=1)
+            event = msprime.MassMigration(time=g, source=0, dest=1)
             d = event.get_ll_representation(1)
             dp = {
                 "time": g,
                 "type": "mass_migration",
                 "source": 0,
-                "destination": 1,
+                "dest": 1,
                 "proportion": 1}
             self.assertEqual(d, dp)
 
     def test_mass_migration_source_dest(self):
         g = 51
         for source, dest in itertools.permutations(range(4), 2):
-            event = msprime.MassMigration(time=g, source=source, destination=dest)
+            event = msprime.MassMigration(time=g, source=source, dest=dest)
             d = event.get_ll_representation(1)
             dp = {
                 "time": g,
                 "type": "mass_migration",
                 "source": source,
-                "destination": dest,
+                "dest": dest,
                 "proportion": 1}
             self.assertEqual(d, dp)
 
     def test_mass_migration_proportion(self):
         g = 51
         for p in [0, 1e-6, 0.4, 1]:
-            event = msprime.MassMigration(time=g, source=0, destination=1, proportion=p)
+            event = msprime.MassMigration(time=g, source=0, dest=1, proportion=p)
             d = event.get_ll_representation(1)
             dp = {
                 "time": g,
                 "type": "mass_migration",
                 "source": 0,
-                "destination": 1,
+                "dest": 1,
                 "proportion": p}
             self.assertEqual(d, dp)
 
@@ -935,7 +960,7 @@ class TestHistoricalSampling(unittest.TestCase):
                 msprime.PopulationConfiguration()],
             demographic_events=[
                 msprime.MassMigration(
-                    time=migration_time, source=1, destination=0)])
+                    time=migration_time, source=1, dest=0)])
         t = next(ts.trees())
         self.assertEqual(t.get_time(0), 0)
         self.assertEqual(t.get_time(1), sampling_time)
@@ -961,9 +986,9 @@ class TestHistoricalSampling(unittest.TestCase):
                 msprime.PopulationConfiguration(),
                 msprime.PopulationConfiguration()],
             demographic_events=[
-                msprime.MassMigration(time=t1, source=0, destination=1),
-                msprime.MassMigration(time=t2, source=1, destination=2),
-                msprime.MassMigration(time=t3, source=2, destination=3)])
+                msprime.MassMigration(time=t1, source=0, dest=1),
+                msprime.MassMigration(time=t2, source=1, dest=2),
+                msprime.MassMigration(time=t3, source=2, dest=3)])
         t = next(ts.trees())
         self.assertEqual(t.get_time(0), 0)
         self.assertEqual(t.get_time(1), t1)

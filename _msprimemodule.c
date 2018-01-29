@@ -6996,7 +6996,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             source = (int) PyLong_AsLong(value);
-            value = get_dict_number(item, "destination");
+            value = get_dict_number(item, "dest");
             if (value == NULL) {
                 goto out;
             }

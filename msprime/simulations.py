@@ -843,14 +843,19 @@ class MassMigration(DemographicEvent):
 
     :param float time: The time at which this event occurs in generations.
     :param int source: The ID of the source population.
-    :param int destination: The ID of the destination population.
+    :param int dest: The ID of the destination population.
     :param float proportion: The probability that any given lineage within
         the source population migrates to the destination population.
     """
-    def __init__(self, time, source, destination, proportion=1.0):
+    def __init__(self, time, source, dest=None, proportion=1.0, destination=None):
         super(MassMigration, self).__init__("mass_migration", time)
+        if dest is not None and destination is not None:
+            raise ValueError(
+                "dest and destination are aliases; cannot supply both")
+        if destination is not None:
+            dest = destination
         self.source = source
-        self.destination = destination
+        self.dest = dest
         self.proportion = proportion
 
     def get_ll_representation(self, num_populations):
@@ -858,7 +863,7 @@ class MassMigration(DemographicEvent):
             "type": self.type,
             "time": self.time,
             "source": self.source,
-            "destination": self.destination,
+            "dest": self.dest,
             "proportion": self.proportion
         }
 
@@ -866,7 +871,7 @@ class MassMigration(DemographicEvent):
         return (
             "Mass migration: lineages move from {} to {} with "
             "probability {}".format(
-                self.source, self.destination, self.proportion))
+                self.source, self.dest, self.proportion))
 
 
 class SimpleBottleneck(DemographicEvent):
