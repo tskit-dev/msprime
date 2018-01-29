@@ -60,17 +60,6 @@ CoalescenceRecord = collections.namedtuple(
     "CoalescenceRecord",
     ["left", "right", "node", "children", "time", "population"])
 
-# TODO We need to get rid of the these namedtuples where possible and
-# make proper classes where possible. Also, need to standardise on 'id'
-# rather than index throughout.
-
-
-# This is provided for backwards compatibility with the deprecated mutations()
-# iterator.
-DeprecatedMutation = collections.namedtuple(
-    "DeprecatedMutation",
-    ["position", "node", "index"])
-
 
 # TODO this interface is rubbish. Should have much better printing options.
 # TODO we should be use __slots__ here probably.
@@ -300,6 +289,17 @@ class Provenance(SimpleContainer):
         self.id = id_
         self.timestamp = timestamp
         self.record = record
+
+
+def add_deprecated_mutation_attrs(site, mutation):
+    """
+    Add in attributes for the older deprecated way of defining
+    mutations. These attributes will be removed in future releases
+    and are deliberately undocumented in version 0.5.0.
+    """
+    mutation.position = site.position
+    mutation.index = site.id
+    return mutation
 
 
 class SparseTree(object):
@@ -791,12 +791,7 @@ class SparseTree(object):
         """
         for site in self.sites():
             for mutation in site.mutations:
-                # Add in attributes for the older deprecated way of defining
-                # mutations. These attributes will be removed in future releases
-                # and are deliberately undocumented in version 0.5.0.
-                mutation.position = site.position
-                mutation.index = site.id
-                yield mutation
+                yield add_deprecated_mutation_attrs(site, mutation)
 
     def get_leaves(self, u):
         # Deprecated alias for samples. See the discussion in the get_num_leaves
@@ -1740,12 +1735,7 @@ class TreeSequence(object):
         """
         for site in self.sites():
             for mutation in site.mutations:
-                # Add in attributes for the older deprecated way of defining
-                # mutations. These attributes will be removed in future releases
-                # and are deliberately undocumented in version 0.5.0.
-                mutation.position = site.position
-                mutation.index = site.id
-                yield mutation
+                yield add_deprecated_mutation_attrs(site, mutation)
 
     def breakpoints(self):
         """
