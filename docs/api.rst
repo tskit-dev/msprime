@@ -207,7 +207,9 @@ Top level-classes
 +++++++++++++++++
 
 These classes are the interfaces used to interact with the trees
-and mutational information stored in a tree sequence.
+and mutational information stored in a tree sequence. The :class:`.TreeSequence`
+class represents a single tree sequence, and the :class:`.SparseTree` class
+represents a single tree in a tree sequence.
 
 .. autoclass:: msprime.TreeSequence()
     :members:

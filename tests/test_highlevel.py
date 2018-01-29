@@ -215,9 +215,9 @@ def get_bottleneck_examples():
     trees.
     """
     bottlenecks = [
-        msprime.SimpleBottleneck(0.01, proportion=0.05),
-        msprime.SimpleBottleneck(0.02, proportion=0.25),
-        msprime.SimpleBottleneck(0.03, proportion=1)]
+        msprime.SimpleBottleneck(0.01, 0, proportion=0.05),
+        msprime.SimpleBottleneck(0.02, 0, proportion=0.25),
+        msprime.SimpleBottleneck(0.03, 0, proportion=1)]
     for n in [3, 10, 100]:
         ts = msprime.simulate(
             n, length=100, recombination_rate=1,
@@ -2369,7 +2369,7 @@ class TestNodeOrdering(HighLevelTestCase):
         ts = msprime.simulate(
             sample_size=20, recombination_rate=10,
             demographic_events=[
-                msprime.SimpleBottleneck(time=0.5, proportion=1)])
+                msprime.SimpleBottleneck(time=0.5, population=0, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
         for t in ts.trees():

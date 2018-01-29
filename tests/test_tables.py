@@ -935,7 +935,7 @@ class TestSortTables(unittest.TestCase):
         ts = msprime.simulate(
             sample_size=20, recombination_rate=10, random_seed=self.random_seed,
             mutation_rate=mutation_rate, demographic_events=[
-                msprime.SimpleBottleneck(time=0.5, proportion=1)])
+                msprime.SimpleBottleneck(time=0.5, population=0, proportion=1)])
         # Make sure this really has some non-binary nodes
         found = False
         for e in ts.edgesets():

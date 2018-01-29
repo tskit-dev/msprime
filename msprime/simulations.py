@@ -247,7 +247,7 @@ def simulate(
     :param list samples: The list specifying the location and time of
         all samples. This parameter may be used to specify historical
         samples, and cannot be used in conjunction with the ``sample_size``
-        parameter. Each sample is a (``population_id``, ``time``) pair
+        parameter. Each sample is a (``population``, ``time``) pair
         such that the sample in position ``j`` in the list of samples
         is drawn in the specified population at the specfied time. Time
         is measured in generations, as elsewhere.
@@ -755,13 +755,20 @@ class PopulationParametersChange(DemographicEvent):
         growth rate over the preceding time slice.
     :param float growth_rate: The new per-generation growth rate. If None,
         the growth rate is not changed. Defaults to None.
-    :param int population_id: The ID of the population affected. If
-        ``population_id`` is None, the changes affect all populations
+    :param int populationd: The ID of the population affected. If
+        ``population`` is None, the changes affect all populations
         simultaneously.
     """
-    def __init__(self, time, initial_size=None, growth_rate=None, population_id=None):
+    def __init__(
+            self, time, initial_size=None, growth_rate=None, population=None,
+            population_id=None):
         super(PopulationParametersChange, self).__init__(
             "population_parameters_change", time)
+        if population_id is not None and population is not None:
+            raise ValueError(
+                "population_id and population are aliases; cannot supply both.")
+        if population_id is not None:
+            population = population_id
         if growth_rate is None and initial_size is None:
             raise ValueError("Must specify one or more of growth_rate and initial_size")
         if initial_size is not None and initial_size <= 0:
@@ -769,13 +776,13 @@ class PopulationParametersChange(DemographicEvent):
         self.time = time
         self.growth_rate = growth_rate
         self.initial_size = initial_size
-        self.population_id = -1 if population_id is None else population_id
+        self.population = -1 if population is None else population
 
     def get_ll_representation(self, num_populations):
         ret = {
             "type": self.type,
             "time": self.time,
-            "population_id": self.population_id
+            "population": self.population
         }
         if self.growth_rate is not None:
             ret["growth_rate"] = self.growth_rate
@@ -784,7 +791,7 @@ class PopulationParametersChange(DemographicEvent):
         return ret
 
     def __str__(self):
-        s = "Population parameter change for {}: ".format(self.population_id)
+        s = "Population parameter change for {}: ".format(self.population)
         if self.initial_size is not None:
             s += "initial_size -> {} ".format(self.initial_size)
         if self.growth_rate is not None:
@@ -876,38 +883,48 @@ class MassMigration(DemographicEvent):
 
 class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
-    def __init__(self, time, population_id=0, proportion=1.0):
+    def __init__(self, time, population=None, proportion=1.0, population_id=None):
         super(SimpleBottleneck, self).__init__("simple_bottleneck", time)
-        self.population_id = population_id
+        if population_id is not None and population is not None:
+            raise ValueError(
+                "population_id and population are aliases; cannot supply both.")
+        if population_id is not None:
+            population = population_id
+        self.population = population
         self.proportion = proportion
 
     def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
             "time": self.time,
-            "population_id": self.population_id,
+            "population": self.population,
             "proportion": self.proportion
         }
 
     def __str__(self):
         return (
             "Simple bottleneck: lineages in population {} coalesce "
-            "probability {}".format(self.population_id, self.proportion))
+            "probability {}".format(self.population, self.proportion))
 
 
 class InstantaneousBottleneck(DemographicEvent):
     # TODO document
 
-    def __init__(self, time, population_id=0, strength=1.0):
+    def __init__(self, time, population=None, strength=1.0, population_id=None):
         super(InstantaneousBottleneck, self).__init__("instantaneous_bottleneck", time)
-        self.population_id = population_id
+        if population_id is not None and population is not None:
+            raise ValueError(
+                "population_id and population are aliases; cannot supply both.")
+        if population_id is not None:
+            population = population_id
+        self.population = population
         self.strength = strength
 
     def get_ll_representation(self, num_populations):
         return {
             "type": self.type,
             "time": self.time,
-            "population_id": self.population_id,
+            "population": self.population,
             "strength": self.strength,
         }
 
@@ -915,7 +932,7 @@ class InstantaneousBottleneck(DemographicEvent):
         return (
             "Instantaneous bottleneck in population {}: equivalent to {} "
             "generations of the coalescent".format(
-                self.population_id, self.strength))
+                self.population, self.strength))
 
 
 class SimulationModel(object):
