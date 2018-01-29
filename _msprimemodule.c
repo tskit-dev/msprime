@@ -6965,7 +6965,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 }
                 growth_rate = PyFloat_AsDouble(value);
             }
-            value = get_dict_number(item, "population_id");
+            value = get_dict_number(item, "population");
             if (value == NULL) {
                 goto out;
             }
@@ -7009,7 +7009,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             proportion = PyFloat_AsDouble(value);
-            value = get_dict_number(item, "population_id");
+            value = get_dict_number(item, "population");
             if (value == NULL) {
                 goto out;
             }
@@ -7022,7 +7022,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             strength = PyFloat_AsDouble(value);
-            value = get_dict_number(item, "population_id");
+            value = get_dict_number(item, "population");
             if (value == NULL) {
                 goto out;
             }

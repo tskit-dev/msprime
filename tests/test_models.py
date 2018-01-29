@@ -246,7 +246,7 @@ class TestUnsupportedDemographicEvents(unittest.TestCase):
         for model in ["smc", "smc_prime"]:
             self.assertRaises(
                 _msprime.InputError, msprime.simulate, 10, model=model,
-                demographic_events=[msprime.SimpleBottleneck(1)])
+                demographic_events=[msprime.SimpleBottleneck(1, population=0)])
             self.assertRaises(
                 _msprime.InputError, msprime.simulate, 10, model=model,
-                demographic_events=[msprime.InstantaneousBottleneck(1)])
+                demographic_events=[msprime.InstantaneousBottleneck(1, population=0)])

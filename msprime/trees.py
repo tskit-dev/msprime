@@ -339,7 +339,7 @@ class SparseTree(object):
     one may either use ``tree.tree_sequence.node(u)`` to obtain the
     corresponding :class:`Node` instance, or use the :meth:`.time` or
     :meth:`.population` shorthands. Tree traversals in various orders
-    is possible using the :meth:`.nodes` iterator.
+    is possible using the :meth:`.SparseTree.nodes` iterator.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the

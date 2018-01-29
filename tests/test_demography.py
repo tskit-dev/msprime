@@ -72,6 +72,69 @@ class TestDeprecatedParameters(unittest.TestCase):
             self.assertEqual(e.dest, j)
             self.assertEqual(e.proportion, 0.5)
 
+    def test_population_parameters_population_id(self):
+        self.assertRaises(
+            ValueError, msprime.PopulationParametersChange,
+            time=0, initial_size=1.1, growth_rate=0.1, population=1,
+            population_id=1)
+
+        for j in range(10):
+            e = msprime.PopulationParametersChange(
+                time=0.1, initial_size=1.1, growth_rate=0.1, population=j)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.initial_size, 1.1)
+            self.assertEqual(e.growth_rate, 0.1)
+            self.assertEqual(e.population, j)
+            e = msprime.PopulationParametersChange(0.1, 1.1, 0.1, j)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.initial_size, 1.1)
+            self.assertEqual(e.growth_rate, 0.1)
+            self.assertEqual(e.population, j)
+            e = msprime.PopulationParametersChange(
+                time=0.1, initial_size=1.1, growth_rate=0.1, population_id=j)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.initial_size, 1.1)
+            self.assertEqual(e.growth_rate, 0.1)
+            self.assertEqual(e.population, j)
+
+    def test_simple_bottleneck_population_id(self):
+        self.assertRaises(
+            ValueError, msprime.SimpleBottleneck,
+            time=0, population=1, proportion=5, population_id=1)
+
+        for j in range(10):
+            e = msprime.SimpleBottleneck(time=0.1, population=j, proportion=5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.population, j)
+            self.assertEqual(e.proportion, 5)
+            e = msprime.SimpleBottleneck(0.1, j, 5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.population, j)
+            self.assertEqual(e.proportion, 5)
+            e = msprime.SimpleBottleneck(time=0.1, population_id=j, proportion=5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.population, j)
+            self.assertEqual(e.proportion, 5)
+
+    def test_instantaneous_bottleneck_population_id(self):
+        self.assertRaises(
+            ValueError, msprime.InstantaneousBottleneck,
+            time=0, population=1, strength=1, population_id=1)
+
+        for j in range(10):
+            e = msprime.InstantaneousBottleneck(time=0.1, population=j, strength=5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.population, j)
+            self.assertEqual(e.strength, 5)
+            e = msprime.InstantaneousBottleneck(0.1, j, 5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.population, j)
+            self.assertEqual(e.strength, 5)
+            e = msprime.InstantaneousBottleneck(time=0.1, population_id=j, strength=5)
+            self.assertEqual(e.time, 0.1)
+            self.assertEqual(e.population, j)
+            self.assertEqual(e.strength, 5)
+
 
 class TestGrowthRates(unittest.TestCase):
     """
@@ -209,7 +272,7 @@ class TestRateConversions(unittest.TestCase):
         ll_event = {
             "type": "population_parameters_change",
             "time": g,
-            "population_id": -1,
+            "population": -1,
             "initial_size": new_size
         }
         self.assertEqual(event.get_ll_representation(1), ll_event)
@@ -218,11 +281,11 @@ class TestRateConversions(unittest.TestCase):
         g = 512
         growth_rate = 1
         event = msprime.PopulationParametersChange(
-            time=g, growth_rate=growth_rate, population_id=1)
+            time=g, growth_rate=growth_rate, population=1)
         ll_event = {
             "type": "population_parameters_change",
             "time": g,
-            "population_id": 1,
+            "population": 1,
             "growth_rate": growth_rate
         }
         self.assertEqual(event.get_ll_representation(1), ll_event)
@@ -233,11 +296,11 @@ class TestRateConversions(unittest.TestCase):
         initial_size = 8192
         event = msprime.PopulationParametersChange(
             time=g, initial_size=initial_size,
-            growth_rate=growth_rate, population_id=1)
+            growth_rate=growth_rate, population=1)
         ll_event = {
             "type": "population_parameters_change",
             "time": g,
-            "population_id": 1,
+            "population": 1,
             "initial_size": initial_size,
             "growth_rate": growth_rate
         }
@@ -308,7 +371,7 @@ class TestDemographyDebugger(unittest.TestCase):
             msprime.MigrationRateChange(0.2, rate=0),
             msprime.MigrationRateChange(0.4, matrix_index=(0, 1), rate=1),
             msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1),
-            msprime.InstantaneousBottleneck(0.5, strength=100)]
+            msprime.InstantaneousBottleneck(0.5, population=0, strength=100)]
         self.verify_debug(
             population_configurations, migration_matrix, demographic_events)
 
@@ -560,9 +623,9 @@ class TestCoalescenceLocations(unittest.TestCase):
         t3 = 0.0003
         t4 = 0.0004
         demographic_events = [
-            msprime.InstantaneousBottleneck(time=t1, population_id=0, strength=strength),
-            msprime.InstantaneousBottleneck(time=t2, population_id=1, strength=strength),
-            msprime.InstantaneousBottleneck(time=t3, population_id=2, strength=strength),
+            msprime.InstantaneousBottleneck(time=t1, population=0, strength=strength),
+            msprime.InstantaneousBottleneck(time=t2, population=1, strength=strength),
+            msprime.InstantaneousBottleneck(time=t3, population=2, strength=strength),
             msprime.MassMigration(time=t4, source=2, dest=0),
             msprime.MassMigration(time=t4, source=1, dest=0)
         ]
@@ -690,7 +753,7 @@ class TestTimeUnits(unittest.TestCase):
         # coalescence.
         demographic_events = [
             msprime.MassMigration(time=t, source=1, dest=0),
-            msprime.InstantaneousBottleneck(time=t, strength=100)
+            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
         ]
         reps = msprime.simulate(
             Ne=Ne,
@@ -747,7 +810,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 d = event.get_ll_representation(1)
                 dp = {
                     "time": g,
-                    "population_id": -1,
+                    "population": -1,
                     "type": "population_parameters_change",
                     "initial_size": Ne}
                 self.assertEqual(d, dp)
@@ -761,7 +824,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 d = event.get_ll_representation(1)
                 dp = {
                     "time": g,
-                    "population_id": -1,
+                    "population": -1,
                     "type": "population_parameters_change",
                     "initial_size": initial_size}
                 self.assertEqual(d, dp)
@@ -773,21 +836,21 @@ class TestLowLevelConversions(unittest.TestCase):
             d = event.get_ll_representation(1)
             dp = {
                 "time": g,
-                "population_id": -1,
+                "population": -1,
                 "type": "population_parameters_change",
                 "growth_rate": growth_rate}
             self.assertEqual(d, dp)
 
-    def test_population_parameters_change_population_id(self):
+    def test_population_parameters_change_population(self):
         g = 100
         Ne = 10
-        for population_id in range(3):
+        for population in range(3):
             event = msprime.PopulationParametersChange(
-                time=g, initial_size=Ne, population_id=population_id)
+                time=g, initial_size=Ne, population=population)
             d = event.get_ll_representation(1)
             dp = {
                 "time": g,
-                "population_id": population_id,
+                "population": population,
                 "type": "population_parameters_change",
                 "initial_size": Ne}
             self.assertEqual(d, dp)
@@ -884,12 +947,12 @@ class TestLowLevelConversions(unittest.TestCase):
         for population in [0, 1, 5]:
             for strength in [0, 100, 1000, 1e9]:
                 event = msprime.InstantaneousBottleneck(
-                    time=g, population_id=population, strength=strength)
+                    time=g, population=population, strength=strength)
                 d = event.get_ll_representation(1)
                 dp = {
                     "time": g,
                     "type": "instantaneous_bottleneck",
-                    "population_id": population,
+                    "population": population,
                     "strength": strength}
                 self.assertEqual(d, dp)
 
