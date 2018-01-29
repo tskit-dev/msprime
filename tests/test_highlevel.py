@@ -837,6 +837,33 @@ class TestHaplotypeGenerator(HighLevelTestCase):
         for ts in get_bottleneck_examples():
             self.verify_tree_sequence(ts)
 
+    def test_acgt_mutations(self):
+        ts = msprime.simulate(10, mutation_rate=10)
+        self.assertGreater(ts.num_sites, 0)
+        tables = ts.tables
+        sites = tables.sites
+        mutations = tables.mutations
+        sites.set_columns(
+            position=sites.position,
+            ancestral_state=np.zeros(ts.num_sites, dtype=np.int8) + ord("A"),
+            ancestral_state_offset=np.arange(ts.num_sites + 1, dtype=np.uint32))
+        mutations.set_columns(
+            site=mutations.site,
+            node=mutations.node,
+            derived_state=np.zeros(ts.num_sites, dtype=np.int8) + ord("T"),
+            derived_state_offset=np.arange(ts.num_sites + 1, dtype=np.uint32))
+        tsp = msprime.load_tables(**tables.asdict())
+        H = [h.replace("0", "A").replace("1", "T") for h in ts.haplotypes()]
+        self.assertEqual(H, list(tsp.haplotypes()))
+
+    def test_multiletter_mutations(self):
+        ts = msprime.simulate(10)
+        tables = ts.tables
+        sites = tables.sites
+        sites.add_row(0, "ACTG")
+        tsp = msprime.load_tables(**tables.asdict())
+        self.assertRaises(_msprime.LibraryError, list, tsp.haplotypes())
+
     def test_recurrent_mutations_over_samples(self):
         for ts in get_bottleneck_examples():
             num_sites = 5

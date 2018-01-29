@@ -189,7 +189,7 @@ class Mutation(SimpleContainer):
         further information about a site with a given ID use
         :meth:`.TreeSequence.site`.
     :vartype site: int
-    :ivar node: The integer ID of the the first node that inherits this mutation.
+    :ivar node: The integer ID of the first node that inherits this mutation.
         To obtain further information about a node with a given ID, use
         :meth:`.TreeSequence.node`.
     :vartype node: int
@@ -199,7 +199,8 @@ class Mutation(SimpleContainer):
     :vartype derived_state: str
     :ivar parent: The integer ID of this mutation's parent mutation. When multiple
         mutations occur at a site along a path in the tree, mutations must
-        record the mutation that is immediately above them.
+        record the mutation that is immediately above them. If the mutation does
+        not have a parent, this is equal to the :const:`NULL_MUTATION` (-1).
         To obtain further information about a mutation with a given ID, use
         :meth:`.TreeSequence.mutation`.
     :vartype parent: int
@@ -251,17 +252,40 @@ class Migration(SimpleContainer):
 class Variant(SimpleContainer):
     """
     A variant is represents the observed variation among the samples
-    for a given site.
+    for a given site. A variant consists (a) of a reference to the
+    :class:`.Site` instance in question; (b) the **alleles** that may be
+    observed at the samples for this site; and (c) the **genotypes**
+    mapping sample IDs to the observed alleles.
+
+    Each element in the ``alleles`` tuple is a string, representing the
+    actual observed state for a given sample. The first element of this
+    tuple is guaranteed to be the same as the site's ``ancestral_state`` value.
+    The list of alleles is also guaranteed not to contain any duplicates.
+    However, allelic values may be listed that are not referred to by any
+    samples. For example, if we have a site that is fixed for the derived state
+    (i.e., we have a mutation over the tree root), all genotypes will be 1, but
+    the alleles list will be equal to ``('0', '1')``. Other than the
+    ancestral state being the first allele, the alleles are listed in
+    no particular order, and the ordering should not be relied upon.
+
+    The ``genotypes`` represent the observed allelic states for each sample,
+    such that ``var.alleles[var.genotypes[j]]`` gives the string allele
+    for sample ID ``j``. Thus, the elements of the genotypes array are
+    indexes into the ``alleles`` list. The genotypes are provided in this
+    way via a numpy array to enable efficient calculations.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
 
     :ivar site: The site object for this variant.
     :vartype site: :class:`.Site`
-    :ivar alleles:
-    :vartype alleles:
-    :ivar genotypes:
-    :vartype genotypes:
+    :ivar alleles: A tuple of the allelic values that may be observed at the
+        samples at the current site. The first element of this tuple is always
+        the sites's ancestral state.
+    :vartype alleles: tuple(str)
+    :ivar genotypes: An array of indexes into the list ``alleles``, giving the
+        state of each sample at the current site.
+    :vartype genotypes: numpy.ndarray
     """
     def __init__(self, site, alleles, genotypes):
         self.site = site
@@ -304,17 +328,18 @@ def add_deprecated_mutation_attrs(site, mutation):
 
 class SparseTree(object):
     """
-    A SparseTree is a single tree in a :class:`.TreeSequence`. In a sparse tree
-    for a sample of size :math:`n`, the samples are nodes :math:`0` to :math:`n
-    - 1` inclusive and internal nodes are integers :math:`\geq n`. The value of
-    these nodes is strictly increasing as we ascend the tree and the root of
-    the tree is the node with the largest value that is reachable from  the
-    samples. Each node in the tree has a parent which is obtained using the
-    :meth:`.get_parent` method. The parent of the root node is the
-    :const:`.NULL_NODE`, :math:`-1`. Similarly, each internal node has a
-    pair of children, which are obtained using the :meth:`.get_children`
-    method. Each node in the tree has a time associated with it in generations.
-    This value is obtained using the :meth:`.SparseTree.get_time` method.
+    A SparseTree is a single tree in a :class:`.TreeSequence`. The SparseTree
+    implementation differs from most tree implementations by using **integer
+    node IDs** to refer to nodes rather than objects. Thus, when we wish to
+    find the parent of the node with ID '0', we use ``tree.parent(0)``, which
+    returns another integer. If '0' does not have a parent in the current tree
+    (e.g., if it is a root), then the special value :const:`.NULL_NODE`
+    (:math:`-1`) is returned. The children of a node are found using the
+    :meth:`.children` method. To obtain information about a particular node,
+    one may either use ``tree.tree_sequence.node(u)`` to obtain the
+    corresponding :class:`Node` instance, or use the :meth:`.time` or
+    :meth:`.population` shorthands. Tree traversals in various orders
+    is possible using the :meth:`.nodes` iterator.
 
     Sparse trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
@@ -465,6 +490,7 @@ class SparseTree(object):
     def time(self, u):
         """
         Returns the time of the specified node in generations.
+        Equivalent to ``tree.tree_sequence.node(u).time``.
 
         :param int u: The node of interest.
         :return: The time of u.
@@ -478,10 +504,8 @@ class SparseTree(object):
 
     def population(self, u):
         """
-        Returns the population associated with the specified node. If the
-        specified node is not a member of this tree or population level
-        information was not stored in the tree sequence,
-        :const:`.NULL_POPULATION` is returned.
+        Returns the population associated with the specified node.
+        Equivalent to ``tree.tree_sequence.node(u).population``.
 
         :param int u: The node of interest.
         :return: The ID of the population associated with node u.
@@ -1336,9 +1360,20 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
 
 class TreeSequence(object):
     """
-    A TreeSequence represents the information generated in a coalescent
-    simulation. This includes all the trees across the simulated region,
-    along with the mutations (if any are present).
+    A single tree sequence, as defined by the :ref:`data model <sec_data_model>`.
+    A TreeSequence instance can be created from a set of
+    :ref:`tables <sec_table_definitions>` using :func:`.load_tables`; or loaded
+    from a set of text files using :func:`.load_text`; or, loaded from a
+    native file using :func:`load`.
+
+    TreeSequences are immutable. To change the data held in a particular
+    tree sequence, first output the informatinn to a set of tables
+    (using :meth:`.dump_tables`), edit those tables using the
+    :ref:`tables api <sec_tables_api>`, and create a new tree sequence using
+    :func:`.load_tables`.
+
+    The :meth:`.trees` method iterates over all trees in a tree sequence, and
+    the :meth:`.variants` method iterates over all sites and their genotypes.
     """
 
     def __init__(self, ll_tree_sequence):
@@ -1832,17 +1867,26 @@ class TreeSequence(object):
     def haplotypes(self):
         """
         Returns an iterator over the haplotypes resulting from the trees
-        and mutations in this tree sequence as a string of '1's and '0's.
+        and mutations in this tree sequence as a string.
         The iterator returns a total of :math:`n` strings, each of which
         contains :math:`s` characters (:math:`n` is the sample size
-        returned by :meth:`msprime.TreeSequence.get_sample_size` and
-        :math:`s` is the number of mutations returned by
-        :meth:`msprime.TreeSequence.get_num_mutations`). The first
+        returned by :attr:`msprime.TreeSequence.num_samples` and
+        :math:`s` is the number of sites returned by
+        :attr:`msprime.TreeSequence.num_sites`). The first
         string returned is the haplotype for sample `0`, and so on.
+        For a given haplotype ``h``, the value of ``h[j]`` is the observed
+        allelic state at site ``j``.
+
+        See also the :meth:`variants` iterator for site-centric access
+        to sample genotypes.
+
+        This method is only supported for single-letter alleles.
 
         :return: An iterator over the haplotype strings for the samples in
             this tree sequence.
         :rtype: iter
+        :raises: LibraryError if called on a tree sequence containing
+            multiletter alleles.
         """
         hapgen = _msprime.HaplotypeGenerator(self._ll_tree_sequence)
         j = 0
@@ -1853,35 +1897,27 @@ class TreeSequence(object):
 
     def variants(self, as_bytes=False):
         """
-        Returns an iterator over the variants in this tree sequence. Each
-        variant corresponds to a single mutation and is represented as a tuple
-        :math:`(x, u, j, g)`. The values of :math:`x`, :math:`u` and :math:`j`
-        are identical to the values returned by the
-        :meth:`.TreeSequence.mutations` method, and :math:`g` represents the
-        sample genotypes for this variant. Thus, :math:`g[k]` is the observed
-        state for sample :math:`k` at this site; zero represents the
-        ancestral type and one the derived type.
+        Returns an iterator over the variants in this tree sequence. See the
+        :class:`Variant` class for details on the fields of each returned
+        object. By default the ``genotypes`` for the variants are numpy arrays,
+        corresponding to indexes into the ``alleles`` array. If the
+        ``as_bytes`` parameter is true, these allelic values are recorded
+        directly into a bytes array.
 
-        Each variant returned is an instance of :func:`collections.namedtuple`,
-        and may be accessed via the attributes ``position``, ``node``,
-        ``index`` and ``genotypes`` as well as the usual positional approach.
-        This is the recommended interface for working with variants as it is
-        both more readable and also ensures that code is forward compatible
-        with future extensions.
-
-        The returned genotypes may be either a numpy array of 1 byte unsigned
-        integer 0/1 values, or a Python bytes object of '0'/'1' ASCII
-        characters. This behaviour is controller by the ``as_bytes`` parameter.
-        The default behaviour is to return a numpy array, which is
-        substantially more efficient.
+        .. note::
+            The ``as_bytes`` parameter is kept as a compatibility
+            option for older code. It is not the recommended way of
+            accessing variant data, and will be deprecated in a later
+            release. Another method will be provided to obtain the allelic
+            states for each site directly.
 
         :param bool as_bytes: If True, the genotype values will be returned
             as a Python bytes object. This is useful in certain situations
             (i.e., directly printing the genotypes) or when numpy is
             not available. Otherwise, genotypes are returned as a numpy
             array (the default).
-        :return: An iterator of all :math:`(x, u, j, g)` tuples defining
-            the variants in this tree sequence.
+        :return: An iterator of all variants this tree sequence.
+        :rtype: iter(:class:`Variant`)
         """
         # See comments for the Variant type for discussion on why the
         # present form was chosen.
@@ -1900,6 +1936,22 @@ class TreeSequence(object):
             yield Variant(site, alleles, genotypes)
 
     def genotype_matrix(self):
+        """
+        Returns an :math:`m \\times n` numpy array of the genotypes in this
+        tree sequence, where :math:`m` is the number of site and :math:`n`
+        the number of samples. The genotypes are the indexes into the array
+        of ``alleles``, as described for the :class:`Variant` class. The value
+        0 always corresponds to the ancestal state, and values > 0 represent
+        distinct derived states.
+
+        .. warning::
+            This method can consume a **very large** amount of memory! If
+            all genotypes are not needed at once, it is usually better to
+            access them sequentially using the :meth:`.variants` iterator.
+
+        :return: The full matrix of genotypes.
+        :rtype: numpy.ndarray (dtype=np.uint8)
+        """
         return self._ll_tree_sequence.get_genotype_matrix()
 
     def get_pairwise_diversity(self, samples=None):
@@ -1964,34 +2016,6 @@ class TreeSequence(object):
     def provenance(self, id_):
         timestamp, record = self._ll_tree_sequence.get_provenance(id_)
         return Provenance(id_=id_, timestamp=timestamp, record=record)
-
-    def get_time(self, u):
-        """
-        Returns the time that the specified ID was alive at.
-
-        :param int u: The individual ID of interest.
-        :return: The time at which the specified individual was alive at.
-        :rtype: int
-        """
-        if u < 0 or u >= self.get_num_nodes():
-            raise ValueError("ID out of bounds")
-        node = self.node(u)
-        return node.time
-
-    def get_population(self, u):
-        """
-        Returns the population ID for the specified sample ID.
-
-        :param int u: The individual  ID of interest.
-        :return: The population ID where the specified individual lived.
-            Returns :const:`.NULL_POPULATION` if no population information
-            is available.
-        :rtype: int
-        """
-        if u < 0 or u >= self.get_num_nodes():
-            raise ValueError("ID out of bounds")
-        node = self.node(u)
-        return node.population
 
     def get_samples(self, population_id=None):
         # Deprecated alias for samples()
@@ -2112,6 +2136,18 @@ class TreeSequence(object):
     # later release.
     #
     ############################################
+
+    def get_time(self, u):
+        if u < 0 or u >= self.get_num_nodes():
+            raise ValueError("ID out of bounds")
+        node = self.node(u)
+        return node.time
+
+    def get_population(self, u):
+        if u < 0 or u >= self.get_num_nodes():
+            raise ValueError("ID out of bounds")
+        node = self.node(u)
+        return node.population
 
     # TODO deprecate
     def get_num_records(self):
