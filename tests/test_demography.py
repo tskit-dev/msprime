@@ -551,7 +551,7 @@ class TestCoalescenceLocations(unittest.TestCase):
         # The parent of all the samples from each deme should be in that deme.
         for pop in range(3):
             parents = [
-                tree.get_parent(u) for u in ts.get_samples(population_id=pop)]
+                tree.get_parent(u) for u in ts.samples(population=pop)]
             for v in parents:
                 self.assertEqual(tree.get_population(v), pop)
 
@@ -576,7 +576,6 @@ class TestMigrationRecords(unittest.TestCase):
             demographic_events=demographic_events,
             random_seed=1, record_migrations=True)
         migrations = list(ts.migrations())
-        self.assertEqual(len(migrations), ts.num_migrations)
         self.assertEqual(len(migrations), 2)
         m0 = migrations[0]
         m1 = migrations[1]

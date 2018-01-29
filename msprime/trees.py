@@ -2050,20 +2050,26 @@ class TreeSequence(object):
         # Deprecated alias for samples()
         return self.samples(population_id)
 
-    def samples(self, population_id=None):
+    def samples(self, population=None, population_id=None):
         """
         Returns the samples matching the specified population ID.
 
-        :param int population_id: The population of interest. If None,
+        :param int population: The population of interest. If None,
             return all samples.
+        :param int population_id: Deprecated alias for ``population``.
         :return: The ID of the population we wish to find samples from.
             If None, return samples from all populations.
         :rtype: list
         """
-        samples = self._ll_tree_sequence.get_samples()
+        if population is not None and population_id is not None:
+            raise ValueError(
+                "population_id and population are aliases. Cannot specify both")
         if population_id is not None:
+            population = population_id
+        samples = self._ll_tree_sequence.get_samples()
+        if population is not None:
             samples = [
-                u for u in samples if self.get_population(u) == population_id]
+                u for u in samples if self.get_population(u) == population]
         return samples
 
     def write_vcf(self, output, ploidy=1, contig_id="1", compresslevel=None):
