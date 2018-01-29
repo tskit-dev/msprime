@@ -1057,6 +1057,16 @@ class TestTreeSequence(HighLevelTestCase):
     def test_samples(self):
         for ts in get_example_tree_sequences():
             self.verify_samples(ts)
+            pops = set(node.population for node in ts.nodes())
+            for pop in pops:
+                subsample = ts.samples(pop)
+                self.assertEqual(subsample, ts.samples(population=pop))
+                self.assertEqual(subsample, ts.samples(population_id=pop))
+                self.assertEqual(
+                    subsample,
+                    [node.id for node in ts.nodes()
+                        if node.population == pop and node.is_sample()])
+            self.assertRaises(ValueError, ts.samples, population=0, population_id=0)
 
     def test_first(self):
         for ts in get_example_tree_sequences():
