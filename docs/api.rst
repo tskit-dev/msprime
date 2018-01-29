@@ -154,16 +154,23 @@ Constants
 .. data:: msprime.NULL_NODE = -1
 
     Special reserved value, representing the null node. If the parent of a
-    given node is null, then this node is a root. Similarly, if the children of
-    a node are null, this node is a leaf.
+    given node is null, then this node is either a root (the ancestor of
+    one or more samples), or the node is not present in the current tree.
 
 .. data:: msprime.NULL_POPULATION = -1
 
-    Special reserved value, representing the null population ID. If the
-    population associated with a particular tree node is not defined,
-    or population information was not available in the underlying
-    tree sequence, then this value will be returned by
-    :meth:`.SparseTree.get_population`.
+    Special reserved value, representing the null population ID. This value is
+    returned if the population associated with a particular node is not
+    defined, or population information was not available in the underlying tree
+    sequence.
+
+.. data:: msprime.NULL_MUTATION = -1
+
+    Special reserved value, representing the null mutation ID. If there is a
+    single mutation at a site, or if a mutation at a given site does not have
+    an ancestal mutations it inherited from, this is the value returned by
+    ``mutation.parent``. See also :class:`.Mutation`.
+
 
 .. data:: msprime.FORWARD = 1
 
