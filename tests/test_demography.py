@@ -201,12 +201,16 @@ class TestDemographyDebuggerOutput(unittest.TestCase):
     """
     def verify_debug(
             self, population_configurations, migration_matrix, demographic_events):
+
+        dd = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events)
+        # Check the reprs
+        s = repr(dd.epochs)
+        self.assertGreater(len(s), 0)
         with tempfile.TemporaryFile("w+") as f:
-            dp = msprime.DemographyDebugger(
-                population_configurations=population_configurations,
-                migration_matrix=migration_matrix,
-                demographic_events=demographic_events)
-            dp.print_history(f)
+            dd.print_history(f)
             f.seek(0)
             debug_output = f.read()
         # TODO when there is better output, write some tests to

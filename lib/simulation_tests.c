@@ -603,7 +603,7 @@ test_demographic_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 2.0);
+    ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
     CU_ASSERT_EQUAL(ret, 0);

@@ -141,6 +141,18 @@ class TestLdCalculator(unittest.TestCase):
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
+    def test_deprecated_aliases(self):
+        ts = msprime.simulate(20, mutation_rate=10, random_seed=15)
+        ts = tsutil.subsample_sites(ts, self.num_test_sites)
+        ldc = msprime.LdCalculator(ts)
+        A = ldc.get_r2_matrix()
+        B = ldc.r2_matrix()
+        self.assertTrue(np.array_equal(A, B))
+        a = ldc.get_r2_array(0)
+        b = ldc.r2_array(0)
+        self.assertTrue(np.array_equal(a, b))
+        self.assertEqual(ldc.get_r2(0, 1), ldc.r2(0, 1))
+
     @unittest.skip("recurrent mutations")
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
