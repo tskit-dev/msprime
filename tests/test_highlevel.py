@@ -912,11 +912,8 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_sparse_trees(ts)
 
-    @unittest.skip("Back mutation pi")
     def test_mutations(self):
-        # TODO enable the back_mutations here once this has been implemented
-        # for pi and variants.
-        for ts in get_example_tree_sequences(back_mutations=False):
+        for ts in get_example_tree_sequences():
             self.verify_mutations(ts)
 
     def verify_edge_diffs(self, ts):
@@ -1115,19 +1112,24 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertRaises(
             ValueError, list, ts.trees(sample_counts=False, tracked_samples=[0]))
 
-    @unittest.skip("pi on recurrent mutations")
     def test_get_pairwise_diversity(self):
         for ts in get_example_tree_sequences():
             n = ts.get_sample_size()
             self.assertRaises(ValueError, ts.get_pairwise_diversity, [])
             self.assertRaises(ValueError, ts.get_pairwise_diversity, [1])
             self.assertRaises(ValueError, ts.get_pairwise_diversity, [1, n])
-            self.assertEqual(
-                ts.get_pairwise_diversity(),
-                ts.get_pairwise_diversity(range(n)))
-            self.assertEqual(
-                ts.get_pairwise_diversity([0, 1]),
-                ts.get_pairwise_diversity([1, 0]))
+            samples = list(ts.samples())
+            if any(len(site.mutations) > 1 for site in ts.sites()):
+                # Multi-mutations are not currenty supported when computing pi.
+                self.assertRaises(
+                    _msprime.LibraryError, ts.get_pairwise_diversity)
+            else:
+                self.assertEqual(
+                    ts.get_pairwise_diversity(),
+                    ts.get_pairwise_diversity(samples))
+                self.assertEqual(
+                    ts.get_pairwise_diversity(samples[:2]),
+                    ts.get_pairwise_diversity(reversed(samples[:2])))
 
     def test_get_population(self):
         for ts in get_example_tree_sequences():
