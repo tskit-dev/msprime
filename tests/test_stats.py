@@ -27,6 +27,7 @@ import unittest
 import numpy as np
 
 import msprime
+import _msprime
 import tests.tsutil as tsutil
 
 
@@ -156,8 +157,9 @@ class TestLdCalculator(unittest.TestCase):
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
         ts = tsutil.insert_branch_mutations(ts)
-        self.verify_matrix(ts)
-        self.verify_max_distance(ts)
+        # We don't support back mutations, so this should fail.
+        self.assertRaises(_msprime.LibraryError, self.verify_matrix, ts)
+        self.assertRaises(_msprime.LibraryError, self.verify_max_distance, ts)
 
     def test_tree_sequence_regular_mutations(self):
         ts = msprime.simulate(
