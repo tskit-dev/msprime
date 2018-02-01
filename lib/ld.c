@@ -220,7 +220,10 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
     if (ret != 0) {
         goto out;
     }
-    assert(sA.mutations_length == 1);
+    if (sA.mutations_length > 1) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     tB->mark = 1;
@@ -233,7 +236,10 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         if (ret != 0) {
             goto out;
         }
-        assert(sB.mutations_length == 1);
+        if (sB.mutations_length > 1) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            goto out;
+        }
         if (sB.position - sA.position > max_distance) {
             break;
         }
@@ -304,7 +310,10 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
     if (ret != 0) {
         goto out;
     }
-    assert(sA.mutations_length == 1);
+    if (sA.mutations_length > 1) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     tB->mark = 1;
@@ -315,6 +324,10 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         }
         ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) site_index, &sB);
         if (ret != 0) {
+            goto out;
+        }
+        if (sB.mutations_length > 1) {
+            ret = MSP_ERR_UNSUPPORTED_OPERATION;
             goto out;
         }
         if (sA.position - sB.position > max_distance) {
@@ -427,6 +440,10 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     }
     ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) b, &sB);
     if (ret != 0) {
+        goto out;
+    }
+    if (sA.mutations_length > 1 || sB.mutations_length > 1) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
     assert(sA.mutations_length == 1);
