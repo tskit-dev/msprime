@@ -340,6 +340,12 @@ class TestDemographyDebugger(unittest.TestCase):
         # verify its format.
         self.assertGreater(len(debug_output), 0)
 
+    def test_zero_samples(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(0)]
+        self.verify_debug(population_configurations, [[0]], [])
+        self.verify_debug(None, None, [])
+
     def test_one_population(self):
         population_configurations = [
             msprime.PopulationConfiguration(10)]

@@ -1036,8 +1036,17 @@ class DemographyDebugger(object):
     def __init__(
             self, Ne=1, population_configurations=None, migration_matrix=None,
             demographic_events=[]):
+        # Make sure that we have a sample size of at least 2 so that we can
+        # initialise the simulator.
+        sample_size = None
+        if population_configurations is None:
+            sample_size = 2
+        else:
+            for pop_config in population_configurations:
+                pop_config.sample_size = 2
         self._precision = 3
         self._simulator = simulator_factory(
+            sample_size=sample_size,
             Ne=Ne,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
