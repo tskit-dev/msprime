@@ -739,6 +739,9 @@ class DemographicEvent(object):
         self.type = type_
         self.time = time
 
+    def __repr__(self):
+        return repr(self.__dict__)
+
 
 class PopulationParametersChange(DemographicEvent):
     """
@@ -1013,19 +1016,31 @@ class Population(object):
     Simple class to represent the state of a population in terms of its
     demographic parameters.
     """
-    def __init__(self, initial_size=None, growth_rate=None):
-        self.initial_size = initial_size
+    def __init__(self, start_size, end_size, growth_rate):
+        self.start_size = start_size
+        self.end_size = end_size
         self.growth_rate = growth_rate
 
-    def get_size(self, time):
-        """
-        Gets the size of the population after the specified amount of
-        time.
-        """
-        size = self.initial_size
-        if self.growth_rate != 0:
-            size = self.initial_size * math.exp(-self.growth_rate * time)
-        return size
+    def __repr__(self):
+        return repr(self.__dict__)
+
+
+class Epoch(object):
+    """
+    Represents a single epoch in the simulation within which the state
+    of the demographic parameters are constant.
+    """
+    def __init__(
+            self, start_time=None, end_time=None, populations=None,
+            migration_matrix=None, demographic_events=None):
+        self.start_time = start_time
+        self.end_time = end_time
+        self.populations = populations
+        self.migration_matrix = migration_matrix
+        self.demographic_events = demographic_events
+
+    def __repr__(self):
+        return repr(self.__dict__)
 
 
 class DemographyDebugger(object):
@@ -1037,19 +1052,58 @@ class DemographyDebugger(object):
             self, Ne=1, population_configurations=None, migration_matrix=None,
             demographic_events=[]):
         self._precision = 3
-        self._simulator = simulator_factory(
-            Ne=Ne,
+        # Make sure that we have a sample size of at least 2 so that we can
+        # initialise the simulator.
+        sample_size = None
+        if population_configurations is None:
+            sample_size = 2
+        else:
+            for pop_config in population_configurations:
+                pop_config.sample_size = 2
+        simulator = simulator_factory(
+            sample_size=sample_size, Ne=Ne,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        self._demographic_events = sorted(demographic_events, key=lambda e: e.time)
+        self._make_epochs(
+            simulator, sorted(demographic_events, key=lambda e: e.time))
 
-    def _print_populations(
-            self, start_time, end_time, migration_matrix, populations, output):
+    def _make_epochs(self, simulator, demographic_events):
+        self.epochs = []
+        ll_sim = simulator.create_ll_instance()
+        N = simulator.num_populations
+        start_time = 0
+        end_time = 0
+        abs_tol = 1e-9
+        event_index = 0
+        while not math.isinf(end_time):
+            events = []
+            while (
+                    event_index < len(demographic_events) and
+                    almost_equal(
+                        demographic_events[event_index].time,
+                        start_time, abs_tol=abs_tol)):
+                events.append(demographic_events[event_index])
+                event_index += 1
+            end_time = ll_sim.debug_demography()
+            m = ll_sim.get_migration_matrix()
+            migration_matrix = [[m[j * N + k] for k in range(N)] for j in range(N)]
+            growth_rates = [
+                conf["growth_rate"] for conf in ll_sim.get_population_configuration()]
+            populations = [
+                Population(
+                    start_size=ll_sim.compute_population_size(j, start_time),
+                    end_size=ll_sim.compute_population_size(j, end_time),
+                    growth_rate=growth_rates[j]) for j in range(N)]
+            self.epochs.append(Epoch(
+                start_time, end_time, populations, migration_matrix, events))
+            start_time = end_time
+
+    def _print_populations(self, epoch, output):
         field_width = self._precision + 6
         growth_rate_field_width = 14
         sep_str = " | "
-        N = len(migration_matrix)
+        N = len(epoch.migration_matrix)
         fmt = (
             "{id:<2} "
             "{start_size:^{field_width}}"
@@ -1061,8 +1115,7 @@ class DemographyDebugger(object):
             growth_rate_field_width=growth_rate_field_width), end=sep_str,
             file=output)
         for k in range(N):
-            print(
-                "{0:^{1}}".format(k, field_width), end="", file=output)
+            print("{0:^{1}}".format(k, field_width), end="", file=output)
         print(file=output)
         h = "-" * (field_width - 1)
         print(
@@ -1075,62 +1128,38 @@ class DemographyDebugger(object):
             s = "-" * (field_width - 1)
             print("{0:<{1}}".format(s, field_width), end="", file=output)
         print(file=output)
-        for j, pop in enumerate(populations):
+        for j, pop in enumerate(epoch.populations):
             s = (
                 "{id:<2}|"
                 "{start_size:^{field_width}.{precision}g}"
                 "{end_size:^{field_width}.{precision}g}"
                 "{growth_rate:>{growth_rate_field_width}.{precision}g}"
                 ).format(
-                    id=j, start_size=pop.initial_size,
-                    end_size=pop.get_size(end_time - start_time),
+                    id=j,
+                    start_size=pop.start_size,
+                    end_size=pop.end_size,
                     growth_rate=pop.growth_rate,
                     precision=self._precision, field_width=field_width,
                     growth_rate_field_width=growth_rate_field_width)
             print(s, end=sep_str, file=output)
             for k in range(N):
-                x = migration_matrix[j][k]
+                x = epoch.migration_matrix[j][k]
                 print("{0:^{1}.{2}g}".format(
-                    x, field_width, self._precision), end="",
-                    file=output)
+                    x, field_width, self._precision), end="", file=output)
             print(file=output)
 
     def print_history(self, output=sys.stdout):
         """
         Prints a summary of the history of the populations.
         """
-        abs_tol = 1e-9
-        ll_sim = self._simulator.create_ll_instance()
-        N = self._simulator.num_populations
-        start_time = 0
-        end_time = 0
-        event_index = 0
-        while not math.isinf(end_time):
-            events = []
-            while (
-                    event_index < len(self._demographic_events) and
-                    almost_equal(
-                        self._demographic_events[event_index].time,
-                        start_time, abs_tol=abs_tol)):
-                events.append(self._demographic_events[event_index])
-                event_index += 1
-            if len(events) > 0:
-                print(
-                    "Events @ generation {}".format(start_time), file=output)
-            for event in events:
-                assert almost_equal(event.time, start_time, abs_tol=abs_tol)
+        for epoch in self.epochs:
+            if len(epoch.demographic_events) > 0:
+                print("Events @ generation {}".format(epoch.start_time), file=output)
+            for event in epoch.demographic_events:
                 print("   -", event, file=output)
-            print(file=output)
-            end_time = ll_sim.debug_demography()
-            m = ll_sim.get_migration_matrix()
-            migration_matrix = [[m[j * N + k] for j in range(N)] for k in range(N)]
-            populations = [
-                Population(**d) for d in ll_sim.get_population_configuration()]
-            s = "Epoch: {} -- {} generations".format(start_time, end_time)
+            s = "Epoch: {} -- {} generations".format(epoch.start_time, epoch.end_time)
             print("=" * len(s), file=output)
             print(s, file=output)
             print("=" * len(s), file=output)
-            self._print_populations(
-                start_time, end_time, migration_matrix, populations, output)
+            self._print_populations(epoch, output)
             print(file=output)
-            start_time = end_time

@@ -136,131 +136,6 @@ class TestDeprecatedParameters(unittest.TestCase):
             self.assertEqual(e.strength, 5)
 
 
-class TestGrowthRates(unittest.TestCase):
-    """
-    Tests to see the growth rates we calculate give us the
-    right values when we go through to the low-level debugging
-    interface.
-    """
-    def test_single_growth_rate(self):
-        # Set out our values in units of generations and absolute sizes.
-        Ne = 1000
-        growth_rate = -0.01
-        end_time = 20
-        end_size = Ne * math.exp(-growth_rate * end_time)
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=2, initial_size=Ne, growth_rate=growth_rate)]
-        demographic_events = [
-            msprime.PopulationParametersChange(time=end_time, growth_rate=0)]
-        simulator = msprime.simulator_factory(
-            Ne=Ne,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events)
-        ll_sim = simulator.create_ll_instance()
-        ll_end_time = ll_sim.debug_demography()
-        self.assertEqual(end_time, ll_end_time)
-        populations = [
-            msprime.Population(**d)
-            for d in ll_sim.get_population_configuration()]
-        self.assertEqual(len(populations), 1)
-        pop = populations[0]
-        self.assertEqual(pop.growth_rate, growth_rate)
-        self.assertEqual(pop.initial_size, Ne)
-        self.assertEqual(pop.get_size(end_time), end_size)
-        # Now fast forward to the next time slice.
-        ll_end_time = ll_sim.debug_demography()
-        self.assertTrue(math.isinf(ll_end_time))
-        populations = [
-            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
-        pop = populations[0]
-        self.assertEqual(pop.growth_rate, 0)
-        self.assertEqual(pop.initial_size, end_size)
-        self.assertEqual(pop.get_size(10), end_size)
-
-    def test_symmetric_growth_rates(self):
-        # Test a symmetric model where we start with a negative growth
-        # rate and then increase back to the same value.
-        Ne = 10001
-        growth_rate = 0.0125
-        delta_t = 50
-        end_size = Ne * math.exp(-growth_rate * delta_t)
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=2, initial_size=Ne, growth_rate=growth_rate)]
-        demographic_events = [
-            msprime.PopulationParametersChange(time=delta_t, growth_rate=-growth_rate),
-            msprime.PopulationParametersChange(time=2 * delta_t, growth_rate=0)]
-        simulator = msprime.simulator_factory(
-            Ne=Ne,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events)
-        ll_sim = simulator.create_ll_instance()
-        ll_end_time = ll_sim.debug_demography()
-        t = delta_t
-        self.assertEqual(t, ll_end_time)
-        populations = [
-            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
-        pop = populations[0]
-        self.assertEqual(pop.growth_rate, growth_rate)
-        self.assertEqual(pop.initial_size, Ne)
-        self.assertEqual(pop.get_size(delta_t), end_size)
-        # Now fast forward to the next time slice.
-        t += delta_t
-        ll_end_time = ll_sim.debug_demography()
-        self.assertEqual(t, ll_end_time)
-        pop = [
-            msprime.Population(**d) for d in ll_sim.get_population_configuration()][0]
-        self.assertEqual(pop.growth_rate, -growth_rate)
-        self.assertEqual(pop.initial_size, end_size)
-        self.assertEqual(pop.get_size(delta_t), Ne)
-        # Now fast forward to the next time slice.
-        ll_end_time = ll_sim.debug_demography()
-        self.assertTrue(math.isinf(ll_end_time))
-        populations = [
-            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
-        pop = populations[0]
-        self.assertEqual(pop.growth_rate, 0)
-        self.assertEqual(pop.initial_size, Ne)
-
-    def test_single_growth_rate_size_change(self):
-        # Set out our values in units of generations and absolute sizes.
-        Ne = 1000
-        growth_rate = -0.01
-        end_time = 20
-        end_size = Ne * math.exp(-growth_rate * end_time)
-        new_size = 4 * Ne
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=2, initial_size=Ne, growth_rate=growth_rate)]
-        demographic_events = [
-            msprime.PopulationParametersChange(
-                time=end_time, initial_size=new_size, growth_rate=0)]
-        simulator = msprime.simulator_factory(
-            Ne=Ne,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events)
-        ll_sim = simulator.create_ll_instance()
-        ll_end_time = ll_sim.debug_demography()
-        self.assertEqual(end_time, ll_end_time)
-        populations = [
-            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
-        self.assertEqual(len(populations), 1)
-        pop = populations[0]
-        self.assertEqual(pop.growth_rate, growth_rate)
-        self.assertEqual(pop.initial_size, Ne)
-        self.assertEqual(pop.get_size(end_time), end_size)
-        # Now fast forward to the next time slice.
-        ll_end_time = ll_sim.debug_demography()
-        self.assertTrue(math.isinf(ll_end_time))
-        populations = [
-            msprime.Population(**d) for d in ll_sim.get_population_configuration()]
-        pop = populations[0]
-        self.assertEqual(pop.growth_rate, 0)
-        self.assertEqual(pop.initial_size, new_size)
-        self.assertEqual(pop.get_size(10), new_size)
-
-
 class TestRateConversions(unittest.TestCase):
     """
     Tests for the demographic events interface.
@@ -320,25 +195,33 @@ class TestRateConversions(unittest.TestCase):
         self.assertEqual(event.get_ll_representation(d), ll_event)
 
 
-class TestDemographyDebugger(unittest.TestCase):
+class TestDemographyDebuggerOutput(unittest.TestCase):
     """
     Tests for the demography debug interface.
     """
-
     def verify_debug(
-            self, population_configurations, migration_matrix,
-            demographic_events):
+            self, population_configurations, migration_matrix, demographic_events):
+
+        dd = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events)
+        # Check the reprs
+        s = repr(dd.epochs)
+        self.assertGreater(len(s), 0)
         with tempfile.TemporaryFile("w+") as f:
-            dp = msprime.DemographyDebugger(
-                population_configurations=population_configurations,
-                migration_matrix=migration_matrix,
-                demographic_events=demographic_events)
-            dp.print_history(f)
+            dd.print_history(f)
             f.seek(0)
             debug_output = f.read()
         # TODO when there is better output, write some tests to
         # verify its format.
         self.assertGreater(len(debug_output), 0)
+
+    def test_zero_samples(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(0)]
+        self.verify_debug(population_configurations, [[0]], [])
+        self.verify_debug(None, None, [])
 
     def test_one_population(self):
         population_configurations = [
@@ -348,16 +231,14 @@ class TestDemographyDebugger(unittest.TestCase):
             msprime.PopulationParametersChange(0.1, initial_size=2),
             msprime.PopulationParametersChange(0.1, growth_rate=10)]
         self.verify_debug(
-            population_configurations, migration_matrix,
-            demographic_events)
+            population_configurations, migration_matrix, demographic_events)
 
     def test_no_events(self):
         population_configurations = [
             msprime.PopulationConfiguration(10),
             msprime.PopulationConfiguration(10)]
         migration_matrix = [[0, 0], [0, 0]]
-        self.verify_debug(
-            population_configurations, migration_matrix, [])
+        self.verify_debug(population_configurations, migration_matrix, [])
 
     def test_demographic_events(self):
         population_configurations = [
@@ -374,6 +255,209 @@ class TestDemographyDebugger(unittest.TestCase):
             msprime.InstantaneousBottleneck(0.5, population=0, strength=100)]
         self.verify_debug(
             population_configurations, migration_matrix, demographic_events)
+
+
+class TestDemographyDebugger(unittest.TestCase):
+    """
+    Tests for the demography debugger. Ensure that we compute the correct
+    population sizes etc.
+    """
+
+    def test_one_pop_zero_events(self):
+        dd = msprime.DemographyDebugger(
+            population_configurations=[msprime.PopulationConfiguration()])
+        self.assertEqual(len(dd.epochs), 1)
+        e = dd.epochs[0]
+        self.assertEqual(e.start_time, 0)
+        self.assertTrue(math.isinf(e.end_time))
+        self.assertEqual(len(e.demographic_events), 0)
+        self.assertEqual(len(e.populations), 1)
+        self.assertEqual(e.migration_matrix, [[0]])
+        pop = e.populations[0]
+        self.assertEqual(pop.growth_rate, 0)
+        self.assertEqual(pop.start_size, 1)
+        self.assertEqual(pop.end_size, 1)
+
+    def test_two_pop_different_sizes(self):
+        dd = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=10),
+                msprime.PopulationConfiguration(initial_size=20)])
+        self.assertEqual(len(dd.epochs), 1)
+        e = dd.epochs[0]
+        self.assertEqual(e.start_time, 0)
+        self.assertTrue(math.isinf(e.end_time))
+        self.assertEqual(len(e.demographic_events), 0)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        for pop in e.populations:
+            self.assertEqual(pop.growth_rate, 0)
+            self.assertEqual(pop.start_size, pop.end_size)
+        self.assertEqual(e.populations[0].start_size, 10)
+        self.assertEqual(e.populations[1].start_size, 20)
+
+    def test_two_pop_different_growth_rates(self):
+        g1 = 0.1
+        g2 = 0.5
+        p0_end_size = 10 * math.exp(-g1 * 10)
+        p1_end_size = 20 * math.exp(-g2 * 10)
+        dd = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=10, growth_rate=g1),
+                msprime.PopulationConfiguration(initial_size=20, growth_rate=g2)],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=10, growth_rate=0)])
+        # Make sure we're testing the __repr__ paths.
+        s = repr(dd)
+        self.assertGreater(len(s), 0)
+        self.assertEqual(len(dd.epochs), 2)
+        e = dd.epochs[0]
+        self.assertEqual(e.start_time, 0)
+        self.assertEqual(e.end_time, 10)
+        self.assertEqual(len(e.demographic_events), 0)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        self.assertEqual(e.populations[0].start_size, 10)
+        self.assertEqual(e.populations[0].end_size, p0_end_size)
+        self.assertEqual(e.populations[1].start_size, 20)
+        self.assertEqual(e.populations[1].end_size, p1_end_size)
+
+        e = dd.epochs[1]
+        self.assertEqual(e.start_time, 10)
+        self.assertTrue(math.isinf(e.end_time))
+        self.assertEqual(len(e.demographic_events), 1)
+        d = e.demographic_events[0]
+        self.assertEqual(d.time, 10)
+        self.assertEqual(d.growth_rate, 0)
+        self.assertEqual(d.initial_size, None)
+        self.assertEqual(d.population, -1)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        for pop in e.populations:
+            self.assertEqual(pop.growth_rate, 0)
+            self.assertEqual(pop.start_size, pop.end_size)
+        self.assertEqual(e.populations[0].start_size, p0_end_size)
+        self.assertEqual(e.populations[1].start_size, p1_end_size)
+
+    def test_two_pop_update_migration_rate(self):
+        dd = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=100),
+                msprime.PopulationConfiguration(initial_size=100)],
+            demographic_events=[
+                msprime.MigrationRateChange(time=20, rate=1),
+                msprime.MigrationRateChange(time=22, rate=1.7, matrix_index=(0, 1))],
+            migration_matrix=[[0, 0.25], [0, 0]])
+        self.assertEqual(len(dd.epochs), 3)
+        e = dd.epochs[0]
+        self.assertEqual(e.start_time, 0)
+        self.assertEqual(e.end_time, 20)
+        self.assertEqual(e.migration_matrix, [[0, 0.25], [0, 0]])
+        for pop in e.populations:
+            self.assertEqual(pop.growth_rate, 0)
+            self.assertEqual(pop.start_size, pop.end_size)
+            self.assertEqual(pop.start_size, 100)
+
+        e = dd.epochs[1]
+        self.assertEqual(e.start_time, 20)
+        self.assertTrue(e.end_time, 22)
+        self.assertEqual(len(e.demographic_events), 1)
+        d = e.demographic_events[0]
+        self.assertEqual(d.matrix_index, None)
+        self.assertEqual(d.time, 20)
+        self.assertEqual(d.rate, 1)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 1], [1, 0]])
+        for pop in e.populations:
+            self.assertEqual(pop.growth_rate, 0)
+            self.assertEqual(pop.start_size, pop.end_size)
+            self.assertEqual(pop.start_size, 100)
+
+        e = dd.epochs[2]
+        self.assertEqual(e.start_time, 22)
+        self.assertTrue(math.isinf(e.end_time))
+        self.assertEqual(len(e.demographic_events), 1)
+        d = e.demographic_events[0]
+        self.assertEqual(d.matrix_index, (0, 1))
+        self.assertEqual(d.time, 22)
+        self.assertEqual(d.rate, 1.7)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 1.7], [1, 0]])
+        for pop in e.populations:
+            self.assertEqual(pop.growth_rate, 0)
+            self.assertEqual(pop.start_size, pop.end_size)
+            self.assertEqual(pop.start_size, 100)
+
+    def test_two_pop_change_growth_rates(self):
+        alpha = 0.33
+        N0 = 1000
+        N1 = 10
+        t1 = 5
+        t2 = 10
+        t3 = 15
+        dd = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N0, growth_rate=alpha),
+                msprime.PopulationConfiguration(initial_size=N1, growth_rate=0)],
+            demographic_events=[
+                # p1 changes growth rate to alpha
+                msprime.PopulationParametersChange(
+                    population=1, time=t1, growth_rate=alpha),
+                # p0 changes growth rate to -alpha
+                msprime.PopulationParametersChange(
+                    population=0, time=t2, growth_rate=-alpha),
+                # Both change growth_rate to 0 at t3.
+                msprime.PopulationParametersChange(time=t3, growth_rate=0)])
+
+        self.assertEqual(len(dd.epochs), 4)
+        e = dd.epochs[0]
+        self.assertEqual(e.start_time, 0)
+        self.assertEqual(e.end_time, t1)
+        self.assertEqual(len(e.demographic_events), 0)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        self.assertEqual(e.populations[0].start_size, N0)
+        n0 = N0 * math.exp(-alpha * t1)
+        self.assertEqual(e.populations[0].end_size, n0)
+        self.assertEqual(e.populations[1].start_size, N1)
+        self.assertEqual(e.populations[1].end_size, N1)
+
+        e = dd.epochs[1]
+        self.assertEqual(e.start_time, t1)
+        self.assertEqual(e.end_time, t2)
+        self.assertEqual(len(e.demographic_events), 1)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        self.assertEqual(e.populations[0].start_size, n0)
+        n0 = N0 * math.exp(-alpha * t2)
+        self.assertEqual(e.populations[0].end_size, n0)
+        self.assertEqual(e.populations[1].start_size, N1)
+        n1 = N1 * math.exp(-alpha * (t2 - t1))
+        self.assertEqual(e.populations[1].end_size, n1)
+
+        e = dd.epochs[2]
+        self.assertEqual(e.start_time, t2)
+        self.assertEqual(e.end_time, t3)
+        self.assertEqual(len(e.demographic_events), 1)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        self.assertEqual(e.populations[0].start_size, n0)
+        n0 = n0 * math.exp(alpha * (t3 - t2))
+        self.assertEqual(e.populations[0].end_size, n0)
+        self.assertEqual(e.populations[1].start_size, n1)
+        n1 = N1 * math.exp(-alpha * (t3 - t1))
+        self.assertEqual(e.populations[1].end_size, n1)
+
+        e = dd.epochs[3]
+        self.assertEqual(e.start_time, t3)
+        self.assertTrue(math.isinf(e.end_time))
+        self.assertEqual(len(e.demographic_events), 1)
+        self.assertEqual(len(e.populations), 2)
+        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        self.assertEqual(e.populations[0].start_size, n0)
+        self.assertEqual(e.populations[0].end_size, n0)
+        self.assertEqual(e.populations[1].start_size, n1)
+        self.assertEqual(e.populations[1].end_size, n1)
 
 
 class TestCoalescenceLocations(unittest.TestCase):

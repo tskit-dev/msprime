@@ -560,17 +560,18 @@ the values used.
         ]
         # Use the demography debugger to print out the demographic history
         # that we have just described.
-        dp = msprime.DemographyDebugger(
+        dd = msprime.DemographyDebugger(
             Ne=N_A,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        dp.print_history()
+        dd.print_history()
 
 
 The :class:`.DemographyDebugger` provides a method to debug the history that
 you have described so that you can be sure that the migration rates, population
 sizes and growth rates are all as you intend during each epoch::
+
 
     =============================
     Epoch: 0 -- 848.0 generations
@@ -587,7 +588,6 @@ sizes and growth rates are all as you intend during each epoch::
        - Migration rate change for (0, 1) to 0.00025
        - Migration rate change for (1, 0) to 0.00025
        - Population parameter change for 1: initial_size -> 2100 growth_rate -> 0
-
     ==================================
     Epoch: 848.0 -- 5600.0 generations
     ==================================
@@ -595,11 +595,10 @@ sizes and growth rates are all as you intend during each epoch::
        -------- --------       -------- | -------- -------- --------
     0 |1.23e+04 1.23e+04              0 |     0     0.00025     0
     1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
-    2 |5.41e+04 2.41e-07         0.0055 |     0        0        0
+    2 |   510   2.27e-09         0.0055 |     0        0        0
 
     Events @ generation 5600.0
        - Mass migration: lineages move from 1 to 0 with probability 1.0
-
     ===================================
     Epoch: 5600.0 -- 8800.0 generations
     ===================================
@@ -607,11 +606,10 @@ sizes and growth rates are all as you intend during each epoch::
        -------- --------       -------- | -------- -------- --------
     0 |1.23e+04 1.23e+04              0 |     0     0.00025     0
     1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
-    2 |5.41e+04  0.00123         0.0055 |     0        0        0
+    2 |2.27e-09 5.17e-17         0.0055 |     0        0        0
 
     Events @ generation 8800.0
        - Population parameter change for 0: initial_size -> 7300
-
     ================================
     Epoch: 8800.0 -- inf generations
     ================================
@@ -619,8 +617,7 @@ sizes and growth rates are all as you intend during each epoch::
        -------- --------       -------- | -------- -------- --------
     0 | 7.3e+03  7.3e+03              0 |     0     0.00025     0
     1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
-    2 |5.41e+04     0            0.0055 |     0        0        0
-
+    2 |5.17e-17     0            0.0055 |     0        0        0
 
 .. warning:: The output of the :meth:`.DemographyDebugger.print_history` method
     is intended only for debugging purposes, and is not meant to be machine

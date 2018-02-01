@@ -27,6 +27,7 @@ import unittest
 import numpy as np
 
 import msprime
+import _msprime
 import tests.tsutil as tsutil
 
 
@@ -141,18 +142,24 @@ class TestLdCalculator(unittest.TestCase):
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 
-    @unittest.skip("recurrent mutations")
+    def test_deprecated_aliases(self):
+        ts = msprime.simulate(20, mutation_rate=10, random_seed=15)
+        ts = tsutil.subsample_sites(ts, self.num_test_sites)
+        ldc = msprime.LdCalculator(ts)
+        A = ldc.get_r2_matrix()
+        B = ldc.r2_matrix()
+        self.assertTrue(np.array_equal(A, B))
+        a = ldc.get_r2_array(0)
+        b = ldc.r2_array(0)
+        self.assertTrue(np.array_equal(a, b))
+        self.assertEqual(ldc.get_r2(0, 1), ldc.r2(0, 1))
+
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
-        # TODO change this to use branch_mutations from tsutil.
-        sites = [
-            msprime.Site(
-                position=j, id_=j, ancestral_state="0",
-                mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
-            for j in range(self.num_test_sites)]
-        ts = ts.copy(sites)
-        self.verify_matrix(ts)
-        self.verify_max_distance(ts)
+        ts = tsutil.insert_branch_mutations(ts)
+        # We don't support back mutations, so this should fail.
+        self.assertRaises(_msprime.LibraryError, self.verify_matrix, ts)
+        self.assertRaises(_msprime.LibraryError, self.verify_max_distance, ts)
 
     def test_tree_sequence_regular_mutations(self):
         ts = msprime.simulate(

@@ -503,13 +503,13 @@ static void
 test_demographic_events(void)
 {
     int ret;
-    uint32_t j;
+    uint32_t j, k;
     uint32_t n = 10;
     uint32_t m = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     double migration_matrix[] = {0, 1, 1, 0};
-    double time;
+    double last_time, time, pop_size;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -603,7 +603,7 @@ test_demographic_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 2.0);
+    ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
     CU_ASSERT_EQUAL(ret, 0);
@@ -636,11 +636,27 @@ test_demographic_events(void)
     CU_ASSERT_EQUAL(ret, 0);
 
     j = 0;
+    last_time = 0;
     do {
         ret = msp_debug_demography(&msp, &time);
         CU_ASSERT_EQUAL(ret, 0);
         msp_print_state(&msp, _devnull);
+        ret = msp_compute_population_size(&msp, 10, last_time, &pop_size);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+        for (k = 0; k < 2; k++) {
+            ret = msp_compute_population_size(&msp, k, last_time, &pop_size);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_TRUE(pop_size >= 0);
+            ret = msp_compute_population_size(&msp, k, time, &pop_size);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_TRUE(pop_size >= 0);
+            ret = msp_compute_population_size(&msp, k, last_time + (time - last_time) / 2,
+                    &pop_size);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_TRUE(pop_size >= 0);
+        }
         j++;
+        last_time = time;
     } while (! gsl_isinf(time));
     CU_ASSERT_EQUAL(j, 10);
     CU_ASSERT_EQUAL(ret, 0);

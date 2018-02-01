@@ -71,6 +71,10 @@ class LdCalculator(object):
         self._instance_lock = threading.Lock()
 
     def get_r2(self, a, b):
+        # Deprecated alias for r2(a, b)
+        return self.r2(a, b)
+
+    def r2(self, a, b):
         """
         Returns the value of the :math:`r^2` statistic between the pair of
         mutations at the specified indexes. This method is *not* an efficient
@@ -86,8 +90,11 @@ class LdCalculator(object):
         with self._instance_lock:
             return self._ll_ld_calculator.get_r2(a, b)
 
-    def get_r2_array(
-            self, a, direction=1, max_mutations=None, max_distance=None):
+    def get_r2_array(self, a, direction=1, max_mutations=None, max_distance=None):
+        # Deprecated alias for r2_array
+        return self.r2_array(a, direction, max_mutations, max_distance)
+
+    def r2_array(self, a, direction=1, max_mutations=None, max_distance=None):
         """
         Returns the value of the :math:`r^2` statistic between the focal
         mutation at index :math:`a` and a set of other mutations. The method
@@ -139,6 +146,10 @@ class LdCalculator(object):
         return np.frombuffer(self._buffer, "d", num_values)
 
     def get_r2_matrix(self):
+        # Deprecated alias for r2_matrix
+        return self.r2_matrix()
+
+    def r2_matrix(self):
         """
         Returns the complete :math:`m \\times m` matrix of pairwise
         :math:`r^2` values in a tree sequence with :math:`m` mutations.
