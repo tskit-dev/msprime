@@ -1032,6 +1032,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
         self.assertEqual(
             sim2.get_population_configuration(), population_configuration)
+        self.assertRaises(_msprime.LibraryError, sim.compute_population_size, N + 1, 0)
         # For each event we now run the simulator forward until this time
         # and make sure that the internal state is what it should be.
         for event in demographic_events:
@@ -1040,6 +1041,9 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(next_event_time, t)
             self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
             completed = sim.run(t)
+            for j in range(N):
+                s = sim2.compute_population_size(j, t)
+                self.assertGreater(s, 0)
             self.assertFalse(completed)
             self.assertEqual(sim.get_time(), t)
             if event_type == "migration_rate_change":
