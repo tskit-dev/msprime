@@ -5575,12 +5575,6 @@ test_stats_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        /* if (j == 4) { */
-        /*     printf("\n\nFIXME multiple mutation PI\n"); */
-        /*     tree_sequence_free(examples[j]); */
-        /*     free(examples[j]); */
-        /*     continue; */
-        /* } */
         verify_stats(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
