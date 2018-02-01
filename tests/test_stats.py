@@ -153,16 +153,9 @@ class TestLdCalculator(unittest.TestCase):
         self.assertTrue(np.array_equal(a, b))
         self.assertEqual(ldc.get_r2(0, 1), ldc.r2(0, 1))
 
-    @unittest.skip("recurrent mutations")
     def test_single_tree_regular_mutations(self):
         ts = msprime.simulate(self.num_test_sites, length=self.num_test_sites)
-        # TODO change this to use branch_mutations from tsutil.
-        sites = [
-            msprime.Site(
-                position=j, id_=j, ancestral_state="0",
-                mutations=[msprime.Mutation(site=j, node=j, derived_state="1")])
-            for j in range(self.num_test_sites)]
-        ts = ts.copy(sites)
+        ts = tsutil.insert_branch_mutations(ts)
         self.verify_matrix(ts)
         self.verify_max_distance(ts)
 

@@ -500,6 +500,39 @@ tree_sequence_from_text(tree_sequence_t *ts, double sequence_length,
     migration_table_free(&migration_table);
 }
 
+static int
+get_max_site_mutations(tree_sequence_t *ts)
+{
+    int ret;
+    int max_mutations = 0;
+    size_t j;
+    site_t site;
+
+    for (j = 0; j < tree_sequence_get_num_sites(ts); j++) {
+        ret = tree_sequence_get_site(ts, j, &site);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        max_mutations = GSL_MAX(max_mutations, site.mutations_length);
+    }
+    return max_mutations;
+}
+
+static bool
+multi_mutations_exist(tree_sequence_t *ts, size_t start, size_t end)
+{
+    int ret;
+    size_t j;
+    site_t site;
+
+    for (j = 0; j < GSL_MIN(tree_sequence_get_num_sites(ts), end); j++) {
+        ret = tree_sequence_get_site(ts, j, &site);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        if (site.mutations_length > 1) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void
 unsort_edges(edge_table_t *edges, size_t start)
 {
@@ -872,6 +905,7 @@ verify_stats(tree_sequence_t *ts)
     node_id_t *samples;
     uint32_t j;
     double pi;
+    int max_site_mutations = get_max_site_mutations(ts);
 
     ret = tree_sequence_get_pairwise_diversity(ts, NULL, 0, &pi);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -885,8 +919,12 @@ verify_stats(tree_sequence_t *ts)
 
     for (j = 2; j < num_samples; j++) {
         ret = tree_sequence_get_pairwise_diversity(ts, samples, j, &pi);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_TRUE_FATAL(pi >= 0);
+        if (max_site_mutations <= 1) {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_TRUE_FATAL(pi >= 0);
+        }
     }
 }
 
@@ -1908,82 +1946,114 @@ verify_ld(tree_sequence_t *ts)
     int ret;
     size_t num_sites = tree_sequence_get_num_sites(ts);
     site_t *sites = malloc(num_sites * sizeof(site_t));
+    int *num_site_mutations = malloc(num_sites * sizeof(int));
     ld_calc_t ld_calc;
     double *r2, *r2_prime, x;
     size_t j, num_r2_values;
     double eps = 1e-6;
 
-    r2 = malloc(num_sites * sizeof(double));
-    r2_prime = malloc(num_sites * sizeof(double));
+    r2 = calloc(num_sites, sizeof(double));
+    r2_prime = calloc(num_sites, sizeof(double));
     CU_ASSERT_FATAL(r2 != NULL);
+    CU_ASSERT_FATAL(r2_prime != NULL);
+    CU_ASSERT_FATAL(sites != NULL);
+    CU_ASSERT_FATAL(num_site_mutations != NULL);
 
     ret = ld_calc_alloc(&ld_calc, ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ld_calc_print_state(&ld_calc, _devnull);
 
-
     for (j = 0; j < num_sites; j++) {
         ret = tree_sequence_get_site(ts, j, sites + j);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        num_site_mutations[j] = sites[j].mutations_length;
         ret = ld_calc_get_r2(&ld_calc, j, j, &x);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_DOUBLE_EQUAL_FATAL(x, 1.0, eps);
+        if (num_site_mutations[j] <= 1) {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_DOUBLE_EQUAL_FATAL(x, 1.0, eps);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        }
     }
 
     if (num_sites > 0) {
         /* Some checks in the forward direction */
         ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD,
                 num_sites, DBL_MAX, r2, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        if (multi_mutations_exist(ts, 0, num_sites)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        }
         ld_calc_print_state(&ld_calc, _devnull);
 
         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 2, MSP_DIR_FORWARD,
                 num_sites, DBL_MAX, r2_prime, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        if (multi_mutations_exist(ts, num_sites - 2, num_sites)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        }
         ld_calc_print_state(&ld_calc, _devnull);
 
         ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD,
                 num_sites, DBL_MAX, r2_prime, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
-        ld_calc_print_state(&ld_calc, _devnull);
-
-        for (j = 0; j < num_r2_values; j++) {
-            CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
-            ret = ld_calc_get_r2(&ld_calc, 0, j + 1, &x);
+        if (multi_mutations_exist(ts, 0, num_sites)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+            ld_calc_print_state(&ld_calc, _devnull);
+            for (j = 0; j < num_r2_values; j++) {
+                CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
+                ret = ld_calc_get_r2(&ld_calc, 0, j + 1, &x);
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps);
+            }
+
         }
 
         /* Some checks in the reverse direction */
         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 1,
                 MSP_DIR_REVERSE, num_sites, DBL_MAX,
                 r2, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        if (multi_mutations_exist(ts, 0, num_sites)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+        }
         ld_calc_print_state(&ld_calc, _devnull);
 
         ret = ld_calc_get_r2_array(&ld_calc, 1, MSP_DIR_REVERSE,
                 num_sites, DBL_MAX, r2_prime, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        if (multi_mutations_exist(ts, 0, 1)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        }
         ld_calc_print_state(&ld_calc, _devnull);
 
         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 1,
                 MSP_DIR_REVERSE, num_sites, DBL_MAX,
                 r2_prime, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
-        ld_calc_print_state(&ld_calc, _devnull);
-
-        for (j = 0; j < num_r2_values; j++) {
-            CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
-            ret = ld_calc_get_r2(&ld_calc, num_sites - 1,
-                    num_sites - j - 2, &x);
+        if (multi_mutations_exist(ts, 0, num_sites)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
+            ld_calc_print_state(&ld_calc, _devnull);
+
+            for (j = 0; j < num_r2_values; j++) {
+                CU_ASSERT_EQUAL_FATAL(r2[j], r2_prime[j]);
+                ret = ld_calc_get_r2(&ld_calc, num_sites - 1,
+                        num_sites - j - 2, &x);
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                CU_ASSERT_DOUBLE_EQUAL_FATAL(r2[j], x, eps);
+            }
         }
 
         /* Check some error conditions */
@@ -1998,14 +2068,22 @@ verify_ld(tree_sequence_t *ts)
         x = sites[j + 1].position - sites[j].position;
         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_sites,
                 x, r2, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        if (multi_mutations_exist(ts, j, num_sites)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        }
 
         x = sites[j].position - sites[j - 1].position;
         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_REVERSE, num_sites,
                 x, r2, &num_r2_values);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        if (multi_mutations_exist(ts, 0, j + 1)) {
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+        } else {
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
+        }
     }
 
     /* Check some error conditions */
@@ -2023,6 +2101,7 @@ verify_ld(tree_sequence_t *ts)
     free(r2);
     free(r2_prime);
     free(sites);
+    free(num_site_mutations);
 }
 
 static void
@@ -5466,13 +5545,7 @@ test_ld_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        /* j = 4 corresponds to the recurrent mutation case where we
-         * trigger an assert */
-        if (j == 4) {
-            printf("\nSkipping recurrent mutation example\n");
-        } else {
-            verify_ld(examples[j]);
-        }
+        verify_ld(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -5502,12 +5575,12 @@ test_stats_from_examples(void)
 
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
-        if (j == 4) {
-            printf("\n\nFIXME multiple mutation PI\n");
-            tree_sequence_free(examples[j]);
-            free(examples[j]);
-            continue;
-        }
+        /* if (j == 4) { */
+        /*     printf("\n\nFIXME multiple mutation PI\n"); */
+        /*     tree_sequence_free(examples[j]); */
+        /*     free(examples[j]); */
+        /*     continue; */
+        /* } */
         verify_stats(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
