@@ -799,6 +799,8 @@ int msp_get_migrations(msp_t *self, migration_t **migrations);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
+int msp_compute_population_size(msp_t *self, size_t population_id,
+        double time, double *pop_size);
 int msp_is_completed(msp_t *self);
 
 simulation_model_t * msp_get_model(msp_t *self);

@@ -2868,6 +2868,32 @@ out:
     return ret;
 }
 
+/* Used for high-level debugging. */
+int WARN_UNUSED
+msp_compute_population_size(msp_t *self, size_t population_id, double time,
+        double *pop_size)
+{
+    int ret = 0;
+    population_t *pop;
+    simulation_model_t *model = &self->model;
+    double dt;
+
+    if (population_id > self->num_populations) {
+        ret = MSP_ERR_BAD_POPULATION_ID;
+        goto out;
+    }
+    pop = &self->populations[population_id];
+    if (pop->growth_rate == 0.0) {
+        *pop_size = model->population_size * pop->initial_size;
+    } else {
+        dt = model->generations_to_model_time(model, time) - pop->start_time;
+        *pop_size = model->population_size * pop->initial_size
+            * exp(-pop->growth_rate * dt);
+    }
+out:
+    return ret;
+}
+
 simulation_model_t *
 msp_get_model(msp_t *self)
 {

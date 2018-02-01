@@ -8164,6 +8164,30 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_compute_population_size(Simulator *self, PyObject *args)
+{
+
+    PyObject *ret = NULL;
+    int sim_ret, population_id;
+    double time, size;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "id", &population_id, &time)) {
+        goto out;
+    }
+    sim_ret = msp_compute_population_size(self->sim, population_id, time, &size);
+    if (sim_ret != 0) {
+        handle_library_error(sim_ret);
+        goto out;
+    }
+    ret = Py_BuildValue("d", size);
+out:
+    return ret;
+}
+
 
 static PyMethodDef Simulator_methods[] = {
     {"get_model", (PyCFunction) Simulator_get_model, METH_NOARGS,
@@ -8283,6 +8307,9 @@ static PyMethodDef Simulator_methods[] = {
             "if sample has coalesced and False otherwise." },
     {"debug_demography", (PyCFunction) Simulator_debug_demography, METH_NOARGS,
             "Runs the state of the simulator forward for one demographic event."},
+    {"compute_population_size",
+            (PyCFunction) Simulator_compute_population_size, METH_VARARGS,
+            "Computes the size of a population at a given time. Debug method."},
     {NULL}  /* Sentinel */
 };
 
