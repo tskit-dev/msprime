@@ -1989,10 +1989,14 @@ class TreeSequence(object):
 
     def pairwise_diversity(self, samples=None):
         """
-        Returns the value of pi, the pairwise nucleotide site diversity,
+        Returns the value of :math:`\pi`, the pairwise nucleotide site diversity,
         which is the average number of mutations that differ between a randomly
         chosen pair of samples.  If `samples` is specified, calculate the
         diversity within this set.
+
+        .. note:: This method does not currently support sites that have more
+            than one mutation. Using it on such a tree sequence will raise
+            a LibraryError with an "Unsupported operation" message.
 
         :param iterable samples: The set of samples within which we calculate
             the diversity. If None, calculate diversity within the entire sample.
@@ -2173,58 +2177,21 @@ class TreeSequence(object):
     ############################################
 
     def get_time(self, u):
+        # Deprecated. Use ts.node(u).time
         if u < 0 or u >= self.get_num_nodes():
             raise ValueError("ID out of bounds")
         node = self.node(u)
         return node.time
 
     def get_population(self, u):
+        # Deprecated. Use ts.node(u).population
         if u < 0 or u >= self.get_num_nodes():
             raise ValueError("ID out of bounds")
         node = self.node(u)
         return node.population
 
-    # TODO deprecate
-    def get_num_records(self):
-        """
-        Returns the number of coalescence records in this tree sequence.
-        See the :meth:`.records` method for details on these objects.
-
-        :return: The number of coalescence records defining this tree
-            sequence.
-        :rtype: int
-        """
-        # TODO this is incorrect
-        return self._ll_tree_sequence.get_num_edges()
-
-    # TODO deprecate
     def records(self):
-        """
-        Returns an iterator over the coalescence records in this tree
-        sequence in time-sorted order. Each record is a tuple
-        :math:`(l, r, u, c, t, d)` defining the assignment of a tree node
-        across an interval. The range of this record is the half-open
-        genomic interval :math:`[l, r)`, such that it applies to all
-        positions :math:`l \leq x < r`. Each record represents the
-        assignment of a pair of children :math:`c` to a parent
-        parent :math:`u`. This assignment happens at :math:`t` generations
-        in the past within the population with ID :math:`d`. If population
-        information was not stored for this tree sequence then the
-        population ID will be :const:`.NULL_POPULATION`.
-
-        Each record returned is an instance of :func:`collections.namedtuple`,
-        and may be accessed via the attributes ``left``, ``right``, ``node``,
-        ``children``, ``time`` and ``population``, as well as the usual
-        positional approach. For example, if we wished to print out the genomic
-        length of each record, we could write::
-
-        >>> for record in tree_sequence.records():
-        >>>     print(record.right - record.left)
-
-        :return: An iterator of all :math:`(l, r, u, c, t, d)` tuples defining
-            the coalescence records in this tree sequence.
-        :rtype: iter
-        """
+        # Deprecated. Use either ts.edges() or ts.edgesets().
         t = [node.time for node in self.nodes()]
         pop = [node.population for node in self.nodes()]
         for e in self.edgesets():
@@ -2232,6 +2199,16 @@ class TreeSequence(object):
                 e.left, e.right, e.parent, e.children, t[e.parent], pop[e.parent])
 
     # Unsupported old methods.
+
+    def get_num_records(self):
+        raise NotImplementedError(
+            "This method is no longer supported. Please use the "
+            "TreeSequence.num_edges if possible to work with edges rather "
+            "than coalescence records. If not, please use len(list(ts.edgesets())) "
+            "which should return the number of coalescence records, as previously "
+            "defined. Please open an issue on GitHub if this is "
+            "important for your workflow.")
+
     def diffs(self):
         raise NotImplementedError(
             "This method is no longer supported. Please use the "
