@@ -13,6 +13,12 @@ If you would like to help make ``msprime`` better, please see the
 [developer documentation](https://msprime.readthedocs.org/en/latest/development.html)
 to get started.
 
+If you are looking for help on a specific issue or would like to ask a
+question to fellow ``msprime`` users, please send an email to the
+[mailing list](https://groups.google.com/group/msprime-users). By asking
+questions on the mailing list, you can help to build a searchable knowledge
+base.
+
 If you use ``msprime`` in your work, please cite the [PLOS Computational
 Biology](http://dx.doi.org/10.1371/journal.pcbi.1004842) paper.
 See [here](https://msprime.readthedocs.org/en/latest/CITATION.html) for
