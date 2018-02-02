@@ -1193,6 +1193,12 @@ def sort_tables(
     - child node ID, then
     - left endpoint.
 
+    Note that this sorting order exceeds the
+    :ref:`edge sorting requirements <sec_edge_requirements>` for a valid
+    tree sequence. For a valid tree sequence, we require that all edges for a
+    given parent ID are adjacent, but we do not require that they be listed in
+    sorted order.
+
     Sites are sorted by position.
 
     Mutations are sorted by site ID.
