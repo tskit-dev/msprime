@@ -291,19 +291,14 @@ time                double              Time of migration event.
 
 
 The ``left`` and ``right`` columns are floating point values defining the
-half-open segment of genome affected.
-
-
-.. todo::
-    Document the remaining fields
+half-open segment of genome affected. The ``source`` and ``dest`` columns
+record the IDs of the respective populations. The ``node`` column records the
+ID of the node that was associated with the ancestry segment in question
+at the time of the migration event. The ``time`` column is holds floating
+point values recording the time of the event.
 
 See the :ref:`sec_migration_requirements` section for details on the properties
 required for a valid set of mutations.
-
-..     This ``migration`` records that the ancestor who was alive 2.1 time units
-..     in the past from which ``node`` 3 inherited the segment of genome between
-..     0.0 and 0.3 migrated from population 0 to population 1.
-
 
 .. _sec_provenance_table_definition:
 
@@ -481,17 +476,26 @@ in the :meth:`.TreeSequence.variants` iterator.
 Migration requirements
 ----------------------
 
-.. todo::
-    Add requirements for valid migrations.
+Given a valid set of nodes and edges, the requirements for a value set of
+migrations are:
 
-.. A valid ``migration``:
+- ``left`` and ``right`` must lie within the tree sequence coordinate space (i.e.,
+  from 0 to ``sequence_length``).
+- ``time`` must be strictly between the time of its ``node`` and the time of any
+  ancestral node from which that node inherits on the segment ``[left, right)``.
+- The ``population`` of any such ancestor matching ``source``, if another
+  ``migration`` does not intervene.
 
-.. 1. Has ``time`` strictly between the time of its ``node`` and the time of any
-..    ancestral node from which that node inherits on the segment ``[left,
-..    right)``.
-.. 2. Has the ``population`` of any such ancestor matching ``source``, if another
-..    ``migration`` does not intervene.
+To enable efficient processing, migrations must also be:
 
+- Sorted by nondecreasing ``time`` value.
+
+Note in particular that there is no requirement that adjacent migration records
+should be "squashed". That is, we can have two records ``m1`` and ``m2``
+such that ``m1.right`` = ``m2.left`` and with the ``node``, ``source``,
+``dest`` and ``time`` fields equal. This is because such records will usually
+represent two independent ancestral segments migrating at the same time, and
+as such squashing them into a single record would result in a loss of information.
 
 .. _sec_text_file_format:
 
