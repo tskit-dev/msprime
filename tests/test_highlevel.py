@@ -983,6 +983,26 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_edgesets(ts)
 
+    def verify_coalescence_records(self, ts):
+        """
+        Checks that the coalescence records we output are correct.
+        """
+        edgesets = list(ts.edgesets())
+        records = list(ts.records())
+        self.assertEqual(len(edgesets), len(records))
+        for edgeset, record in zip(edgesets, records):
+            self.assertEqual(edgeset.left, record.left)
+            self.assertEqual(edgeset.right, record.right)
+            self.assertEqual(edgeset.parent, record.node)
+            self.assertEqual(edgeset.children, record.children)
+            parent = ts.node(edgeset.parent)
+            self.assertEqual(parent.time, record.time)
+            self.assertEqual(parent.population, record.population)
+
+    def test_coalescence_records(self):
+        for ts in get_example_tree_sequences():
+            self.verify_coalescence_records(ts)
+
     def verify_tracked_samples(self, ts):
         # Should be empty list by default.
         for tree in ts.trees():
@@ -1407,6 +1427,7 @@ class TestTreeSequence(HighLevelTestCase):
 
     def test_removed_methods(self):
         ts = next(get_example_tree_sequences())
+        self.assertRaises(NotImplementedError, ts.get_num_records)
         self.assertRaises(NotImplementedError, ts.diffs)
         self.assertRaises(NotImplementedError, ts.newick_trees)
 

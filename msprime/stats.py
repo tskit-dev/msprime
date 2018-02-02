@@ -54,6 +54,10 @@ class LdCalculator(object):
     for an example of how use multiple threads to calculate LD values
     efficiently.
 
+    .. note:: This class does not currently support sites that have more than one
+        mutation. Using it on such a tree sequence will raise a LibraryError with
+        an "Unsupported operation" message.
+
     :param TreeSequence tree_sequence: The tree sequence containing the
         mutations we are interested in.
     """
@@ -79,7 +83,7 @@ class LdCalculator(object):
         Returns the value of the :math:`r^2` statistic between the pair of
         mutations at the specified indexes. This method is *not* an efficient
         method for computing large numbers of pairwise; please use either
-        :meth:`.get_r2_array` or :meth:`.get_r2_matrix` for this purpose.
+        :meth:`.r2_array` or :meth:`.r2_matrix` for this purpose.
 
         :param int a: The index of the first mutation.
         :param int b: The index of the second mutation.
