@@ -1684,11 +1684,9 @@ class TreeSequence(object):
     def migrations(self):
         """
         Returns an iterator over all the
-        :ref:`migrations <sec_migration_table_definition>`
-        in this tree sequence.
+        :ref:`migrations <sec_migration_table_definition>` in this tree sequence.
 
-        .. todo::
-            Define the order and properties of the returned migrations.
+        Migrations are returned in nondecreasing order of the ``time`` value.
 
         :return: An iterator over all migrations.
         :rtype: iter(:class:`.Migration`)

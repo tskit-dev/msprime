@@ -732,6 +732,24 @@ class TestMigrationRecords(unittest.TestCase):
     """
     Tests that migrations happen where they should for simple models.
     """
+    def verify_migrations(self, ts):
+        """
+        Verifies that the migrations for the specified tree sequence
+        have the required properties.
+        """
+        migrations = list(ts.migrations())
+        self.assertEqual(ts.num_migrations, len(migrations))
+        oldest_t = max(node.time for node in ts.nodes())
+        for mig in migrations:
+            self.assertGreaterEqual(mig.left, 0)
+            self.assertLessEqual(mig.right, ts.sequence_length)
+            self.assertNotEqual(mig.source, mig.dest)
+            self.assertTrue(0 <= mig.node < ts.num_nodes)
+            self.assertTrue(0 <= mig.time < oldest_t)
+        # Migrations must be listed in non-decreasing time order.
+        for j in range(1, len(migrations)):
+            self.assertTrue(migrations[j - 1].time <= migrations[j].time)
+
     def test_two_pops_single_sample(self):
         population_configurations = [
             msprime.PopulationConfiguration(1),
@@ -747,6 +765,7 @@ class TestMigrationRecords(unittest.TestCase):
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1, record_migrations=True)
+        self.verify_migrations(ts)
         migrations = list(ts.migrations())
         self.assertEqual(len(migrations), 2)
         m0 = migrations[0]
@@ -761,6 +780,78 @@ class TestMigrationRecords(unittest.TestCase):
         self.assertEqual(m1.source, 1)
         self.assertEqual(m1.dest, 2)
         self.assertEqual(m1.time, t)
+
+    def test_two_pops_asymmetric_migrations(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            migration_matrix=[
+                [0, 0],
+                [1, 0]],
+            # Can migrate from 1 to 0 but not vice-versa
+            random_seed=1, record_migrations=True)
+        self.verify_migrations(ts)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(ts.node(mig.node).population, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertEqual(mig.left, 0)
+            self.assertEqual(mig.right, 1)
+
+    def test_two_pops_asymmetric_migrations_recombination(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        ts = msprime.simulate(
+            recombination_rate=1,
+            population_configurations=population_configurations,
+            migration_matrix=[
+                [0, 0],
+                [1, 0]],
+            # Can migrate from 1 to 0 but not vice-versa
+            random_seed=1, record_migrations=True)
+        self.verify_migrations(ts)
+        self.assertGreater(ts.num_trees, 1)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(ts.node(mig.node).population, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertGreaterEqual(mig.left, 0)
+            self.assertLessEqual(mig.right, 1)
+
+    def test_two_pops_mass_migration_recombination(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+        ]
+        ts = msprime.simulate(
+            recombination_rate=10,
+            population_configurations=population_configurations,
+            demographic_events=[
+                msprime.MassMigration(time=20, source=1, dest=0, proportion=1)
+            ],
+            random_seed=1, record_migrations=True)
+        self.verify_migrations(ts)
+        self.assertGreater(ts.num_trees, 10)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(mig.node, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertGreaterEqual(mig.left, 0)
+            self.assertLessEqual(mig.right, 1)
 
 
 class TestTimeUnits(unittest.TestCase):
