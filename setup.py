@@ -19,6 +19,8 @@
 from __future__ import division
 from __future__ import print_function
 
+from setuptools import setup, Extension
+
 import subprocess
 import platform
 import os
@@ -41,15 +43,6 @@ try:
         HAVE_NUMPY = True
 except ImportError:
     warn("numpy not available. Some features will not work.")
-
-# First, we try to use setuptools. If it's not available locally,
-# we fall back on ez_setup.
-try:
-    from setuptools import setup, Extension
-except ImportError:
-    from ez_setup import use_setuptools
-    use_setuptools()
-    from setuptools import setup, Extension
 
 
 class PathConfigurator(object):
@@ -170,7 +163,7 @@ _msprime_module = Extension(
     library_dirs=configurator.library_dirs,
 )
 
-with open("README.txt") as f:
+with open("README.rst") as f:
     long_description = f.read()
 
 setup(

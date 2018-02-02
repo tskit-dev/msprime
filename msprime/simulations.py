@@ -619,6 +619,24 @@ class RecombinationMap(object):
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None):
+        """
+        Returns a :class:`.RecombinationMap` instance in which the recombination
+        rate is constant over a chromosome of the specified length. The optional
+        ``num_loci`` controls the number of discrete loci in the underlying
+        simulation, and is by default large enough to be effectively be
+        a continuous model.
+
+        The following map can be used to simulate a true finite locus model
+        with a fixed number of loci ``m``::
+
+            >>> recomb_map = RecombinationMap.uniform_map(m, rate, num_loci=m)
+
+        :param float length: The length of the chromosome.
+        :param float rate: The rate of recombination per unit of sequence length
+            along this chromosome.
+        :param int num_loci: The number of discrete loci in the underlying
+            simulation. By default this is set to a large number.
+        """
         return cls([0, length], [rate, 0], num_loci)
 
     @classmethod

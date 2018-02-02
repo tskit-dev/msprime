@@ -20,7 +20,7 @@ scenarios. The library is a reimplementation of Hudson's seminal
 2. ``msprime`` is primarily designed to be used through its
    :ref:`Python API <sec_api>` to simplify the workflow associated with
    running and analysing simulations. (However, we do provide an
-   ``ms``_compatible :ref:`command line interface <sec_cli>` to
+   ``ms`` compatible :ref:`command line interface <sec_cli>` to
    plug in to existing workflows.) For many simulations we first
    write a script to generate the command line parameters we
    want to run, then fork shell processes to run the simulations,
@@ -36,3 +36,12 @@ scenarios. The library is a reimplementation of Hudson's seminal
    format allows us to store genealogical data very concisely,
    particularly for large sample sizes.
 
+
+The ``msprime`` library has also evolved to support data
+from external sources, and can work with data conforming to
+the :ref:`sec_interchange` definitions. In the near future, the
+efficient algorithms and data structures used to process tree
+sequence data will be moved into a new library, provisiononally
+called ``tskit``. Once this transition is complete, ``msprime``
+will depend on this library, and will become primarily concerned
+with simulating backwards-in-time population processes.

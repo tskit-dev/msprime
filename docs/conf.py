@@ -138,11 +138,10 @@ author = u'Jerome Kelleher'
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-# Following advice from setuptools_scm at
-# https://github.com/pypa/setuptools_scm
 try:
-    release = pkg_resources.get_distribution('msprime').version
-    version = '.'.join(release.split('.')[:2])
+    from setuptools_scm import get_version
+    release = get_version(root='..', relative_to=__file__)
+    version = release[:3]
 except pkg_resources.DistributionNotFound:
     release = "0.0.0"
     version = "0.0.0"
