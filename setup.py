@@ -45,7 +45,6 @@ except ImportError:
     warn("numpy not available. Some features will not work.")
 
 
-
 class PathConfigurator(object):
     """
     A class to attempt configuration of the compile search paths
