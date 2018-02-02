@@ -1884,7 +1884,8 @@ class TreeSequence(object):
             flags |= _msprime.SAMPLE_LISTS
         kwargs = {"flags": flags}
         if tracked_samples is not None:
-            kwargs["tracked_samples"] = tracked_samples
+            # TODO remove this when we allow numpy arrays in the low-level API.
+            kwargs["tracked_samples"] = list(tracked_samples)
         ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
         iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree, self)
@@ -2003,9 +2004,7 @@ class TreeSequence(object):
         """
         if samples is None:
             samples = self.samples()
-        else:
-            samples = list(samples)
-        return self._ll_tree_sequence.get_pairwise_diversity(samples)
+        return self._ll_tree_sequence.get_pairwise_diversity(list(samples))
 
     def node(self, id_):
         """
@@ -2054,25 +2053,28 @@ class TreeSequence(object):
 
     def samples(self, population=None, population_id=None):
         """
-        Returns the samples matching the specified population ID.
+        Returns an array of the sample node IDs in this tree sequence. If the
+        ``population`` parameter is specified, only return sample IDs from this
+        population.
 
         :param int population: The population of interest. If None,
             return all samples.
         :param int population_id: Deprecated alias for ``population``.
-        :return: The ID of the population we wish to find samples from.
-            If None, return samples from all populations.
-        :rtype: list
+        :return: A numpy array of the node IDs for the samples of interest.
+        :rtype: numpy.ndarray (dtype=np.int32)
         """
         if population is not None and population_id is not None:
             raise ValueError(
                 "population_id and population are aliases. Cannot specify both")
         if population_id is not None:
             population = population_id
+        # TODO the low-level tree sequence should perform this operation natively
+        # and return a numpy array.
         samples = self._ll_tree_sequence.get_samples()
         if population is not None:
             samples = [
                 u for u in samples if self.get_population(u) == population]
-        return samples
+        return np.array(samples, dtype=np.int32)
 
     def write_vcf(self, output, ploidy=1, contig_id="1"):
         """
