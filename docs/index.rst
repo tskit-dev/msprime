@@ -9,6 +9,12 @@ Welcome to msprime's documentation!
 This is the documentation for ``msprime``, a reimplementation of Hudson's
 classical :command:`ms` simulator.
 
+If you are looking for help on a specific issue or would like to ask a
+question to fellow ``msprime`` users, please send an email to the
+`mailing list <https://groups.google.com/group/msprime-users>`_. By asking
+questions on the mailing list, you can help to build a searchable knowledge
+base.
+
 Contents:
 =========
 
