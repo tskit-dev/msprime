@@ -399,7 +399,8 @@ class TestSimplify(unittest.TestCase):
             self.assertTreeSequencesEqual(full_ts, py_full_ts)
 
             for nsamples in [2, 5, 10]:
-                sub_samples = random.sample(ts.samples(), min(nsamples, ts.sample_size))
+                sub_samples = random.sample(
+                    list(ts.samples()), min(nsamples, ts.sample_size))
                 s = tests.Simplifier(ts, sub_samples)
                 py_small_ts, py_small_map = s.simplify()
                 small_ts, small_map = ts.simplify(samples=sub_samples, map_nodes=True)
@@ -416,8 +417,8 @@ class TestSimplify(unittest.TestCase):
                 edges = tables.edges.copy()
                 sites = tables.sites.copy()
                 mutations = tables.mutations.copy()
-                sub_samples = random.sample(ts.samples(), min(nsamples, ts.num_samples))
-
+                sub_samples = random.sample(
+                    list(ts.samples()), min(nsamples, ts.num_samples))
                 node_map = msprime.simplify_tables(
                     samples=sub_samples, nodes=nodes, edges=edges,
                     sites=sites, mutations=mutations)

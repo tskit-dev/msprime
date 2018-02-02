@@ -680,7 +680,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                 self.assertListAlmostEqual(tsc_vals[i], tree_vals[i])
 
     def check_tree_stat_interface(self, ts):
-        samples = ts.samples()
+        samples = list(ts.samples())
         tsc = self.stat_class(ts)
 
         def wfn(x):
@@ -734,7 +734,7 @@ class GeneralStatsTestCase(unittest.TestCase):
     def check_tree_stat_vector(self, ts):
         # test the general tree_stat_vector() machinery
         self.check_tree_stat_interface(ts)
-        samples = random.sample(ts.samples(), 12)
+        samples = random.sample(list(ts.samples()), 12)
         A = [[samples[0], samples[1], samples[6]],
              [samples[2], samples[3], samples[7]],
              [samples[4], samples[5], samples[8]],
@@ -759,11 +759,11 @@ class GeneralStatsTestCase(unittest.TestCase):
     def check_sfs(self, ts):
         # check site frequency spectrum
         self.check_sfs_interface(ts)
-        A = [random.sample(ts.samples(), 2),
-             random.sample(ts.samples(), 4),
-             random.sample(ts.samples(), 8),
-             random.sample(ts.samples(), 10),
-             random.sample(ts.samples(), 12)]
+        A = [random.sample(list(ts.samples()), 2),
+             random.sample(list(ts.samples()), 4),
+             random.sample(list(ts.samples()), 8),
+             random.sample(list(ts.samples()), 10),
+             random.sample(list(ts.samples()), 12)]
         tsc = self.stat_class(ts)
         py_tsc = self.py_stat_class(ts)
 
@@ -778,7 +778,7 @@ class GeneralStatsTestCase(unittest.TestCase):
 
     def check_f_stats(self, ts):
         self.check_f_interface(ts)
-        samples = random.sample(ts.samples(), 12)
+        samples = random.sample(list(ts.samples()), 12)
         A = [[samples[0], samples[1], samples[2]],
              [samples[3], samples[4]],
              [samples[5], samples[6]],
@@ -794,7 +794,7 @@ class GeneralStatsTestCase(unittest.TestCase):
                            tsc_fn=tsc.f4, tsc_vector_fn=tsc.f4_vector)
 
     def check_Y_stat(self, ts):
-        samples = random.sample(ts.samples(), 12)
+        samples = random.sample(list(ts.samples()), 12)
         A = [[samples[0], samples[1], samples[6]],
              [samples[2], samples[3], samples[7]],
              [samples[4], samples[5], samples[8]],
@@ -1238,12 +1238,12 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
                                    recombination_rate=10)
 
     def check_pairwise_diversity(self, ts):
-        samples = random.sample(ts.samples(), 2)
+        samples = random.sample(list(ts.samples()), 2)
         tsc = msprime.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A_one = [[samples[0]], [samples[1]]]
-        A_many = [random.sample(ts.samples(), 2),
-                  random.sample(ts.samples(), 2)]
+        A_many = [random.sample(list(ts.samples()), 2),
+                  random.sample(list(ts.samples()), 2)]
         for A in (A_one, A_many):
             n = [len(a) for a in A]
 
@@ -1259,7 +1259,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
 
     def check_divergence_matrix(self, ts):
         # nonoverlapping samples
-        samples = random.sample(ts.samples(), 6)
+        samples = random.sample(list(ts.samples()), 6)
         tsc = msprime.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A = [samples[0:3], samples[3:5], samples[5:6]]
@@ -1328,12 +1328,12 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
 
     def test_windowization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
-        samples = random.sample(ts.samples(), 2)
+        samples = random.sample(list(ts.samples()), 2)
         tsc = msprime.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A_one = [[samples[0]], [samples[1]]]
-        A_many = [random.sample(ts.samples(), 2),
-                  random.sample(ts.samples(), 2)]
+        A_many = [random.sample(list(ts.samples()), 2),
+                  random.sample(list(ts.samples()), 2)]
         some_breaks = list(set([0.0, ts.sequence_length/2, ts.sequence_length] +
                                random.sample(list(ts.breakpoints()), 5)))
         some_breaks.sort()
@@ -1460,7 +1460,7 @@ class SiteStatsTestCase(GeneralStatsTestCase):
 
     def check_pairwise_diversity_mutations(self, ts):
         py_tsc = PythonSiteStatCalculator(ts)
-        samples = random.sample(ts.samples(), 2)
+        samples = random.sample(list(ts.samples()), 2)
         A = [[samples[0]], [samples[1]]]
         n = [len(a) for a in A]
 

@@ -682,7 +682,7 @@ class TestGeneralSamples(TopologyTestCase):
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
 
         self.assertEqual(ts.sample_size, 3)
-        self.assertEqual(ts.samples(), [2, 3, 4])
+        self.assertEqual(list(ts.samples()), [2, 3, 4])
         self.assertEqual(ts.num_nodes, 5)
         self.assertEqual(ts.num_nodes, 5)
         self.assertEqual(ts.num_sites, 4)
@@ -700,7 +700,7 @@ class TestGeneralSamples(TopologyTestCase):
         self.assertEqual(list(node_map), [4, 3, 0, 1, 2])
         # We should have the same tree sequence just with canonicalised nodes.
         self.assertEqual(tss.sample_size, 3)
-        self.assertEqual(tss.samples(), [0, 1, 2])
+        self.assertEqual(list(tss.samples()), [0, 1, 2])
         self.assertEqual(tss.num_nodes, 5)
         self.assertEqual(tss.num_trees, 1)
         self.assertEqual(tss.num_sites, 4)
@@ -728,7 +728,7 @@ class TestGeneralSamples(TopologyTestCase):
         samples = sorted(node_map[:ts.sample_size])
         node_map = samples + node_map[ts.sample_size:]
         permuted = tsutil.permute_nodes(ts, node_map)
-        self.assertEqual(permuted.samples(), samples)
+        self.assertEqual(list(permuted.samples()), samples)
         self.assertEqual(list(permuted.haplotypes()), list(ts.haplotypes()))
         self.assertEqual(
             [v.genotypes for v in permuted.variants(as_bytes=True)],
@@ -752,7 +752,7 @@ class TestGeneralSamples(TopologyTestCase):
         simplified, s_node_map = permuted.simplify(map_nodes=True)
         for u, v in enumerate(node_map):
             self.assertEqual(s_node_map[v], u)
-        self.assertEqual(simplified.samples(), ts.samples())
+        self.assertTrue(np.array_equal(simplified.samples(), ts.samples()))
         self.assertEqual(list(simplified.nodes()), list(ts.nodes()))
         self.assertEqual(list(simplified.edges()), list(ts.edges()))
         self.assertEqual(list(simplified.sites()), list(ts.sites()))

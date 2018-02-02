@@ -903,6 +903,88 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             self.verify_tree_sequence(ts)
 
 
+class TestNumpySamples(unittest.TestCase):
+    """
+    Tests that we correctly handle samples as numpy arrays when passed to
+    various methods.
+    """
+    def get_tree_sequence(self, num_demes=4):
+        n = 40
+        return msprime.simulate(
+            samples=[
+                msprime.Sample(time=0, population=j % num_demes) for j in range(n)],
+            population_configurations=[
+                msprime.PopulationConfiguration() for _ in range(num_demes)],
+            migration_matrix=[
+                [int(j != k) for j in range(num_demes)] for k in range(num_demes)],
+            random_seed=1,
+            mutation_rate=10)
+
+    def test_samples(self):
+        d = 4
+        ts = self.get_tree_sequence(d)
+        self.assertTrue(np.array_equal(
+            ts.samples(), np.arange(ts.num_samples, dtype=np.int32)))
+        total = 0
+        for pop in range(d):
+            subsample = ts.samples(pop)
+            total += subsample.shape[0]
+            self.assertTrue(np.array_equal(subsample, ts.samples(population=pop)))
+            self.assertEqual(
+                list(subsample),
+                [node.id for node in ts.nodes()
+                    if node.population == pop and node.is_sample()])
+        self.assertEqual(total, ts.num_samples)
+
+    def test_genotype_matrix_indexing(self):
+        num_demes = 4
+        ts = self.get_tree_sequence(num_demes)
+        G = ts.genotype_matrix()
+        for d in range(num_demes):
+            samples = ts.samples(population=d)
+            total = 0
+            for tree in ts.trees(tracked_samples=samples):
+                for mutation in tree.mutations():
+                    total += tree.num_tracked_samples(mutation.node)
+            self.assertEqual(total, np.sum(G[:, samples]))
+
+    def test_genotype_indexing(self):
+        num_demes = 6
+        ts = self.get_tree_sequence(num_demes)
+        for d in range(num_demes):
+            samples = ts.samples(population=d)
+            total = 0
+            for tree in ts.trees(tracked_samples=samples):
+                for mutation in tree.mutations():
+                    total += tree.num_tracked_samples(mutation.node)
+            other_total = 0
+            for variant in ts.variants():
+                other_total += np.sum(variant.genotypes[samples])
+            self.assertEqual(total, other_total)
+
+    def test_pairwise_diversity(self):
+        num_demes = 6
+        ts = self.get_tree_sequence(num_demes)
+        pi1 = ts.pairwise_diversity(ts.samples())
+        pi2 = ts.pairwise_diversity()
+        self.assertEqual(pi1, pi2)
+        for d in range(num_demes):
+            samples = ts.samples(population=d)
+            pi1 = ts.pairwise_diversity(samples)
+            pi2 = ts.pairwise_diversity(list(samples))
+            self.assertEqual(pi1, pi2)
+
+    def test_simplify(self):
+        num_demes = 3
+        ts = self.get_tree_sequence(num_demes)
+        sts = ts.simplify(samples=ts.samples())
+        self.assertEqual(ts.num_samples, sts.num_samples)
+        for d in range(num_demes):
+            samples = ts.samples(population=d)
+            sts = ts.simplify(samples=samples)
+            self.assertEqual(sts.num_samples, samples.shape[0])
+
+
 class TestTreeSequence(HighLevelTestCase):
     """
     Tests for the tree sequence object.
@@ -1077,10 +1159,10 @@ class TestTreeSequence(HighLevelTestCase):
             pops = set(node.population for node in ts.nodes())
             for pop in pops:
                 subsample = ts.samples(pop)
-                self.assertEqual(subsample, ts.samples(population=pop))
-                self.assertEqual(subsample, ts.samples(population_id=pop))
+                self.assertTrue(np.array_equal(subsample, ts.samples(population=pop)))
+                self.assertTrue(np.array_equal(subsample, ts.samples(population_id=pop)))
                 self.assertEqual(
-                    subsample,
+                    list(subsample),
                     [node.id for node in ts.nodes()
                         if node.population == pop and node.is_sample()])
             self.assertRaises(ValueError, ts.samples, population=0, population_id=0)
@@ -1168,19 +1250,6 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertRaises(ValueError, ts.get_time, N + 1)
             for u in range(N):
                 self.assertEqual(ts.get_time(u), ts.node(u).time)
-
-    def test_get_samples(self):
-        for ts in get_example_tree_sequences():
-            samples = []
-            for u in range(ts.num_nodes):
-                if ts.node(u).is_sample():
-                    samples.append(u)
-            self.assertEqual(ts.samples(), samples)
-            self.assertEqual(ts.samples(0), samples)
-            self.assertEqual(ts.samples(msprime.NULL_POPULATION), [])
-            self.assertEqual(ts.samples(1), [])
-            for t in ts.trees():
-                self.assertEqual(sorted(list(t.samples())), samples)
 
     def test_write_vcf_interface(self):
         for ts in get_example_tree_sequences():
@@ -1337,7 +1406,7 @@ class TestTreeSequence(HighLevelTestCase):
         samples = ts.samples()
         self.assertEqual(
             ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
-        self.assertEqual(ts.get_samples(), ts.samples())
+        self.assertTrue(np.array_equal(ts.get_samples(), ts.samples()))
 
     def test_generate_mutations_on_tree_sequence(self):
         some_mutations = False
