@@ -19,7 +19,7 @@ Quickstart
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root. If you
   are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
-  run ``make ext3``.
+  run ``make ext3``. Python 3.x is the default if no arguments are provided.
 - Run the tests to ensure everything has worked: ``nosetests -vs``. These should
   all pass.
 - Make your changes in a local branch, and open a pull request on GitHub when you
