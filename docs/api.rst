@@ -145,12 +145,12 @@ Using simulation results
 
 The :class:`.TreeSequence` class represents a sequence of correlated trees
 output by a simulation. The :class:`.SparseTree` class represents a single
-tree in this sequence. 
+tree in this sequence.
 These classes are the interfaces used to interact with the trees
 and mutational information stored in a tree sequence returned from a simulation.
 There are also methods for loading data into these objects, either from the native
-format, e.g., :func:`msprime.load`, or from another format, e.g.,
-:func:`msprime.load_text` compatible with the `Tables API <sec_tables_api>`.
+format using :func:`msprime.load`, or from another sources
+using :func:`msprime.load_text` or :func:`msprime.load_tables`.
 
 +++++++++++++++++
 Top level-classes
