@@ -30,6 +30,11 @@
 #ifndef _AVL_H
 #define _AVL_H
 
+/* C++ support added by Jerome Kelleher 2017/02/06 */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* We need either depths, counts or both (the latter being the default) */
 #if !defined(AVL_DEPTH) && !defined(AVL_COUNT)
 #define AVL_DEPTH
@@ -123,12 +128,12 @@ extern avl_node_t *avl_insert_top(avl_tree_t *, avl_node_t *avlnode);
 /* Insert a node before another node. Returns the new node.
  * If old is NULL, the item is appended to the tree.
  * O(lg n) */
-extern avl_node_t *avl_insert_before(avl_tree_t *, avl_node_t *old, avl_node_t *new);
+extern avl_node_t *avl_insert_before(avl_tree_t *, avl_node_t *old, avl_node_t *new_node);
 
 /* Insert a node after another node. Returns the new node.
  * If old is NULL, the item is prepended to the tree.
  * O(lg n) */
-extern avl_node_t *avl_insert_after(avl_tree_t *, avl_node_t *old, avl_node_t *new);
+extern avl_node_t *avl_insert_after(avl_tree_t *, avl_node_t *old, avl_node_t *new_node);
 
 /* Deletes a node from the tree. Returns immediately if the node is NULL.
  * The item will not be free()d regardless of the tree's freeitem handler.
@@ -152,7 +157,7 @@ extern void *avl_delete(avl_tree_t *, const void *item);
  * in the tree that refer to it. It must be an exact shallow copy.
  * Returns the pointer to the old position.
  * O(1) */
-extern avl_node_t *avl_fixup_node(avl_tree_t *, avl_node_t *new);
+extern avl_node_t *avl_fixup_node(avl_tree_t *, avl_node_t *new_node);
 
 /* Searches for a node with the key closest (or equal) to the given item.
  * If avlnode is not NULL, *avlnode will be set to the node found or NULL
@@ -183,4 +188,7 @@ extern avl_node_t *avl_at(const avl_tree_t *, unsigned int);
 extern unsigned int avl_index(const avl_node_t *);
 #endif
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -23,7 +23,7 @@
 
 #include <gsl/gsl_randist.h>
 
-#include "err.h"
+#include "util.h"
 #include "msprime.h"
 #include "object_heap.h"
 
