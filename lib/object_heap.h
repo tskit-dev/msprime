@@ -24,7 +24,18 @@
 #include <string.h>
 #include <assert.h>
 
-#include "msprime.h"
+/* #include "msprime.h" */
+
+typedef struct {
+    size_t object_size;
+    size_t block_size; /* number of objects in a block */
+    size_t top;
+    size_t size;
+    size_t num_blocks;
+    void **heap;
+    char **mem_blocks;
+    void (*init_object)(void **obj, size_t index);
+} object_heap_t;
 
 extern size_t object_heap_get_num_allocated(object_heap_t *self);
 extern void object_heap_print_state(object_heap_t *self, FILE *out);
