@@ -139,32 +139,52 @@ Variable recombination rates
     :members:
 
 
-*******************
-Processing results
-*******************
+************************
+Using simulation results
+************************
 
 The :class:`.TreeSequence` class represents a sequence of correlated trees
 output by a simulation. The :class:`.SparseTree` class represents a single
-tree in this sequence.
+tree in this sequence. 
+These classes are the interfaces used to interact with the trees
+and mutational information stored in a tree sequence returned from a simulation.
+There are also methods for loading data into these objects, either from the native
+format, e.g., :func:`msprime.load`, or from another format, e.g.,
+:func:`msprime.load_text` compatible with the `Tables API <sec_tables_api>`.
+
++++++++++++++++++
+Top level-classes
++++++++++++++++++
+
+
+.. autoclass:: msprime.TreeSequence()
+    :members:
+
+.. autoclass:: msprime.SparseTree()
+    :members:
+
 
 +++++++++
 Constants
 +++++++++
 
-.. data:: msprime.NULL_NODE = -1
+These constants are used in :class:`.TreeSequence` and :class:`.SparseTree`
+instances to define special values of various variables.
+
+.. data:: msprime.NULL_NODE == -1
 
     Special reserved value, representing the null node. If the parent of a
     given node is null, then this node is either a root (the ancestor of
     one or more samples), or the node is not present in the current tree.
 
-.. data:: msprime.NULL_POPULATION = -1
+.. data:: msprime.NULL_POPULATION == -1
 
     Special reserved value, representing the null population ID. This value is
     returned if the population associated with a particular node is not
     defined, or population information was not available in the underlying tree
     sequence.
 
-.. data:: msprime.NULL_MUTATION = -1
+.. data:: msprime.NULL_MUTATION == -1
 
     Special reserved value, representing the null mutation ID. If there is a
     single mutation at a site, or if a mutation at a given site does not have
@@ -172,50 +192,16 @@ Constants
     ``mutation.parent``. See also :class:`.Mutation`.
 
 
-.. data:: msprime.FORWARD = 1
+.. data:: msprime.FORWARD == 1
 
     Constant representing the forward direction of travel (i.e.,
     increasing coordinate values).
 
-.. data:: msprime.REVERSE = -1
+.. data:: msprime.REVERSE == -1
 
     Constant representing the reverse direction of travel (i.e.,
     decreasing coordinate values).
 
-++++++++++++
-Loading data
-++++++++++++
-
-There are several methods for loading data into the msprime API. The simplest
-and most convenient is the use the :func:`msprime.load` function to load
-a :ref:`HDF ancestry file <sec_hdf5_file_format>`. For small scale data
-and debugging, it is often convenient to use the :func:`msprime.load_text`
-to read data in the :ref:`text file format <sec_text_file_format>`.
-The :func:`msprime.load_tables` function efficiently loads large volumes
-of data using the :ref:`Tables API <sec_tables_api>`.
-
-
-.. autofunction:: msprime.load
-
-.. autofunction:: msprime.load_text
-
-.. autofunction:: msprime.load_tables
-
-
-+++++++++++++++++
-Top level-classes
-+++++++++++++++++
-
-These classes are the interfaces used to interact with the trees
-and mutational information stored in a tree sequence. The :class:`.TreeSequence`
-class represents a single tree sequence, and the :class:`.SparseTree` class
-represents a single tree in a tree sequence.
-
-.. autoclass:: msprime.TreeSequence()
-    :members:
-
-.. autoclass:: msprime.SparseTree()
-    :members:
 
 ++++++++++++++++++++++++
 Simple container classes
@@ -243,6 +229,25 @@ directly, but are the return types for the various iterators provided by the
 
 .. autoclass:: msprime.Migration()
     :members:
+
+++++++++++++
+Loading data
+++++++++++++
+
+There are several methods for loading data into a :class:`.TreeSequence`
+instance. The simplest and most convenient is the use the :func:`msprime.load`
+function to load a :ref:`HDF ancestry file <sec_hdf5_file_format>`. For small
+scale data and debugging, it is often convenient to use the
+:func:`msprime.load_text` to read data in the :ref:`text file format
+<sec_text_file_format>`. The :func:`msprime.load_tables` function efficiently
+loads large volumes of data using the :ref:`Tables API <sec_tables_api>`.
+
+
+.. autofunction:: msprime.load
+
+.. autofunction:: msprime.load_text
+
+.. autofunction:: msprime.load_tables
 
 
 **********************
