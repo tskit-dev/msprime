@@ -265,6 +265,15 @@ class TestDemographyDebugger(unittest.TestCase):
     population sizes etc.
     """
 
+    def test_equal_after(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(sample_size=10),
+            msprime.PopulationConfiguration(sample_size=20)]
+        msprime.DemographyDebugger(
+            population_configurations=population_configurations)
+        self.assertEqual(population_configurations[0].sample_size, 10)
+        self.assertEqual(population_configurations[1].sample_size, 20)
+
     def test_one_pop_zero_events(self):
         dd = msprime.DemographyDebugger(
             population_configurations=[msprime.PopulationConfiguration()])

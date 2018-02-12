@@ -1076,6 +1076,8 @@ class DemographyDebugger(object):
         if population_configurations is None:
             sample_size = 2
         else:
+            saved_sample_sizes = [
+                pop_config.sample_size for pop_config in population_configurations]
             for pop_config in population_configurations:
                 pop_config.sample_size = 2
         simulator = simulator_factory(
@@ -1085,6 +1087,12 @@ class DemographyDebugger(object):
             demographic_events=demographic_events)
         self._make_epochs(
             simulator, sorted(demographic_events, key=lambda e: e.time))
+
+        if population_configurations is not None:
+            # Restore the saved sample sizes.
+            for pop_config, sample_size in zip(
+                    population_configurations, saved_sample_sizes):
+                pop_config.sample_size = sample_size
 
     def _make_epochs(self, simulator, demographic_events):
         self.epochs = []
