@@ -1385,6 +1385,7 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 
     attr_id = H5Aopen_by_name(file_id, "/", "format_version", H5P_DEFAULT, H5P_DEFAULT);
     if (attr_id < 0) {
+        ret = MSP_ERR_FILE_FORMAT;
         goto out;
     }
     dataspace_id = H5Aget_space(attr_id);
@@ -1419,6 +1420,7 @@ tree_sequence_read_hdf5_metadata(tree_sequence_t *self, hid_t file_id)
 
     attr_id = H5Aopen_by_name(file_id, "/", "sequence_length", H5P_DEFAULT, H5P_DEFAULT);
     if (attr_id < 0) {
+        ret = MSP_ERR_FILE_FORMAT;
         goto out;
     }
     dataspace_id = H5Aget_space(attr_id);
