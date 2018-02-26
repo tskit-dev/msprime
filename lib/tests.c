@@ -6268,6 +6268,7 @@ test_node_table(void)
     ret = node_table_alloc(&table, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     node_table_print_state(&table, _devnull);
+    node_table_dump_text(&table, _devnull);
 
     for (j = 0; j < num_rows; j++) {
         ret = node_table_add_row(&table, j, j, j, test_metadata, test_metadata_length);
@@ -6282,7 +6283,7 @@ test_node_table(void)
         memcpy(metadata_copy, table.metadata + table.metadata_offset[j], test_metadata_length);
         CU_ASSERT_NSTRING_EQUAL(metadata_copy, test_metadata, test_metadata_length);
     }
-    node_table_print_state(&table, _devnull);
+    node_table_dump_text(&table, _devnull);
     node_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
@@ -6317,6 +6318,7 @@ test_node_table(void)
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, num_rows);
     node_table_print_state(&table, _devnull);
+    node_table_dump_text(&table, _devnull);
 
     /* Append another num_rows onto the end */
     ret = node_table_append_columns(&table, num_rows, flags, time, population,
@@ -6334,6 +6336,7 @@ test_node_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, 2 * num_rows);
     node_table_print_state(&table, _devnull);
+    node_table_dump_text(&table, _devnull);
 
     /* If population is NULL it should be set the -1. If metadata is NULL all metadatas
      * should be set to the empty string. */
@@ -6387,6 +6390,7 @@ test_node_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
     node_table_print_state(&table, _devnull);
+    node_table_dump_text(&table, _devnull);
 
     node_table_free(&table);
     free(flags);
@@ -6409,6 +6413,7 @@ test_edge_table(void)
     ret = edge_table_alloc(&table, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     edge_table_print_state(&table, _devnull);
+    edge_table_dump_text(&table, _devnull);
 
     for (j = 0; j < num_rows; j++) {
         ret = edge_table_add_row(&table, j, j, j, j);
@@ -6420,6 +6425,7 @@ test_edge_table(void)
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
     }
     edge_table_print_state(&table, _devnull);
+    edge_table_dump_text(&table, _devnull);
 
     num_rows *= 2;
     left = malloc(num_rows * sizeof(double));
@@ -6490,6 +6496,7 @@ test_site_table(void)
     ret = site_table_alloc(&table, 1, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     site_table_print_state(&table, _devnull);
+    site_table_dump_text(&table, _devnull);
 
     ret = site_table_add_row(&table, 0, "A", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6521,6 +6528,7 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 3);
 
     site_table_print_state(&table, _devnull);
+    site_table_dump_text(&table, _devnull);
     site_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 0);
@@ -6677,6 +6685,7 @@ test_mutation_table(void)
     ret = mutation_table_alloc(&table, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutation_table_print_state(&table, _devnull);
+    mutation_table_dump_text(&table, _devnull);
 
     len = 0;
     for (j = 0; j < num_rows; j++) {
@@ -6696,6 +6705,7 @@ test_mutation_table(void)
         CU_ASSERT_EQUAL(table.metadata_length, len);
     }
     mutation_table_print_state(&table, _devnull);
+    mutation_table_dump_text(&table, _devnull);
 
     num_rows *= 2;
     site = malloc(num_rows * sizeof(site_id_t));
@@ -6878,6 +6888,7 @@ test_migration_table(void)
     ret = migration_table_alloc(&table, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     migration_table_print_state(&table, _devnull);
+    migration_table_dump_text(&table, _devnull);
 
     for (j = 0; j < num_rows; j++) {
         ret = migration_table_add_row(&table, j, j, j, j, j, j);
@@ -6891,6 +6902,7 @@ test_migration_table(void)
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
     }
     migration_table_print_state(&table, _devnull);
+    migration_table_dump_text(&table, _devnull);
 
     num_rows *= 2;
     left = malloc(num_rows * sizeof(double));

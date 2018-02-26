@@ -985,6 +985,7 @@ int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *fla
 int node_table_clear(node_table_t *self);
 int node_table_free(node_table_t *self);
 void node_table_print_state(node_table_t *self, FILE *out);
+void node_table_dump_text(node_table_t *self, FILE *out);
 bool node_table_equal(node_table_t *self, node_table_t *other);
 
 int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
@@ -997,6 +998,7 @@ int edge_table_append_columns(edge_table_t *self, size_t num_rows, double *left,
 int edge_table_clear(edge_table_t *self);
 int edge_table_free(edge_table_t *self);
 void edge_table_print_state(edge_table_t *self, FILE *out);
+void edge_table_dump_text(edge_table_t *self, FILE *out);
 bool edge_table_equal(edge_table_t *self, edge_table_t *other);
 
 int site_table_alloc(site_table_t *self, size_t max_rows_increment,
@@ -1016,8 +1018,8 @@ bool site_table_equal(site_table_t *self, site_table_t *other);
 int site_table_clear(site_table_t *self);
 int site_table_free(site_table_t *self);
 void site_table_print_state(site_table_t *self, FILE *out);
+void site_table_dump_text(site_table_t *self, FILE *out);
 
-void mutation_table_print_state(mutation_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
         size_t max_total_derived_state_length_increment,
         size_t max_total_metadata_length_increment);
@@ -1037,6 +1039,7 @@ bool mutation_table_equal(mutation_table_t *self, mutation_table_t *other);
 int mutation_table_clear(mutation_table_t *self);
 int mutation_table_free(mutation_table_t *self);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
+void mutation_table_dump_text(mutation_table_t *self, FILE *out);
 
 int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
 migration_id_t migration_table_add_row(migration_table_t *self, double left,
@@ -1051,6 +1054,7 @@ int migration_table_append_columns(migration_table_t *self, size_t num_rows,
 int migration_table_clear(migration_table_t *self);
 int migration_table_free(migration_table_t *self);
 void migration_table_print_state(migration_table_t *self, FILE *out);
+void migration_table_dump_text(migration_table_t *self, FILE *out);
 
 int simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,

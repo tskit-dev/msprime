@@ -297,11 +297,29 @@ node_table_print_state(node_table_t *self, FILE *out)
             (int) self->max_metadata_length,
             (int) self->max_metadata_length_increment);
     fprintf(out, TABLE_SEP);
-    fprintf(out, "index\tflags\tis_sample\ttime\tpopulation\tmetadata_offset\tmetadata\n");
+    fprintf(out, "index\tflags\ttime\tpopulation\tmetadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "%d\t%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j],
-                (int) (self->flags[j] & MSP_NODE_IS_SAMPLE), self->time[j],
+        fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
                 (int) self->population[j], self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_offset[self->num_rows] == self->metadata_length);
+}
+
+void
+node_table_dump_text(node_table_t *self, FILE *out)
+{
+    size_t j, k;
+
+    fprintf(out, "index\tis_sample\ttime\tpopulation\tmetadata\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%d\t%f\t%d\t", (int) j,
+                (int) (self->flags[j] & MSP_NODE_IS_SAMPLE), self->time[j],
+                (int) self->population[j]);
         for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
             fprintf(out, "%c", self->metadata[k]);
         }
@@ -473,6 +491,19 @@ edge_table_print_state(edge_table_t *self, FILE *out)
     fprintf(out, "index\tleft\tright\tparent\tchild\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%.3f\t%.3f\t%d\t%d\t", (int) j, self->left[j], self->right[j],
+                self->parent[j], self->child[j]);
+        fprintf(out, "\n");
+    }
+}
+
+void
+edge_table_dump_text(edge_table_t *self, FILE *out)
+{
+    size_t j;
+
+    fprintf(out, "left\tright\tparent\tchild\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%.3f\t%.3f\t%d\t%d\t", self->left[j], self->right[j],
                 self->parent[j], self->child[j]);
         fprintf(out, "\n");
     }
@@ -814,6 +845,32 @@ site_table_print_state(site_table_t *self, FILE *out)
             fprintf(out, "%c", self->ancestral_state[k]);
         }
         fprintf(out, "\t%d\t", self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+
+    assert(self->ancestral_state_offset[0] == 0);
+    assert(self->ancestral_state_length
+            == self->ancestral_state_offset[self->num_rows]);
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_length == self->metadata_offset[self->num_rows]);
+}
+
+void
+site_table_dump_text(site_table_t *self, FILE *out)
+{
+    table_size_t j, k;
+
+    fprintf(out, "index\tposition\tancestral_state\tmetadata\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%f\t", (int) j, self->position[j]);
+        for (k = self->ancestral_state_offset[j];
+                k < self->ancestral_state_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->ancestral_state[k]);
+        }
+        fprintf(out, "\t");
         for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
             fprintf(out, "%c", self->metadata[k]);
         }
@@ -1186,6 +1243,34 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
             == self->metadata_offset[self->num_rows]);
 }
 
+void
+mutation_table_dump_text(mutation_table_t *self, FILE *out)
+{
+    size_t j, k;
+
+    fprintf(out, "site\tnode\tparent\tderived_state\tmetadata\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%d\t%d\t", self->site[j], self->node[j],
+                self->parent[j]);
+        for (k = self->derived_state_offset[j];
+                k < self->derived_state_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->derived_state[k]);
+        }
+        fprintf(out, "\t");
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+
+    assert(self->derived_state_offset[0] == 0);
+    assert(self->derived_state_length
+            == self->derived_state_offset[self->num_rows]);
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_length
+            == self->metadata_offset[self->num_rows]);
+}
+
 /*************************
  * migration table
  *************************/
@@ -1346,6 +1431,19 @@ migration_table_print_state(migration_table_t *self, FILE *out)
     fprintf(out, "index\tleft\tright\tnode\tsource\tdest\ttime\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%.3f\t%.3f\t%d\t%d\t%d\t%f\n", (int) j, self->left[j],
+                self->right[j], (int) self->node[j], (int) self->source[j],
+                (int) self->dest[j], self->time[j]);
+    }
+}
+
+void
+migration_table_dump_text(migration_table_t *self, FILE *out)
+{
+    size_t j;
+
+    fprintf(out, "left\tright\tnode\tsource\tdest\ttime\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%.3f\t%.3f\t%d\t%d\t%d\t%f\n", self->left[j],
                 self->right[j], (int) self->node[j], (int) self->source[j],
                 (int) self->dest[j], self->time[j]);
     }
