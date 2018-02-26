@@ -1,5 +1,5 @@
 ********************
-[0.5.0] - TBC
+[0.5.0] - 2018-02-26
 ********************
 
 This is a major update to the underlying data structures in msprime to
