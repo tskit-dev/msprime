@@ -204,7 +204,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         1   1           0   XYZ+
         2   0           1   !@#$%^&*()
         """)
-        n = msprime.parse_nodes(nodes, strict=False, decode_metadata=False)
+        n = msprime.parse_nodes(nodes, strict=False, encoding='utf8',
+                                base64_metadata=False)
         expected = ['abc', 'XYZ+', '!@#$%^&*()']
         for a, b in zip(expected, n):
             self.assertEqual(a.encode('utf8'),
@@ -217,7 +218,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         0.5 C   XYZ+
         0.8 G   !@#$%^&*()
         """)
-        s = msprime.parse_sites(sites, strict=False, decode_metadata=False)
+        s = msprime.parse_sites(sites, strict=False, encoding='utf8',
+                                base64_metadata=False)
         expected = ['abc', 'XYZ+', '!@#$%^&*()']
         for a, b in zip(expected, s):
             self.assertEqual(a.encode('utf8'),
@@ -229,7 +231,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         0   2   C   mno
         0   3   G   )(*&^%$#@!
         """)
-        m = msprime.parse_mutations(mutations, strict=False, decode_metadata=False)
+        m = msprime.parse_mutations(mutations, strict=False, encoding='utf8',
+                                    base64_metadata=False)
         expected = ['mno', ')(*&^%$#@!']
         for a, b in zip(expected, m):
             self.assertEqual(a.encode('utf8'),
