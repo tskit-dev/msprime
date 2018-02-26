@@ -6283,7 +6283,9 @@ test_node_table(void)
         memcpy(metadata_copy, table.metadata + table.metadata_offset[j], test_metadata_length);
         CU_ASSERT_NSTRING_EQUAL(metadata_copy, test_metadata, test_metadata_length);
     }
+    node_table_print_state(&table, _devnull);
     node_table_dump_text(&table, _devnull);
+
     node_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
@@ -6732,6 +6734,7 @@ test_mutation_table(void)
         metadata[j] = 'M';
         metadata_offset[j] = j;
     }
+
     derived_state_offset[num_rows] = num_rows;
     metadata_offset[num_rows] = num_rows;
     ret = mutation_table_set_columns(&table, num_rows, site, node, parent,
@@ -6807,6 +6810,7 @@ test_mutation_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.derived_state_length, 2 * num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
+
 
     /* Inputs except parent, metadata and metadata_offset cannot be NULL*/
     ret = mutation_table_set_columns(&table, num_rows, NULL, node, parent,
@@ -7095,7 +7099,6 @@ test_provenance_table(void)
     free(record);
     free(record_offset);
 }
-
 
 static int
 msprime_suite_init(void)
