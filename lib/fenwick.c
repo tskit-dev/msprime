@@ -75,16 +75,21 @@ fenwick_alloc(fenwick_t *self, size_t initial_size)
 int WARN_UNUSED
 fenwick_expand(fenwick_t *self, size_t increment)
 {
-    int ret = -1;
+    int ret = MSP_ERR_NO_MEMORY;
     size_t j, n, k;
-    self->tree = realloc(self->tree, 
-                         (1 + self->size + increment) * sizeof(int64_t));
-    self->values = realloc(self->values, 
-                           (1 + self->size + increment) * sizeof(int64_t));
-    if (self->tree == NULL || self->values == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+    void *p;
+
+    p = realloc(self->tree, (1 + self->size + increment) * sizeof(int64_t));
+    if (p == NULL) {
         goto out;
     }
+    self->tree = p;
+    p = realloc(self->values, (1 + self->size + increment) * sizeof(int64_t));
+    if (p == NULL) {
+        goto out;
+    }
+    self->values = p;
+
     self->size += increment;
     fenwick_set_log_size(self);
     for (j = self->size - increment + 1; j <= self->size; j++) {
