@@ -76,33 +76,30 @@ int WARN_UNUSED
 fenwick_expand(fenwick_t *self, size_t increment)
 {
     int ret = -1;
-    size_t j;
-    int64_t *values = self->values;
-    size_t old_size = self->size;
-
+    size_t j, n, k;
+    self->tree = realloc(self->tree, 
+                         (1 + self->size + increment) * sizeof(int64_t));
+    self->values = realloc(self->values, 
+                           (1 + self->size + increment) * sizeof(int64_t));
     if (self->tree == NULL || self->values == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     self->size += increment;
-    free(self->tree);
-    /* we still need values until we have rebuilt the tree; we need to
-     * make sure we don't double free in an error condition though.
-     */
-    self->values = NULL;
-    ret = fenwick_alloc_buffers(self);
-    if (ret != 0) {
-        goto out;
+    fenwick_set_log_size(self);
+    for (j = self->size - increment + 1; j <= self->size; j++) {
+        self->values[j] = 0;
+        self->tree[j] = 0;
+        n = j;
+        k = 1;
+        while (n % 2 == 0) {
+            self->tree[j] += self->tree[j - k];
+            k *= 2;
+            n >>= 1;
+        }
     }
-    /* now insert all of the values into the new tree. There is probably a
-     * better way to do this...
-     */
-    for (j = 1; j <= old_size; j++) {
-        fenwick_set_value(self, j, values[j]);
-    }
+    ret = 0;
 out:
-    if (values != NULL) {
-        free(values);
-    }
     return ret;
 }
 
