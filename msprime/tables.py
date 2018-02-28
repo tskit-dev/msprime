@@ -38,22 +38,6 @@ except ImportError:
     pass
 
 
-def text_encode_metadata(metadata):
-    """
-    Returns the specified metadata bytes object encoded as an ASCII-safe
-    string.
-    """
-    return base64.b64encode(metadata).decode('utf8')
-
-
-def text_decode_metadata(encoded):
-    """
-    Decodes the specified ASCII encoding of binary metadata and returns the
-    resulting bytes.
-    """
-    return base64.b64decode(encoded.encode('utf8'))
-
-
 NodeTableRow = collections.namedtuple(
     "NodeTableRow",
     ["flags", "time", "population", "metadata"])
@@ -119,8 +103,9 @@ class NodeTable(_msprime.NodeTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tflags\tpopulation\ttime\tmetadata\n"
         for j in range(self.num_rows):
+            md = base64.b64encode(metadata[j]).decode('utf8')
             ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
-                j, flags[j], population[j], time[j], text_encode_metadata(metadata[j]))
+                j, flags[j], population[j], time[j], md)
         return ret[:-1]
 
     def __eq__(self, other):
@@ -618,9 +603,9 @@ class SiteTable(_msprime.SiteTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
+            md = base64.b64encode(metadata[j]).decode('utf8')
             ret += "{}\t{:.8f}\t{}\t{}\n".format(
-                j, position[j], ancestral_state[j],
-                text_encode_metadata(metadata[j]))
+                j, position[j], ancestral_state[j], md)
         return ret[:-1]
 
     def __eq__(self, other):
@@ -824,9 +809,9 @@ class MutationTable(_msprime.MutationTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tsite\tnode\tderived_state\tparent\tmetadata\n"
         for j in range(self.num_rows):
+            md = base64.b64encode(metadata[j]).decode('utf8')
             ret += "{}\t{}\t{}\t{}\t{}\t{}\n".format(
-                j, site[j], node[j], derived_state[j], parent[j],
-                text_encode_metadata(metadata[j]))
+                j, site[j], node[j], derived_state[j], parent[j], md)
         return ret[:-1]
 
     def __eq__(self, other):

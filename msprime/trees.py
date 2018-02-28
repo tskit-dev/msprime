@@ -27,6 +27,7 @@ import collections
 import itertools
 import json
 import sys
+import base64
 
 try:
     import numpy as np
@@ -1109,7 +1110,7 @@ def load_tables(
     return TreeSequence.load_tables(**kwargs)
 
 
-def parse_nodes(source, strict=True):
+def parse_nodes(source, strict=True, encoding='utf8', base64_metadata=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a node table and returns the corresponding :class:`NodeTable`
@@ -1118,11 +1119,15 @@ def parse_nodes(source, strict=True):
     :ref:`node table definition <sec_node_table_definition>` section for the
     required properties of the contents.
 
-    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+    See :func:`.load_text` for a detailed explanation of the ``strict``
+    parameter.
 
     :param stream source: The file-like object containing the text.
     :param bool strict: If True, require strict tab delimiting (default). If
         False, a relaxed whitespace splitting algorithm is used.
+    :param string encoding: Encoding used for text representation.
+    :param bool base64_metadata: If True, metadata is encoded using Base64
+        encoding; otherwise, as plain text.
     """
     sep = None
     if strict:
@@ -1155,7 +1160,9 @@ def parse_nodes(source, strict=True):
                 population = int(tokens[population_index])
             metadata = b''
             if metadata_index is not None and metadata_index < len(tokens):
-                metadata = tables.text_decode_metadata(tokens[metadata_index])
+                metadata = tokens[metadata_index].encode(encoding)
+                if base64_metadata:
+                    metadata = base64.b64decode(metadata)
             table.add_row(
                 flags=flags, time=time, population=population, metadata=metadata)
     return table
@@ -1198,7 +1205,7 @@ def parse_edges(source, strict=True):
     return table
 
 
-def parse_sites(source, strict=True):
+def parse_sites(source, strict=True, encoding='utf8', base64_metadata=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a site table and returns the corresponding :class:`SiteTable`
@@ -1207,11 +1214,15 @@ def parse_sites(source, strict=True):
     :ref:`site table definition <sec_site_table_definition>` section for the
     required properties of the contents.
 
-    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+    See :func:`.load_text` for a detailed explanation of the ``strict``
+    parameter.
 
     :param stream source: The file-like object containing the text.
     :param bool strict: If True, require strict tab delimiting (default). If
         False, a relaxed whitespace splitting algorithm is used.
+    :param string encoding: Encoding used for text representation.
+    :param bool base64_metadata: If True, metadata is encoded using Base64
+        encoding; otherwise, as plain text.
     """
     sep = None
     if strict:
@@ -1232,13 +1243,15 @@ def parse_sites(source, strict=True):
             ancestral_state = tokens[ancestral_state_index]
             metadata = b''
             if metadata_index is not None and metadata_index < len(tokens):
-                metadata = tables.text_decode_metadata(tokens[metadata_index])
+                metadata = tokens[metadata_index].encode(encoding)
+                if base64_metadata:
+                    metadata = base64.b64decode(metadata)
             table.add_row(
                 position=position, ancestral_state=ancestral_state, metadata=metadata)
     return table
 
 
-def parse_mutations(source, strict=True):
+def parse_mutations(source, strict=True, encoding='utf8', base64_metadata=True):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a mutation table and returns the corresponding :class:`MutationTable`
@@ -1247,11 +1260,15 @@ def parse_mutations(source, strict=True):
     :ref:`mutation table definition <sec_mutation_table_definition>` section for the
     required properties of the contents.
 
-    See :func:`.load_text` for a detailed explanation of the ``strict`` parameter.
+    See :func:`.load_text` for a detailed explanation of the ``strict``
+    parameter.
 
     :param stream source: The file-like object containing the text.
     :param bool strict: If True, require strict tab delimiting (default). If
         False, a relaxed whitespace splitting algorithm is used.
+    :param string encoding: Encoding used for text representation.
+    :param bool base64_metadata: If True, metadata is encoded using Base64
+        encoding; otherwise, as plain text.
     """
     sep = None
     if strict:
@@ -1282,14 +1299,17 @@ def parse_mutations(source, strict=True):
                 parent = int(tokens[parent_index])
             metadata = b''
             if metadata_index is not None and metadata_index < len(tokens):
-                metadata = tables.text_decode_metadata(tokens[metadata_index])
+                metadata = tokens[metadata_index].encode(encoding)
+                if base64_metadata:
+                    metadata = base64.b64decode(metadata)
             table.add_row(
                 site=site, node=node, derived_state=derived_state, parent=parent,
                 metadata=metadata)
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, strict=True):
+def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, strict=True,
+              encoding='utf8', base64_metadata=True):
     """
     Parses the tree sequence data from the specified file-like objects, and
     returns the resulting :class:`.TreeSequence` object. The format
@@ -1339,18 +1359,24 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
         not supplied or zero this will be inferred from the set of edges.
     :param bool strict: If True, require strict tab delimiting (default). If
         False, a relaxed whitespace splitting algorithm is used.
+    :param string encoding: Encoding used for text representation.
+    :param bool base64_metadata: If True, metadata is encoded using Base64
+        encoding; otherwise, as plain text.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    node_table = parse_nodes(nodes, strict=strict)
+    node_table = parse_nodes(nodes, strict=strict, encoding=encoding,
+                             base64_metadata=base64_metadata)
     edge_table = parse_edges(edges, strict=strict)
     site_table = tables.SiteTable()
     mutation_table = tables.MutationTable()
     if sites is not None:
-        site_table = parse_sites(sites, strict=strict)
+        site_table = parse_sites(sites, strict=strict, encoding=encoding,
+                                 base64_metadata=base64_metadata)
     if mutations is not None:
-        mutation_table = parse_mutations(mutations, strict=strict)
+        mutation_table = parse_mutations(mutations, strict=strict, encoding=encoding,
+                                         base64_metadata=base64_metadata)
     tables.sort_tables(
         nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
     return load_tables(
@@ -1463,10 +1489,13 @@ class TreeSequence(object):
 
     def dump_text(
             self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
-            precision=6):
+            precision=6, encoding='utf8', base64_metadata=True):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
+
+        If Base64 encoding is not used, then metadata will be saved directly, possibly
+        resulting in errors reading the tables back in if metadata includes whitespace.
 
         :param stream nodes: The file-like object (having a .write() method) to write
             the NodeTable to.
@@ -1475,6 +1504,9 @@ class TreeSequence(object):
         :param stream mutations: The file-like object to write the MutationTable to.
         :param stream provenances: The file-like object to write the ProvenanceTable to.
         :param int precision: The number of digits of precision.
+        :param string encoding: Encoding used for text representation.
+        :param bool base64_metadata: If True, metadata is encoded using Base64
+            encoding; otherwise, as plain text.
         """
 
         if nodes is not None:
@@ -1482,6 +1514,9 @@ class TreeSequence(object):
                 "id", "is_sample", "time", "population", "metadata", sep="\t",
                 file=nodes)
             for node in self.nodes():
+                metadata = node.metadata
+                if base64_metadata:
+                    metadata = base64.b64encode(metadata).decode(encoding)
                 row = (
                     "{id:d}\t"
                     "{is_sample:d}\t"
@@ -1491,7 +1526,7 @@ class TreeSequence(object):
                         precision=precision, id=node.id,
                         is_sample=node.is_sample(), time=node.time,
                         population=node.population,
-                        metadata=tables.text_encode_metadata(node.metadata))
+                        metadata=metadata)
                 print(row, file=nodes)
 
         if edges is not None:
@@ -1509,13 +1544,16 @@ class TreeSequence(object):
         if sites is not None:
             print("position", "ancestral_state", "metadata", sep="\t", file=sites)
             for site in self.sites():
+                metadata = site.metadata
+                if base64_metadata:
+                    metadata = base64.b64encode(metadata).decode(encoding)
                 row = (
                     "{position:.{precision}f}\t"
                     "{ancestral_state}\t"
                     "{metadata}").format(
                         precision=precision, position=site.position,
                         ancestral_state=site.ancestral_state,
-                        metadata=tables.text_encode_metadata(site.metadata))
+                        metadata=metadata)
                 print(row, file=sites)
 
         if mutations is not None:
@@ -1524,6 +1562,9 @@ class TreeSequence(object):
                 sep="\t", file=mutations)
             for site in self.sites():
                 for mutation in site.mutations:
+                    metadata = mutation.metadata
+                    if base64_metadata:
+                        metadata = base64.b64encode(metadata).decode(encoding)
                     row = (
                         "{site}\t"
                         "{node}\t"
@@ -1533,7 +1574,7 @@ class TreeSequence(object):
                             site=mutation.site, node=mutation.node,
                             derived_state=mutation.derived_state,
                             parent=mutation.parent,
-                            metadata=tables.text_encode_metadata(mutation.metadata))
+                            metadata=metadata)
                     print(row, file=mutations)
 
         if provenances is not None:
