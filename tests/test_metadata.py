@@ -31,6 +31,7 @@ import pickle
 
 import numpy as np
 import python_jsonschema_objects as pjs
+import six
 
 import msprime
 
@@ -189,3 +190,50 @@ class TestJsonSchemaDecoding(unittest.TestCase):
         decoded = ns.ExampleMetadata.from_json(node.metadata.decode())
         self.assertEqual(decoded.one, metadata.one)
         self.assertEqual(decoded.two, metadata.two)
+
+
+class TestLoadTextMetadata(unittest.TestCase):
+    """
+    Tests that use the load_text interface.
+    """
+
+    def test_nodes(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time    metadata
+        0   1           0   abc
+        1   1           0   XYZ+
+        2   0           1   !@#$%^&*()
+        """)
+        n = msprime.parse_nodes(nodes, strict=False, encoding='utf8',
+                                base64_metadata=False)
+        expected = ['abc', 'XYZ+', '!@#$%^&*()']
+        for a, b in zip(expected, n):
+            self.assertEqual(a.encode('utf8'),
+                             b.metadata)
+
+    def test_sites(self):
+        sites = six.StringIO("""\
+        position    ancestral_state metadata
+        0.1 A   abc
+        0.5 C   XYZ+
+        0.8 G   !@#$%^&*()
+        """)
+        s = msprime.parse_sites(sites, strict=False, encoding='utf8',
+                                base64_metadata=False)
+        expected = ['abc', 'XYZ+', '!@#$%^&*()']
+        for a, b in zip(expected, s):
+            self.assertEqual(a.encode('utf8'),
+                             b.metadata)
+
+    def test_mutations(self):
+        mutations = six.StringIO("""\
+        site    node    derived_state   metadata
+        0   2   C   mno
+        0   3   G   )(*&^%$#@!
+        """)
+        m = msprime.parse_mutations(mutations, strict=False, encoding='utf8',
+                                    base64_metadata=False)
+        expected = ['mno', ')(*&^%$#@!']
+        for a, b in zip(expected, m):
+            self.assertEqual(a.encode('utf8'),
+                             b.metadata)
