@@ -1523,6 +1523,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             self.assertEqual(str(node.is_sample()), splits[1])
             self.assertEqual(convert(node.time), splits[2])
             self.assertEqual(str(node.population), splits[3])
+            self.assertEqual(tests.base64_encode(node.metadata), splits[4])
 
     def verify_edges_format(self, ts, edges_file, precision):
         """
@@ -1557,6 +1558,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             splits = line.split("\t")
             self.assertEqual(convert(site.position), splits[0])
             self.assertEqual(site.ancestral_state, splits[1])
+            self.assertEqual(tests.base64_encode(site.metadata), splits[2])
 
     def verify_mutations_format(self, ts, mutations_file, precision):
         """
@@ -1576,6 +1578,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             self.assertEqual(str(mutation.node), splits[1])
             self.assertEqual(str(mutation.derived_state), splits[2])
             self.assertEqual(str(mutation.parent), splits[3])
+            self.assertEqual(tests.base64_encode(mutation.metadata), splits[4])
 
     def test_output_format(self):
         for ts in get_example_tree_sequences():

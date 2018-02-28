@@ -27,6 +27,7 @@ import heapq
 import random
 import sys
 import unittest
+import base64
 
 try:
     # We run some tests on the CLI to make sure that we can work in a minimal
@@ -1048,6 +1049,14 @@ class Simplifier(object):
                 if x.next is not None:
                     assert x.right <= x.next.left
                 x = x.next
+
+
+def base64_encode(metadata):
+    """
+    Returns the specified metadata bytes object encoded as an ASCII-safe
+    string.
+    """
+    return base64.b64encode(metadata).decode('utf8')
 
 
 if __name__ == "__main__":

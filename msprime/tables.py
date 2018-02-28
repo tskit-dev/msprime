@@ -96,16 +96,14 @@ class NodeTable(_msprime.NodeTable):
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
-    def __str__(self, encoding='utf8', base64_metadata=True):
+    def __str__(self):
         time = self.time
         flags = self.flags
         population = self.population
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tflags\tpopulation\ttime\tmetadata\n"
         for j in range(self.num_rows):
-            md = metadata[j]
-            if base64_metadata:
-                md = base64.b64encode(md).decode(encoding)
+            md = base64.b64encode(metadata[j]).decode('utf8')
             ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
                 j, flags[j], population[j], time[j], md)
         return ret[:-1]
@@ -598,16 +596,14 @@ class SiteTable(_msprime.SiteTable):
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
-    def __str__(self, encoding='utf8', base64_metadata=True):
+    def __str__(self):
         position = self.position
         ancestral_state = unpack_strings(
             self.ancestral_state, self.ancestral_state_offset)
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
-            md = metadata[j]
-            if base64_metadata:
-                md = base64.b64encode(md).decode(encoding)
+            md = base64.b64encode(metadata[j]).decode('utf8')
             ret += "{}\t{:.8f}\t{}\t{}\n".format(
                 j, position[j], ancestral_state[j], md)
         return ret[:-1]
@@ -805,7 +801,7 @@ class MutationTable(_msprime.MutationTable):
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
 
-    def __str__(self, encoding='utf8', base64_metadata=True):
+    def __str__(self):
         site = self.site
         node = self.node
         parent = self.parent
@@ -813,9 +809,7 @@ class MutationTable(_msprime.MutationTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tsite\tnode\tderived_state\tparent\tmetadata\n"
         for j in range(self.num_rows):
-            md = metadata[j]
-            if base64_metadata:
-                md = base64.b64encode(md).decode(encoding)
+            md = base64.b64encode(metadata[j]).decode('utf8')
             ret += "{}\t{}\t{}\t{}\t{}\t{}\n".format(
                 j, site[j], node[j], derived_state[j], parent[j], md)
         return ret[:-1]
