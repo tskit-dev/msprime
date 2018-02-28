@@ -141,6 +141,34 @@ test_fenwick(void)
 }
 
 static void
+test_fenwick_expand(void)
+{
+    fenwick_t t1, t2;
+    int64_t s;
+    size_t j, n;
+
+    for (n = 1; n < 100; n++) {
+        s = n;
+        CU_ASSERT(fenwick_alloc(&t1, n) == 0);
+        CU_ASSERT(fenwick_alloc(&t2, 3 * n) == 0);
+        for (j = 1; j <= n; j++) {
+            fenwick_increment(&t1, j, s);
+            fenwick_increment(&t2, j, s);
+            CU_ASSERT(fenwick_get_value(&t1, j) == s);
+            CU_ASSERT(fenwick_get_value(&t2, j) == s);
+        }
+        /* After we expand, the internal tree values should be identical */
+        CU_ASSERT(t1.size != t2.size);
+        CU_ASSERT(fenwick_expand(&t1, 2 * n) == 0);
+        CU_ASSERT_EQUAL(t1.size, t2.size);
+        CU_ASSERT_EQUAL(memcmp(t1.tree, t2.tree, (t2.size + 1) * sizeof(int64_t)), 0);
+        CU_ASSERT_EQUAL(memcmp(t1.values, t2.values, (t2.size + 1) * sizeof(int64_t)), 0);
+        CU_ASSERT(fenwick_free(&t1) == 0);
+        CU_ASSERT(fenwick_free(&t2) == 0);
+    }
+}
+
+static void
 test_single_locus_two_populations(void)
 {
     int ret;
@@ -1645,7 +1673,8 @@ main(int argc, char **argv)
     CU_pTest test;
     CU_pSuite suite;
     CU_TestInfo tests[] = {
-        {"test_fenwick_tree", test_fenwick},
+        {"test_fenwick", test_fenwick},
+        {"test_fenwick_expand", test_fenwick_expand},
         {"test_single_locus_two_populations", test_single_locus_two_populations},
         {"test_single_locus_many_populations", test_single_locus_many_populations},
         {"test_single_locus_historical_sample", test_single_locus_historical_sample},
