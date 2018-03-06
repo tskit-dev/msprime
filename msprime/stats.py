@@ -275,13 +275,14 @@ class GeneralStatCalculator(object):
 
     def Y3_vector(self, sample_sets, windows, indices):
         """
-        Finds the 'Y' statistic between three sample_sets.  The sample_sets should
-        be disjoint (the computation works fine, but if not the result depends
-        on the amount of overlap).  If the sample_sets are A, B, and C, then the
-        result gives the mean total length of any edge in the tree between a
-        and the most recent common ancestor of b and c, where a, b, and c are
-        random draws from A, B, and C respectively; or the density of mutations
-        segregating a|bc.
+        Finds the 'Y' statistic between three sample_sets.  The sample_sets
+        should be disjoint (the computation works fine, but if not the result
+        depends on the amount of overlap).  If the sample_sets are A, B, and C,
+        then define 'y3(A;B,C)' as the mean total length of any edge in the tree
+        between a and the most recent common ancestor of b and c, where a, b,
+        and c are random draws from A, B, and C respectively; or the density of
+        mutations segregating a|bc.
+        Then 'Y3' is y3(A;B,C) - 1/2 y3(B;A,C) - 1/2 y3(C;A,B).
 
         The result is, for each window, a vector whose k-th entry is
             Y(sample_sets[indices[k][0]], sample_sets[indices[k][1]],
@@ -300,7 +301,9 @@ class GeneralStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k]))
+            return [float(x[i] * (n[j] - x[j]) * (n[k] - x[k]) -
+                          0.5 * (x[j] * (n[i] - x[i]) * (n[k] - x[k]) +
+                                 x[k] * (n[i] - x[i]) * (n[j] - x[j])))
                     for i, j, k in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -319,10 +322,9 @@ class GeneralStatCalculator(object):
         Finds the 'Y' statistic for two groups of samples in sample_sets.
         The sample_sets should be disjoint (the computation works fine, but if
         not the result depends on the amount of overlap).
-        If the sample_sets are A and B then the result gives the mean total length
-        of any edge in the tree between a and the most recent common ancestor of
-        b and c, where a, b, and c are random draws from A, B, and B
-        respectively (without replacement).
+        If the sample_sets are A and B then 'Y2' is y3(A;B,B) - y3(B;A,A), where
+        'y3' is defined in :meth:`Y3_vector` and draws from B are without
+        replacement.
 
         The result is, for each window, a vector whose k-th entry is
             Y2(sample_sets[indices[k][0]], sample_sets[indices[k][1]]).
@@ -340,7 +342,8 @@ class GeneralStatCalculator(object):
         n = [len(x) for x in sample_sets]
 
         def f(x):
-            return [float(x[i] * (n[j] - x[j]) * (n[j] - x[j] - 1))
+            return [float(x[i] * (n[j] - x[j]) * (n[j] - x[j] - 1) -
+                          x[j] * (n[i] - x[i]) * (n[i] - x[i] - 1))
                     for i, j in indices]
 
         out = self.tree_stat_vector(sample_sets, weight_fun=f, windows=windows)
@@ -355,10 +358,9 @@ class GeneralStatCalculator(object):
         """
         Finds the 'Y1' statistic within each set of samples in sample_sets. The
         sample_sets should be disjoint (the computation works fine, but if not
-        the result depends on the amount of overlap).  For the sample set A, the
-        result gives the mean total length of any edge in the tree between a
-        and the most recent common ancestor of b and c, where a, b, and c are
-        random draws from A, without replacement.
+        the result depends on the amount of overlap).  For the sample set A,
+        define 'Y1' as y3(A;A,A) where 'y3' is defined in :meth:`Y3_vector` and
+        draws from A are without replacement.
 
         The result is, for each window, a vector whose k-th entry is
             Y1(sample_sets[k]).
@@ -389,20 +391,6 @@ class GeneralStatCalculator(object):
         return self.Y2_vector(sample_sets, windows, indices=[(0, 1)])
 
     def Y3(self, sample_sets, windows):
-        """
-        Finds the 'Y' statistic between the three groups of samples in
-        sample_sets. The sample_sets should be disjoint (the computation works
-        fine, but if not the result depends on the amount of overlap).  If the
-        sample_sets are A, B, and C, then the result gives the mean total
-        length of any edge in the tree between a and the most recent common
-        ancestor of b and c, where a, b, and c are random draws from A, B, and
-        C respectively.
-
-        :param list sample_sets: A list of *three* sets of IDs of samples: (A,B,C).
-        :param iterable windows: The breakpoints of the windows (including start
-            and end, so has one more entry than number of windows).
-        :return: A list of numeric values computed separately on each window.
-        """
         return self.Y3_vector(sample_sets, windows, indices=[(0, 1, 2)])
 
     def f4_vector(self, sample_sets, windows, indices):

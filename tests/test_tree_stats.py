@@ -95,6 +95,11 @@ class PythonBranchLengthStatCalculator(object):
         return S/((end-begin)*len(X)*len(Y))
 
     def Y3(self, X, Y, Z, begin=0.0, end=None):
+        return self.y3(X, Y, Z, begin, end) - 0.5 * (
+            self.y3(Y, X, Z, begin, end) +
+            self.y3(Z, X, Y, begin, end))
+
+    def y3(self, X, Y, Z, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         S = 0
@@ -128,6 +133,9 @@ class PythonBranchLengthStatCalculator(object):
         return S/((end - begin) * len(X) * len(Y) * len(Z))
 
     def Y2(self, X, Y, begin=0.0, end=None):
+        return self.y2(X, Y, begin, end) - self.y2(Y, X, begin, end)
+
+    def y2(self, X, Y, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         S = 0
@@ -369,6 +377,11 @@ class PythonSiteStatCalculator(object):
         return S/((end - begin) * len(X) * len(Y))
 
     def Y3(self, X, Y, Z, begin=0.0, end=None):
+        return self.y3(X, Y, Z, begin, end) - 0.5 * (
+            self.y3(Y, X, Z, begin, end) +
+            self.y3(Z, X, Y, begin, end))
+
+    def y3(self, X, Y, Z, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         haps = list(self.tree_sequence.haplotypes())
@@ -386,6 +399,9 @@ class PythonSiteStatCalculator(object):
         return S/((end - begin) * len(X) * len(Y) * len(Z))
 
     def Y2(self, X, Y, begin=0.0, end=None):
+        return self.y2(X, Y, begin, end) - self.y2(Y, X, begin, end)
+
+    def y2(self, X, Y, begin=0.0, end=None):
         if end is None:
             end = self.tree_sequence.sequence_length
         haps = list(self.tree_sequence.haplotypes())
@@ -813,7 +829,7 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
     seed = 21
 
     def test_case_1(self):
-        # With mutations:
+        # With mutations (infinite sites):
         #
         # 1.0          6
         # 0.7         / \                                    5
@@ -828,8 +844,16 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         branch_true_diversity_01 = 2*(1 * (0.2-0) + 0.5 * (0.8-0.2) + 0.7 * (1.0-0.8))
         branch_true_diversity_02 = 2*(1 * (0.2-0) + 0.4 * (0.8-0.2) + 0.7 * (1.0-0.8))
         branch_true_diversity_12 = 2*(0.5 * (0.2-0) + 0.5 * (0.8-0.2) + 0.5 * (1.0-0.8))
-        branch_true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2)
-        site_true_Y = 3 + 0 + 1
+        # y(0;1,2) - 0.5 ( y(1;0,2) + y(2;0,1))
+        # assume branch lengths are same on alternative topologies and distances
+        # are measured to UNROOTED mrca
+        branch_true_Y = 0.2*(1 + 0.5) + 0.6*(0.4) + 0.2*(0.7+0.2) - 0.5 * (
+            0.2*(0.5) + 0.6*(0.5 + 0.1) + 0.2*(0.5) +
+            0.2*(0.5) + 0.6*(0.4) + 0.2*(0.5)
+        )
+        # 0|12 - 0.5 * ( 1|02 + 2|01), where 0|12 counts sites that separate 
+        # 0 from both 1 and 2; with infinite sites all muts are separating 
+        site_true_Y = 3 + 0 + 1 - 0.5 * ((1 + 1 + 1) + (1 + 1 + 1))
 
         nodes = six.StringIO("""\
         id      is_sample   time
@@ -919,9 +943,16 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         # Y-statistic for (0/12)
         A = [[0], [1, 2]]
 
-        def f(x):
+        def f1(x):
             return float(((x[0] == 1) and (x[1] == 0))
                          or ((x[0] == 0) and (x[1] == 2)))/2.0
+
+        def f2(x):
+            return float(((x[1] == 1) and (x[0] == 0))
+                         or ((x[1] == 0) and (x[1] == 1)))/2.0
+
+        def f(x):
+            return f1(x) - f2(x)
 
         # tree lengths:
         branch_tsc_Y = branch_tsc.Y3([[0], [1], [2]], [0.0, 1.0])[0][0]
@@ -990,7 +1021,9 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         #          (0.0, 0.2),        (0.2, 0.8),       (0.8, 1.0)
         # genotypes:
         #       0     2       0        1   0   1       0   2       3
-        site_true_Y = 0 + 1 + 1
+        # computing Y on 3 sites with tip genotypes as above:
+        # Y(0;1, 2) = 0|12 - 0.5 * (1|02 + 2|01)
+        site_true_Y = 0 + 1 + 1 - 0.5 *((1 + 0 + 1) + (0 + 0 + 1))
 
         nodes = six.StringIO("""\
         id      is_sample   time
@@ -1086,12 +1119,17 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         branch_true_mean_diversity = (
             0 + branch_true_diversity_02 + branch_true_diversity_01
             + branch_true_diversity_12) / 4
-        # Y(0;1, 2)
-        branch_true_Y = 0.2*4 + 0.2*(4+2) + 0.2*4 + 0.2*2 + 0.2*(5+1)
+        # y(0;1, 2) - 0.5 (y(1;0,2) + y(2;0,1)
+        # assume branch lengths are same on alternative topologies and distances
+        # are measured to UNROOTED mrca
+        branch_true_Y = 0.2*4 + 0.2*(4+2) + 0.2*4 + 0.2*2 + 0.2*(5+1) - 0.5 * (
+            (0.2*4 + 0.2*2 + 0.2*4 + 0.2*2 + 0.2*4) +
+            (0.2*(5+1) + 0.2*2 + 0.2*(5+1) + 0.1*(5+3) + 0.1*(4+2) + 0.2*4)
+        )
 
         # site stats
-        # Y(0;1, 2)
-        site_true_Y = 1
+        # Y(0;1, 2) = 0|12 - 0.5 * (1|02 + 2|01)
+        site_true_Y = 1 - 0.5 * (1 + 1)
 
         nodes = six.StringIO("""\
         is_sample       time    population
@@ -1184,9 +1222,16 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         # Y-statistic for (0/12)
         A = [[0], [1, 2]]
 
-        def f(x):
+        def f1(x):
             return float(((x[0] == 1) and (x[1] == 0))
                          or ((x[0] == 0) and (x[1] == 2)))/2.0
+
+        def f2(x):
+            return float(((x[1] == 1) and (x[0] == 0))
+                         or ((x[1] == 0) and (x[1] == 1)))/2.0
+
+        def f(x):
+            return f1(x) - f2(x)
 
         # tree lengths:
         self.assertAlmostEqual(py_branch_tsc.Y3([0], [1], [2]), branch_true_Y)
