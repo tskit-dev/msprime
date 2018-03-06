@@ -41,6 +41,10 @@ tags:
 clean:
 	rm -f main tests simulation_tests *.o *.gcda *.gcno
 
+debian-tests: CC=h5cc
+debian-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage
+debian-tests: tests simulation_tests
+
 ubuntu-tests: CC=gcc
 ubuntu-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
 ubuntu-tests: tests simulation_tests
