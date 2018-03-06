@@ -1,0 +1,54 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.5.5
+    working_directory: /home/circleci/msprime
+    steps:
+      - checkout
+      - run: sudo chown -R circleci:circleci *
+      - restore_cache:
+          key: msprime-{{ .Branch }}
+      - run:
+          name: Install dependencies and set path
+          command: |
+            sudo apt-get update
+            sudo apt-get install libgsl0-dev libhdf5-serial-dev libcunit1-dev libconfig-dev
+            pip install --user -r requirements/development.txt
+            # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
+            echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
+      - save_cache:
+          key: msprime-{{ .Branch }}
+          paths:
+            - "/home/circleci/.local"
+      - run:
+          name: Compile
+          command: |
+            CC=h5cc CFLAGS=--coverage python setup.py build_ext --inplace
+            make -C lib debian-tests
+      - run:
+          name: Run highlevel tests and upload coverage
+          command: |
+            flake8 --max-line-length 89 setup.py msprime tests
+            nosetests -v --with-coverage --cover-package msprime \
+            --cover-branches --cover-erase --cover-xml \
+            --cover-inclusive tests
+            codecov -X gcov -F python
+            rm .coverage
+      - run:
+          name: Run the low-level tests.
+          command: |
+            ./lib/tests
+            ./lib/simulation_tests
+      - run:
+          name: Run gcov manually, as the one used in codecov doesn't work here.
+          command: |
+            gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
+            find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
+            codecov -X gcov -F C
+      - run:
+          name: Make sure the docs build.
+          command: make -C docs
+      - run:
+          name: Make sure we can build a distribution tarball.
+          command: python setup.py sdist
