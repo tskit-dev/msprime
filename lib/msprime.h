@@ -98,12 +98,17 @@ typedef struct {
     double c; // constant
 } dirac_coalescent_t;
 
+typedef struct {
+    double num_dtwf_generations;
+} dtwf_t;
+
 typedef struct _simulation_model_t {
     int type;
     double population_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
+        dtwf_t dtwf;
     } params;
     /* Time and rate conversions */
     double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
@@ -475,7 +480,8 @@ typedef struct {
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
 int msp_set_simulation_model(msp_t *self, int model, double population_size);
-int msp_set_simulation_model_dtwf(msp_t *self, double population_size);
+int msp_set_simulation_model_dtwf(msp_t *self, double population_size,
+        double num_dtwf_generations);
 int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
     double c);
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,

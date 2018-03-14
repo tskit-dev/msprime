@@ -2263,6 +2263,7 @@ msp_dtwf_generation(msp_t *self)
 
         pop = &self->populations[j];
         N = (uint32_t) msp_get_population_size(self, pop);
+        /* printf("%u parents to choose from\n", N); */
 
         // Allocate memory for linked list of offspring per parent
         parents = calloc(N, sizeof(segment_list_t *));
@@ -2374,40 +2375,34 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     size_t transition_pop_size = 0;
+    double num_dtwf_generations;
+    
+    num_dtwf_generations = self->model.params.dtwf.num_dtwf_generations;
 
-    printf("Running dtwf simulations...\n");
-    while (msp_get_num_ancestors(self) > 0 && self->time < 300) {
+    /* printf("Running %f dtwf generations...\n", num_dtwf_generations); */
+    /* printf("Starting with %lu ancestors\n", msp_get_num_ancestors(self)); */
+    while (msp_get_num_ancestors(self) > 0) {
+        if (self->time == num_dtwf_generations) {
+            break;
+        }
+        /* printf("%f\n", self->time); */
         self->time++;
         ret = msp_dtwf_generation(self);
         if (ret != 0) {
             goto out;
         }
     }
-    printf("dtwf simulations complete\n");
-    printf("%lu ancestors remaining\n", msp_get_num_ancestors(self));
+    /* printf("dtwf simulations complete\n"); */
+    /* printf("%lu ancestors remaining\n", msp_get_num_ancestors(self)); */
 
-    // For testing hybrid model
-    printf("Running coalescent simulation...\n");
-    //
-    // NOTE: Hack to set proper population size in coalescent simulations
-    // TODO: More work to be done to set proper configuration +t1
-    // * Try populate_tables before transition?
-    //
-    /* #<{(| Create the tree_sequence from the state of the simulator. |)}># */
-    /* ret = msp_populate_tables(msp, recomb_map, nodes, edges, migrations); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
-
-    /* transition_pop_size = msp_get_num_ancestors(self); */
-    transition_pop_size = 1;
+    transition_pop_size = 1; //TODO: Verify correct value
     msp_set_simulation_model(self, MSP_MODEL_HUDSON, (double) transition_pop_size);
+    /* msp_set_population_configuration */
     ret = msp_run_coalescent(self, max_time, max_events);
-    
     if (ret != 0) {
         goto out;
     }
-    printf("Coalescent simulation complete\n");
+    /* printf("Coalescent simulation complete\n"); */
 out:
     return ret;
 }
@@ -2474,6 +2469,9 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
         scaled_time = self->model.model_time_to_generations(&self->model, node->time);
+        /* printf("Recording node with model time %f\n", node->time); */
+        /* printf("Scaled time: %f\n", scaled_time); */
+        /* printf("Model name: %s\n", msp_get_model_name(self)); */
         ret = node_table_add_row(nodes, node->flags, scaled_time, node->population,
                 NULL, 0);
         if (ret < 0) {
@@ -3835,13 +3833,16 @@ out:
 }
 
 int
-msp_set_simulation_model_dtwf(msp_t *self, double population_size)
+msp_set_simulation_model_dtwf(msp_t *self, double population_size,
+        double num_dtwf_generations)
 {
     int ret = 0;
     ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, population_size);
     if (ret != 0) {
         goto out;
     }
+    /* printf("Setting model to MSP_MODEL_DTWF\n"); */
+    self->model.params.dtwf.num_dtwf_generations = num_dtwf_generations;
     self->model.model_time_to_generations = dtwf_model_time_to_generations;
     self->model.generations_to_model_time = dtwf_generations_to_model_time;
     self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;

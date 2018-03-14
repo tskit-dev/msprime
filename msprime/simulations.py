@@ -986,14 +986,6 @@ class SmcPrimeApproxCoalescent(SimulationModel):
     name = "smc_prime"
 
 
-class DiscreteTimeWrightFisher(SimulationModel):
-    """
-    A discrete backwards-time Wright Fisher model, with back-and-forth
-    recombination
-    """
-    name = 'dtwf'
-
-
 class ParametricSimulationModel(SimulationModel):
     """
     The superclass of simulation models that require extra parameters.
@@ -1002,6 +994,18 @@ class ParametricSimulationModel(SimulationModel):
         d = super(ParametricSimulationModel, self).get_ll_representation()
         d.update(self.__dict__)
         return d
+
+
+class DiscreteTimeWrightFisher(ParametricSimulationModel):
+    """
+    A discrete backwards-time Wright Fisher model, with back-and-forth
+    recombination
+    """
+    name = 'dtwf'
+
+    def __init__(self, population_size=1, num_dtwf_generations=-1):
+        self.population_size = population_size
+        self.num_dtwf_generations = num_dtwf_generations
 
 
 class BetaCoalescent(ParametricSimulationModel):

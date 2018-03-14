@@ -67,4 +67,4 @@ table_example: table_example.c
 
 # Make sure that all the files are compiled as C code.
 table_example_cpp: table_example_cpp.cc tables.o object_heap.o util.o
-	h5c++ -o table_example_cpp table_example_cpp.cc tables.o object_heap.o avl.o util.o
+	h5c++ -std=c++11 -o table_example_cpp table_example_cpp.cc tables.o object_heap.o avl.o util.o
