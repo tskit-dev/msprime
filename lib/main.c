@@ -29,7 +29,7 @@
 #include "argtable3.h"
 
 #include "msprime.h"
-#include "err.h"
+#include "util.h"
 
 /* This file defines a crude CLI for msprime. It is intended for development
  * use only.
@@ -835,47 +835,20 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutation_params_t mutation_params;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t *msp = calloc(1, sizeof(msp_t));
-    tree_sequence_t *tree_seq = calloc(1, sizeof(tree_sequence_t));
     recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
     mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
-    node_table_t *nodes = malloc(sizeof(node_table_t));
-    edge_table_t *edges = malloc(sizeof(edge_table_t));
-    site_table_t *sites = malloc(sizeof(site_table_t));
-    mutation_table_t *mutations = malloc(sizeof(mutation_table_t));
-    migration_table_t *migrations = malloc(sizeof(migration_table_t));
-    provenance_table_t *provenance = malloc(sizeof(provenance_table_t));
+    table_collection_t tables;
+    tree_sequence_t tree_seq;
 
-    if (rng == NULL || msp == NULL || tree_seq == NULL || recomb_map == NULL
-            || mutgen == NULL || nodes == NULL || edges == NULL
-            || sites == NULL || mutations == NULL || migrations == NULL
-            || provenance == NULL) {
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    if (ret != 0) {
+        goto out;
+    }
+    if (rng == NULL || msp == NULL || recomb_map == NULL || mutgen == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = edge_table_alloc(edges, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = node_table_alloc(nodes, 0, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = site_table_alloc(sites, 0, 0, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_alloc(mutations, 0, 0, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = migration_table_alloc(migrations, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = provenance_table_alloc(provenance, 0, 0, 0);
     if (ret != 0) {
         goto out;
     }
@@ -888,12 +861,8 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_initialise(tree_seq);
-    if (ret != 0) {
-        goto out;
-    }
 
-    record_provenance(provenance);
+    record_provenance(&tables.provenances);
 
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
@@ -917,51 +886,44 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             goto out;
         }
         /* Create the tree_sequence from the state of the simulator. */
-        ret = msp_populate_tables(msp, recomb_map, nodes, edges, migrations);
+        /* TODO this is messy; we should pass the table_collection to populate_tables */
+        tables.sequence_length = recomb_map->sequence_length;
+        ret = msp_populate_tables(msp, recomb_map, &tables.nodes, &tables.edges,
+                &tables.migrations);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, nodes, edges);
+        ret = mutgen_generate_tables_tmp(mutgen, &tables.nodes, &tables.edges);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_populate_tables(mutgen, sites, mutations);
+        ret = mutgen_populate_tables(mutgen, &tables.sites, &tables.mutations);
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables(tree_seq,
-                recomb_map_get_sequence_length(recomb_map),
-                nodes, edges, migrations, sites, mutations, provenance, 0);
+        ret = tree_sequence_load_tables(&tree_seq, &tables, 0);
         if (ret != 0) {
             goto out;
         }
         if (output_file != NULL) {
-            ret = tree_sequence_dump(tree_seq, output_file, 0);
+            ret = tree_sequence_dump(&tree_seq, output_file, 0);
             if (ret != 0) {
                 goto out;
             }
         }
         if (verbose >= 1) {
-            node_table_print_state(nodes, stdout);
-            edge_table_print_state(edges, stdout);
-            site_table_print_state(sites, stdout);
-            mutation_table_print_state(mutations, stdout);
-            migration_table_print_state(migrations, stdout);
-            provenance_table_print_state(provenance, stdout);
+            table_collection_print_state(&tables, stdout);
             printf("-----------------\n");
             mutgen_print_state(mutgen, stdout);
             printf("-----------------\n");
-            tree_sequence_print_state(tree_seq, stdout);
+            tree_sequence_print_state(&tree_seq, stdout);
         }
+        tree_sequence_free(&tree_seq);
     }
 out:
     if (msp != NULL) {
         msp_free(msp);
         free(msp);
-    }
-    if (tree_seq != NULL) {
-        tree_sequence_free(tree_seq);
-        free(tree_seq);
     }
     if (recomb_map != NULL) {
         recomb_map_free(recomb_map);
@@ -974,30 +936,7 @@ out:
     if (rng != NULL) {
         gsl_rng_free(rng);
     }
-    if (edges != NULL) {
-        edge_table_free(edges);
-        free(edges);
-    }
-    if (nodes != NULL) {
-        node_table_free(nodes);
-        free(nodes);
-    }
-    if (mutations != NULL) {
-        mutation_table_free(mutations);
-        free(mutations);
-    }
-    if (sites != NULL) {
-        site_table_free(sites);
-        free(sites);
-    }
-    if (migrations != NULL) {
-        migration_table_free(migrations);
-        free(migrations);
-    }
-    if (provenance != NULL) {
-        provenance_table_free(provenance);
-        free(provenance);
-    }
+    table_collection_free(&tables);
     if (ret != 0) {
         printf("error occured:%d:%s\n", ret, msp_strerror(ret));
     }
@@ -1006,11 +945,7 @@ out:
 static void
 load_tree_sequence(tree_sequence_t *ts, const char *filename)
 {
-    int ret = tree_sequence_initialise(ts);
-    if (ret != 0) {
-        fatal_library_error(ret, "Init error");
-    }
-    ret = tree_sequence_load(ts, filename, 0);
+    int ret = tree_sequence_load(ts, filename, 0);
     if (ret != 0) {
         fatal_library_error(ret, "Load error");
     }
@@ -1112,10 +1047,6 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     ret = tree_sequence_get_samples(&ts, &samples);
     if (ret != 0) {
         fatal_library_error(ret, "get_samples");
-    }
-    ret = tree_sequence_initialise(&subset);
-    if (ret != 0) {
-        fatal_library_error(ret, "init error");
     }
     ret = tree_sequence_simplify(&ts, samples, num_samples, flags, &subset, NULL);
     if (ret != 0) {

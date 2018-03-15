@@ -21,7 +21,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "err.h"
+#include "util.h"
 #include "object_heap.h"
 #include "msprime.h"
 

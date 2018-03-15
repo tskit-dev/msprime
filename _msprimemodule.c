@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2014-2017 University of Oxford
+** Copyright (C) 2014-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -4004,7 +4004,6 @@ static int
 TreeSequence_alloc(TreeSequence *self)
 {
     int ret = -1;
-    int err;
 
     if (self->tree_sequence != NULL) {
         tree_sequence_free(self->tree_sequence);
@@ -4015,11 +4014,7 @@ TreeSequence_alloc(TreeSequence *self)
         PyErr_NoMemory();
         goto out;
     }
-    err = tree_sequence_initialise(self->tree_sequence);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    memset(self->tree_sequence, 0, sizeof(*self->tree_sequence));
     ret = 0;
 out:
     return ret;
@@ -4078,16 +4073,20 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     ProvenanceTable *py_provenances = NULL;
-    node_table_t *nodes = NULL;
-    edge_table_t *edges = NULL;
-    migration_table_t *migrations = NULL;
-    mutation_table_t *mutations = NULL;
-    site_table_t *sites = NULL;
-    provenance_table_t *provenances = NULL;
+    table_collection_t tables;
     double sequence_length = 0.0;
-
     static char *kwlist[] = {"nodes", "edges", "migrations",
         "sites", "mutations", "provenances", "sequence_length", NULL};
+
+    /* For now we keep a local table collection object, but we'll want to
+     * update this method to take a TableCollection object. The tricky
+     * bit is keeping API compatability with existing code, but hopefully
+     * this can be handled at the high-level API. */
+    err = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    if (ret != 0) {
+        handle_library_error(err);
+        goto out;
+    }
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
@@ -4102,52 +4101,81 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    nodes = py_nodes->node_table;
+    err = node_table_copy(py_nodes->node_table, &tables.nodes);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
-    edges = py_edges->edge_table;
+    err = edge_table_copy(py_edges->edge_table, &tables.edges);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+
     if (py_migrations != NULL) {
         if (MigrationTable_check_state(py_migrations) != 0) {
             goto out;
         }
-        migrations = py_migrations->migration_table;
+        err = migration_table_copy(py_migrations->migration_table, &tables.migrations);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
+
     if (py_sites != NULL) {
         if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
-        sites = py_sites->site_table;
+        err = site_table_copy(py_sites->site_table, &tables.sites);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
+
     if (py_mutations != NULL) {
         if (MutationTable_check_state(py_mutations) != 0) {
             goto out;
         }
-        mutations = py_mutations->mutation_table;
+        err = mutation_table_copy(py_mutations->mutation_table, &tables.mutations);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
+
     if (py_provenances != NULL) {
         if (ProvenanceTable_check_state(py_provenances) != 0) {
             goto out;
         }
-        provenances = py_provenances->provenance_table;
+        err = provenance_table_copy(py_provenances->provenance_table, &tables.provenances);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
-    if ((mutations == NULL) != (sites == NULL)) {
+    if ((py_mutations == NULL) != (py_sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
         goto out;
     }
-
     err = TreeSequence_alloc(self);
     if (err != 0) {
         goto out;
     }
-    err = tree_sequence_load_tables(self->tree_sequence, sequence_length,
-        nodes, edges, migrations, sites, mutations, provenances, 0);
+    tables.sequence_length = sequence_length;
+    err = tree_sequence_load_tables(self->tree_sequence, &tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
+    table_collection_free(&tables);
     return ret;
 }
 
@@ -4162,14 +4190,19 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     ProvenanceTable *py_provenances = NULL;
-    node_table_t *nodes = NULL;
-    edge_table_t *edges = NULL;
-    migration_table_t *migrations = NULL;
-    site_table_t *sites = NULL;
-    mutation_table_t *mutations = NULL;
-    provenance_table_t *provenances = NULL;
+    table_collection_t tables;
     static char *kwlist[] = {"nodes", "edges", "migrations",
         "sites", "mutations", "provenances", NULL};
+
+    /* For now we keep a local table collection object, but we'll want to
+     * update this method to take a TableCollection object. The tricky
+     * bit is keeping API compatability with existing code, but hopefully
+     * this can be handled at the high-level API. */
+    err = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    if (ret != 0) {
+        handle_library_error(err);
+        goto out;
+    }
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
             &NodeTableType, &py_nodes,
@@ -4183,50 +4216,80 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
+    err = tree_sequence_dump_tables(self->tree_sequence, &tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    nodes = py_nodes->node_table;
+    err = node_table_copy(&tables.nodes, py_nodes->node_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
-    edges = py_edges->edge_table;
+    err = edge_table_copy(&tables.edges, py_edges->edge_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+
     if (py_migrations != NULL) {
         if (MigrationTable_check_state(py_migrations) != 0) {
             goto out;
         }
-        migrations = py_migrations->migration_table;
+        err = migration_table_copy(&tables.migrations, py_migrations->migration_table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
+
     if (py_sites != NULL) {
         if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
-        sites = py_sites->site_table;
+        err = site_table_copy(&tables.sites, py_sites->site_table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
     if (py_mutations != NULL) {
         if (MutationTable_check_state(py_mutations) != 0) {
             goto out;
         }
-        mutations = py_mutations->mutation_table;
+        err = mutation_table_copy(&tables.mutations, py_mutations->mutation_table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
-    if ((mutations == NULL) != (sites == NULL)) {
+
+    if ((py_mutations == NULL) != (py_sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both mutations and sites");
         goto out;
     }
+
     if (py_provenances != NULL) {
         if (ProvenanceTable_check_state(py_provenances) != 0) {
             goto out;
         }
-        provenances = py_provenances->provenance_table;
-    }
-    err = tree_sequence_dump_tables(self->tree_sequence,
-        nodes, edges, migrations, sites, mutations, provenances, 0);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
+        err = provenance_table_copy(&tables.provenances, py_provenances->provenance_table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
     ret = Py_BuildValue("");
 out:
+    table_collection_free(&tables);
     return ret;
 }
 

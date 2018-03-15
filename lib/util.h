@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2016 University of Oxford
+** Copyright (C) 2015-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -16,8 +16,8 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef __ERR_H__
-#define __ERR_H__
+#ifndef __UTIL_H__
+#define __UTIL_H__
 
 /*
  * raise a compiler warning if a potentially error raising function's return
@@ -29,6 +29,33 @@
     #define WARN_UNUSED
 #endif
 
+#define MSP_NODE_IS_SAMPLE 1
+
+/* The root node indicator */
+#define MSP_NULL_NODE (-1)
+/* Indicates the that the population ID has not been set. */
+#define MSP_NULL_POPULATION_ID (-1)
+/* There is no parent for a given mutation */
+#define MSP_NULL_MUTATION (-1)
+
+/* Flags for simplify() */
+#define MSP_FILTER_ZERO_MUTATION_SITES 1
+
+/* Flags for dump tables */
+#define MSP_ALLOC_TABLES 1
+
+/* Flags for load tables */
+#define MSP_BUILD_INDEXES 1
+
+/* Flags for tree sequence dump/load */
+#define MSP_DUMP_ZLIB_COMPRESSION 1
+#define MSP_LOAD_EXTENDED_CHECKS  1
+
+#define MSP_FILE_FORMAT_VERSION_MAJOR 10
+#define MSP_FILE_FORMAT_VERSION_MINOR 0
+
+
+/* Error codes */
 #define MSP_ERR_GENERIC                                             -1
 #define MSP_ERR_NO_MEMORY                                           -2
 #define MSP_ERR_IO                                                  -3
@@ -101,6 +128,11 @@
 #define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 
-#endif /*__ERR_H__*/
+const char * msp_strerror(int err);
+void __msp_safe_free(void **ptr);
 
-/* #define MSP_ERR_UNSORTED_MUTATION_NODES                             -45 */
+#define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
+#define MSP_MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MSP_MIN(a,b) ((a) < (b) ? (a) : (b))
+
+#endif /*__UTIL_H__*/

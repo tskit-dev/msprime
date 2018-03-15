@@ -9,11 +9,11 @@ EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
 CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS
 LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
-HEADERS=msprime.h err.h
+HEADERS=msprime.h util.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
-    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o table.o
+    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o
 
-all: main tests simulation_tests
+all: main simulation_tests tests table_example table_example_cpp
 
 # We need a seperate rule for avl.c as it won't pass the strict checks.
 avl.o: avl.c
@@ -39,7 +39,7 @@ tags:
 	etags *
 
 clean:
-	rm -f main tests simulation_tests *.o *.gcda *.gcno
+	rm -f main tests simulation_tests table_example table_example_cpp *.o *.gcda *.gcno
 
 debian-tests: CC=h5cc
 debian-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage
@@ -60,3 +60,11 @@ coverity:
 	make clean
 	/home/jk/admin/software/cov-analysis-linux64-8.5.0/bin/cov-build --dir cov-int make coverity-tests
 	tar -zcvf cov-int.tar.gz cov-int
+
+# Examples using just the tables API.
+table_example: table_example.c
+	h5cc -o table_example table_example.c tables.c object_heap.c avl.c util.c
+
+# Make sure that all the files are compiled as C code.
+table_example_cpp: table_example_cpp.cc tables.o object_heap.o util.o
+	h5c++ -std=c++11 -o table_example_cpp table_example_cpp.cc tables.o object_heap.o avl.o util.o

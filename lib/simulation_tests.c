@@ -1131,25 +1131,25 @@ test_simulation_replicates(void)
     msp_t msp;
     tree_sequence_t ts;
     mutgen_t mutgen;
-    node_table_t nodes;
-    edge_table_t edges;
-    site_table_t sites;
-    mutation_table_t mutations;
-    migration_table_t migrations;
+    table_collection_t tables;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
     /* Set all the table block sizes to 1 to force reallocs */
-    ret = node_table_alloc(&nodes, 1, 1);
+    ret = table_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edge_table_alloc(&edges, 1);
+    ret = node_table_alloc(&tables.nodes, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites, 1, 1, 1);
+    ret = edge_table_alloc(&tables.edges, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, 1, 1, 1);
+    ret = site_table_alloc(&tables.sites, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = migration_table_alloc(&migrations, 1);
+    ret = mutation_table_alloc(&tables.mutations, 1, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = migration_table_alloc(&tables.migrations, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = provenance_table_alloc(&tables.provenances, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     gsl_rng_set(rng, seed);
@@ -1182,22 +1182,22 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutgen_alloc(&mutgen, mutation_rate, rng, 0, 3);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_initialise(&ts);
-    CU_ASSERT_EQUAL(ret, 0);
 
     for (j = 0; j < num_replicates; j++) {
         ret = msp_run(&msp, DBL_MAX, SIZE_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_populate_tables(&msp, NULL, &nodes, &edges, &migrations);
+        ret = msp_populate_tables(&msp, NULL, &tables.nodes, &tables.edges,
+                &tables.migrations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = mutgen_generate_tables_tmp(&mutgen, &nodes, &edges);
+        ret = mutgen_generate_tables_tmp(&mutgen, &tables.nodes, &tables.edges);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = mutgen_populate_tables(&mutgen, &sites, &mutations);
+        ret = mutgen_populate_tables(&mutgen, &tables.sites, &tables.mutations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tree_sequence_load_tables(&ts, 0, &nodes, &edges, &migrations,
-                &sites, &mutations, NULL, 0);
+        /* TODO remove this when populate tables takes table_collection as arg */
+        tables.sequence_length = m;
+        ret = tree_sequence_load_tables(&ts, &tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_simulator_tree_sequence_equality(&msp, &ts, &mutgen, 1.0);
         tree_sequence_print_state(&ts, _devnull);
@@ -1205,21 +1205,15 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 0);
         CU_ASSERT_EQUAL_FATAL(msp_get_num_migrations(&msp), 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-
+        tree_sequence_free(&ts);
     }
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = tree_sequence_free(&ts);
-    CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     free(samples);
-    node_table_free(&nodes);
-    edge_table_free(&edges);
-    site_table_free(&sites);
-    mutation_table_free(&mutations);
-    migration_table_free(&migrations);
+    table_collection_free(&tables);
 }
 
 static void

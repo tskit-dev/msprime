@@ -21,7 +21,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "err.h"
+#include "util.h"
 #include "msprime.h"
 
 /* This infrastructure is left-over from an earlier more complex version

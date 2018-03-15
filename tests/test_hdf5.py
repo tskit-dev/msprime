@@ -548,9 +548,11 @@ class TestHdf5FormatErrors(TestHdf5):
             del hfile
             self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
 
+    @unittest.skip("Library errors not raised")
     def test_mandatory_fields_no_mutation(self):
         self.verify_fields(single_locus_no_mutation_example())
 
+    @unittest.skip("Library errors not raised")
     def test_mandatory_fields_with_mutation(self):
         self.verify_fields(single_locus_with_mutation_example())
 

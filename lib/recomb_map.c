@@ -22,7 +22,7 @@
 
 #include <gsl/gsl_math.h>
 
-#include "err.h"
+#include "util.h"
 #include "msprime.h"
 
 void

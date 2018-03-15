@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "err.h"
+#include "util.h"
 #include "fenwick.h"
 
 static void
