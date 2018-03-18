@@ -203,67 +203,6 @@ tree_sequence_free(tree_sequence_t *self)
 }
 
 static int
-check_offset_array(size_t num_rows, table_size_t *offset)
-{
-    int ret = MSP_ERR_BAD_OFFSET;
-    int j;
-
-    if (offset[0] != 0) {
-        goto out;
-    }
-    for (j = 0; j < (int) num_rows; j++) {
-        if (offset[j] > offset[j + 1]) {
-            goto out;
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
-tree_sequence_check_offsets(tree_sequence_t *self)
-{
-    int ret = 0;
-
-    ret = check_offset_array(self->nodes.num_records, self->nodes.metadata_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = check_offset_array(self->sites.num_records, self->sites.ancestral_state_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = check_offset_array(self->sites.num_records, self->sites.metadata_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = check_offset_array(self->mutations.num_records,
-            self->mutations.derived_state_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = check_offset_array(self->mutations.num_records,
-            self->mutations.metadata_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = check_offset_array(self->provenances.num_records,
-            self->provenances.timestamp_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = check_offset_array(self->provenances.num_records,
-            self->provenances.record_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static int
 tree_sequence_check(tree_sequence_t *self)
 {
     int ret = MSP_ERR_GENERIC;
@@ -684,10 +623,6 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     self->provenances.record_offset = self->tables->provenances.record_offset;
 
     ret = tree_sequence_init_nodes(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_check_offsets(self);
     if (ret != 0) {
         goto out;
     }

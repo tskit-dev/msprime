@@ -75,15 +75,18 @@ squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges)
     return ret;
 }
 
-
 /* Checks that the specified list of offsets is well-formed. */
 static int
-check_offsets(size_t num_rows, table_size_t *offsets)
+check_offsets(size_t num_rows, table_size_t *offsets, table_size_t length,
+        bool check_length)
 {
     int ret = MSP_ERR_BAD_OFFSET;
     size_t j;
 
     if (offsets[0] != 0) {
+        goto out;
+    }
+    if (check_length && offsets[num_rows] != length) {
         goto out;
     }
     for (j = 0; j < num_rows; j++) {
@@ -247,7 +250,7 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
             self->metadata_offset[self->num_rows + j + 1] = (table_size_t) self->metadata_length;
         }
     } else {
-        ret = check_offsets(num_rows, metadata_offset);
+        ret = check_offsets(num_rows, metadata_offset, 0, false);
         if (ret != 0) {
             goto out;
         }
@@ -786,7 +789,7 @@ site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
             self->metadata_offset[self->num_rows + j + 1] = (table_size_t) self->metadata_length;
         }
     } else {
-        ret = check_offsets(num_rows, metadata_offset);
+        ret = check_offsets(num_rows, metadata_offset, 0, false);
         if (ret != 0) {
             goto out;
         }
@@ -806,7 +809,7 @@ site_table_append_columns(site_table_t *self, size_t num_rows, double *position,
     self->metadata_offset[self->num_rows + num_rows] = self->metadata_length;
 
     /* Ancestral state column */
-    ret = check_offsets(num_rows, ancestral_state_offset);
+    ret = check_offsets(num_rows, ancestral_state_offset, 0, false);
     if (ret != 0) {
         goto out;
     }
@@ -1161,7 +1164,7 @@ mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t
             self->metadata_offset[self->num_rows + j + 1] = (table_size_t) self->metadata_length;
         }
     } else {
-        ret = check_offsets(num_rows, metadata_offset);
+        ret = check_offsets(num_rows, metadata_offset, 0, false);
         if (ret != 0) {
             goto out;
         }
@@ -1181,7 +1184,7 @@ mutation_table_append_columns(mutation_table_t *self, size_t num_rows, site_id_t
     self->metadata_offset[self->num_rows + num_rows] = self->metadata_length;
 
     /* Derived state column */
-    ret = check_offsets(num_rows, derived_state_offset);
+    ret = check_offsets(num_rows, derived_state_offset, 0, false);
     if (ret != 0) {
         goto out;
     }
@@ -1681,7 +1684,7 @@ provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
         goto out;
     }
 
-    ret = check_offsets(num_rows, timestamp_offset);
+    ret = check_offsets(num_rows, timestamp_offset, 0, false);
     if (ret != 0) {
         goto out;
     }
@@ -1698,7 +1701,7 @@ provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
             timestamp_length * sizeof(char));
     self->timestamp_length += timestamp_length;
 
-    ret = check_offsets(num_rows, record_offset);
+    ret = check_offsets(num_rows, record_offset, 0, false);
     if (ret != 0) {
         goto out;
     }
@@ -3696,7 +3699,7 @@ hdf5_file_read_dimensions(hdf5_file_t *self, hid_t file_id)
         }
     }
     /* provenance is a special case because we have no simple columns. We must
-     * have at least one rown in the offsets col or we have an error. */
+     * have at least one row in the offsets col or we have an error. */
     if (num_provenances == 0) {
         goto out;
     }
@@ -4348,6 +4351,51 @@ cmp_index_sort(const void *a, const void *b) {
     return ret;
 }
 
+static int
+table_collection_check_offsets(table_collection_t *self)
+{
+    int ret = 0;
+
+    ret = check_offsets(self->nodes.num_rows, self->nodes.metadata_offset,
+            self->nodes.metadata_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = check_offsets(self->sites.num_rows, self->sites.ancestral_state_offset,
+            self->sites.ancestral_state_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = check_offsets(self->sites.num_rows, self->sites.metadata_offset,
+            self->sites.metadata_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = check_offsets(self->mutations.num_rows, self->mutations.derived_state_offset,
+            self->mutations.derived_state_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = check_offsets(self->mutations.num_rows, self->mutations.metadata_offset,
+            self->mutations.metadata_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = check_offsets(self->provenances.num_rows, self->provenances.timestamp_offset,
+            self->provenances.timestamp_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = check_offsets(self->provenances.num_rows, self->provenances.record_offset,
+            self->provenances.record_length, true);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 int
 table_collection_print_state(table_collection_t *self, FILE *out)
 {
@@ -4574,6 +4622,7 @@ table_collection_load(table_collection_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
+    ret = table_collection_check_offsets(self);
 out:
     hdf5_file_free(&hdf5_file);
     return ret;
