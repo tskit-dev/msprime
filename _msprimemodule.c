@@ -6762,7 +6762,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *beta_s = NULL;
     PyObject *value;
     int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta;
-    double population_size, psi, c, alpha, truncation_point;
+    double population_size, psi, c, alpha, truncation_point, num_dtwf_generations;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -6822,7 +6822,12 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_dtwf) {
-        err = msp_set_simulation_model(self->sim, MSP_MODEL_DTWF, population_size);
+        value = get_dict_number(py_model, "num_dtwf_generations");
+        if (value == NULL) {
+            goto out;
+        }
+        num_dtwf_generations = PyFloat_AsDouble(value);
+        err = msp_set_simulation_model_dtwf(self->sim, population_size, num_dtwf_generations);
         /* err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_DTWF); */
     }
 
