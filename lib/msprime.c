@@ -269,8 +269,14 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->initial_populations[population_id].initial_size =
-        initial_size / model->population_size;
+    // NOTE: DTWF needs absolute population size
+    if (self->model.type == MSP_MODEL_DTWF) {
+        self->initial_populations[population_id].initial_size =
+            initial_size;
+    } else {
+        self->initial_populations[population_id].initial_size =
+            initial_size / model->population_size;
+    }
     self->initial_populations[population_id].growth_rate =
         model->generation_rate_to_model_rate(model, growth_rate);
     ret = 0;
@@ -1285,14 +1291,13 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ret = 0;
     int ix;
     double mu;
-    uint64_t k;
+    int64_t k;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
     mu = 1.0 / self->recombination_rate;
-    k = 1 + (uint64_t) x->left +
-        (uint64_t) gsl_ran_exponential(self->rng, mu);
+    k = 1 + x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
 
     s1.next = NULL;
     s2.next = NULL;
@@ -1323,9 +1328,13 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = z;
             x->next = NULL;
             x->right = (uint32_t) k;
+
+            /* msp_print_state(self, stdout); */
+            fenwick_increment(&self->links, x->id, k - z->right);
+
             assert(x->left < x->right);
             x = z;
-            k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
+            k = 1 + k + (int64_t) gsl_ran_exponential(self->rng, mu);
         }
         else if (x->right <= k && y != NULL && y->left >= k) {
             // Recombine in gap between segment and the next
@@ -1334,15 +1343,19 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             while (y->left >= k) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
-                k = 1 + k + (uint64_t) gsl_ran_exponential(self->rng, mu);
+                k = 1 + k + (int64_t) gsl_ran_exponential(self->rng, mu);
             }
             seg_tails[ix]->next = y;
             y->prev = seg_tails[ix];
             seg_tails[ix] = y;
             x = y;
+            z = y;
+            fenwick_set_value(&self->links, z->id, z->right - z->left - 1);
+
         } else {
             // Breakpoint in later segment
             x = y;
+            z = y;
         }
     }
     // Remove sentinal segments
@@ -2224,6 +2237,7 @@ msp_dtwf_generation(msp_t *self)
     int mig_source_pop, mig_dest_pop;
     double mu;
     uint32_t num_migrations, n;
+    int64_t num_links;
     size_t segment_mem_offset;
     population_t *pop;
     segment_t *x;
@@ -2238,10 +2252,18 @@ msp_dtwf_generation(msp_t *self)
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
     }
 
+    num_links = fenwick_get_total(&self->links);
+    ret = msp_sanity_check(self, num_links);
+    if (ret != 0) {
+        goto out;
+    }
+    msp_verify_segments(self);
+
     for (j = 0; j < self->num_populations; j++) {
 
         pop = &self->populations[j];
         N = (uint32_t) msp_get_population_size(self, pop);
+        /* printf("%u parents to choose from\n", N); */
 
         // Allocate memory for linked list of offspring per parent
         parents = calloc(N, sizeof(segment_list_t *));
@@ -2264,6 +2286,7 @@ msp_dtwf_generation(msp_t *self)
             parents[p] = s;
         }
 
+        msp_verify_segments(self);
         // Iterate through offspring of parent k, adding to avl_tree
         for (k = 0; k < N; k++) {
             for (s = parents[k]; s != NULL; s = s->next) {
@@ -2273,6 +2296,7 @@ msp_dtwf_generation(msp_t *self)
                 msp_free_avl_node(self, node);
 
                 // Recombine ancestor
+
                 if (self->recombination_rate > 0) {
                     ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
                     if (ret != 0) {
@@ -2300,6 +2324,7 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
         }
+        msp_verify_segments(self);
         free(parents);
         free(segment_mem);
         segment_mem = NULL;
@@ -2346,17 +2371,38 @@ out:
 
 /* The main event loop for the Wright Fisher model. */
 static int WARN_UNUSED
-msp_run_dtwf(msp_t *self, double max_time)
+msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
+    size_t transition_pop_size = 0;
+    double num_dtwf_generations;
 
-    while (msp_get_num_ancestors(self) > 0 && self->time < max_time) {
+    num_dtwf_generations = self->model.params.dtwf.num_dtwf_generations;
+
+    /* printf("Running %f dtwf generations...\n", num_dtwf_generations); */
+    /* printf("Starting with %lu ancestors\n", msp_get_num_ancestors(self)); */
+    while (msp_get_num_ancestors(self) > 0) {
+        if (self->time == num_dtwf_generations) {
+            break;
+        }
+        /* printf("%f\n", self->time); */
         self->time++;
         ret = msp_dtwf_generation(self);
         if (ret != 0) {
             goto out;
         }
     }
+    /* printf("dtwf simulations complete\n"); */
+    /* printf("%lu ancestors remaining\n", msp_get_num_ancestors(self)); */
+
+    transition_pop_size = 1; //TODO: Verify correct value
+    msp_set_simulation_model(self, MSP_MODEL_HUDSON, (double) transition_pop_size);
+    /* msp_set_population_configuration */
+    ret = msp_run_coalescent(self, max_time, max_events);
+    if (ret != 0) {
+        goto out;
+    }
+    /* printf("Coalescent simulation complete\n"); */
 out:
     return ret;
 }
@@ -2383,7 +2429,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     if (self->model.type == MSP_MODEL_DTWF) {
-        ret = msp_run_dtwf(self, scaled_time);
+        ret = msp_run_dtwf(self, scaled_time, max_events);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
@@ -2423,6 +2469,9 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
         scaled_time = self->model.model_time_to_generations(&self->model, node->time);
+        /* printf("Recording node with model time %f\n", node->time); */
+        /* printf("Scaled time: %f\n", scaled_time); */
+        /* printf("Model name: %s\n", msp_get_model_name(self)); */
         ret = node_table_add_row(nodes, node->flags, scaled_time, node->population,
                 NULL, 0);
         if (ret < 0) {
@@ -3784,13 +3833,16 @@ out:
 }
 
 int
-msp_set_simulation_model_dtwf(msp_t *self, double population_size)
+msp_set_simulation_model_dtwf(msp_t *self, double population_size,
+        double num_dtwf_generations)
 {
     int ret = 0;
     ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, population_size);
     if (ret != 0) {
         goto out;
     }
+    /* printf("Setting model to MSP_MODEL_DTWF\n"); */
+    self->model.params.dtwf.num_dtwf_generations = num_dtwf_generations;
     self->model.model_time_to_generations = dtwf_model_time_to_generations;
     self->model.generations_to_model_time = dtwf_generations_to_model_time;
     self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;

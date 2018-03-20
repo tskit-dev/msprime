@@ -923,6 +923,7 @@ test_dtwf_multi_locus_simulation(void)
     const char *model_name;
     size_t num_ca_events, num_re_events;
     double t;
+    double num_dtwf_generations = -1; // Do not switch to coalescent simulations
 
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -950,7 +951,7 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
+    ret = msp_set_simulation_model_dtwf(msp, n, num_dtwf_generations);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -983,7 +984,7 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
+    ret = msp_set_simulation_model_dtwf(msp, n, num_dtwf_generations);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
