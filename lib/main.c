@@ -117,7 +117,7 @@ read_model_config(msp_t *msp, config_t *config)
     config_setting_t *setting = config_lookup(config, "model");
     config_setting_t *s;
     const char *name;
-    double population_size, psi, c, alpha, truncation_point, num_dtwf_generations;
+    double population_size, psi, c, alpha, truncation_point;
 
     if (setting == NULL) {
         fatal_error("model is a required parameter");
@@ -138,19 +138,13 @@ read_model_config(msp_t *msp, config_t *config)
     population_size = config_setting_get_float(s);
     /* printf("Checking model specification\n"); */
     if (strcmp(name, "hudson") == 0) {
-        ret = msp_set_simulation_model(msp, MSP_MODEL_HUDSON, population_size);
+        ret = msp_set_simulation_model_hudson(msp, population_size);
     } else if (strcmp(name, "smc") == 0) {
-        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC, population_size);
+        ret = msp_set_simulation_model_smc(msp, population_size);
     } else if (strcmp(name, "smc_prime") == 0) {
-        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC_PRIME, population_size);
+        ret = msp_set_simulation_model_smc_prime(msp, population_size);
     } else if (strcmp(name, "dtwf") == 0) {
-        /* printf("Model detected as MSP_MODEL_DTWF\n"); */
-        s = config_setting_get_member(setting, "num_dtwf_generations");
-        if (s == NULL) {
-            fatal_error("number of DTWF generations not specified");
-        }
-        num_dtwf_generations = config_setting_get_float(s);
-        ret = msp_set_simulation_model_dtwf(msp, population_size, num_dtwf_generations);
+        ret = msp_set_simulation_model_dtwf(msp, population_size);
     } else if (strcmp(name, "dirac") == 0) {
         s = config_setting_get_member(setting, "psi");
         if (s == NULL) {

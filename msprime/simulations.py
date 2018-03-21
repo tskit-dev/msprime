@@ -316,6 +316,7 @@ class Simulator(object):
         self.samples = samples
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
+        self.ll_sim = None
         self.set_model(model, Ne)
         self.recombination_map = recombination_map
         self.random_generator = None
@@ -338,7 +339,6 @@ class Simulator(object):
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self.max_memory = sys.maxsize
-        self.ll_sim = None
         self.node_table = tables.NodeTable(block_size)
         self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
@@ -510,6 +510,8 @@ class Simulator(object):
                     "SimulationModel")
             model_instance = model
         self.model = model_instance
+        if self.ll_sim is not None:
+            self.ll_sim.set_model(self.model.get_ll_representation())
 
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
@@ -545,7 +547,7 @@ class Simulator(object):
             migration_block_size=self.migration_block_size)
         return ll_sim
 
-    def run(self):
+    def run(self, time=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -553,7 +555,9 @@ class Simulator(object):
             raise ValueError("A random generator instance must be set")
         if self.ll_sim is None:
             self.ll_sim = self.create_ll_instance()
-        self.ll_sim.run()
+        if time is None:
+            time = sys.float_info.max
+        self.ll_sim.run(time)
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """
@@ -996,16 +1000,15 @@ class ParametricSimulationModel(SimulationModel):
         return d
 
 
-class DiscreteTimeWrightFisher(ParametricSimulationModel):
+class DiscreteTimeWrightFisher(SimulationModel):
     """
     A discrete backwards-time Wright Fisher model, with back-and-forth
     recombination
     """
     name = 'dtwf'
 
-    def __init__(self, population_size=1, num_dtwf_generations=-1):
+    def __init__(self, population_size=1):
         self.population_size = population_size
-        self.num_dtwf_generations = num_dtwf_generations
 
 
 class BetaCoalescent(ParametricSimulationModel):
