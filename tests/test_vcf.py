@@ -122,8 +122,6 @@ class TestEquality(unittest.TestCase):
     Tests if the VCF file produced by the low level code is the
     same as one we generate here.
     """
-
-    @unittest.skip("Version not set on Circle")
     def test_equal(self):
         for datum in test_data:
             with tempfile.TemporaryFile("w+") as f:

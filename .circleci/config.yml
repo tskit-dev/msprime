@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.5.5
+      - image: circleci/python:3.6-stretch
     working_directory: /home/circleci/msprime
     steps:
       - checkout
@@ -24,15 +24,14 @@ jobs:
       - run:
           name: Compile
           command: |
-            CC=h5cc CFLAGS=--coverage python setup.py build_ext --inplace
+            CFLAGS=--coverage python setup.py build_ext --inplace
             make -C lib debian-tests
       - run:
           name: Run highlevel tests and upload coverage
           command: |
             flake8 --max-line-length 89 setup.py msprime tests
             nosetests -v --with-coverage --cover-package msprime \
-            --cover-branches --cover-erase --cover-xml \
-            --cover-inclusive tests
+              --cover-branches --cover-erase --cover-xml --cover-inclusive tests
             codecov -X gcov -F python
             rm .coverage
       - run:
