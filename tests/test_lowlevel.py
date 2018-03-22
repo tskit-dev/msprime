@@ -377,7 +377,6 @@ class TestMRCACalculator(unittest.TestCase):
                         self.assertEqual(mrca, sv.get_mrca(j, k))
 
 
-@unittest.skip("Version not set on Circle")
 class TestModule(tests.MsprimeTestCase):
     """
     Tests for module level stuff.
