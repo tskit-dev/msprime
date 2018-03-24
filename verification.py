@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 import numpy.random
 import statsmodels.api as sm
+import seaborn as sns
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
@@ -630,6 +631,41 @@ class SimulationVerifier(object):
         pyplot.savefig(filename)
         pyplot.close('all')
 
+    def run_dtwf_single_locus(self):
+        N = 1000
+        n = 10
+        num_replicates = 100
+
+        t_mrca_hudson = np.zeros(num_replicates)
+        replicates = msprime.simulate(n, Ne=N, num_replicates=num_replicates)
+        for j, ts in enumerate(replicates):
+            tree = ts.first()
+            t_mrca_hudson[j] = tree.time(tree.root)
+
+        t_mrca_dtwf = np.zeros(num_replicates)
+        replicates = msprime.simulate(
+            n, model=msprime.DiscreteTimeWrightFisher(N), num_replicates=num_replicates)
+        for j, ts in enumerate(replicates):
+            tree = ts.first()
+            t_mrca_dtwf[j] = tree.time(tree.root)
+
+        # TODO this should be handled at a higher level
+        basedir = "tmp__NOBACKUP__/dtwf_vs_coalescent_single_locus"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        sns.distplot(t_mrca_hudson)
+        sns.distplot(t_mrca_dtwf)
+        filename = os.path.join(basedir, "tmrca.png")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+
+    def add_dtwf_vs_coalescent_single_locus(self):
+        """
+        Checks the DTWF against the standard coalescent at a single locus.
+        """
+        self._instances["dtwf_vs_coalescent_single_locus"] = self.run_dtwf_single_locus
 
     def _get_xiDirac_mutation_stats(self, sample_size, num_repeat, mut_rate, rec_rate, num_loci):
         output = open("tmp", "w")
@@ -698,7 +734,6 @@ class SimulationVerifier(object):
             d["mig_events_{}".format(j)] = events
         df = pd.DataFrame(d)
         return df
-
 
     def run_xiDirac_kingman_check(self):
         print("Let's test here")
@@ -989,6 +1024,9 @@ def main():
 
     # Add XiDirac checks against standard coalescent.
     verifier.add_xiDirac_vs_kingman_coalescent_check()
+
+    # DTWF checks against coalescent.
+    verifier.add_dtwf_vs_coalescent_single_locus()
 
     keys = None
     if len(sys.argv) > 1:

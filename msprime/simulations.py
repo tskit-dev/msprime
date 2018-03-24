@@ -936,7 +936,6 @@ class SimulationModelChange(DemographicEvent):
         return "Population model changes to {}".format(self.model())
 
 
-
 class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
     def __init__(self, time, population=None, proportion=1.0, population_id=None):
