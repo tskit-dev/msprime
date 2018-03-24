@@ -122,6 +122,7 @@ typedef struct _msp_t {
     double recombination_rate;
     uint32_t num_populations;
     sample_t *samples;
+    simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;
     /* allocation block sizes */

@@ -862,7 +862,6 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-
     record_provenance(&tables.provenances);
 
     for (j = 0; j < num_replicates; j++) {
@@ -875,14 +874,15 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
+        msp_verify(msp);
         ret = msp_run(msp, DBL_MAX, UINT32_MAX);
         if (ret < 0) {
             goto out;
         }
-        msp_verify(msp);
         if (verbose >= 1) {
             ret = msp_print_state(msp, stdout);
         }
+        msp_verify(msp);
         if (ret != 0) {
             goto out;
         }

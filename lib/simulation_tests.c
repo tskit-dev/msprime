@@ -783,13 +783,15 @@ static void
 test_mixed_model_simulation(void)
 {
     int ret;
-    uint32_t j;
+    uint32_t j, k;
     uint32_t n = 10;
-    double N = 1000;
+    double N = 100;
     int model;
+    double initial_size, growth_rate;
     const char *model_name;
     table_collection_t tables;
     tree_sequence_t ts;
+    double g = -1.0 / 8192;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -801,12 +803,23 @@ test_mixed_model_simulation(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(msp, 3);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp, N);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* Set the populations to 1, 2, and 3N. We don't simulate them,
+     * but they should be equal at the end */
+    ret = msp_set_population_configuration(msp, 0, N, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 1, 2 * N, g);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 2, 3 * N, 2 * g);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
+
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -814,6 +827,13 @@ test_mixed_model_simulation(void)
     j = 0;
     while ((ret = msp_run(msp, j * 10, UINT32_MAX)) == 2) {
         msp_verify(msp);
+        /* Check that our populations and growth rates are still correct */
+        for (k = 0; k < 3; k++) {
+            ret = msp_get_population_configuration(msp, k, &initial_size, &growth_rate);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(initial_size, (k + 1) * N);
+            CU_ASSERT_EQUAL_FATAL(growth_rate, k * g);
+        }
         CU_ASSERT_FALSE(msp_is_completed(msp));
         if (j % 2 == 1) {
             model = msp_get_model(msp)->type;
@@ -832,9 +852,7 @@ test_mixed_model_simulation(void)
         }
         j++;
     }
-
-    /* msp_print_state(msp, stdout); */
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(msp));
     CU_ASSERT_TRUE(j > 5);
 
@@ -859,8 +877,6 @@ test_mixed_model_simulation(void)
     free(msp);
     free(samples);
 }
-
-
 
 static void
 test_dtwf_single_locus_simulation(void)
@@ -888,8 +904,6 @@ test_dtwf_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
-    ret = msp_set_population_configuration(msp, 0, n, 0);
-    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
@@ -998,7 +1012,7 @@ test_dtwf_multi_locus_simulation(void)
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
-    double migration_matrix[] = {0, 1, 1, 0};
+    double migration_matrix[] = {0, 0.1, 0.1, 0};
     const char *model_name;
     size_t num_ca_events, num_re_events;
     double t;
@@ -1017,10 +1031,6 @@ test_dtwf_multi_locus_simulation(void)
     ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(msp, 0, n / 4, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(msp, 1, n / 4, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(msp, 4, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1052,11 +1062,6 @@ test_dtwf_multi_locus_simulation(void)
     ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* DN: Hackish setting of pop size */
-    ret = msp_set_population_configuration(msp, 0, n / 4, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(msp, 1, n / 4, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(msp, 4, migration_matrix);
     ret = msp_set_num_loci(msp, m);
