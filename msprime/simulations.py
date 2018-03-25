@@ -933,7 +933,7 @@ class SimulationModelChange(DemographicEvent):
         }
 
     def __str__(self):
-        return "Population model changes to {}".format(self.model())
+        return "Population model changes to {}".format(self.model)
 
 
 class SimpleBottleneck(DemographicEvent):

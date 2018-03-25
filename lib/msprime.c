@@ -2255,6 +2255,9 @@ msp_dtwf_generation(msp_t *self)
     for (j = 0; j < self->num_populations; j++) {
 
         pop = &self->populations[j];
+        if (avl_count(&pop->ancestors) == 0) {
+            continue;
+        }
         /* For the DTWF, N for each population is the reference population size
          * from the model multiplied by the current population size, rounded
          * to the nearest integer. Thus, the population's size is always relative

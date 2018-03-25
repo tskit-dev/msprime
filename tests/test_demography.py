@@ -50,6 +50,35 @@ class TestBadDemographicParameters(unittest.TestCase):
                 ValueError, msprime.PopulationConfiguration, sample_size=bad_size)
 
 
+class TestBadDemographicEvents(unittest.TestCase):
+    """
+    Tests for input errors when creating demographic events.
+    """
+    def test_growth_rate_or_initial_size(self):
+        self.assertRaises(ValueError, msprime.PopulationParametersChange, time=0)
+
+    def test_bad_simulation_model(self):
+        for model in [None, "hudson", {}]:
+            self.assertRaises(
+                TypeError, msprime.SimulationModelChange, time=0, model=model)
+
+
+class TestDemographicEventStr(unittest.TestCase):
+    """
+    Make sure __str__ works for demographic events.
+    """
+    def test_defaults(self):
+        events = [
+            msprime.PopulationParametersChange(0, initial_size=1),
+            msprime.MigrationRateChange(0, 1),
+            msprime.MassMigration(0, 0),
+            msprime.SimulationModelChange(0, msprime.StandardCoalescent(1)),
+            msprime.SimpleBottleneck(0),
+            msprime.InstantaneousBottleneck(0)]
+        for event in events:
+            self.assertGreater(len(str(event)), 0)
+
+
 class TestDeprecatedParameters(unittest.TestCase):
     """
     Tests to check that aliased parameters are handled correctly.
@@ -876,7 +905,7 @@ class TestMigrationRecords(unittest.TestCase):
             self.assertLessEqual(mig.right, 1)
 
 
-class TestTimeUnits(unittest.TestCase):
+class TimeUnitsMixin(object):
     """
     Tests for time conversion between generations and coalescent
     units.
@@ -898,6 +927,7 @@ class TestTimeUnits(unittest.TestCase):
         ]
         reps = msprime.simulate(
             Ne=Ne,
+            model=self.model,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1, num_replicates=10, record_migrations=True)
@@ -928,6 +958,7 @@ class TestTimeUnits(unittest.TestCase):
         ]
         reps = msprime.simulate(
             Ne=Ne,
+            model=self.model,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1, num_replicates=10)
@@ -954,12 +985,22 @@ class TestTimeUnits(unittest.TestCase):
         ]
         reps = msprime.simulate(
             Ne=Ne,
+            model=self.model,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1, num_replicates=10)
         for ts in reps:
             tree = next(ts.trees())
             self.assertAlmostEqual(t, tree.time(tree.root), places=5)
+
+
+class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
+    model = "hudson"
+
+
+@unittest.skip("Problems with DTWF grow rates")
+class TestTimeUnitsWrightFisher(unittest.TestCase, TimeUnitsMixin):
+    model = "dtwf"
 
 
 class TestLowLevelConversions(unittest.TestCase):
@@ -1154,14 +1195,17 @@ class TestLowLevelConversions(unittest.TestCase):
                 self.assertEqual(d, dp)
 
 
-class TestHistoricalSampling(unittest.TestCase):
+class HistoricalSamplingMixin(object):
     """
     Tests to make sure historical sampling works correctly.
     """
     def test_two_samples(self):
-        sampling_time = 1.01
+        N = 100
+        sampling_time = 1.01 * N
         for recombination_rate in [0, 1]:
             ts = msprime.simulate(
+                Ne=N,
+                model=self.model,
                 recombination_rate=recombination_rate,
                 samples=[
                     msprime.Sample(0, 0), msprime.Sample(0, sampling_time)])
@@ -1173,10 +1217,13 @@ class TestHistoricalSampling(unittest.TestCase):
                 self.assertGreater(t.get_time(t.get_parent(0)), sampling_time)
 
     def test_different_times(self):
-        st1 = 1.01
-        st2 = 2.01
-        st3 = 3.01
+        N = 50
+        st1 = 1.01 * N
+        st2 = 2.01 * N
+        st3 = 3.01 * N
         ts = msprime.simulate(
+            model=self.model,
+            Ne=N,
             samples=[
                 msprime.Sample(0, 0),
                 msprime.Sample(0, st1),
@@ -1195,23 +1242,27 @@ class TestHistoricalSampling(unittest.TestCase):
     def test_old_sampling_time(self):
         # This is an enormously long time in coalescent time, so we should
         # coalesce quickly after the samples are introduced.
-        sampling_time = 1000.01
+        N = 1000
+        sampling_time = N * 1000.01
         n = 5
         samples = [
             msprime.Sample(0, sampling_time) for j in range(n - 1)] + [
             msprime.Sample(0, 0)]
-        ts = msprime.simulate(Ne=1/4, samples=samples)
+        ts = msprime.simulate(Ne=N, samples=samples, model=self.model)
         t = next(ts.trees())
         for j in range(n - 1):
             self.assertEqual(t.get_time(j), sampling_time)
         self.assertEqual(t.get_time(n - 1), 0)
         # Allow it to be within 10 coalescent time units.
-        self.assertLess(t.get_time(t.get_root()), sampling_time + 10)
+        self.assertLess(t.get_time(t.get_root()), sampling_time + 10 * N)
 
     def test_two_samples_mass_migration(self):
-        sampling_time = 2.01
-        migration_time = 4.33
+        N = 200
+        sampling_time = 2.01 * N
+        migration_time = 4.33 * N
         ts = msprime.simulate(
+            model=self.model,
+            Ne=N,
             samples=[
                 msprime.Sample(0, 0),
                 msprime.Sample(1, sampling_time)],
@@ -1230,11 +1281,13 @@ class TestHistoricalSampling(unittest.TestCase):
         self.assertEqual(t.get_population(2), 0)
 
     def test_interleaved_migrations(self):
-        t1 = 1.5
-        t2 = 10.5
-        t3 = 50.5
+        N = 100
+        t1 = 1.5 * N
+        t2 = 10.5 * N
+        t3 = 50.5 * N
         ts = msprime.simulate(
-            Ne=1/4,
+            model=self.model,
+            Ne=N,
             samples=[
                 msprime.Sample(0, 0),
                 msprime.Sample(1, t1),
@@ -1264,3 +1317,12 @@ class TestHistoricalSampling(unittest.TestCase):
         self.assertTrue(t1 < t.get_time(4) < t2)
         self.assertTrue(t2 < t.get_time(5) < t3)
         self.assertGreater(t.get_time(6), t3)
+
+
+class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
+    model = "hudson"
+
+
+@unittest.skip("Problems with DTWF")
+class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMixin):
+    model = "dtwf"
