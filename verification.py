@@ -5,6 +5,7 @@ known statistical results and benchmark programs such as Hudson's ms.
 from __future__ import print_function
 from __future__ import division
 
+import collections
 import math
 import os
 import random
@@ -17,6 +18,7 @@ import pandas as pd
 import numpy as np
 import numpy.random
 import statsmodels.api as sm
+import seaborn as sns
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
@@ -631,7 +633,60 @@ class SimulationVerifier(object):
         pyplot.close('all')
 
 
-    def _get_xiDirac_mutation_stats(self, sample_size, num_repeat, mut_rate, rec_rate, num_loci):
+    def run_dtwf_coalescent_comparison(self, test_name, **kwargs):
+        df = pd.DataFrame()
+        for model in ["hudson", "dtwf"]:
+            kwargs["model"] = model
+            print("Running: ", kwargs)
+            replicates = msprime.simulate(**kwargs)
+            data = collections.defaultdict(list)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["model"].append(model)
+            df = df.append(pd.DataFrame(data))
+
+        basedir = os.path.join("tmp__NOBACKUP__", test_name)
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        df_hudson = df[df.model == "hudson"]
+        df_dtwf = df[df.model == "dtwf"]
+        for stat in ["tmrca_mean", "num_trees"]:
+            v1 = df_hudson[stat]
+            v2 = df_dtwf[stat]
+            sm.graphics.qqplot(v1)
+            sm.qqplot_2samples(v1, v2, line="45")
+            f = os.path.join(basedir, "{}.png".format(stat))
+            pyplot.savefig(f, dpi=72)
+            pyplot.close('all')
+
+    def add_dtwf_vs_coalescent_single_locus(self):
+        """
+        Checks the DTWF against the standard coalescent at a single locus.
+        """
+        def f():
+            self.run_dtwf_coalescent_comparison(
+                "dtwf_vs_coalescent_single_locus", sample_size=10, Ne=1000,
+                num_replicates=100)
+        self._instances["dtwf_vs_coalescent_single_locus"] = f
+
+    def add_dtwf_vs_coalescent_low_recombination(self):
+        """
+        Checks the DTWF against the standard coalescent at a single locus.
+        """
+        def f():
+            self.run_dtwf_coalescent_comparison(
+                "dtwf_vs_coalescent_low_recombination", sample_size=10, Ne=1000,
+                num_replicates=100, recombination_rate=0.01)
+        self._instances["dtwf_vs_coalescent_low_recombination"] = f
+
+    def _get_xi_dirac_mutation_stats(self, sample_size, num_repeat, mut_rate, rec_rate, num_loci):
+        # TODO Fix this! We can write the output to a proper temporary file, or
+        # pipe it directly into sample_stats.
         output = open("tmp", "w")
         output.write("msprimedirac "+str(sample_size)+ " " +str(num_repeat) +"\n1 1 1\n")
         model = msprime.DiracCoalescent(psi=0.99, c=0)
@@ -650,8 +705,9 @@ class SimulationVerifier(object):
                 print(hap, file = output)
         output.close()
 
-    def _run_xiDirac_mutation_stats(self, sample_size, num_repeat, theta, r, num_loci):
-        self._get_xiDirac_mutation_stats(sample_size, num_repeat, theta/num_loci, r/(num_loci-1), num_loci)
+    def _run_xi_dirac_mutation_stats(self, sample_size, num_repeat, theta, r, num_loci):
+        self._get_xi_dirac_mutation_stats(
+            sample_size, num_repeat, theta/num_loci, r/(num_loci-1), num_loci)
         p1 = subprocess.Popen(["cat", "tmp"], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
             ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE)
@@ -663,8 +719,7 @@ class SimulationVerifier(object):
             df = pd.read_table(f)
         return df
 
-
-    def _run_xiDirac_coalescent_stats(self, sample_size, num_repeat, r, num_loci):
+    def _run_xi_dirac_coalescent_stats(self, sample_size, num_repeat, r, num_loci):
         print("\t msprime dirac")
         replicates = num_repeat
         model = msprime.DiracCoalescent(psi=0.99, c=0)
@@ -699,35 +754,33 @@ class SimulationVerifier(object):
         df = pd.DataFrame(d)
         return df
 
-
-    def run_xiDirac_kingman_check(self):
-        print("Let's test here")
+    def run_xi_dirac_kingman_check(self):
         sample_size = 15
         num_replicates = 10000
         theta = 10.04
         r = 100.0
         num_loci = 2501
-        basedir = "tmp__NOBACKUP__/xiDirac_kingman"
+        basedir = "tmp__NOBACKUP__/xi_dirac_kingman"
         args = "{} {} -t {} -r {} {}".format(
             sample_size, num_replicates, theta, r, num_loci)
-        df_msp_dirac = self._run_xiDirac_mutation_stats(sample_size, num_replicates, theta, r, num_loci)
+        df_msp_dirac = self._run_xi_dirac_mutation_stats(
+                sample_size, num_replicates, theta, r, num_loci)
         df_msp = self._run_msprime_mutation_stats(args)
-        self._plot_stats("xiDirac_kingman", "mutation", df_msp, df_msp_dirac)
+        self._plot_stats("xi_dirac_kingman", "mutation", df_msp, df_msp_dirac)
         df_ms = self._run_ms_mutation_stats(args)
-        self._plot_stats("xiDirac_kingman", "ms_mutation", df_ms, df_msp)
-        df_msp_dirac = self._run_xiDirac_coalescent_stats(sample_size, num_replicates, r, num_loci)
+        self._plot_stats("xi_dirac_kingman", "ms_mutation", df_ms, df_msp)
+        df_msp_dirac = self._run_xi_dirac_coalescent_stats(
+                sample_size, num_replicates, r, num_loci)
         df_msp = self._run_msprime_coalescent_stats(args)
-        self._plot_stats("xiDirac_kingman", "coalescent", df_msp, df_msp_dirac)
+        self._plot_stats("xi_dirac_kingman", "coalescent", df_msp, df_msp_dirac)
         df_ms = self._run_ms_coalescent_stats(args)
-        self._plot_stats("xiDirac_kingman", "ms_coalescent", df_ms, df_msp)
+        self._plot_stats("xi_dirac_kingman", "ms_coalescent", df_ms, df_msp)
 
-
-    def add_xiDirac_vs_kingman_coalescent_check(self):
+    def add_xi_dirac_vs_kingman_coalescent_check(self):
         """
-        Adds a check for xiDirac the same as kingman coalescent
+        Adds a check for xi_dirac the same as kingman coalescent
         """
-        self._instances["xiDirac_kingman"] = self.run_xiDirac_kingman_check
-
+        self._instances["xi_dirac_kingman"] = self.run_xi_dirac_kingman_check
 
     def add_s_analytical_check(self):
         """
@@ -735,7 +788,6 @@ class SimulationVerifier(object):
         of S, the number of segregating sites.
         """
         self._instances["analytical_s"] = self.run_s_analytical_check
-
 
     def add_pi_analytical_check(self):
         """
@@ -988,7 +1040,12 @@ def main():
     verifier.add_smc_oldest_time_check()
 
     # Add XiDirac checks against standard coalescent.
-    verifier.add_xiDirac_vs_kingman_coalescent_check()
+    # TODO fixup these tests.
+    verifier.add_xi_dirac_vs_kingman_coalescent_check()
+
+    # DTWF checks against coalescent.
+    verifier.add_dtwf_vs_coalescent_single_locus()
+    verifier.add_dtwf_vs_coalescent_low_recombination()
 
     keys = None
     if len(sys.argv) > 1:

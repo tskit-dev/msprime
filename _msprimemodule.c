@@ -6814,7 +6814,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_hudson) {
-        err = msp_set_simulation_model(self->sim, MSP_MODEL_HUDSON, population_size);
+        err = msp_set_simulation_model_hudson(self->sim, population_size);
     }
 
     is_dtwf = PyObject_RichCompareBool(py_name, dtwf_s, Py_EQ);
@@ -6822,8 +6822,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_dtwf) {
-        err = msp_set_simulation_model(self->sim, MSP_MODEL_DTWF, population_size);
-        /* err = msp_set_simulation_model_non_parametric(self->sim, MSP_MODEL_DTWF); */
+        err = msp_set_simulation_model_dtwf(self->sim, population_size);
     }
 
     is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
@@ -6831,7 +6830,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc) {
-        err = msp_set_simulation_model(self->sim, MSP_MODEL_SMC, population_size);
+        err = msp_set_simulation_model_smc(self->sim, population_size);
     }
 
     is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
@@ -6839,8 +6838,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc_prime) {
-        err = msp_set_simulation_model(self->sim, MSP_MODEL_SMC_PRIME,
-                population_size);
+        err = msp_set_simulation_model_smc_prime(self->sim, population_size);
     }
 
     is_dirac = PyObject_RichCompareBool(py_name, dirac_s, Py_EQ);
@@ -7352,6 +7350,26 @@ Simulator_get_model(Simulator *self)
 out:
     Py_XDECREF(d);
     Py_XDECREF(value);
+    return ret;
+}
+
+static PyObject *
+Simulator_set_model(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PyObject *py_model = NULL;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &py_model)) {
+        goto out;
+    }
+    if (Simulator_parse_simulation_model(self, py_model) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
     return ret;
 }
 
@@ -8253,6 +8271,8 @@ out:
 
 
 static PyMethodDef Simulator_methods[] = {
+    {"set_model", (PyCFunction) Simulator_set_model, METH_VARARGS,
+            "Sets the simulation model." },
     {"get_model", (PyCFunction) Simulator_get_model, METH_NOARGS,
             "Returns the simulation model" },
     {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,

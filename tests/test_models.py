@@ -26,6 +26,8 @@ from __future__ import division
 import sys
 import unittest
 
+import numpy as np
+
 import _msprime
 import msprime
 
@@ -250,3 +252,26 @@ class TestUnsupportedDemographicEvents(unittest.TestCase):
             self.assertRaises(
                 _msprime.InputError, msprime.simulate, 10, model=model,
                 demographic_events=[msprime.InstantaneousBottleneck(1, population=0)])
+
+
+class TestMixedModels(unittest.TestCase):
+    """
+    Tests that we can run mixed simulation models.
+    """
+    def test_wf_hudson_single_locus(self):
+        Ne = 100
+        t = 10
+        ts = msprime.simulate(
+            sample_size=10,
+            model=msprime.DiscreteTimeWrightFisher(Ne),
+            demographic_events=[
+                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))])
+        tree = ts.first()
+        self.assertEqual(tree.num_roots, 1)
+        times = ts.tables.nodes.time
+        dtwf_times = times[np.logical_and(times > 0, times < t)]
+        self.assertGreater(dtwf_times.shape[0], 0)
+        self.assertTrue(np.all(dtwf_times == np.floor(dtwf_times)))
+        coalescent_times = times[times > t]
+        self.assertGreater(coalescent_times.shape[0], 0)
+        self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))

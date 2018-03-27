@@ -396,7 +396,7 @@ test_simulator_getters_setters(void)
             msp_set_population_configuration(&msp, 3, 0, 0),
             MSP_ERR_BAD_POPULATION_ID);
 
-    ret = msp_set_simulation_model(&msp, MSP_MODEL_HUDSON, Ne);
+    ret = msp_set_simulation_model_hudson(&msp, Ne);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->population_size, Ne);
 
@@ -489,7 +489,6 @@ test_simulator_model_errors(void)
     uint32_t j;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    int models[] = {MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -507,16 +506,13 @@ test_simulator_model_errors(void)
     CU_ASSERT_EQUAL(msp_run(&msp, DBL_MAX, ULONG_MAX), 0);
     CU_ASSERT_EQUAL(msp_free(&msp), 0);
 
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
-    CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
-    CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
-    CU_ASSERT_EQUAL(msp_set_simulation_model(&msp, MSP_MODEL_HUDSON, 0.25),
-            MSP_ERR_UNSUPPORTED_OPERATION);
-    CU_ASSERT_EQUAL(msp_free(&msp), 0);
-
-    for (j = 0; j < sizeof(models) / sizeof(int); j++) {
+    for (j = 0; j < 2; j++) {
         CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
-        CU_ASSERT_EQUAL(msp_set_simulation_model(&msp, models[j], 0.25), 0);
+        if (j == 0) {
+            CU_ASSERT_EQUAL(msp_set_simulation_model_smc(&msp, 0.25), 0);
+        } else {
+            CU_ASSERT_EQUAL(msp_set_simulation_model_smc_prime(&msp, 0.25), 0);
+        }
         CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), MSP_ERR_BAD_MODEL);
         CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1),
                 MSP_ERR_BAD_MODEL);
@@ -748,7 +744,7 @@ test_dtwf_deterministic(void)
         gsl_rng_set(rng, seed);
         ret = msp_alloc(msp, n, samples, rng);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_simulation_model(msp, MSP_MODEL_DTWF, n);
+        ret = msp_set_simulation_model_dtwf(msp, n);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(msp, 0, n, 0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -784,6 +780,105 @@ test_dtwf_deterministic(void)
 }
 
 static void
+test_mixed_model_simulation(void)
+{
+    int ret;
+    uint32_t j, k;
+    uint32_t n = 10;
+    double N = 100;
+    int model;
+    double initial_size, growth_rate;
+    const char *model_name;
+    table_collection_t tables;
+    tree_sequence_t ts;
+    double g = -1.0 / 8192;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(msp, 3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(msp, N);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* Set the populations to 1, 2, and 3N. We don't simulate them,
+     * but they should be equal at the end */
+    ret = msp_set_population_configuration(msp, 0, N, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 1, 2 * N, g);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 2, 3 * N, 2 * g);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_loci(msp, 10);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    /* Run for 10 generations each for the different models, alternating */
+    j = 0;
+    while ((ret = msp_run(msp, j * 10, UINT32_MAX)) == 2) {
+        msp_verify(msp);
+        /* Check that our populations and growth rates are still correct */
+        for (k = 0; k < 3; k++) {
+            ret = msp_get_population_configuration(msp, k, &initial_size, &growth_rate);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(initial_size, (k + 1) * N);
+            CU_ASSERT_EQUAL_FATAL(growth_rate, k * g);
+        }
+        CU_ASSERT_FALSE(msp_is_completed(msp));
+        if (j % 2 == 1) {
+            model = msp_get_model(msp)->type;
+            CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
+            model_name = msp_get_model_name(msp);
+            CU_ASSERT_STRING_EQUAL(model_name, "hudson");
+            ret = msp_set_simulation_model_dtwf(msp, N);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            model = msp_get_model(msp)->type;
+            CU_ASSERT_EQUAL(model, MSP_MODEL_DTWF);
+            model_name = msp_get_model_name(msp);
+            CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+            ret = msp_set_simulation_model_hudson(msp, N);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(msp));
+    CU_ASSERT_TRUE(j > 5);
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* Make sure we can build a tree sequence from the tables. */
+    ret = msp_populate_tables(msp, NULL, &tables.nodes, &tables.edges,
+            &tables.migrations);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* TODO remove this when populate tables takes table_collection as arg */
+    tables.sequence_length = msp->num_loci;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_print_state(&ts, _devnull);
+    tree_sequence_free(&ts);
+    table_collection_free(&tables);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+}
+
+static void
 test_dtwf_single_locus_simulation(void)
 {
     int ret;
@@ -805,12 +900,10 @@ test_dtwf_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model(msp, MSP_MODEL_DTWF, n);
+    ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
-    ret = msp_set_population_configuration(msp, 0, n, 0);
-    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
@@ -919,7 +1012,7 @@ test_dtwf_multi_locus_simulation(void)
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
-    double migration_matrix[] = {0, 1, 1, 0};
+    double migration_matrix[] = {0, 0.1, 0.1, 0};
     const char *model_name;
     size_t num_ca_events, num_re_events;
     double t;
@@ -935,12 +1028,9 @@ test_dtwf_multi_locus_simulation(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* DN: Hackish setting of pop size */
-    ret = msp_set_population_configuration(msp, 0, n / 4, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(msp, 1, n / 4, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(msp, 4, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
@@ -949,8 +1039,6 @@ test_dtwf_multi_locus_simulation(void)
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -971,19 +1059,14 @@ test_dtwf_multi_locus_simulation(void)
     gsl_rng_set(rng, seed);
     ret = msp_alloc(msp, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* DN: Hackish setting of pop size */
-    ret = msp_set_population_configuration(msp, 0, n / 4, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(msp, 1, n / 4, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(msp, 4, migration_matrix);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1058,7 +1141,17 @@ test_multi_locus_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_recombination_rate(msp, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_simulation_model(msp, models[j], 0.25);
+        switch (j) {
+            case 0:
+                ret = msp_set_simulation_model_hudson(msp, 0.25);
+                break;
+            case 1:
+                ret = msp_set_simulation_model_smc(msp, 0.25);
+                break;
+            case 2:
+                ret = msp_set_simulation_model_smc_prime(msp, 0.25);
+                break;
+        }
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1676,6 +1769,7 @@ main(int argc, char **argv)
         {"test_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_demographic_events},
         {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_simulation_memory_limit", test_simulation_memory_limit},

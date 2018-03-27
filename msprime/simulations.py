@@ -316,6 +316,7 @@ class Simulator(object):
         self.samples = samples
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
+        self.ll_sim = None
         self.set_model(model, Ne)
         self.recombination_map = recombination_map
         self.random_generator = None
@@ -323,6 +324,7 @@ class Simulator(object):
             PopulationConfiguration(initial_size=self.model.population_size)]
         self.migration_matrix = [[0]]
         self.demographic_events = []
+        self.model_change_events = []
         self.store_migrations = False
         # Set default block sizes to 64K objects.
         # TODO does this give good performance in a range of scenarios?
@@ -338,7 +340,6 @@ class Simulator(object):
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self.max_memory = sys.maxsize
-        self.ll_sim = None
         self.node_table = tables.NodeTable(block_size)
         self.edge_table = tables.EdgeTable(block_size)
         self.migration_table = tables.MigrationTable(block_size)
@@ -478,10 +479,15 @@ class Simulator(object):
             "sorted in non-decreasing order of time.")
         if not isinstance(demographic_events, collections.Iterable):
             raise TypeError(err)
+        self.demographic_events = []
+        self.model_change_events = []
         for event in demographic_events:
             if not isinstance(event, DemographicEvent):
                 raise TypeError(err)
-        self.demographic_events = demographic_events
+            if isinstance(event, SimulationModelChange):
+                self.model_change_events.append(event)
+            else:
+                self.demographic_events.append(event)
 
     def set_model(self, model, population_size):
         """
@@ -551,8 +557,10 @@ class Simulator(object):
         """
         if self.random_generator is None:
             raise ValueError("A random generator instance must be set")
-        if self.ll_sim is None:
-            self.ll_sim = self.create_ll_instance()
+        self.ll_sim = self.create_ll_instance()
+        for event in self.model_change_events:
+            self.ll_sim.run(event.time)
+            self.ll_sim.set_model(event.model.get_ll_representation())
         self.ll_sim.run()
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
@@ -902,6 +910,32 @@ class MassMigration(DemographicEvent):
                 self.source, self.dest, self.proportion))
 
 
+class SimulationModelChange(DemographicEvent):
+    # TODO document
+    # Implementation note: these are treated as demographic events for the
+    # sake of the high-level interface, but are treated differently at run
+    # time. There is no corresponding demographic event in the C layer, as
+    # this would add too much complexity to the main loops. Instead, we
+    # detect these events at the high level, and insert calls to set_model
+    # as appropriate.
+    def __init__(self, time, model):
+        super(SimulationModelChange, self).__init__("simulation_model_change", time)
+        if not isinstance(model, SimulationModel):
+            raise TypeError(
+                "Simulation model must be an instance of SimulationModel")
+        self.model = model
+
+    def get_ll_representation(self, num_populations):
+        return {
+            "type": self.type,
+            "time": self.time,
+            "model": self.model.get_ll_representation()
+        }
+
+    def __str__(self):
+        return "Population model changes to {}".format(self.model)
+
+
 class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
     def __init__(self, time, population=None, proportion=1.0, population_id=None):
@@ -1085,6 +1119,8 @@ class DemographyDebugger(object):
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
+        # TODO implement the model change events here.
+        assert len(simulator.model_change_events) == 0
         self._make_epochs(
             simulator, sorted(demographic_events, key=lambda e: e.time))
 

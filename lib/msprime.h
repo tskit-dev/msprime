@@ -122,6 +122,7 @@ typedef struct _msp_t {
     double recombination_rate;
     uint32_t num_populations;
     sample_t *samples;
+    simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;
     /* allocation block sizes */
@@ -236,10 +237,10 @@ typedef struct {
 } recomb_map_t;
 
 /* Tree sequences */
-/* TODO This struct has some redundancy now, where we mirror the structure 
- * of the table_collection_t within internal structs and keep pointers 
+/* TODO This struct has some redundancy now, where we mirror the structure
+ * of the table_collection_t within internal structs and keep pointers
  * to its memory (and also a copy of sequence_length). We need to refactor
- * this somehow to remove this redundancy. Probably downstream code should 
+ * this somehow to remove this redundancy. Probably downstream code should
  * be forced to use some functions rather than accessing these structs
  * to obtain pointers to indexes, edges data and so on.
  */
@@ -474,7 +475,9 @@ typedef struct {
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
-int msp_set_simulation_model(msp_t *self, int model, double population_size);
+int msp_set_simulation_model_hudson(msp_t *self, double population_size);
+int msp_set_simulation_model_smc(msp_t *self, double population_size);
+int msp_set_simulation_model_smc_prime(msp_t *self, double population_size);
 int msp_set_simulation_model_dtwf(msp_t *self, double population_size);
 int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
     double c);

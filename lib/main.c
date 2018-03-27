@@ -136,12 +136,13 @@ read_model_config(msp_t *msp, config_t *config)
         fatal_error("population_size not specified");
     }
     population_size = config_setting_get_float(s);
+    /* printf("Checking model specification\n"); */
     if (strcmp(name, "hudson") == 0) {
-        ret = msp_set_simulation_model(msp, MSP_MODEL_HUDSON, population_size);
+        ret = msp_set_simulation_model_hudson(msp, population_size);
     } else if (strcmp(name, "smc") == 0) {
-        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC, population_size);
+        ret = msp_set_simulation_model_smc(msp, population_size);
     } else if (strcmp(name, "smc_prime") == 0) {
-        ret = msp_set_simulation_model(msp, MSP_MODEL_SMC_PRIME, population_size);
+        ret = msp_set_simulation_model_smc_prime(msp, population_size);
     } else if (strcmp(name, "dtwf") == 0) {
         ret = msp_set_simulation_model_dtwf(msp, population_size);
     } else if (strcmp(name, "dirac") == 0) {
@@ -861,7 +862,6 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-
     record_provenance(&tables.provenances);
 
     for (j = 0; j < num_replicates; j++) {
@@ -874,14 +874,15 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
+        msp_verify(msp);
         ret = msp_run(msp, DBL_MAX, UINT32_MAX);
         if (ret < 0) {
             goto out;
         }
-        msp_verify(msp);
         if (verbose >= 1) {
             ret = msp_print_state(msp, stdout);
         }
+        msp_verify(msp);
         if (ret != 0) {
             goto out;
         }
