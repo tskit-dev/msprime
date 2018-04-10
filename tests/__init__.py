@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -650,6 +650,9 @@ class Segment(object):
             self.left, self.right, self.node, repr(self.next))
         return s
 
+    def __repr__(self):
+        return repr((self.left, self.right, self.node))
+
     def __lt__(self, other):
         return (self.left, self.right, self.node) < (other.left, other.right, self.node)
 
@@ -666,16 +669,14 @@ class Simplifier(object):
         self.filter_zero_mutation_sites = filter_zero_mutation_sites
         self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
-        # A maps input node IDs to the extant ancestor chain. Once the algorithm
-        # has processed the ancestors, they are are removed from the map.
-        self.A = {}
+        self.A = [[] for _ in range(ts.num_nodes)]
         self.mutation_table = msprime.MutationTable(ts.num_mutations)
         self.node_table = msprime.NodeTable(ts.num_nodes)
         self.edge_table = msprime.EdgeTable(ts.num_edges)
         self.site_table = msprime.SiteTable(ts.num_sites)
         self.mutation_table = msprime.MutationTable(ts.num_mutations)
         self.edge_buffer = []
-        self.node_id_map = {}
+        self.node_id_map = np.zeros(ts.num_nodes, dtype=np.int32) - 1
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
         self.samples = set(sample)
         for sample_id in sample:
@@ -724,10 +725,11 @@ class Simplifier(object):
         flags &= ~msprime.NODE_IS_SAMPLE
         if is_sample:
             flags |= msprime.NODE_IS_SAMPLE
-        self.node_id_map[input_id] = len(self.node_table)
-        self.node_table.add_row(
+        output_id = self.node_table.add_row(
             flags=flags, time=node.time, population=node.population,
             metadata=node.metadata)
+        self.node_id_map[input_id] = output_id
+        return output_id
 
     def flush_edges(self):
         """
@@ -774,18 +776,20 @@ class Simplifier(object):
 
     def print_state(self):
         print(".................")
-        print("Ancestors: ", len(self.A))
-        for x in self.A.keys():
-            s = str(x) + ": " + self.segment_chain_str(self.A[x])
-            print("\t\t" + s)
+        print("Ancestors: ")
+        for j, segments in enumerate(self.A):
+            print("\t", j, "->", end="")
+            for x in segments:
+                print("({}-{}->{})".format(x.left, x.right, x.node), end="")
+            print()
         print("Mutation map:")
         for u in range(len(self.mutation_map)):
             v = self.mutation_map[u]
             if len(v) > 0:
                 print("\t", u, "->", v)
         print("Node ID map: (input->output)")
-        for input_id in sorted(self.node_id_map.keys()):
-            print("\t", input_id, "->", self.node_id_map[input_id])
+        for input_id, output_id in enumerate(self.node_id_map):
+            print("\t", input_id, "->", output_id)
         print("Mutation node map")
         for j in range(self.num_mutations):
             print("\t", j, "->", self.mutation_node_map[j])
@@ -802,10 +806,10 @@ class Simplifier(object):
         """
         Inserts the specified sample ID into the algorithm state.
         """
-        assert sample_id not in self.A
-        self.record_node(sample_id, is_sample=True)
-        x = self.alloc_segment(0, self.sequence_length, self.node_id_map[sample_id])
-        self.A[sample_id] = x
+        assert len(self.A[sample_id]) == 0
+        output_id = self.record_node(sample_id, is_sample=True)
+        x = self.alloc_segment(0, self.sequence_length, output_id)
+        self.A[sample_id].append(x)
 
     def process_parent_edges(self, edges):
         """
@@ -814,15 +818,28 @@ class Simplifier(object):
         assert len(set(e.parent for e in edges)) == 1
         parent = edges[0].parent
 
-        # Snip out the ancestry from the state corresponding to each of the
-        # edges, and queue this up for merging.
-        H = []
+#         head = self.A[input_id]
+#         # Record any mutations we encounter.
+#         x = head
+#         while x is not None:
+#             mutations = self.get_mutations(input_id, x.left, x.right)
+#             for mutation_id in mutations:
+#                 self.record_mutation(x.node, mutation_id)
+#             x = x.next
+
+        Q = []
         for edge in edges:
-            if edge.child in self.A:
-                self.remove_ancestry(edge.left, edge.right, edge.child, H)
-                self.check_state()
-        self.merge_labeled_ancestors(H, parent)
+            for x in self.A[edge.child]:
+                if x.right > edge.left and edge.right > x.left:
+                    y = Segment(max(x.left, edge.left), min(x.right, edge.right), x.node)
+                    heapq.heappush(Q, y)
+
+                mutations = self.get_mutations(edge.child, x.left, x.right)
+                for mutation_id in mutations:
+                    self.record_mutation(x.node, mutation_id)
+        self.merge_labeled_ancestors(Q, parent)
         self.check_state()
+        # self.print_state()
 
     def finalise_sites(self):
         # Build a map from the old mutation IDs to new IDs. Any mutation that
@@ -877,25 +894,24 @@ class Simplifier(object):
                     edges = []
                 edges.append(e)
             self.process_parent_edges(edges)
+        # self.print_state()
+
         # Record any final mutations over the roots.
-        for input_id in list(self.A.keys()):
-            x = self.A[input_id]
-            while x is not None:
-                mutations = self.get_mutations(input_id, x.left, x.right)
-                for mutation_id in mutations:
-                    # print("Recording mutation over root", x.node, mutation_id)
-                    self.record_mutation(x.node, mutation_id)
-                x = x.next
+        # for input_id in list(self.A.keys()):
+        #     x = self.A[input_id]
+        #     while x is not None:
+        #         mutations = self.get_mutations(input_id, x.left, x.right)
+        #         for mutation_id in mutations:
+        #             # print("Recording mutation over root", x.node, mutation_id)
+        #             self.record_mutation(x.node, mutation_id)
+        #         x = x.next
 
         self.finalise_sites()
-        node_map = np.zeros(self.ts.num_nodes, np.int32) - 1
-        for input_id, output_id in self.node_id_map.items():
-            node_map[input_id] = output_id
         ts = msprime.load_tables(
             nodes=self.node_table, edges=self.edge_table,
             sites=self.site_table, mutations=self.mutation_table,
             sequence_length=self.sequence_length)
-        return ts, node_map
+        return ts, self.node_id_map
 
     def record_mutation(self, node, mutation):
         self.mutation_node_map[mutation] = node
@@ -964,91 +980,77 @@ class Simplifier(object):
         else:
             self.A[input_id] = head
 
-    def merge_labeled_ancestors(self, H, input_id):
+    def merge_labeled_ancestors(self, Q, input_id):
         """
-        All ancestry segments in H come together into a new parent.
+        All ancestry segments in Q come together into a new parent.
         The new parent must be assigned and any overlapping segments coalesced.
         """
-        # H is a heapq of (x.left, x) tuples,
-        # with x an ancestor, i.e., a list of segments.
-        coalescence = False
-        alpha = None
-        head = Segment()
-        z = head
-        while len(H) > 0:
-            # print("LOOP HEAD")
-            # self.print_heaps(H)
-            alpha = None
-            left = H[0][0]
+        output_id = self.node_id_map[input_id]
+        is_sample = output_id != -1
+        self.A[input_id] = []
+        while len(Q) > 0:
+            left = Q[0].left
+            right = self.sequence_length
             X = []
-            r = self.sequence_length + 1
-            while len(H) > 0 and H[0][0] == left:
-                x = heapq.heappop(H)[1]
+            while len(Q) > 0 and Q[0].left == left:
+                x = heapq.heappop(Q)
                 X.append(x)
-                r = min(r, x.right)
-            if len(H) > 0:
-                r = min(r, H[0][0])
+                right = min(right, x.right)
+            if len(Q) > 0:
+                right = min(right, Q[0].left)
 
             if len(X) == 1:
                 x = X[0]
-                if len(H) > 0 and H[0][0] < x.right:
-                    alpha = self.alloc_segment(x.left, H[0][0], x.node)
-                    x.left = H[0][0]
-                    heapq.heappush(H, (x.left, x))
-                else:
-                    if x.next is not None:
-                        y = x.next
-                        heapq.heappush(H, (y.left, y))
-                    alpha = x
-                    alpha.next = None
-                if self.is_sample(input_id):
-                    u = self.node_id_map[input_id]
-                    self.record_edge(alpha.left, alpha.right, u, alpha.node)
-                    alpha.node = u
+                alpha = x
+                if len(Q) > 0 and Q[0].left < x.right:
+                    alpha = Segment(x.left, Q[0].left, x.node)
+                    x.left = Q[0].left
+                    heapq.heappush(Q, x)
+                if is_sample:
+                    self.record_edge(alpha.left, alpha.right, output_id, alpha.node)
+                    alpha.node = output_id
             else:
-                if not coalescence:
-                    coalescence = True
-                    if input_id not in self.node_id_map:
-                        self.record_node(input_id)
-                # output node ID
-                u = self.node_id_map[input_id]
-                alpha = self.alloc_segment(left, r, u)
-                # Update the heaps and add edges
+                if output_id == -1:
+                    output_id = self.record_node(input_id)
+                alpha = Segment(left, right, output_id)
                 for x in X:
-                    self.record_edge(left, r, u, x.node)
-                    if x.right == r:
-                        self.free_segment(x)
-                        if x.next is not None:
-                            y = x.next
-                            heapq.heappush(H, (y.left, y))
-                    elif x.right > r:
-                        x.left = r
-                        heapq.heappush(H, (x.left, x))
-            # loop tail; update alpha and integrate it into the state.
-            z.next = alpha
-            z = alpha
-        if input_id in self.A:
-            # Free the allocated segments.
-            x = head.next
-            while x is not None:
-                assert x.node == self.node_id_map[input_id]
-                x = x.next
-        else:
-            z = head.next
-            self.A[input_id] = z
+                    self.record_edge(left, right, output_id, x.node)
+                    if x.right > right:
+                        x.left = right
+                        heapq.heappush(Q, x)
+            if is_sample:
+                # Fill in any gaps in the ancestry for the sample
+                prev_right = 0
+                if len(self.A[input_id]) > 0:
+                    prev_right = self.A[input_id][-1].right
+                if alpha.left != prev_right:
+                    self.A[input_id].append(Segment(prev_right, alpha.left, output_id))
+            self.A[input_id].append(alpha)
+        if is_sample:
+            # If a trailing gap exists in the sample ancestry, fill it in.
+            prev_right = 0
+            if len(self.A[input_id]) > 0:
+                prev_right = self.A[input_id][-1].right
+            if prev_right != self.sequence_length:
+                self.A[input_id].append(
+                    Segment(prev_right, self.sequence_length, output_id))
         self.flush_edges()
 
     def check_state(self):
+        for segments in self.A:
+            for j in range(1, len(segments) - 1):
+                assert segments[j - 1].right <= segments[j].left
+
         # print("CHECK_STATE")
-        # # self.print_state()
-        for input_id, x in self.A.items():
-            # print("input id = ", input_id)
-            while x is not None:
-                # print("\tx = ", x)
-                assert x.left < x.right
-                if x.next is not None:
-                    assert x.right <= x.next.left
-                x = x.next
+        # self.print_state()
+        # for input_id, x in self.A.items():
+        #     # print("input id = ", input_id)
+        #     while x is not None:
+        #         # print("\tx = ", x)
+        #         assert x.left < x.right
+        #         if x.next is not None:
+        #             assert x.right <= x.next.left
+        #         x = x.next
 
 
 def base64_encode(metadata):
@@ -1064,8 +1066,8 @@ if __name__ == "__main__":
     ts = msprime.load(sys.argv[1])
     samples = list(map(int, sys.argv[2:]))
     s = Simplifier(ts, samples)
-    s.print_state()
-    tss = s.simplify()
+    # s.print_state()
+    tss, _ = s.simplify()
     tables = tss.dump_tables()
     print("Output:")
     print(tables.nodes)
