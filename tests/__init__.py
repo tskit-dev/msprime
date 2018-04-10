@@ -23,7 +23,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import heapq
 import random
 import sys
 import unittest
@@ -631,6 +630,41 @@ class MRCACalculator(object):
         return z
 
 
+def overlapping_segments(segments):
+    """
+    Returns an iterator over the (left, right, X) tuples describing the
+    distinct overlapping segments in the specified set.
+    """
+    S = sorted(segments, key=lambda x: x.left)
+    n = len(S)
+    # Insert a sentinel at the end for convenience.
+    S.append(Segment(sys.float_info.max, 0))
+    right = S[0].left
+    X = []
+    j = 0
+    while j < n:
+        # Remove any elements of X with right <= left
+        left = right
+        X = [x for x in X if x.right > left]
+        if len(X) == 0:
+            left = S[j].left
+        while j < n and S[j].left == left:
+            X.append(S[j])
+            j += 1
+        j -= 1
+        right = min(x.right for x in X)
+        right = min(right, S[j + 1].left)
+        yield left, right, X
+        j += 1
+
+    while len(X) > 0:
+        left = right
+        X = [x for x in X if x.right > left]
+        if len(X) > 0:
+            right = min(x.right for x in X)
+            yield left, right, X
+
+
 class Segment(object):
     """
     A class representing a single segment. Each segment has a left and right,
@@ -669,7 +703,12 @@ class Simplifier(object):
         self.filter_zero_mutation_sites = filter_zero_mutation_sites
         self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
-        self.A = [[] for _ in range(ts.num_nodes)]
+        self.A_head = [None for _ in range(ts.num_nodes)]
+        self.A_tail = [None for _ in range(ts.num_nodes)]
+        # Use a head sentinel on the linked lists for convenience.
+        for j in range(ts.num_nodes):
+            self.A_head[j] = Segment(0, 0, -1)
+            self.A_tail[j] = self.A_head[j]
         self.mutation_table = msprime.MutationTable(ts.num_mutations)
         self.node_table = msprime.NodeTable(ts.num_nodes)
         self.edge_table = msprime.EdgeTable(ts.num_edges)
@@ -680,7 +719,8 @@ class Simplifier(object):
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
         self.samples = set(sample)
         for sample_id in sample:
-            self.insert_sample(sample_id)
+            output_id = self.record_node(sample_id, is_sample=True)
+            self.add_ancestry(sample_id, 0, self.sequence_length, output_id)
         # We keep a map of input nodes to mutations.
         self.mutation_map = [[] for _ in range(ts.num_nodes)]
         position = ts.tables.sites.position
@@ -689,30 +729,6 @@ class Simplifier(object):
         for mutation_id in range(ts.num_mutations):
             site_position = position[site[mutation_id]]
             self.mutation_map[node[mutation_id]].append((site_position, mutation_id))
-
-    def get_mutations(self, input_id, left, right):
-        """
-        Returns all mutations for the specified input ID over the specified
-        interval.
-        """
-        for pos, mutation_id in self.mutation_map[input_id]:
-            if left <= pos < right:
-                yield mutation_id
-
-    def alloc_segment(self, left, right, node, next=None):
-        """
-        Allocates a new segment with the specified values.
-        """
-        s = Segment(left, right, node, next)
-        return s
-
-    def free_segment(self, u):
-        """
-        Frees the specified segment.
-
-        Note: this method is only here to ensure that we are not leaking segments
-        in the C implementation.
-        """
 
     def record_node(self, input_id, is_sample=False):
         """
@@ -759,28 +775,16 @@ class Simplifier(object):
         self.edge_buffer.append(
             msprime.Edge(left=left, right=right, parent=parent, child=child))
 
-    def segment_chain_str(self, segment):
-        u = segment
-        s = ""
-        while u is not None:
-            s += "({0}-{1}->{2})".format(u.left, u.right, u.node)
-            u = u.next
-        return s
-
-    def print_heaps(self, L):
-        copy = list(L)
-        ordered = [heapq.heappop(copy) for _ in L]
-
-        for l, x in ordered:
-            print("\t", l, ":", self.segment_chain_str(x))
-
     def print_state(self):
         print(".................")
         print("Ancestors: ")
-        for j, segments in enumerate(self.A):
+        num_nodes = len(self.A_tail)
+        for j in range(num_nodes):
             print("\t", j, "->", end="")
-            for x in segments:
+            x = self.A_head[j].next
+            while x is not None:
                 print("({}-{}->{})".format(x.left, x.right, x.node), end="")
+                x = x.next
             print()
         print("Mutation map:")
         for u in range(len(self.mutation_map)):
@@ -801,15 +805,54 @@ class Simplifier(object):
         print(self.site_table)
         print("Output mutations: ")
         print(self.mutation_table)
+        self.check_state()
 
-    def insert_sample(self, sample_id):
+    def add_ancestry(self, input_id, left, right, node):
+        tail = self.A_tail[input_id]
+        if tail.right == left and tail.node == node:
+            tail.right = right
+        else:
+            x = Segment(left, right, node)
+            tail.next = x
+            self.A_tail[input_id] = x
+
+    def merge_labeled_ancestors(self, S, input_id):
         """
-        Inserts the specified sample ID into the algorithm state.
+        All ancestry segments in S come together into a new parent.
+        The new parent must be assigned and any overlapping segments coalesced.
         """
-        assert len(self.A[sample_id]) == 0
-        output_id = self.record_node(sample_id, is_sample=True)
-        x = self.alloc_segment(0, self.sequence_length, output_id)
-        self.A[sample_id].append(x)
+        output_id = self.node_id_map[input_id]
+        is_sample = output_id != -1
+        if is_sample:
+            # Free up the existing ancestry mapping.
+            x = self.A_tail[input_id]
+            assert x.left == 0 and x.right == self.sequence_length
+            self.A_tail[input_id] = self.A_head[input_id]
+            self.A_head[input_id].next = None
+
+        prev_right = 0
+        for left, right, X in overlapping_segments(S):
+            if len(X) == 1:
+                ancestry_node = X[0].node
+                if is_sample:
+                    self.record_edge(left, right, output_id, X[0].node)
+                    ancestry_node = output_id
+            else:
+                if output_id == -1:
+                    output_id = self.record_node(input_id)
+                ancestry_node = output_id
+                for x in X:
+                    self.record_edge(left, right, output_id, x.node)
+            if is_sample and left != prev_right:
+                # Fill in any gaps in the ancestry for the sample
+                self.add_ancestry(input_id, prev_right, left, output_id)
+            self.add_ancestry(input_id, left, right, ancestry_node)
+            prev_right = right
+
+        if is_sample and prev_right != self.sequence_length:
+            # If a trailing gap exists in the sample ancestry, fill it in.
+            self.add_ancestry(input_id, prev_right, self.sequence_length, output_id)
+        self.flush_edges()
 
     def process_parent_edges(self, edges):
         """
@@ -817,27 +860,15 @@ class Simplifier(object):
         """
         assert len(set(e.parent for e in edges)) == 1
         parent = edges[0].parent
-
-#         head = self.A[input_id]
-#         # Record any mutations we encounter.
-#         x = head
-#         while x is not None:
-#             mutations = self.get_mutations(input_id, x.left, x.right)
-#             for mutation_id in mutations:
-#                 self.record_mutation(x.node, mutation_id)
-#             x = x.next
-
-        Q = []
+        S = []
         for edge in edges:
-            for x in self.A[edge.child]:
+            x = self.A_head[edge.child].next
+            while x is not None:
                 if x.right > edge.left and edge.right > x.left:
                     y = Segment(max(x.left, edge.left), min(x.right, edge.right), x.node)
-                    heapq.heappush(Q, y)
-
-                mutations = self.get_mutations(edge.child, x.left, x.right)
-                for mutation_id in mutations:
-                    self.record_mutation(x.node, mutation_id)
-        self.merge_labeled_ancestors(Q, parent)
+                    S.append(y)
+                x = x.next
+        self.merge_labeled_ancestors(S, parent)
         self.check_state()
         # self.print_state()
 
@@ -882,6 +913,22 @@ class Simplifier(object):
                     position=site.position, ancestral_state=site.ancestral_state,
                     metadata=site.metadata)
 
+    def map_mutation_nodes(self):
+        for input_node in range(len(self.mutation_map)):
+            mutations = self.mutation_map[input_node]
+            seg = self.A_head[input_node].next
+            m_index = 0
+            while seg is not None and m_index < len(mutations):
+                x, mutation_id = mutations[m_index]
+                if seg.left <= x < seg.right:
+                    self.mutation_node_map[mutation_id] = seg.node
+                    m_index += 1
+                elif x >= seg.right:
+                    seg = seg.next
+                else:
+                    assert x < seg.left
+                    m_index += 1
+
     def simplify(self):
         # print("START")
         # self.print_state()
@@ -895,17 +942,7 @@ class Simplifier(object):
                 edges.append(e)
             self.process_parent_edges(edges)
         # self.print_state()
-
-        # Record any final mutations over the roots.
-        # for input_id in list(self.A.keys()):
-        #     x = self.A[input_id]
-        #     while x is not None:
-        #         mutations = self.get_mutations(input_id, x.left, x.right)
-        #         for mutation_id in mutations:
-        #             # print("Recording mutation over root", x.node, mutation_id)
-        #             self.record_mutation(x.node, mutation_id)
-        #         x = x.next
-
+        self.map_mutation_nodes()
         self.finalise_sites()
         ts = msprime.load_tables(
             nodes=self.node_table, edges=self.edge_table,
@@ -913,144 +950,27 @@ class Simplifier(object):
             sequence_length=self.sequence_length)
         return ts, self.node_id_map
 
-    def record_mutation(self, node, mutation):
-        self.mutation_node_map[mutation] = node
-
-    def is_sample(self, input_id):
-        return input_id in self.samples
-
-    def remove_ancestry(self, left, right, input_id, H):
-        """
-        Remove the ancestry for the specified input node over the specified interval
-        by snipping out elements of the segment chain and modifying any segments
-        that overlap the edges. Update the specified heapq H of (x.left, x)
-        tuples, where x is the head of a linked list of ancestral segments that we
-        remove from the chain for input_id.
-        """
-        head = self.A[input_id]
-        # Record any mutations we encounter.
-        x = head
-        while x is not None:
-            mutations = self.get_mutations(input_id, x.left, x.right)
-            for mutation_id in mutations:
-                self.record_mutation(x.node, mutation_id)
-            x = x.next
-
-        x = head
-        last = None
-        # Skip the leading segments before left.
-        while x is not None and x.right <= left:
-            last = x
-            x = x.next
-        if x is not None and x.left < left:
-            # The left edge of x overhangs. Insert a new segment for the excess.
-            y = self.alloc_segment(x.left, left, x.node, None)
-            x.left = left
-            if last is not None:
-                last.next = y
-            last = y
-            if x == head:
-                head = last
-
-        if x is not None and x.left < right:
-            # x is the first segment within the target interval, so add it to the
-            # output heapq.
-            heapq.heappush(H, (x.left, x))
-            # Skip over segments strictly within the interval
-            while x is not None and x.right <= right:
-                x_prev = x
-                x = x.next
-            if x is not None and x.left < right:
-                # We have an overhang on the right hand side. Create a new
-                # segment for the overhang and terminate the output chain.
-                y = self.alloc_segment(right, x.right, x.node, x.next)
-                x.right = right
-                x.next = None
-                x = y
-            elif x_prev is not None:
-                x_prev.next = None
-
-        # x is the first segment in the new chain starting after right.
-        if last is None:
-            head = x
-        else:
-            last.next = x
-        if head is None:
-            del self.A[input_id]
-        else:
-            self.A[input_id] = head
-
-    def merge_labeled_ancestors(self, Q, input_id):
-        """
-        All ancestry segments in Q come together into a new parent.
-        The new parent must be assigned and any overlapping segments coalesced.
-        """
-        output_id = self.node_id_map[input_id]
-        is_sample = output_id != -1
-        self.A[input_id] = []
-        while len(Q) > 0:
-            left = Q[0].left
-            right = self.sequence_length
-            X = []
-            while len(Q) > 0 and Q[0].left == left:
-                x = heapq.heappop(Q)
-                X.append(x)
-                right = min(right, x.right)
-            if len(Q) > 0:
-                right = min(right, Q[0].left)
-
-            if len(X) == 1:
-                x = X[0]
-                alpha = x
-                if len(Q) > 0 and Q[0].left < x.right:
-                    alpha = Segment(x.left, Q[0].left, x.node)
-                    x.left = Q[0].left
-                    heapq.heappush(Q, x)
-                if is_sample:
-                    self.record_edge(alpha.left, alpha.right, output_id, alpha.node)
-                    alpha.node = output_id
-            else:
-                if output_id == -1:
-                    output_id = self.record_node(input_id)
-                alpha = Segment(left, right, output_id)
-                for x in X:
-                    self.record_edge(left, right, output_id, x.node)
-                    if x.right > right:
-                        x.left = right
-                        heapq.heappush(Q, x)
-            if is_sample:
-                # Fill in any gaps in the ancestry for the sample
-                prev_right = 0
-                if len(self.A[input_id]) > 0:
-                    prev_right = self.A[input_id][-1].right
-                if alpha.left != prev_right:
-                    self.A[input_id].append(Segment(prev_right, alpha.left, output_id))
-            self.A[input_id].append(alpha)
-        if is_sample:
-            # If a trailing gap exists in the sample ancestry, fill it in.
-            prev_right = 0
-            if len(self.A[input_id]) > 0:
-                prev_right = self.A[input_id][-1].right
-            if prev_right != self.sequence_length:
-                self.A[input_id].append(
-                    Segment(prev_right, self.sequence_length, output_id))
-        self.flush_edges()
-
     def check_state(self):
-        for segments in self.A:
-            for j in range(1, len(segments) - 1):
-                assert segments[j - 1].right <= segments[j].left
-
-        # print("CHECK_STATE")
-        # self.print_state()
-        # for input_id, x in self.A.items():
-        #     # print("input id = ", input_id)
-        #     while x is not None:
-        #         # print("\tx = ", x)
-        #         assert x.left < x.right
-        #         if x.next is not None:
-        #             assert x.right <= x.next.left
-        #         x = x.next
+        num_nodes = len(self.A_head)
+        for j in range(num_nodes):
+            head = self.A_head[j]
+            tail = self.A_tail[j]
+            assert head.left == 0
+            assert head.right == 0
+            assert head.node == -1
+            x = head
+            while x.next is not None:
+                x = x.next
+            assert x == tail
+            x = head.next
+            while x is not None:
+                assert x.left < x.right
+                if x.next is not None:
+                    assert x.right <= x.next.left
+                    # We should also not have any squashable segments.
+                    if x.right == x.next.left:
+                        assert x.node != x.next.node
+                x = x.next
 
 
 def base64_encode(metadata):

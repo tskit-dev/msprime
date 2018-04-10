@@ -11,7 +11,6 @@ extern "C" {
 
 #include "util.h"
 #include "object_heap.h"
-#include "avl.h"
 
 typedef int32_t node_id_t;
 typedef int32_t edge_id_t;
@@ -192,15 +191,19 @@ typedef struct _simplify_segment_t {
     node_id_t node;
 } simplify_segment_t;
 
-typedef struct _mutation_node_list_t {
-    mutation_id_t mutation_id;
-    struct _mutation_node_list_t *next;
-} mutation_node_list_t;
+typedef struct _mutation_id_list_t {
+    mutation_id_t mutation;
+    struct _mutation_id_list_t *next;
+} mutation_id_list_t;
 
+/* State needed for overlapping segments algorithm */
 typedef struct {
-    double position;
-    mutation_node_list_t *head;
-} mutation_position_map_t;
+    size_t index;
+    size_t num_overlapping;
+    double left;
+    double right;
+    simplify_segment_t **overlapping;
+} overlapping_segments_state_t;
 
 typedef struct {
     node_id_t *samples;
@@ -210,7 +213,6 @@ typedef struct {
     /* Keep a copy of the input nodes simplify mapping */
     node_table_t input_nodes;
     /* TODO remove this field when name_offset has been added to node_table. */
-    size_t *node_name_offset;
     /* Also keep a copy of the input edges and a buffer to store unsorted edges */
     edge_table_t input_edges;
     edge_t *edge_buffer;
@@ -225,22 +227,29 @@ typedef struct {
     site_table_t *sites;
     mutation_table_t *mutations;
     /* State for topology */
-    simplify_segment_t **ancestor_map;
+    simplify_segment_t **ancestor_map_head;
+    simplify_segment_t **ancestor_map_tail;
     node_id_t *node_id_map;
     bool *is_sample;
-    avl_tree_t merge_queue;
+    /* Segments for a particular parent that are processed together */
+    simplify_segment_t *segment_queue;
+    size_t segment_queue_size;
+    size_t max_segment_queue_size;
+    overlapping_segments_state_t overlapping_segments_state;
+    /* TODO this heap is overkill here because we're not freeing
+     * segments as we go. Can use something simpler and get rid of
+     * the object_heap include above */
     object_heap_t segment_heap;
-    object_heap_t avl_node_heap;
     size_t segment_buffer_size;
     simplify_segment_t **segment_buffer;
     /* For each mutation, map its output node. */
     node_id_t *mutation_node_map;
     /* Map of input mutation IDs to output mutation IDs. */
     mutation_id_t *mutation_id_map;
-    /* For each input node, map position -> list of mutation IDs */
-    avl_tree_t *mutation_position_map;
-    mutation_node_list_t *mutation_node_list_mem;
-    mutation_position_map_t *mutation_position_map_mem;
+    /* Map of input nodes to the list of input mutation IDs */
+    mutation_id_list_t **node_mutation_list_map_head;
+    mutation_id_list_t **node_mutation_list_map_tail;
+    mutation_id_list_t *node_mutation_list_mem;
 } simplifier_t;
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,

@@ -42,6 +42,140 @@ import tests
 import tests.tsutil as tsutil
 
 
+def generate_segments(n, sequence_length=100, seed=None):
+    rng = random.Random(seed)
+    segs = []
+    for j in range(n):
+        left = rng.randint(0, sequence_length - 1)
+        right = rng.randint(left + 1, sequence_length)
+        assert left < right
+        segs.append(tests.Segment(left, right, j))
+    return segs
+
+
+class TestOverlappingSegments(unittest.TestCase):
+    """
+    Tests for the overlapping segments algorithm required for simplify.
+    This test probably belongs somewhere else.
+    """
+
+    def test_random(self):
+        segs = generate_segments(10, 20, 1)
+        for left, right, X in tests.overlapping_segments(segs):
+            self.assertGreater(right, left)
+            self.assertGreater(len(X), 0)
+
+    def test_empty(self):
+        ret = list(tests.overlapping_segments([]))
+        self.assertEqual(len(ret), 0)
+
+    def test_single_interval(self):
+        for j in range(1, 10):
+            segs = [tests.Segment(0, 1, j) for _ in range(j)]
+            ret = list(tests.overlapping_segments(segs))
+            self.assertEqual(len(ret), 1)
+            left, right, X = ret[0]
+            self.assertEqual(left, 0)
+            self.assertEqual(right, 1)
+            self.assertEqual(sorted(segs), sorted(X))
+
+    def test_stairs_down(self):
+        segs = [
+            tests.Segment(0, 1, 0),
+            tests.Segment(0, 2, 1),
+            tests.Segment(0, 3, 2)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 3)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(sorted(X), sorted(segs))
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 1)
+        self.assertEqual(right, 2)
+        self.assertEqual(sorted(X), sorted(segs[1:]))
+
+        left, right, X = ret[2]
+        self.assertEqual(left, 2)
+        self.assertEqual(right, 3)
+        self.assertEqual(sorted(X), sorted(segs[2:]))
+
+    def test_stairs_up(self):
+        segs = [
+            tests.Segment(0, 3, 0),
+            tests.Segment(1, 3, 1),
+            tests.Segment(2, 3, 2)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 3)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(X, segs[:1])
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 1)
+        self.assertEqual(right, 2)
+        self.assertEqual(sorted(X), sorted(segs[:2]))
+
+        left, right, X = ret[2]
+        self.assertEqual(left, 2)
+        self.assertEqual(right, 3)
+        self.assertEqual(sorted(X), sorted(segs))
+
+    def test_pyramid(self):
+        segs = [
+            tests.Segment(0, 5, 0),
+            tests.Segment(1, 4, 1),
+            tests.Segment(2, 3, 2)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 5)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(X, segs[:1])
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 1)
+        self.assertEqual(right, 2)
+        self.assertEqual(sorted(X), sorted(segs[:2]))
+
+        left, right, X = ret[2]
+        self.assertEqual(left, 2)
+        self.assertEqual(right, 3)
+        self.assertEqual(sorted(X), sorted(segs))
+
+        left, right, X = ret[3]
+        self.assertEqual(left, 3)
+        self.assertEqual(right, 4)
+        self.assertEqual(sorted(X), sorted(segs[:2]))
+
+        left, right, X = ret[4]
+        self.assertEqual(left, 4)
+        self.assertEqual(right, 5)
+        self.assertEqual(sorted(X), sorted(segs[:1]))
+
+    def test_gap(self):
+        segs = [
+            tests.Segment(0, 2, 0),
+            tests.Segment(3, 4, 1)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 2)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 2)
+        self.assertEqual(X, segs[:1])
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 3)
+        self.assertEqual(right, 4)
+        self.assertEqual(X, segs[1:])
+
+
 class TopologyTestCase(unittest.TestCase):
     """
     Superclass of test cases containing common utilities.
@@ -2341,19 +2475,11 @@ class TestSimplify(unittest.TestCase):
                 sequence_length=ts.sequence_length)
             py_tables = new_ts.dump_tables()
             # print("lib = ")
-            # print(lib_tables.sites)
-            # print(lib_tables.mutations)
+            # print(lib_tables.nodes)
+            # print(lib_tables.edges)
             # print("py = ")
-            # print(py_tables.sites)
-            # print(py_tables.mutations)
-
-            # print("LIB SIMPLIFIED")
-            # lib_ts = msprime.load_tables(lib_tables.nodes, lib_tables.edges)
-            # for tree in lib_ts.trees():
-            #     print(tree.draw(format="unicode"))
-            # print("PY SIMPLIFIED")
-            # for tree in new_ts.trees():
-            #     print(tree.draw(format="unicode"))
+            # print(py_tables.nodes)
+            # print(py_tables.edges)
 
             self.assertEqual(lib_tables.nodes, py_tables.nodes)
             self.assertEqual(lib_tables.edges, py_tables.edges)
@@ -2557,7 +2683,6 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 0)
         self.assertEqual(list(tss.haplotypes()), ["", ""])
 
-    @unittest.skip("Mutations over roots failing")
     def test_small_tree_mutations_over_root(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
@@ -2570,9 +2695,10 @@ class TestSimplify(unittest.TestCase):
             mutations=tables.mutations)
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 1)
-        tss, _ = self.do_simplify(ts, None, filter_zero_mutation_sites=True)
-        self.assertEqual(tss.num_sites, 0)
-        self.assertEqual(tss.num_mutations, 0)
+        for filt in [True, False]:
+            tss, _ = self.do_simplify(ts, [0, 1], filter_zero_mutation_sites=filt)
+            self.assertEqual(tss.num_sites, 1)
+            self.assertEqual(tss.num_mutations, 1)
 
     def test_small_tree_recurrent_mutations(self):
         ts = msprime.load_text(
