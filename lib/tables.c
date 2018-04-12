@@ -2219,14 +2219,25 @@ cmp_segment(const void *a, const void *b) {
     return ret;
 }
 
+static int
+cmp_node_id(const void *a, const void *b) {
+    const node_id_t *ia = (const node_id_t *) a;
+    const node_id_t *ib = (const node_id_t *) b;
+    return (*ia > *ib) - (*ia < *ib);
+}
+
 static void
 simplifier_check_state(simplifier_t *self)
 {
-    size_t j;
+    size_t j, k;
     simplify_segment_t *u;
     mutation_id_list_t *list_node;
     site_id_t site;
+    interval_list_t *int_list;
+    node_id_t child;
     double position, last_position;
+    bool found;
+    size_t num_intervals;
 
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         assert((self->ancestor_map_head[j] == NULL) ==
@@ -2259,6 +2270,37 @@ simplifier_check_state(simplifier_t *self)
             last_position = position;
         }
     }
+
+    /* check the buffered edges */
+    for (j = 0; j < self->input_nodes.num_rows; j++) {
+        assert((self->child_edge_map_head[j] == NULL) ==
+            (self->child_edge_map_tail[j] == NULL));
+        if (self->child_edge_map_head[j] != NULL) {
+            /* Make sure that the child is in our list */
+            found = false;
+            for (k = 0; k < self->num_buffered_children; k++) {
+                if (self->buffered_children[k] == (node_id_t) j) {
+                    found = true;
+                    break;
+                }
+            }
+            assert(found);
+        }
+    }
+    num_intervals = 0;
+    for (j = 0; j < self->num_buffered_children; j++) {
+        child = self->buffered_children[j];
+        assert(self->child_edge_map_head[child] != NULL);
+        for (int_list = self->child_edge_map_head[child]; int_list != NULL;
+                int_list = int_list->next) {
+            assert(int_list->left < int_list->right);
+            if (int_list->next != NULL) {
+                assert(int_list->right < int_list->next->left);
+            }
+            num_intervals++;
+        }
+    }
+    /* assert(num_intervals == object_heap_get_num_allocated(&self->interval_list_heap)); */
 }
 
 static void
@@ -2277,6 +2319,8 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     size_t j;
     simplify_segment_t *u;
     mutation_id_list_t *list_node;
+    interval_list_t *int_list;
+    node_id_t child;
 
     fprintf(out, "--simplifier state--\n");
     fprintf(out, "===\nInput nodes\n==\n");
@@ -2294,7 +2338,9 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     mutation_table_print_state(self->mutations, out);
     fprintf(out, "===\nmemory heaps\n==\n");
     fprintf(out, "segment_heap:\n");
-    /* object_heap_print_state(&self->segment_heap, out); */
+    object_heap_print_state(&self->segment_heap, out);
+    fprintf(out, "interval_list_heap:\n");
+    object_heap_print_state(&self->interval_list_heap, out);
     fprintf(out, "===\nancestors\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         fprintf(out, "%d:\t", (int) j);
@@ -2313,11 +2359,15 @@ simplifier_print_state(simplifier_t *self, FILE *out)
         fprintf(out, "(%f,%f->%d)", u->left, u->right, u->node);
         fprintf(out, "\n");
     }
-    fprintf(out, "===\nbuffered edges\n==\n");
-    for (j = 0; j < self->num_buffered_edges; j++) {
-        fprintf(out, "%f\t%f\t%d\t%d\n", self->edge_buffer[j].left,
-                self->edge_buffer[j].right, self->edge_buffer[j].parent,
-                self->edge_buffer[j].child);
+    fprintf(out, "===\nbuffered children\n==\n");
+    for (j = 0; j < self->num_buffered_children; j++) {
+        child = self->buffered_children[j];
+        fprintf(out, "%d -> ", (int) j);
+        for (int_list = self->child_edge_map_head[child]; int_list != NULL;
+                int_list = int_list->next) {
+            fprintf(out, "(%f, %f), ", int_list->left, int_list->right);
+        }
+        fprintf(out, "\n");
     }
     fprintf(out, "===\nmutation node map\n==\n");
     for (j = 0; j < self->input_mutations.num_rows; j++) {
@@ -2359,6 +2409,27 @@ out:
     return seg;
 }
 
+static interval_list_t * WARN_UNUSED
+simplifier_alloc_interval_list(simplifier_t *self, double left, double right)
+{
+    interval_list_t *x = NULL;
+
+    if (object_heap_empty(&self->interval_list_heap)) {
+        if (object_heap_expand(&self->interval_list_heap) != 0) {
+            goto out;
+        }
+    }
+    x = (interval_list_t *) object_heap_alloc_object(&self->interval_list_heap);
+    if (x == NULL) {
+        goto out;
+    }
+    x->next = NULL;
+    x->left = left;
+    x->right = right;
+out:
+    return x;
+}
+
 /* Add a new node to the output node table corresponding to the specified input id.
  * Returns the new ID. */
 static int WARN_UNUSED
@@ -2383,58 +2454,64 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
 
 
 static int
-simplifier_flush_edges(simplifier_t *self)
+simplifier_flush_edges(simplifier_t *self, node_id_t parent)
 {
     int ret = 0;
-    size_t j, num_output_edges;
-    edge_t e;
+    size_t j;
+    node_id_t child;
+    interval_list_t *x;
 
-    if (self->num_buffered_edges > 0) {
-        ret = squash_edges(self->edge_buffer, self->num_buffered_edges, &num_output_edges);
-        if (ret != 0) {
-            goto out;
-        }
-        /* Flush these edges to the table */
-        for (j = 0; j < num_output_edges; j++) {
-            e = self->edge_buffer[j];
-            ret = edge_table_add_row(self->edges, e.left, e.right, e.parent, e.child);
+    qsort(self->buffered_children, self->num_buffered_children,
+            sizeof(node_id_t), cmp_node_id);
+    for (j = 0; j < self->num_buffered_children; j++) {
+        child = self->buffered_children[j];
+        for (x = self->child_edge_map_head[child]; x != NULL; x = x->next) {
+            ret = edge_table_add_row(self->edges, x->left, x->right, parent, child);
             if (ret < 0) {
                 goto out;
             }
         }
+        self->child_edge_map_head[child] = NULL;
+        self->child_edge_map_tail[child] = NULL;
     }
+    self->num_buffered_children = 0;
     ret = 0;
-    self->num_buffered_edges = 0;
 out:
     return ret;
 }
 
-/* Records the specified edge in the output table */
+/* Records the specified edge for the current parent by buffering it */
 static int
-simplifier_record_edge(simplifier_t *self, double left, double right, node_id_t parent,
-        node_id_t child)
+simplifier_record_edge(simplifier_t *self, double left, double right, node_id_t child)
 {
     int ret = 0;
-    edge_t *e;
+    interval_list_t *tail, *x;
 
-    if (self->num_buffered_edges == self->max_buffered_edges - 1) {
-        /* Grow the array. Use a doubling strategy here as we expect this
-         * to usually be reasonably small */
-        self->max_buffered_edges *= 2;
-        e = realloc(self->edge_buffer, self->max_buffered_edges * sizeof(edge_t));
-        if (e == NULL) {
+    tail = self->child_edge_map_tail[child];
+    if (tail == NULL) {
+        assert(self->num_buffered_children < self->input_nodes.num_rows);
+        self->buffered_children[self->num_buffered_children] = child;
+        self->num_buffered_children++;
+        x = simplifier_alloc_interval_list(self, left, right);
+        if (x == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        self->edge_buffer = e;
+        self->child_edge_map_head[child] = x;
+        self->child_edge_map_tail[child] = x;
+    } else {
+        if (tail->right == left) {
+            tail->right = right;
+        } else {
+            x = simplifier_alloc_interval_list(self, left, right);
+            if (x == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            tail->next = x;
+            self->child_edge_map_tail[child] = x;
+        }
     }
-    assert(self->num_buffered_edges < self->max_buffered_edges);
-    e = self->edge_buffer + self->num_buffered_edges;
-    e->left = left;
-    e->right = right;
-    e->parent = parent;
-    e->child = child;
-    self->num_buffered_edges++;
 out:
     return ret;
 }
@@ -2645,8 +2722,7 @@ int
 simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations,
-        size_t max_buffered_edges, int flags)
+        site_table_t *sites, mutation_table_t *mutations, int flags)
 {
     int ret = 0;
     size_t j, max_alloc_block, num_nodes_alloc, num_edges_alloc;
@@ -2726,16 +2802,6 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-    if (max_buffered_edges == 0) {
-        max_buffered_edges = 1024;
-    }
-    self->max_buffered_edges = max_buffered_edges;
-    self->num_buffered_edges = 0;
-    self->edge_buffer = malloc(self->max_buffered_edges * sizeof(edge_t));
-    if (self->edge_buffer == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
 
     /* Make a copy of the input sites and clear the input table, ready for output. */
     ret = site_table_alloc(&self->input_sites, sites->num_rows,
@@ -2753,7 +2819,6 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-
     /* Make a copy of the input mutations and clear the input table, ready for output. */
     ret = mutation_table_alloc(&self->input_mutations, mutations->num_rows,
             mutations->derived_state_length, mutations->metadata_length);
@@ -2779,10 +2844,18 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
+    ret = object_heap_init(&self->interval_list_heap, sizeof(interval_list_t),
+            8192, NULL);
+    if (ret != 0) {
+        goto out;
+    }
     /* Make the maps and set the intial state */
     self->ancestor_map_head = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
     self->ancestor_map_tail = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
+    self->child_edge_map_head = calloc(num_nodes_alloc, sizeof(interval_list_t *));
+    self->child_edge_map_tail = calloc(num_nodes_alloc, sizeof(interval_list_t *));
     self->node_id_map = malloc(num_nodes_alloc * sizeof(node_id_t));
+    self->buffered_children = malloc(num_nodes_alloc * sizeof(node_id_t));
     self->is_sample = calloc(num_nodes_alloc, sizeof(bool));
     self->max_segment_queue_size = 64;
     self->segment_queue = malloc(self->max_segment_queue_size
@@ -2790,8 +2863,9 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     self->overlapping_segments_state.overlapping = malloc(self->max_segment_queue_size
             * sizeof(simplify_segment_t *));
     if (self->ancestor_map_head == NULL || self->ancestor_map_tail == NULL
+            || self->child_edge_map_head == NULL || self->child_edge_map_tail == NULL
             || self->node_id_map == NULL || self->is_sample == NULL
-            || self->segment_queue == NULL) {
+            || self->segment_queue == NULL || self->buffered_children == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -2818,13 +2892,15 @@ simplifier_free(simplifier_t *self)
     site_table_free(&self->input_sites);
     mutation_table_free(&self->input_mutations);
     object_heap_free(&self->segment_heap);
+    object_heap_free(&self->interval_list_heap);
     msp_safe_free(self->samples);
     msp_safe_free(self->ancestor_map_head);
     msp_safe_free(self->ancestor_map_tail);
+    msp_safe_free(self->child_edge_map_head);
+    msp_safe_free(self->child_edge_map_tail);
     msp_safe_free(self->node_id_map);
     msp_safe_free(self->segment_queue);
     msp_safe_free(self->overlapping_segments_state.overlapping);
-    msp_safe_free(self->edge_buffer);
     msp_safe_free(self->is_sample);
     msp_safe_free(self->mutation_id_map);
     msp_safe_free(self->mutation_node_map);
@@ -2984,8 +3060,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         if (num_overlapping == 1) {
             ancestry_node = X[0]->node;
             if (is_sample) {
-                ret = simplifier_record_edge(self, left, right, output_id,
-                        ancestry_node);
+                ret = simplifier_record_edge(self, left, right, ancestry_node);
                 if (ret != 0) {
                     goto out;
                 }
@@ -3001,7 +3076,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             }
             ancestry_node = output_id;
             for (j = 0; j < num_overlapping; j++) {
-                ret = simplifier_record_edge(self, left, right, output_id, X[j]->node);
+                ret = simplifier_record_edge(self, left, right, X[j]->node);
                 if (ret != 0) {
                     goto out;
                 }
@@ -3033,7 +3108,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             goto out;
         }
     }
-    ret = simplifier_flush_edges(self);
+    ret = simplifier_flush_edges(self, output_id);
 out:
     return ret;
 }
@@ -4479,7 +4554,7 @@ table_collection_simplify(table_collection_t *self,
     /* TODO the simplifier object should take a table collection as a parameter */
     ret = simplifier_alloc(&simplifier, self->sequence_length,
             samples, num_samples, &self->nodes, &self->edges, &self->migrations,
-            &self->sites, &self->mutations, 0, flags);
+            &self->sites, &self->mutations, flags);
     if (ret != 0) {
         goto out;
     }

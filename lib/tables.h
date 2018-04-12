@@ -191,6 +191,12 @@ typedef struct _simplify_segment_t {
     node_id_t node;
 } simplify_segment_t;
 
+typedef struct _interval_list_t {
+    double left;
+    double right;
+    struct _interval_list_t *next;
+} interval_list_t;
+
 typedef struct _mutation_id_list_t {
     mutation_id_t mutation;
     struct _mutation_id_list_t *next;
@@ -212,12 +218,8 @@ typedef struct {
     double sequence_length;
     /* Keep a copy of the input nodes simplify mapping */
     node_table_t input_nodes;
-    /* TODO remove this field when name_offset has been added to node_table. */
     /* Also keep a copy of the input edges and a buffer to store unsorted edges */
     edge_table_t input_edges;
-    edge_t *edge_buffer;
-    size_t num_buffered_edges;
-    size_t max_buffered_edges;
     /* Input copy of the sites and mutations */
     site_table_t input_sites;
     mutation_table_t input_mutations;
@@ -237,11 +239,15 @@ typedef struct {
     size_t max_segment_queue_size;
     overlapping_segments_state_t overlapping_segments_state;
     /* TODO this heap is overkill here because we're not freeing
-     * segments as we go. Can use something simpler and get rid of
-     * the object_heap include above */
+     * segments as we go. Can use something simpler */
     object_heap_t segment_heap;
-    size_t segment_buffer_size;
-    simplify_segment_t **segment_buffer;
+    /* Buffer for output edges. For each child we keep a linked list of
+     * intervals, and also store the actual children that have been buffered. */
+    object_heap_t interval_list_heap;
+    interval_list_t **child_edge_map_head;
+    interval_list_t **child_edge_map_tail;
+    node_id_t *buffered_children;
+    size_t num_buffered_children;
     /* For each mutation, map its output node. */
     node_id_t *mutation_node_map;
     /* Map of input mutation IDs to output mutation IDs. */
@@ -373,8 +379,7 @@ int table_collection_simplify(table_collection_t *self,
 int simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,
         node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations,
-        size_t max_buffered_edges, int flags);
+        site_table_t *sites, mutation_table_t *mutations, int flags);
 int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self, node_id_t *node_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);

@@ -710,7 +710,7 @@ class Simplifier(object):
         self.edge_table = msprime.EdgeTable(ts.num_edges)
         self.site_table = msprime.SiteTable(ts.num_sites)
         self.mutation_table = msprime.MutationTable(ts.num_mutations)
-        self.edge_buffer = []
+        self.edge_buffer = {}
         self.node_id_map = np.zeros(ts.num_nodes, dtype=np.int32) - 1
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
         self.samples = set(sample)
@@ -748,28 +748,23 @@ class Simplifier(object):
         Flush the edges to the output table after sorting and squashing
         any redundant records.
         """
-        if len(self.edge_buffer) > 0:
-            self.edge_buffer.sort(key=lambda e: (e.child, e.left))
-            parent = self.edge_buffer[0].parent
-            left = self.edge_buffer[0].left
-            right = self.edge_buffer[0].right
-            child = self.edge_buffer[0].child
-            for e in self.edge_buffer[1:]:
-                assert e.parent == parent
-                if e.left != right or e.child != child:
-                    self.edge_table.add_row(left, right, parent, child)
-                    left = e.left
-                    child = e.child
-                right = e.right
-            self.edge_table.add_row(left, right, parent, child)
-            self.edge_buffer = []
+        for child in sorted(self.edge_buffer.keys()):
+            for edge in self.edge_buffer[child]:
+                self.edge_table.add_row(edge.left, edge.right, edge.parent, edge.child)
+        self.edge_buffer.clear()
 
     def record_edge(self, left, right, parent, child):
         """
         Adds an edge to the output list.
         """
-        self.edge_buffer.append(
-            msprime.Edge(left=left, right=right, parent=parent, child=child))
+        if child not in self.edge_buffer:
+            self.edge_buffer[child] = [msprime.Edge(left, right, parent, child)]
+        else:
+            last = self.edge_buffer[child][-1]
+            if last.right == left:
+                last.right = right
+            else:
+                self.edge_buffer[child].append(msprime.Edge(left, right, parent, child))
 
     def print_state(self):
         print(".................")
@@ -931,7 +926,6 @@ class Simplifier(object):
                     m_index += 1
 
     def simplify(self):
-        # print("START")
         # self.print_state()
         if self.ts.num_edges > 0:
             all_edges = list(self.ts.edges())
