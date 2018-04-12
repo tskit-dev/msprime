@@ -208,7 +208,7 @@ node_table_copy(node_table_t *self, node_table_t *dest)
 
 int WARN_UNUSED
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
 
@@ -224,7 +224,7 @@ out:
 
 int
 node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
     table_size_t j, metadata_length;
@@ -4548,5 +4548,145 @@ table_collection_simplify(table_collection_t *self,
     }
 out:
     simplifier_free(&simplifier);
+    return ret;
+}
+
+
+/*******************
+ * Cleaning tables *
+ ******************/
+
+typedef struct {
+    site_table_t *sites;
+    mutation_table_t *mutations;
+    /* Map of old site IDs to new site IDs. */
+    site_id_t *site_id_map;
+} table_cleaner_t;
+
+static int table_cleaner_run(table_cleaner_t *self)
+{
+    // Remove any sites with duplicate positions, retaining only the *first*
+    // one. Assumes the tables have been sorted, throwing an error if not.
+
+    int ret = 0;
+    table_size_t j, k, site_j;
+    table_size_t as_length, as_offset;
+    table_size_t md_length, md_offset;
+    table_size_t num_input_sites;
+    double last_position, position;
+
+    num_input_sites = self->sites->num_rows;
+    site_j = 0; // the index of the next output row
+    // this will need to change if negative positions are allowed!
+    last_position = -1;
+    as_offset = 0;
+    md_offset = 0;
+
+    // self->site_id_map[0] = 0;
+    // last_position = self->sites->position[0];
+    // as_offset = self->sites->ancestral_state_offset[1];
+    // md_offset = self->sites->metadata_offset[1];
+    for (j = 0; j < self->sites->num_rows; j++) {
+        position = self->sites->position[j];
+        if (position < last_position) {
+            ret = MSP_ERR_UNSORTED_SITES;
+            goto out;
+        }
+        if (position != last_position) {
+            as_length = (self->sites->ancestral_state_offset[j + 1] 
+                    - self->sites->ancestral_state_offset[j]);
+            md_length = self->sites->metadata_offset[j + 1] - self->sites->metadata_offset[j];
+            if (site_j != j) {
+                assert(site_j < j);
+                self->sites->position[site_j] = self->sites->position[j];
+                self->sites->ancestral_state_offset[site_j] = as_offset;
+                memcpy(self->sites->ancestral_state + self->sites->ancestral_state_offset[site_j],
+                        self->sites->ancestral_state + self->sites->ancestral_state_offset[j],
+                        as_length);
+                self->sites->metadata_offset[site_j] = md_offset;
+                memcpy(self->sites->metadata + self->sites->metadata_offset[site_j],
+                        self->sites->metadata + self->sites->metadata_offset[j],
+                        md_length);
+            }
+            as_offset += as_length;
+            md_offset += md_length;
+            last_position = position;
+            site_j++;
+        }
+        self->site_id_map[j] = site_j - 1;
+    }
+
+    self->sites->num_rows = site_j;
+    self->sites->ancestral_state_length = self->sites->ancestral_state_offset[site_j];
+    self->sites->metadata_length = self->sites->metadata_offset[site_j];
+
+    if (self->sites->num_rows < num_input_sites) {
+        // Remap sites in the mutation table
+        // (but only if there's been any changed sites)
+        for (j = 0; j < self->mutations->num_rows; j++) {
+            k = self->mutations->site[j];
+            assert(k < num_input_sites);
+            self->mutations->site[j] = self->site_id_map[k];
+        }
+    }
+
+out:
+    return ret;
+}
+
+static int 
+table_cleaner_alloc(table_cleaner_t *self, 
+        site_table_t *sites,
+        mutation_table_t *mutations) {
+    int ret = 0;
+
+    memset(self, 0, sizeof(table_cleaner_t));
+    if (sites == NULL || mutations == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->sites = sites;
+    self->mutations = mutations;
+
+    self->site_id_map = malloc(sites->num_rows * sizeof(site_id_t));
+    if (self->site_id_map == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+out:
+    return ret;
+}
+
+static void
+table_cleaner_free(table_cleaner_t *self)
+{
+    msp_safe_free(self->site_id_map);
+}
+
+int
+clean_tables(site_table_t *sites, mutation_table_t *mutations)
+{
+    int ret = 0;
+    table_cleaner_t *cleaner = NULL;
+
+    cleaner = malloc(sizeof(table_cleaner_t));
+    if (cleaner == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    ret = table_cleaner_alloc(cleaner, sites, mutations);
+    if (ret != 0) {
+        goto out;
+    }
+
+    ret = table_cleaner_run(cleaner);
+
+out:
+    if (cleaner != NULL) {
+        table_cleaner_free(cleaner);
+        free(cleaner);
+    }
     return ret;
 }

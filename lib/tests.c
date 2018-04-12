@@ -626,6 +626,64 @@ verify_migrations_equal(migration_t *r1, migration_t *r2, double scale)
 }
 
 static void
+verify_site_tables_equal(site_table_t *s1, site_table_t *s2)
+{
+    double eps = 1e-6;
+    table_size_t j, k;
+    table_size_t as1_length, as2_length;
+    table_size_t md1_length, md2_length;
+
+    CU_ASSERT_EQUAL_FATAL(s1->num_rows, s2->num_rows);
+    CU_ASSERT_EQUAL_FATAL(s1->ancestral_state_length, s2->ancestral_state_length);
+    CU_ASSERT_EQUAL_FATAL(s1->metadata_length, s2->metadata_length);
+    for (j = 0; j < s1->num_rows; j++) {
+        CU_ASSERT_DOUBLE_EQUAL_FATAL(s1->position[j], s2->position[j], eps);
+        CU_ASSERT_EQUAL_FATAL(s1->ancestral_state_offset[j], s2->ancestral_state_offset[j]);
+        as1_length = s1->ancestral_state_offset[j+1] - s1->ancestral_state_offset[j];
+        as2_length = s2->ancestral_state_offset[j+1] - s2->ancestral_state_offset[j];
+        CU_ASSERT_EQUAL_FATAL(as1_length, as2_length);
+        for (k = 0; k < as1_length; k++) {
+            CU_ASSERT_EQUAL_FATAL(s1->ancestral_state[k], s2->ancestral_state[k]);
+        }
+        CU_ASSERT_EQUAL_FATAL(s1->metadata_offset[j], s2->metadata_offset[j]);
+        md1_length = s1->metadata_offset[j+1] - s1->metadata_offset[j];
+        md2_length = s2->metadata_offset[j+1] - s2->metadata_offset[j];
+        CU_ASSERT_EQUAL_FATAL(md1_length, md2_length);
+        for (k = 0; k < md1_length; k++) {
+            CU_ASSERT_EQUAL_FATAL(s1->metadata[k], s2->metadata[k]);
+        }
+    }
+}
+
+static void
+verify_mutation_tables_equal(mutation_table_t *m1, mutation_table_t *m2)
+{
+    // NOTE: does not check parent column
+    table_size_t j, k;
+    table_size_t m1_length, m2_length;
+
+    CU_ASSERT_EQUAL_FATAL(m1->num_rows, m2->num_rows);
+    CU_ASSERT_EQUAL_FATAL(m1->derived_state_length, m2->derived_state_length);
+    CU_ASSERT_EQUAL_FATAL(m1->metadata_length, m2->metadata_length);
+
+    for (j = 0; j < m1->num_rows; j++) {
+        CU_ASSERT_EQUAL_FATAL(m1->site[j], m2->site[j]);
+        m1_length = m1->derived_state_offset[j+1] - m1->derived_state_offset[j];
+        m2_length = m2->derived_state_offset[j+1] - m2->derived_state_offset[j];
+        CU_ASSERT_EQUAL_FATAL(m1_length, m2_length);
+        for (k = 0; k < m1_length; k++) {
+            CU_ASSERT_EQUAL_FATAL(m1->derived_state[k], m2->derived_state[k]);
+        }
+        m1_length = m1->metadata_offset[j+1] - m1->metadata_offset[j];
+        m2_length = m2->metadata_offset[j+1] - m2->metadata_offset[j];
+        CU_ASSERT_EQUAL_FATAL(m1_length, m2_length);
+        for (k = 0; k < m1_length; k++) {
+            CU_ASSERT_EQUAL_FATAL(m1->metadata[k], m2->metadata[k]);
+        }
+    }
+}
+
+static void
 verify_provenances_equal(provenance_t *p1, provenance_t *p2)
 {
     CU_ASSERT_FATAL(p1->timestamp_length == p2->timestamp_length);
@@ -2279,7 +2337,7 @@ test_simplest_degenerate_multiple_root_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
 
-    sparse_tree_alloc(&t, &ts, 0);
+    ret = sparse_tree_alloc(&t, &ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_first(&t);
     CU_ASSERT_EQUAL(ret, 1);
@@ -5674,6 +5732,101 @@ test_sort_tables(void)
 }
 
 static void
+test_clean_tree_sequence(void)
+{
+    int ret;
+    // Modified from paper_ex
+    const char *tidy_sites =
+        "1      0\n"
+        "4.5    0\n"
+        "8.5    0\n";
+    const char *tidy_mutations =
+        "0      2   1\n"
+        "0      1   2\n"
+        "0      6   3\n"
+        "0      3   4\n"
+        "1      0   1\n"
+        "1      2   2\n"
+        "1      4   3\n"
+        "1      5   4\n"
+        "2      5   1\n"
+        "2      7   2\n"
+        "2      1   3\n"
+        "2      0   4\n";
+    const char *messy_sites =
+        "1      0\n"
+        "1      0\n"
+        "1      0\n"
+        "1      0\n"
+        "4.5    0\n"
+        "4.5    0\n"
+        "4.5    0\n"
+        "4.5    0\n"
+        "8.5    0\n"
+        "8.5    0\n"
+        "8.5    0\n"
+        "8.5    0\n";
+    const char *messy_mutations =
+        "0      2   1\n"
+        "1      1   2\n"
+        "2      6   3\n"
+        "3      3   4\n"
+        "4      0   1\n"
+        "5      2   2\n"
+        "6      4   3\n"
+        "7      5   4\n"
+        "8      5   1\n"
+        "9      7   2\n"
+        "10     1   3\n"
+        "11     0   4\n";
+    site_table_t *tidy_site_table = malloc(sizeof(site_table_t)); 
+    site_table_t *messy_site_table = malloc(sizeof(site_table_t));
+    mutation_table_t *tidy_mutation_table = malloc(sizeof(mutation_table_t));
+    mutation_table_t *messy_mutation_table = malloc(sizeof(mutation_table_t));
+    ret = site_table_alloc(tidy_site_table, 100, 100, 100);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_alloc(messy_site_table, 100, 100, 100);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(tidy_mutation_table, 100, 100, 100);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutation_table_alloc(messy_mutation_table, 100, 100, 100);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_sites(tidy_sites, tidy_site_table);
+    parse_mutations(tidy_mutations, tidy_mutation_table);
+
+    // test cleaning doesn't mess up the tidy one
+    parse_sites(tidy_sites, messy_site_table);
+    parse_mutations(tidy_mutations, messy_mutation_table);
+
+    ret = clean_tables(messy_site_table, messy_mutation_table);
+    CU_ASSERT_EQUAL(ret, 0);
+    verify_site_tables_equal(tidy_site_table, messy_site_table);
+    verify_mutation_tables_equal(tidy_mutation_table, messy_mutation_table);
+
+    site_table_clear(messy_site_table);
+    mutation_table_clear(messy_mutation_table);
+
+    // test with the actual messy one
+    parse_sites(messy_sites, messy_site_table);
+    parse_mutations(messy_mutations, messy_mutation_table);
+
+    ret = clean_tables(messy_site_table, messy_mutation_table);
+    CU_ASSERT_EQUAL(ret, 0);
+    verify_site_tables_equal(tidy_site_table, messy_site_table);
+    verify_mutation_tables_equal(tidy_mutation_table, messy_mutation_table);
+
+    site_table_free(tidy_site_table);
+    free(tidy_site_table);
+    site_table_free(messy_site_table);
+    free(messy_site_table);
+    mutation_table_free(tidy_mutation_table);
+    free(tidy_mutation_table);
+    mutation_table_free(messy_mutation_table);
+    free(messy_mutation_table);
+}
+
+static void
 test_dump_tables(void)
 {
     int ret;
@@ -6769,6 +6922,7 @@ main(int argc, char **argv)
         {"test_save_hdf5_tables", test_save_hdf5_tables},
         {"test_dump_tables", test_dump_tables},
         {"test_sort_tables", test_sort_tables},
+        {"test_clean_tree_sequence", test_clean_tree_sequence},
         {"test_dump_tables_hdf5", test_dump_tables_hdf5},
         {"test_error_messages", test_strerror},
         {"test_node_table", test_node_table},
