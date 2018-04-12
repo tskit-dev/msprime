@@ -10,7 +10,6 @@ extern "C" {
 #include <stdint.h>
 
 #include "util.h"
-#include "object_heap.h"
 
 typedef int32_t node_id_t;
 typedef int32_t edge_id_t;
@@ -181,6 +180,9 @@ typedef struct {
     table_size_t record_length;
 } provenance_t;
 
+/* TODO Move the simplifier structs into the tables.c file. We don't need to
+ * expose this API externally, and can use table_collection_simplify
+ * instead */
 
 /* For the simplify algorithm, we need specialised forms of ancestral
  * segments, sites and mutations */
@@ -238,12 +240,10 @@ typedef struct {
     size_t segment_queue_size;
     size_t max_segment_queue_size;
     overlapping_segments_state_t overlapping_segments_state;
-    /* TODO this heap is overkill here because we're not freeing
-     * segments as we go. Can use something simpler */
-    object_heap_t segment_heap;
+    block_allocator_t segment_heap;
     /* Buffer for output edges. For each child we keep a linked list of
      * intervals, and also store the actual children that have been buffered. */
-    object_heap_t interval_list_heap;
+    block_allocator_t interval_list_heap;
     interval_list_t **child_edge_map_head;
     interval_list_t **child_edge_map_tail;
     node_id_t *buffered_children;

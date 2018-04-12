@@ -26,9 +26,7 @@
 
 #include <hdf5.h>
 
-#include "util.h"
 #include "tables.h"
-#include "object_heap.h"
 
 #define DEFAULT_SIZE_INCREMENT 1024
 
@@ -2300,7 +2298,8 @@ simplifier_check_state(simplifier_t *self)
             num_intervals++;
         }
     }
-    /* assert(num_intervals == object_heap_get_num_allocated(&self->interval_list_heap)); */
+    assert(num_intervals ==
+        self->interval_list_heap.total_allocated / (sizeof(interval_list_t)));
 }
 
 static void
@@ -2338,9 +2337,9 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     mutation_table_print_state(self->mutations, out);
     fprintf(out, "===\nmemory heaps\n==\n");
     fprintf(out, "segment_heap:\n");
-    object_heap_print_state(&self->segment_heap, out);
+    block_allocator_print_state(&self->segment_heap, out);
     fprintf(out, "interval_list_heap:\n");
-    object_heap_print_state(&self->interval_list_heap, out);
+    block_allocator_print_state(&self->interval_list_heap, out);
     fprintf(out, "===\nancestors\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         fprintf(out, "%d:\t", (int) j);
@@ -2392,12 +2391,7 @@ simplifier_alloc_segment(simplifier_t *self, double left, double right, node_id_
 {
     simplify_segment_t *seg = NULL;
 
-    if (object_heap_empty(&self->segment_heap)) {
-        if (object_heap_expand(&self->segment_heap) != 0) {
-            goto out;
-        }
-    }
-    seg = (simplify_segment_t *) object_heap_alloc_object(&self->segment_heap);
+    seg = block_allocator_get(&self->segment_heap, sizeof(*seg));
     if (seg == NULL) {
         goto out;
     }
@@ -2414,12 +2408,7 @@ simplifier_alloc_interval_list(simplifier_t *self, double left, double right)
 {
     interval_list_t *x = NULL;
 
-    if (object_heap_empty(&self->interval_list_heap)) {
-        if (object_heap_expand(&self->interval_list_heap) != 0) {
-            goto out;
-        }
-    }
-    x = (interval_list_t *) object_heap_alloc_object(&self->interval_list_heap);
+    x = block_allocator_get(&self->interval_list_heap, sizeof(*x));
     if (x == NULL) {
         goto out;
     }
@@ -2475,7 +2464,7 @@ simplifier_flush_edges(simplifier_t *self, node_id_t parent)
         self->child_edge_map_tail[child] = NULL;
     }
     self->num_buffered_children = 0;
-    ret = 0;
+    ret = block_allocator_reset(&self->interval_list_heap);
 out:
     return ret;
 }
@@ -2725,7 +2714,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         site_table_t *sites, mutation_table_t *mutations, int flags)
 {
     int ret = 0;
-    size_t j, max_alloc_block, num_nodes_alloc, num_edges_alloc;
+    size_t j, num_nodes_alloc;
 
     memset(self, 0, sizeof(simplifier_t));
     self->num_samples = num_samples;
@@ -2761,10 +2750,8 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     memcpy(self->samples, samples, num_samples * sizeof(node_id_t));
 
     /* If we have more then 256K blocks or edges just allocate this much */
-    max_alloc_block = 256 * 1024;
     /* Need to avoid malloc(0) so make sure we have at least 1. */
-    num_nodes_alloc = MSP_MAX(max_alloc_block, 1 + nodes->num_rows);
-    num_edges_alloc = MSP_MAX(max_alloc_block, 1 + edges->num_rows);
+    num_nodes_alloc = 1 + nodes->num_rows;
 
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
@@ -2836,16 +2823,12 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     if (ret != 0) {
         goto out;
     }
-
-    /* Allocate the heaps used for small objects. */
-    /* TODO assuming that the number of edges is a good guess here. */
-    ret = object_heap_init(&self->segment_heap, sizeof(simplify_segment_t),
-            num_edges_alloc, NULL);
+    /* Allocate the heaps used for small objects. Assuming 8K is a good chunk size */
+    ret = block_allocator_alloc(&self->segment_heap, 8192);
     if (ret != 0) {
         goto out;
     }
-    ret = object_heap_init(&self->interval_list_heap, sizeof(interval_list_t),
-            8192, NULL);
+    ret = block_allocator_alloc(&self->interval_list_heap, 8192);
     if (ret != 0) {
         goto out;
     }
@@ -2891,8 +2874,8 @@ simplifier_free(simplifier_t *self)
     edge_table_free(&self->input_edges);
     site_table_free(&self->input_sites);
     mutation_table_free(&self->input_mutations);
-    object_heap_free(&self->segment_heap);
-    object_heap_free(&self->interval_list_heap);
+    block_allocator_free(&self->segment_heap);
+    block_allocator_free(&self->interval_list_heap);
     msp_safe_free(self->samples);
     msp_safe_free(self->ancestor_map_head);
     msp_safe_free(self->ancestor_map_tail);
@@ -2907,6 +2890,7 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->node_mutation_list_mem);
     msp_safe_free(self->node_mutation_list_map_head);
     msp_safe_free(self->node_mutation_list_map_tail);
+    msp_safe_free(self->buffered_children);
     return 0;
 }
 
