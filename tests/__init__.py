@@ -705,10 +705,6 @@ class Simplifier(object):
         self.input_sites = list(ts.sites())
         self.A_head = [None for _ in range(ts.num_nodes)]
         self.A_tail = [None for _ in range(ts.num_nodes)]
-        # Use a head sentinel on the linked lists for convenience.
-        for j in range(ts.num_nodes):
-            self.A_head[j] = Segment(0, 0, -1)
-            self.A_tail[j] = self.A_head[j]
         self.mutation_table = msprime.MutationTable(ts.num_mutations)
         self.node_table = msprime.NodeTable(ts.num_nodes)
         self.edge_table = msprime.EdgeTable(ts.num_edges)
@@ -781,7 +777,7 @@ class Simplifier(object):
         num_nodes = len(self.A_tail)
         for j in range(num_nodes):
             print("\t", j, "->", end="")
-            x = self.A_head[j].next
+            x = self.A_head[j]
             while x is not None:
                 print("({}-{}->{})".format(x.left, x.right, x.node), end="")
                 x = x.next
@@ -809,12 +805,17 @@ class Simplifier(object):
 
     def add_ancestry(self, input_id, left, right, node):
         tail = self.A_tail[input_id]
-        if tail.right == left and tail.node == node:
-            tail.right = right
-        else:
+        if tail is None:
             x = Segment(left, right, node)
-            tail.next = x
+            self.A_head[input_id] = x
             self.A_tail[input_id] = x
+        else:
+            if tail.right == left and tail.node == node:
+                tail.right = right
+            else:
+                x = Segment(left, right, node)
+                tail.next = x
+                self.A_tail[input_id] = x
 
     def merge_labeled_ancestors(self, S, input_id):
         """
@@ -827,8 +828,8 @@ class Simplifier(object):
             # Free up the existing ancestry mapping.
             x = self.A_tail[input_id]
             assert x.left == 0 and x.right == self.sequence_length
-            self.A_tail[input_id] = self.A_head[input_id]
-            self.A_head[input_id].next = None
+            self.A_tail[input_id] = None
+            self.A_head[input_id] = None
 
         prev_right = 0
         for left, right, X in overlapping_segments(S):
@@ -862,7 +863,7 @@ class Simplifier(object):
         parent = edges[0].parent
         S = []
         for edge in edges:
-            x = self.A_head[edge.child].next
+            x = self.A_head[edge.child]
             while x is not None:
                 if x.right > edge.left and edge.right > x.left:
                     y = Segment(max(x.left, edge.left), min(x.right, edge.right), x.node)
@@ -916,7 +917,7 @@ class Simplifier(object):
     def map_mutation_nodes(self):
         for input_node in range(len(self.mutation_map)):
             mutations = self.mutation_map[input_node]
-            seg = self.A_head[input_node].next
+            seg = self.A_head[input_node]
             m_index = 0
             while seg is not None and m_index < len(mutations):
                 x, mutation_id = mutations[m_index]
@@ -955,22 +956,22 @@ class Simplifier(object):
         for j in range(num_nodes):
             head = self.A_head[j]
             tail = self.A_tail[j]
-            assert head.left == 0
-            assert head.right == 0
-            assert head.node == -1
-            x = head
-            while x.next is not None:
-                x = x.next
-            assert x == tail
-            x = head.next
-            while x is not None:
-                assert x.left < x.right
-                if x.next is not None:
-                    assert x.right <= x.next.left
-                    # We should also not have any squashable segments.
-                    if x.right == x.next.left:
-                        assert x.node != x.next.node
-                x = x.next
+            if head is None:
+                assert tail is None
+            else:
+                x = head
+                while x.next is not None:
+                    x = x.next
+                assert x == tail
+                x = head.next
+                while x is not None:
+                    assert x.left < x.right
+                    if x.next is not None:
+                        assert x.right <= x.next.left
+                        # We should also not have any squashable segments.
+                        if x.right == x.next.left:
+                            assert x.node != x.next.node
+                    x = x.next
 
 
 def base64_encode(metadata):

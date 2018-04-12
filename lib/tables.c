@@ -2229,11 +2229,9 @@ simplifier_check_state(simplifier_t *self)
     double position, last_position;
 
     for (j = 0; j < self->input_nodes.num_rows; j++) {
-        assert(self->ancestor_map_head[j] != NULL);
-        assert(self->ancestor_map_head[j]->left == 0);
-        assert(self->ancestor_map_head[j]->right == 0);
-        assert(self->ancestor_map_head[j]->node == -1);
-        for (u = self->ancestor_map_head[j]->next; u != NULL; u = u->next) {
+        assert((self->ancestor_map_head[j] == NULL) ==
+                (self->ancestor_map_tail[j] == NULL));
+        for (u = self->ancestor_map_head[j]; u != NULL; u = u->next) {
             assert(u->left < u->right);
             if (u->next != NULL) {
                 assert(u->right <= u->next->left);
@@ -2300,7 +2298,7 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     fprintf(out, "===\nancestors\n==\n");
     for (j = 0; j < self->input_nodes.num_rows; j++) {
         fprintf(out, "%d:\t", (int) j);
-        print_segment_chain(self->ancestor_map_head[j]->next, out);
+        print_segment_chain(self->ancestor_map_head[j], out);
         fprintf(out, "\n");
     }
     fprintf(out, "===\nnode_id map (input->output)\n==\n");
@@ -2587,17 +2585,26 @@ simplifier_add_ancestry(simplifier_t *self, node_id_t input_id, double left, dou
     simplify_segment_t *x;
 
     assert(left < right);
-    assert(tail != NULL);
-    if (tail->right == left && tail->node == output_id) {
-        tail->right = right;
-    } else {
+    if (tail == NULL) {
         x = simplifier_alloc_segment(self, left, right, output_id);
         if (x == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        tail->next = x;
+        self->ancestor_map_head[input_id] = x;
         self->ancestor_map_tail[input_id] = x;
+    } else {
+        if (tail->right == left && tail->node == output_id) {
+            tail->right = right;
+        } else {
+            x = simplifier_alloc_segment(self, left, right, output_id);
+            if (x == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            tail->next = x;
+            self->ancestor_map_tail[input_id] = x;
+        }
     }
 out:
     return ret;
@@ -2643,7 +2650,6 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
 {
     int ret = 0;
     size_t j, max_alloc_block, num_nodes_alloc, num_edges_alloc;
-    simplify_segment_t *sentinel;
 
     memset(self, 0, sizeof(simplifier_t));
     self->num_samples = num_samples;
@@ -2791,16 +2797,6 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
     memset(self->node_id_map, 0xff, self->input_nodes.num_rows * sizeof(node_id_t));
     self->nodes->num_rows = 0;
-    /* Set up the ancestor map sentinels */
-    for (j = 0; j < num_nodes_alloc; j++) {
-        sentinel = simplifier_alloc_segment(self, 0, 0, -1);
-        if (sentinel == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        self->ancestor_map_head[j] = sentinel;
-        self->ancestor_map_tail[j] = sentinel;
-    }
     ret = simplifier_init_samples(self, samples);
     if (ret != 0) {
         goto out;
@@ -2972,8 +2968,8 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         /* Free up the existing ancestry mapping. */
         x = self->ancestor_map_tail[input_id];
         assert(x->left == 0 && x->right == self->sequence_length);
-        self->ancestor_map_tail[input_id] = self->ancestor_map_head[input_id];
-        self->ancestor_map_head[input_id]->next = NULL;
+        self->ancestor_map_head[input_id] = NULL;
+        self->ancestor_map_tail[input_id] = NULL;
     }
 
     ret = simplifier_overlapping_segments_init(self);
@@ -3059,7 +3055,7 @@ simplifier_process_parent_edges(simplifier_t *self, node_id_t parent, size_t sta
         child = self->input_edges.child[j];
         left = self->input_edges.left[j];
         right = self->input_edges.right[j];
-        for (x = self->ancestor_map_head[child]->next; x != NULL; x = x->next) {
+        for (x = self->ancestor_map_head[child]; x != NULL; x = x->next) {
             if (x->right > left && right > x->left) {
                 ret = simplifier_enqueue_segment(self,
                         MSP_MAX(x->left, left), MSP_MIN(x->right, right), x->node);
@@ -3089,7 +3085,7 @@ simplifier_map_mutation_nodes(simplifier_t *self)
     double position;
 
     for (input_node = 0; input_node < self->input_nodes.num_rows; input_node++) {
-        seg = self->ancestor_map_head[input_node]->next;
+        seg = self->ancestor_map_head[input_node];
         m_node = self->node_mutation_list_map_head[input_node];
         /* Co-iterate over the segments and mutations; mutations must be listed
          * in increasing order of site position */
