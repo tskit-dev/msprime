@@ -20,10 +20,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <stdlib.h>
 
-#include "util.h"
-#include "object_heap.h"
-#include "msprime.h"
+#include "trees.h"
 
 
 /* Ensure the tree is in a consistent state */
