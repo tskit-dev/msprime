@@ -20,11 +20,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <stdlib.h>
 
-#include <gsl/gsl_math.h>
-
-#include "util.h"
-#include "msprime.h"
+#include "trees.h"
 
 void
 vcf_converter_print_state(vcf_converter_t *self, FILE* out)
@@ -278,7 +276,7 @@ vcf_converter_alloc(vcf_converter_t *self,
     self->contig_length =
         (unsigned long) round(tree_sequence_get_sequence_length(tree_sequence));
     if (self->num_sites > 0) {
-        self->contig_length = GSL_MAX(
+        self->contig_length = MSP_MAX(
             self->contig_length,
             self->positions[self->num_sites - 1]);
     }
