@@ -563,12 +563,13 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(len(ancestors), sim.get_num_ancestors())
         for ind in ancestors:
             the_pop_id = ind[0][-1]
-            for l, r, node, pop_id in ind:
+            for l, r, node, pop_id, label in ind:
                 self.assertTrue(0 <= l < m)
                 self.assertTrue(1 <= r <= m)
                 self.assertGreaterEqual(node, 0)
                 self.assertTrue(0 <= pop_id < N)
                 self.assertEqual(the_pop_id, pop_id)
+                self.assertEqual(label, 0)
         breakpoints = [0] + sim.get_breakpoints() + [m]
         self.assertEqual(len(breakpoints), sim.get_num_breakpoints() + 2)
         self.assertEqual(breakpoints, sorted(breakpoints))
@@ -597,7 +598,7 @@ class TestSimulationState(LowLevelTestCase):
         # full coalescence has occured).
         segments_am = [0 for b in breakpoints[:-1]]
         for ind in ancestors:
-            for l, r, _, _ in ind:
+            for l, r, _, _, _ in ind:
                 j = breakpoints.index(l)
                 while breakpoints[j] < r:
                     segments_am[j] += 1
@@ -835,11 +836,12 @@ class TestSimulationState(LowLevelTestCase):
             pop_sizes = [0 for _ in population_configuration]
             for ind in sim.get_ancestors():
                 self.assertEqual(len(ind), 1)
-                l, r, node, pop_id = ind[0]
+                l, r, node, pop_id, label = ind[0]
                 pop_sizes[pop_id] += 1
                 self.assertEqual(l, 0)
                 self.assertEqual(r, m)
                 self.assertFalse(node in nodes)
+                self.assertEqual(label, 0)
                 nodes.add(node)
                 a += 1
             for n1, n2 in zip(sample_pop_sizes, pop_sizes):
@@ -982,10 +984,11 @@ class TestSimulationState(LowLevelTestCase):
         nodes = []
         for ancestor in ancestors:
             self.assertEqual(len(ancestor), 1)
-            for l, r, node, pop_id in ancestor:
+            for l, r, node, pop_id, label in ancestor:
                 self.assertEqual(l, 0)
                 self.assertEqual(r, m)
                 self.assertEqual(pop_id, 0)
+                self.assertEqual(label, 0)
                 nodes.append(node)
         self.assertEqual(sorted(nodes), list(range(n)))
         events = 0
@@ -1061,7 +1064,7 @@ class TestSimulationState(LowLevelTestCase):
                 proportion = event["proportion"]
                 pop_sizes = [0 for j in range(N)]
                 for ind in sim.get_ancestors():
-                    _, _, _, pop_id = ind[0]
+                    _, _, _, pop_id, _ = ind[0]
                     pop_sizes[pop_id] += 1
                 if proportion == 1:
                     self.assertEqual(pop_sizes[source], 0)
@@ -1717,12 +1720,12 @@ class TestSimulator(LowLevelTestCase):
         sim.run(t)
         pop_sizes_before = [0, 0]
         for ind in sim.get_ancestors():
-            for _, _, _, pop_id in ind:
+            for _, _, _, pop_id, _ in ind:
                 pop_sizes_before[pop_id] += 1
         sim.run(t + dt)
         pop_sizes_after = [0, 0]
         for ind in sim.get_ancestors():
-            for _, _, _, pop_id in ind:
+            for _, _, _, pop_id, _ in ind:
                 pop_sizes_after[pop_id] += 1
         self.assertEqual(pop_sizes_before[0], pop_sizes_after[1])
 
@@ -1745,13 +1748,13 @@ class TestSimulator(LowLevelTestCase):
         sim.run(t1)
         pop_sizes = [0, 0]
         for ind in sim.get_ancestors():
-            for _, _, _, pop_id in ind:
+            for _, _, _, pop_id, _ in ind:
                 pop_sizes[pop_id] += 1
         self.assertEqual(pop_sizes[0], 1)
         sim.run(t2)
         pop_sizes = [0, 0]
         for ind in sim.get_ancestors():
-            for _, _, _, pop_id in ind:
+            for _, _, _, pop_id, _ in ind:
                 pop_sizes[pop_id] += 1
         self.assertEqual(pop_sizes[1], 1)
         sim.run()

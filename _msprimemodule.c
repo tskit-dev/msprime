@@ -7778,8 +7778,8 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     u = ind;
     j = 0;
     while (u != NULL) {
-        t = Py_BuildValue("(I,I,I,I)", u->left, u->right, u->value,
-                u->population_id);
+        t = Py_BuildValue("(I,I,I,I,I)", u->left, u->right, u->value,
+                u->population, u->label);
         if (t == NULL) {
             Py_DECREF(l);
             goto out;

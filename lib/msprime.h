@@ -40,11 +40,17 @@
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SINGLE_SWEEP 6
 
-
-#define MSP_INITIALISED_MAGIC 0x1234567
+/* int16 is surely fine, but it won't make the segment struct any smaller
+ * because of alignment requirements. After tskit has been separarated,
+ * we will probably want to make both population_id_t and label_id_t
+ * int16_t, and then we'll reduce the size of the segment struct a
+ * fair bit. It's not worth doing until then though.
+ */
+typedef uint32_t label_id_t;
 
 typedef struct segment_t_t {
-    population_id_t population_id;
+    population_id_t population;
+    label_id_t label;
     /* During simulation we use genetic coordinates */
     uint32_t left;
     uint32_t right;
@@ -68,7 +74,7 @@ typedef struct {
     double initial_size;
     double growth_rate;
     double start_time;
-    avl_tree_t ancestors;
+    avl_tree_t *ancestors;
 } population_t;
 
 typedef struct {
@@ -122,6 +128,7 @@ typedef struct _msp_t {
     uint32_t num_loci;
     double recombination_rate;
     uint32_t num_populations;
+    uint32_t num_labels;
     sample_t *samples;
     simulation_model_t initial_model;
     double *initial_migration_matrix;
@@ -154,11 +161,13 @@ typedef struct _msp_t {
     population_t *populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
-    fenwick_t links;
+    /* We keep an independent Fenwick tree for each label */
+    fenwick_t *links;
     /* memory management */
     object_heap_t avl_node_heap;
-    object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
+    /* We need one segment heap per label */
+    object_heap_t *segment_heap;
     /* nodes are stored in a flat array */
     node_t *nodes;
     size_t num_nodes;
@@ -180,8 +189,10 @@ typedef struct _msp_t {
     size_t num_migration_blocks;
     /* Methods for getting the waiting time until the next common ancestor
      * event and the event are defined by the simulation model */
-    double (*get_common_ancestor_waiting_time)(struct _msp_t *self, population_id_t pop);
-    int (*common_ancestor_event)(struct _msp_t *selt, population_id_t pop);
+    double (*get_common_ancestor_waiting_time)(
+            struct _msp_t *self, population_id_t pop, label_id_t label);
+    int (*common_ancestor_event)(
+            struct _msp_t *self, population_id_t pop, label_id_t label);
 } msp_t;
 
 /* Demographic events */
