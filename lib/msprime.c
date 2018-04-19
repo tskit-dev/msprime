@@ -1067,28 +1067,48 @@ out:
 
 static int WARN_UNUSED
 msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
-        population_id_t dest_pop)
+        population_id_t dest_pop, label_id_t dest_label)
 {
     int ret = 0;
-    segment_t *ind, *x;
+    segment_t *ind, *x, *y, *new_ind;
+    int64_t num_links;
 
     ind = (segment_t *) node->item;
     avl_unlink_node(source, node);
     msp_free_avl_node(self, node);
-    /* Need to set the population_id for each segment. */
-    x = ind;
-    while (x != NULL) {
-        if (self->store_migrations) {
-            ret = msp_record_migration(self, x->left, x->right, x->value,
-                    x->population, dest_pop);
-            if (ret != 0) {
-                goto out;
+
+    if (ind->label == dest_label) {
+        /* Need to set the population and label for each segment. */
+        new_ind = ind;
+        for (x = ind; x != NULL; x = x->next) {
+            if (self->store_migrations) {
+                ret = msp_record_migration(self, x->left, x->right, x->value,
+                        x->population, dest_pop);
+                if (ret != 0) {
+                    goto out;
+                }
             }
+            x->population = dest_pop;
         }
-        x->population = dest_pop;
-        x = x->next;
+    } else {
+        /* Because we are changing to a different Fenwick tree we must allocate
+         * new segments each time. */
+        new_ind = NULL;
+        y = NULL;
+        for (x = ind; x != NULL; x = x->next) {
+            y = msp_alloc_segment(self, x->left, x->right, x->value, x->population,
+                    dest_label, y, NULL);
+            if (new_ind == NULL) {
+                new_ind = y;
+            } else {
+                y->prev->next = y;
+            }
+            num_links = fenwick_get_value(&self->links[x->label], x->id);
+            fenwick_increment(&self->links[y->label], y->id, num_links);
+            msp_free_segment(self, x);
+        }
     }
-    ret = msp_insert_individual(self, ind);
+    ret = msp_insert_individual(self, new_ind);
 out:
     return ret;
 }
@@ -1398,7 +1418,7 @@ out:
 }
 
 static int WARN_UNUSED
-msp_recombination_event(msp_t *self, label_id_t label)
+msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_t **rhs)
 {
     int ret = 0;
     int64_t l, t, gap, k;
@@ -1451,6 +1471,21 @@ msp_recombination_event(msp_t *self, label_id_t label)
     }
     fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
     ret = msp_insert_individual(self, z);
+    if (ret != 0) {
+        goto out;
+    }
+    if (lhs != NULL) {
+        assert(rhs != NULL);
+        if (x == NULL) {
+            x = y;
+        }
+        /* Seek back to the head of the x chain */
+        while (x->prev != NULL) {
+            x = x->prev;
+        }
+        *lhs = x;
+        *rhs = z;
+    }
 out:
     return ret;
 }
@@ -1590,7 +1625,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         nm = (node_mapping_t *) node->item;
                         r = nm->left;
                     }
-                    alpha = msp_alloc_segment(self, l, r, v, population_id, 0,
+                    alpha = msp_alloc_segment(self, l, r, v, population_id, label,
                             NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
@@ -1876,7 +1911,7 @@ msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t des
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
     node = avl_at(source, j);
     assert(node != NULL);
-    ret = msp_move_individual(self, node, source, dest_pop);
+    ret = msp_move_individual(self, node, source, dest_pop, label);
     return ret;
 }
 
@@ -2242,7 +2277,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         } else {
             self->time += t_wait;
             if (re_t_wait == t_wait) {
-                ret = msp_recombination_event(self, label);
+                ret = msp_recombination_event(self, label, NULL, NULL);
             } else if (ca_t_wait == t_wait) {
                 ret = self->common_ancestor_event(self, ca_pop_id, label);
                 if (ret == 1) {
@@ -2469,6 +2504,123 @@ out:
     return ret;
 }
 
+/* Set up the intial populations for a sweep by moving individuals from
+ * label 0 to label 1 with the specified probability.
+ */
+static int
+msp_single_sweep_initialise(msp_t *self, double switch_proba)
+{
+    int ret = 0;
+    uint32_t j;
+    avl_node_t *node, *next;
+    avl_tree_t *pop;
+
+    /* Move ancestors to new labels. */
+    for (j = 0; j < self->num_populations; j++) {
+        assert(avl_count(&self->populations[j].ancestors[1]) == 0);
+        pop = &self->populations[j].ancestors[0];
+        node = pop->head;
+        while (node != NULL) {
+            next = node->next;
+            if (gsl_rng_uniform(self->rng) < switch_proba) {
+                ret = msp_move_individual(self, node, pop, (population_id_t) j, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+            node = next;
+        }
+    }
+out:
+    return ret;
+}
+
+/* Migrate the specified individual to the specified new label.
+ */
+static int
+msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
+{
+    int ret = 0;
+    avl_tree_t *pop = &self->populations[ind->population].ancestors[ind->label];
+    avl_node_t *node;
+
+    /* Find the this individual in the AVL tree. */
+    node = avl_search(pop, ind);
+    assert(node != NULL);
+    ret = msp_move_individual(self, node, pop, ind->population, 1);
+    return ret;
+}
+
+static int
+msp_single_sweep_recombination_event(msp_t *self, label_id_t label,
+        uint32_t sweep_locus, double population_frequency)
+{
+    int ret = 0;
+    segment_t *lhs, *rhs;
+    label_id_t new_label;
+
+    ret = msp_recombination_event(self, label, &lhs, &rhs);
+    if (ret != 0) {
+        goto out;
+    }
+    /* NOTE: we can look at rhs->left when we compare to the sweep site. */
+
+    /* LHS and RHS are the two resulting individuals */
+    if (gsl_rng_uniform(self->rng) < population_frequency) {
+        new_label = (label + 1) % 2;
+        ret = msp_change_label(self, lhs, new_label);
+        if (ret != 0) {
+            goto out;
+        }
+        /* TODO actual logic here --- obviously this is nonsense. But it should
+         * be possible to use calls to msp_change_label here for all you need
+         */
+
+    }
+
+out:
+    return ret;
+}
+
+static int
+msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
+{
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+    size_t num_steps = model->params.single_sweep.trajectory.num_steps;
+    double *allele_frequency = model->params.single_sweep.trajectory.allele_frequency;
+    uint32_t sweep_locus = model->params.single_sweep.locus;
+    size_t j;
+    /* double *time = model->params.single_sweep.trajectory.time; */
+
+
+    assert(num_steps > 0);
+    assert(self->num_labels == 2); /* just assuming 2 labels for now */
+    ret = msp_single_sweep_initialise(self, allele_frequency[0]);
+    if (ret != 0) {
+        goto out;
+    }
+    /* Obviously this is all utter rubbish, but hopefully these are the building
+     * blocks that you need??? */
+    for (j = 1; j < num_steps; j++) {
+        msp_verify(self);
+        if (j % 3 == 1) {
+            /* Resolves to msp_std_common_ancestor_event(self, pop_id, label) */
+            ret = self->common_ancestor_event(self, 0, 1);
+        } else if (j % 3 == 2) {
+            ret = msp_single_sweep_recombination_event(self, 0, sweep_locus,
+                    allele_frequency[j]);
+        } else {
+            /* When we want to do an ordinary recombination event */
+            ret = msp_recombination_event(self, 0, NULL, NULL);
+        }
+
+    }
+    msp_print_state(self, stdout);
+out:
+    return ret;
+}
+
 /* Runs the simulation backwards in time until either the sample has coalesced,
  * or specified maximum simulation time has been reached or the specified maximum
  * number of events has been reached.
@@ -2492,6 +2644,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, scaled_time, max_events);
+    } else if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
+        ret = msp_run_single_sweep(self, scaled_time, max_events);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
@@ -3139,7 +3293,7 @@ msp_mass_migration(msp_t *self, demographic_event_t *event)
     while (node != NULL) {
         next = node->next;
         if (gsl_rng_uniform(self->rng) < p) {
-            ret = msp_move_individual(self, node, pop, dest);
+            ret = msp_move_individual(self, node, pop, dest, label);
             if (ret != 0) {
                 goto out;
             }

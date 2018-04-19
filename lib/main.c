@@ -507,7 +507,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int err;
     int int_tmp;
     double rho;
-    size_t num_samples, num_loci, num_populations;
+    size_t num_samples, num_loci, num_populations, num_labels;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *setting, *t;
@@ -526,6 +526,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("random_seed is a required parameter");
     }
     gsl_rng_set(rng,  (unsigned long) int_tmp);
+    if (config_lookup_int(config, "num_labels", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("num_labels is a required parameter");
+    }
+    num_labels = (size_t) int_tmp;
     ret = read_samples(config, &num_samples, &samples);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
@@ -546,7 +550,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     num_populations = (size_t) config_setting_length(setting);
 
     /* Now allocate the simulator object */
-    ret = msp_alloc(msp, num_loci, num_populations, 1, num_samples, samples, rng);
+    ret = msp_alloc(msp, num_loci, num_populations, num_labels, num_samples, samples, rng);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
