@@ -375,6 +375,7 @@ int table_collection_copy(table_collection_t *self, table_collection_t *dest);
 int table_collection_free(table_collection_t *self);
 int table_collection_simplify(table_collection_t *self,
         node_id_t *samples, size_t num_samples, int flags, node_id_t *node_map);
+int table_collection_deduplicate_sites(table_collection_t *tables, int flags);
 
 int simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,
@@ -388,7 +389,6 @@ int sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *mig
         site_table_t *sites, mutation_table_t *mutations, size_t edge_start);
 int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);
 
-int clean_tables(site_table_t *sites, mutation_table_t *mutations);
 
 #ifdef __cplusplus
 }

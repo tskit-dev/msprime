@@ -5732,7 +5732,7 @@ test_sort_tables(void)
 }
 
 static void
-test_clean_tree_sequence(void)
+test_deduplicate_sites(void)
 {
     int ret;
     // Modified from paper_ex
@@ -5779,51 +5779,109 @@ test_clean_tree_sequence(void)
         "9      7   2\n"
         "10     1   3\n"
         "11     0   4\n";
-    site_table_t *tidy_site_table = malloc(sizeof(site_table_t)); 
-    site_table_t *messy_site_table = malloc(sizeof(site_table_t));
-    mutation_table_t *tidy_mutation_table = malloc(sizeof(mutation_table_t));
-    mutation_table_t *messy_mutation_table = malloc(sizeof(mutation_table_t));
-    ret = site_table_alloc(tidy_site_table, 100, 100, 100);
+    table_collection_t tidy, messy;
+
+    ret = table_collection_alloc(&tidy, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(messy_site_table, 100, 100, 100);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(tidy_mutation_table, 100, 100, 100);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(messy_mutation_table, 100, 100, 100);
+    ret = table_collection_alloc(&messy, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    parse_sites(tidy_sites, tidy_site_table);
-    parse_mutations(tidy_mutations, tidy_mutation_table);
-
+    parse_sites(tidy_sites, &tidy.sites);
+    parse_mutations(tidy_mutations, &tidy.mutations);
     // test cleaning doesn't mess up the tidy one
-    parse_sites(tidy_sites, messy_site_table);
-    parse_mutations(tidy_mutations, messy_mutation_table);
+    parse_sites(tidy_sites, &messy.sites);
+    parse_mutations(tidy_mutations, &messy.mutations);
 
-    ret = clean_tables(messy_site_table, messy_mutation_table);
+    ret = table_collection_deduplicate_sites(&messy, 0);
     CU_ASSERT_EQUAL(ret, 0);
-    verify_site_tables_equal(tidy_site_table, messy_site_table);
-    verify_mutation_tables_equal(tidy_mutation_table, messy_mutation_table);
+    verify_site_tables_equal(&tidy.sites, &messy.sites);
+    verify_mutation_tables_equal(&tidy.mutations, &messy.mutations);
 
-    site_table_clear(messy_site_table);
-    mutation_table_clear(messy_mutation_table);
+    site_table_clear(&messy.sites);
+    mutation_table_clear(&messy.mutations);
 
     // test with the actual messy one
-    parse_sites(messy_sites, messy_site_table);
-    parse_mutations(messy_mutations, messy_mutation_table);
+    parse_sites(messy_sites, &messy.sites);
+    parse_mutations(messy_mutations, &messy.mutations);
 
-    ret = clean_tables(messy_site_table, messy_mutation_table);
+    ret = table_collection_deduplicate_sites(&messy, 0);
     CU_ASSERT_EQUAL(ret, 0);
-    verify_site_tables_equal(tidy_site_table, messy_site_table);
-    verify_mutation_tables_equal(tidy_mutation_table, messy_mutation_table);
+    verify_site_tables_equal(&tidy.sites, &messy.sites);
+    verify_mutation_tables_equal(&tidy.mutations, &messy.mutations);
 
-    site_table_free(tidy_site_table);
-    free(tidy_site_table);
-    site_table_free(messy_site_table);
-    free(messy_site_table);
-    mutation_table_free(tidy_mutation_table);
-    free(tidy_mutation_table);
-    mutation_table_free(messy_mutation_table);
-    free(messy_mutation_table);
+    table_collection_free(&tidy);
+    table_collection_free(&messy);
+}
+
+static void
+test_deduplicate_sites_errors(void)
+{
+    int ret;
+    table_collection_t tables;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = site_table_add_row(&tables.sites, 2, "A", 1, "m", 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_add_row(&tables.sites, 2, "TT", 2, "MM", 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = mutation_table_add_row(&tables.mutations, 0, 0, -1,
+            "T", 1, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Negative position */
+    tables.sites.position[0] = -1;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SITE_POSITION);
+    tables.sites.position[0] = 2;
+
+    /* unsorted position */
+    tables.sites.position[1] = 0.5;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_SITES);
+    tables.sites.position[1] = 2;
+
+    /* negative site ID */
+    tables.mutations.site[0] = -1;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
+    tables.mutations.site[0] = 0;
+
+     /* site ID out of bounds */
+    tables.mutations.site[0] = 2;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
+    tables.mutations.site[0] = 0;
+
+    /* Bad offset in metadata */
+    tables.sites.metadata_offset[0] = 2;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    tables.sites.metadata_offset[0] = 0;
+
+    /* Bad length in metadata */
+    tables.sites.metadata_offset[2] = 100;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    tables.sites.metadata_offset[2] = 3;
+
+    /* Bad offset in ancestral_state */
+    tables.sites.ancestral_state_offset[0] = 2;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    tables.sites.ancestral_state_offset[0] = 0;
+
+    /* Bad length in ancestral_state */
+    tables.sites.ancestral_state_offset[2] = 100;
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    tables.sites.ancestral_state_offset[2] = 3;
+
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    table_collection_free(&tables);
 }
 
 static void
@@ -6922,7 +6980,8 @@ main(int argc, char **argv)
         {"test_save_hdf5_tables", test_save_hdf5_tables},
         {"test_dump_tables", test_dump_tables},
         {"test_sort_tables", test_sort_tables},
-        {"test_clean_tree_sequence", test_clean_tree_sequence},
+        {"test_deduplicate_sites", test_deduplicate_sites},
+        {"test_deduplicate_sites_errors", test_deduplicate_sites_errors},
         {"test_dump_tables_hdf5", test_dump_tables_hdf5},
         {"test_error_messages", test_strerror},
         {"test_node_table", test_node_table},
