@@ -263,6 +263,18 @@ msp_strerror(int err)
         case MSP_ERR_TOO_MANY_ALLELES:
             ret = "Cannot have more than 255 alleles.";
             break;
+        case MSP_ERR_BAD_SWEEP_LOCUS:
+            ret = "Sweep locus must be between 0 and num_loci.";
+            break;
+        case MSP_ERR_BAD_TRAJECTORY_TIME:
+            ret = "Time values must be > 0 and in increasing order.";
+            break;
+        case MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY:
+            ret = "Allele frequency values must be between 0 and 1.";
+            break;
+        case MSP_ERR_EMPTY_TRAJECTORY:
+            ret = "Trajectory must contain at least one time point.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

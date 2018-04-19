@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2017 University of Oxford
+** Copyright (C) 2015-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -111,6 +111,68 @@ out:
 }
 
 static int
+read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
+        double population_size)
+{
+    int ret = 0;
+    config_setting_t *s, *setting, *row;
+    int locus;
+    size_t num_steps, j;
+    double *allele_frequency = NULL;
+    double *time = NULL;
+
+    s = config_setting_get_member(model_setting, "locus");
+    if (s == NULL) {
+        fatal_error("single_sweep model locus not specified");
+    }
+    locus = config_setting_get_int(s);
+
+    setting = config_setting_get_member(model_setting, "trajectory");
+    if (setting == NULL) {
+        fatal_error("single_sweep model trajectory not specified");
+    }
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("trajectory must be a list");
+    }
+    num_steps = (size_t) config_setting_length(setting);
+    allele_frequency = malloc(num_steps * sizeof(double));
+    time = malloc(num_steps * sizeof(double));
+    if (allele_frequency == NULL || time == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < num_steps; j++) {
+        row = config_setting_get_elem(setting, (unsigned int) j);
+        if (row == NULL) {
+            fatal_error("error reading trajectory[%d]", j);
+        }
+        if (config_setting_is_array(row) == CONFIG_FALSE) {
+            fatal_error("trajectory[%d] not an array", j);
+        }
+        if (config_setting_length(row) != 2) {
+            fatal_error(
+                "trajectory entries must be [coord, rate] pairs");
+        }
+        s = config_setting_get_elem(row, 0);
+        if (!config_setting_is_number(s)) {
+            fatal_error("trajectory entries must be numbers");
+        }
+        time[j] = config_setting_get_float(s);
+        s = config_setting_get_elem(row, 1);
+        if (!config_setting_is_number(s)) {
+            fatal_error("trajectory entries must be numbers");
+        }
+        allele_frequency[j] = config_setting_get_float(s);
+    }
+    ret = msp_set_simulation_model_single_sweep(msp, population_size,
+            (uint32_t) locus, num_steps, time, allele_frequency);
+out:
+    msp_safe_free(allele_frequency);
+    msp_safe_free(time);
+    return ret;
+}
+
+static int
 read_model_config(msp_t *msp, config_t *config)
 {
     int ret = 0;
@@ -169,38 +231,27 @@ read_model_config(msp_t *msp, config_t *config)
         }
         truncation_point = config_setting_get_float(s);
         ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
+    } else if (strcmp(name, "single_sweep") == 0) {
+        ret = read_single_sweep_model_config(msp, setting, population_size);
     } else {
         fatal_error("Unknown simulation model '%s'", name);
     }
     if (ret != 0) {
         goto out;
     }
-
 out:
     return ret;
 }
 
 static int
-read_population_configuration(msp_t *msp, config_t *config)
+read_population_configuration(msp_t *msp, config_setting_t *setting,
+        size_t num_populations)
 {
     int ret = 0;
-    int j;
+    size_t j;
     double growth_rate, initial_size;
-    int num_populations;
     config_setting_t *s, *t;
-    config_setting_t *setting = config_lookup(config, "population_configuration");
 
-    if (setting == NULL) {
-        fatal_error("population_configuration is a required parameter");
-    }
-    if (config_setting_is_list(setting) == CONFIG_FALSE) {
-        fatal_error("population_configuration must be a list");
-    }
-    num_populations = config_setting_length(setting);
-    ret = msp_set_num_populations(msp, (size_t) num_populations);
-    if (ret != 0) {
-        fatal_error("Error reading number of populations");
-    }
     for (j = 0; j < num_populations; j++) {
         s = config_setting_get_elem(setting, (unsigned int) j);
         if (s == NULL) {
@@ -219,7 +270,7 @@ read_population_configuration(msp_t *msp, config_t *config)
             fatal_error("initial_size not specified");
         }
         initial_size = config_setting_get_float(t);
-        ret = msp_set_population_configuration(msp, j, initial_size,
+        ret = msp_set_population_configuration(msp, (int) j, initial_size,
                 growth_rate);
         if (ret != 0) {
             goto out;
@@ -381,7 +432,7 @@ read_migration_matrix(msp_t *msp, config_t *config)
         }
         migration_matrix[j] = (double) config_setting_get_float(s);
     }
-    ret = msp_set_migration_matrix(msp, size, migration_matrix);
+    ret = msp_set_migration_matrix(msp, migration_matrix);
 out:
     if (migration_matrix != NULL) {
         free(migration_matrix);
@@ -456,10 +507,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int err;
     int int_tmp;
     double rho;
-    size_t num_samples;
+    size_t num_samples, num_loci, num_populations;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
-    config_setting_t *t;
+    config_setting_t *setting, *t;
 
     if (config == NULL) {
         fatal_error("no memory");
@@ -479,11 +530,27 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_alloc(msp, num_samples, samples, rng);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    ret = msp_set_num_loci(msp, (size_t) int_tmp);
+    num_loci = (size_t) int_tmp;
+
+    /* Read the population configurations */
+    setting = config_lookup(config, "population_configuration");
+    if (setting == NULL) {
+        fatal_error("population_configuration is a required parameter");
+    }
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("population_configuration must be a list");
+    }
+    num_populations = (size_t) config_setting_length(setting);
+
+    /* Now allocate the simulator object */
+    ret = msp_alloc(msp, num_loci, num_populations, 1, num_samples, samples, rng);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+    ret = read_population_configuration(msp, setting, num_populations);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -557,10 +624,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error("model not specified");
     }
     ret = read_model_config(msp, config);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
-    ret = read_population_configuration(msp, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }

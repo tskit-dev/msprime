@@ -1219,9 +1219,7 @@ get_example_tree_sequence(uint32_t num_samples,
     for (j = 0; j < num_historical_samples; j++) {
         samples[j].time = 0.1 * (j + 1);
     }
-    ret = msp_alloc(msp, num_samples, samples, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, num_loci);
+    ret = msp_alloc(msp, num_loci, num_populations, 1, num_samples, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, recombination_rate);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1238,10 +1236,7 @@ get_example_tree_sequence(uint32_t num_samples,
             CU_ASSERT_FATAL(0 == 1);
         }
     }
-    ret = msp_set_num_populations(msp, num_populations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_migration_matrix(msp, num_populations * num_populations,
-            migration_matrix);
+    ret = msp_set_migration_matrix(msp, migration_matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_store_migrations(msp, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

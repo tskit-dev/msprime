@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2017 University of Oxford
+** Copyright (C) 2015-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -38,6 +38,7 @@
 #define MSP_MODEL_BETA 3
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
+#define MSP_MODEL_SINGLE_SWEEP 6
 
 
 #define MSP_INITIALISED_MAGIC 0x1234567
@@ -52,7 +53,6 @@ typedef struct segment_t_t {
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
-
 
 typedef struct {
     uint32_t left; /* TODO CHANGE THIS - not a good name! */
@@ -89,12 +89,22 @@ typedef struct {
     double c; // constant
 } dirac_coalescent_t;
 
+typedef struct {
+    uint32_t locus;
+    struct {
+        double *allele_frequency;
+        double *time;
+        size_t num_steps;
+    } trajectory;
+} single_sweep_t;
+
 typedef struct _simulation_model_t {
     int type;
     double population_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
+        single_sweep_t single_sweep;
     } params;
     /* Time and rate conversions */
     double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
@@ -246,7 +256,9 @@ typedef struct {
     object_heap_t avl_node_heap;
 } mutgen_t;
 
-int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
+int msp_alloc(msp_t *self, size_t num_loci, size_t num_populations,
+        size_t num_labels, size_t num_samples, sample_t *samples, gsl_rng *rng);
+
 int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);
 int msp_set_simulation_model_smc_prime(msp_t *self, double population_size);
@@ -255,9 +267,11 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
     double c);
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
-int msp_set_num_loci(msp_t *self, size_t num_loci);
+int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
+        uint32_t locus, size_t num_steps, double *time,
+        double *allele_frequency);
+
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
-int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_recombination_rate(msp_t *self, double recombination_rate);
 int msp_set_max_memory(msp_t *self, size_t max_memory);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
@@ -266,10 +280,7 @@ int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
 int msp_set_node_block_size(msp_t *self, size_t block_size);
 int msp_set_edge_block_size(msp_t *self, size_t block_size);
 int msp_set_migration_block_size(msp_t *self, size_t block_size);
-int msp_set_sample_configuration(msp_t *self, size_t num_populations,
-        size_t *sample_configuration);
-int msp_set_migration_matrix(msp_t *self, size_t size,
-        double *migration_matrix);
+int msp_set_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_set_population_configuration(msp_t *self, int population_id,
         double initial_size, double growth_rate);
 

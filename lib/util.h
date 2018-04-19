@@ -112,7 +112,7 @@
 #define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -54
 #define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -55
 #define MSP_ERR_LENGTH_MISMATCH                                     -56
-
+#define MSP_ERR_BAD_SWEEP_LOCUS                                     -57
 #define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
 #define MSP_ERR_UNSORTED_SITES                                      -59
 #define MSP_ERR_BAD_SITE_POSITION                                   -60
@@ -127,6 +127,9 @@
 #define MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -69
 #define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
+#define MSP_ERR_BAD_TRAJECTORY_TIME                                 -73
+#define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -74
+#define MSP_ERR_EMPTY_TRAJECTORY                                    -75
 
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);

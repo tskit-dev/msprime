@@ -186,9 +186,7 @@ test_single_locus_two_populations(void)
 
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = msp_alloc(&msp, n, samples, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_populations(&msp, 2);
+    ret = msp_alloc(&msp, 1, 2, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(&msp, true);
     CU_ASSERT_EQUAL(ret, 0);
@@ -262,10 +260,8 @@ test_single_locus_many_populations(void)
 
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = msp_alloc(&msp, n, samples, rng);
+    ret = msp_alloc(&msp, 1, num_populations, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_populations(&msp, num_populations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_add_mass_migration(&msp, 30.0, 0, num_populations - 1, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
@@ -305,7 +301,7 @@ test_single_locus_historical_sample(void)
 
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = msp_alloc(&msp, n, samples, rng);
+    ret = msp_alloc(&msp, 1, 1, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -361,17 +357,21 @@ test_simulator_getters_setters(void)
         samples[j].time = j;
         samples[j].population_id = j % 2;
     }
-    CU_ASSERT_EQUAL(msp_alloc(&msp, 0, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 1, 1, 0, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
     samples[0].time = 1.0;
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), MSP_ERR_BAD_SAMPLES);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 1, 1, n, samples, rng), MSP_ERR_BAD_SAMPLES);
     msp_free(&msp);
     samples[0].time = -1.0;
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 1, 1, n, samples, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
     samples[0].time = 0.0;
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 0, 1, 1, n, samples, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 0, 1, n, samples, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 1, 0, n, samples, rng), MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
 
-    ret = msp_alloc(&msp, n, samples, rng);
+    ret = msp_alloc(&msp, m, 2, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(msp_set_max_memory(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0),
@@ -384,8 +384,6 @@ test_simulator_getters_setters(void)
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_migration_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_num_loci(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(
             msp_set_recombination_rate(&msp, -1),
             MSP_ERR_BAD_PARAM_VALUE);
@@ -400,35 +398,25 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->population_size, Ne);
 
-    ret = msp_set_num_populations(&msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(
-            msp_get_population_configuration(&msp, 3, NULL, NULL),
-            MSP_ERR_BAD_POPULATION_ID);
     ret = msp_set_population_configuration(&msp, 0, 2 * Ne, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 0, NULL),
-            MSP_ERR_BAD_MIGRATION_MATRIX);
-    CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 3, migration_matrix),
-            MSP_ERR_BAD_MIGRATION_MATRIX);
+            msp_set_migration_matrix(&msp, NULL),
+            MSP_ERR_BAD_PARAM_VALUE);
     migration_matrix[0] = 1;
     CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 4, migration_matrix),
+            msp_set_migration_matrix(&msp, migration_matrix),
             MSP_ERR_BAD_MIGRATION_MATRIX);
     migration_matrix[0] = 0;
     migration_matrix[1] = -1;
     CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 4, migration_matrix),
+            msp_set_migration_matrix(&msp, migration_matrix),
             MSP_ERR_BAD_MIGRATION_MATRIX);
 
     migration_matrix[1] = 1;
     migration_matrix[2] = 1;
-    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(&msp, m);
+    ret = msp_set_migration_matrix(&msp, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -498,7 +486,7 @@ test_simulator_model_errors(void)
         samples[j].population_id = 0;
     }
 
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 1, 1, n, samples, rng), 0);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
     CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
     CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
@@ -507,7 +495,7 @@ test_simulator_model_errors(void)
     CU_ASSERT_EQUAL(msp_free(&msp), 0);
 
     for (j = 0; j < 2; j++) {
-        CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, rng), 0);
+        CU_ASSERT_EQUAL(msp_alloc(&msp, 1, 1, 1, n, samples, rng), 0);
         if (j == 0) {
             CU_ASSERT_EQUAL(msp_set_simulation_model_smc(&msp, 0.25), 0);
         } else {
@@ -543,7 +531,7 @@ test_demographic_events(void)
         samples[j].time = j;
         samples[j].population_id = j % 2;
     }
-    ret = msp_alloc(&msp, n, samples, rng);
+    ret = msp_alloc(&msp, m, 2, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     /* Zero or negative population sizes are not allowed */
     ret = msp_set_population_configuration(&msp, 0, -1, 0);
@@ -551,15 +539,11 @@ test_demographic_events(void)
     ret = msp_set_population_configuration(&msp, 0, 0, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    ret = msp_set_num_populations(&msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, 1, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 1, 2, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(&msp, m);
+    ret = msp_set_migration_matrix(&msp, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -742,13 +726,11 @@ test_dtwf_deterministic(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         gsl_rng_set(rng, seed);
-        ret = msp_alloc(msp, n, samples, rng);
+        ret = msp_alloc(msp, m, 1, 1, n, samples, rng);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_dtwf(msp, n);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(msp, 0, n, 0);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_recombination_rate(msp, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -801,9 +783,7 @@ test_mixed_model_simulation(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_populations(msp, 3);
+    ret = msp_alloc(msp, 10, 3, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp, N);
     CU_ASSERT_EQUAL(ret, 0);
@@ -814,8 +794,6 @@ test_mixed_model_simulation(void)
     ret = msp_set_population_configuration(msp, 1, 2 * N, g);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(msp, 2, 3 * N, 2 * g);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -896,7 +874,7 @@ test_dtwf_single_locus_simulation(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, 1, 1, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -943,7 +921,7 @@ test_single_locus_simulation(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, 1, 1, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -984,11 +962,9 @@ test_simulation_memory_limit(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, 10000, 1, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_max_memory(msp, 1024 * 1024);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, 10000);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1026,17 +1002,13 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_FATAL(rng != NULL);
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, m, 2, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_populations(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+    ret = msp_set_migration_matrix(msp, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(msp, true);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1057,14 +1029,11 @@ test_dtwf_multi_locus_simulation(void)
     /* Realloc the simulator under different memory params to see if
      * we get the same result. */
     gsl_rng_set(rng, seed);
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, m, 2, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_populations(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_matrix(msp, 4, migration_matrix);
-    ret = msp_set_num_loci(msp, m);
+    ret = msp_set_migration_matrix(msp, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1117,11 +1086,9 @@ test_multi_locus_simulation(void)
         CU_ASSERT_FATAL(rng != NULL);
         gsl_rng_set(rng, seed);
         memset(samples, 0, n * sizeof(sample_t));
-        ret = msp_alloc(msp, n, samples, rng);
+        ret = msp_alloc(msp, m, 2, 1, n, samples, rng);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_num_populations(msp, 2);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+        ret = msp_set_migration_matrix(msp, migration_matrix);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_store_migrations(msp, true);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1136,8 +1103,6 @@ test_multi_locus_simulation(void)
         ret = msp_set_edge_block_size(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_migration_block_size(msp, 1);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_recombination_rate(msp, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1247,11 +1212,9 @@ test_simulation_replicates(void)
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, rng);
+    ret = msp_alloc(&msp, m, 2, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_populations(&msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+    ret = msp_set_migration_matrix(&msp, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(&msp, true);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1266,8 +1229,6 @@ test_simulation_replicates(void)
     ret = msp_set_edge_block_size(&msp, 3);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_block_size(&msp, 3);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(&msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1329,7 +1290,7 @@ test_bottleneck_simulation(void)
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, m, 1, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     /* set all the block sizes to something small to provoke the memory
      * expansions. */
@@ -1342,8 +1303,6 @@ test_bottleneck_simulation(void)
     ret = msp_set_node_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_edge_block_size(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1426,11 +1385,9 @@ test_large_bottleneck_simulation(void)
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, rng);
+    ret = msp_alloc(msp, m, 1, 1, n, samples, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
         ret = msp_add_simple_bottleneck(msp, bottlenecks[j].time, 0,
@@ -1471,13 +1428,18 @@ test_large_bottleneck_simulation(void)
 }
 
 static void
-test_multiple_mergers_simulation(void)
+test_falling_factorial(void)
 {
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(0), 0, 0.000000);
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(1), 1.386294, 0.000001);
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(2), 2.484907, 0.000001);
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(3), 3.178054, 0.000001);
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(4), 3.178054, 0.000001);
+}
+
+static void
+test_multiple_mergers_simulation(void)
+{
     int ret;
     size_t j;
     uint32_t n = 100;
@@ -1495,7 +1457,7 @@ test_multiple_mergers_simulation(void)
         gsl_rng_set(rng, seed);
         /* TODO check non-zero sample times here to make sure they fail. */
         memset(samples, 0, n * sizeof(sample_t));
-        ret = msp_alloc(msp, n, samples, rng);
+        ret = msp_alloc(msp, m, 1, 1, n, samples, rng);
         CU_ASSERT_EQUAL(ret, 0);
         /* TODO what are good parameters here?? */
         if (j == 0) {
@@ -1504,8 +1466,6 @@ test_multiple_mergers_simulation(void)
         } else {
             ret = msp_set_simulation_model_beta(msp, 1, 1.0, 10.0);
         }
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_recombination_rate(msp, 10.0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1537,6 +1497,62 @@ test_multiple_mergers_simulation(void)
     free(samples);
 }
 
+static void
+test_single_sweep_param_errors(void)
+{
+    int ret;
+    msp_t msp;
+    uint32_t n = 2;
+    uint32_t m = 100;
+    double time[] = {0, 1, 2};
+    double freq[] = {0.1, 0.2, 0.3};
+    sample_t samples[] = {{0, 0}, {0, 0}};
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(rng != NULL);
+
+    ret = msp_alloc(&msp, m, 1, 1, n, samples, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_set_simulation_model_single_sweep(&msp, -1, 5, 3, time, freq);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_POPULATION_SIZE);
+
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, m, 0, NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_LOCUS);
+
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, 5, 0, NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_EMPTY_TRAJECTORY);
+
+    /* Negative time */
+    time[0] = -1;
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, 10, 3, time, freq);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_TIME);
+    time[0] = 0;
+
+    /* Unordered time */
+    time[0] = 1;
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, 10, 3, time, freq);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_TIME);
+    time[0] = 0;
+
+    /* Negative allele frequency */
+    freq[0] = -1;
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, 10, 3, time, freq);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_TIME);
+    freq[0] = 0.1;
+
+    /* allele frequency > 1 */
+    freq[0] = 1.1;
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, 10, 3, time, freq);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_TIME);
+    freq[0] = 0.1;
+
+    ret = msp_set_simulation_model_single_sweep(&msp, 10, 10, 3, time, freq);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    msp_free(&msp);
+    gsl_rng_free(rng);
+}
 
 static void
 test_simple_recomb_map(void)
@@ -1777,8 +1793,10 @@ main(int argc, char **argv)
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
+        {"test_falling_factorial", test_falling_factorial},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
+        {"test_single_sweep_param_errors", test_single_sweep_param_errors},
         {"test_simple_recombination_map", test_simple_recomb_map},
         {"test_recombination_map_errors", test_recomb_map_errors},
         {"test_recombination_map_examples", test_recomb_map_examples},

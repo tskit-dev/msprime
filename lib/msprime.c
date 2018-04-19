@@ -170,75 +170,6 @@ msp_set_store_migrations(msp_t *self, bool store_migrations)
 }
 
 int
-msp_set_num_loci(msp_t *self, size_t num_loci)
-{
-    int ret = 0;
-
-    if (num_loci < 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->num_loci = (uint32_t) num_loci;
-out:
-    return ret;
-}
-
-int
-msp_set_num_populations(msp_t *self, size_t num_populations)
-{
-    int ret = 0;
-    size_t j;
-
-    if (num_populations < 1 || num_populations > UINT32_MAX) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->num_populations = (uint32_t) num_populations;
-    /* Free any memory, if it has been allocated */
-    if (self->initial_migration_matrix != NULL) {
-        free(self->initial_migration_matrix);
-    }
-    if (self->migration_matrix != NULL) {
-        free(self->migration_matrix);
-    }
-    if (self->num_migration_events != NULL) {
-        free(self->num_migration_events);
-    }
-    if (self->initial_populations != NULL) {
-        free(self->initial_populations);
-    }
-    if (self->populations != NULL) {
-        free(self->populations);
-    }
-    /* Allocate storage for new num_populations */
-    self->initial_migration_matrix = calloc(num_populations * num_populations,
-            sizeof(double));
-    self->migration_matrix = calloc(num_populations * num_populations,
-            sizeof(double));
-    self->num_migration_events = calloc(num_populations * num_populations,
-            sizeof(size_t));
-    self->initial_populations = calloc(num_populations, sizeof(population_t));
-    self->populations = calloc(num_populations, sizeof(population_t));
-    if (self->migration_matrix == NULL
-            || self->initial_migration_matrix == NULL
-            || self->num_migration_events == NULL
-            || self->initial_populations == NULL
-            || self->populations == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    for (j = 0; j < num_populations; j++) {
-        avl_init_tree(&self->populations[j].ancestors, cmp_individual, NULL);
-        /* Set the default sizes and growth rates. */
-        self->initial_populations[j].growth_rate = 0.0;
-        self->initial_populations[j].initial_size = 1.0;
-        self->initial_populations[j].start_time = 0.0;
-    }
-out:
-    return ret;
-}
-
-int
 msp_set_recombination_rate(msp_t *self, double recombination_rate)
 {
     int ret = 0;
@@ -279,14 +210,15 @@ out:
 }
 
 int
-msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
+msp_set_migration_matrix(msp_t *self, double *migration_matrix)
 {
     int ret = MSP_ERR_BAD_MIGRATION_MATRIX;
     size_t j, k;
     size_t N = self->num_populations;
     simulation_model_t *model = &self->model;
 
-    if (N * N != size) {
+    if (migration_matrix == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     /* Check values */
@@ -413,7 +345,9 @@ out:
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng) {
+msp_alloc(msp_t *self, size_t num_loci, size_t num_populations,
+        size_t num_labels, size_t num_samples, sample_t *samples,
+        gsl_rng *rng) {
     int ret = -1;
     size_t j, k, initial_samples;
 
@@ -422,15 +356,57 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    /* TODO need descriptive errors here */
+    if (num_populations < 1 || num_populations > UINT32_MAX) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (num_loci < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (num_labels < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
     self->num_samples = (uint32_t) num_samples;
+    self->num_loci = (uint32_t) num_loci;
+    self->num_populations = (uint32_t) num_populations;
+    /* self->num_labels = num_labels; */
     self->rng = rng;
-    self->num_loci = 1;
-    self->recombination_rate = 0.0;
+
     self->samples = malloc(num_samples * sizeof(sample_t));
     if (self->samples == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    self->num_populations = (uint32_t) num_populations;
+    self->initial_migration_matrix = calloc(num_populations * num_populations,
+            sizeof(double));
+    self->migration_matrix = calloc(num_populations * num_populations,
+            sizeof(double));
+    self->num_migration_events = calloc(num_populations * num_populations,
+            sizeof(size_t));
+    self->initial_populations = calloc(num_populations, sizeof(population_t));
+    self->populations = calloc(num_populations, sizeof(population_t));
+    if (self->migration_matrix == NULL
+            || self->initial_migration_matrix == NULL
+            || self->num_migration_events == NULL
+            || self->initial_populations == NULL
+            || self->populations == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < num_populations; j++) {
+        avl_init_tree(&self->populations[j].ancestors, cmp_individual, NULL);
+        /* Set the default sizes and growth rates. */
+        self->initial_populations[j].growth_rate = 0.0;
+        self->initial_populations[j].initial_size = 1.0;
+        self->initial_populations[j].start_time = 0.0;
+    }
+
+    /* Set up the samples */
     initial_samples = 0;
     for (j = 0; j < num_samples; j++) {
         self->samples[j].population_id = samples[j].population_id;
@@ -471,17 +447,11 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng) {
         qsort(self->sampling_events, self->num_sampling_events,
                 sizeof(sampling_event_t), cmp_sampling_event);
     }
-    /* We have one population by default */
-    ret = msp_set_num_populations(self, 1);
-    if (ret != 0) {
-        goto out;
-    }
+    self->recombination_rate = 0.0;
     /* Use the standard coalescent with coalescent time units by default. */
     self->model.type = -1;
     ret = msp_set_simulation_model_hudson(self, 0.25);
     assert(ret == 0);
-    /* Set sensible defaults for the sample_config and migration matrix */
-    self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
     self->store_migrations = false;
     self->avl_node_block_size = 1024;
@@ -587,6 +557,10 @@ msp_free(msp_t *self)
         tmp = de->next;
         free(de);
         de = tmp;
+    }
+    if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
+        msp_safe_free(self->model.params.single_sweep.trajectory.allele_frequency);
+        msp_safe_free(self->model.params.single_sweep.trajectory.time);
     }
     msp_safe_free(self->initial_migration_matrix);
     msp_safe_free(self->migration_matrix);
@@ -895,6 +869,15 @@ msp_print_state(msp_t *self, FILE *out)
         fprintf(out, "\tdirac coalescent parameters: psi = %f, c = %f\n",
                 self->model.params.dirac_coalescent.psi,
                 self->model.params.dirac_coalescent.c);
+    } else if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
+        fprintf(out, "\tsingle_sweep parameters: locus = %d, trajectory=[",
+                self->model.params.single_sweep.locus);
+        for (j = 0; j < self->model.params.single_sweep.trajectory.num_steps; j++) {
+            fprintf(out, "(%f, %f),",
+                self->model.params.single_sweep.trajectory.time[j],
+                self->model.params.single_sweep.trajectory.allele_frequency[j]);
+        }
+        fprintf(out, "]\n");
     }
     fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
     fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
@@ -2617,6 +2600,9 @@ msp_get_model_name(msp_t *self)
         case MSP_MODEL_DTWF:
             ret = "dtwf";
             break;
+        case MSP_MODEL_SINGLE_SWEEP:
+            ret = "single-sweep";
+            break;
         default:
             ret = "BUG: bad model in simulator!";
             break;
@@ -3861,7 +3847,8 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
             && model != MSP_MODEL_SMC_PRIME
             && model != MSP_MODEL_DIRAC
             && model != MSP_MODEL_BETA
-            && model != MSP_MODEL_DTWF) {
+            && model != MSP_MODEL_DTWF
+            && model != MSP_MODEL_SINGLE_SWEEP) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -3878,6 +3865,13 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
             goto out;
         }
     }
+    /* If the last model was a selective sweep, free the trajectory */
+    if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
+        msp_safe_free(self->model.params.single_sweep.trajectory.allele_frequency);
+        msp_safe_free(self->model.params.single_sweep.trajectory.time);
+    }
+    memset(&self->model.params, 0, sizeof(self->model.params));
+
     self->model.type = model;
     self->model.population_size = population_size;
     /* For convenience here we set these to what is needed for the standard
@@ -3989,6 +3983,65 @@ msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
     self->get_common_ancestor_waiting_time = msp_beta_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_beta_common_ancestor_event;
     ret = msp_rescale_model_times(self);
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
+        uint32_t locus, size_t num_steps, double *time,
+        double *allele_frequency)
+{
+    int ret = 0;
+    size_t j;
+    simulation_model_t *model = &self->model;
+
+    /* Check the inputs to make sure they make sense */
+    if (locus >= self->num_loci) {
+        ret = MSP_ERR_BAD_SWEEP_LOCUS;
+        goto out;
+    }
+    if (num_steps == 0) {
+        ret = MSP_ERR_EMPTY_TRAJECTORY;
+        goto out;
+    }
+    for (j = 0; j < num_steps; j++) {
+        if (j > 0) {
+            if (time[j - 1] >= time[j]) {
+                ret = MSP_ERR_BAD_TRAJECTORY_TIME;
+                goto out;
+            }
+        }
+        /* TODO how do we interpret these time values? Are they relative to the
+         * current time, or absolute values?? */
+        if (time[j] < 0) {
+            ret = MSP_ERR_BAD_TRAJECTORY_TIME;
+            goto out;
+        }
+        if (allele_frequency[j] < 0 || allele_frequency[j] > 1) {
+            ret = MSP_ERR_BAD_TRAJECTORY_TIME;
+            goto out;
+        }
+    }
+
+    ret = msp_set_simulation_model(self, MSP_MODEL_SINGLE_SWEEP, population_size);
+    if (ret != 0) {
+        goto out;
+    }
+    model->params.single_sweep.locus = locus;
+    model->params.single_sweep.trajectory.num_steps = num_steps;
+    model->params.single_sweep.trajectory.allele_frequency = malloc(
+            num_steps * sizeof(double));
+    model->params.single_sweep.trajectory.time = malloc(num_steps * sizeof(double));
+    if (model->params.single_sweep.trajectory.allele_frequency == NULL
+            || model->params.single_sweep.trajectory.time == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(model->params.single_sweep.trajectory.allele_frequency,
+            allele_frequency, num_steps * sizeof(double));
+    memcpy(model->params.single_sweep.trajectory.time,
+            time, num_steps * sizeof(double));
 out:
     return ret;
 }

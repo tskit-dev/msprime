@@ -6652,22 +6652,12 @@ static int
 Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_config)
 {
     int ret = -1;
-    Py_ssize_t j, num_populations;
+    Py_ssize_t j;
     double initial_size, growth_rate;
     int err;
     PyObject *item, *value;
 
     if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    num_populations = PyList_Size(py_pop_config);
-    if (num_populations == 0) {
-        PyErr_SetString(PyExc_ValueError, "Empty population configuration");
-        goto out;
-    }
-    err = msp_set_num_populations(self->sim, (size_t) num_populations);
-    if (err != 0) {
-        handle_input_error(err);
         goto out;
     }
     for (j = 0; j < PyList_Size(py_pop_config); j++) {
@@ -6735,7 +6725,7 @@ Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
             goto out;
         }
     }
-    err = msp_set_migration_matrix(self->sim, size, migration_matrix);
+    err = msp_set_migration_matrix(self->sim, migration_matrix);
     if (err != 0) {
         handle_input_error(err);
         goto out;
@@ -7145,6 +7135,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t num_samples = 2;
     unsigned long num_loci = 1;
     double recombination_rate = 0.0;
+    Py_ssize_t num_populations = 1;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
@@ -7177,12 +7168,20 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (parse_samples(py_samples, &num_samples, &samples) != 0) {
         goto out;
     }
+    if (population_configuration != NULL) {
+        num_populations = PyList_Size(population_configuration);
+        if (num_populations == 0) {
+            PyErr_SetString(PyExc_ValueError, "Empty population configuration");
+            goto out;
+        }
+    }
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
+    sim_ret = msp_alloc(self->sim, num_loci, num_populations, 1,
+            (size_t) num_samples, samples,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -7194,11 +7193,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         }
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_num_loci(self->sim, (size_t) num_loci);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;

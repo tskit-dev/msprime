@@ -135,7 +135,7 @@ class Segment(object):
     def __lt__(self, other):
         return ((self.left, self.right, self.population, self.node)
                 < (other.left, other.right, other.population, self.node))
-    
+
     def find_head(self):
         u = self
         while u.prev is not None:
@@ -239,7 +239,7 @@ class Population(object):
         return iter(self._ancestors)
 
 class Trajectory(object):
-    """ 
+    """
     Class representing an allele frequency trajectory
     on which to condition the coalescent simulation.
     """
@@ -253,9 +253,9 @@ class Trajectory(object):
         self._end_freq = end_freq
         self._alpha = alpha
         self._initial_dt = 1e-06
-        self._modifier_events = events 
+        self._modifier_events = events
         self._deltaTMod = 1.0/40.
-        
+
     def _genic_selection_stochastic_forwards(self, dt, current_freq, alpha):
         ux = (alpha * current_freq*(1.-current_freq))/np.tanh(alpha*current_freq)
         if random.random() < 0.5:
@@ -263,7 +263,7 @@ class Trajectory(object):
         else:
             current_freq += (ux * dt) - np.sqrt(current_freq * (1.0 - current_freq) * dt)
         return(current_freq)
-    
+
     def simulate(self):
         """
         proposes a sweep trajectory
@@ -278,7 +278,7 @@ class Trajectory(object):
         Nmax = self._start_size
 
         #go through each event looking for population size changes in popn0
-        # not dealing with sweeps in other popns or growth 
+        # not dealing with sweeps in other popns or growth
         for anEvent in self._modifier_events:
             local_next_time = anEvent[0]
             while( x > self._initial_freq and self._start_time+ttau < local_next_time):
@@ -288,7 +288,7 @@ class Trajectory(object):
                 self._allele_freqs.append(max(x,self._initial_freq))
                 self._times.append(ttau)
                 #print(x,ttau)
-            #is the next event a popnSize change?    
+            #is the next event a popnSize change?
             if anEvent[1] == Simulator.change_population_size \
                 and anEvent[2][0] == 0 and x > 0:
                 current_size = anEvent[2][1]
@@ -528,7 +528,7 @@ class Simulator(object):
                     # print("MIG EVENT")
                     self.migration_event(mig_source, mig_dest)
         return self.finalise()
-    
+
     def hudson_simulate_until(self,max_time):
         """
         Simulates the algorithm until all loci have coalesced or
@@ -583,25 +583,25 @@ class Simulator(object):
                     # print("MIG EVENT")
                     self.migration_event(mig_source, mig_dest)
         return self.t
-   
+
     def single_sweep_simulate(self):
         """
         Simulates a single sweep model using
         phases of coalescent and structured coalsct
         """
-        
+
         assert( any(["single_sweep_event" in x for x in self.modifier_events]))
         #pull out sweep
         idx = ["single_sweep_event" in x for x in self.modifier_events].index(True)
         s_params = self.modifier_events.pop(idx)
         sweep_time = s_params[0]
-        
+
         #generate trajectory
         traj = Trajectory(s_params[2][0],s_params[2][1],s_params[2][2],self.modifier_events)
-        traj.get_trajectory() 
+        traj.get_trajectory()
         self.curr_traj = traj
         self.sweep_traj_step = 0
-        
+
         #first neutral phase
         infinity = sys.float_info.max
         self.hudson_simulate_until(sweep_time)
@@ -616,9 +616,9 @@ class Simulator(object):
             self.sweep_phase_simulate_until(next_time)
 
         self.hudson_simulate_until(infinity)
-        
+
         return self.finalise()
-        
+
     def sweep_phase_simulate_until(self, max_time):
         """
         Does a structed coalescent until end_freq is reached
@@ -678,10 +678,10 @@ class Simulator(object):
                     for i in range(1,len(self.P)):
                         k = self.P[0][i].get_num_ancestors()
                         pCoalNS += (k * (k - 1)) * tIncOrig / u._start_size
-                
+
                 totRate = sweepPopTotRate + pRecNS + pCoalNS
                 eventProb *= 1.0 - totRate
-            
+
             #choose which event happened
             if random.random() < sweepPopTotRate / totRate:
                 #even in sweeping pop, choose which kind
@@ -735,7 +735,7 @@ class Simulator(object):
                         self.set_labels_right(u,0)
                         tmp = self.P[2][i].remove(idx)
                         self.P[0][i].add(tmp)
-   
+
 
     def dtwf_simulate(self):
         """
@@ -757,7 +757,7 @@ class Simulator(object):
             offspring = bintrees.AVLTree()
             for i in range(pop.get_num_ancestors()-1, -1, -1):
                 ## Popping every ancestor every generation is inefficient.
-                ## In the C implementation we store a pointer to the 
+                ## In the C implementation we store a pointer to the
                 ## ancestor so we can pop only if we need to merge
                 anc = pop.remove(i)
                 parent = np.random.choice(cur_inds)
@@ -856,7 +856,7 @@ class Simulator(object):
             self.L[newLabel].set_value(aSegment.index,links)
             aSegment.label = newLabel
             aSegment = aSegment.next
-            
+
     def hudson_recombination_event_sweep_phase(self, label, sweepSite, popnFreq):
         """
         Implements a recombination event.
@@ -884,7 +884,7 @@ class Simulator(object):
         z.label = label #temp label
         self.L[z.label].set_value(z.index, z.right - z.left - 1)
         self.P[z.label][z.population].add(z)
-        
+
         #move up x to tail of LHS
         if x is None:
             x = y
@@ -907,7 +907,7 @@ class Simulator(object):
                 idx = self.P[label][d.population]._ancestors.index(d)
                 tmp = self.P[label][d.population].remove(idx)
                 self.P[d.label][d.population].add(d)
-    
+
     def dtwf_recombine(self, x):
         """
         Chooses breakpoints and returns segments sorted by inheritance
@@ -1209,7 +1209,7 @@ class Simulator(object):
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
-    
+
 
     def print_state(self):
         print("State @ time ", self.t)
