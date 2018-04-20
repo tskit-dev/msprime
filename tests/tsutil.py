@@ -109,6 +109,29 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
         provenances=tables.provenances)
 
 
+def insert_branch_sites(ts):
+    """
+    Returns a copy of the specified tree sequence with a site on every branch
+    of every tree.
+    """
+    sites = msprime.SiteTable()
+    mutations = msprime.MutationTable()
+    for tree in ts.trees():
+        left, right = tree.interval
+        delta = (right - left) / len(list(tree.nodes()))
+        x = left
+        for u in tree.nodes():
+            if tree.parent(u) != msprime.NULL_NODE:
+                site = sites.add_row(position=x, ancestral_state='0')
+                mutations.add_row(site=site, node=u, derived_state='1')
+                x += delta
+    tables = ts.tables
+    add_provenance(tables.provenances, "insert_branch_sites")
+    return msprime.load_tables(
+        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
+        provenances=tables.provenances)
+
+
 def insert_multichar_mutations(ts, seed=1, max_len=10):
     """
     Returns a copy of the specified tree sequence with multiple chararacter
@@ -122,7 +145,9 @@ def insert_multichar_mutations(ts, seed=1, max_len=10):
         site = len(sites)
         ancestral_state = rng.choice(letters) * rng.randint(0, max_len)
         sites.add_row(position=tree.interval[0], ancestral_state=ancestral_state)
-        u = rng.choice(list(tree.nodes()))
+        nodes = list(tree.nodes())
+        nodes.remove(tree.root)
+        u = rng.choice(nodes)
         derived_state = ancestral_state
         while ancestral_state == derived_state:
             derived_state = rng.choice(letters) * rng.randint(0, max_len)

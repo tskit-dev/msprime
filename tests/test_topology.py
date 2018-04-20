@@ -42,6 +42,140 @@ import tests
 import tests.tsutil as tsutil
 
 
+def generate_segments(n, sequence_length=100, seed=None):
+    rng = random.Random(seed)
+    segs = []
+    for j in range(n):
+        left = rng.randint(0, sequence_length - 1)
+        right = rng.randint(left + 1, sequence_length)
+        assert left < right
+        segs.append(tests.Segment(left, right, j))
+    return segs
+
+
+class TestOverlappingSegments(unittest.TestCase):
+    """
+    Tests for the overlapping segments algorithm required for simplify.
+    This test probably belongs somewhere else.
+    """
+
+    def test_random(self):
+        segs = generate_segments(10, 20, 1)
+        for left, right, X in tests.overlapping_segments(segs):
+            self.assertGreater(right, left)
+            self.assertGreater(len(X), 0)
+
+    def test_empty(self):
+        ret = list(tests.overlapping_segments([]))
+        self.assertEqual(len(ret), 0)
+
+    def test_single_interval(self):
+        for j in range(1, 10):
+            segs = [tests.Segment(0, 1, j) for _ in range(j)]
+            ret = list(tests.overlapping_segments(segs))
+            self.assertEqual(len(ret), 1)
+            left, right, X = ret[0]
+            self.assertEqual(left, 0)
+            self.assertEqual(right, 1)
+            self.assertEqual(sorted(segs), sorted(X))
+
+    def test_stairs_down(self):
+        segs = [
+            tests.Segment(0, 1, 0),
+            tests.Segment(0, 2, 1),
+            tests.Segment(0, 3, 2)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 3)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(sorted(X), sorted(segs))
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 1)
+        self.assertEqual(right, 2)
+        self.assertEqual(sorted(X), sorted(segs[1:]))
+
+        left, right, X = ret[2]
+        self.assertEqual(left, 2)
+        self.assertEqual(right, 3)
+        self.assertEqual(sorted(X), sorted(segs[2:]))
+
+    def test_stairs_up(self):
+        segs = [
+            tests.Segment(0, 3, 0),
+            tests.Segment(1, 3, 1),
+            tests.Segment(2, 3, 2)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 3)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(X, segs[:1])
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 1)
+        self.assertEqual(right, 2)
+        self.assertEqual(sorted(X), sorted(segs[:2]))
+
+        left, right, X = ret[2]
+        self.assertEqual(left, 2)
+        self.assertEqual(right, 3)
+        self.assertEqual(sorted(X), sorted(segs))
+
+    def test_pyramid(self):
+        segs = [
+            tests.Segment(0, 5, 0),
+            tests.Segment(1, 4, 1),
+            tests.Segment(2, 3, 2)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 5)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(X, segs[:1])
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 1)
+        self.assertEqual(right, 2)
+        self.assertEqual(sorted(X), sorted(segs[:2]))
+
+        left, right, X = ret[2]
+        self.assertEqual(left, 2)
+        self.assertEqual(right, 3)
+        self.assertEqual(sorted(X), sorted(segs))
+
+        left, right, X = ret[3]
+        self.assertEqual(left, 3)
+        self.assertEqual(right, 4)
+        self.assertEqual(sorted(X), sorted(segs[:2]))
+
+        left, right, X = ret[4]
+        self.assertEqual(left, 4)
+        self.assertEqual(right, 5)
+        self.assertEqual(sorted(X), sorted(segs[:1]))
+
+    def test_gap(self):
+        segs = [
+            tests.Segment(0, 2, 0),
+            tests.Segment(3, 4, 1)]
+        ret = list(tests.overlapping_segments(segs))
+        self.assertEqual(len(ret), 2)
+
+        left, right, X = ret[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 2)
+        self.assertEqual(X, segs[:1])
+
+        left, right, X = ret[1]
+        self.assertEqual(left, 3)
+        self.assertEqual(right, 4)
+        self.assertEqual(X, segs[1:])
+
+
 class TopologyTestCase(unittest.TestCase):
     """
     Superclass of test cases containing common utilities.
@@ -2340,6 +2474,13 @@ class TestSimplify(unittest.TestCase):
                 filter_zero_mutation_sites=filter_zero_mutation_sites,
                 sequence_length=ts.sequence_length)
             py_tables = new_ts.dump_tables()
+            # print("lib = ")
+            # print(lib_tables.nodes)
+            # print(lib_tables.edges)
+            # print("py = ")
+            # print(py_tables.nodes)
+            # print(py_tables.edges)
+
             self.assertEqual(lib_tables.nodes, py_tables.nodes)
             self.assertEqual(lib_tables.edges, py_tables.edges)
             self.assertEqual(lib_tables.migrations, py_tables.migrations)
@@ -2398,6 +2539,7 @@ class TestSimplify(unittest.TestCase):
     def test_single_tree_mutations(self):
         ts = msprime.simulate(10, mutation_rate=1, random_seed=self.random_seed)
         self.assertGreater(ts.num_sites, 1)
+        self.do_simplify(ts)
         self.verify_single_childified(ts)
 
     def test_many_trees_mutations(self):
@@ -2405,6 +2547,7 @@ class TestSimplify(unittest.TestCase):
             10, recombination_rate=1, mutation_rate=10, random_seed=self.random_seed)
         self.assertGreater(ts.num_trees, 2)
         self.assertGreater(ts.num_sites, 2)
+        self.do_simplify(ts)
         self.verify_single_childified(ts)
 
     def test_many_trees(self):
@@ -2504,6 +2647,20 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 4)
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
 
+    def test_small_tree_filter_zero_mutations(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edges=six.StringIO(self.small_tree_ex_edges), strict=False)
+        ts = tsutil.insert_branch_sites(ts)
+        self.assertEqual(ts.num_sites, 8)
+        self.assertEqual(ts.num_mutations, 8)
+        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_zero_mutation_sites=True)
+        self.assertEqual(tss.num_sites, 5)
+        self.assertEqual(tss.num_mutations, 5)
+        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_zero_mutation_sites=False)
+        self.assertEqual(tss.num_sites, 8)
+        self.assertEqual(tss.num_mutations, 5)
+
     def test_small_tree_fixed_sites(self):
         ts = msprime.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
@@ -2525,6 +2682,23 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.sample_size, 2)
         self.assertEqual(tss.num_mutations, 0)
         self.assertEqual(list(tss.haplotypes()), ["", ""])
+
+    def test_small_tree_mutations_over_root(self):
+        ts = msprime.load_text(
+            nodes=six.StringIO(self.small_tree_ex_nodes),
+            edges=six.StringIO(self.small_tree_ex_edges), strict=False)
+        tables = ts.dump_tables()
+        tables.sites.add_row(position=0.25, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=8, derived_state="1")
+        ts = msprime.load_tables(
+            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
+            mutations=tables.mutations)
+        self.assertEqual(ts.num_sites, 1)
+        self.assertEqual(ts.num_mutations, 1)
+        for filt in [True, False]:
+            tss, _ = self.do_simplify(ts, [0, 1], filter_zero_mutation_sites=filt)
+            self.assertEqual(tss.num_sites, 1)
+            self.assertEqual(tss.num_mutations, 1)
 
     def test_small_tree_recurrent_mutations(self):
         ts = msprime.load_text(
@@ -2738,6 +2912,30 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_sites, 1)
         self.assertEqual(tss.num_mutations, 3)
         self.assertEqual(list(tss.haplotypes()), ["1"])
+
+    def test_many_trees_filter_zero_mutations(self):
+        ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
+        self.assertGreater(ts.num_trees, 3)
+        ts = tsutil.insert_branch_sites(ts)
+        self.assertEqual(ts.num_sites, ts.num_mutations)
+        self.assertGreater(ts.num_sites, ts.num_trees)
+        for filter_zero_mutation_sites in [True, False]:
+            tss, _ = self.do_simplify(
+                ts, samples=None, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            self.assertEqual(ts.num_sites, tss.num_sites)
+            self.assertEqual(ts.num_mutations, tss.num_mutations)
+
+    def test_many_trees_filter_zero_multichar_mutations(self):
+        ts = msprime.simulate(5, recombination_rate=1, random_seed=10)
+        self.assertGreater(ts.num_trees, 3)
+        ts = tsutil.insert_multichar_mutations(ts)
+        self.assertEqual(ts.num_sites, ts.num_trees)
+        self.assertEqual(ts.num_mutations, ts.num_trees)
+        for filter_zero_mutation_sites in [True, False]:
+            tss, _ = self.do_simplify(
+                ts, samples=None, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            self.assertEqual(ts.num_sites, tss.num_sites)
+            self.assertEqual(ts.num_mutations, tss.num_mutations)
 
     def verify_simplify_haplotypes(self, ts, samples):
         sub_ts, node_map = self.do_simplify(
