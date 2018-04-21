@@ -208,7 +208,7 @@ node_table_copy(node_table_t *self, node_table_t *dest)
 
 int WARN_UNUSED
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
 
@@ -224,7 +224,7 @@ out:
 
 int
 node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
     table_size_t j, metadata_length;
@@ -4548,5 +4548,126 @@ table_collection_simplify(table_collection_t *self,
     }
 out:
     simplifier_free(&simplifier);
+    return ret;
+}
+
+/*
+ * Remove any sites with duplicate positions, retaining only the *first*
+ * one. Assumes the tables have been sorted, throwing an error if not.
+ */
+int WARN_UNUSED
+table_collection_deduplicate_sites(table_collection_t *self, int flags)
+{
+    int ret = 0;
+    table_size_t j, site_j;
+    table_size_t as_length, as_offset;
+    table_size_t md_length, md_offset;
+    table_size_t num_input_sites;
+    double last_position, position;
+    site_id_t mutation_site;
+    /* Map of old site IDs to new site IDs. */
+    site_id_t *site_id_map = NULL;
+
+    num_input_sites = self->sites.num_rows;
+    site_id_map = malloc(num_input_sites * sizeof(*site_id_map));
+    if (site_id_map == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Check the input first. This avoids leaving the table in an indeterminate
+     * state after an error occurs, which could lead to nasty downstream bugs.
+     * The cost of the extra iterations is minimal. If the user is super-sure
+     * that their input is correct, then we could add a flag to skip these
+     * checks. */
+    last_position = -1;
+    for (j = 0; j < self->sites.num_rows; j++) {
+        position = self->sites.position[j];
+        if (position < 0) {
+            ret = MSP_ERR_BAD_SITE_POSITION;
+            goto out;
+        }
+        if (position < last_position) {
+            ret = MSP_ERR_UNSORTED_SITES;
+            goto out;
+        }
+        /* Checking the offsets is arguably unnecessary, since these should
+         * be validated when calling add_row/or append_rows. However,
+         * we can't be sure that users won't edit tables directly and
+         * we'll end up with hard-to-debug memory access violations when
+         * doing the memcpy'ing below. */
+        if (self->sites.metadata_offset[j + 1] > self->sites.metadata_length) {
+            ret = MSP_ERR_BAD_OFFSET;
+            goto out;
+        }
+        if (self->sites.metadata_offset[j] > self->sites.metadata_offset[j + 1]) {
+            ret = MSP_ERR_BAD_OFFSET;
+            goto out;
+        }
+        if (self->sites.ancestral_state_offset[j + 1]
+                > self->sites.ancestral_state_length) {
+            ret = MSP_ERR_BAD_OFFSET;
+            goto out;
+        }
+        if (self->sites.ancestral_state_offset[j]
+                > self->sites.ancestral_state_offset[j + 1]) {
+            ret = MSP_ERR_BAD_OFFSET;
+            goto out;
+        }
+        last_position = position;
+    }
+    for (j = 0; j < self->mutations.num_rows; j++) {
+        mutation_site = self->mutations.site[j];
+        if (mutation_site < 0 || mutation_site >= (site_id_t) num_input_sites) {
+            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+
+    site_j = 0; // the index of the next output row
+    // NOTE: this will need to change if negative positions are allowed!
+    last_position = -1;
+    as_offset = 0;
+    md_offset = 0;
+
+    for (j = 0; j < self->sites.num_rows; j++) {
+        position = self->sites.position[j];
+        if (position != last_position) {
+            as_length = (self->sites.ancestral_state_offset[j + 1]
+                    - self->sites.ancestral_state_offset[j]);
+            md_length = self->sites.metadata_offset[j + 1] - self->sites.metadata_offset[j];
+            if (site_j != j) {
+                assert(site_j < j);
+                self->sites.position[site_j] = self->sites.position[j];
+                self->sites.ancestral_state_offset[site_j] = as_offset;
+                memcpy(self->sites.ancestral_state + self->sites.ancestral_state_offset[site_j],
+                        self->sites.ancestral_state + self->sites.ancestral_state_offset[j],
+                        as_length);
+                self->sites.metadata_offset[site_j] = md_offset;
+                memcpy(self->sites.metadata + self->sites.metadata_offset[site_j],
+                        self->sites.metadata + self->sites.metadata_offset[j],
+                        md_length);
+            }
+            as_offset += as_length;
+            md_offset += md_length;
+            last_position = position;
+            site_j++;
+        }
+        site_id_map[j] = (site_id_t) site_j - 1;
+    }
+
+    self->sites.num_rows = site_j;
+    self->sites.ancestral_state_length = self->sites.ancestral_state_offset[site_j];
+    self->sites.metadata_length = self->sites.metadata_offset[site_j];
+
+    if (self->sites.num_rows < num_input_sites) {
+        // Remap sites in the mutation table
+        // (but only if there's been any changed sites)
+        for (j = 0; j < self->mutations.num_rows; j++) {
+            mutation_site = self->mutations.site[j];
+            self->mutations.site[j] = site_id_map[self->mutations.site[j]];
+        }
+    }
+out:
+    msp_safe_free(site_id_map);
     return ret;
 }

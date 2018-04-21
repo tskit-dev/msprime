@@ -259,13 +259,13 @@ typedef struct {
 } simplifier_t;
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
-        size_t max_name_length_increment);
+        size_t max_metadata_length_increment);
 node_id_t node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *name, size_t name_length);
+        population_id_t population, const char *metadata, size_t metadata_length);
 int node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *name, table_size_t *name_length);
+        population_id_t *population, const char *metadata, table_size_t *metadata_length);
 int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, char *name, table_size_t *name_length);
+        population_id_t *population, const char *metadata, table_size_t *metadata_length);
 int node_table_clear(node_table_t *self);
 int node_table_free(node_table_t *self);
 int node_table_dump_text(node_table_t *self, FILE *out);
@@ -375,6 +375,7 @@ int table_collection_copy(table_collection_t *self, table_collection_t *dest);
 int table_collection_free(table_collection_t *self);
 int table_collection_simplify(table_collection_t *self,
         node_id_t *samples, size_t num_samples, int flags, node_id_t *node_map);
+int table_collection_deduplicate_sites(table_collection_t *tables, int flags);
 
 int simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,
@@ -387,6 +388,7 @@ void simplifier_print_state(simplifier_t *self, FILE *out);
 int sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
         site_table_t *sites, mutation_table_t *mutations, size_t edge_start);
 int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);
+
 
 #ifdef __cplusplus
 }
