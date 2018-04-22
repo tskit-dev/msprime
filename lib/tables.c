@@ -905,13 +905,13 @@ site_table_print_state(site_table_t *self, FILE *out)
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "site_table: %p:\n", (void *) self);
-    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "num_rows = %d\t(max= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "ancestral_state_length = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "ancestral_state_length = %d\t(max= %d\tincrement = %d)\n",
             (int) self->ancestral_state_length,
             (int) self->max_ancestral_state_length,
             (int) self->max_ancestral_state_length_increment);
-    fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "metadata_length = %d\(tmax= %d\tincrement = %d)\n",
             (int) self->metadata_length,
             (int) self->max_metadata_length,
             (int) self->max_metadata_length_increment);
@@ -1870,7 +1870,16 @@ cmp_site(const void *a, const void *b) {
     const site_t *ia = (const site_t *) a;
     const site_t *ib = (const site_t *) b;
     /* Compare sites by position */
-    return (ia->position > ib->position) - (ia->position < ib->position);
+    int ret = (ia->position > ib->position) - (ia->position < ib->position);
+	if (ret == 0) {
+		/* Within a particular position sort by ID.  This ensures that relative ordering
+		 * of multiple sites at the same position is maintained; the redundant sites
+		 * will get compacted down by clean_tables(), but in the meantime if the order
+		 * of the redundant sites changes it will cause the sort order of mutations to
+		 * be corrupted, as the mutations will follow their sites. */
+		ret = (ia->id > ib->id) - (ia->id < ib->id);
+	}
+	return ret;
 }
 
 static int

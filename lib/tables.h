@@ -71,9 +71,9 @@ typedef struct {
 } node_table_t;
 
 typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
+    table_size_t num_rows;
+    table_size_t max_rows;
+    table_size_t max_rows_increment;
     double *left;
     double *right;
     node_id_t *parent;
@@ -81,9 +81,9 @@ typedef struct {
 } edge_table_t;
 
 typedef struct {
-    size_t num_rows;
-    size_t max_rows;
-    size_t max_rows_increment;
+    table_size_t num_rows;
+    table_size_t max_rows;
+    table_size_t max_rows_increment;
     population_id_t *source;
     population_id_t *dest;
     node_id_t *node;
