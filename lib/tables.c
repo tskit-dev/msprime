@@ -911,7 +911,7 @@ site_table_print_state(site_table_t *self, FILE *out)
             (int) self->ancestral_state_length,
             (int) self->max_ancestral_state_length,
             (int) self->max_ancestral_state_length_increment);
-    fprintf(out, "metadata_length = %d\(tmax= %d\tincrement = %d)\n",
+    fprintf(out, "metadata_length = %d(\tmax= %d\tincrement = %d)\n",
             (int) self->metadata_length,
             (int) self->max_metadata_length,
             (int) self->max_metadata_length_increment);
@@ -2950,7 +2950,7 @@ simplifier_overlapping_segments_init(simplifier_t *self)
     /* Sort the segments in the buffer by left coordinate */
     qsort(self->segment_queue, self->segment_queue_size, sizeof(simplify_segment_t),
             cmp_segment);
-    assert(self->segment_queue_size < self->max_segment_queue_size - 1);
+    assert(self->segment_queue_size < self->max_segment_queue_size);
     sentinel = self->segment_queue + self->segment_queue_size;
     sentinel->left = DBL_MAX;
     self->overlapping_segments_state.index = 0;
