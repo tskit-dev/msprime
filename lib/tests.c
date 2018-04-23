@@ -4226,6 +4226,66 @@ test_single_tree_simplify(void)
 
 
 static void
+test_single_tree_compute_mutation_parents(void)
+{
+    int ret = 0;
+    const char *sites =
+        "0       0\n"
+        "0.1     0\n"
+        "0.2     0\n";
+    const char *mutations =
+        "0   0  1  -1\n"
+        "1   1  1  -1\n"
+        "2   4  1  -1\n"
+        "2   1  0  2\n"
+        "2   1  1  3\n"
+        "2   2  1  -1\n";
+    tree_sequence_t ts;
+    table_collection_t tables;
+    mutation_id_t parent;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(single_tree_ex_nodes, &tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes.num_rows, 7);
+    parse_edges(single_tree_ex_edges, &tables.edges);
+    CU_ASSERT_EQUAL_FATAL(tables.edges.num_rows, 6);
+    parse_sites(sites, &tables.sites);
+    parse_mutations(mutations, &tables.mutations);
+    CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 3);
+    CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 6);
+    tables.sequence_length = 1.0;
+
+    /* Check to make sure we have legal mutations */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    tree_sequence_free(&ts);
+
+    for (int j=0; j < tables.mutations.num_rows; ++j) {
+        parent = tables.mutations.parent[j];
+        tables.mutations.parent[j] = MSP_NULL_MUTATION;
+        ret = tree_sequence_load_tables(&ts, &tables, MSP_FIX_PARENTS | MSP_COMPUTE_PARENTS);
+        CU_ASSERT_EQUAL(ret, 0);
+        printf("\n%d ---> %d = %d\n", ret, ts.mutations.parent[j], parent);
+        CU_ASSERT_EQUAL(ts.mutations.parent[j], parent);
+        tree_sequence_free(&ts);
+        tables.mutations.parent[j] = parent;
+    }
+
+    /* Check to make sure we still have legal mutations */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    tree_sequence_free(&ts);
+
+    table_collection_free(&tables);
+}
+
+static void
 test_single_tree_inconsistent_mutations(void)
 {
     const char *sites =
@@ -6992,6 +7052,7 @@ main(int argc, char **argv)
         {"test_single_tree_vargen_max_alleles", test_single_tree_vargen_max_alleles},
         {"test_single_tree_simplify", test_single_tree_simplify},
         {"test_single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
+        {"test_single_tree_compute_mutation_parents", test_single_tree_compute_mutation_parents},
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_sparse_tree_errors", test_sparse_tree_errors},

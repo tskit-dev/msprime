@@ -1169,7 +1169,10 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
                         table_size_t mut_site_index = node_map[group_index].site_index;
                         mutation_id_t actual_parent_mut_id = site->mutations[mut_site_index].parent;
 
-                        if (actual_parent_mut_id != putative_parent_mut_id)
+                        if (fix_missing_parents && (actual_parent_mut_id == MSP_NULL_MUTATION)) {
+                            site->mutations[mut_site_index].parent = putative_parent_mut_id;
+                        }
+                        else if (actual_parent_mut_id != putative_parent_mut_id)
                         {
                             ret = MSP_ERR_MALFORMED_MUTATION_BRANCH_GROUP;
                             goto out;
