@@ -397,18 +397,16 @@ def compute_mutation_parent(ts):
                 else:
                     mutation_parent[mutation.id] = bottom_mutation[mutation.node]
                 bottom_mutation[mutation.node] = mutation.id
-            # Now traverse down through the tree and see what mutations
-            # we encounter along the way.
-            for root in tree.roots:
-                stack = [(root, msprime.NULL_MUTATION)]
-                while len(stack) > 0:
-                    u, parent = stack.pop()
-                    top = top_mutation[u]
-                    if top != msprime.NULL_MUTATION:
-                        mutation_parent[top] = parent
-                        parent = bottom_mutation[u]
-                    for v in tree.children(u):
-                        stack.append((v, parent))
+            for mutation in site.mutations:
+                u = mutation.node
+                if top_mutation[u] != msprime.NULL_MUTATION:
+                    # Traverse upwards until we find a another mutation or root.
+                    v = tree.parent(u)
+                    while v != msprime.NULL_NODE \
+                            and top_mutation[v] == msprime.NULL_MUTATION:
+                        v = tree.parent(v)
+                    if v != msprime.NULL_NODE:
+                        mutation_parent[top_mutation[u]] = bottom_mutation[v]
             # Reset the maps for the next site.
             for mutation in site.mutations:
                 bottom_mutation[mutation.node] = msprime.NULL_MUTATION
