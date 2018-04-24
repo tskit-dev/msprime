@@ -384,33 +384,30 @@ def compute_mutation_parent(ts):
     mutation_parent = np.zeros(ts.num_mutations, dtype=np.int32) - 1
     # Maps nodes to the top and bottom mutations on each branch
     bottom_mutation = np.zeros(ts.num_nodes, dtype=np.int32) - 1
-    top_mutation = np.zeros(ts.num_nodes, dtype=np.int32) - 1
     for tree in ts.trees():
         for site in tree.sites():
             # Go forward through the mutations creating a mapping from the
             # mutations to the nodes. If we see more than one mutation
             # at a node, then these must be parents since we're assuming
             # that mutations are listed in order that they occur.
-            for mutation in site.mutations:
-                if bottom_mutation[mutation.node] == msprime.NULL_MUTATION:
-                    top_mutation[mutation.node] = mutation.id
-                else:
+            branch_group = [False for _ in site.mutations]
+            for j, mutation in enumerate(site.mutations):
+                if bottom_mutation[mutation.node] != msprime.NULL_MUTATION:
                     mutation_parent[mutation.id] = bottom_mutation[mutation.node]
+                    branch_group[j] = True
                 bottom_mutation[mutation.node] = mutation.id
-            for mutation in site.mutations:
-                u = mutation.node
-                if top_mutation[u] != msprime.NULL_MUTATION:
-                    # Traverse upwards until we find a another mutation or root.
-                    v = tree.parent(u)
-                    while v != msprime.NULL_NODE \
-                            and top_mutation[v] == msprime.NULL_MUTATION:
-                        v = tree.parent(v)
-                    if v != msprime.NULL_NODE:
-                        mutation_parent[top_mutation[u]] = bottom_mutation[v]
+            for j, mutation in enumerate(site.mutations):
+                if branch_group[j]:
+                    continue
+                v = tree.parent(mutation.node)
+                # Traverse upwards until we find a another mutation or root.
+                while v != msprime.NULL_NODE \
+                        and bottom_mutation[v] == msprime.NULL_MUTATION:
+                    v = tree.parent(v)
+                if v != msprime.NULL_NODE:
+                    mutation_parent[mutation.id] = bottom_mutation[v]
             # Reset the maps for the next site.
             for mutation in site.mutations:
                 bottom_mutation[mutation.node] = msprime.NULL_MUTATION
-                top_mutation[mutation.node] = msprime.NULL_MUTATION
             assert np.all(bottom_mutation == -1)
-            assert np.all(top_mutation == -1)
     return mutation_parent
