@@ -1163,7 +1163,7 @@ tree_sequence_compute_parents(tree_sequence_t *self, bool fix_missing_parents)
                         mutation_id_t actual_parent_mut_id = site->mutations[mut_site_index].parent;
 
                         if (fix_missing_parents && (actual_parent_mut_id == MSP_NULL_MUTATION)) {
-                            self->mutations.parent[site->mutations[mut_site_index].id] = putative_parent_mut_id;
+                            self->mutations.parent[node_map[group_index].mutation_id] = putative_parent_mut_id;
                         } else if (actual_parent_mut_id != putative_parent_mut_id) {
                             ret = MSP_ERR_MALFORMED_MUTATION_BRANCH_GROUP;
                             goto out;
@@ -1228,9 +1228,9 @@ tree_sequence_compute_parents(tree_sequence_t *self, bool fix_missing_parents)
                             node_map__index >= 0; --node_map__index) {
                         if (node_map[node_map__index].node_id == u) {
                             // now node_map__index is the index of the inferred
-                            // parent in the node map the inferred parent is
-                            // required to be above the child mutation in the
-                            // mutation table, always
+                            // parent in the node map.
+                            // the inferred parent is required to be above the
+                            // child mutation in the mutation table, always
                             if (node_map[node_map__index].mutation_id > node_map[j].mutation_id) {
                                 ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
                                 goto out;

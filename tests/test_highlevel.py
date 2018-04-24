@@ -2526,6 +2526,8 @@ class TestMutationParent(unittest.TestCase):
 
     def test_interface(self):
         mp = tsutil.compute_mutation_parent(ts=self.ts)
+        print(mp)
+        print(self.tabs.mutations.parent)
         self.assertTrue(np.all(mp == self.tabs.mutations.parent))
 
     def test_single_muts(self):
