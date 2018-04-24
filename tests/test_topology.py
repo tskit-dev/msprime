@@ -3005,3 +3005,110 @@ class TestSimplify(unittest.TestCase):
             for num_samples in range(1, ts.num_samples):
                 for samples in itertools.combinations(ts.samples(), num_samples):
                     self.verify_simplify_haplotypes(ts, samples)
+
+
+class TestMutationParent(unittest.TestCase):
+    """
+    Tests that mutation parent is correctly specified, and that we correctly
+    recompute it with compute_mutation_parent.
+    """
+    seed = 42
+
+    def verify_parents(self, ts):
+        parent = tsutil.compute_mutation_parent(ts)
+        tables = ts.tables
+        self.assertTrue(np.array_equal(parent, tables.mutations.parent))
+
+    def test_example(self):
+        nodes = six.StringIO("""\
+        id      is_sample   time
+        0       0           2.0
+        1       0           1.0
+        2       0           1.0
+        3       1           0
+        4       1           0
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0.0    0.5   2  3
+        0.0    0.8   2  4
+        0.5    1.0   1  3
+        0.0    1.0   0  1
+        0.0    1.0   0  2
+        0.8    1.0   0  4
+        """)
+        sites = six.StringIO("""\
+        position    ancestral_state
+        0.1     0
+        0.5     0
+        0.9     0
+        """)
+        mutations = six.StringIO("""\
+        site    node    derived_state   parent
+        0       1       1               -1
+        0       2       1               -1
+        0       3       2               1
+        1       0       1               -1
+        1       1       1               3
+        1       3       2               4
+        1       2       1               3
+        1       4       2               6
+        2       0       1               -1
+        2       1       1               8
+        2       2       1               8
+        2       4       1               8
+        """)
+        ts = msprime.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
+        self.verify_parents(ts)
+
+    def test_single_muts(self):
+        ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=3.0,
+                              recombination_rate=1.0)
+        self.verify_parents(ts)
+
+    def test_with_jukes_cantor(self):
+        ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
+                              recombination_rate=1.0)
+        # make *lots* of recurrent mutations
+        mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
+                                     multiple_per_node=False, seed=self.seed)
+        self.verify_parents(mut_ts)
+
+    def test_with_jukes_cantor_multiple_per_node(self):
+        ts = msprime.simulate(10, random_seed=self.seed, mutation_rate=0.0,
+                              recombination_rate=1.0)
+        # make *lots* of recurrent mutations
+        mut_ts = tsutil.jukes_cantor(ts, num_sites=10, mu=1,
+                                     multiple_per_node=True, seed=self.seed)
+        self.verify_parents(mut_ts)
+
+    def verify_branch_mutations(self, ts, mutations_per_branch):
+        ts = tsutil.insert_branch_mutations(ts, mutations_per_branch)
+        self.assertGreater(ts.num_mutations, 1)
+        self.verify_parents(ts)
+
+    def test_single_tree_one_mutation_per_branch(self):
+        ts = msprime.simulate(6, random_seed=10)
+        self.verify_branch_mutations(ts, 1)
+
+    def test_single_tree_two_mutations_per_branch(self):
+        ts = msprime.simulate(10, random_seed=9)
+        self.verify_branch_mutations(ts, 2)
+
+    def test_single_tree_three_mutations_per_branch(self):
+        ts = msprime.simulate(8, random_seed=9)
+        self.verify_branch_mutations(ts, 3)
+
+    def test_single_multiroot_tree_recurrent_mutations(self):
+        ts = msprime.simulate(6, random_seed=10)
+        ts = tsutil.decapitate(ts, ts.num_edges // 2)
+        for mutations_per_branch in [1, 2, 3]:
+            self.verify_branch_mutations(ts, mutations_per_branch)
+
+    def test_many_multiroot_trees_recurrent_mutations(self):
+        ts = msprime.simulate(7, recombination_rate=1, random_seed=10)
+        self.assertGreater(ts.num_trees, 3)
+        ts = tsutil.decapitate(ts, ts.num_edges // 2)
+        for mutations_per_branch in [1, 2, 3]:
+            self.verify_branch_mutations(ts, mutations_per_branch)
