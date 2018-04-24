@@ -634,15 +634,7 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
         goto out;
     }
 
-    if (flags & (MSP_COMPUTE_PARENTS | MSP_FIX_PARENTS))
-    {
-        // parents must be computed in order for parents to be fixed
-        if ((flags & MSP_FIX_PARENTS) && !(flags & MSP_COMPUTE_PARENTS))
-        {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-
+    if (flags & (MSP_COMPUTE_PARENTS | MSP_FIX_PARENTS)) {
         ret = tree_sequence_compute_parents(self, !!(flags & MSP_FIX_PARENTS));
         if (ret != 0) {
             goto out;
@@ -1013,14 +1005,14 @@ typedef struct  {
     bool branch_group_checked;
 } node_map_t;
 
-static int node_map_compare_node_id(const void *p, const void *q)
+static int
+node_map_compare_node_id(const void *p, const void *q)
 {
     // sort by node_id, and by site_index below that so that we don't reorder entries within each branch group
     int ln = ((node_map_t *)p)->node_id;
     int rn = ((node_map_t *)q)->node_id;
 
-    if (ln == rn)
-    {
+    if (ln == rn) {
         int ls = ((node_map_t *)p)->site_index;
         int rs = ((node_map_t *)q)->site_index;
 
@@ -1030,7 +1022,8 @@ static int node_map_compare_node_id(const void *p, const void *q)
     return (ln - rn);
 }
 
-static int node_map_compare_site_index(const void *p, const void *q)
+static int
+node_map_compare_site_index(const void *p, const void *q)
 {
     // sort by site_index (index in the site's mutation array), which fully determines the order
     int l = ((node_map_t *)p)->site_index;
@@ -1038,7 +1031,8 @@ static int node_map_compare_site_index(const void *p, const void *q)
     return (l - r);
 }
 
-int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_missing_parents)
+int WARN_UNUSED
+tree_sequence_compute_parents(tree_sequence_t *self, bool fix_missing_parents)
 {
     // This function walks through sites and correctly designates parents for
     // mutations by figuring out who is ancestral to whom.  It finds parental
@@ -1058,7 +1052,7 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
     //   the parent of B, or is merely *inferred* to be; however, when A is
     //   explicitly declared to be the parent of B and they are out of order,
     //   msprime should catch that issue already on table load anyway.
-    //   
+    //
     // If `fix_missing_parents` is true, then parents currently -1 will be
     // filled in with the correct value; if it is false, then all parents,
     // including those set to -1, will be checked for correctness.
@@ -1073,21 +1067,21 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
     // start looping through trees
     sparse_tree_t tree;
     ret = sparse_tree_alloc(&tree, self, 0);
-    if (ret != 0) goto out;
-    ret = sparse_tree_first(&tree);
-    if (ret < 0) goto out;
+    if (ret != 0) {
+        goto out;
+    }
 
-    do
-    {
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
         // for this tree, loop through sites
-        for (size_t tree_site_index = 0; tree_site_index < tree.sites_length; ++tree_site_index)
-        {
+        for (size_t tree_site_index = 0;
+                tree_site_index < tree.sites_length; ++tree_site_index) {
             site_t *site = &tree.sites[tree_site_index];
 
             // If there is only one mutation (or none) we can skip the rest of
             // the work (no parent-child relationship)
-            if (site->mutations_length <= 1)
+            if (site->mutations_length <= 1) {
                 continue;
+            }
 
             // This maps node_id_t to mutation_id_t; think of this as a slow
             // std::unordered_map<node_id_t, mutation_id_t> we also keep a
@@ -1098,15 +1092,19 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
             // Ensure the node map has sufficient capacity to hold an entry for
             // each mutation at this site We expand by doublings, to avoid
             // repeatedly scootching our size up by small increments
-            if (node_map__capacity < site->mutations_length)
-            {
-                if (node_map__capacity == 0)
+            if (node_map__capacity < site->mutations_length) {
+                if (node_map__capacity == 0) {
                     node_map__capacity = 16;    // arbitrary start size
+                }
 
                 while (node_map__capacity < site->mutations_length)
                     node_map__capacity <<= 1;
 
                 node_map = realloc(node_map, node_map__capacity * sizeof(node_map_t));
+                if (node_map == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
             }
 
             // For each site we have a fresh node_map, which we then fill with
@@ -1115,8 +1113,7 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
             // (and thus their order listed in the site) is wrong
             node_map__count = 0;
 
-            for (table_size_t j = 0; j < site->mutations_length; j++)
-            {
+            for (table_size_t j = 0; j < site->mutations_length; j++) {
                 mutation_t *mut = &site->mutations[j];
                 node_map_t *node_map_entry = node_map + node_map__count;
 
@@ -1141,12 +1138,10 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
             // can just scan the branch group in order and check parentage.
             node_id_t previous_node_id = node_map[0].node_id;
 
-            for (table_size_t j = 1; j < node_map__count; ++j)
-            {
+            for (table_size_t j = 1; j < node_map__count; ++j) {
                 node_id_t current_node_id = node_map[j].node_id;
 
-                if (current_node_id == previous_node_id)
-                {
+                if (current_node_id == previous_node_id) {
                     // a branch group starts at j - 1 (previous_node_id); find its extent
                     table_size_t first_in_group = j - 1, last_in_group = j;
 
@@ -1155,25 +1150,21 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
                     node_map[last_in_group].branch_group_checked = true;
 
                     while ((last_in_group + 1 < node_map__count)
-                            && (node_map[last_in_group + 1].node_id == previous_node_id))
-                    {
+                            && (node_map[last_in_group + 1].node_id == previous_node_id)) {
                         ++last_in_group;
                         node_map[last_in_group].branch_group_checked = true;
                     }
 
                     // check that the branch group forms a linear chain
                     for (table_size_t group_index = first_in_group + 1;
-                            group_index <= last_in_group; ++group_index)
-                    {
+                            group_index <= last_in_group; ++group_index) {
                         mutation_id_t putative_parent_mut_id = node_map[group_index - 1].mutation_id;
                         table_size_t mut_site_index = node_map[group_index].site_index;
                         mutation_id_t actual_parent_mut_id = site->mutations[mut_site_index].parent;
 
                         if (fix_missing_parents && (actual_parent_mut_id == MSP_NULL_MUTATION)) {
-                            site->mutations[mut_site_index].parent = putative_parent_mut_id;
-                        }
-                        else if (actual_parent_mut_id != putative_parent_mut_id)
-                        {
+                            self->mutations.parent[site->mutations[mut_site_index].id] = putative_parent_mut_id;
+                        } else if (actual_parent_mut_id != putative_parent_mut_id) {
                             ret = MSP_ERR_MALFORMED_MUTATION_BRANCH_GROUP;
                             goto out;
                         }
@@ -1193,13 +1184,13 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
             qsort(node_map, node_map__count, sizeof(node_map_t), &node_map_compare_site_index);
 
             // for this site, loop through mutations and find/check the parent of each mutation
-            for (int j = 0; j < (int)site->mutations_length; j++)
-            {
+            for (int j = 0; j < (int)site->mutations_length; j++) {
                 // if the mutation we're looking at is in a branch group, and
                 // it is not the chain end, it has already been checked
                 // sufficiently
-                if (node_map[j].branch_group_checked)
+                if (node_map[j].branch_group_checked) {
                     continue;
+                }
 
                 // otherwise, walk upward until we reach the root, or a node
                 // associated with a mutation other than ourselves
@@ -1207,23 +1198,22 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
                 node_id_t u = mut->node;
                 int node_map__index = -1;
 
-                do
-                {
+                do {
                     // walk up to the parent node of u
                     node_id_t u_parent;
 
                     ret = sparse_tree_get_parent(&tree, u, &u_parent);
-                    if (ret != 0) goto out;
+                    if (ret != 0) {
+                        goto out;
+                    }
                     u = u_parent;
 
                     // if we've reached the top node, we're done
-                    if (u == MSP_NULL_NODE)
-                    {
+                    if (u == MSP_NULL_NODE) {
                         // we walked all the way up without finding a parent
                         // mutation, so check that our parent is
                         // MSP_NULL_MUTATION as it ought to be
-                        if (mut->parent != MSP_NULL_MUTATION)
-                        {
+                        if (mut->parent != MSP_NULL_MUTATION) {
                             ret = MSP_ERR_MUTATION_PARENT_INCONSISTENT;
                             goto out;
                         }
@@ -1235,40 +1225,33 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
                     // we look from end to beginning so that when a branch group
                     // exists we find the chain start for the branch group
                     for (node_map__index = node_map__count - 1;
-                            node_map__index >= 0; --node_map__index)
-                    {
-                        if (node_map[node_map__index].node_id == u)
-                        {
+                            node_map__index >= 0; --node_map__index) {
+                        if (node_map[node_map__index].node_id == u) {
                             // now node_map__index is the index of the inferred
                             // parent in the node map the inferred parent is
                             // required to be above the child mutation in the
                             // mutation table, always
-                            if (node_map[node_map__index].mutation_id > node_map[j].mutation_id)
-                            {
+                            if (node_map[node_map__index].mutation_id > node_map[j].mutation_id) {
                                 ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
                                 goto out;
                             }
 
-                            if (mut->parent == MSP_NULL_MUTATION)
-                            {
+                            if (mut->parent == MSP_NULL_MUTATION) {
                                 // the child mutation had no designated parent,
                                 // so mark the inferred parent for it.
-                                // note the MSP_FIX_PARENTS flag enables this; 
+                                // note the MSP_FIX_PARENTS flag enables this;
                                 if (fix_missing_parents) {
-                                    mut->parent = node_map[node_map__index].mutation_id;
+                                    self->mutations.parent[mut->id] = node_map[node_map__index].mutation_id;
                                 } else {
                                     // the child mutation wrongly specifies no parent
                                     ret = MSP_ERR_MUTATION_PARENT_INCONSISTENT;
                                     goto out;
                                 }
-                            }
-                            else
-                            {
+                            } else {
                                 // the child mutation did specify a parent, so
                                 // it has to match our inference
                                 if (mut->parent !=
-                                        node_map[node_map__index].mutation_id)
-                                {
+                                        node_map[node_map__index].mutation_id) {
                                     ret = MSP_ERR_MUTATION_PARENT_INCONSISTENT;
                                     goto out;
                                 }
@@ -1281,15 +1264,15 @@ int WARN_UNUSED tree_sequence_compute_parents(tree_sequence_t *self, bool fix_mi
                 while (node_map__index == -1);
             }
         }
-
-        // go to the next tree
-        ret = sparse_tree_next(&tree);
-        if (ret < 0) goto out;
     }
-    while (ret != 0);
+    if (ret < 0) {
+        goto out;
+    }
 
     ret = sparse_tree_free(&tree);
-    if (ret != 0) goto out;
+    if (ret != 0) {
+        goto out;
+    }
 
 out:
     return ret;

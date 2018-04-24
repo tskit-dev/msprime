@@ -4267,9 +4267,8 @@ test_single_tree_compute_mutation_parents(void)
     for (int j=0; j < tables.mutations.num_rows; ++j) {
         parent = tables.mutations.parent[j];
         tables.mutations.parent[j] = MSP_NULL_MUTATION;
-        ret = tree_sequence_load_tables(&ts, &tables, MSP_FIX_PARENTS | MSP_COMPUTE_PARENTS);
+        ret = tree_sequence_load_tables(&ts, &tables, MSP_FIX_PARENTS);
         CU_ASSERT_EQUAL(ret, 0);
-        printf("\n%d ---> %d = %d\n", ret, ts.mutations.parent[j], parent);
         CU_ASSERT_EQUAL(ts.mutations.parent[j], parent);
         tree_sequence_free(&ts);
         tables.mutations.parent[j] = parent;
