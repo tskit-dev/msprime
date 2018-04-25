@@ -1085,6 +1085,7 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_coalescence_records(ts)
 
+    @unittest.skip("Implement TableCollection.compute_mutation_parents")
     def test_compute_mutation_parent(self):
         for ts in get_example_tree_sequences():
             computed_parent = ts.compute_mutation_parents()

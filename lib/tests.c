@@ -971,17 +971,26 @@ static void
 verify_compute_mutation_parents(tree_sequence_t *ts)
 {
     int ret;
-    size_t j;
-    size_t num_mutations = tree_sequence_get_num_mutations(ts);
-    mutation_id_t *parent = malloc(num_mutations * sizeof(*parent));
+    size_t size = tree_sequence_get_num_mutations(ts) * sizeof(mutation_id_t);
+    mutation_id_t *parent = malloc(size);
+    table_collection_t tables;
 
     CU_ASSERT_FATAL(parent != NULL);
-    ret = tree_sequence_compute_mutation_parents(ts, parent, 0);
+    ret = tree_sequence_dump_tables(ts, &tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < num_mutations; j++) {
-        CU_ASSERT_EQUAL_FATAL(parent[j], ts->mutations.parent[j]);
-    }
+    memcpy(parent, tables.mutations.parent, size);
+    /* table_collection_print_state(&tables, stdout); */
+    /* Make sure the tables are actually updated */
+    memset(tables.mutations.parent, 0, size);
+
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(memcmp(parent, tables.mutations.parent, size), 0);
+    /* printf("after\n"); */
+    /* table_collection_print_state(&tables, stdout); */
+
     free(parent);
+    table_collection_free(&tables);
 }
 
 static void
@@ -4209,10 +4218,8 @@ test_single_tree_compute_mutation_parents(void)
         "2   1  0  2\n"
         "2   1  1  3\n"
         "2   2  1  -1\n";
-    table_size_t j;
     tree_sequence_t ts;
     table_collection_t tables;
-    mutation_id_t parent[6];
 
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4234,11 +4241,8 @@ test_single_tree_compute_mutation_parents(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
 
     /* Compute the mutation parents */
-    ret = tree_sequence_compute_mutation_parents(&ts, parent, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    for (j = 0; j < tables.mutations.num_rows; j++) {
-        CU_ASSERT_EQUAL(tables.mutations.parent[j], parent[j]);
-    }
+    verify_compute_mutation_parents(&ts);
+
     tree_sequence_free(&ts);
     table_collection_free(&tables);
 }

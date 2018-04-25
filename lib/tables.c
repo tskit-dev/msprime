@@ -4682,3 +4682,98 @@ out:
     msp_safe_free(site_id_map);
     return ret;
 }
+
+int WARN_UNUSED
+table_collection_compute_mutation_parents(table_collection_t *self, int flags)
+{
+    int ret = 0;
+    const edge_id_t *I, *O;
+    const edge_table_t edges = self->edges;
+    const site_table_t sites = self->sites;
+    const mutation_table_t mutations = self->mutations;
+    edge_id_t tj, tk, M;
+    node_id_t *parent = NULL;
+    mutation_id_t *bottom_mutation = NULL;
+    node_id_t u;
+    double left, right;
+    site_id_t site;
+    /* Using unsigned values here avoids potentially undefined behaviour */
+    uint32_t j, mutation, first_mutation;
+
+    ret = table_collection_build_indexes(self, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    parent = malloc(self->nodes.num_rows * sizeof(*parent));
+    bottom_mutation = malloc(self->nodes.num_rows * sizeof(*bottom_mutation));
+    if (parent == NULL || bottom_mutation == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memset(parent, 0xff, self->nodes.num_rows * sizeof(*parent));
+    memset(bottom_mutation, 0xff, self->nodes.num_rows * sizeof(*bottom_mutation));
+    memset(mutations.parent, 0xff, self->mutations.num_rows * sizeof(mutation_id_t));
+
+    I = self->indexes.edge_insertion_order;
+    O = self->indexes.edge_removal_order;
+    M = (edge_id_t) edges.num_rows;
+    tj = 0;
+    tk = 0;
+    site = 0;
+    mutation = 0;
+    while (tj < M) {
+        left = edges.left[I[tj]];
+        while (tk < M && edges.right[O[tk]] == left) {
+            parent[edges.child[O[tk]]] = MSP_NULL_NODE;
+            tk++;
+        }
+        while (tj < M && edges.left[I[tj]] == left) {
+            parent[edges.child[I[tj]]] = edges.parent[I[tj]];
+            tj++;
+        }
+        right = self->sequence_length;
+        if (tk < M) {
+            right = edges.right[O[tk]];
+        }
+        /* Tree is now ready. We look at each site on this tree in turn */
+        while (site < (site_id_t) sites.num_rows && sites.position[site] < right) {
+            /* Create a mapping from mutations to nodes. If we see more than one
+             * mutation at a node, the previously seen one must be the parent
+             * of the current since we assume they are in order. */
+            first_mutation = mutation;
+            while (mutation < mutations.num_rows && mutations.site[mutation] == site) {
+                u = mutations.node[mutation];
+                if (bottom_mutation[u] != MSP_NULL_MUTATION) {
+                    mutations.parent[mutation] = bottom_mutation[u];
+                }
+                bottom_mutation[u] = (mutation_id_t) mutation;
+                mutation++;
+            }
+            /* There's no point in checking the first mutation since this cannot
+             * have a parent. This also efficiently covers the common case of
+             * single mutations at a site. */
+            for (j = first_mutation + 1; j < mutation; j++) {
+                if (mutations.parent[j] == MSP_NULL_MUTATION) {
+                    u = parent[mutations.node[j]];
+                    while (u != MSP_NULL_NODE && bottom_mutation[u] == MSP_NULL_MUTATION) {
+                        u = parent[u];
+                    }
+                    if (u != MSP_NULL_NODE) {
+                        mutations.parent[j] = bottom_mutation[u];
+                    }
+                }
+            }
+            /* Reset the mapping for the next site */
+            for (j = first_mutation; j < mutation; j++) {
+                u = mutations.node[j];
+                bottom_mutation[u] = MSP_NULL_MUTATION;
+            }
+            site++;
+        }
+    }
+
+out:
+    msp_safe_free(parent);
+    msp_safe_free(bottom_mutation);
+    return ret;
+}
