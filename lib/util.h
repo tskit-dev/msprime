@@ -46,7 +46,6 @@
 
 /* Flags for load tables */
 #define MSP_BUILD_INDEXES 1
-#define MSP_COMPUTE_PARENTS 2
 
 /* Flags for tree sequence dump/load */
 #define MSP_DUMP_ZLIB_COMPRESSION 1

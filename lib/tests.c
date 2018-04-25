@@ -968,6 +968,23 @@ verify_stats(tree_sequence_t *ts)
 }
 
 static void
+verify_compute_mutation_parents(tree_sequence_t *ts)
+{
+    int ret;
+    size_t j;
+    size_t num_mutations = tree_sequence_get_num_mutations(ts);
+    mutation_id_t *parent = malloc(num_mutations * sizeof(*parent));
+
+    CU_ASSERT_FATAL(parent != NULL);
+    ret = tree_sequence_compute_mutation_parents(ts, parent, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    for (j = 0; j < num_mutations; j++) {
+        CU_ASSERT_EQUAL_FATAL(parent[j], ts->mutations.parent[j]);
+    }
+    free(parent);
+}
+
+static void
 verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
 {
     int ret;
@@ -4195,7 +4212,7 @@ test_single_tree_compute_mutation_parents(void)
     table_size_t j;
     tree_sequence_t ts;
     table_collection_t tables;
-    mutation_id_t parent;
+    mutation_id_t parent[6];
 
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4215,25 +4232,14 @@ test_single_tree_compute_mutation_parents(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
-    tree_sequence_free(&ts);
 
-    for (j = 0; j < tables.mutations.num_rows; j++) {
-        parent = tables.mutations.parent[j];
-        tables.mutations.parent[j] = MSP_NULL_MUTATION;
-        ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(ts.mutations.parent[j], parent);
-        tree_sequence_free(&ts);
-        tables.mutations.parent[j] = parent;
-    }
-
-    /* Check to make sure we still have legal mutations */
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    /* Compute the mutation parents */
+    ret = tree_sequence_compute_mutation_parents(&ts, parent, 0);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    for (j = 0; j < tables.mutations.num_rows; j++) {
+        CU_ASSERT_EQUAL(tables.mutations.parent[j], parent[j]);
+    }
     tree_sequence_free(&ts);
-
     table_collection_free(&tables);
 }
 
@@ -5267,7 +5273,6 @@ test_next_prev_from_examples(void)
     free(examples);
 }
 
-
 static void
 test_hapgen_from_examples(void)
 {
@@ -5322,6 +5327,21 @@ test_stats_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_stats(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
+test_compute_mutation_parents_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_compute_mutation_parents(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -7036,6 +7056,8 @@ main(int argc, char **argv)
         {"test_vargen_from_examples", test_vargen_from_examples},
         {"test_newick_from_examples", test_newick_from_examples},
         {"test_stats_from_examples", test_stats_from_examples},
+        {"test_compute_mutation_parents_from_examples",
+            test_compute_mutation_parents_from_examples},
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
         {"test_save_empty_hdf5", test_save_empty_hdf5},
