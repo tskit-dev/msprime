@@ -1085,6 +1085,12 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_coalescence_records(ts)
 
+    def test_compute_mutation_parent(self):
+        for ts in get_example_tree_sequences():
+            computed_parent = ts.compute_mutation_parents()
+            parent = ts.tables.mutations.parent
+            self.assertTrue(np.array_equal(parent, computed_parent))
+
     def verify_tracked_samples(self, ts):
         # Should be empty list by default.
         for tree in ts.trees():

@@ -3018,6 +3018,8 @@ class TestMutationParent(unittest.TestCase):
         parent = tsutil.compute_mutation_parent(ts)
         tables = ts.tables
         self.assertTrue(np.array_equal(parent, tables.mutations.parent))
+        parent = ts.compute_mutation_parents()
+        self.assertTrue(np.array_equal(parent, tables.mutations.parent))
 
     def test_example(self):
         nodes = six.StringIO("""\

@@ -4770,6 +4770,43 @@ out:
 #endif
 }
 
+static PyObject *
+TreeSequence_compute_mutation_parents(TreeSequence *self)
+{
+#ifdef HAVE_NUMPY
+    PyObject *ret = NULL;
+    int err;
+    size_t num_mutations;
+    npy_intp dims[1];
+    PyArrayObject *parent = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_mutations = tree_sequence_get_num_mutations(self->tree_sequence);
+    dims[0] = num_mutations;
+
+    parent = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT32);
+    if (parent == NULL) {
+        goto out;
+    }
+    err = tree_sequence_compute_mutation_parents(self->tree_sequence,
+            (mutation_id_t *) PyArray_DATA(parent), 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = (PyObject *) parent;
+    parent = NULL;
+out:
+    Py_XDECREF(parent);
+    return ret;
+#else
+    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
+    return NULL;
+#endif
+}
+
 static PyMemberDef TreeSequence_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -4828,6 +4865,9 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_pairwise_diversity",
         (PyCFunction) TreeSequence_get_pairwise_diversity,
         METH_VARARGS|METH_KEYWORDS, "Returns the average pairwise diversity." },
+    {"compute_mutation_parents",
+        (PyCFunction) TreeSequence_compute_mutation_parents, METH_NOARGS,
+        "Computes the parent column for the mutations." },
     {"get_genotype_matrix", (PyCFunction) TreeSequence_get_genotype_matrix, METH_NOARGS,
         "Returns the genotypes matrix." },
     {NULL}  /* Sentinel */
