@@ -417,8 +417,9 @@ static int
 edge_table_expand_columns(edge_table_t *self, size_t additional_rows)
 {
     int ret = 0;
-    size_t increment = MSP_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    table_size_t increment = MSP_MAX(
+        (table_size_t) additional_rows, self->max_rows_increment);
+    table_size_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
@@ -452,7 +453,7 @@ edge_table_alloc(edge_table_t *self, size_t max_rows_increment)
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = (table_size_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
     ret = edge_table_expand_columns(self, 1);
@@ -523,7 +524,7 @@ edge_table_append_columns(edge_table_t *self,
     memcpy(self->right + self->num_rows, right, num_rows * sizeof(double));
     memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(node_id_t));
     memcpy(self->child + self->num_rows, child, num_rows * sizeof(node_id_t));
-    self->num_rows += num_rows;
+    self->num_rows += (table_size_t) num_rows;
 out:
     return ret;
 }
@@ -1344,8 +1345,9 @@ static int
 migration_table_expand(migration_table_t *self, size_t additional_rows)
 {
     int ret = 0;
-    size_t increment = MSP_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    table_size_t increment = MSP_MAX(
+            (table_size_t) additional_rows, self->max_rows_increment);
+    table_size_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
@@ -1387,7 +1389,7 @@ migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = (table_size_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
     ret = migration_table_expand(self, 1);
@@ -1420,7 +1422,7 @@ migration_table_append_columns(migration_table_t *self, size_t num_rows, double 
     memcpy(self->source + self->num_rows, source, num_rows * sizeof(population_id_t));
     memcpy(self->dest + self->num_rows, dest, num_rows * sizeof(population_id_t));
     memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
-    self->num_rows += num_rows;
+    self->num_rows += (table_size_t) num_rows;
 out:
     return ret;
 }

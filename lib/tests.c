@@ -3458,54 +3458,6 @@ test_single_tree_bad_mutations(void)
     tree_sequence_free(&ts);
     tables.mutations.parent[2] = MSP_NULL_MUTATION;
 
-    /* mutation parent not consistent with tree */
-    tables.mutations.parent[5] = 2;
-    ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_INCONSISTENT);
-    tree_sequence_free(&ts);
-    tables.mutations.parent[5] = MSP_NULL_MUTATION;
-
-    /* mutation parent null but shouldn't be */
-    tables.mutations.parent[3] = MSP_NULL_MUTATION;
-    ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_INCONSISTENT);
-    tree_sequence_free(&ts);
-    tables.mutations.parent[3] = 2;
-
-    /* mutations on same branch without parentage */
-    tables.mutations.parent[4] = MSP_NULL_MUTATION;
-    ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_MALFORMED_MUTATION_BRANCH_GROUP);
-    tree_sequence_free(&ts);
-    tables.mutations.parent[4] = 3;
-
-    /* mutations on a branch not a chain */
-    tables.mutations.parent[4] = 2;
-    ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_MALFORMED_MUTATION_BRANCH_GROUP);
-    tree_sequence_free(&ts);
-    tables.mutations.parent[4] = 3;
-
-    /* mutation specifies a parent but it shouldn't */
-    tables.mutations.parent[5] = 3;
-    ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_INCONSISTENT);
-    tree_sequence_free(&ts);
-    tables.mutations.parent[5] = MSP_NULL_MUTATION;
-
-    /* mutation parent after child */
-    tables.mutations.node[2] = 1;
-    tables.mutations.node[3] = 4;
-    tables.mutations.parent[3] = MSP_NULL_MUTATION;
-    tables.mutations.parent[4] = 2;
-    ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_AFTER_CHILD);
-    tree_sequence_free(&ts);
-    tables.mutations.node[2] = 4;
-    tables.mutations.node[3] = 1;
-    tables.mutations.parent[3] = 2;
-    tables.mutations.parent[4] = 3;
-
     /* Check to make sure we've maintained legal mutations */
     ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4240,6 +4192,7 @@ test_single_tree_compute_mutation_parents(void)
         "2   1  0  2\n"
         "2   1  1  3\n"
         "2   2  1  -1\n";
+    table_size_t j;
     tree_sequence_t ts;
     table_collection_t tables;
     mutation_id_t parent;
@@ -4264,10 +4217,10 @@ test_single_tree_compute_mutation_parents(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
     tree_sequence_free(&ts);
 
-    for (int j=0; j < tables.mutations.num_rows; ++j) {
+    for (j = 0; j < tables.mutations.num_rows; j++) {
         parent = tables.mutations.parent[j];
         tables.mutations.parent[j] = MSP_NULL_MUTATION;
-        ret = tree_sequence_load_tables(&ts, &tables, MSP_FIX_PARENTS);
+        ret = tree_sequence_load_tables(&ts, &tables, MSP_COMPUTE_PARENTS);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(ts.mutations.parent[j], parent);
         tree_sequence_free(&ts);

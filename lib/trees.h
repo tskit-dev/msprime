@@ -245,7 +245,6 @@ int tree_sequence_dump_tables(tree_sequence_t *self, table_collection_t *tables,
 int tree_sequence_load(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_dump(tree_sequence_t *self, const char *filename, int flags);
 int tree_sequence_free(tree_sequence_t *self);
-int tree_sequence_compute_parents(tree_sequence_t *self, bool fix_missing_parents); 
 
 size_t tree_sequence_get_num_nodes(tree_sequence_t *self);
 size_t tree_sequence_get_num_edges(tree_sequence_t *self);
