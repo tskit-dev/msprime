@@ -4243,16 +4243,25 @@ test_single_tree_compute_mutation_parents(void)
     /* Compute the mutation parents */
     verify_compute_mutation_parents(&ts);
 
-    /* Mutations not ordered by tree -- doesn't check this!
-    tables.mutations.node[2] = 1;
-    tables.mutations.node[3] = 4;
+    /* First mutation out of order */
+    tables.mutations.site[0] = 2;
     ret = table_collection_compute_mutation_parents(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
+    tables.mutations.site[0] = 0;
+    // ***/
+
+    /* Mutations not ordered by tree */
+    tables.mutations.node[2] = 1;
+    tables.mutations.node[3] = 4;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* table_collection_print_state(&tables, stdout); */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_AFTER_CHILD);
     tables.mutations.node[2] = 4;
     tables.mutations.node[3] = 1;
-    ***/
 
     /* Mutations not ordered by site */
     tables.mutations.site[3] = 1;

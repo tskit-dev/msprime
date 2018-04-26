@@ -4749,10 +4749,9 @@ table_collection_compute_mutation_parents(table_collection_t *self, int flags)
                 bottom_mutation[u] = (mutation_id_t) mutation;
                 mutation++;
             }
-            /* There's no point in checking the first mutation since this cannot
-             * have a parent. This also efficiently covers the common case of
-             * single mutations at a site. */
-            for (j = first_mutation + 1; j < mutation; j++) {
+            /* The first mutation shouldn't have a parent, but since we want to
+             * catch errors, we need to check it. */
+            for (j = first_mutation; j < mutation; j++) {
                 if (mutations.parent[j] == MSP_NULL_MUTATION) {
                     u = parent[mutations.node[j]];
                     while (u != MSP_NULL_NODE && bottom_mutation[u] == MSP_NULL_MUTATION) {
