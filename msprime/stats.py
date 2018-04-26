@@ -603,8 +603,8 @@ class BranchLengthStatCalculator(GeneralStatCalculator):
     .. warning::
         This interface is still in beta, and may change in the future.
 
-    :param TreeSequence tree_sequence: The tree sequence mutations we are
-        interested in.
+    :param TreeSequence tree_sequence: The tree sequence we will compute
+        statistics for.
     """
 
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):
@@ -847,8 +847,8 @@ class SiteStatCalculator(GeneralStatCalculator):
     .. warning::
         This interface is still in beta, and may change in the future.
 
-    :param TreeSequence tree_sequence: The tree sequence mutations we are
-        interested in.
+    :param TreeSequence tree_sequence: The tree sequence we will compute
+        statistics for.
     """
 
     def __init__(self, tree_sequence):
