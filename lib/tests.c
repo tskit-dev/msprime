@@ -4243,6 +4243,31 @@ test_single_tree_compute_mutation_parents(void)
     /* Compute the mutation parents */
     verify_compute_mutation_parents(&ts);
 
+    /* Mutations not ordered by tree -- doesn't check this!
+    tables.mutations.node[2] = 1;
+    tables.mutations.node[3] = 4;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
+    tables.mutations.node[2] = 4;
+    tables.mutations.node[3] = 1;
+    ***/
+
+    /* Mutations not ordered by site */
+    tables.mutations.site[3] = 1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
+    tables.mutations.site[3] = 2;
+
+    /* Check to make sure we still have legal mutations */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+
     tree_sequence_free(&ts);
     table_collection_free(&tables);
 }
