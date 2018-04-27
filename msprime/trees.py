@@ -2023,6 +2023,10 @@ class TreeSequence(object):
         """
         return self._ll_tree_sequence.get_genotype_matrix()
 
+    def compute_mutation_parents(self):
+        # TODO document.
+        return self._ll_tree_sequence.compute_mutation_parents()
+
     def get_pairwise_diversity(self, samples=None):
         # Deprecated alias for self.pairwise_diversity
         return self.pairwise_diversity(samples)

@@ -417,8 +417,9 @@ static int
 edge_table_expand_columns(edge_table_t *self, size_t additional_rows)
 {
     int ret = 0;
-    size_t increment = MSP_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    table_size_t increment = MSP_MAX(
+        (table_size_t) additional_rows, self->max_rows_increment);
+    table_size_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
@@ -452,7 +453,7 @@ edge_table_alloc(edge_table_t *self, size_t max_rows_increment)
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = (table_size_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
     ret = edge_table_expand_columns(self, 1);
@@ -523,7 +524,7 @@ edge_table_append_columns(edge_table_t *self,
     memcpy(self->right + self->num_rows, right, num_rows * sizeof(double));
     memcpy(self->parent + self->num_rows, parent, num_rows * sizeof(node_id_t));
     memcpy(self->child + self->num_rows, child, num_rows * sizeof(node_id_t));
-    self->num_rows += num_rows;
+    self->num_rows += (table_size_t) num_rows;
 out:
     return ret;
 }
@@ -905,13 +906,13 @@ site_table_print_state(site_table_t *self, FILE *out)
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "site_table: %p:\n", (void *) self);
-    fprintf(out, "num_rows = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "num_rows = %d\t(max= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
-    fprintf(out, "ancestral_state_length = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "ancestral_state_length = %d\t(max= %d\tincrement = %d)\n",
             (int) self->ancestral_state_length,
             (int) self->max_ancestral_state_length,
             (int) self->max_ancestral_state_length_increment);
-    fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "metadata_length = %d(\tmax= %d\tincrement = %d)\n",
             (int) self->metadata_length,
             (int) self->max_metadata_length,
             (int) self->max_metadata_length_increment);
@@ -1344,8 +1345,9 @@ static int
 migration_table_expand(migration_table_t *self, size_t additional_rows)
 {
     int ret = 0;
-    size_t increment = MSP_MAX(additional_rows, self->max_rows_increment);
-    size_t new_size = self->max_rows + increment;
+    table_size_t increment = MSP_MAX(
+            (table_size_t) additional_rows, self->max_rows_increment);
+    table_size_t new_size = self->max_rows + increment;
 
     if ((self->num_rows + additional_rows) > self->max_rows) {
         ret = expand_column((void **) &self->left, new_size, sizeof(double));
@@ -1387,7 +1389,7 @@ migration_table_alloc(migration_table_t *self, size_t max_rows_increment)
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
-    self->max_rows_increment = max_rows_increment;
+    self->max_rows_increment = (table_size_t) max_rows_increment;
     self->max_rows = 0;
     self->num_rows = 0;
     ret = migration_table_expand(self, 1);
@@ -1420,7 +1422,7 @@ migration_table_append_columns(migration_table_t *self, size_t num_rows, double 
     memcpy(self->source + self->num_rows, source, num_rows * sizeof(population_id_t));
     memcpy(self->dest + self->num_rows, dest, num_rows * sizeof(population_id_t));
     memcpy(self->time + self->num_rows, time, num_rows * sizeof(double));
-    self->num_rows += num_rows;
+    self->num_rows += (table_size_t) num_rows;
 out:
     return ret;
 }
@@ -1870,7 +1872,16 @@ cmp_site(const void *a, const void *b) {
     const site_t *ia = (const site_t *) a;
     const site_t *ib = (const site_t *) b;
     /* Compare sites by position */
-    return (ia->position > ib->position) - (ia->position < ib->position);
+    int ret = (ia->position > ib->position) - (ia->position < ib->position);
+    if (ret == 0) {
+        /* Within a particular position sort by ID.  This ensures that relative ordering
+         * of multiple sites at the same position is maintained; the redundant sites
+         * will get compacted down by clean_tables(), but in the meantime if the order
+         * of the redundant sites changes it will cause the sort order of mutations to
+         * be corrupted, as the mutations will follow their sites. */
+        ret = (ia->id > ib->id) - (ia->id < ib->id);
+    }
+    return ret;
 }
 
 static int
@@ -2941,7 +2952,7 @@ simplifier_overlapping_segments_init(simplifier_t *self)
     /* Sort the segments in the buffer by left coordinate */
     qsort(self->segment_queue, self->segment_queue_size, sizeof(simplify_segment_t),
             cmp_segment);
-    assert(self->segment_queue_size < self->max_segment_queue_size - 1);
+    assert(self->segment_queue_size < self->max_segment_queue_size);
     sentinel = self->segment_queue + self->segment_queue_size;
     sentinel->left = DBL_MAX;
     self->overlapping_segments_state.index = 0;
@@ -4669,5 +4680,138 @@ table_collection_deduplicate_sites(table_collection_t *self, int flags)
     }
 out:
     msp_safe_free(site_id_map);
+    return ret;
+}
+
+int WARN_UNUSED
+table_collection_compute_mutation_parents(table_collection_t *self, int flags)
+{
+    int ret = 0;
+    const edge_id_t *I, *O;
+    const edge_table_t edges = self->edges;
+    const node_table_t nodes = self->nodes;
+    const site_table_t sites = self->sites;
+    const mutation_table_t mutations = self->mutations;
+    const edge_id_t M = (edge_id_t) edges.num_rows;
+    edge_id_t tj, tk;
+    node_id_t *parent = NULL;
+    mutation_id_t *bottom_mutation = NULL;
+    node_id_t u;
+    double left, right;
+    site_id_t site;
+    /* Using unsigned values here avoids potentially undefined behaviour */
+    uint32_t j, mutation, first_mutation;
+
+    ret = table_collection_build_indexes(self, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    parent = malloc(nodes.num_rows * sizeof(*parent));
+    bottom_mutation = malloc(nodes.num_rows * sizeof(*bottom_mutation));
+    if (parent == NULL || bottom_mutation == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memset(parent, 0xff, nodes.num_rows * sizeof(*parent));
+    memset(bottom_mutation, 0xff, nodes.num_rows * sizeof(*bottom_mutation));
+    memset(mutations.parent, 0xff, self->mutations.num_rows * sizeof(mutation_id_t));
+
+    /* Building the indexes ensures that the nodes in the edge table are
+     * valid. We need to check the mutations. */
+    /* TODO replace this with calls to check_integrity */
+    for (j = 0; j < sites.num_rows; j++) {
+        if (j > 0) {
+            if (sites.position[j] < sites.position[j - 1]) {
+                ret = MSP_ERR_UNSORTED_SITES;
+                goto out;
+            }
+        }
+    }
+    for (j = 0; j < mutations.num_rows; j++) {
+        if (mutations.node[j] < 0 || mutations.node[j] >= (node_id_t) nodes.num_rows) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (mutations.site[j] < 0 || mutations.site[j] >= (site_id_t) sites.num_rows) {
+            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (j > 0) {
+            if (mutations.site[j] < mutations.site[j - 1]) {
+                ret = MSP_ERR_UNSORTED_MUTATIONS;
+                goto out;
+            }
+        }
+    }
+
+    I = self->indexes.edge_insertion_order;
+    O = self->indexes.edge_removal_order;
+    tj = 0;
+    tk = 0;
+    site = 0;
+    mutation = 0;
+    while (tj < M) {
+        left = edges.left[I[tj]];
+        while (tk < M && edges.right[O[tk]] == left) {
+            parent[edges.child[O[tk]]] = MSP_NULL_NODE;
+            tk++;
+        }
+        while (tj < M && edges.left[I[tj]] == left) {
+            parent[edges.child[I[tj]]] = edges.parent[I[tj]];
+            tj++;
+        }
+        right = self->sequence_length;
+        if (tk < M) {
+            right = edges.right[O[tk]];
+        }
+        /* Tree is now ready. We look at each site on this tree in turn */
+        while (site < (site_id_t) sites.num_rows && sites.position[site] < right) {
+            /* Create a mapping from mutations to nodes. If we see more than one
+             * mutation at a node, the previously seen one must be the parent
+             * of the current since we assume they are in order. */
+            first_mutation = mutation;
+            while (mutation < mutations.num_rows && mutations.site[mutation] == site) {
+                u = mutations.node[mutation];
+                if (bottom_mutation[u] != MSP_NULL_MUTATION) {
+                    mutations.parent[mutation] = bottom_mutation[u];
+                }
+                bottom_mutation[u] = (mutation_id_t) mutation;
+                mutation++;
+            }
+            /* Make the common case of 1 mutation fast */
+            if (mutation > first_mutation + 1) {
+                /* If we have more than one mutation, compute the parent for each
+                 * one by traversing up the tree until we find a node that has a
+                 * mutation. */
+                for (j = first_mutation; j < mutation; j++) {
+                    if (mutations.parent[j] == MSP_NULL_MUTATION) {
+                        u = parent[mutations.node[j]];
+                        while (u != MSP_NULL_NODE
+                                && bottom_mutation[u] == MSP_NULL_MUTATION) {
+                            u = parent[u];
+                        }
+                        if (u != MSP_NULL_NODE) {
+                            mutations.parent[j] = bottom_mutation[u];
+                        }
+                    }
+                }
+            }
+            /* Reset the mapping for the next site */
+            for (j = first_mutation; j < mutation; j++) {
+                u = mutations.node[j];
+                bottom_mutation[u] = MSP_NULL_MUTATION;
+                /* Check that we haven't violated the sortedness property */
+                if (mutations.parent[j] > (mutation_id_t) j) {
+                    ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
+                    goto out;
+                }
+            }
+            site++;
+        }
+    }
+
+out:
+    msp_safe_free(parent);
+    msp_safe_free(bottom_mutation);
     return ret;
 }

@@ -373,32 +373,40 @@ def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
 
 def compute_mutation_parent(ts):
     """
-    (Re-)compute the `parent` column of a MutationTable. Doing this uses
-    topological information in the nodes and edgesets, as well as the fact that
-    each mutation must be listed after the mutation on whose background it occurred
-    (i.e., its parent).
+    Compute the `parent` column of a MutationTable. Correct computation uses
+    topological information in the nodes and edges, as well as the fact that
+    each mutation must be listed after the mutation on whose background it
+    occurred (i.e., its parent).
 
     :param TreeSequence ts: The tree sequence to compute for.  Need not
         have a valid mutation parent column.
     """
-    if ts.num_mutations == 0:
-        return []
-    # sites are ordered by position,
-    #  and mutations by site.
-    # mutation_parent = np.repeat(-1, [ts.num_mutations])
-    mutation_parent = [-1 for _ in range(ts.num_mutations)]
-    for t in ts.trees():
-        for site in t.sites():
-            # If there is more than one mutation on a given node,
-            # they will be in time-increasing order.
-            node_map = {}
-            for mut in site.mutations:
-                u = mut.node
-                while u != msprime.NULL_NODE and u not in node_map:
-                    u = t.parent(u)
-                if u != msprime.NULL_NODE:
-                    mutation_parent[mut.id] = node_map[u].id
-                    # # for checking, we would
-                    # assert node_map[u].id == mut.parent
-                node_map[mut.node] = mut
+    mutation_parent = np.zeros(ts.num_mutations, dtype=np.int32) - 1
+    # Maps nodes to the bottom mutation on each branch
+    bottom_mutation = np.zeros(ts.num_nodes, dtype=np.int32) - 1
+    for tree in ts.trees():
+        for site in tree.sites():
+            # Go forward through the mutations creating a mapping from the
+            # mutations to the nodes. If we see more than one mutation
+            # at a node, then these must be parents since we're assuming
+            # they are in order.
+            for mutation in site.mutations:
+                if bottom_mutation[mutation.node] != msprime.NULL_MUTATION:
+                    mutation_parent[mutation.id] = bottom_mutation[mutation.node]
+                bottom_mutation[mutation.node] = mutation.id
+            # There's no point in checking the first mutation, since this cannot
+            # have a parent.
+            for mutation in site.mutations[1:]:
+                if mutation_parent[mutation.id] == msprime.NULL_MUTATION:
+                    v = tree.parent(mutation.node)
+                    # Traverse upwards until we find a another mutation or root.
+                    while v != msprime.NULL_NODE \
+                            and bottom_mutation[v] == msprime.NULL_MUTATION:
+                        v = tree.parent(v)
+                    if v != msprime.NULL_NODE:
+                        mutation_parent[mutation.id] = bottom_mutation[v]
+            # Reset the maps for the next site.
+            for mutation in site.mutations:
+                bottom_mutation[mutation.node] = msprime.NULL_MUTATION
+            assert np.all(bottom_mutation == -1)
     return mutation_parent

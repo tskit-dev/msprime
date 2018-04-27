@@ -968,6 +968,32 @@ verify_stats(tree_sequence_t *ts)
 }
 
 static void
+verify_compute_mutation_parents(tree_sequence_t *ts)
+{
+    int ret;
+    size_t size = tree_sequence_get_num_mutations(ts) * sizeof(mutation_id_t);
+    mutation_id_t *parent = malloc(size);
+    table_collection_t tables;
+
+    CU_ASSERT_FATAL(parent != NULL);
+    ret = tree_sequence_dump_tables(ts, &tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    memcpy(parent, tables.mutations.parent, size);
+    /* table_collection_print_state(&tables, stdout); */
+    /* Make sure the tables are actually updated */
+    memset(tables.mutations.parent, 0, size);
+
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(memcmp(parent, tables.mutations.parent, size), 0);
+    /* printf("after\n"); */
+    /* table_collection_print_state(&tables, stdout); */
+
+    free(parent);
+    table_collection_free(&tables);
+}
+
+static void
 verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
 {
     int ret;
@@ -3340,8 +3366,10 @@ test_single_tree_bad_mutations(void)
     const char *mutations =
         "0   0  1  -1\n"
         "1   1  1  -1\n"
-        "2   0  1  -1\n"
-        "2   1  1  2\n";
+        "2   4  1  -1\n"
+        "2   1  0  2\n"
+        "2   1  1  3\n"
+        "2   2  1  -1\n";
     tree_sequence_t ts;
     table_collection_t tables;
 
@@ -3355,14 +3383,14 @@ test_single_tree_bad_mutations(void)
     parse_sites(sites, &tables.sites);
     parse_mutations(mutations, &tables.mutations);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 3);
-    CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 4);
+    CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 6);
     tables.sequence_length = 1.0;
 
     /* Check to make sure we have legal mutations */
     ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
     tree_sequence_free(&ts);
 
     /* negative coordinate */
@@ -3460,7 +3488,7 @@ test_single_tree_bad_mutations(void)
     ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
-    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
     tree_sequence_free(&ts);
 
     table_collection_free(&tables);
@@ -4174,6 +4202,108 @@ test_single_tree_simplify(void)
     table_collection_free(&tables);
 }
 
+static void
+test_single_tree_compute_mutation_parents(void)
+{
+    int ret = 0;
+    const char *sites =
+        "0       0\n"
+        "0.1     0\n"
+        "0.2     0\n";
+    const char *mutations =
+        "0   0  1  -1\n"
+        "1   1  1  -1\n"
+        "2   4  1  -1\n"
+        "2   1  0  2\n"
+        "2   1  1  3\n"
+        "2   2  1  -1\n";
+    tree_sequence_t ts;
+    table_collection_t tables;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    parse_nodes(single_tree_ex_nodes, &tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes.num_rows, 7);
+    parse_edges(single_tree_ex_edges, &tables.edges);
+    CU_ASSERT_EQUAL_FATAL(tables.edges.num_rows, 6);
+    parse_sites(sites, &tables.sites);
+    parse_mutations(mutations, &tables.mutations);
+    CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 3);
+    CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 6);
+    tables.sequence_length = 1.0;
+
+    /* Check to make sure we have legal mutations */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+
+    /* Compute the mutation parents */
+    verify_compute_mutation_parents(&ts);
+    tree_sequence_free(&ts);
+
+    /* Bad site reference */
+    tables.mutations.site[0] = -1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
+    tables.mutations.site[0] = 0;
+
+    /* Bad site reference */
+    tables.mutations.site[0] = -1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
+    tables.mutations.site[0] = 0;
+
+    /* mutation sites out of order */
+    tables.mutations.site[0] = 2;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
+    tables.mutations.site[0] = 0;
+
+    /* sites out of order */
+    tables.sites.position[0] = 0.11;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_SITES);
+    tables.sites.position[0] = 0;
+
+    /* Bad node reference */
+    tables.mutations.node[0] = -1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tables.mutations.node[0] = 0;
+
+    /* Bad node reference */
+    tables.mutations.node[0] = tables.nodes.num_rows;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tables.mutations.node[0] = 0;
+
+    /* Mutations not ordered by tree */
+    tables.mutations.node[2] = 1;
+    tables.mutations.node[3] = 4;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_AFTER_CHILD);
+    tables.mutations.node[2] = 4;
+    tables.mutations.node[3] = 1;
+    tree_sequence_free(&ts);
+
+    /* Mutations not ordered by site */
+    tables.mutations.site[3] = 1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
+    tables.mutations.site[3] = 2;
+
+    /* Check to make sure we still have legal mutations */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    tree_sequence_free(&ts);
+
+    tree_sequence_free(&ts);
+    table_collection_free(&tables);
+}
 
 static void
 test_single_tree_inconsistent_mutations(void)
@@ -5205,7 +5335,6 @@ test_next_prev_from_examples(void)
     free(examples);
 }
 
-
 static void
 test_hapgen_from_examples(void)
 {
@@ -5260,6 +5389,21 @@ test_stats_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_stats(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
+test_compute_mutation_parents_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_compute_mutation_parents(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -6942,6 +7086,7 @@ main(int argc, char **argv)
         {"test_single_tree_vargen_max_alleles", test_single_tree_vargen_max_alleles},
         {"test_single_tree_simplify", test_single_tree_simplify},
         {"test_single_tree_inconsistent_mutations", test_single_tree_inconsistent_mutations},
+        {"test_single_tree_compute_mutation_parents", test_single_tree_compute_mutation_parents},
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_sparse_tree_errors", test_sparse_tree_errors},
@@ -6973,6 +7118,8 @@ main(int argc, char **argv)
         {"test_vargen_from_examples", test_vargen_from_examples},
         {"test_newick_from_examples", test_newick_from_examples},
         {"test_stats_from_examples", test_stats_from_examples},
+        {"test_compute_mutation_parents_from_examples",
+            test_compute_mutation_parents_from_examples},
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
         {"test_save_empty_hdf5", test_save_empty_hdf5},

@@ -521,7 +521,6 @@ out:
     return ret;
 }
 
-
 /* TODO add a flag that allows us to use the tables directly without
  * making a copy */
 int WARN_UNUSED
