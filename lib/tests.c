@@ -4202,7 +4202,6 @@ test_single_tree_simplify(void)
     table_collection_free(&tables);
 }
 
-
 static void
 test_single_tree_compute_mutation_parents(void)
 {
@@ -4242,32 +4241,56 @@ test_single_tree_compute_mutation_parents(void)
 
     /* Compute the mutation parents */
     verify_compute_mutation_parents(&ts);
+    tree_sequence_free(&ts);
 
-    /* First mutation out of order */
+    /* Bad site reference */
+    tables.mutations.site[0] = -1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
+    tables.mutations.site[0] = 0;
+
+    /* Bad site reference */
+    tables.mutations.site[0] = -1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
+    tables.mutations.site[0] = 0;
+
+    /* mutation sites out of order */
     tables.mutations.site[0] = 2;
     ret = table_collection_compute_mutation_parents(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
     tables.mutations.site[0] = 0;
-    // ***/
+
+    /* sites out of order */
+    tables.sites.position[0] = 0.11;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_SITES);
+    tables.sites.position[0] = 0;
+
+    /* Bad node reference */
+    tables.mutations.node[0] = -1;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tables.mutations.node[0] = 0;
+
+    /* Bad node reference */
+    tables.mutations.node[0] = tables.nodes.num_rows;
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tables.mutations.node[0] = 0;
 
     /* Mutations not ordered by tree */
     tables.mutations.node[2] = 1;
     tables.mutations.node[3] = 4;
     ret = table_collection_compute_mutation_parents(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* table_collection_print_state(&tables, stdout); */
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_AFTER_CHILD);
     tables.mutations.node[2] = 4;
     tables.mutations.node[3] = 1;
+    tree_sequence_free(&ts);
 
     /* Mutations not ordered by site */
     tables.mutations.site[3] = 1;
     ret = table_collection_compute_mutation_parents(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
     tables.mutations.site[3] = 2;
 
@@ -4276,6 +4299,7 @@ test_single_tree_compute_mutation_parents(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    tree_sequence_free(&ts);
 
     tree_sequence_free(&ts);
     table_collection_free(&tables);
