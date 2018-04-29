@@ -10,6 +10,10 @@ jobs:
       - restore_cache:
           key: msprime-{{ .Branch }}
       - run:
+          name: Checkout submodules
+          command: |
+            git submodule update --init --recursive --remote
+      - run:
           name: Install dependencies and set path
           command: |
             sudo apt-get update

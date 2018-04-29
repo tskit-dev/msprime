@@ -146,11 +146,13 @@ class DefineMacros(object):
         return defines[index]
 
 
+kastore_dir = os.path.join("kastore", "c")
 configurator = PathConfigurator()
 source_files = [
     "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
     "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
-    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c"]
+    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c",
+    os.path.join(kastore_dir, "kastore.c")]
 libdir = "lib"
 _msprime_module = Extension(
     '_msprime',
@@ -160,7 +162,7 @@ _msprime_module = Extension(
     extra_compile_args=["-std=c99"],
     define_macros=DefineMacros(),
     libraries=["gsl", "gslcblas", "hdf5"],
-    include_dirs=[libdir] + configurator.include_dirs,
+    include_dirs=[libdir, os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
 

@@ -27,6 +27,7 @@
 #include <hdf5.h>
 
 #include "tables.h"
+#include "kastore.h"
 
 #define DEFAULT_SIZE_INCREMENT 1024
 

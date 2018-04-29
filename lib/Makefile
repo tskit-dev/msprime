@@ -6,12 +6,13 @@ EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wcast-align -Wcast-qual \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= 
-CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS
+CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS -Ikastore/c
 LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
 HEADERS=msprime.h util.h trees.h tables.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
-    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o
+    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o \
+    kastore.o
 
 all: main simulation_tests tests table_example table_example_cpp
 
@@ -25,8 +26,11 @@ argtable3.o: argtable3.c
 %.o : %.c ${HEADERS}
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
+kastore.o: kastore/c/kastore.c
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+
 main: CFLAGS+=${EXTRA_CFLAGS}
-main: main.c ${COMPILED} ${HEADERS} argtable3.o
+main: main.c ${COMPILED} ${HEADERS} argtable3.o 
 	${CC} ${CFLAGS} ${EXTRA_CFLAGS} -o main main.c ${COMPILED} argtable3.o ${LDFLAGS} -lconfig 
 
 tests: tests.c ${COMPILED} ${HEADERS}
@@ -42,7 +46,7 @@ clean:
 	rm -f main tests simulation_tests table_example table_example_cpp *.o *.gcda *.gcno
 
 debian-tests: CC=h5cc
-debian-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage
+debian-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage -Ikastore/c
 debian-tests: tests simulation_tests
 
 ubuntu-tests: CC=gcc

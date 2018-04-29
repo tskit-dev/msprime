@@ -10,6 +10,7 @@ environment:
 
 install:
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "git submodule update --init --recursive --remote"
 
 build: false
 
