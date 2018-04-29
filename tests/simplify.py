@@ -289,13 +289,9 @@ class Simplifier(object):
                 if mut.parent != -1:
                     mapped_parent = mutation_id_map[mut.parent]
                 if mapped_node != -1:
-                    keep = True
-                    if mapped_parent == -1 and site.ancestral_state == mut.derived_state:
-                        keep = False
-                    if keep:
-                        mutation_id_map[mut.id] = num_output_mutations
-                        num_output_mutations += 1
-                        num_output_site_mutations += 1
+                    mutation_id_map[mut.id] = num_output_mutations
+                    num_output_mutations += 1
+                    num_output_site_mutations += 1
             output_site = True
             if self.filter_zero_mutation_sites and num_output_site_mutations == 0:
                 output_site = False
