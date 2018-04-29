@@ -570,10 +570,12 @@ make_variant(variant_t *variant, size_t num_samples)
     PyObject *alleles = make_alleles(variant);
     PyArrayObject *genotypes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_UINT8);
 
+    /* TODO update this to account for 16 bit variants when we provide the
+     * high-level interface. */
     if (genotypes == NULL || alleles == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(genotypes), variant->genotypes, num_samples * sizeof(uint8_t));
+    memcpy(PyArray_DATA(genotypes), variant->genotypes.u8, num_samples * sizeof(uint8_t));
     ret = Py_BuildValue("iOO", variant->site->id, genotypes, alleles);
 out:
     Py_XDECREF(genotypes);
@@ -4723,6 +4725,8 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
     variant_t *variant;
     size_t j;
 
+    /* TODO add option for 16 bit genotypes */
+
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
@@ -4748,7 +4752,7 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
     }
     j = 0;
     while ((err = vargen_next(vg, &variant)) == 1) {
-        memcpy(V + (j * num_samples), variant->genotypes, num_samples * sizeof(uint8_t));
+        memcpy(V + (j * num_samples), variant->genotypes.u8, num_samples * sizeof(uint8_t));
         j++;
     }
     if (err != 0) {
@@ -6324,6 +6328,7 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"tree_sequence", NULL};
     TreeSequence *tree_sequence = NULL;
 
+    /* TODO add option for 16 bit genotypes */
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
