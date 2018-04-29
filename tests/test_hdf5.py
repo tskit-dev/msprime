@@ -300,6 +300,7 @@ class TestRoundTrip(TestHdf5):
             self.assertEqual(list(position[1:]), position_after)
 
 
+@unittest.skip("Skip HDF5 tests")
 class TestErrors(TestHdf5):
     """
     Test various API errors.
@@ -328,6 +329,7 @@ class TestErrors(TestHdf5):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
+@unittest.skip("Skip HDF5 tests")
 class TestHdf5Format(TestHdf5):
     """
     Tests on the HDF5 file format.
@@ -525,6 +527,7 @@ class TestHdf5Format(TestHdf5):
         self.verify_tree_dump_format(multichar_mutation_example())
 
 
+@unittest.skip("Skip HDF5 tests")
 class TestHdf5FormatErrors(TestHdf5):
     """
     Tests for errors in the HDF5 format.
