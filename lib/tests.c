@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <hdf5.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
 #include <CUnit/Basic.h>
@@ -5803,7 +5802,7 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
 }
 
 static void
-test_save_empty_hdf5(void)
+test_save_empty_kas(void)
 {
     int ret;
     tree_sequence_t ts1, ts2;
@@ -5830,7 +5829,7 @@ test_save_empty_hdf5(void)
 }
 
 static void
-test_save_hdf5(void)
+test_save_kas(void)
 {
     int ret;
     size_t j, k;
@@ -5861,7 +5860,7 @@ test_save_hdf5(void)
 }
 
 static void
-test_save_hdf5_tables(void)
+test_save_kas_tables(void)
 {
     int ret;
     size_t j, k;
@@ -6213,7 +6212,7 @@ test_dump_tables(void)
 }
 
 static void
-test_dump_tables_hdf5(void)
+test_dump_tables_kas(void)
 {
     int ret;
     size_t k;
@@ -6260,12 +6259,7 @@ test_strerror(void)
     for (j = 0; j < max_error_code; j++) {
         msg = msp_strerror(-j);
         CU_ASSERT_FATAL(msg != NULL);
-        if (-j == MSP_ERR_HDF5) {
-            /* There is no HDF5 error, so... */
-            CU_ASSERT_EQUAL(strlen(msg), 0);
-        } else {
-            CU_ASSERT(strlen(msg) > 0);
-        }
+        CU_ASSERT(strlen(msg) > 0);
     }
 
     printf("\nFIXME: need to upate error message handling to deal with kastore\n");
@@ -7158,10 +7152,6 @@ msprime_suite_init(void)
     if (_devnull == NULL) {
         return CUE_SINIT_FAILED;
     }
-    /* Silence HDF5 errors */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        return CUE_SINIT_FAILED;
-    }
     return CUE_SUCCESS;
 }
 
@@ -7279,15 +7269,15 @@ main(int argc, char **argv)
             test_compute_mutation_parents_from_examples},
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
-        {"test_save_empty_hdf5", test_save_empty_hdf5},
-        {"test_save_hdf5", test_save_hdf5},
-        {"test_save_hdf5_tables", test_save_hdf5_tables},
+        {"test_save_empty_kas", test_save_empty_kas},
+        {"test_save_kas", test_save_kas},
+        {"test_save_kas_tables", test_save_kas_tables},
         {"test_dump_tables", test_dump_tables},
         {"test_sort_tables", test_sort_tables},
         {"test_deduplicate_sites", test_deduplicate_sites},
         {"test_deduplicate_sites_errors", test_deduplicate_sites_errors},
-        {"test_dump_tables_hdf5", test_dump_tables_hdf5},
-        {"test_error_messages", test_strerror},
+        {"test_dump_tables_kas", test_dump_tables_kas},
+        {"test_strerror", test_strerror},
         {"test_node_table", test_node_table},
         {"test_edge_table", test_edge_table},
         {"test_site_table", test_site_table},

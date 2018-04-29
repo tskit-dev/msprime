@@ -25,27 +25,9 @@
 #include <errno.h>
 #include <assert.h>
 
-#include <hdf5.h>
-
 #include "util.h"
 #include "kastore.h"
 
-#define MSP_HDF5_ERR_MSG_SIZE 1024
-
-static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
-
-static herr_t
-hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
-{
-    /* We only copy the message from the first element in the error stack */
-    if (_hdf5_error[0] == '\0') {
-        snprintf(_hdf5_error, MSP_HDF5_ERR_MSG_SIZE,
-                "HDF5 Error: %d: %d:'%s'",
-                (int) err_desc->maj_num, (int) err_desc->min_num,
-                err_desc->desc);
-    }
-    return 0;
-}
 
 static const char *
 msp_strerror_internal(int err)
@@ -168,11 +150,11 @@ msp_strerror_internal(int err)
             ret = "Bad sample configuration provided.";
             break;
         case MSP_ERR_FILE_VERSION_TOO_OLD:
-            ret = "HDF5 file version too old. Please upgrade using the "
+            ret = "tskit file version too old. Please upgrade using the "
                 "'msp upgrade' command";
             break;
         case MSP_ERR_FILE_VERSION_TOO_NEW:
-            ret = "HDF5 file version is too new for this version of msprime. "
+            ret = "tskit file version is too new for this instance. "
                 "Please upgrade msprime to the latest version.";
             break;
         case MSP_ERR_DUPLICATE_SAMPLE:
@@ -271,15 +253,6 @@ msp_strerror_internal(int err)
             } else {
                 ret = "Unspecified IO error";
             }
-            break;
-        case MSP_ERR_HDF5:
-            _hdf5_error[0] = '\0';
-            if (H5Ewalk2(H5E_DEFAULT, H5E_WALK_UPWARD, hdf5_error_walker, NULL)
-                    != 0) {
-                ret = "Eek! Error handling HDF5 error.";
-                goto out;
-            }
-            ret = _hdf5_error;
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "

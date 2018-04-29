@@ -128,9 +128,6 @@ class DefineMacros(object):
                 self._msprime_version = '"{}"'.format(version)
 
         defines = [
-            # We define this macro to ensure we're using the v18 versions of
-            # the HDF5 API and not earlier deprecated versions.
-            ("H5_NO_DEPRECATED_SYMBOLS", None),
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
@@ -138,9 +135,7 @@ class DefineMacros(object):
             defines += [
                 # These two are required for GSL to compile and link against the
                 # conda-forge version.
-                ("GSL_DLL", None), ("WIN32", None),
-                # This is needed for HDF5 to link properly.
-                ("H5_BUILT_AS_DYNAMIC_LIB", None)]
+                ("GSL_DLL", None), ("WIN32", None)]
         if HAVE_NUMPY:
             defines += [("HAVE_NUMPY", None)]
         return defines[index]
@@ -161,7 +156,7 @@ _msprime_module = Extension(
     undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
     define_macros=DefineMacros(),
-    libraries=["gsl", "gslcblas", "hdf5"],
+    libraries=["gsl", "gslcblas"],
     include_dirs=[libdir, os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )

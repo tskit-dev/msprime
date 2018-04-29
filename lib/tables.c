@@ -24,8 +24,6 @@
 #include <stdlib.h>
 #include <float.h>
 
-#include <hdf5.h>
-
 #include "tables.h"
 #include "kastore.h"
 

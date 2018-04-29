@@ -29,7 +29,6 @@
 
 #include <float.h>
 
-#include <hdf5.h>
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
 
@@ -4049,11 +4048,6 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (zlib_compression) {
         flags = MSP_DUMP_ZLIB_COMPRESSION;
     }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
     err = tree_sequence_dump(self->tree_sequence, path, flags);
     if (err != 0) {
         handle_library_error(err);
@@ -4307,12 +4301,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
-
     err = TreeSequence_alloc(self);
     if (err != 0) {
         goto out;
@@ -8792,45 +8780,10 @@ msprime_get_gsl_version(PyObject *self)
 }
 
 static PyObject *
-msprime_get_hdf5_version(PyObject *self)
-{
-    herr_t status;
-    PyObject *ret = NULL;
-    unsigned int major, minor, release;
-
-    /* Beware! This seems to leak memory, so don't call it repeatedly */
-    status = H5get_libversion(&major, &minor, &release);
-    if (status != 0) {
-        PyErr_SetString(PyExc_SystemError, "Error getting HDF5 version");
-        goto out;
-    }
-    ret = Py_BuildValue("III", major, minor, release);
-out:
-    return ret;
-}
-
-static PyObject *
-msprime_h5close(PyObject *self)
-{
-    herr_t status;
-    PyObject *ret = NULL;
-
-    status = H5close();
-    if (status != 0) {
-        PyErr_SetString(PyExc_SystemError, "Error calling H5close");
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
 msprime_get_library_version_str(PyObject *self)
 {
     return Py_BuildValue("s", MSP_LIBRARY_VERSION_STR);
 }
-
 
 static PyMethodDef msprime_methods[] = {
     {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
@@ -8839,10 +8792,6 @@ static PyMethodDef msprime_methods[] = {
             "Simplifies the specified set of tables for a given sample subset." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
-    {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
-            "Returns the version of HDF5 we are linking against." },
-    {"h5close", (PyCFunction) msprime_h5close, METH_NOARGS,
-            "Calls H5close()" },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
             METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
