@@ -410,6 +410,30 @@ node_table_equal(node_table_t *self, node_table_t *other)
     return ret;
 }
 
+static int
+node_table_dump(node_table_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    ret = kastore_put(store, "nodes/time", 10, self->time, self->num_rows, KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_put(store, "nodes/flags", 10, self->population, self->num_rows,
+            KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_put(store, "nodes/population", 15, self->population, self->num_rows,
+            KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+
+out:
+    return ret;
+}
+
 /*************************
  * edge table
  *************************/
@@ -3319,6 +3343,7 @@ out:
     return ret;
 }
 
+#if 0
 /*************************
  * hdf5_file
  *************************/
@@ -4181,6 +4206,8 @@ out:
     }
     return ret;
 }
+#endif
+
 
 /*************************
  * table_collection
@@ -4473,19 +4500,30 @@ int WARN_UNUSED
 table_collection_load(table_collection_t *self, const char *filename, int flags)
 {
     int ret = 0;
-    hdf5_file_t hdf5_file;
 
-    ret = hdf5_file_alloc(&hdf5_file, self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = hdf5_file_load(&hdf5_file, filename);
-    if (ret != 0) {
-        goto out;
-    }
     ret = table_collection_check_offsets(self);
+/* out: */
+    return ret;
+}
+
+static int WARN_UNUSED
+table_collection_write_metadata(table_collection_t *self)
+{
+    int ret = 0;
+    uint32_t version[2] = {
+        MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
+
+    ret = kastore_put(&self->store, "format_version", 15, version, 2, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_put(&self->store, "sequence_length", 10, &self->sequence_length, 1,
+            KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+
 out:
-    hdf5_file_free(&hdf5_file);
     return ret;
 }
 
@@ -4493,24 +4531,25 @@ int WARN_UNUSED
 table_collection_dump(table_collection_t *self, const char *filename, int flags)
 {
     int ret = 0;
-    hdf5_file_t hdf5_file;
 
-    if (!table_collection_is_indexed(self)) {
-        ret = table_collection_build_indexes(self, 0);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    ret = hdf5_file_alloc(&hdf5_file, self);
+    ret = kastore_open(&self->store, filename, "w", 0);
     if (ret != 0) {
         goto out;
     }
-    ret = hdf5_file_dump(&hdf5_file, filename, flags);
+    ret = table_collection_write_metadata(self);
     if (ret != 0) {
         goto out;
     }
+    ret = node_table_dump(&self->nodes, &self->store);
+    if (ret != 0) {
+        goto out;
+    }
+    kastore_print_state(&self->store, stdout);
+
+
+    ret = kastore_close(&self->store);
 out:
-    hdf5_file_free(&hdf5_file);
+    kastore_close(&self->store);
     return ret;
 }
 

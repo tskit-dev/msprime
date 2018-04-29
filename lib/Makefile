@@ -67,8 +67,9 @@ coverity:
 
 # Examples using just the tables API.
 table_example: table_example.c
-	h5cc -o table_example table_example.c tables.c util.c
+	h5cc -o -Ikastore/c table_example table_example.c tables.c util.c kastore/c/kastore.c
 
 # Make sure that all the files are compiled as C code.
 table_example_cpp: table_example_cpp.cc tables.o util.o
-	h5c++ -std=c++11 -o table_example_cpp table_example_cpp.cc tables.o util.o
+	h5c++ -std=c++11 -I kastore/c -o table_example_cpp table_example_cpp.cc tables.o util.o \
+		kastore.o
