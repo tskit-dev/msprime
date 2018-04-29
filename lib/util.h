@@ -130,6 +130,7 @@
 #define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 
+int msp_set_kas_error(int err);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 

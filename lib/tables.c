@@ -415,21 +415,30 @@ node_table_dump(node_table_t *self, kastore_t *store)
 {
     int ret = 0;
 
-    ret = kastore_put(store, "nodes/time", 10, self->time, self->num_rows, KAS_FLOAT64, 0);
+    ret = kastore_puts(store, "nodes/time", self->time, self->num_rows, KAS_FLOAT64, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = kastore_put(store, "nodes/flags", 10, self->population, self->num_rows,
+    ret = kastore_puts(store, "nodes/flags", self->population, self->num_rows,
             KAS_UINT32, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = kastore_put(store, "nodes/population", 15, self->population, self->num_rows,
+    ret = kastore_puts(store, "nodes/population", self->population, self->num_rows,
             KAS_INT32, 0);
     if (ret != 0) {
         goto out;
     }
-
+    ret = kastore_puts(store, "nodes/metadata", self->metadata, self->metadata_length,
+            KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "nodes/metadata_offset", self->metadata_offset,
+            self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -622,6 +631,31 @@ edge_table_equal(edge_table_t *self, edge_table_t *other)
             && memcmp(self->child, other->child,
                     self->num_rows * sizeof(node_id_t)) == 0;
     }
+    return ret;
+}
+
+static int
+edge_table_dump(edge_table_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    ret = kastore_puts(store, "edges/left", self->left, self->num_rows, KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "edges/right", self->right, self->num_rows, KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "edges/parent", self->parent, self->num_rows, KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "edges/child", self->child, self->num_rows, KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+out:
     return ret;
 }
 
@@ -976,6 +1010,40 @@ site_table_dump_text(site_table_t *self, FILE *out)
         }
     }
     ret = 0;
+out:
+    return ret;
+}
+
+static int
+site_table_dump(site_table_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    ret = kastore_puts(store, "sites/position", self->position, self->num_rows,
+            KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "sites/ancestral_state", self->ancestral_state,
+            self->ancestral_state_length, KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "sites/ancestral_state_offset",
+            self->ancestral_state_offset, self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "sites/metadata", self->metadata,
+            self->metadata_length, KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "sites/metadata_offset",
+            self->metadata_offset, self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -1362,6 +1430,50 @@ out:
     return ret;
 }
 
+static int
+mutation_table_dump(mutation_table_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    ret = kastore_puts(store, "mutations/site", self->site, self->num_rows,
+            KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "mutations/node", self->node, self->num_rows,
+            KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "mutations/parent", self->parent, self->num_rows,
+            KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "mutations/derived_state", self->derived_state,
+            self->derived_state_length, KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "mutations/derived_state_offset",
+            self->derived_state_offset, self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "mutations/metadata", self->metadata,
+            self->metadata_length, KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "mutations/metadata_offset",
+            self->metadata_offset, self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
 /*************************
  * migration table
  *************************/
@@ -1556,6 +1668,44 @@ out:
     return ret;
 }
 
+static int
+migration_table_dump(migration_table_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    ret = kastore_puts(store, "migrations/left", self->left, self->num_rows,
+            KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "migrations/right", self->right, self->num_rows,
+            KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "migrations/node", self->node,
+            self->num_rows, KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "migrations/source", self->source,
+            self->num_rows, KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "migrations/dest", self->dest,
+            self->num_rows, KAS_INT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "migrations/time", self->time, self->num_rows,
+            KAS_FLOAT64, 0);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
 
 /*************************
  * provenance table
@@ -1866,6 +2016,35 @@ provenance_table_equal(provenance_table_t *self, provenance_table_t *other)
             && memcmp(self->record, other->record,
                     self->record_length * sizeof(char)) == 0;
     }
+    return ret;
+}
+
+static int
+provenance_table_dump(provenance_table_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    ret = kastore_puts(store, "provenances/timestamp", self->timestamp,
+            self->timestamp_length, KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "provenances/timestamp_offset",
+            self->timestamp_offset, self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "provenances/record", self->record,
+            self->record_length, KAS_UINT8, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts(store, "provenances/record_offset",
+            self->record_offset, self->num_rows + 1, KAS_UINT32, 0);
+    if (ret != 0) {
+        goto out;
+    }
+out:
     return ret;
 }
 
@@ -4496,13 +4675,83 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+table_collection_read_metadata(table_collection_t *self)
+{
+    int ret = 0;
+    int type;
+    size_t len;
+    const uint32_t *version;
+    const double *L;
+
+    ret = kastore_gets(&self->store, "format_version", (const void **) &version,
+            &len, &type);
+    if (ret != 0) {
+        goto out;
+    }
+    if (type != KAS_UINT32 || len != 2) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    if (version[0] < MSP_FILE_FORMAT_VERSION_MAJOR) {
+        ret = MSP_ERR_FILE_VERSION_TOO_OLD;
+        goto out;
+    }
+    if (version[0] > MSP_FILE_FORMAT_VERSION_MAJOR) {
+        ret = MSP_ERR_FILE_VERSION_TOO_NEW;
+        goto out;
+    }
+
+    ret = kastore_gets(&self->store, "sequence_length", (const void **) &L,
+            &len, &type);
+    if (ret != 0) {
+        goto out;
+    }
+    if (type != KAS_FLOAT64 || len != 1) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    if (L[0] <= 0.0) {
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+        goto out;
+    }
+    self->sequence_length = L[0];
+out:
+    return ret;
+}
+
+
+
 int WARN_UNUSED
 table_collection_load(table_collection_t *self, const char *filename, int flags)
 {
     int ret = 0;
 
-    ret = table_collection_check_offsets(self);
-/* out: */
+    ret = kastore_open(&self->store, filename, "r", 0);
+    if (ret != 0) {
+        goto out;
+    }
+
+    ret = table_collection_read_metadata(self);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* ret = node_table_dump(&self->nodes, &self->store); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+    kastore_print_state(&self->store, stdout);
+
+
+    ret = kastore_close(&self->store);
+
+    if (0) {
+        ret = table_collection_check_offsets(self);
+    }
+out:
+    kastore_close(&self->store);
+
     return ret;
 }
 
@@ -4513,11 +4762,11 @@ table_collection_write_metadata(table_collection_t *self)
     uint32_t version[2] = {
         MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
 
-    ret = kastore_put(&self->store, "format_version", 15, version, 2, KAS_UINT32, 0);
+    ret = kastore_puts(&self->store, "format_version", version, 2, KAS_UINT32, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = kastore_put(&self->store, "sequence_length", 10, &self->sequence_length, 1,
+    ret = kastore_puts(&self->store, "sequence_length", &self->sequence_length, 1,
             KAS_FLOAT64, 0);
     if (ret != 0) {
         goto out;
@@ -4531,8 +4780,9 @@ int WARN_UNUSED
 table_collection_dump(table_collection_t *self, const char *filename, int flags)
 {
     int ret = 0;
+    kastore_t store;
 
-    ret = kastore_open(&self->store, filename, "w", 0);
+    ret = kastore_open(&store, filename, "w", 0);
     if (ret != 0) {
         goto out;
     }
@@ -4540,16 +4790,36 @@ table_collection_dump(table_collection_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_dump(&self->nodes, &self->store);
+    ret = node_table_dump(&self->nodes, &store);
     if (ret != 0) {
         goto out;
     }
-    kastore_print_state(&self->store, stdout);
-
-
-    ret = kastore_close(&self->store);
+    ret = edge_table_dump(&self->edges, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_dump(&self->sites, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_dump(&self->migrations, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_dump(&self->mutations, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_dump(&self->provenances, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_close(&store);
 out:
-    kastore_close(&self->store);
+    if (ret != 0) {
+        ret = msp_set_kas_error(ret);
+        kastore_close(&store);
+    }
     return ret;
 }
 

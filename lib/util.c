@@ -28,6 +28,7 @@
 #include <hdf5.h>
 
 #include "util.h"
+#include "kastore.h"
 
 #define MSP_HDF5_ERR_MSG_SIZE 1024
 
@@ -46,8 +47,8 @@ hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
     return 0;
 }
 
-const char *
-msp_strerror(int err)
+static const char *
+msp_strerror_internal(int err)
 {
     const char *ret = "Unknown error";
 
@@ -287,6 +288,26 @@ msp_strerror(int err)
     }
 out:
     return ret;
+}
+
+#define MSP_KAS_ERR_BIT 14
+
+int
+msp_set_kas_error(int err)
+{
+    /* Flip this bit. As the error is negative, this sets the bit to 0 */
+    return err ^ (1 << MSP_KAS_ERR_BIT);
+}
+
+const char *
+msp_strerror(int err)
+{
+    if (!(err & (1 << MSP_KAS_ERR_BIT))) {
+        err ^= (1 << MSP_KAS_ERR_BIT);
+        return kas_strerror(err);
+    } else {
+        return msp_strerror_internal(err);
+    }
 }
 
 void
