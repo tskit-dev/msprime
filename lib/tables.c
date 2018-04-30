@@ -2040,11 +2040,11 @@ provenance_table_add_row_internal(provenance_table_t *self,
     int ret = 0;
 
     assert(self->num_rows < self->max_rows);
-    assert(self->timestamp_length + timestamp_length < self->max_timestamp_length);
+    assert(self->timestamp_length + timestamp_length <= self->max_timestamp_length);
     memcpy(self->timestamp + self->timestamp_length, timestamp, timestamp_length);
     self->timestamp_offset[self->num_rows + 1] = self->timestamp_length + timestamp_length;
     self->timestamp_length += timestamp_length;
-    assert(self->record_length + record_length < self->max_record_length);
+    assert(self->record_length + record_length <= self->max_record_length);
     memcpy(self->record + self->record_length, record, record_length);
     self->record_offset[self->num_rows + 1] = self->record_length + record_length;
     self->record_length += record_length;
