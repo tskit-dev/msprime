@@ -9,7 +9,7 @@ EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
 CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS
 LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
 
-HEADERS=msprime.h util.h
+HEADERS=msprime.h util.h trees.h tables.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
     hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o
 

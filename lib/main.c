@@ -614,7 +614,7 @@ print_variants(tree_sequence_t *ts)
         }
         printf("\t");
         for (k = 0; k < ts->num_samples; k++) {
-            printf("%d\t", var->genotypes[k]);
+            printf("%d\t", var->genotypes.u8[k]);
         }
         printf("\n");
     }

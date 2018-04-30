@@ -157,6 +157,7 @@ _msprime_module = Extension(
     sources=["_msprimemodule.c"] + [os.path.join(libdir, f) for f in source_files],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
+    extra_compile_args=["-std=c99"],
     define_macros=DefineMacros(),
     libraries=["gsl", "gslcblas", "hdf5"],
     include_dirs=[libdir] + configurator.include_dirs,
