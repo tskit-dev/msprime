@@ -2671,6 +2671,54 @@ test_simplest_holey_tree_sequence(void)
 }
 
 static void
+test_simplest_holey_tree_sequence_mutation_parents(void)
+{
+    const char *nodes_txt =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edges_txt =
+        "0  1   2   0\n"
+        "2  3   2   0\n"
+        "0  1   2   1\n"
+        "2  3   2   1\n";
+    const char *sites_txt =
+        "0.5  0\n"
+        "1.5  0\n"
+        "2.5  0\n";
+    const char *mutations_txt =
+        "0    0     1\n"
+        "0    0     1\n"
+        "1    1     1\n"
+        "1    1     1\n"
+        "2    2     1\n"
+        "2    2     1\n";
+    tree_sequence_t ts;
+    table_collection_t tables;
+    int ret;
+
+    tree_sequence_from_text(&ts, 0, nodes_txt, edges_txt, NULL, sites_txt,
+            mutations_txt, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 3);
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.mutations.parent[0], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[1], 0);
+    CU_ASSERT_EQUAL(tables.mutations.parent[2], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[3], 2);
+    CU_ASSERT_EQUAL(tables.mutations.parent[4], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[5], 4);
+    table_collection_free(&tables);
+    tree_sequence_free(&ts);
+}
+
+static void
 test_simplest_initial_gap_tree_sequence(void)
 {
     const char *nodes =
@@ -2719,6 +2767,51 @@ test_simplest_initial_gap_tree_sequence(void)
         CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]);
     }
     hapgen_free(&hapgen);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_simplest_initial_gap_tree_sequence_mutation_parents(void)
+{
+    const char *nodes_txt =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edges_txt =
+        "2  3   2   0,1\n";
+    const char *sites_txt =
+        "0.5  0\n"
+        "1.5  0\n"
+        "2.5  0\n";
+    const char *mutations_txt =
+        "0    0     1\n"
+        "0    0     1\n"
+        "1    1     1\n"
+        "1    1     1\n"
+        "2    2     1\n"
+        "2    2     1\n";
+    tree_sequence_t ts;
+    table_collection_t tables;
+    int ret;
+
+    tree_sequence_from_text(&ts, 0, nodes_txt, edges_txt, NULL, sites_txt,
+            mutations_txt, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 2);
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.mutations.parent[0], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[1], 0);
+    CU_ASSERT_EQUAL(tables.mutations.parent[2], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[3], 2);
+    CU_ASSERT_EQUAL(tables.mutations.parent[4], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[5], 4);
+    table_collection_free(&tables);
     tree_sequence_free(&ts);
 }
 
@@ -2774,6 +2867,50 @@ test_simplest_final_gap_tree_sequence(void)
     tree_sequence_free(&ts);
 }
 
+static void
+test_simplest_final_gap_tree_sequence_mutation_parents(void)
+{
+    const char *nodes_txt =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0";
+    const char *edges_txt =
+        "0  2   2   0,1\n";
+    const char *sites_txt =
+        "0.5  0\n"
+        "1.5  0\n"
+        "2.5  0\n";
+    const char *mutations_txt =
+        "0    0     1\n"
+        "0    0     1\n"
+        "1    1     1\n"
+        "1    1     1\n"
+        "2    0     1\n"
+        "2    0     1\n";
+    tree_sequence_t ts;
+    table_collection_t tables;
+    int ret;
+
+    tree_sequence_from_text(&ts, 3, nodes_txt, edges_txt, NULL, sites_txt,
+            mutations_txt, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 2);
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.mutations.parent[0], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[1], 0);
+    CU_ASSERT_EQUAL(tables.mutations.parent[2], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[3], 2);
+    CU_ASSERT_EQUAL(tables.mutations.parent[4], -1);
+    CU_ASSERT_EQUAL(tables.mutations.parent[5], 4);
+    table_collection_free(&tables);
+    tree_sequence_free(&ts);
+}
 
 static void
 test_simplest_bad_records(void)
@@ -7070,8 +7207,14 @@ main(int argc, char **argv)
         {"test_simplest_back_mutations", test_simplest_back_mutations},
         {"test_simplest_general_samples", test_simplest_general_samples},
         {"test_simplest_holey_tree_sequence", test_simplest_holey_tree_sequence},
+        {"test_simplest_holey_tree_sequence_mutation_parents",
+            test_simplest_holey_tree_sequence_mutation_parents},
         {"test_simplest_initial_gap_tree_sequence", test_simplest_initial_gap_tree_sequence},
+        {"test_simplest_initial_gap_tree_sequence_mutation_parents",
+            test_simplest_initial_gap_tree_sequence_mutation_parents},
         {"test_simplest_final_gap_tree_sequence", test_simplest_final_gap_tree_sequence},
+        {"test_simplest_final_gap_tree_sequence_mutation_parents",
+            test_simplest_final_gap_tree_sequence_mutation_parents},
         {"test_simplest_bad_records", test_simplest_bad_records},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
         {"test_simplest_contradictory_children", test_simplest_contradictory_children},

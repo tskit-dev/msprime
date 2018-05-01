@@ -410,6 +410,12 @@ class TestHoleyTreeSequences(TopologyTestCase):
         for t in ts.trees():
             observed.append((t.interval, t.parent_dict))
         self.assertEqual(expected, observed)
+        # Test simple algorithm also.
+        observed = []
+        for interval, parent in tsutil.algorithm_T(ts):
+            parent_dict = {j: parent[j] for j in range(ts.num_nodes) if parent[j] >= 0}
+            observed.append((interval, parent_dict))
+        self.assertEqual(expected, observed)
 
     def test_simple_hole(self):
         nodes = six.StringIO("""\
@@ -3116,3 +3122,58 @@ class TestMutationParent(unittest.TestCase):
         ts = tsutil.decapitate(ts, ts.num_edges // 2)
         for mutations_per_branch in [1, 2, 3]:
             self.verify_branch_mutations(ts, mutations_per_branch)
+
+
+class TestSimpleTreeAlgorithm(unittest.TestCase):
+    """
+    Tests for the direct implementation of Algorithm T in tsutil.py.
+
+    See TestHoleyTreeSequences above for further tests on wacky topologies.
+    """
+    def test_zero_nodes(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        # Test the simple tree iterator.
+        trees = list(tsutil.algorithm_T(ts))
+        self.assertEqual(len(trees), 1)
+        (left, right), parent = trees[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(parent, [])
+
+    def test_one_node(self):
+        nodes = msprime.NodeTable()
+        edges = msprime.EdgeTable()
+        nodes.add_row()
+        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertEqual(ts.num_trees, 1)
+        # Test the simple tree iterator.
+        trees = list(tsutil.algorithm_T(ts))
+        self.assertEqual(len(trees), 1)
+        (left, right), parent = trees[0]
+        self.assertEqual(left, 0)
+        self.assertEqual(right, 1)
+        self.assertEqual(parent, [-1])
+
+    def test_single_coalescent_tree(self):
+        ts = msprime.simulate(10, random_seed=1, length=10)
+        tree = ts.first()
+        p1 = [tree.parent(j) for j in range(ts.num_nodes)]
+        interval, p2 = next(tsutil.algorithm_T(ts))
+        self.assertEqual(interval, tree.interval)
+        self.assertEqual(p1, p2)
+
+    def test_coalescent_trees(self):
+        ts = msprime.simulate(8, recombination_rate=5, random_seed=1, length=2)
+        self.assertGreater(ts.num_trees, 2)
+        new_trees = tsutil.algorithm_T(ts)
+        for tree in ts.trees():
+            interval, p2 = next(new_trees)
+            p1 = [tree.parent(j) for j in range(ts.num_nodes)]
+            self.assertEqual(interval, tree.interval)
+            self.assertEqual(p1, p2)
+        self.assertRaises(StopIteration, next, new_trees)
