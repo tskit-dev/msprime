@@ -410,3 +410,38 @@ def compute_mutation_parent(ts):
                 bottom_mutation[mutation.node] = msprime.NULL_MUTATION
             assert np.all(bottom_mutation == -1)
     return mutation_parent
+
+
+def algorithm_T(ts):
+    """
+    Simple implementation of algorithm T from the PLOS paper, taking into
+    account tree sequences with gaps and other complexities.
+    """
+    sequence_length = ts.sequence_length
+    edges = list(ts.edges())
+    M = len(edges)
+    time = [ts.node(edge.parent).time for edge in edges]
+    in_order = sorted(range(M), key=lambda j: (
+        edges[j].left, time[j], edges[j].parent, edges[j].child))
+    out_order = sorted(range(M), key=lambda j: (
+        edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
+    j = 0
+    k = 0
+    left = 0
+    parent = [-1 for _ in range(ts.num_nodes)]
+    while j < M or left < sequence_length:
+        while k < M and edges[out_order[k]].right == left:
+            edge = edges[out_order[k]]
+            parent[edge.child] = -1
+            k += 1
+        while j < M and edges[in_order[j]].left == left:
+            edge = edges[in_order[j]]
+            parent[edge.child] = edge.parent
+            j += 1
+        right = sequence_length
+        if j < M:
+            right = min(right, edges[in_order[j]].left)
+        if k < M:
+            right = min(right, edges[out_order[k]].right)
+        yield (left, right), parent
+        left = right
