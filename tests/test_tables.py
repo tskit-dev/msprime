@@ -965,7 +965,7 @@ class TestSortTables(unittest.TestCase):
         tables2 = ts2.dump_tables()
         # The edges in tables2 will refer to nodes that don't exist.
         self.assertRaises(
-            IndexError, msprime.sort_tables, tables1.nodes, tables2.edges)
+            _msprime.LibraryError, msprime.sort_tables, tables1.nodes, tables2.edges)
 
     def test_incompatible_sites(self):
         ts1 = msprime.simulate(10, random_seed=self.random_seed)
@@ -975,7 +975,7 @@ class TestSortTables(unittest.TestCase):
         tables2 = ts2.dump_tables()
         # The mutations in tables2 will refer to sites that don't exist.
         self.assertRaises(
-            IndexError, msprime.sort_tables, tables1.nodes, tables1.edges,
+            _msprime.LibraryError, msprime.sort_tables, tables1.nodes, tables1.edges,
             sites=tables1.sites, mutations=tables2.mutations)
 
     def test_incompatible_mutation_nodes(self):
@@ -986,7 +986,7 @@ class TestSortTables(unittest.TestCase):
         tables2 = ts2.dump_tables()
         # The mutations in tables2 will refer to nodes that don't exist.
         self.assertRaises(
-            IndexError, msprime.sort_tables, tables1.nodes, tables1.edges,
+            _msprime.LibraryError, msprime.sort_tables, tables1.nodes, tables1.edges,
             sites=tables2.sites, mutations=tables2.mutations)
 
     def test_empty_tables(self):
@@ -1139,7 +1139,7 @@ class TestSortMutations(unittest.TestCase):
         1       0       1               -2
         """)
         self.assertRaises(
-            IndexError, msprime.load_text,
+            _msprime.LibraryError, msprime.load_text,
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             sequence_length=1, strict=False)
 

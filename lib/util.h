@@ -19,6 +19,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <stdbool.h>
+
 /*
  * raise a compiler warning if a potentially error raising function's return
  * value is not used.
@@ -130,7 +132,11 @@
 #define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 
+/* This bit is 0 for any errors originating from kastore */
+#define MSP_KAS_ERR_BIT 14
+
 int msp_set_kas_error(int err);
+bool is_kas_error(int err);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 

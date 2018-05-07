@@ -46,6 +46,7 @@
 
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
+static PyObject *MsprimeFileFormatError;
 
 typedef struct {
     PyObject_HEAD
@@ -172,9 +173,9 @@ typedef struct {
 static void
 handle_library_error(int err)
 {
-    if (err == MSP_ERR_OUT_OF_BOUNDS) {
-        PyErr_SetString(PyExc_IndexError, msp_strerror(err));
-    } else{
+    if (is_kas_error(err)) {
+        PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
+    } else {
         PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
     }
 }
@@ -9009,6 +9010,9 @@ init_msprime(void)
     MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
+    MsprimeFileFormatError = PyErr_NewException("_msprime.FileFormatError", NULL, NULL);
+    Py_INCREF(MsprimeFileFormatError);
+    PyModule_AddObject(module, "FileFormatError", MsprimeFileFormatError);
 
     /* Node flags */
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", MSP_NODE_IS_SAMPLE);
