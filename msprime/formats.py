@@ -440,7 +440,8 @@ def _dump_legacy_hdf5_v10(tree_sequence, root):
     _add_dataset(mutations, "node", tables.mutations.node)
     _add_dataset(mutations, "parent", tables.mutations.parent)
     _add_dataset(mutations, "derived_state", tables.mutations.derived_state)
-    _add_dataset(mutations, "derived_state_offset", tables.mutations.derived_state_offset)
+    _add_dataset(
+        mutations, "derived_state_offset", tables.mutations.derived_state_offset)
     _add_dataset(mutations, "metadata", tables.mutations.metadata)
     _add_dataset(mutations, "metadata_offset", tables.mutations.metadata_offset)
 

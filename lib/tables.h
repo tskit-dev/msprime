@@ -120,6 +120,7 @@ typedef struct {
     struct {
         edge_id_t *edge_insertion_order;
         edge_id_t *edge_removal_order;
+        bool malloced_locally;
     } indexes;
     kastore_t store;
     /* TODO Add in reserved space for future tables. */

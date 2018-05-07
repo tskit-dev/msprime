@@ -3809,8 +3809,10 @@ table_collection_free(table_collection_t *self)
     site_table_free(&self->sites);
     mutation_table_free(&self->mutations);
     provenance_table_free(&self->provenances);
-    msp_safe_free(self->indexes.edge_insertion_order);
-    msp_safe_free(self->indexes.edge_removal_order);
+    if (self->indexes.malloced_locally) {
+        msp_safe_free(self->indexes.edge_insertion_order);
+        msp_safe_free(self->indexes.edge_removal_order);
+    }
     kastore_close(&self->store);
     return ret;
 }
@@ -3851,6 +3853,7 @@ table_collection_copy(table_collection_t *self, table_collection_t *dest)
         index_size = self->edges.num_rows * sizeof(edge_id_t);
         dest->indexes.edge_insertion_order = malloc(index_size);
         dest->indexes.edge_removal_order = malloc(index_size);
+        dest->indexes.malloced_locally = true;
         if (dest->indexes.edge_insertion_order == NULL
                 || dest->indexes.edge_removal_order == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -3875,8 +3878,10 @@ table_collection_is_indexed(table_collection_t *self)
 int
 table_collection_drop_indexes(table_collection_t *self)
 {
-    msp_safe_free(self->indexes.edge_insertion_order);
-    msp_safe_free(self->indexes.edge_removal_order);
+    if (self->indexes.malloced_locally) {
+        msp_safe_free(self->indexes.edge_insertion_order);
+        msp_safe_free(self->indexes.edge_removal_order);
+    }
     self->indexes.edge_insertion_order = NULL;
     self->indexes.edge_removal_order = NULL;
     return 0;
@@ -3891,9 +3896,8 @@ table_collection_build_indexes(table_collection_t *self, int flags)
     index_sort_t *sort_buff = NULL;
     node_id_t parent;
 
-    /* Alloc the indexes. Free them first if they aren't NULL. */
-    msp_safe_free(self->indexes.edge_insertion_order);
-    msp_safe_free(self->indexes.edge_removal_order);
+    table_collection_drop_indexes(self);
+    self->indexes.malloced_locally = true;
     self->indexes.edge_insertion_order = malloc(self->edges.num_rows * sizeof(edge_id_t));
     self->indexes.edge_removal_order = malloc(self->edges.num_rows * sizeof(edge_id_t));
     if (self->indexes.edge_insertion_order == NULL
@@ -4005,6 +4009,19 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+table_collection_load_indexes(table_collection_t *self)
+{
+    read_table_col_t read_cols[] = {
+        {"indexes/edge_insertion_order", (void **) &self->indexes.edge_insertion_order,
+            &self->edges.num_rows, 0, KAS_INT32},
+        {"indexes/edge_removal_order", (void **) &self->indexes.edge_removal_order,
+            &self->edges.num_rows, 0, KAS_INT32},
+    };
+    self->indexes.malloced_locally = false;
+    return read_table_cols(&self->store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
+}
+
 int WARN_UNUSED
 table_collection_load(table_collection_t *self, const char *filename, int flags)
 {
@@ -4047,6 +4064,10 @@ table_collection_load(table_collection_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
+    ret = table_collection_load_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
     ret = table_collection_check_offsets(self);
 out:
     return ret;
@@ -4068,6 +4089,31 @@ table_collection_write_metadata(table_collection_t *self, kastore_t *store)
         goto out;
     }
 
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+table_collection_dump_indexes(table_collection_t *self, kastore_t *store)
+{
+    int ret = 0;
+
+    if (! table_collection_is_indexed(self)) {
+        ret = table_collection_build_indexes(self, 0);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = kastore_puts_int32(store, "indexes/edge_insertion_order",
+            self->indexes.edge_insertion_order, self->edges.num_rows, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = kastore_puts_int32(store, "indexes/edge_removal_order",
+            self->indexes.edge_removal_order, self->edges.num_rows, 0);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -4107,6 +4153,10 @@ table_collection_dump(table_collection_t *self, const char *filename, int flags)
         goto out;
     }
     ret = provenance_table_dump(&self->provenances, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = table_collection_dump_indexes(self, &store);
     if (ret != 0) {
         goto out;
     }

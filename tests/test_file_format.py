@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2017 University of Oxford
+# Copyright (C) 2016-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -189,6 +189,10 @@ class TestLoadLegacyExamples(TestFileFormat):
                 for mut in site.mutations:
                     self.assertEqual(mut.site, site.id)
 
+    @unittest.skip("Add tests for loading HDF5")
+    def test_hdf5_error(self):
+        msprime.load("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
+
     def test_msprime_v_0_5_0(self):
         ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
         self.verify_tree_sequence(ts)
@@ -348,7 +352,8 @@ class TestErrors(TestFileFormat):
         self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=4)
         # Cannot read current files.
         ts.dump(self.temp_file)
-        self.assertRaises(OSError, msprime.load_legacy, self.temp_file)
+        # Catch Exception here because h5py throws different exceptions on py2 and py3
+        self.assertRaises(Exception, msprime.load_legacy, self.temp_file)
 
     def test_no_version_number(self):
         root = h5py.File(self.temp_file, "w")
@@ -357,10 +362,9 @@ class TestErrors(TestFileFormat):
         self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
 
 
-@unittest.skip("Skip HDF5 tests")
-class TestFileFormatFormat(TestFileFormat):
+class TestDumpFormat(TestFileFormat):
     """
-    Tests on the HDF5 file format.
+    Tests on the on-disk file format.
     """
 
     def verify_metadata(self, group, num_rows):
@@ -377,191 +381,131 @@ class TestFileFormatFormat(TestFileFormat):
             self.assertNotIn("metadata", group)
         self.assertEqual(len(metadata_offset), num_rows + 1)
 
-    def verify_tree_dump_format(self, ts):
-        int8 = "<i1"
-        int32 = "<i4"
-        uint32 = "<u4"
-        float64 = "<f8"
+    def verify_dump_format(self, ts):
         ts.dump(self.temp_file)
         self.assertTrue(os.path.exists(self.temp_file))
         self.assertGreater(os.path.getsize(self.temp_file), 0)
-        root = h5py.File(self.temp_file, "r")
+        store = kastore.load(self.temp_file, use_mmap=False)
         # Check the basic root attributes
-        format_version = root.attrs['format_version']
-        self.assertEqual(format_version[0], 10)
+        format_version = store['format_version']
+        self.assertEqual(format_version[0], 11)
         self.assertEqual(format_version[1], 0)
-        sequence_length = root.attrs['sequence_length']
-        self.assertGreater(sequence_length, 0)
-        keys = set(root.keys())
-        self.assertIn("nodes", keys)
-        self.assertIn("edges", keys)
-        self.assertIn("sites", keys)
-        self.assertIn("mutations", keys)
-        self.assertIn("provenances", keys)
-        # Not filled in yet, but the group should be present for forward compatability.
-        self.assertIn("migrations", keys)
+        self.assertEqual(ts.sequence_length, store['sequence_length'][0])
 
-        g = root["sites"]
-        fields = [
-            ("position", float64), ("ancestral_state", int8),
-            ("ancestral_state_offset", uint32)]
-        self.verify_metadata(g, ts.num_sites)
-        ancestral_state_offset = g["ancestral_state_offset"]
-        if ts.num_sites == 0:
-            self.assertEqual(ancestral_state_offset.shape, (1,))
-            self.assertNotIn("ancestral_state", list(g.keys()))
-        else:
-            for name, dtype in fields:
-                self.assertEqual(len(g[name].shape), 1)
-                self.assertEqual(g[name].dtype, dtype)
-            position = list(g["position"])
-            self.assertEqual(len(position), ts.num_sites)
-            self.assertEqual(len(ancestral_state_offset), ts.num_sites + 1)
-            ancestral_states = msprime.unpack_strings(
-                g["ancestral_state"], ancestral_state_offset)
-            for j, site in enumerate(ts.sites()):
-                self.assertEqual(position[j], site.position)
-                self.assertEqual(ancestral_states[j], site.ancestral_state)
+        tables = ts.tables
+        self.assertTrue(np.array_equal(tables.nodes.flags, store["nodes/flags"]))
+        self.assertTrue(np.array_equal(tables.nodes.time, store["nodes/time"]))
+        self.assertTrue(np.array_equal(
+            tables.nodes.population, store["nodes/population"]))
+        self.assertTrue(np.array_equal(
+            tables.nodes.metadata, store["nodes/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.nodes.metadata_offset, store["nodes/metadata_offset"]))
 
-        g = root["mutations"]
-        fields = [
-            ("site", int32), ("node", int32), ("parent", int32),
-            ("derived_state", int8), ("derived_state_offset", uint32)]
-        derived_state_offset = g["derived_state_offset"]
-        self.verify_metadata(g, ts.num_sites)
-        if ts.num_mutations == 0:
-            self.assertEqual(derived_state_offset.shape, (1,))
-            self.assertNotIn("derived_state", list(g.keys()))
-        else:
-            for name, dtype in fields:
-                self.assertEqual(len(g[name].shape), 1)
-                self.assertEqual(g[name].dtype, dtype)
-            self.assertEqual(derived_state_offset.shape[0], ts.num_mutations + 1)
-            site = g["site"]
-            node = g["node"]
-            parent = g["parent"]
-            for col in [site, node, parent]:
-                self.assertEqual(col.shape[0], ts.num_mutations)
-            derived_state = msprime.unpack_strings(
-                g["derived_state"], derived_state_offset)
-            j = 0
-            for s in ts.sites():
-                for mutation in s.mutations:
-                    self.assertEqual(site[j], s.id)
-                    self.assertEqual(mutation.site, site[j])
-                    self.assertEqual(mutation.node, node[j])
-                    self.assertEqual(mutation.parent, parent[j])
-                    self.assertEqual(mutation.derived_state, derived_state[j])
-                    j += 1
+        self.assertTrue(np.array_equal(tables.edges.left, store["edges/left"]))
+        self.assertTrue(np.array_equal(tables.edges.right, store["edges/right"]))
+        self.assertTrue(np.array_equal(tables.edges.parent, store["edges/parent"]))
+        self.assertTrue(np.array_equal(tables.edges.child, store["edges/child"]))
 
-        # TODO some of these fields should be optional.
-        nodes_group = root["nodes"]
-        self.assertEqual(nodes_group["flags"].dtype, uint32)
-        self.assertEqual(nodes_group["population"].dtype, int32)
-        self.assertEqual(nodes_group["time"].dtype, float64)
-        self.verify_metadata(nodes_group, ts.num_nodes)
-        population = [0 for _ in range(ts.num_nodes)]
-        time = [0 for _ in range(ts.num_nodes)]
-        flags = [0 for _ in range(ts.num_nodes)]
-        for i, node in enumerate(ts.nodes()):
-            flags[i] = int(node.is_sample())
-            time[i] = node.time
-            population[i] = node.population
-        self.assertEqual(time, list(nodes_group["time"]))
-        self.assertEqual(population, list(nodes_group["population"]))
-        self.assertEqual(flags, list(nodes_group["flags"]))
-
-        edges_group = root["edges"]
-        self.assertEqual(
-            set(edges_group.keys()),
-            {"indexes", "child", "left", "right", "parent"})
-
-        self.assertEqual(edges_group["left"].dtype, float64)
-        self.assertEqual(edges_group["right"].dtype, float64)
-        self.assertEqual(edges_group["parent"].dtype, int32)
-        self.assertEqual(edges_group["child"].dtype, int32)
-        left = list(edges_group["left"])
-        right = list(edges_group["right"])
-        parent = list(edges_group["parent"])
-        child = list(edges_group["child"])
-
-        self.assertEqual(len(left), ts.num_edges)
-        self.assertEqual(len(right), ts.num_edges)
-        self.assertEqual(len(parent), ts.num_edges)
-        self.assertEqual(len(child), ts.num_edges)
-        for j, record in enumerate(ts.edges()):
-            self.assertEqual(record.left, left[j])
-            self.assertEqual(record.right, right[j])
-            self.assertEqual(record.parent, parent[j])
-            self.assertEqual(record.child, child[j])
-
-        indexes_group = edges_group["indexes"]
-        self.assertEqual(
-            set(indexes_group.keys()), {"insertion_order", "removal_order"})
-        for field in indexes_group.keys():
-            self.assertEqual(indexes_group[field].dtype, int32, child[j])
+        left = tables.edges.left
+        right = tables.edges.right
+        parent = tables.edges.parent
+        child = tables.edges.child
+        time = tables.nodes.time
         in_order = sorted(
             range(ts.num_edges),
-            key=lambda j: (left[j], time[parent[j]]))
+            key=lambda j: (left[j], time[parent[j]], parent[j], child[j]))
         out_order = sorted(
             range(ts.num_edges),
-            key=lambda j: (right[j], -time[parent[j]], -child[j]))
-        self.assertEqual(in_order, list(indexes_group["insertion_order"]))
-        self.assertEqual(out_order, list(indexes_group["removal_order"]))
+            key=lambda j: (right[j], -time[parent[j]], -parent[j], -child[j]))
+        self.assertTrue(np.array_equal(
+            np.array(in_order, dtype=np.int32), store["indexes/edge_insertion_order"]))
+        self.assertTrue(np.array_equal(
+            np.array(out_order, dtype=np.int32), store["indexes/edge_removal_order"]))
 
-        provenances_group = root["provenances"]
-        timestamp_offset = list(provenances_group["timestamp_offset"])
-        record_offset = list(provenances_group["record_offset"])
-        self.assertEqual(provenances_group["timestamp_offset"].dtype, uint32)
-        self.assertEqual(provenances_group["record_offset"].dtype, uint32)
-        self.assertEqual(len(timestamp_offset), ts.num_provenances + 1)
-        self.assertEqual(len(record_offset), ts.num_provenances + 1)
-        if timestamp_offset[-1] > 0:
-            timestamp = list(provenances_group["timestamp"])
-            self.assertEqual(provenances_group["timestamp"].dtype, int8)
-            self.assertEqual(len(timestamp), timestamp_offset[-1])
-        if record_offset[-1] > 0:
-            record = list(provenances_group["record"])
-            self.assertEqual(provenances_group["record"].dtype, int8)
-            self.assertEqual(len(record), record_offset[-1])
+        self.assertTrue(
+            np.array_equal(tables.migrations.left, store["migrations/left"]))
+        self.assertTrue(
+            np.array_equal(tables.migrations.right, store["migrations/right"]))
+        self.assertTrue(
+            np.array_equal(tables.migrations.node, store["migrations/node"]))
+        self.assertTrue(
+            np.array_equal(tables.migrations.source, store["migrations/source"]))
+        self.assertTrue(
+            np.array_equal(tables.migrations.dest, store["migrations/dest"]))
+        self.assertTrue(
+            np.array_equal(tables.migrations.time, store["migrations/time"]))
 
-        root.close()
+        self.assertTrue(np.array_equal(tables.sites.position, store["sites/position"]))
+        self.assertTrue(np.array_equal(
+            tables.sites.ancestral_state, store["sites/ancestral_state"]))
+        self.assertTrue(np.array_equal(
+            tables.sites.ancestral_state_offset, store["sites/ancestral_state_offset"]))
+        self.assertTrue(np.array_equal(
+            tables.sites.metadata, store["sites/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.sites.metadata_offset, store["sites/metadata_offset"]))
+
+        self.assertTrue(np.array_equal(tables.mutations.site, store["mutations/site"]))
+        self.assertTrue(np.array_equal(tables.mutations.node, store["mutations/node"]))
+        self.assertTrue(np.array_equal(
+            tables.mutations.parent, store["mutations/parent"]))
+        self.assertTrue(np.array_equal(
+            tables.mutations.derived_state, store["mutations/derived_state"]))
+        self.assertTrue(np.array_equal(
+            tables.mutations.derived_state_offset,
+            store["mutations/derived_state_offset"]))
+        self.assertTrue(np.array_equal(
+            tables.mutations.metadata, store["mutations/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.mutations.metadata_offset, store["mutations/metadata_offset"]))
+
+        self.assertTrue(np.array_equal(
+            tables.provenances.record, store["provenances/record"]))
+        self.assertTrue(np.array_equal(
+            tables.provenances.record_offset, store["provenances/record_offset"]))
+        self.assertTrue(np.array_equal(
+            tables.provenances.timestamp, store["provenances/timestamp"]))
+        self.assertTrue(np.array_equal(
+            tables.provenances.timestamp_offset, store["provenances/timestamp_offset"]))
+
+        store.close()
 
     def test_single_locus_no_mutation(self):
-        self.verify_tree_dump_format(single_locus_no_mutation_example())
+        self.verify_dump_format(single_locus_no_mutation_example())
 
     def test_single_locus_with_mutation(self):
-        self.verify_tree_dump_format(single_locus_with_mutation_example())
+        self.verify_dump_format(single_locus_with_mutation_example())
 
     def test_multi_locus_with_mutation(self):
-        self.verify_tree_dump_format(multi_locus_with_mutation_example())
+        self.verify_dump_format(multi_locus_with_mutation_example())
 
     def test_migration_example(self):
-        self.verify_tree_dump_format(migration_example())
+        self.verify_dump_format(migration_example())
 
     def test_bottleneck_example(self):
-        self.verify_tree_dump_format(bottleneck_example())
+        self.verify_dump_format(bottleneck_example())
 
     def test_historical_sample_example(self):
-        self.verify_tree_dump_format(historical_sample_example())
+        self.verify_dump_format(historical_sample_example())
 
     def test_node_metadata_example(self):
-        self.verify_tree_dump_format(node_metadata_example())
+        self.verify_dump_format(node_metadata_example())
 
     def test_site_metadata_example(self):
-        self.verify_tree_dump_format(site_metadata_example())
+        self.verify_dump_format(site_metadata_example())
 
     def test_mutation_metadata_example(self):
-        self.verify_tree_dump_format(mutation_metadata_example())
+        self.verify_dump_format(mutation_metadata_example())
 
     def test_general_mutation_example(self):
-        self.verify_tree_dump_format(general_mutation_example())
+        self.verify_dump_format(general_mutation_example())
 
     def test_multichar_mutation_example(self):
-        self.verify_tree_dump_format(multichar_mutation_example())
+        self.verify_dump_format(multichar_mutation_example())
 
 
-class TestFileFormatFormatErrors(TestFileFormat):
+class TestFileFormatErrors(TestFileFormat):
     """
     Tests for errors in the HDF5 format.
     """
@@ -576,11 +520,8 @@ class TestFileFormatFormatErrors(TestFileFormat):
             kastore.dump(data, self.temp_file)
             self.assertRaises(_msprime.FileFormatError, msprime.load, self.temp_file)
 
-    def test_mandatory_fields_no_mutation(self):
-        self.verify_fields(single_locus_no_mutation_example())
-
-    def test_mandatory_fields_with_mutation(self):
-        self.verify_fields(single_locus_with_mutation_example())
+    def test_missing_fields(self):
+        self.verify_fields(migration_example())
 
     def test_load_empty_kastore(self):
         kastore.dump({}, self.temp_file)
