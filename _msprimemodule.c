@@ -3193,8 +3193,8 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     PyArrayObject *timestamp_array = NULL;
     PyObject *timestamp_offset_input = NULL;
     PyArrayObject *timestamp_offset_array = NULL;
-    PyObject *provenance_input = NULL;
-    PyArrayObject *provenance_array = NULL;
+    PyObject *record_input = NULL;
+    PyArrayObject *record_array = NULL;
     PyObject *record_offset_input = NULL;
     PyArrayObject *record_offset_array = NULL;
 
@@ -3203,7 +3203,7 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
                 &timestamp_input, &timestamp_offset_input,
-                &provenance_input, &record_offset_input)) {
+                &record_input, &record_offset_input)) {
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {
@@ -3219,9 +3219,9 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     if (timestamp_offset_array == NULL) {
         goto out;
     }
-    provenance_array = table_read_column_array(provenance_input, NPY_INT8,
+    record_array = table_read_column_array(record_input, NPY_INT8,
             &record_length, false);
-    if (provenance_array == NULL) {
+    if (record_array == NULL) {
         goto out;
     }
     record_offset_array = table_read_offset_array(record_offset_input, &num_rows,
@@ -3232,11 +3232,11 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     if (method == SET_COLS) {
         err = provenance_table_set_columns(self->provenance_table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
+                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else if (method == APPEND_COLS) {
         err = provenance_table_append_columns(self->provenance_table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
+                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else {
         assert(0);
     }
@@ -3248,7 +3248,7 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 out:
     Py_XDECREF(timestamp_array);
     Py_XDECREF(timestamp_offset_array);
-    Py_XDECREF(provenance_array);
+    Py_XDECREF(record_array);
     Py_XDECREF(record_offset_array);
     return ret;
 }

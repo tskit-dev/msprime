@@ -22,9 +22,7 @@ Test cases for the HDF5 format in msprime.
 from __future__ import print_function
 from __future__ import division
 
-import contextlib
 import os
-import sys
 import tempfile
 import unittest
 
@@ -35,21 +33,6 @@ import numpy as np
 import msprime
 import _msprime
 import tests.tsutil as tsutil
-
-
-@contextlib.contextmanager
-def silence_stderr():
-    """
-    Context manager to silence stderr. We do this here because h5py dumps out some
-    spurious error messages. See https://github.com/h5py/h5py/issues/390
-    """
-    tmp = sys.stderr
-    try:
-        with open(os.devnull, "w") as devnull:
-            sys.stderr = devnull
-            yield
-    finally:
-        sys.stderr = tmp
 
 
 def single_locus_no_mutation_example():
@@ -128,6 +111,21 @@ def historical_sample_example():
         samples=[(0, j) for j in range(10)])
 
 
+def no_provenance_example():
+    ts = msprime.simulate(10, random_seed=1)
+    tables = ts.dump_tables()
+    return msprime.load_tables(nodes=tables.nodes, edges=tables.edges)
+
+
+def provenance_timestamp_only_example():
+    ts = msprime.simulate(10, random_seed=1)
+    tables = ts.dump_tables()
+    provenances = msprime.ProvenanceTable()
+    provenances.add_row(timestamp="12345", record="")
+    return msprime.load_tables(
+        nodes=tables.nodes, edges=tables.edges, provenances=provenances)
+
+
 def node_metadata_example():
     ts = msprime.simulate(
         sample_size=100, recombination_rate=0.1, length=10, random_seed=1)
@@ -140,6 +138,24 @@ def node_metadata_example():
     new_nodes.set_columns(
         metadata=packed, metadata_offset=offset, flags=nodes.flags, time=nodes.time)
     return msprime.load_tables(nodes=new_nodes, edges=edges)
+
+
+def site_metadata_example():
+    ts = msprime.simulate(10, length=10, random_seed=2)
+    tables = ts.dump_tables()
+    for j in range(10):
+        tables.sites.add_row(j, ancestral_state="a", metadata=b"1234")
+    return msprime.load_tables(**tables.asdict())
+
+
+def mutation_metadata_example():
+    ts = msprime.simulate(10, length=10, random_seed=2)
+    tables = ts.dump_tables()
+    tables.sites.add_row(0, ancestral_state="a")
+    for j in range(10):
+        tables.mutations.add_row(
+            site=0, node=j, derived_state="t", metadata=b"1234")
+    return msprime.load_tables(**tables.asdict())
 
 
 class TestFileFormat(unittest.TestCase):
@@ -173,6 +189,10 @@ class TestLoadLegacyExamples(TestFileFormat):
                 for mut in site.mutations:
                     self.assertEqual(mut.site, site.id)
 
+    def test_msprime_v_0_5_0(self):
+        ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
+        self.verify_tree_sequence(ts)
+
     def test_msprime_v_0_4_0(self):
         ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5")
         self.verify_tree_sequence(ts)
@@ -200,8 +220,7 @@ class TestRoundTrip(TestFileFormat):
 
     def verify_round_trip(self, ts, version):
         msprime.dump_legacy(ts, self.temp_file, version=version)
-        with silence_stderr():
-            tsp = msprime.load_legacy(self.temp_file)
+        tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
         tsp.dump(self.temp_file)
         tsp = msprime.load(self.temp_file)
@@ -214,8 +233,7 @@ class TestRoundTrip(TestFileFormat):
         group = root[group_name]
         group.attrs[attr] = bad_json
         root.close()
-        with silence_stderr():
-            tsp = msprime.load_legacy(self.temp_file)
+        tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def test_malformed_json_v2(self):
@@ -228,33 +246,46 @@ class TestRoundTrip(TestFileFormat):
     def test_single_locus_no_mutation(self):
         self.verify_round_trip(single_locus_no_mutation_example(), 2)
         self.verify_round_trip(single_locus_no_mutation_example(), 3)
+        self.verify_round_trip(single_locus_no_mutation_example(), 10)
 
     def test_single_locus_with_mutation(self):
         self.verify_round_trip(single_locus_with_mutation_example(), 2)
         self.verify_round_trip(single_locus_with_mutation_example(), 3)
+        self.verify_round_trip(single_locus_with_mutation_example(), 10)
 
     def test_multi_locus_with_mutation(self):
         self.verify_round_trip(multi_locus_with_mutation_example(), 2)
         self.verify_round_trip(multi_locus_with_mutation_example(), 3)
+        self.verify_round_trip(multi_locus_with_mutation_example(), 10)
 
     def test_migration_example(self):
         self.verify_round_trip(migration_example(), 2)
         self.verify_round_trip(migration_example(), 3)
+        self.verify_round_trip(migration_example(), 10)
 
     def test_bottleneck_example(self):
         self.verify_round_trip(migration_example(), 3)
+        self.verify_round_trip(migration_example(), 10)
+
+    def test_no_provenance(self):
+        self.verify_round_trip(no_provenance_example(), 10)
+
+    def test_provenance_timestamp_only(self):
+        self.verify_round_trip(provenance_timestamp_only_example(), 10)
 
     def test_recurrent_mutation_example(self):
         ts = recurrent_mutation_example()
         for version in [2, 3]:
             self.assertRaises(
                 ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+        self.verify_round_trip(ts, 10)
 
     def test_general_mutation_example(self):
         ts = general_mutation_example()
         for version in [2, 3]:
             self.assertRaises(
                 ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+        self.verify_round_trip(ts, 10)
 
     def test_v2_no_samples(self):
         ts = multi_locus_with_mutation_example()
@@ -262,8 +293,7 @@ class TestRoundTrip(TestFileFormat):
         root = h5py.File(self.temp_file, "r+")
         del root['samples']
         root.close()
-        with silence_stderr():
-            tsp = msprime.load_legacy(self.temp_file)
+        tsp = msprime.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def test_duplicate_mutation_positions_single_value(self):
@@ -273,11 +303,10 @@ class TestRoundTrip(TestFileFormat):
             root = h5py.File(self.temp_file, "r+")
             root['mutations/position'][:] = 0
             root.close()
-            with silence_stderr():
-                self.assertRaises(
-                    msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
-                tsp = msprime.load_legacy(
-                    self.temp_file, remove_duplicate_positions=True)
+            self.assertRaises(
+                msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
+            tsp = msprime.load_legacy(
+                self.temp_file, remove_duplicate_positions=True)
             self.assertEqual(tsp.num_sites, 1)
             sites = list(tsp.sites())
             self.assertEqual(sites[0].position, 0)
@@ -291,17 +320,15 @@ class TestRoundTrip(TestFileFormat):
             position[0] = position[1]
             root['mutations/position'][:] = position
             root.close()
-            with silence_stderr():
-                self.assertRaises(
-                    msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
-                tsp = msprime.load_legacy(
-                    self.temp_file, remove_duplicate_positions=True)
+            self.assertRaises(
+                msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
+            tsp = msprime.load_legacy(
+                self.temp_file, remove_duplicate_positions=True)
             self.assertEqual(tsp.num_sites, position.shape[0] - 1)
             position_after = list(s.position for s in tsp.sites())
             self.assertEqual(list(position[1:]), position_after)
 
 
-@unittest.skip("Skip HDF5 tests")
 class TestErrors(TestFileFormat):
     """
     Test various API errors.
@@ -319,9 +346,9 @@ class TestErrors(TestFileFormat):
     def test_unsupported_version(self):
         ts = msprime.simulate(10)
         self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=4)
-        # We refuse to read current version also
+        # Cannot read current files.
         ts.dump(self.temp_file)
-        self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
+        self.assertRaises(OSError, msprime.load_legacy, self.temp_file)
 
     def test_no_version_number(self):
         root = h5py.File(self.temp_file, "w")
@@ -520,6 +547,12 @@ class TestFileFormatFormat(TestFileFormat):
 
     def test_node_metadata_example(self):
         self.verify_tree_dump_format(node_metadata_example())
+
+    def test_site_metadata_example(self):
+        self.verify_tree_dump_format(site_metadata_example())
+
+    def test_mutation_metadata_example(self):
+        self.verify_tree_dump_format(mutation_metadata_example())
 
     def test_general_mutation_example(self):
         self.verify_tree_dump_format(general_mutation_example())
