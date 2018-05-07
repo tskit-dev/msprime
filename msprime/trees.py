@@ -40,6 +40,7 @@ import _msprime
 import msprime.drawing as drawing
 import msprime.provenance as provenance
 import msprime.tables as tables
+# import msprime.formats as formats
 
 from _msprime import NODE_IS_SAMPLE
 
@@ -1061,7 +1062,10 @@ def load(path):
         stored in the specified file path.
     :rtype: :class:`msprime.TreeSequence`
     """
+    # try:
     return TreeSequence.load(path)
+    # except _msprime.FileFormatError as e:
+    #     formats.raise_hdf5_format_error(path)
 
 
 def load_tables(

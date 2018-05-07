@@ -387,7 +387,10 @@ class TestDumpFormat(TestFileFormat):
         self.assertGreater(os.path.getsize(self.temp_file), 0)
         store = kastore.load(self.temp_file, use_mmap=False)
         # Check the basic root attributes
-        format_version = store['format_version']
+        format_name = store['format/name']
+        self.assertTrue(np.array_equal(
+            np.array(bytearray(b"tskit.trees"), dtype=np.int8), format_name))
+        format_version = store['format/version']
         self.assertEqual(format_version[0], 11)
         self.assertEqual(format_version[1], 0)
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
@@ -533,7 +536,17 @@ class TestFileFormatErrors(TestFileFormat):
             ts.dump(self.temp_file)
             with kastore.load(self.temp_file, use_mmap=False) as store:
                 data = dict(store)
-            data["format_version"] = np.array(bad_version, dtype=np.uint32)
+            data["format/version"] = np.array(bad_version, dtype=np.uint32)
+            kastore.dump(data, self.temp_file)
+            self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
+
+    def test_format_name_error(self):
+        ts = msprime.simulate(10)
+        for bad_name in ["tskit.tree", "tskit.treesAndOther", "", "x"*100]:
+            ts.dump(self.temp_file)
+            with kastore.load(self.temp_file, use_mmap=False) as store:
+                data = dict(store)
+            data["format/name"] = np.array(bytearray(bad_name.encode()), dtype=np.int8)
             kastore.dump(data, self.temp_file)
             self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
 

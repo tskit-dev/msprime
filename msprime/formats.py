@@ -250,6 +250,17 @@ def load_legacy(filename, remove_duplicate_positions=False):
     return ts
 
 
+def raise_hdf5_format_error(filename):
+    """
+    Tries to open the specified file as a legacy HDF5 file. If it looks like
+    an msprime format HDF5 file, raise an error advising to run msp upgrade.
+    """
+    root = h5py.File(filename, "r")
+    if 'format_version' not in root.attrs:
+        raise ValueError("HDF5 file not in msprime format")
+    raise ValueError("Please run upgrade")
+
+
 def _dump_legacy_hdf5_v2(tree_sequence, root):
     root.attrs["format_version"] = (2, 999)
     root.attrs["sample_size"] = tree_sequence.get_sample_size()

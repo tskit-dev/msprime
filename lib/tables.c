@@ -112,7 +112,6 @@ out:
     return ret;
 }
 
-
 typedef struct {
     const char *name;
     void **array_dest;
@@ -159,6 +158,32 @@ read_table_cols(kastore_t *store, read_table_col_t *read_cols, size_t num_cols)
 out:
     return ret;
 }
+
+typedef struct {
+    const char *name;
+    void *array;
+    table_size_t len;
+    int type;
+} write_table_col_t;
+
+static int
+write_table_cols(kastore_t *store, write_table_col_t *write_cols, size_t num_cols)
+{
+    int ret = 0;
+    size_t j;
+
+    for (j = 0; j < num_cols; j++) {
+        ret = kastore_puts(store, write_cols[j].name, write_cols[j].array,
+                write_cols[j].len, write_cols[j].type, 0);
+        if (ret != 0) {
+            ret = msp_set_kas_error(ret);
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
 
 /*************************
  * node table
@@ -461,34 +486,15 @@ node_table_equal(node_table_t *self, node_table_t *other)
 static int
 node_table_dump(node_table_t *self, kastore_t *store)
 {
-    int ret = 0;
-
-    ret = kastore_puts(store, "nodes/time", self->time, self->num_rows, KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "nodes/flags", self->flags, self->num_rows,
-            KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "nodes/population", self->population, self->num_rows,
-            KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "nodes/metadata", self->metadata, self->metadata_length,
-            KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "nodes/metadata_offset", self->metadata_offset,
-            self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"nodes/time", (void *) self->time, self->num_rows, KAS_FLOAT64},
+        {"nodes/flags", (void *) self->flags, self->num_rows, KAS_UINT32},
+        {"nodes/population", (void *) self->population, self->num_rows, KAS_INT32},
+        {"nodes/metadata", (void *) self->metadata, self->metadata_length, KAS_UINT8},
+        {"nodes/metadata_offset", (void *) self->metadata_offset, self->num_rows + 1,
+            KAS_UINT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
 
 static int
@@ -703,26 +709,13 @@ edge_table_equal(edge_table_t *self, edge_table_t *other)
 static int
 edge_table_dump(edge_table_t *self, kastore_t *store)
 {
-    int ret = 0;
-
-    ret = kastore_puts(store, "edges/left", self->left, self->num_rows, KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "edges/right", self->right, self->num_rows, KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "edges/parent", self->parent, self->num_rows, KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "edges/child", self->child, self->num_rows, KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"edges/left", (void *) self->left, self->num_rows, KAS_FLOAT64},
+        {"edges/right", (void *) self->right, self->num_rows, KAS_FLOAT64},
+        {"edges/parent", (void *) self->parent, self->num_rows, KAS_INT32},
+        {"edges/child", (void *) self->child, self->num_rows, KAS_INT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
 
 static int
@@ -1096,35 +1089,17 @@ out:
 static int
 site_table_dump(site_table_t *self, kastore_t *store)
 {
-    int ret = 0;
-
-    ret = kastore_puts(store, "sites/position", self->position, self->num_rows,
-            KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "sites/ancestral_state", self->ancestral_state,
-            self->ancestral_state_length, KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "sites/ancestral_state_offset",
-            self->ancestral_state_offset, self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "sites/metadata", self->metadata,
-            self->metadata_length, KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "sites/metadata_offset",
-            self->metadata_offset, self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"sites/position", (void *) self->position, self->num_rows, KAS_FLOAT64},
+        {"sites/ancestral_state", (void *) self->ancestral_state,
+            self->ancestral_state_length, KAS_UINT8},
+        {"sites/ancestral_state_offset", (void *) self->ancestral_state_offset,
+            self->num_rows + 1, KAS_UINT32},
+        {"sites/metadata", (void *) self->metadata, self->metadata_length, KAS_UINT8},
+        {"sites/metadata_offset", (void *) self->metadata_offset,
+            self->num_rows + 1, KAS_UINT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
 
 static int
@@ -1531,46 +1506,22 @@ out:
 static int
 mutation_table_dump(mutation_table_t *self, kastore_t *store)
 {
-    int ret = 0;
-
-    ret = kastore_puts(store, "mutations/site", self->site, self->num_rows,
-            KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "mutations/node", self->node, self->num_rows,
-            KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "mutations/parent", self->parent, self->num_rows,
-            KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "mutations/derived_state", self->derived_state,
-            self->derived_state_length, KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "mutations/derived_state_offset",
-            self->derived_state_offset, self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "mutations/metadata", self->metadata,
-            self->metadata_length, KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "mutations/metadata_offset",
-            self->metadata_offset, self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"mutations/site", (void *) self->site, self->num_rows, KAS_INT32},
+        {"mutations/node", (void *) self->node, self->num_rows, KAS_INT32},
+        {"mutations/parent", (void *) self->parent, self->num_rows, KAS_INT32},
+        {"mutations/derived_state", (void *) self->derived_state,
+            self->derived_state_length, KAS_UINT8},
+        {"mutations/derived_state_offset", (void *) self->derived_state_offset,
+            self->num_rows + 1, KAS_UINT32},
+        {"mutations/metadata", (void *) self->metadata,
+            self->metadata_length, KAS_UINT8},
+        {"mutations/metadata_offset", (void *) self->metadata_offset,
+            self->num_rows + 1, KAS_UINT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
+
 
 static int
 mutation_table_load(mutation_table_t *self, kastore_t *store)
@@ -1790,40 +1741,15 @@ out:
 static int
 migration_table_dump(migration_table_t *self, kastore_t *store)
 {
-    int ret = 0;
-
-    ret = kastore_puts(store, "migrations/left", self->left, self->num_rows,
-            KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "migrations/right", self->right, self->num_rows,
-            KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "migrations/node", self->node,
-            self->num_rows, KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "migrations/source", self->source,
-            self->num_rows, KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "migrations/dest", self->dest,
-            self->num_rows, KAS_INT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "migrations/time", self->time, self->num_rows,
-            KAS_FLOAT64, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"migrations/left", (void *) self->left, self->num_rows,  KAS_FLOAT64},
+        {"migrations/right", (void *) self->right, self->num_rows,  KAS_FLOAT64},
+        {"migrations/node", (void *) self->node, self->num_rows,  KAS_INT32},
+        {"migrations/source", (void *) self->source, self->num_rows,  KAS_INT32},
+        {"migrations/dest", (void *) self->dest, self->num_rows,  KAS_INT32},
+        {"migrations/time", (void *) self->time, self->num_rows,  KAS_FLOAT64},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
 
 static int
@@ -2157,30 +2083,17 @@ provenance_table_equal(provenance_table_t *self, provenance_table_t *other)
 static int
 provenance_table_dump(provenance_table_t *self, kastore_t *store)
 {
-    int ret = 0;
-
-    ret = kastore_puts(store, "provenances/timestamp", self->timestamp,
-            self->timestamp_length, KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "provenances/timestamp_offset",
-            self->timestamp_offset, self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "provenances/record", self->record,
-            self->record_length, KAS_UINT8, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts(store, "provenances/record_offset",
-            self->record_offset, self->num_rows + 1, KAS_UINT32, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"provenances/timestamp", (void *) self->timestamp,
+            self->timestamp_length, KAS_UINT8},
+        {"provenances/timestamp_offset", (void *) self->timestamp_offset,
+            self->num_rows+ 1, KAS_UINT32},
+        {"provenances/record", (void *) self->record,
+            self->record_length, KAS_UINT8},
+        {"provenances/record_offset", (void *) self->record_offset,
+            self->num_rows + 1, KAS_UINT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
 
 static int
@@ -3971,9 +3884,24 @@ table_collection_read_metadata(table_collection_t *self)
     int ret = 0;
     size_t len;
     uint32_t *version;
+    int8_t *format_name;
     double *L;
 
-    ret = kastore_gets_uint32(&self->store, "format_version", &version, &len);
+    ret = kastore_gets_int8(&self->store, "format/name", &format_name, &len);
+    if (ret != 0) {
+        ret = msp_set_kas_error(ret);
+        goto out;
+    }
+    if (len != MSP_FILE_FORMAT_NAME_LENGTH) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+    if (memcmp(MSP_FILE_FORMAT_NAME, format_name, MSP_FILE_FORMAT_NAME_LENGTH) != 0) {
+        ret = MSP_ERR_FILE_FORMAT;
+        goto out;
+    }
+
+    ret = kastore_gets_uint32(&self->store, "format/version", &version, &len);
     if (ret != 0) {
         ret = msp_set_kas_error(ret);
         goto out;
@@ -4005,6 +3933,28 @@ table_collection_read_metadata(table_collection_t *self)
         goto out;
     }
     self->sequence_length = L[0];
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+table_collection_dump_indexes(table_collection_t *self, kastore_t *store)
+{
+    int ret = 0;
+    write_table_col_t write_cols[] = {
+        {"indexes/edge_insertion_order", NULL, self->edges.num_rows, KAS_INT32},
+        {"indexes/edge_removal_order", NULL, self->edges.num_rows, KAS_INT32},
+    };
+
+    if (! table_collection_is_indexed(self)) {
+        ret = table_collection_build_indexes(self, 0);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    write_cols[0].array = self->indexes.edge_insertion_order;
+    write_cols[1].array = self->indexes.edge_removal_order;
+    ret = write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 out:
     return ret;
 }
@@ -4076,46 +4026,18 @@ out:
 static int WARN_UNUSED
 table_collection_write_metadata(table_collection_t *self, kastore_t *store)
 {
-    int ret = 0;
+    char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
     uint32_t version[2] = {
         MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
-
-    ret = kastore_puts_uint32(store, "format_version", version, 2, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts_float64(store, "sequence_length", &self->sequence_length, 1, 0);
-    if (ret != 0) {
-        goto out;
-    }
-
-out:
-    return ret;
-}
-
-static int WARN_UNUSED
-table_collection_dump_indexes(table_collection_t *self, kastore_t *store)
-{
-    int ret = 0;
-
-    if (! table_collection_is_indexed(self)) {
-        ret = table_collection_build_indexes(self, 0);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    ret = kastore_puts_int32(store, "indexes/edge_insertion_order",
-            self->indexes.edge_insertion_order, self->edges.num_rows, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = kastore_puts_int32(store, "indexes/edge_removal_order",
-            self->indexes.edge_removal_order, self->edges.num_rows, 0);
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    return ret;
+    write_table_col_t write_cols[] = {
+        {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
+        {"format/version", (void *) version, 2, KAS_UINT32},
+        {"sequence_length", (void *) &self->sequence_length, 1, KAS_FLOAT64},
+    };
+    /* This stupid dance is to workaround the fact that compilers won't allow
+     * casts to discard the 'const' qualifier. */
+    memcpy(format_name, MSP_FILE_FORMAT_NAME, sizeof(format_name));
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
 }
 
 int WARN_UNUSED
@@ -4126,6 +4048,7 @@ table_collection_dump(table_collection_t *self, const char *filename, int flags)
 
     ret = kastore_open(&store, filename, "w", 0);
     if (ret != 0) {
+        ret = msp_set_kas_error(ret);
         goto out;
     }
     ret = table_collection_write_metadata(self, &store);
@@ -4163,7 +4086,6 @@ table_collection_dump(table_collection_t *self, const char *filename, int flags)
     ret = kastore_close(&store);
 out:
     if (ret != 0) {
-        ret = msp_set_kas_error(ret);
         kastore_close(&store);
     }
     return ret;
