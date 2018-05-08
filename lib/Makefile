@@ -1,4 +1,4 @@
-CC=h5cc 
+CC=gcc
 EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wno-unused-parameter\
   -Wmissing-prototypes -Wstrict-prototypes \
@@ -6,12 +6,13 @@ EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wcast-align -Wcast-qual \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= 
-CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS
-LDFLAGS=-lgsl -lgslcblas -lhdf5 -lm
+CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS -Ikastore/c
+LDFLAGS=-lgsl -lgslcblas -lm
 
 HEADERS=msprime.h util.h trees.h tables.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
-    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o
+    hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o \
+    kastore.o
 
 all: main simulation_tests tests table_example table_example_cpp
 
@@ -25,8 +26,11 @@ argtable3.o: argtable3.c
 %.o : %.c ${HEADERS}
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
+kastore.o: kastore/c/kastore.c
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+
 main: CFLAGS+=${EXTRA_CFLAGS}
-main: main.c ${COMPILED} ${HEADERS} argtable3.o
+main: main.c ${COMPILED} ${HEADERS} argtable3.o 
 	${CC} ${CFLAGS} ${EXTRA_CFLAGS} -o main main.c ${COMPILED} argtable3.o ${LDFLAGS} -lconfig 
 
 tests: tests.c ${COMPILED} ${HEADERS}
@@ -41,17 +45,10 @@ tags:
 clean:
 	rm -f main tests simulation_tests table_example table_example_cpp *.o *.gcda *.gcno
 
-debian-tests: CC=h5cc
-debian-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage
+debian-tests: CFLAGS=--coverage -Ikastore/c
 debian-tests: tests simulation_tests
 
-ubuntu-tests: CC=gcc
-ubuntu-tests: CFLAGS=-DH5_NO_DEPRECATED_SYMBOLS --coverage 
-ubuntu-tests: tests simulation_tests
-
 coverity-tests: CC=gcc 
-coverity-tests: CFLAGS+=-I/usr/include/hdf5/serial
-coverity-tests: LDFLAGS+=-L/usr/lib/x86_64-linux-gnu/hdf5/serial
 coverity-tests: tests main simulation_tests
 
 coverity: 
@@ -63,8 +60,9 @@ coverity:
 
 # Examples using just the tables API.
 table_example: table_example.c
-	h5cc -o table_example table_example.c tables.c util.c
+	gcc -Ikastore/c -o table_example table_example.c tables.c util.c kastore/c/kastore.c
 
 # Make sure that all the files are compiled as C code.
 table_example_cpp: table_example_cpp.cc tables.o util.o
-	h5c++ -std=c++11 -o table_example_cpp table_example_cpp.cc tables.o util.o
+	g++ -std=c++11 -Ikastore/c -o table_example_cpp table_example_cpp.cc tables.o util.o \
+		kastore.o

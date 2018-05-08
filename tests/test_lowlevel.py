@@ -386,11 +386,6 @@ class TestModule(tests.MsprimeTestCase):
         self.assertIsInstance(major, int)
         self.assertGreater(major, 0)
         self.assertIsInstance(minor, int)
-        major, minor, revision = _msprime.get_hdf5_version()
-        self.assertIsInstance(major, int)
-        self.assertGreater(major, 0)
-        self.assertIsInstance(minor, int)
-        self.assertIsInstance(revision, int)
         version_str = _msprime.get_library_version_str()
         self.assertEqual(version_str, _library_version)
 
@@ -1900,20 +1895,20 @@ class TestTreeSequence(LowLevelTestCase):
             for bad_type in [1, None, [], {}]:
                 self.assertRaises(TypeError, func, bad_type)
             # Try to dump/load files we don't have access to or don't exist.
-            for f in ["/", "/test.hdf5", "/dir_does_not_exist/x.hdf5"]:
-                self.assertRaises(_msprime.LibraryError, func, f)
+            for f in ["/", "/test.trees", "/dir_does_not_exist/x.trees"]:
+                self.assertRaises(_msprime.FileFormatError, func, f)
                 try:
                     func(f)
-                except _msprime.LibraryError as e:
+                except _msprime.FileFormatError as e:
                     message = str(e)
                     self.assertGreater(len(message), 0)
             # use a long filename and make sure we don't overflow error
             # buffers
             f = "/" + 4000 * "x"
-            self.assertRaises(_msprime.LibraryError, func, f)
+            self.assertRaises(_msprime.FileFormatError, func, f)
             try:
                 func(f)
-            except _msprime.LibraryError as e:
+            except _msprime.FileFormatError as e:
                 message = str(e)
                 self.assertLess(len(message), 1024)
 
@@ -3447,9 +3442,9 @@ class TestLdCalculator(LowLevelTestCase):
         ldc = _msprime.LdCalculator(ts)
         for bad_index in bad_indexes:
             self.assertRaises(
-                IndexError, ldc.get_r2_array, self.get_buffer(1), bad_index)
-            self.assertRaises(IndexError, ldc.get_r2, bad_index, 0)
-            self.assertRaises(IndexError, ldc.get_r2, 0, bad_index)
+                _msprime.LibraryError, ldc.get_r2_array, self.get_buffer(1), bad_index)
+            self.assertRaises(_msprime.LibraryError, ldc.get_r2, bad_index, 0)
+            self.assertRaises(_msprime.LibraryError, ldc.get_r2, 0, bad_index)
 
     def test_get_r2_interface(self):
         ts = self.get_tree_sequence()

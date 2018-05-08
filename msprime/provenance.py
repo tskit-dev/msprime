@@ -35,10 +35,6 @@ except ImportError:
     pass
 
 
-# Getting the hdf5 version here on import because we seem to leak memory
-# if we call this function over and over again. Looks like a bug in the
-# underlying HDF5 lib.
-_hdf5_version = _msprime.get_hdf5_version()
 _gsl_version = _msprime.get_gsl_version()
 
 
@@ -48,9 +44,6 @@ def get_environment():
     is currently running.
     """
     env = {
-        "hdf5": {
-            "version": _hdf5_version
-        },
         "gsl": {
             "version": _gsl_version
         },

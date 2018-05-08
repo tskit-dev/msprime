@@ -38,8 +38,10 @@ except ImportError:
 
 import _msprime
 import msprime.drawing as drawing
+import msprime.exceptions as exceptions
 import msprime.provenance as provenance
 import msprime.tables as tables
+import msprime.formats as formats
 
 from _msprime import NODE_IS_SAMPLE
 
@@ -1061,7 +1063,14 @@ def load(path):
         stored in the specified file path.
     :rtype: :class:`msprime.TreeSequence`
     """
-    return TreeSequence.load(path)
+    try:
+        return TreeSequence.load(path)
+    except _msprime.VersionTooNewError as e:
+        raise exceptions.VersionTooNewError(str(e))
+    except _msprime.VersionTooOldError as e:
+        raise exceptions.VersionTooOldError(str(e))
+    except _msprime.FileFormatError as e:
+        formats.raise_hdf5_format_error(path, e)
 
 
 def load_tables(

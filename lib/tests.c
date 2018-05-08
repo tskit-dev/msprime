@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <hdf5.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
 #include <CUnit/Basic.h>
@@ -5803,7 +5802,7 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
 }
 
 static void
-test_save_empty_hdf5(void)
+test_save_empty_kas(void)
 {
     int ret;
     tree_sequence_t ts1, ts2;
@@ -5830,7 +5829,7 @@ test_save_empty_hdf5(void)
 }
 
 static void
-test_save_hdf5(void)
+test_save_kas(void)
 {
     int ret;
     size_t j, k;
@@ -5861,7 +5860,7 @@ test_save_hdf5(void)
 }
 
 static void
-test_save_hdf5_tables(void)
+test_save_kas_tables(void)
 {
     int ret;
     size_t j, k;
@@ -6213,7 +6212,7 @@ test_dump_tables(void)
 }
 
 static void
-test_dump_tables_hdf5(void)
+test_dump_tables_kas(void)
 {
     int ret;
     size_t k;
@@ -6254,31 +6253,21 @@ test_strerror(void)
     int j;
     const char *msg;
     int max_error_code = 1024; /* totally arbitrary */
-    FILE *f;
     tree_sequence_t ts;
 
     for (j = 0; j < max_error_code; j++) {
         msg = msp_strerror(-j);
         CU_ASSERT_FATAL(msg != NULL);
-        if (-j == MSP_ERR_HDF5) {
-            /* There is no HDF5 error, so... */
-            CU_ASSERT_EQUAL(strlen(msg), 0);
-        } else {
-            CU_ASSERT(strlen(msg) > 0);
-        }
+        CU_ASSERT(strlen(msg) > 0);
     }
-    /* Provoke an HDF5 error */
+
+    /* Provoke an IO error error */
     ret = tree_sequence_load(&ts, "/file/does/not/exist", 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_HDF5);
+    CU_ASSERT(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL(ret, KAS_ERR_IO ^ (1 << MSP_KAS_ERR_BIT));
     msg = msp_strerror(ret);
     CU_ASSERT_FATAL(msg != NULL);
     CU_ASSERT(strlen(msg) > 0);
-    /* Provoke an IO error */
-    f = fopen("/file/does/not/exist", "r");
-    CU_ASSERT_EQUAL_FATAL(f, NULL);
-    msg = msp_strerror(MSP_ERR_IO);
-    CU_ASSERT_FATAL(msg != NULL);
-    CU_ASSERT_STRING_EQUAL(msg, strerror(errno));
 }
 
 static void
@@ -7133,6 +7122,341 @@ test_provenance_table(void)
     free(record_offset);
 }
 
+typedef struct {
+    const char *name;
+    void *array;
+    table_size_t len;
+    int type;
+} write_table_col_t;
+
+static void
+write_table_cols(kastore_t *store, write_table_col_t *write_cols, size_t num_cols)
+{
+    size_t j;
+    int ret;
+
+    for (j = 0; j < num_cols; j++) {
+        ret = kastore_puts(store, write_cols[j].name, write_cols[j].array,
+                write_cols[j].len, write_cols[j].type, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+}
+
+static void
+test_format_data_load_errors(void)
+{
+    char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
+    double L[2];
+    uint32_t version[2] = {
+        MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
+    write_table_col_t write_cols[] = {
+        {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
+        {"format/version", (void *) version, 2, KAS_UINT32},
+        {"sequence_length", (void *) L, 1, KAS_FLOAT64},
+    };
+    table_collection_t tables;
+    kastore_t store;
+    size_t j;
+    int ret;
+
+    L[0] = 1;
+    L[1] = 0;
+    memcpy(format_name, MSP_FILE_FORMAT_NAME, sizeof(format_name));
+
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    /* We've only defined the format headers, so we should fail immediately
+     * after with key not found */
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_KEY_NOT_FOUND);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Version too old */
+    version[0] = MSP_FILE_FORMAT_VERSION_MAJOR - 1;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_VERSION_TOO_OLD);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Version too new */
+    version[0] = MSP_FILE_FORMAT_VERSION_MAJOR + 1;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_VERSION_TOO_NEW);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    version[0] = MSP_FILE_FORMAT_VERSION_MAJOR;
+
+    /* Bad version length */
+    write_cols[1].len = 0;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[1].len = 2;
+
+
+    /* Bad format name length */
+    write_cols[0].len = 0;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[0].len = MSP_FILE_FORMAT_NAME_LENGTH;
+
+    /* Bad format name */
+    format_name[0] = 'X';
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    format_name[0] = 't';
+
+    /* Bad type for sequence length. */
+    write_cols[2].type = KAS_FLOAT32;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_TYPE_MISMATCH);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[2].type = KAS_FLOAT64;
+
+    /* Bad length for sequence length. */
+    write_cols[2].len = 2;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[2].len = 1;
+
+    /* Bad value for sequence length. */
+    L[0] = -1;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SEQUENCE_LENGTH);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Missing keys */
+    for (j = 0; j < sizeof(write_cols) / sizeof(*write_cols) - 1; j++) {
+        ret = kastore_open(&store, _tmp_file_name, "w", 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        write_table_cols(&store, write_cols, j);
+        ret = kastore_close(&store);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_load(&tables, _tmp_file_name, 0);
+        CU_ASSERT_TRUE(msp_is_kas_error(ret));
+        CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_KEY_NOT_FOUND);
+        ret = table_collection_free(&tables);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+}
+
+void
+test_dump_unindexed(void)
+{
+    table_collection_t tables, loaded;
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 1;
+    parse_nodes(single_tree_ex_nodes, &tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes.num_rows, 7);
+    parse_edges(single_tree_ex_edges, &tables.edges);
+    CU_ASSERT_EQUAL_FATAL(tables.edges.num_rows, 6);
+    CU_ASSERT_FALSE(table_collection_is_indexed(&tables));
+    ret = table_collection_dump(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_is_indexed(&tables));
+
+    ret = table_collection_alloc(&loaded, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&loaded, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_is_indexed(&loaded));
+    CU_ASSERT_TRUE(node_table_equal(&tables.nodes, &loaded.nodes));
+    CU_ASSERT_TRUE(edge_table_equal(&tables.edges, &loaded.edges));
+
+    table_collection_free(&loaded);
+    table_collection_free(&tables);
+}
+
+void
+test_table_collection_load_errors(void)
+{
+    table_collection_t tables;
+    int ret;
+    const char *str;
+
+    ret = table_collection_alloc(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, "/", 0);
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_IO);
+    str = msp_strerror(ret);
+    CU_ASSERT_TRUE(strlen(str) > 0);
+
+    table_collection_free(&tables);
+}
+
+void
+test_table_collection_dump_errors(void)
+{
+    table_collection_t tables;
+    int ret;
+    const char *str;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_dump(&tables, "/", 0);
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_IO);
+    str = msp_strerror(ret);
+    CU_ASSERT_TRUE(strlen(str) > 0);
+
+    table_collection_free(&tables);
+}
+
+void
+test_load_node_table_errors(void)
+{
+    char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
+    double L = 1;
+    double time = 0;
+    double flags = 0;
+    int32_t population = 0;
+    int8_t metadata = 0;
+    uint32_t metadata_offset[] = {0, 1};
+    uint32_t version[2] = {
+        MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
+    write_table_col_t write_cols[] = {
+        {"nodes/time", (void *) &time, 1, KAS_FLOAT64},
+        {"nodes/flags", (void *) &flags, 1, KAS_UINT32},
+        {"nodes/population", (void *) &population, 1, KAS_INT32},
+        {"nodes/metadata", (void *) &metadata, 1, KAS_UINT8},
+        {"nodes/metadata_offset", (void *) metadata_offset, 2, KAS_UINT32},
+        {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
+        {"format/version", (void *) version, 2, KAS_UINT32},
+        {"sequence_length", (void *) &L, 1, KAS_FLOAT64},
+    };
+    table_collection_t tables;
+    kastore_t store;
+    int ret;
+
+    memcpy(format_name, MSP_FILE_FORMAT_NAME, sizeof(format_name));
+
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    /* We've only defined the format headers and nodes, so we should fail immediately
+     * after with key not found */
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_KEY_NOT_FOUND);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Wrong type for time */
+    write_cols[0].type = KAS_INT64;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[0].type = KAS_FLOAT64;
+
+    /* Wrong length for flags */
+    write_cols[1].len = 0;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[1].len = 1;
+
+    /* Missing key */
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols) - 1);
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_KEY_NOT_FOUND);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Wrong length for metadata offset */
+    write_cols[4].len = 1;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[4].len = 2;
+}
+
+
+
 static int
 msprime_suite_init(void)
 {
@@ -7154,10 +7478,6 @@ msprime_suite_init(void)
     close(fd);
     _devnull = fopen("/dev/null", "w");
     if (_devnull == NULL) {
-        return CUE_SINIT_FAILED;
-    }
-    /* Silence HDF5 errors */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
         return CUE_SINIT_FAILED;
     }
     return CUE_SUCCESS;
@@ -7277,21 +7597,26 @@ main(int argc, char **argv)
             test_compute_mutation_parents_from_examples},
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
-        {"test_save_empty_hdf5", test_save_empty_hdf5},
-        {"test_save_hdf5", test_save_hdf5},
-        {"test_save_hdf5_tables", test_save_hdf5_tables},
+        {"test_save_empty_kas", test_save_empty_kas},
+        {"test_save_kas", test_save_kas},
+        {"test_save_kas_tables", test_save_kas_tables},
         {"test_dump_tables", test_dump_tables},
         {"test_sort_tables", test_sort_tables},
         {"test_deduplicate_sites", test_deduplicate_sites},
         {"test_deduplicate_sites_errors", test_deduplicate_sites_errors},
-        {"test_dump_tables_hdf5", test_dump_tables_hdf5},
-        {"test_error_messages", test_strerror},
+        {"test_dump_tables_kas", test_dump_tables_kas},
+        {"test_strerror", test_strerror},
         {"test_node_table", test_node_table},
         {"test_edge_table", test_edge_table},
         {"test_site_table", test_site_table},
         {"test_mutation_table", test_mutation_table},
         {"test_migration_table", test_migration_table},
         {"test_provenance_table", test_provenance_table},
+        {"test_format_data_load_errors", test_format_data_load_errors},
+        {"test_dump_unindexed", test_dump_unindexed},
+        {"test_table_collection_load_errors", test_table_collection_load_errors},
+        {"test_table_collection_dump_errors", test_table_collection_dump_errors},
+        {"test_load_node_table_errors", test_load_node_table_errors},
         CU_TEST_INFO_NULL,
     };
 

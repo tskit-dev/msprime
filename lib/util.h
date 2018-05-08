@@ -19,6 +19,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <stdbool.h>
+
 /*
  * raise a compiler warning if a potentially error raising function's return
  * value is not used.
@@ -53,7 +55,9 @@
 #define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 10
+#define MSP_FILE_FORMAT_NAME          "tskit.trees"
+#define MSP_FILE_FORMAT_NAME_LENGTH   11
+#define MSP_FILE_FORMAT_VERSION_MAJOR 11
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 
@@ -130,6 +134,11 @@
 #define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 
+/* This bit is 0 for any errors originating from kastore */
+#define MSP_KAS_ERR_BIT 14
+
+int msp_set_kas_error(int err);
+bool msp_is_kas_error(int err);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 

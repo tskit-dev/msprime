@@ -56,16 +56,6 @@ class PathConfigurator(object):
         if HAVE_NUMPY:
             self.include_dirs = [np.get_include()]
         try:
-            self._check_hdf5_version()
-        except OSError as e:
-            warn("Error occured checking HDF5 version: {}".format(e))
-        # On Unix systems with the correct tools installed we can detect the
-        # paths for include and library files.
-        try:
-            self._configure_hdf5()
-        except OSError as e:
-            warn("Error occured getting HDF5 path config: {}".format(e))
-        try:
             self._configure_gsl()
         except OSError as e:
             warn("Error occured getting GSL path config: {}".format(e))
@@ -80,24 +70,6 @@ class PathConfigurator(object):
 
     def _run_command(self, args):
         return subprocess.check_output(args, universal_newlines=True)
-
-    def _check_hdf5_version(self):
-        output = self._run_command(["h5ls", "-V"]).split()
-        version_str = output[2]
-        version = list(map(int, version_str.split(".")[:2]))
-        if version < [1, 8]:
-            # TODO is there a better exception to raise here?
-            raise ValueError(
-                "hdf5 version {} found; we need 1.8.0 or greater".format(
-                    version_str))
-
-    def _configure_hdf5(self):
-        output = self._run_command(["h5cc", "-show"]).split()
-        for token in output:
-            if token.startswith("-I"):
-                self.include_dirs.append(token[2:])
-            elif token.startswith("-L"):
-                self.library_dirs.append(token[2:])
 
     def _configure_gsl(self):
         output = self._run_command(["gsl-config", "--cflags"]).split()
@@ -128,9 +100,6 @@ class DefineMacros(object):
                 self._msprime_version = '"{}"'.format(version)
 
         defines = [
-            # We define this macro to ensure we're using the v18 versions of
-            # the HDF5 API and not earlier deprecated versions.
-            ("H5_NO_DEPRECATED_SYMBOLS", None),
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
@@ -138,19 +107,19 @@ class DefineMacros(object):
             defines += [
                 # These two are required for GSL to compile and link against the
                 # conda-forge version.
-                ("GSL_DLL", None), ("WIN32", None),
-                # This is needed for HDF5 to link properly.
-                ("H5_BUILT_AS_DYNAMIC_LIB", None)]
+                ("GSL_DLL", None), ("WIN32", None)]
         if HAVE_NUMPY:
             defines += [("HAVE_NUMPY", None)]
         return defines[index]
 
 
+kastore_dir = os.path.join("kastore", "c")
 configurator = PathConfigurator()
 source_files = [
     "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
     "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
-    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c"]
+    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c",
+    os.path.join(kastore_dir, "kastore.c")]
 libdir = "lib"
 _msprime_module = Extension(
     '_msprime',
@@ -159,8 +128,8 @@ _msprime_module = Extension(
     undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
     define_macros=DefineMacros(),
-    libraries=["gsl", "gslcblas", "hdf5"],
-    include_dirs=[libdir] + configurator.include_dirs,
+    libraries=["gsl", "gslcblas"],
+    include_dirs=[libdir, os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
 

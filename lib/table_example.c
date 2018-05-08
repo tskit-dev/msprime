@@ -39,7 +39,7 @@ main(int argc, char **argv)
     }
 
     /* Write the state out to file */
-    ret = table_collection_dump(&tables, "tmp.hdf5", 0);
+    ret = table_collection_dump(&tables, "tmp.kas", 0);
     if (ret != 0) {
         goto out;
     }

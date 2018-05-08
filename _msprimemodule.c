@@ -29,7 +29,6 @@
 
 #include <float.h>
 
-#include <hdf5.h>
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
 
@@ -47,6 +46,9 @@
 
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
+static PyObject *MsprimeFileFormatError;
+static PyObject *MsprimeVersionTooOldError;
+static PyObject *MsprimeVersionTooNewError;
 
 typedef struct {
     PyObject_HEAD
@@ -173,10 +175,22 @@ typedef struct {
 static void
 handle_library_error(int err)
 {
-    if (err == MSP_ERR_OUT_OF_BOUNDS) {
-        PyErr_SetString(PyExc_IndexError, msp_strerror(err));
-    } else{
-        PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+    if (msp_is_kas_error(err)) {
+        PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
+    } else {
+        switch (err) {
+            case MSP_ERR_FILE_VERSION_TOO_NEW:
+                PyErr_SetString(MsprimeVersionTooNewError, msp_strerror(err));
+                break;
+            case MSP_ERR_FILE_VERSION_TOO_OLD:
+                PyErr_SetString(MsprimeVersionTooOldError, msp_strerror(err));
+                break;
+            case MSP_ERR_FILE_FORMAT:
+                PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
+                break;
+            default:
+                PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+        }
     }
 }
 
@@ -3193,8 +3207,8 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     PyArrayObject *timestamp_array = NULL;
     PyObject *timestamp_offset_input = NULL;
     PyArrayObject *timestamp_offset_array = NULL;
-    PyObject *provenance_input = NULL;
-    PyArrayObject *provenance_array = NULL;
+    PyObject *record_input = NULL;
+    PyArrayObject *record_array = NULL;
     PyObject *record_offset_input = NULL;
     PyArrayObject *record_offset_array = NULL;
 
@@ -3203,7 +3217,7 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
                 &timestamp_input, &timestamp_offset_input,
-                &provenance_input, &record_offset_input)) {
+                &record_input, &record_offset_input)) {
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {
@@ -3219,9 +3233,9 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     if (timestamp_offset_array == NULL) {
         goto out;
     }
-    provenance_array = table_read_column_array(provenance_input, NPY_INT8,
+    record_array = table_read_column_array(record_input, NPY_INT8,
             &record_length, false);
-    if (provenance_array == NULL) {
+    if (record_array == NULL) {
         goto out;
     }
     record_offset_array = table_read_offset_array(record_offset_input, &num_rows,
@@ -3232,11 +3246,11 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     if (method == SET_COLS) {
         err = provenance_table_set_columns(self->provenance_table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
+                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else if (method == APPEND_COLS) {
         err = provenance_table_append_columns(self->provenance_table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
+                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else {
         assert(0);
     }
@@ -3248,7 +3262,7 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 out:
     Py_XDECREF(timestamp_array);
     Py_XDECREF(timestamp_offset_array);
-    Py_XDECREF(provenance_array);
+    Py_XDECREF(record_array);
     Py_XDECREF(record_offset_array);
     return ret;
 }
@@ -4049,11 +4063,6 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (zlib_compression) {
         flags = MSP_DUMP_ZLIB_COMPRESSION;
     }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
     err = tree_sequence_dump(self->tree_sequence, path, flags);
     if (err != 0) {
         handle_library_error(err);
@@ -4307,12 +4316,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
-
     err = TreeSequence_alloc(self);
     if (err != 0) {
         goto out;
@@ -8792,45 +8795,10 @@ msprime_get_gsl_version(PyObject *self)
 }
 
 static PyObject *
-msprime_get_hdf5_version(PyObject *self)
-{
-    herr_t status;
-    PyObject *ret = NULL;
-    unsigned int major, minor, release;
-
-    /* Beware! This seems to leak memory, so don't call it repeatedly */
-    status = H5get_libversion(&major, &minor, &release);
-    if (status != 0) {
-        PyErr_SetString(PyExc_SystemError, "Error getting HDF5 version");
-        goto out;
-    }
-    ret = Py_BuildValue("III", major, minor, release);
-out:
-    return ret;
-}
-
-static PyObject *
-msprime_h5close(PyObject *self)
-{
-    herr_t status;
-    PyObject *ret = NULL;
-
-    status = H5close();
-    if (status != 0) {
-        PyErr_SetString(PyExc_SystemError, "Error calling H5close");
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
 msprime_get_library_version_str(PyObject *self)
 {
     return Py_BuildValue("s", MSP_LIBRARY_VERSION_STR);
 }
-
 
 static PyMethodDef msprime_methods[] = {
     {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
@@ -8839,10 +8807,6 @@ static PyMethodDef msprime_methods[] = {
             "Simplifies the specified set of tables for a given sample subset." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
-    {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
-            "Returns the version of HDF5 we are linking against." },
-    {"h5close", (PyCFunction) msprime_h5close, METH_NOARGS,
-            "Calls H5close()" },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
             METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
@@ -9060,6 +9024,15 @@ init_msprime(void)
     MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
+    MsprimeFileFormatError = PyErr_NewException("_msprime.FileFormatError", NULL, NULL);
+    Py_INCREF(MsprimeFileFormatError);
+    PyModule_AddObject(module, "FileFormatError", MsprimeFileFormatError);
+    MsprimeVersionTooNewError = PyErr_NewException("_msprime.VersionTooNewError", NULL, NULL);
+    Py_INCREF(MsprimeVersionTooNewError);
+    PyModule_AddObject(module, "VersionTooNewError", MsprimeVersionTooNewError);
+    MsprimeVersionTooOldError = PyErr_NewException("_msprime.VersionTooOldError", NULL, NULL);
+    Py_INCREF(MsprimeVersionTooOldError);
+    PyModule_AddObject(module, "VersionTooOldError", MsprimeVersionTooOldError);
 
     /* Node flags */
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", MSP_NODE_IS_SAMPLE);
