@@ -19,30 +19,18 @@
 from __future__ import division
 from __future__ import print_function
 
-from setuptools import setup, Extension
-
 import subprocess
 import platform
 import os
 import os.path
 from warnings import warn
 
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext as _build_ext
+
 
 CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
-
-# NOTE: sadly these warnings won't work to warn users installing with pip
-# https://github.com/pypa/pip/issues/2933
-HAVE_NUMPY = False
-try:
-    import numpy as np
-    version = tuple(map(int, np.__version__.split(".")))
-    if version < (1, 7, 0):
-        warn("numpy version is too old: version 1.7 or newer needed")
-    else:
-        HAVE_NUMPY = True
-except ImportError:
-    warn("numpy not available. Some features will not work.")
 
 
 class PathConfigurator(object):
@@ -53,8 +41,6 @@ class PathConfigurator(object):
     def __init__(self):
         self.include_dirs = []
         self.library_dirs = []
-        if HAVE_NUMPY:
-            self.include_dirs = [np.get_include()]
         try:
             self._configure_gsl()
         except OSError as e:
@@ -80,6 +66,35 @@ class PathConfigurator(object):
         for token in output:
             if token.startswith("-L"):
                 self.library_dirs.append(token[2:])
+
+
+# Obscure magic required to allow numpy be used as an 'setup_requires'.
+class build_ext(_build_ext):
+    def finalize_options(self):
+        super(build_ext, self).finalize_options()
+        # Prevent numpy from thinking it is still in its setup process:
+        __builtins__.__NUMPY_SETUP__ = False
+        import numpy
+        self.include_dirs.append(numpy.get_include())
+
+
+# The above obscure magic doesn't seem to work on py2 and prevents the
+# extension from building at all, so here's a nasty workaround:
+libdir = "lib"
+includes = [libdir]
+try:
+    import numpy
+    includes.append(numpy.get_include())
+except ImportError:
+    pass
+
+kastore_dir = os.path.join("kastore", "c")
+configurator = PathConfigurator()
+source_files = [
+    "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
+    "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
+    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c",
+    os.path.join(kastore_dir, "kastore.c")]
 
 
 # Now, setup the extension module. We have to do some quirky workarounds
@@ -108,19 +123,9 @@ class DefineMacros(object):
                 # These two are required for GSL to compile and link against the
                 # conda-forge version.
                 ("GSL_DLL", None), ("WIN32", None)]
-        if HAVE_NUMPY:
-            defines += [("HAVE_NUMPY", None)]
         return defines[index]
 
 
-kastore_dir = os.path.join("kastore", "c")
-configurator = PathConfigurator()
-source_files = [
-    "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
-    "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
-    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c",
-    os.path.join(kastore_dir, "kastore.c")]
-libdir = "lib"
 _msprime_module = Extension(
     '_msprime',
     sources=["_msprimemodule.c"] + [os.path.join(libdir, f) for f in source_files],
@@ -129,7 +134,8 @@ _msprime_module = Extension(
     extra_compile_args=["-std=c99"],
     define_macros=DefineMacros(),
     libraries=["gsl", "gslcblas"],
-    include_dirs=[libdir, os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
+    include_dirs=includes + [
+        os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
 
@@ -150,7 +156,7 @@ setup(
             'msp=msprime.cli:msp_main',
         ]
     },
-    install_requires=["svgwrite", "six"],
+    install_requires=["numpy>=1.7.0", "h5py", "svgwrite", "six"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
@@ -175,6 +181,6 @@ setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    setup_requires=['setuptools_scm'],
+    setup_requires=['numpy', 'setuptools_scm'],
     use_scm_version={"write_to": "msprime/_version.py"},
 )

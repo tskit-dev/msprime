@@ -57,4 +57,8 @@ jobs:
           command: python setup.py sdist
       - run:
           name: Install from the distribution tarball
-          command: pip install dist/*.tar.gz --user
+          command: |
+            python -m venv venv
+            source venv/bin/activate 
+            pip install --upgrade setuptools pip
+            pip install dist/*.tar.gz 
