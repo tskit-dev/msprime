@@ -56,7 +56,6 @@ def _get_v2_provenance(command, attrs):
     try:
         environment = json.loads(str(attrs["environment"]))
     except ValueError:
-
         logging.warn("Failed to convert environment provenance")
     try:
         parameters = json.loads(str(attrs["parameters"]))

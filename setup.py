@@ -56,16 +56,6 @@ class PathConfigurator(object):
         if HAVE_NUMPY:
             self.include_dirs = [np.get_include()]
         try:
-            self._check_hdf5_version()
-        except OSError as e:
-            warn("Error occured checking HDF5 version: {}".format(e))
-        # On Unix systems with the correct tools installed we can detect the
-        # paths for include and library files.
-        try:
-            self._configure_hdf5()
-        except OSError as e:
-            warn("Error occured getting HDF5 path config: {}".format(e))
-        try:
             self._configure_gsl()
         except OSError as e:
             warn("Error occured getting GSL path config: {}".format(e))
@@ -80,24 +70,6 @@ class PathConfigurator(object):
 
     def _run_command(self, args):
         return subprocess.check_output(args, universal_newlines=True)
-
-    def _check_hdf5_version(self):
-        output = self._run_command(["h5ls", "-V"]).split()
-        version_str = output[2]
-        version = list(map(int, version_str.split(".")[:2]))
-        if version < [1, 8]:
-            # TODO is there a better exception to raise here?
-            raise ValueError(
-                "hdf5 version {} found; we need 1.8.0 or greater".format(
-                    version_str))
-
-    def _configure_hdf5(self):
-        output = self._run_command(["h5cc", "-show"]).split()
-        for token in output:
-            if token.startswith("-I"):
-                self.include_dirs.append(token[2:])
-            elif token.startswith("-L"):
-                self.library_dirs.append(token[2:])
 
     def _configure_gsl(self):
         output = self._run_command(["gsl-config", "--cflags"]).split()
