@@ -22,10 +22,7 @@
 
 #include <Python.h>
 #include <structmember.h>
-
-#ifdef HAVE_NUMPY
 #include <numpy/arrayobject.h>
-#endif
 
 #include <float.h>
 
@@ -550,8 +547,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 make_alleles(variant_t *variant)
 {
@@ -596,7 +591,6 @@ out:
     Py_XDECREF(alleles);
     return ret;
 }
-#endif
 
 static PyObject *
 convert_sites(site_t *sites, size_t num_sites)
@@ -740,8 +734,6 @@ static PyTypeObject RandomGeneratorType = {
  *===================================================================
  */
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 table_get_column_array(size_t num_rows, void *data, int npy_type,
         size_t element_size)
@@ -828,8 +820,6 @@ out:
     }
     return ret;
 }
-
-#endif
 
 /*===================================================================
  * NodeTable
@@ -965,8 +955,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -1069,8 +1057,6 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     return NodeTable_set_or_append_columns(self, args, kwds, SET_COLS);
 }
 
-#endif
-
 static PyObject *
 NodeTable_clear(NodeTable *self)
 {
@@ -1126,7 +1112,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 NodeTable_get_time(NodeTable *self, void *closure)
 {
@@ -1196,7 +1181,6 @@ NodeTable_get_metadata_offset(NodeTable *self, void *closure)
 out:
     return ret;
 }
-#endif
 
 static PyGetSetDef NodeTable_getsetters[] = {
     {"max_rows_increment",
@@ -1205,14 +1189,12 @@ static PyGetSetDef NodeTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) NodeTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
     {"population", (getter) NodeTable_get_population, NULL, "The population array"},
     {"metadata", (getter) NodeTable_get_metadata, NULL, "The metadata array"},
     {"metadata_offset", (getter) NodeTable_get_metadata_offset, NULL,
         "The metadata offset array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
@@ -1221,13 +1203,11 @@ static PyMethodDef NodeTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) NodeTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) NodeTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
@@ -1392,7 +1372,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 EdgeTable_set_or_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -1467,7 +1446,6 @@ EdgeTable_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds)
     return EdgeTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-#endif
 
 static PyObject *
 EdgeTable_clear(EdgeTable *self)
@@ -1524,7 +1502,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 EdgeTable_get_left(EdgeTable *self, void *closure)
 {
@@ -1585,8 +1562,6 @@ out:
     return ret;
 }
 
-#endif
-
 static PyGetSetDef EdgeTable_getsetters[] = {
     {"max_rows_increment",
         (getter) EdgeTable_get_max_rows_increment, NULL,
@@ -1595,12 +1570,10 @@ static PyGetSetDef EdgeTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) EdgeTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"left", (getter) EdgeTable_get_left, NULL, "The left array"},
     {"right", (getter) EdgeTable_get_right, NULL, "The right array"},
     {"parent", (getter) EdgeTable_get_parent, NULL, "The parent array"},
     {"child", (getter) EdgeTable_get_child, NULL, "The child array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
@@ -1609,12 +1582,10 @@ static PyMethodDef EdgeTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) EdgeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) EdgeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) EdgeTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) EdgeTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
@@ -1781,8 +1752,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -1871,8 +1840,6 @@ MigrationTable_append_columns(MigrationTable *self, PyObject *args, PyObject *kw
     return MigrationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-#endif
-
 static PyObject *
 MigrationTable_clear(MigrationTable *self)
 {
@@ -1928,7 +1895,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 MigrationTable_get_left(MigrationTable *self, void *closure)
 {
@@ -2012,7 +1978,6 @@ MigrationTable_get_dest(MigrationTable *self, void *closure)
 out:
     return ret;
 }
-#endif
 
 static PyGetSetDef MigrationTable_getsetters[] = {
     {"max_rows_increment",
@@ -2021,14 +1986,12 @@ static PyGetSetDef MigrationTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) MigrationTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"left", (getter) MigrationTable_get_left, NULL, "The left array"},
     {"right", (getter) MigrationTable_get_right, NULL, "The right array"},
     {"node", (getter) MigrationTable_get_node, NULL, "The node array"},
     {"source", (getter) MigrationTable_get_source, NULL, "The source array"},
     {"dest", (getter) MigrationTable_get_dest, NULL, "The dest array"},
     {"time", (getter) MigrationTable_get_time, NULL, "The time array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
@@ -2037,12 +2000,10 @@ static PyMethodDef MigrationTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) MigrationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) MigrationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) MigrationTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
@@ -2222,8 +2183,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -2329,8 +2288,6 @@ SiteTable_append_columns(SiteTable *self, PyObject *args, PyObject *kwds)
     return SiteTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-#endif
-
 static PyObject *
 SiteTable_clear(SiteTable *self)
 {
@@ -2387,7 +2344,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 SiteTable_get_position(SiteTable *self, void *closure)
 {
@@ -2463,8 +2419,6 @@ out:
     return ret;
 }
 
-#endif
-
 static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows_increment",
         (getter) SiteTable_get_max_rows_increment, NULL,
@@ -2475,7 +2429,6 @@ static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows",
         (getter) SiteTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"position", (getter) SiteTable_get_position, NULL,
         "The position array."},
     {"ancestral_state", (getter) SiteTable_get_ancestral_state, NULL,
@@ -2486,7 +2439,6 @@ static PyGetSetDef SiteTable_getsetters[] = {
         "The metadata array."},
     {"metadata_offset", (getter) SiteTable_get_metadata_offset, NULL,
         "The metadata offset array."},
-#endif
     {NULL}  /* Sentinel */
 };
 
@@ -2495,12 +2447,10 @@ static PyMethodDef SiteTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) SiteTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) SiteTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) SiteTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
@@ -2686,8 +2636,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -2817,9 +2765,6 @@ MutationTable_append_columns(MutationTable *self, PyObject *args, PyObject *kwds
     return MutationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-
-#endif
-
 static PyObject *
 MutationTable_clear(MutationTable *self)
 {
@@ -2875,7 +2820,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 MutationTable_get_site(MutationTable *self, void *closure)
 {
@@ -2981,8 +2925,6 @@ out:
     return ret;
 }
 
-#endif
-
 static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
         (getter) MutationTable_get_max_rows_increment, NULL,
@@ -2993,7 +2935,6 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows",
         (getter) MutationTable_get_max_rows, NULL,
         "The curret maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"site", (getter) MutationTable_get_site, NULL, "The site array"},
     {"node", (getter) MutationTable_get_node, NULL, "The node array"},
     {"parent", (getter) MutationTable_get_parent, NULL, "The parent array"},
@@ -3005,7 +2946,6 @@ static PyGetSetDef MutationTable_getsetters[] = {
         "The metadata array"},
     {"metadata_offset", (getter) MutationTable_get_metadata_offset, NULL,
         "The metadata_offset array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
@@ -3014,12 +2954,10 @@ static PyMethodDef MutationTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) MutationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) MutationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified  arrays into the columns."},
-#endif
     {"clear", (PyCFunction) MutationTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
@@ -3194,8 +3132,6 @@ out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -3279,8 +3215,6 @@ ProvenanceTable_set_columns(ProvenanceTable *self, PyObject *args, PyObject *kwd
     return ProvenanceTable_set_or_append_columns(self, args, kwds, SET_COLS);
 }
 
-#endif
-
 static PyObject *
 ProvenanceTable_clear(ProvenanceTable *self)
 {
@@ -3335,8 +3269,6 @@ ProvenanceTable_get_max_rows(ProvenanceTable *self, void *closure)
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 ProvenanceTable_get_timestamp(ProvenanceTable *self, void *closure)
@@ -3394,8 +3326,6 @@ out:
     return ret;
 }
 
-#endif
-
 static PyGetSetDef ProvenanceTable_getsetters[] = {
     {"max_rows_increment",
         (getter) ProvenanceTable_get_max_rows_increment, NULL, "The size increment"},
@@ -3403,14 +3333,12 @@ static PyGetSetDef ProvenanceTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) ProvenanceTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"timestamp", (getter) ProvenanceTable_get_timestamp, NULL, "The timestamp array"},
     {"timestamp_offset", (getter) ProvenanceTable_get_timestamp_offset, NULL,
         "The timestamp offset array"},
     {"record", (getter) ProvenanceTable_get_record, NULL, "The record array"},
     {"record_offset", (getter) ProvenanceTable_get_record_offset, NULL,
         "The record offset array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
@@ -3419,13 +3347,11 @@ static PyMethodDef ProvenanceTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) ProvenanceTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) ProvenanceTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
     {"set_columns", (PyCFunction) ProvenanceTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) ProvenanceTable_clear, METH_NOARGS,
         "Clears this table."},
     {NULL}  /* Sentinel */
@@ -4716,7 +4642,6 @@ out:
 static PyObject *
 TreeSequence_get_genotype_matrix(TreeSequence  *self)
 {
-#ifdef HAVE_NUMPY
     PyObject *ret = NULL;
     int err;
     size_t num_sites;
@@ -4771,10 +4696,6 @@ out:
     }
     Py_XDECREF(genotype_matrix);
     return ret;
-#else
-    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
-    return NULL;
-#endif
 }
 
 static PyMemberDef TreeSequence_members[] = {
@@ -6298,7 +6219,6 @@ static PyTypeObject HaplotypeGeneratorType = {
  * VariantGenerator
  *===================================================================
  */
-#ifdef HAVE_NUMPY
 
 static int
 VariantGenerator_check_state(VariantGenerator *self)
@@ -6426,8 +6346,6 @@ static PyTypeObject VariantGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)VariantGenerator_init,      /* tp_init */
 };
-
-#endif
 
 /*===================================================================
  * LdCalculator
@@ -8454,7 +8372,6 @@ static PyTypeObject SimulatorType = {
 static PyObject *
 msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
 {
-#ifdef HAVE_NUMPY
     int err;
     PyObject *ret = NULL;
     NodeTable *py_nodes = NULL;
@@ -8560,16 +8477,11 @@ out:
         py_mutations->locked = false;
     }
     return ret;
-#else
-    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
-    return NULL;
-#endif
 }
 
 static PyObject *
 msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
 {
-#ifdef HAVE_NUMPY
     int err;
     PyObject *ret = NULL;
     PyObject *samples = NULL;
@@ -8782,10 +8694,6 @@ out:
         PyMem_Free(mutations);
     }
     return ret;
-#else
-    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
-    return NULL;
-#endif
 }
 
 static PyObject *
@@ -8849,9 +8757,7 @@ init_msprime(void)
     if (module == NULL) {
         INITERROR;
     }
-#ifdef HAVE_NUMPY
     import_array();
-#endif
 
     /* RandomGenerator type */
     RandomGeneratorType.tp_new = PyType_GenericNew;
@@ -8999,7 +8905,6 @@ init_msprime(void)
     PyModule_AddObject(module, "HaplotypeGenerator",
             (PyObject *) &HaplotypeGeneratorType);
 
-#ifdef HAVE_NUMPY
     /* VariantGenerator type */
     VariantGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&VariantGeneratorType) < 0) {
@@ -9007,7 +8912,6 @@ init_msprime(void)
     }
     Py_INCREF(&VariantGeneratorType);
     PyModule_AddObject(module, "VariantGenerator", (PyObject *) &VariantGeneratorType);
-#endif
 
     /* LdCalculator type */
     LdCalculatorType.tp_new = PyType_GenericNew;
