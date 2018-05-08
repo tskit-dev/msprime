@@ -3879,7 +3879,7 @@ out:
 }
 
 static int WARN_UNUSED
-table_collection_read_metadata(table_collection_t *self)
+table_collection_read_format_data(table_collection_t *self)
 {
     int ret = 0;
     size_t len;
@@ -3977,6 +3977,7 @@ table_collection_load(table_collection_t *self, const char *filename, int flags)
 {
     int ret = 0;
 
+    memset(self, 0, sizeof(*self));
     /* mmaping is inherently unsafe in terms of changes to the underlying file.
      * Without a great deal of extra effort catching SIGBUS here and transforming
      * it into an error return value, we can't be sure that this function won't
@@ -3986,7 +3987,7 @@ table_collection_load(table_collection_t *self, const char *filename, int flags)
         ret = msp_set_kas_error(ret);
         goto out;
     }
-    ret = table_collection_read_metadata(self);
+    ret = table_collection_read_format_data(self);
     if (ret != 0) {
         goto out;
     }
@@ -4024,7 +4025,7 @@ out:
 }
 
 static int WARN_UNUSED
-table_collection_write_metadata(table_collection_t *self, kastore_t *store)
+table_collection_write_format_data(table_collection_t *self, kastore_t *store)
 {
     char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
     uint32_t version[2] = {
@@ -4051,7 +4052,7 @@ table_collection_dump(table_collection_t *self, const char *filename, int flags)
         ret = msp_set_kas_error(ret);
         goto out;
     }
-    ret = table_collection_write_metadata(self, &store);
+    ret = table_collection_write_format_data(self, &store);
     if (ret != 0) {
         goto out;
     }

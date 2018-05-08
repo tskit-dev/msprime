@@ -138,7 +138,7 @@
 #define MSP_KAS_ERR_BIT 14
 
 int msp_set_kas_error(int err);
-bool is_kas_error(int err);
+bool msp_is_kas_error(int err);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 

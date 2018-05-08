@@ -272,7 +272,7 @@ msp_set_kas_error(int err)
 }
 
 bool
-is_kas_error(int err)
+msp_is_kas_error(int err)
 {
     return !(err & (1 << MSP_KAS_ERR_BIT));
 }
@@ -280,7 +280,7 @@ is_kas_error(int err)
 const char *
 msp_strerror(int err)
 {
-    if (is_kas_error(err)) {
+    if (msp_is_kas_error(err)) {
         err ^= (1 << MSP_KAS_ERR_BIT);
         return kas_strerror(err);
     } else {
