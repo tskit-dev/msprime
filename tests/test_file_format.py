@@ -31,8 +31,11 @@ import kastore
 import numpy as np
 
 import msprime
-import _msprime
+import msprime.exceptions as exceptions
 import tests.tsutil as tsutil
+
+
+CURRENT_FILE_MAJOR = 11
 
 
 def single_locus_no_mutation_example():
@@ -189,9 +192,13 @@ class TestLoadLegacyExamples(TestFileFormat):
                 for mut in site.mutations:
                     self.assertEqual(mut.site, site.id)
 
-    @unittest.skip("Add tests for loading HDF5")
-    def test_hdf5_error(self):
-        msprime.load("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
+    def test_format_too_old_raised_for_hdf5(self):
+        files = [
+            "tests/data/hdf5-formats/msprime-0.3.0_v2.0.hdf5",
+            "tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5",
+            "tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5"]
+        for filename in files:
+            self.assertRaises(exceptions.VersionTooOldError, msprime.load, filename)
 
     def test_msprime_v_0_5_0(self):
         ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
@@ -391,7 +398,7 @@ class TestDumpFormat(TestFileFormat):
         self.assertTrue(np.array_equal(
             np.array(bytearray(b"tskit.trees"), dtype=np.int8), format_name))
         format_version = store['format/version']
-        self.assertEqual(format_version[0], 11)
+        self.assertEqual(format_version[0], CURRENT_FILE_MAJOR)
         self.assertEqual(format_version[1], 0)
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
 
@@ -512,6 +519,7 @@ class TestFileFormatErrors(TestFileFormat):
     """
     Tests for errors in the HDF5 format.
     """
+    current_major_version = 12
 
     def verify_fields(self, ts):
         ts.dump(self.temp_file)
@@ -521,24 +529,39 @@ class TestFileFormatErrors(TestFileFormat):
             data = dict(all_data)
             del data[key]
             kastore.dump(data, self.temp_file)
-            self.assertRaises(_msprime.FileFormatError, msprime.load, self.temp_file)
+            self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
 
     def test_missing_fields(self):
         self.verify_fields(migration_example())
 
     def test_load_empty_kastore(self):
         kastore.dump({}, self.temp_file)
-        self.assertRaises(_msprime.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
 
-    def test_version_load_error(self):
-        ts = msprime.simulate(10)
-        for bad_version in [(0, 1), (0, 8), (2, 0)]:
+    def test_load_non_msprime_hdf5(self):
+        with h5py.File(self.temp_file, "w") as root:
+            root["x"] = np.zeros(10)
+        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+
+    def test_old_version_load_error(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for bad_version in [(0, 1), (0, 8), (2, 0), (CURRENT_FILE_MAJOR - 1, 0)]:
             ts.dump(self.temp_file)
             with kastore.load(self.temp_file, use_mmap=False) as store:
                 data = dict(store)
             data["format/version"] = np.array(bad_version, dtype=np.uint32)
             kastore.dump(data, self.temp_file)
-            self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
+            self.assertRaises(msprime.VersionTooOldError, msprime.load, self.temp_file)
+
+    def test_new_version_load_error(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for bad_version in [(CURRENT_FILE_MAJOR + j, 0) for j in range(1, 5)]:
+            ts.dump(self.temp_file)
+            with kastore.load(self.temp_file, use_mmap=False) as store:
+                data = dict(store)
+            data["format/version"] = np.array(bad_version, dtype=np.uint32)
+            kastore.dump(data, self.temp_file)
+            self.assertRaises(msprime.VersionTooNewError, msprime.load, self.temp_file)
 
     def test_format_name_error(self):
         ts = msprime.simulate(10)
@@ -548,17 +571,17 @@ class TestFileFormatErrors(TestFileFormat):
                 data = dict(store)
             data["format/name"] = np.array(bytearray(bad_name.encode()), dtype=np.int8)
             kastore.dump(data, self.temp_file)
-            self.assertRaises(_msprime.LibraryError, msprime.load, self.temp_file)
+            self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
 
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.
         # First, check the emtpy file.
-        self.assertRaises(_msprime.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
         # Now some ascii text
         with open(self.temp_file, "wb") as f:
             f.write(b"Some ASCII text")
-        self.assertRaises(_msprime.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
         # Now write 8k of random bytes
         with open(self.temp_file, "wb") as f:
             f.write(os.urandom(8192))
-        self.assertRaises(_msprime.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)

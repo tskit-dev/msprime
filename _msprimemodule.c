@@ -47,6 +47,8 @@
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
 static PyObject *MsprimeFileFormatError;
+static PyObject *MsprimeVersionTooOldError;
+static PyObject *MsprimeVersionTooNewError;
 
 typedef struct {
     PyObject_HEAD
@@ -173,10 +175,22 @@ typedef struct {
 static void
 handle_library_error(int err)
 {
-    if (is_kas_error(err)) {
+    if (msp_is_kas_error(err)) {
         PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
     } else {
-        PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+        switch (err) {
+            case MSP_ERR_FILE_VERSION_TOO_NEW:
+                PyErr_SetString(MsprimeVersionTooNewError, msp_strerror(err));
+                break;
+            case MSP_ERR_FILE_VERSION_TOO_OLD:
+                PyErr_SetString(MsprimeVersionTooOldError, msp_strerror(err));
+                break;
+            case MSP_ERR_FILE_FORMAT:
+                PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
+                break;
+            default:
+                PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+        }
     }
 }
 
@@ -9013,6 +9027,12 @@ init_msprime(void)
     MsprimeFileFormatError = PyErr_NewException("_msprime.FileFormatError", NULL, NULL);
     Py_INCREF(MsprimeFileFormatError);
     PyModule_AddObject(module, "FileFormatError", MsprimeFileFormatError);
+    MsprimeVersionTooNewError = PyErr_NewException("_msprime.VersionTooNewError", NULL, NULL);
+    Py_INCREF(MsprimeVersionTooNewError);
+    PyModule_AddObject(module, "VersionTooNewError", MsprimeVersionTooNewError);
+    MsprimeVersionTooOldError = PyErr_NewException("_msprime.VersionTooOldError", NULL, NULL);
+    Py_INCREF(MsprimeVersionTooOldError);
+    PyModule_AddObject(module, "VersionTooOldError", MsprimeVersionTooOldError);
 
     /* Node flags */
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", MSP_NODE_IS_SAMPLE);
