@@ -55,3 +55,6 @@ jobs:
       - run:
           name: Make sure we can build a distribution tarball.
           command: python setup.py sdist
+      - run:
+          name: Install from the distribution tarball
+          command: pip install dist/*.tar.gz
