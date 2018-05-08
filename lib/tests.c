@@ -7235,7 +7235,7 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = table_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_TRUE(msp_is_kas_error(ret));
-    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_BAD_TYPE);
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_TYPE_MISMATCH);
     ret = table_collection_free(&tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_cols[2].type = KAS_FLOAT64;
