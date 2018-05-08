@@ -29,12 +29,7 @@ import json
 import sys
 import base64
 
-try:
-    import numpy as np
-    _numpy_imported = True
-except ImportError:
-    _numpy_imported = False
-
+import numpy as np
 
 import _msprime
 import msprime.drawing as drawing
@@ -45,6 +40,9 @@ import msprime.formats as formats
 
 from _msprime import NODE_IS_SAMPLE
 
+# TODO change to using NULL when porting to tskit. I.e., all of these
+# would be tskit.NULL.
+
 NULL_NODE = -1
 
 NULL_POPULATION = -1
@@ -52,11 +50,6 @@ NULL_POPULATION = -1
 NULL_MUTATION = -1
 
 IS_PY2 = sys.version_info[0] < 3
-
-
-def check_numpy():
-    if not _numpy_imported:
-        raise RuntimeError("numpy is required for this operation.")
 
 
 CoalescenceRecord = collections.namedtuple(
@@ -1999,7 +1992,6 @@ class TreeSequence(object):
         """
         # See comments for the Variant type for discussion on why the
         # present form was chosen.
-        check_numpy()
         iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
         for site_id, genotypes, alleles in iterator:
             site = self.site(site_id)
@@ -2197,7 +2189,6 @@ class TreeSequence(object):
             sequence.
         :rtype: .TreeSequence or a (.TreeSequence, numpy.array) tuple
         """
-        check_numpy()
         t = self.dump_tables()
         if samples is None:
             samples = self.get_samples()

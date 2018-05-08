@@ -27,22 +27,12 @@ import datetime
 import json
 import logging
 
-try:
-    import h5py
-    _h5py_imported = True
-    # Numpy is required by h5py, so we can safely use it.
-    import numpy as np
-except ImportError:
-    _h5py_imported = False
+import h5py
+import numpy as np
 
 import msprime
 import msprime.provenance as provenance
 import msprime.exceptions as exceptions
-
-
-def _check_h5py():
-    if not _h5py_imported:
-        raise RuntimeError("h5py is required for converting HDF5 files.")
 
 
 def _get_v2_provenance(command, attrs):
@@ -230,7 +220,6 @@ def load_legacy(filename, remove_duplicate_positions=False):
     first) that contain duplicate positions. If this is False, any input
     files that contain duplicate positions will raise an DuplicatePositionsError.
     """
-    _check_h5py()
     loaders = {
         2: _load_legacy_hdf5_v2,
         3: _load_legacy_hdf5_v3,
@@ -561,7 +550,6 @@ def dump_legacy(tree_sequence, filename, version=3):
     Writes the specified tree sequence to a HDF5 file in the specified
     legacy file format version.
     """
-    _check_h5py()
     dumpers = {
         2: _dump_legacy_hdf5_v2,
         3: _dump_legacy_hdf5_v3,

@@ -26,18 +26,9 @@ import threading
 import struct
 import sys
 
-try:
-    import numpy as np
-    _numpy_imported = True
-except ImportError:
-    _numpy_imported = False
+import numpy as np
 
 import _msprime
-
-
-def check_numpy():
-    if not _numpy_imported:
-        raise RuntimeError("numpy is required for statistical calculations.")
 
 
 class LdCalculator(object):
@@ -63,7 +54,6 @@ class LdCalculator(object):
     """
 
     def __init__(self, tree_sequence):
-        check_numpy()
         self._tree_sequence = tree_sequence
         self._ll_ld_calculator = _msprime.LdCalculator(
             tree_sequence.get_ll_tree_sequence())
@@ -183,7 +173,6 @@ class GeneralStatCalculator(object):
     """
 
     def __init__(self, tree_sequence):
-        check_numpy()
         self.tree_sequence = tree_sequence
 
     def divergence(self, sample_sets, windows):
@@ -852,7 +841,6 @@ class SiteStatCalculator(GeneralStatCalculator):
     """
 
     def __init__(self, tree_sequence):
-        check_numpy()
         self.tree_sequence = tree_sequence
 
     def tree_stat_vector(self, sample_sets, weight_fun, windows=None):

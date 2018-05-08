@@ -26,16 +26,10 @@ import base64
 import collections
 import datetime
 
+import numpy as np
 from six.moves import copyreg
 
 import _msprime
-
-# We need numpy for most API operations that involve tables. We should make
-# numpy a hard requirement soon and get rid of these conditional imports.
-try:
-    import numpy as np
-except ImportError:
-    pass
 
 
 NodeTableRow = collections.namedtuple(
