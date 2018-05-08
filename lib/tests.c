@@ -7156,6 +7156,7 @@ test_format_data_load_errors(void)
     };
     table_collection_t tables;
     kastore_t store;
+    size_t j;
     int ret;
 
     L[0] = 1;
@@ -7199,6 +7200,20 @@ test_format_data_load_errors(void)
     ret = table_collection_free(&tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     version[0] = MSP_FILE_FORMAT_VERSION_MAJOR;
+
+    /* Bad version length */
+    write_cols[1].len = 0;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[1].len = 2;
+
 
     /* Bad format name length */
     write_cols[0].len = 0;
@@ -7264,6 +7279,20 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SEQUENCE_LENGTH);
     ret = table_collection_free(&tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Missing keys */
+    for (j = 0; j < sizeof(write_cols) / sizeof(*write_cols) - 1; j++) {
+        ret = kastore_open(&store, _tmp_file_name, "w", 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        write_table_cols(&store, write_cols, j);
+        ret = kastore_close(&store);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_load(&tables, _tmp_file_name, 0);
+        CU_ASSERT_TRUE(msp_is_kas_error(ret));
+        CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_KEY_NOT_FOUND);
+        ret = table_collection_free(&tables);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
 }
 
 void
@@ -7294,6 +7323,42 @@ test_dump_unindexed(void)
     CU_ASSERT_TRUE(edge_table_equal(&tables.edges, &loaded.edges));
 
     table_collection_free(&loaded);
+    table_collection_free(&tables);
+}
+
+void
+test_table_collection_load_errors(void)
+{
+    table_collection_t tables;
+    int ret;
+    const char *str;
+
+    ret = table_collection_alloc(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, "/", 0);
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_IO);
+    str = msp_strerror(ret);
+    CU_ASSERT_TRUE(strlen(str) > 0);
+
+    table_collection_free(&tables);
+}
+
+void
+test_table_collection_dump_errors(void)
+{
+    table_collection_t tables;
+    int ret;
+    const char *str;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_dump(&tables, "/", 0);
+    CU_ASSERT_TRUE(msp_is_kas_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_KAS_ERR_BIT), KAS_ERR_IO);
+    str = msp_strerror(ret);
+    CU_ASSERT_TRUE(strlen(str) > 0);
+
     table_collection_free(&tables);
 }
 
@@ -7549,6 +7614,8 @@ main(int argc, char **argv)
         {"test_provenance_table", test_provenance_table},
         {"test_format_data_load_errors", test_format_data_load_errors},
         {"test_dump_unindexed", test_dump_unindexed},
+        {"test_table_collection_load_errors", test_table_collection_load_errors},
+        {"test_table_collection_dump_errors", test_table_collection_dump_errors},
         {"test_load_node_table_errors", test_load_node_table_errors},
         CU_TEST_INFO_NULL,
     };

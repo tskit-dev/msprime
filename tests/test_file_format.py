@@ -92,7 +92,7 @@ def migration_example():
     ts = msprime.simulate(
         population_configurations=population_configurations,
         demographic_events=demographic_events,
-        random_seed=1)
+        random_seed=1, record_migrations=True)
     return ts
 
 
@@ -218,12 +218,15 @@ class TestRoundTrip(TestFileFormat):
     Tests if we can round trip convert a tree sequence in memory
     through a V2 file format and a V3 format.
     """
-    def verify_tree_sequences_equal(self, ts, tsp):
+    def verify_tree_sequences_equal(self, ts, tsp, simplify=True):
         t1 = ts.tables
         # We need to sort and squash the edges in the new format because it
         # has gone through an edgesets representation. Simplest way to do this
         # is to call simplify.
-        t2 = tsp.simplify().tables
+        if simplify:
+            t2 = tsp.simplify().tables
+        else:
+            t2 = tsp.tables
         self.assertEqual(t1.nodes, t2.nodes)
         self.assertEqual(t1.edges, t2.edges)
         self.assertEqual(t1.sites, t2.sites)
@@ -232,10 +235,11 @@ class TestRoundTrip(TestFileFormat):
     def verify_round_trip(self, ts, version):
         msprime.dump_legacy(ts, self.temp_file, version=version)
         tsp = msprime.load_legacy(self.temp_file)
-        self.verify_tree_sequences_equal(ts, tsp)
+        simplify = version < 10
+        self.verify_tree_sequences_equal(ts, tsp, simplify=simplify)
         tsp.dump(self.temp_file)
         tsp = msprime.load(self.temp_file)
-        self.verify_tree_sequences_equal(ts, tsp)
+        self.verify_tree_sequences_equal(ts, tsp, simplify=simplify)
 
     def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
         msprime.dump_legacy(ts, self.temp_file, 2)
@@ -297,6 +301,18 @@ class TestRoundTrip(TestFileFormat):
             self.assertRaises(
                 ValueError, msprime.dump_legacy, ts, self.temp_file, version)
         self.verify_round_trip(ts, 10)
+
+    def test_node_metadata_example(self):
+        self.verify_round_trip(node_metadata_example(), 10)
+
+    def test_site_metadata_example(self):
+        self.verify_round_trip(site_metadata_example(), 10)
+
+    def test_mutation_metadata_example(self):
+        self.verify_round_trip(mutation_metadata_example(), 10)
+
+    def test_multichar_mutation_example(self):
+        self.verify_round_trip(multichar_mutation_example(), 10)
 
     def test_v2_no_samples(self):
         ts = multi_locus_with_mutation_example()
