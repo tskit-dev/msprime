@@ -53,8 +53,3 @@ install:
 
 script:
   - nosetests -vs
-  # We also want to see if we can build without numpy.
-  - conda uninstall numpy -y
-  - rm -fR build
-  - pip install . --upgrade --force-reinstall
-  - nosetests -vs tests/test_cli.py:TestMspmsOutput
