@@ -18,6 +18,7 @@ typedef int32_t population_id_t;
 typedef int32_t site_id_t;
 typedef int32_t mutation_id_t;
 typedef int32_t migration_id_t;
+typedef int32_t individual_id_t;
 typedef int32_t provenance_id_t;
 typedef uint32_t table_size_t;
 
@@ -56,6 +57,20 @@ typedef struct {
     char *metadata;
     table_size_t *metadata_offset;
 } mutation_table_t;
+
+typedef struct {
+    table_size_t num_rows;
+    table_size_t max_rows;
+    table_size_t max_rows_increment;
+    table_size_t metadata_length;
+    table_size_t max_metadata_length;
+    table_size_t max_metadata_length_increment;
+    table_size_t spatial_dimension;
+    uint32_t *flags;
+    double *location;
+    char *metadata;
+    table_size_t *metadata_offset;
+} individual_table_t;
 
 typedef struct {
     table_size_t num_rows;
@@ -116,6 +131,7 @@ typedef struct {
     migration_table_t migrations;
     site_table_t sites;
     mutation_table_t mutations;
+    individual_table_t individuals;
     provenance_table_t provenances;
     struct {
         edge_id_t *edge_insertion_order;
@@ -348,6 +364,24 @@ int migration_table_free(migration_table_t *self);
 int migration_table_copy(migration_table_t *self, migration_table_t *dest);
 int migration_table_dump_text(migration_table_t *self, FILE *out);
 void migration_table_print_state(migration_table_t *self, FILE *out);
+
+int individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
+        size_t max_metadata_length_increment);
+int individual_table_set_spatial_dimension(individual_table_t *self,
+        table_size_t spatial_dimension);
+individual_id_t individual_table_add_row(individual_table_t *self, uint32_t flags,
+        double *location, const char *metadata, size_t metadata_length);
+int individual_table_set_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
+        table_size_t spatial_dimension, double *location,
+        const char *metadata, table_size_t *metadata_length);
+int individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
+        double *location, const char *metadata, table_size_t *metadata_length);
+int individual_table_clear(individual_table_t *self);
+int individual_table_free(individual_table_t *self);
+int individual_table_dump_text(individual_table_t *self, FILE *out);
+int individual_table_copy(individual_table_t *self, individual_table_t *dest);
+void individual_table_print_state(individual_table_t *self, FILE *out);
+bool individual_table_equal(individual_table_t *self, individual_table_t *other);
 
 int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
         size_t max_timestamp_length_increment,
