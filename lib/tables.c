@@ -210,6 +210,10 @@ node_table_expand_main_columns(node_table_t *self, table_size_t additional_rows)
         if (ret != 0) {
             goto out;
         }
+        ret = expand_column((void **) &self->individual, new_size, sizeof(individual_id_t));
+        if (ret != 0) {
+            goto out;
+        }
         ret = expand_column((void **) &self->metadata_offset, new_size + 1,
                 sizeof(table_size_t));
         if (ret != 0) {
@@ -276,12 +280,14 @@ int WARN_UNUSED
 node_table_copy(node_table_t *self, node_table_t *dest)
 {
     return node_table_set_columns(dest, self->num_rows, self->flags,
-            self->time, self->population, self->metadata, self->metadata_offset);
+            self->time, self->population, self->individual,
+            self->metadata, self->metadata_offset);
 }
 
 int WARN_UNUSED
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, individual_id_t *individual, const char *metadata,
+        uint32_t *metadata_offset)
 {
     int ret;
 
@@ -289,15 +295,16 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_append_columns(self, num_rows, flags, time, population, metadata,
-            metadata_offset);
+    ret = node_table_append_columns(self, num_rows, flags, time, population, individual,
+            metadata, metadata_offset);
 out:
     return ret;
 }
 
 int
 node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, individual_id_t *individual, const char *metadata,
+        uint32_t *metadata_offset)
 {
     int ret;
     table_size_t j, metadata_length;
@@ -345,6 +352,14 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
         memcpy(self->population + self->num_rows, population,
                 num_rows * sizeof(population_id_t));
     }
+    if (individual == NULL) {
+        /* Set individual to NULL_INDIVIDUAL (-1) if not specified */
+        memset(self->individual + self->num_rows, 0xff,
+                num_rows * sizeof(individual_id_t));
+    } else {
+        memcpy(self->individual + self->num_rows, individual,
+                num_rows * sizeof(individual_id_t));
+    }
     self->num_rows += (table_size_t) num_rows;
     self->metadata_offset[self->num_rows] = self->metadata_length;
 out:
@@ -353,7 +368,8 @@ out:
 
 static node_id_t
 node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *metadata, table_size_t metadata_length)
+        population_id_t population, individual_id_t individual,
+        const char *metadata, table_size_t metadata_length)
 {
     assert(self->num_rows < self->max_rows);
     assert(self->metadata_length + metadata_length <= self->max_metadata_length);
@@ -361,6 +377,7 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
+    self->individual[self->num_rows] = individual;
     self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
     self->metadata_length += metadata_length;
     self->num_rows++;
@@ -369,7 +386,8 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
 
 node_id_t
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *metadata, size_t metadata_length)
+        population_id_t population, individual_id_t individual,
+        const char *metadata, size_t metadata_length)
 {
     int ret = 0;
 
@@ -381,8 +399,8 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_add_row_internal(self, flags, time, population, metadata,
-            (table_size_t) metadata_length);
+    ret = node_table_add_row_internal(self, flags, time, population, individual,
+            metadata, (table_size_t) metadata_length);
 out:
     return ret;
 }
@@ -402,6 +420,7 @@ node_table_free(node_table_t *self)
         msp_safe_free(self->flags);
         msp_safe_free(self->time);
         msp_safe_free(self->population);
+        msp_safe_free(self->individual);
         msp_safe_free(self->metadata);
         msp_safe_free(self->metadata_offset);
     }
@@ -424,10 +443,10 @@ node_table_print_state(node_table_t *self, FILE *out)
     fprintf(out, TABLE_SEP);
     /* We duplicate the dump_text code here for simplicity because we want to output
      * the flags column directly. */
-    fprintf(out, "id\tflags\ttime\tpopulation\tmetadata_offset\tmetadata\n");
+    fprintf(out, "id\tflags\ttime\tpopulation\tindividual\tmetadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
-                (int) self->population[j], self->metadata_offset[j]);
+        fprintf(out, "%d\t%d\t%f\t%d\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
+                (int) self->population[j], self->individual[j], self->metadata_offset[j]);
         for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
             fprintf(out, "%c", self->metadata[k]);
         }
@@ -445,15 +464,15 @@ node_table_dump_text(node_table_t *self, FILE *out)
     table_size_t metadata_len;
     int err;
 
-    err = fprintf(out, "id\tis_sample\ttime\tpopulation\tmetadata\n");
+    err = fprintf(out, "id\tis_sample\ttime\tpopulation\tindividual\tmetadata\n");
     if (err < 0) {
         goto out;
     }
     for (j = 0; j < self->num_rows; j++) {
         metadata_len = self->metadata_offset[j + 1] - self->metadata_offset[j];
-        err = fprintf(out, "%d\t%d\t%f\t%d\t%.*s\n", (int) j,
+        err = fprintf(out, "%d\t%d\t%f\t%d\t%d\t%.*s\n", (int) j,
                 (int) (self->flags[j] & MSP_NODE_IS_SAMPLE),
-                self->time[j], self->population[j],
+                self->time[j], self->population[j], self->individual[j],
                 metadata_len, self->metadata + self->metadata_offset[j]);
         if (err < 0) {
             goto out;
@@ -476,6 +495,8 @@ node_table_equal(node_table_t *self, node_table_t *other)
                     self->num_rows * sizeof(uint32_t)) == 0
             && memcmp(self->population, other->population,
                     self->num_rows * sizeof(population_id_t)) == 0
+            && memcmp(self->individual, other->individual,
+                    self->num_rows * sizeof(individual_id_t)) == 0
             && memcmp(self->metadata_offset, other->metadata_offset,
                     (self->num_rows + 1) * sizeof(table_size_t)) == 0
             && memcmp(self->metadata, other->metadata,
@@ -491,6 +512,7 @@ node_table_dump(node_table_t *self, kastore_t *store)
         {"nodes/time", (void *) self->time, self->num_rows, KAS_FLOAT64},
         {"nodes/flags", (void *) self->flags, self->num_rows, KAS_UINT32},
         {"nodes/population", (void *) self->population, self->num_rows, KAS_INT32},
+        {"nodes/individual", (void *) self->individual, self->num_rows, KAS_INT32},
         {"nodes/metadata", (void *) self->metadata, self->metadata_length, KAS_UINT8},
         {"nodes/metadata_offset", (void *) self->metadata_offset, self->num_rows + 1,
             KAS_UINT32},
@@ -505,6 +527,8 @@ node_table_load(node_table_t *self, kastore_t *store)
         {"nodes/time", (void **) &self->time, &self->num_rows, 0, 1, KAS_FLOAT64},
         {"nodes/flags", (void **) &self->flags, &self->num_rows, 0, 1, KAS_UINT32},
         {"nodes/population", (void **) &self->population, &self->num_rows, 0,
+            1, KAS_INT32},
+        {"nodes/individual", (void **) &self->individual, &self->num_rows, 0,
             1, KAS_INT32},
         {"nodes/metadata", (void **) &self->metadata, &self->metadata_length, 0,
             1, KAS_UINT8},
@@ -3115,6 +3139,7 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
     self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
     ret = node_table_add_row_internal(self->nodes, flags,
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
+            self->input_nodes.individual[input_id],
             self->input_nodes.metadata + offset, length);
     return ret;
 }
@@ -3445,7 +3470,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
     ret = node_table_set_columns(&self->input_nodes, nodes->num_rows,
             nodes->flags, nodes->time, nodes->population,
-            nodes->metadata, nodes->metadata_offset);
+            nodes->individual, nodes->metadata, nodes->metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -3843,15 +3868,6 @@ simplifier_map_mutation_nodes(simplifier_t *self)
     return ret;
 }
 
-
-static int WARN_UNUSED
-simplifier_map_individual_nodes(simplifier_t *self)
-{
-    int ret = 0;
-    // TODO something here
-    return ret;
-}
-
 static int WARN_UNUSED
 simplifier_output_sites(simplifier_t *self)
 {
@@ -3979,10 +3995,6 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
         }
     }
     ret = simplifier_map_mutation_nodes(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = simplifier_map_individual_nodes(self);
     if (ret != 0) {
         goto out;
     }

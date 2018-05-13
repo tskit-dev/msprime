@@ -56,13 +56,13 @@ typedef struct {
 
 /* Simple single tree example. */
 const char *single_tree_ex_nodes =/*          6          */
-    "1  0   0\n"                  /*         / \         */
-    "1  0   0\n"                  /*        /   \        */
-    "1  0   0\n"                  /*       /     \       */
-    "1  0   0\n"                  /*      /       5      */
-    "0  1   0\n"                  /*     4       / \     */
-    "0  2   0\n"                  /*    / \     /   \    */
-    "0  3   0\n";                 /*   0   1   2     3   */
+    "1  0   0   -1\n"             /*         / \         */
+    "1  0   0   -1\n"             /*        /   \        */
+    "1  0   0   -1\n"             /*       /     \       */
+    "1  0   0   -1\n"             /*      /       5      */
+    "0  1   0   -1\n"             /*     4       / \     */
+    "0  2   0   -1\n"             /*    / \     /   \    */
+    "0  3   0   -1\n";            /*   0   1   2     3   */
 const char *single_tree_ex_edges =
     "0  1   4   0,1\n"
     "0  1   5   2,3\n"
@@ -82,15 +82,15 @@ const char *single_tree_ex_mutations =
 
 /* Example from the PLOS paper */
 const char *paper_ex_nodes =
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "0  0.071   0\n"
-    "0  0.090   0\n"
-    "0  0.170   0\n"
-    "0  0.202   0\n"
-    "0  0.253   0\n";
+    "1  0       0   0\n"
+    "1  0       0   0\n"
+    "1  0       0   1\n"
+    "1  0       0   1\n"
+    "0  0.071   0   -1\n"
+    "0  0.090   0   -1\n"
+    "0  0.170   0   -1\n"
+    "0  0.202   0   -1\n"
+    "0  0.253   0   -1\n";
 const char *paper_ex_edges =
     "2 10 4 2\n"
     "2 10 4 3\n"
@@ -116,19 +116,19 @@ const char *paper_ex_individuals =
 
 /* An example of a nonbinary tree sequence */
 const char *nonbinary_ex_nodes =
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "0  0.01    0\n"
-    "0  0.068   0\n"
-    "0  0.130   0\n"
-    "0  0.279   0\n"
-    "0  0.405   0\n";
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "1  0       0   -1\n"
+    "0  0.01    0   -1\n"
+    "0  0.068   0   -1\n"
+    "0  0.130   0   -1\n"
+    "0  0.279   0   -1\n"
+    "0  0.405   0   -1\n";
 const char *nonbinary_ex_edges =
     "0	100	8	0,1,2,3\n"
     "0	100	9	6,8\n"
@@ -149,15 +149,15 @@ const char *nonbinary_ex_mutations =
 /* An example of a tree sequence with unary nodes. */
 
 const char *unary_ex_nodes =
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "1  0   0\n"
-    "0  0.071   0\n"
-    "0  0.090   0\n"
-    "0  0.170   0\n"
-    "0  0.202   0\n"
-    "0  0.253   0\n";
+    "1  0       0  -1\n"
+    "1  0       0  -1\n"
+    "1  0       0  -1\n"
+    "1  0       0  -1\n"
+    "0  0.071   0  -1\n"
+    "0  0.090   0  -1\n"
+    "0  0.170   0  -1\n"
+    "0  0.202   0  -1\n"
+    "0  0.253   0  -1\n";
 const char *unary_ex_edges =
     "2 10 4 2,3\n"
     "0 10 5 1\n"
@@ -222,15 +222,15 @@ const char *unary_ex_mutations =
 */
 
 const char *internal_sample_ex_nodes =
-    "1  0.0   0\n"
-    "1  0.1   0\n"
-    "1  0.1   0\n"
-    "1  0.2   0\n"
-    "0  0.4   0\n"
-    "1  0.5   0\n"
-    "0  0.7   0\n"
-    "0  1.0   0\n"
-    "0  1.2   0\n";
+    "1  0.0   0   -1\n"
+    "1  0.1   0   -1\n"
+    "1  0.1   0   -1\n"
+    "1  0.2   0   -1\n"
+    "0  0.4   0   -1\n"
+    "1  0.5   0   -1\n"
+    "0  0.7   0   -1\n"
+    "0  1.0   0   -1\n"
+    "0  1.2   0   -1\n";
 const char *internal_sample_ex_edges =
     "2 8  4 0\n"
     "0 10 4 2\n"
@@ -265,7 +265,7 @@ parse_nodes(const char *text, node_table_t *node_table)
     const char *whitespace = " \t";
     char *p;
     double time;
-    int flags, population;
+    int flags, population, individual;
     char *name;
 
     c = 0;
@@ -293,12 +293,18 @@ parse_nodes(const char *text, node_table_t *node_table)
         population = atoi(p);
         p = strtok(NULL, whitespace);
         if (p == NULL) {
+            individual = -1;
+        } else {
+            individual = atoi(p);
+            p = strtok(NULL, whitespace);
+        }
+        if (p == NULL) {
             name = "";
         } else {
             name = p;
         }
-        ret = node_table_add_row(node_table, flags, time, population, name,
-                strlen(name));
+        ret = node_table_add_row(node_table, flags, time, population,
+                individual, name, strlen(name));
         CU_ASSERT_FATAL(ret >= 0);
     }
 }
@@ -1873,11 +1879,11 @@ static void
 test_node_metadata(void)
 {
     const char *nodes =
-        "1  0   0   n1\n"
-        "1  0   0   n2\n"
-        "0  1   0   A_much_longer_name\n"
-        "0  1   0\n"
-        "0  1   0   n4";
+        "1  0   0   -1   n1\n"
+        "1  0   0   -1   n2\n"
+        "0  1   0   -1   A_much_longer_name\n"
+        "0  1   0   -1\n"
+        "0  1   0   -1   n4";
     const char *edges =
         "0  1   2   0,1\n";
     tree_sequence_t ts;
@@ -6354,6 +6360,7 @@ test_node_table(void)
     uint32_t *flags;
     population_id_t *population;
     double *time;
+    individual_id_t *individual;
     char *metadata;
     uint32_t *metadata_offset;
     const char *test_metadata = "test";
@@ -6367,11 +6374,12 @@ test_node_table(void)
     node_table_dump_text(&table, _devnull);
 
     for (j = 0; j < num_rows; j++) {
-        ret = node_table_add_row(&table, j, j, j, test_metadata, test_metadata_length);
+        ret = node_table_add_row(&table, j, j, j, j, test_metadata, test_metadata_length);
         CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.flags[j], j);
         CU_ASSERT_EQUAL(table.time[j], j);
         CU_ASSERT_EQUAL(table.population[j], j);
+        CU_ASSERT_EQUAL(table.individual[j], j);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
         CU_ASSERT_EQUAL(table.metadata_length, (j + 1) * test_metadata_length);
         CU_ASSERT_EQUAL(table.metadata_offset[j + 1], table.metadata_length);
@@ -6396,6 +6404,9 @@ test_node_table(void)
     time = malloc(num_rows * sizeof(double));
     CU_ASSERT_FATAL(time != NULL);
     memset(time, 0, num_rows * sizeof(double));
+    individual = malloc(num_rows * sizeof(uint32_t));
+    CU_ASSERT_FATAL(individual != NULL);
+    memset(individual, 3, num_rows * sizeof(uint32_t));
     metadata = malloc(num_rows * sizeof(char));
     memset(metadata, 'a', num_rows * sizeof(char));
     CU_ASSERT_FATAL(metadata != NULL);
@@ -6405,11 +6416,12 @@ test_node_table(void)
         metadata_offset[j] = j;
     }
     ret = node_table_set_columns(&table, num_rows, flags, time, population,
-            metadata, metadata_offset);
+            individual, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.individual, individual, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
                 (num_rows + 1) * sizeof(table_size_t)), 0);
@@ -6420,7 +6432,7 @@ test_node_table(void)
 
     /* Append another num_rows onto the end */
     ret = node_table_append_columns(&table, num_rows, flags, time, population,
-            metadata, metadata_offset);
+            individual, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.flags + num_rows, flags, num_rows * sizeof(uint32_t)), 0);
@@ -6429,6 +6441,9 @@ test_node_table(void)
                 num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time + num_rows, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.individual, individual, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.individual + num_rows, individual,
+                num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata + num_rows, metadata, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
@@ -6437,37 +6452,39 @@ test_node_table(void)
     node_table_dump_text(&table, _devnull);
 
     /* If population is NULL it should be set to -1. If metadata is NULL all metadatas
-     * should be set to the empty string. */
+     * should be set to the empty string. If individual is NULL it should be set to -1. */
     num_rows = 10;
     memset(population, 0xff, num_rows * sizeof(uint32_t));
-    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, metadata, metadata_offset);
+    memset(individual, 0xff, num_rows * sizeof(uint32_t));
+    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, NULL, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.individual, individual, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, num_rows);
 
     /* flags and time cannot be NULL */
-    ret = node_table_set_columns(&table, num_rows, NULL, time, population, metadata,
-            metadata_offset);
+    ret = node_table_set_columns(&table, num_rows, NULL, time, population, individual,
+            metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = node_table_set_columns(&table, num_rows, flags, NULL, population, metadata,
-            metadata_offset);
+    ret = node_table_set_columns(&table, num_rows, flags, NULL, population, individual,
+            metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = node_table_set_columns(&table, num_rows, flags, time, population, NULL,
-            metadata_offset);
+    ret = node_table_set_columns(&table, num_rows, flags, time, population, individual,
+            NULL, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = node_table_set_columns(&table, num_rows, flags, time, population, metadata,
-            NULL);
+    ret = node_table_set_columns(&table, num_rows, flags, time, population, individual,
+            metadata, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     /* if metadata and metadata_offset are both null, all metadatas are zero length */
     num_rows = 10;
     memset(metadata_offset, 0, (num_rows + 1) * sizeof(table_size_t));
-    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, NULL, NULL);
+    ret = node_table_set_columns(&table, num_rows, flags, time, NULL, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
@@ -6475,7 +6492,7 @@ test_node_table(void)
                 (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
-    ret = node_table_append_columns(&table, num_rows, flags, time, NULL, NULL, NULL);
+    ret = node_table_append_columns(&table, num_rows, flags, time, NULL, NULL, NULL, NULL);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.flags + num_rows, flags, num_rows * sizeof(uint32_t)), 0);
@@ -7632,6 +7649,7 @@ test_load_node_table_errors(void)
     double time = 0;
     double flags = 0;
     int32_t population = 0;
+    int32_t individual = 0;
     int8_t metadata = 0;
     uint32_t metadata_offset[] = {0, 1};
     uint32_t version[2] = {
@@ -7640,6 +7658,7 @@ test_load_node_table_errors(void)
         {"nodes/time", (void *) &time, 1, KAS_FLOAT64},
         {"nodes/flags", (void *) &flags, 1, KAS_UINT32},
         {"nodes/population", (void *) &population, 1, KAS_INT32},
+        {"nodes/individual", (void *) &individual, 1, KAS_INT32},
         {"nodes/metadata", (void *) &metadata, 1, KAS_UINT8},
         {"nodes/metadata_offset", (void *) metadata_offset, 2, KAS_UINT32},
         {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
@@ -7704,7 +7723,7 @@ test_load_node_table_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Wrong length for metadata offset */
-    write_cols[4].len = 1;
+    write_cols[5].len = 1;
     ret = kastore_open(&store, _tmp_file_name, "w", 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));

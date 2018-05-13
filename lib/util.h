@@ -52,6 +52,8 @@
 #define MSP_NULL_POPULATION_ID (-1)
 /* There is no parent for a given mutation */
 #define MSP_NULL_MUTATION (-1)
+/* Indicates that no individual has been set */
+#define MSP_NULL_INDIVIDUAL (-1)
 
 /* Flags for simplify() */
 #define MSP_FILTER_ZERO_MUTATION_SITES 1

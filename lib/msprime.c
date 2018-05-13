@@ -2482,7 +2482,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
         ret = node_table_add_row(nodes, node->flags, node->time, node->population,
-                NULL, 0);
+                MSP_NULL_INDIVIDUAL, NULL, 0);
         if (ret < 0) {
             goto out;
         }
