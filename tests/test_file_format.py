@@ -389,25 +389,60 @@ class TestDumpFormat(TestFileFormat):
     """
     Tests on the on-disk file format.
     """
-
-    def verify_metadata(self, group, num_rows):
-
-        self.assertEqual(group["metadata_offset"].dtype, np.uint32)
-        metadata_offset = list(group["metadata_offset"])
-        metadata_length = 0
-        if metadata_offset[-1] > 0:
-            self.assertEqual(group["metadata"].dtype, np.int8)
-            metadata = list(group["metadata"])
-            metadata_length = len(metadata)
-            self.assertEqual(metadata_offset[-1], metadata_length)
-        else:
-            self.assertNotIn("metadata", group)
-        self.assertEqual(len(metadata_offset), num_rows + 1)
+    def verify_keys(self, ts):
+        keys = [
+           "edges/child",
+           "edges/left",
+           "edges/parent",
+           "edges/right",
+           "format/name",
+           "format/version",
+           "indexes/edge_insertion_order",
+           "indexes/edge_removal_order",
+           "individuals/flags",
+           "individuals/location",
+           "individuals/location_offset",
+           "individuals/metadata",
+           "individuals/metadata_offset",
+           "migrations/dest",
+           "migrations/left",
+           "migrations/node",
+           "migrations/right",
+           "migrations/source",
+           "migrations/time",
+           "mutations/derived_state",
+           "mutations/derived_state_offset",
+           "mutations/metadata",
+           "mutations/metadata_offset",
+           "mutations/node",
+           "mutations/parent",
+           "mutations/site",
+           "nodes/flags",
+           "nodes/individual",
+           "nodes/metadata",
+           "nodes/metadata_offset",
+           "nodes/population",
+           "nodes/time",
+           "provenances/record",
+           "provenances/record_offset",
+           "provenances/timestamp",
+           "provenances/timestamp_offset",
+           "sequence_length",
+           "sites/ancestral_state",
+           "sites/ancestral_state_offset",
+           "sites/metadata",
+           "sites/metadata_offset",
+           "sites/position",
+        ]
+        ts.dump(self.temp_file)
+        store = kastore.load(self.temp_file)
+        self.assertEqual(sorted(list(store.keys())), keys)
 
     def verify_dump_format(self, ts):
         ts.dump(self.temp_file)
         self.assertTrue(os.path.exists(self.temp_file))
         self.assertGreater(os.path.getsize(self.temp_file), 0)
+        self.verify_keys(ts)
         store = kastore.load(self.temp_file, use_mmap=False)
         # Check the basic root attributes
         format_name = store['format/name']
@@ -419,10 +454,24 @@ class TestDumpFormat(TestFileFormat):
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
 
         tables = ts.tables
+
+        self.assertTrue(np.array_equal(
+            tables.individuals.flags, store["individuals/flags"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.location, store["individuals/location"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.location_offset, store["individuals/location_offset"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.metadata, store["individuals/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.metadata_offset, store["individuals/metadata_offset"]))
+
         self.assertTrue(np.array_equal(tables.nodes.flags, store["nodes/flags"]))
         self.assertTrue(np.array_equal(tables.nodes.time, store["nodes/time"]))
         self.assertTrue(np.array_equal(
             tables.nodes.population, store["nodes/population"]))
+        self.assertTrue(np.array_equal(
+            tables.nodes.individual, store["nodes/individual"]))
         self.assertTrue(np.array_equal(
             tables.nodes.metadata, store["nodes/metadata"]))
         self.assertTrue(np.array_equal(

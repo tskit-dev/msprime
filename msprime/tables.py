@@ -32,6 +32,11 @@ from six.moves import copyreg
 import _msprime
 
 
+IndividualTableRow = collections.namedtuple(
+    "IndividualTableRow",
+    ["flags", "location", "metadata"])
+
+
 NodeTableRow = collections.namedtuple(
     "NodeTableRow",
     ["flags", "time", "population", "individual", "metadata"])
@@ -60,6 +65,105 @@ MutationTableRow = collections.namedtuple(
 ProvenanceTableRow = collections.namedtuple(
     "ProvenanceTableRow",
     ["timestamp", "record"])
+
+
+class IndividualTable(_msprime.IndividualTable):
+    # FIXME
+
+    def __str__(self):
+        flags = self.flags
+        location = self.location
+        location_offset = self.location_offset
+        metadata = unpack_bytes(self.metadata, self.metadata_offset)
+        ret = "id\tflags\tlocation\tmetadata\n"
+        for j in range(self.num_rows):
+            md = base64.b64encode(metadata[j]).decode('utf8')
+            location_str = ",".join(map(
+                str, location[location_offset[j]: location_offset[j + 1]]))
+            ret += "{}\t{}\t{}\t{}\n".format(j, flags[j], location_str, md)
+        return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.flags, other.flags) and
+                np.array_equal(self.location, other.location) and
+                np.array_equal(self.location_offset, other.location_offset) and
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
+        return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __len__(self):
+        return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return IndividualTableRow(*self.get_row(index))
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.set_columns(
+            flags=state["flags"],
+            location=state["location"], location_offset=state["location_offset"],
+            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = IndividualTable()
+        copy.set_columns(
+            flags=self.flags,
+            location=self.location, location_offset=self.location_offset,
+            metadata=self.metadata, metadata_offset=self.metadata_offset)
+        return copy
+
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(IndividualTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
+
+    def add_row(self, flags=0, location=None, metadata=None):
+        return super(IndividualTable, self).add_row(
+                flags=flags, location=location, metadata=metadata)
+
+    def set_columns(
+            self, flags, location=None, location_offset=None,
+            metadata=None, metadata_offset=None):
+        # FIXME
+        super(IndividualTable, self).set_columns(
+            flags, location=location, location_offset=location_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
+    def append_columns(
+            self, flags, location=None, location_offset=None, metadata=None,
+            metadata_offset=None):
+        # FIXME
+        super(IndividualTable, self).append_columns(
+            flags, location=location, location_offset=location_offset,
+            metadata=metadata, metadata_offset=metadata_offset)
+
+
+# Pickle support. See copyreg registration for this function below.
+def _pickle_individual_table(table):
+    state = {
+        "flags": table.flags,
+        "location": table.location,
+        "location_offset": table.location_offset,
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
+    }
+    return IndividualTable, tuple(), state
 
 
 class NodeTable(_msprime.NodeTable):
@@ -171,8 +275,8 @@ class NodeTable(_msprime.NodeTable):
         :return: The ID of the newly added node.
         :rtype: int
         """
-        return super(NodeTable, self).add_row(flags, time, population,
-                                              individual, metadata)
+        return super(NodeTable, self).add_row(
+            flags, time, population, individual, metadata)
 
     def set_columns(
             self, flags, time, population=None, individual=None, metadata=None,
@@ -1091,6 +1195,7 @@ def _provenance_table_pickle(table):
 # here to support Python 2. For Python 3, we can just use the __setstate__.
 # It would be cleaner to attach the pickle_*_table functions to the classes
 # themselves, but this causes issues with Mocking on readthedocs. Sigh.
+copyreg.pickle(IndividualTable, _pickle_individual_table)
 copyreg.pickle(NodeTable, _pickle_node_table)
 copyreg.pickle(EdgeTable, _edge_table_pickle)
 copyreg.pickle(MigrationTable, _migration_table_pickle)
@@ -1106,7 +1211,8 @@ class TableCollection(object):
     """
     def __init__(
             self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
-            provenances=None):
+            provenances=None, individuals=None):
+        self.individuals = individuals
         self.nodes = nodes
         self.edges = edges
         self.migrations = migrations
@@ -1120,6 +1226,9 @@ class TableCollection(object):
         "edges", etc to their respective table objects.
         """
         return {
+            # Leaving individuals out for now to until stuff that depends on it
+            # is implemented.
+            # "individuals": self.individuals,
             "nodes": self.nodes,
             "edges": self.edges,
             "migrations": self.migrations,
@@ -1137,6 +1246,8 @@ class TableCollection(object):
         return line + "\n" + title_line + "\n" + line + "\n"
 
     def __str__(self):
+        s = self.__banner("Individuals")
+        s += str(self.individuals) + "\n"
         s = self.__banner("Nodes")
         s += str(self.nodes) + "\n"
         s += self.__banner("Edges")

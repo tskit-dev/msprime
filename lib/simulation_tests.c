@@ -1244,6 +1244,8 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_alloc(&tables.provenances, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = individual_table_alloc(&tables.individuals, 1, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));

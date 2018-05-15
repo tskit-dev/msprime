@@ -487,6 +487,41 @@ class MetadataTestsMixin(object):
                 list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
 
 
+class TestIndividualTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
+
+    columns = [UInt32Column("flags")]
+    ragged_list_columns = [
+        (DoubleColumn("location"),  UInt32Column("location_offset")),
+        (CharColumn("metadata"),  UInt32Column("metadata_offset"))]
+    string_colnames = []
+    binary_colnames = ["metadata"]
+    input_parameters = [("max_rows_increment", 1024)]
+    equal_len_columns = [["flags"]]
+    table_class = msprime.IndividualTable
+
+    def test_simple_example(self):
+        t = msprime.IndividualTable()
+        t.add_row(flags=0, location=[], metadata=b"123")
+        t.add_row(flags=1, location=(0, 1, 2, 3), metadata=b"456")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0].flags, 0)
+        self.assertEqual(list(t[0].location), [])
+        self.assertEqual(t[0].metadata, b"123")
+        self.assertEqual(t[1].flags, 1)
+        self.assertEqual(list(t[1].location), [0, 1, 2, 3])
+        self.assertEqual(t[1].metadata, b"456")
+        self.assertRaises(IndexError, t.__getitem__, -3)
+
+    def test_add_row_defaults(self):
+        t = msprime.IndividualTable()
+        self.assertEqual(t.add_row(), 0)
+        self.assertEqual(t.flags[0], 0)
+        self.assertEqual(len(t.location), 0)
+        self.assertEqual(t.location_offset[0], 0)
+        self.assertEqual(len(t.metadata), 0)
+        self.assertEqual(t.metadata_offset[0], 0)
+
+
 class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
 
     columns = [

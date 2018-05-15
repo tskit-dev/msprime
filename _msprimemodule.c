@@ -76,6 +76,12 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     bool locked;
+    individual_table_t *individual_table;
+} IndividualTable;
+
+typedef struct {
+    PyObject_HEAD
+    bool locked;
     edge_table_t *edge_table;
 } EdgeTable;
 
@@ -489,6 +495,25 @@ make_provenance(provenance_t *provenance)
 }
 
 static PyObject *
+make_individual(individual_t *r)
+{
+    PyObject *ret = NULL;
+    PyObject *metadata = make_metadata(r->metadata, (Py_ssize_t) r->metadata_length);
+    npy_intp dims = (npy_intp) r->location_length;
+    PyArrayObject *location = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+
+    if (metadata == NULL || location == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(location), r->location, r->location_length * sizeof(double));
+    ret = Py_BuildValue("IOO", (unsigned int) r->flags, location, metadata);
+out:
+    Py_XDECREF(location);
+    Py_XDECREF(metadata);
+    return ret;
+}
+
+static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
@@ -820,6 +845,472 @@ out:
     }
     return ret;
 }
+
+/*===================================================================
+ * IndividualTable
+ *===================================================================
+ */
+
+static int
+IndividualTable_check_state(IndividualTable *self)
+{
+    int ret = -1;
+    if (self->individual_table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "IndividualTable not initialised");
+        goto out;
+    }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "IndividualTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static void
+IndividualTable_dealloc(IndividualTable* self)
+{
+    if (self->individual_table != NULL) {
+        individual_table_free(self->individual_table);
+        PyMem_Free(self->individual_table);
+        self->individual_table = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"max_rows_increment", NULL};
+    Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_position_length_increment = 0;
+    Py_ssize_t max_metadata_length_increment = 0;
+
+    self->individual_table = NULL;
+    self->locked = false;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
+                &max_rows_increment)) {
+        goto out;
+    }
+    if (max_rows_increment < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    self->individual_table = PyMem_Malloc(sizeof(individual_table_t));
+    if (self->individual_table == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = individual_table_alloc(self->individual_table,
+            (size_t) max_rows_increment,
+            (size_t) max_position_length_increment,
+            (size_t) max_metadata_length_increment);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_add_row(IndividualTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    unsigned int flags = 0;
+    PyObject *py_metadata = Py_None;
+    PyObject *py_location = Py_None;
+    PyArrayObject *location_array = NULL;
+    double *location_data = NULL;
+    table_size_t location_length = 0;
+    char *metadata = "";
+    Py_ssize_t metadata_length = 0;
+    npy_intp *shape;
+    static char *kwlist[] = {"flags", "location", "metadata", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|iOO", kwlist,
+                &flags, &py_location, &py_metadata)) {
+        goto out;
+    }
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (py_metadata != Py_None) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
+    }
+    if (py_location != Py_None) {
+        /* This ensures that only 1D arrays are accepted. */
+        location_array = (PyArrayObject *) PyArray_FromAny(py_location,
+                PyArray_DescrFromType(NPY_FLOAT64), 1, 1,
+                NPY_ARRAY_IN_ARRAY, NULL);
+        if (location_array == NULL) {
+            goto out;
+        }
+        shape = PyArray_DIMS(location_array);
+        location_length = (table_size_t) shape[0];
+        location_data = PyArray_DATA(location_array);
+    }
+    err = individual_table_add_row(self->individual_table, (uint32_t) flags,
+            location_data, location_length, metadata, metadata_length);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", err);
+out:
+    Py_XDECREF(location_array);
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_row(IndividualTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    individual_t individual;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->individual_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    individual.flags = self->individual_table->flags[row_id];
+    individual.location = self->individual_table->location
+        + self->individual_table->location_offset[row_id];
+    individual.location_length = self->individual_table->location_offset[row_id + 1]
+        - self->individual_table->location_offset[row_id];
+    individual.metadata = self->individual_table->metadata
+        + self->individual_table->metadata_offset[row_id];
+    individual.metadata_length = self->individual_table->metadata_offset[row_id + 1]
+        - self->individual_table->metadata_offset[row_id];
+    ret = make_individual(&individual);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_set_or_append_columns(IndividualTable *self, PyObject *args, PyObject *kwds,
+        int method)
+{
+    PyObject *ret = NULL;
+    int err;
+    size_t num_rows, metadata_length, location_length;
+    char *metadata_data = NULL;
+    double *location_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
+    uint32_t *location_offset_data = NULL;
+    PyObject *flags_input = NULL;
+    PyArrayObject *flags_array = NULL;
+    PyObject *location_input = Py_None;
+    PyArrayObject *location_array = NULL;
+    PyObject *location_offset_input = Py_None;
+    PyArrayObject *location_offset_array = NULL;
+    PyObject *metadata_input = Py_None;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = Py_None;
+    PyArrayObject *metadata_offset_array = NULL;
+    static char *kwlist[] = {"flags", "location", "location_offset",
+        "metadata", "metadata_offset", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|OOOO", kwlist,
+                &flags_input, &location_input, &location_offset_input,
+                &metadata_input, &metadata_offset_input)) {
+        goto out;
+    }
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
+    if (flags_array == NULL) {
+        goto out;
+    }
+    if ((location_input == Py_None) != (location_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "location and location_offset must be specified together");
+        goto out;
+    }
+    if (location_input != Py_None) {
+        location_array = table_read_column_array(location_input, NPY_FLOAT64,
+                &location_length, false);
+        if (location_array == NULL) {
+            goto out;
+        }
+        location_data = PyArray_DATA(location_array);
+        location_offset_array = table_read_offset_array(location_offset_input, &num_rows,
+                location_length, true);
+        if (location_offset_array == NULL) {
+            goto out;
+        }
+        location_offset_data = PyArray_DATA(location_offset_array);
+    }
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+    if (method == SET_COLS) {
+        err = individual_table_set_columns(self->individual_table, num_rows,
+                PyArray_DATA(flags_array),
+                location_data, location_offset_data,
+                metadata_data, metadata_offset_data);
+    } else if (method == APPEND_COLS) {
+        err = individual_table_append_columns(self->individual_table, num_rows,
+                PyArray_DATA(flags_array),
+                location_data, location_offset_data,
+                metadata_data, metadata_offset_data);
+    } else {
+        assert(0);
+    }
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(flags_array);
+    Py_XDECREF(location_array);
+    Py_XDECREF(location_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static PyObject *
+IndividualTable_append_columns(IndividualTable *self, PyObject *args, PyObject *kwds)
+{
+    return IndividualTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+IndividualTable_set_columns(IndividualTable *self, PyObject *args, PyObject *kwds)
+{
+    return IndividualTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+IndividualTable_clear(IndividualTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = individual_table_clear(self->individual_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_max_rows_increment(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->individual_table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_num_rows(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->individual_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_max_rows(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->individual_table->max_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_flags(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->individual_table->num_rows, self->individual_table->flags,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_location(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->individual_table->location_length,
+            self->individual_table->location, NPY_FLOAT64, sizeof(double));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_location_offset(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->individual_table->num_rows + 1,
+            self->individual_table->location_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_metadata(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->individual_table->metadata_length,
+            self->individual_table->metadata, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_metadata_offset(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->individual_table->num_rows + 1,
+            self->individual_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyGetSetDef IndividualTable_getsetters[] = {
+    {"max_rows_increment",
+        (getter) IndividualTable_get_max_rows_increment, NULL, "The size increment"},
+    {"num_rows", (getter) IndividualTable_get_num_rows, NULL,
+        "The number of rows in the table."},
+    {"max_rows", (getter) IndividualTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
+    {"flags", (getter) IndividualTable_get_flags, NULL, "The flags array"},
+    {"location", (getter) IndividualTable_get_location, NULL, "The location array"},
+    {"location_offset", (getter) IndividualTable_get_location_offset, NULL,
+        "The location offset array"},
+    {"metadata", (getter) IndividualTable_get_metadata, NULL, "The metadata array"},
+    {"metadata_offset", (getter) IndividualTable_get_metadata_offset, NULL,
+        "The metadata offset array"},
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef IndividualTable_methods[] = {
+    {"add_row", (PyCFunction) IndividualTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
+    {"get_row", (PyCFunction) IndividualTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
+    {"append_columns", (PyCFunction) IndividualTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
+    {"set_columns", (PyCFunction) IndividualTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
+    {"clear", (PyCFunction) IndividualTable_clear, METH_NOARGS,
+        "Clears this table."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject IndividualTableType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.IndividualTable",             /* tp_name */
+    sizeof(IndividualTable),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)IndividualTable_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "IndividualTable objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    IndividualTable_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    IndividualTable_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)IndividualTable_init,      /* tp_init */
+};
+
 
 /*===================================================================
  * NodeTable
@@ -4157,9 +4648,10 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     ProvenanceTable *py_provenances = NULL;
+    IndividualTable *py_individuals = NULL;
     table_collection_t tables;
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", NULL};
+        "sites", "mutations", "provenances", "individuals", NULL};
 
     /* For now we keep a local table collection object, but we'll want to
      * update this method to take a TableCollection object. The tricky
@@ -4171,13 +4663,14 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
-            &ProvenanceTableType, &py_provenances)) {
+            &ProvenanceTableType, &py_provenances,
+            &IndividualTableType, &py_individuals)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
@@ -4254,6 +4747,18 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    if (py_individuals != NULL) {
+        if (IndividualTable_check_state(py_individuals) != 0) {
+            goto out;
+        }
+        err = individual_table_copy(&tables.individuals,
+                py_individuals->individual_table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+
     ret = Py_BuildValue("");
 out:
     table_collection_free(&tables);
@@ -8796,13 +9301,13 @@ init_msprime(void)
     Py_INCREF(&RandomGeneratorType);
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
 
-    /* NodeTable type */
-    NodeTableType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&NodeTableType) < 0) {
+    /* IndividualTable type */
+    IndividualTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&IndividualTableType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&NodeTableType);
-    PyModule_AddObject(module, "NodeTable", (PyObject *) &NodeTableType);
+    Py_INCREF(&IndividualTableType);
+    PyModule_AddObject(module, "IndividualTable", (PyObject *) &IndividualTableType);
 
     /* NodeTable type */
     NodeTableType.tp_new = PyType_GenericNew;

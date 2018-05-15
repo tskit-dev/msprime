@@ -147,6 +147,15 @@ typedef struct {
 } table_collection_t;
 
 /* Definitions for the basic objects */
+
+typedef struct {
+    uint32_t flags;
+    double *location;
+    table_size_t location_length;
+    const char *metadata;
+    table_size_t metadata_length;
+} individual_t;
+
 typedef struct {
     uint32_t flags;
     double time;
@@ -376,12 +385,12 @@ void migration_table_print_state(migration_table_t *self, FILE *out);
 int individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
         size_t max_location_length_increment, size_t max_metadata_length_increment);
 individual_id_t individual_table_add_row(individual_table_t *self, uint32_t flags,
-        double *location, size_t location_length, 
+        double *location, size_t location_length,
         const char *metadata, size_t metadata_length);
 int individual_table_set_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
         double *location, table_size_t *location_length,
         const char *metadata, table_size_t *metadata_length);
-int individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags, 
+int individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
         double *location, table_size_t *location_length,
         const char *metadata, table_size_t *metadata_length);
 int individual_table_clear(individual_table_t *self);

@@ -1508,12 +1508,15 @@ class TreeSequence(object):
             mutations = tables.MutationTable()
         if provenances is None:
             provenances = tables.ProvenanceTable()
+        individuals = tables.IndividualTable()
         self._ll_tree_sequence.dump_tables(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations, provenances=provenances)
+            mutations=mutations, provenances=provenances,
+            individuals=individuals)
         return tables.TableCollection(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations, provenances=provenances)
+            mutations=mutations, provenances=provenances,
+            individuals=individuals)
 
     def dump_text(
             self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
