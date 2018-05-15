@@ -569,7 +569,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(breakpoints, sorted(breakpoints))
         nodes = sim.get_nodes()
         self.assertEqual(len(nodes), sim.get_num_nodes())
-        for j, (flags, t, pop, metadata) in enumerate(nodes):
+        for j, (flags, t, pop, ind, metadata) in enumerate(nodes):
             if j < sim.get_num_samples():
                 self.assertEqual(t, 0.0)
                 self.assertEqual(flags, 1)

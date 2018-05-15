@@ -103,7 +103,7 @@ expand_column(void **column, size_t new_max_rows, size_t element_size)
     void *tmp;
 
     tmp = realloc((void **) *column, new_max_rows * element_size);
-    if (tmp == NULL && (new_max_rows * element_size > 0)) {
+    if (tmp == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -117,7 +117,6 @@ typedef struct {
     void **array_dest;
     table_size_t *len_dest;
     table_size_t len_offset;
-    table_size_t len_multiplier;
     int type;
 } read_table_col_t;
 
@@ -524,16 +523,16 @@ static int
 node_table_load(node_table_t *self, kastore_t *store)
 {
     read_table_col_t read_cols[] = {
-        {"nodes/time", (void **) &self->time, &self->num_rows, 0, 1, KAS_FLOAT64},
-        {"nodes/flags", (void **) &self->flags, &self->num_rows, 0, 1, KAS_UINT32},
+        {"nodes/time", (void **) &self->time, &self->num_rows, 0, KAS_FLOAT64},
+        {"nodes/flags", (void **) &self->flags, &self->num_rows, 0, KAS_UINT32},
         {"nodes/population", (void **) &self->population, &self->num_rows, 0,
-            1, KAS_INT32},
+            KAS_INT32},
         {"nodes/individual", (void **) &self->individual, &self->num_rows, 0,
-            1, KAS_INT32},
+            KAS_INT32},
         {"nodes/metadata", (void **) &self->metadata, &self->metadata_length, 0,
-            1, KAS_UINT8},
+            KAS_UINT8},
         {"nodes/metadata_offset", (void **) &self->metadata_offset, &self->num_rows,
-            1, 1, KAS_UINT32},
+            1, KAS_UINT32},
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
@@ -747,10 +746,10 @@ static int
 edge_table_load(edge_table_t *self, kastore_t *store)
 {
     read_table_col_t read_cols[] = {
-        {"edges/left", (void **) &self->left, &self->num_rows, 0, 1, KAS_FLOAT64},
-        {"edges/right", (void **) &self->right, &self->num_rows, 0, 1, KAS_FLOAT64},
-        {"edges/parent", (void **) &self->parent, &self->num_rows, 0, 1, KAS_INT32},
-        {"edges/child", (void **) &self->child, &self->num_rows, 0, 1, KAS_INT32},
+        {"edges/left", (void **) &self->left, &self->num_rows, 0, KAS_FLOAT64},
+        {"edges/right", (void **) &self->right, &self->num_rows, 0, KAS_FLOAT64},
+        {"edges/parent", (void **) &self->parent, &self->num_rows, 0, KAS_INT32},
+        {"edges/child", (void **) &self->child, &self->num_rows, 0, KAS_INT32},
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
@@ -1131,15 +1130,15 @@ static int
 site_table_load(site_table_t *self, kastore_t *store)
 {
     read_table_col_t read_cols[] = {
-        {"sites/position", (void **) &self->position, &self->num_rows, 0, 1, KAS_FLOAT64},
+        {"sites/position", (void **) &self->position, &self->num_rows, 0, KAS_FLOAT64},
         {"sites/ancestral_state", (void **) &self->ancestral_state,
-            &self->ancestral_state_length, 0, 1, KAS_UINT8},
+            &self->ancestral_state_length, 0, KAS_UINT8},
         {"sites/ancestral_state_offset", (void **) &self->ancestral_state_offset,
-            &self->num_rows, 1, 1, KAS_UINT32},
+            &self->num_rows, 1, KAS_UINT32},
         {"sites/metadata", (void **) &self->metadata,
-            &self->metadata_length, 0, 1, KAS_UINT8},
+            &self->metadata_length, 0, KAS_UINT8},
         {"sites/metadata_offset", (void **) &self->metadata_offset,
-            &self->num_rows, 1, 1, KAS_UINT32},
+            &self->num_rows, 1, KAS_UINT32},
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
@@ -1552,17 +1551,17 @@ static int
 mutation_table_load(mutation_table_t *self, kastore_t *store)
 {
     read_table_col_t read_cols[] = {
-        {"mutations/site", (void **) &self->site, &self->num_rows, 0, 1, KAS_INT32},
-        {"mutations/node", (void **) &self->node, &self->num_rows, 0, 1, KAS_INT32},
-        {"mutations/parent", (void **) &self->parent, &self->num_rows, 0, 1, KAS_INT32},
+        {"mutations/site", (void **) &self->site, &self->num_rows, 0, KAS_INT32},
+        {"mutations/node", (void **) &self->node, &self->num_rows, 0, KAS_INT32},
+        {"mutations/parent", (void **) &self->parent, &self->num_rows, 0, KAS_INT32},
         {"mutations/derived_state", (void **) &self->derived_state,
-            &self->derived_state_length, 0, 1, KAS_UINT8},
+            &self->derived_state_length, 0, KAS_UINT8},
         {"mutations/derived_state_offset", (void **) &self->derived_state_offset,
-            &self->num_rows, 1, 1, KAS_UINT32},
+            &self->num_rows, 1, KAS_UINT32},
         {"mutations/metadata", (void **) &self->metadata,
-            &self->metadata_length, 0, 1, KAS_UINT8},
+            &self->metadata_length, 0, KAS_UINT8},
         {"mutations/metadata_offset", (void **) &self->metadata_offset,
-            &self->num_rows, 1, 1, KAS_UINT32},
+            &self->num_rows, 1, KAS_UINT32},
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
@@ -1781,12 +1780,12 @@ static int
 migration_table_load(migration_table_t *self, kastore_t *store)
 {
     read_table_col_t read_cols[] = {
-        {"migrations/left", (void **) &self->left, &self->num_rows, 0, 1, KAS_FLOAT64},
-        {"migrations/right", (void **) &self->right, &self->num_rows, 0, 1, KAS_FLOAT64},
-        {"migrations/node", (void **) &self->node, &self->num_rows, 0, 1, KAS_INT32},
-        {"migrations/source", (void **) &self->source, &self->num_rows, 0, 1, KAS_INT32},
-        {"migrations/dest", (void **) &self->dest, &self->num_rows, 0, 1, KAS_INT32},
-        {"migrations/time", (void **) &self->time, &self->num_rows, 0, 1, KAS_FLOAT64},
+        {"migrations/left", (void **) &self->left, &self->num_rows, 0, KAS_FLOAT64},
+        {"migrations/right", (void **) &self->right, &self->num_rows, 0, KAS_FLOAT64},
+        {"migrations/node", (void **) &self->node, &self->num_rows, 0, KAS_INT32},
+        {"migrations/source", (void **) &self->source, &self->num_rows, 0, KAS_INT32},
+        {"migrations/dest", (void **) &self->dest, &self->num_rows, 0, KAS_INT32},
+        {"migrations/time", (void **) &self->time, &self->num_rows, 0, KAS_FLOAT64},
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
@@ -2005,7 +2004,6 @@ static individual_id_t
 individual_table_add_row_internal(individual_table_t *self, uint32_t flags, double *location,
         table_size_t location_length, const char *metadata, table_size_t metadata_length)
 {
-    int k;
     assert(self->num_rows < self->max_rows);
     assert(self->metadata_length + metadata_length <= self->max_metadata_length);
     assert(self->location_length + location_length <= self->max_location_length);
@@ -2070,7 +2068,7 @@ individual_table_free(individual_table_t *self)
 void
 individual_table_print_state(individual_table_t *self, FILE *out)
 {
-    size_t i, j, k;
+    size_t j, k;
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "individual_table: %p:\n", (void *) self);
@@ -2177,24 +2175,18 @@ individual_table_dump(individual_table_t *self, kastore_t *store)
 static int
 individual_table_load(individual_table_t *self, kastore_t *store)
 {
-    int ret;
-    size_t len;
-
     read_table_col_t read_cols[] = {
-        {"individuals/flags", (void **) &self->flags, &self->num_rows, 0, 1, KAS_UINT32},
+        {"individuals/flags", (void **) &self->flags, &self->num_rows, 0, KAS_UINT32},
         {"individuals/location", (void **) &self->location, &self->location_length, 0,
-            1, KAS_FLOAT64},
+            KAS_FLOAT64},
         {"individuals/location_offset", (void **) &self->location_offset, &self->num_rows,
-            1, 1, KAS_UINT32},
-        {"individuals/metadata", (void **) &self->metadata, &self->metadata_length, 0, 1,
+            1, KAS_UINT32},
+        {"individuals/metadata", (void **) &self->metadata, &self->metadata_length, 0, 
             KAS_UINT8},
         {"individuals/metadata_offset", (void **) &self->metadata_offset, &self->num_rows,
-            1, 1, KAS_UINT32},
+            1, KAS_UINT32},
     };
-    ret = read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
-
-out:
-    return ret;
+    return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
 
 
@@ -2533,13 +2525,13 @@ provenance_table_load(provenance_table_t *self, kastore_t *store)
 {
     read_table_col_t read_cols[] = {
         {"provenances/timestamp", (void **) &self->timestamp,
-            &self->timestamp_length, 0, 1, KAS_UINT8},
+            &self->timestamp_length, 0, KAS_UINT8},
         {"provenances/timestamp_offset", (void **) &self->timestamp_offset,
-            &self->num_rows, 1, 1, KAS_UINT32},
+            &self->num_rows, 1, KAS_UINT32},
         {"provenances/record", (void **) &self->record,
-            &self->record_length, 0, 1, KAS_UINT8},
+            &self->record_length, 0, KAS_UINT8},
         {"provenances/record_offset", (void **) &self->record_offset,
-            &self->num_rows, 1, 1, KAS_UINT32},
+            &self->num_rows, 1, KAS_UINT32},
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
@@ -4412,9 +4404,9 @@ table_collection_load_indexes(table_collection_t *self)
 {
     read_table_col_t read_cols[] = {
         {"indexes/edge_insertion_order", (void **) &self->indexes.edge_insertion_order,
-            &self->edges.num_rows, 0, 1, KAS_INT32},
+            &self->edges.num_rows, 0, KAS_INT32},
         {"indexes/edge_removal_order", (void **) &self->indexes.edge_removal_order,
-            &self->edges.num_rows, 0, 1, KAS_INT32},
+            &self->edges.num_rows, 0, KAS_INT32},
     };
     self->indexes.malloced_locally = false;
     return read_table_cols(&self->store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
