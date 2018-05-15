@@ -1523,14 +1523,15 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_nodes) - 1, ts.num_nodes)
         self.assertEqual(
             list(output_nodes[0].split()),
-            ["id", "is_sample", "time", "population", "metadata"])
+            ["id", "is_sample", "time", "population", "individual", "metadata"])
         for node, line in zip(ts.nodes(), output_nodes[1:]):
             splits = line.split("\t")
             self.assertEqual(str(node.id), splits[0])
             self.assertEqual(str(node.is_sample()), splits[1])
             self.assertEqual(convert(node.time), splits[2])
             self.assertEqual(str(node.population), splits[3])
-            self.assertEqual(tests.base64_encode(node.metadata), splits[4])
+            self.assertEqual(str(node.individual), splits[4])
+            self.assertEqual(tests.base64_encode(node.metadata), splits[5])
 
     def verify_edges_format(self, ts, edges_file, precision):
         """

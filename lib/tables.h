@@ -151,6 +151,7 @@ typedef struct {
     uint32_t flags;
     double time;
     population_id_t population;
+    individual_id_t individual;
     const char *metadata;
     table_size_t metadata_length;
 } node_t;

@@ -40,7 +40,7 @@ except ImportError:
 
 NodeTableRow = collections.namedtuple(
     "NodeTableRow",
-    ["flags", "time", "population", "metadata"])
+    ["flags", "time", "population", "individual", "metadata"])
 
 
 EdgeTableRow = collections.namedtuple(
@@ -88,6 +88,7 @@ class NodeTable(_msprime.NodeTable):
     :vartype flags: numpy.ndarray, dtype=np.uint32
     :ivar population: The array of population IDs.
     :vartype population: numpy.ndarray, dtype=np.int32
+    :vartype individual: numpy.ndarray, dtype=np.int32
     :ivar metadata: The flattened array of binary metadata values. See
         :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata: numpy.ndarray, dtype=np.int8
@@ -100,12 +101,13 @@ class NodeTable(_msprime.NodeTable):
         time = self.time
         flags = self.flags
         population = self.population
+        individual = self.individual
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
-        ret = "id\tflags\tpopulation\ttime\tmetadata\n"
+        ret = "id\tflags\tpopulation\tindividual\ttime\tmetadata\n"
         for j in range(self.num_rows):
             md = base64.b64encode(metadata[j]).decode('utf8')
-            ret += "{}\t{}\t{}\t{:.14f}\t{}\n".format(
-                j, flags[j], population[j], time[j], md)
+            ret += "{}\t{}\t{}\t{}\t{:.14f}\t{}\n".format(
+                j, flags[j], population[j], individual[j], time[j], md)
         return ret[:-1]
 
     def __eq__(self, other):
@@ -114,6 +116,7 @@ class NodeTable(_msprime.NodeTable):
             ret = (
                 np.array_equal(self.flags, other.flags) and
                 np.array_equal(self.population, other.population) and
+                np.array_equal(self.individual, other.individual) and
                 np.array_equal(self.time, other.time) and
                 np.array_equal(self.metadata, other.metadata) and
                 np.array_equal(self.metadata_offset, other.metadata_offset))
@@ -134,7 +137,8 @@ class NodeTable(_msprime.NodeTable):
     def __setstate__(self, state):
         self.set_columns(
             time=state["time"], flags=state["flags"], population=state["population"],
-            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
+            individual=state["individual"], metadata=state["metadata"],
+            metadata_offset=state["metadata_offset"])
 
     def copy(self):
         """
@@ -143,7 +147,8 @@ class NodeTable(_msprime.NodeTable):
         copy = NodeTable()
         copy.set_columns(
             flags=self.flags, time=self.time, population=self.population,
-            metadata=self.metadata, metadata_offset=self.metadata_offset)
+            individual=self.individual, metadata=self.metadata,
+            metadata_offset=self.metadata_offset)
         return copy
 
     def clear(self):
@@ -156,7 +161,7 @@ class NodeTable(_msprime.NodeTable):
         # Deprecated alias for clear
         self.clear()
 
-    def add_row(self, flags=0, time=0, population=-1, metadata=None):
+    def add_row(self, flags=0, time=0, population=-1, individual=-1, metadata=None):
         """
         Adds a new row to this :class:`NodeTable` and returns the ID of the
         corresponding node.
@@ -165,15 +170,19 @@ class NodeTable(_msprime.NodeTable):
         :param float time: The birth time for the new node.
         :param int population: The ID of the population in which the new node was born.
             Defaults to the :const:`.NULL_POPULATION`.
+        :param int individual: The ID of the individual in which the new node was born.
+            Defaults to the :const:`.NULL_INDIVIDUAL`.
         :param bytes metadata: The binary-encoded metadata for the new node. If not
             specified or None, a zero-length byte string is stored.
         :return: The ID of the newly added node.
         :rtype: int
         """
-        return super(NodeTable, self).add_row(flags, time, population, metadata)
+        return super(NodeTable, self).add_row(flags, time, population,
+                                              individual, metadata)
 
     def set_columns(
-            self, flags, time, population=None, metadata=None, metadata_offset=None):
+            self, flags, time, population=None, individual=None, metadata=None,
+            metadata_offset=None):
         """
         Sets the values for each column in this :class:`.NodeTable` using the values in
         the specified arrays. Overwrites any data currently stored in the table.
@@ -191,9 +200,9 @@ class NodeTable(_msprime.NodeTable):
         :param population: The population values for each node. If not specified
             or None, the :const:`.NULL_POPULATION` value is stored for each node.
         :type population: numpy.ndarray, dtype=np.int32
-        :param population: The population values for each node. If not specified
-            or None, the :const:`.NULL_POPULATION` value is stored for each node.
-        :type population: numpy.ndarray, dtype=np.int32
+        :param individual: The individual values for each node. If not specified
+            or None, the :const:`.NULL_INDIVIDUAL` value is stored for each node.
+        :type individual: numpy.ndarray, dtype=np.int32
         :param metadata: The flattened metadata array. Must be specified along
             with ``metadata_offset``. If not specified or None, an empty metadata
             value is stored for each node.
@@ -202,11 +211,12 @@ class NodeTable(_msprime.NodeTable):
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
         super(NodeTable, self).set_columns(
-            flags, time, population=population, metadata=metadata,
+            flags, time, population=population, individual=individual, metadata=metadata,
             metadata_offset=metadata_offset)
 
     def append_columns(
-            self, flags, time, population=None, metadata=None, metadata_offset=None):
+            self, flags, time, population=None, individual=None, metadata=None,
+            metadata_offset=None):
         """
         Appends the specified arrays to the end of the columns in this
         :class:`NodeTable`. This allows many new rows to be added at once.
@@ -224,9 +234,9 @@ class NodeTable(_msprime.NodeTable):
         :param population: The population values for each node. If not specified
             or None, the :const:`.NULL_POPULATION` value is stored for each node.
         :type population: numpy.ndarray, dtype=np.int32
-        :param population: The population values for each node. If not specified
-            or None, the :const:`.NULL_POPULATION` value is stored for each node.
-        :type population: numpy.ndarray, dtype=np.int32
+        :param individual: The individual values for each node. If not specified
+            or None, the :const:`.NULL_INDIVIDUAL` value is stored for each node.
+        :type individual: numpy.ndarray, dtype=np.int32
         :param metadata: The flattened metadata array. Must be specified along
             with ``metadata_offset``. If not specified or None, an empty metadata
             value is stored for each node.
@@ -235,7 +245,7 @@ class NodeTable(_msprime.NodeTable):
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
         super(NodeTable, self).append_columns(
-            flags, time, population=population,
+            flags, time, population=population, individual=individual,
             metadata=metadata, metadata_offset=metadata_offset)
 
 
@@ -245,6 +255,7 @@ def _pickle_node_table(table):
         "time": table.time,
         "flags": table.flags,
         "population": table.population,
+        "individual": table.individual,
         "metadata": table.metadata,
         "metadata_offset": table.metadata_offset,
     }
@@ -1191,12 +1202,12 @@ def sort_tables(
     Migrations and provenances are not currently affected by this function.
     However, this behaviour is likely to change in the future.
 
-    :param NodeTable nodes: The tree sequence nodes (required).
-    :param EdgeTable edges: The tree sequence edges (required).
-    :param MigrationTable migrations: The tree sequence migrations (optional).
-    :param SiteTable sites: The tree sequence sites (optional, but required if
+    :param NodeTable nodes: The nodes of the tree sequence (required).
+    :param EdgeTable edges: The edges of the tree sequence (required).
+    :param MigrationTable migrations: The tree sequence's migrations (optional).
+    :param SiteTable sites: The tree sequence's sites (optional, but required if
          ``mutations`` is provided)
-    :param MutationTable mutations: The tree sequence mutations (optional, but
+    :param MutationTable mutations: The tree sequence's mutations (optional, but
          required if ``sites`` is provided).
     :param ProvenanceTable provenances: Ignored. This argument is provided to
         support calling the function like ``sort_tables(**tables.asdict())``.

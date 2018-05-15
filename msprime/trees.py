@@ -49,6 +49,8 @@ NULL_NODE = -1
 
 NULL_POPULATION = -1
 
+NULL_INDIVIDUAL = -1
+
 NULL_MUTATION = -1
 
 IS_PY2 = sys.version_info[0] < 3
@@ -94,14 +96,18 @@ class Node(SimpleContainer):
     :vartype float: float
     :ivar population: The integer ID of the population that this node was born in.
     :vartype population: int
+    :ivar individual: The integer ID of the individual that this node was a part of.
+    :vartype individual: int
     :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this node.
     :vartype metadata: bytes
     """
     def __init__(
-            self, id_=None, flags=0, time=0, population=NULL_POPULATION, metadata=""):
+            self, id_=None, flags=0, time=0, population=NULL_POPULATION,
+            individual=NULL_INDIVIDUAL, metadata=""):
         self.id = id_
         self.time = time
         self.population = population
+        self.individual = individual
         self.metadata = metadata
         self.flags = flags
 
@@ -515,6 +521,17 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_population(u)
+
+    def individual(self, u):
+        """
+        Returns the individual associated with the specified node.
+        Equivalent to ``tree.tree_sequence.node(u).individual``.
+
+        :param int u: The node of interest.
+        :return: The ID of the individual associated with node u.
+        :rtype: int
+        """
+        return self._ll_sparse_tree.get_individual(u)
 
     def is_internal(self, u):
         """
@@ -1147,9 +1164,14 @@ def parse_nodes(source, strict=True, encoding='utf8', base64_metadata=True):
     is_sample_index = header.index("is_sample")
     time_index = header.index("time")
     population_index = None
+    individual_index = None
     metadata_index = None
     try:
         population_index = header.index("population")
+    except ValueError:
+        pass
+    try:
+        individual_index = header.index("individual")
     except ValueError:
         pass
     try:
@@ -1167,13 +1189,17 @@ def parse_nodes(source, strict=True, encoding='utf8', base64_metadata=True):
             population = NULL_POPULATION
             if population_index is not None:
                 population = int(tokens[population_index])
+            individual = NULL_INDIVIDUAL
+            if individual_index is not None:
+                individual = int(tokens[individual_index])
             metadata = b''
             if metadata_index is not None and metadata_index < len(tokens):
                 metadata = tokens[metadata_index].encode(encoding)
                 if base64_metadata:
                     metadata = base64.b64decode(metadata)
             table.add_row(
-                flags=flags, time=time, population=population, metadata=metadata)
+                flags=flags, time=time, population=population,
+                individual=individual, metadata=metadata)
     return table
 
 
@@ -1520,8 +1546,8 @@ class TreeSequence(object):
 
         if nodes is not None:
             print(
-                "id", "is_sample", "time", "population", "metadata", sep="\t",
-                file=nodes)
+                "id", "is_sample", "time", "population", "individual", "metadata",
+                sep="\t", file=nodes)
             for node in self.nodes():
                 metadata = node.metadata
                 if base64_metadata:
@@ -1531,10 +1557,12 @@ class TreeSequence(object):
                     "{is_sample:d}\t"
                     "{time:.{precision}f}\t"
                     "{population:d}\t"
+                    "{individual:d}\t"
                     "{metadata}").format(
                         precision=precision, id=node.id,
                         is_sample=node.is_sample(), time=node.time,
                         population=node.population,
+                        individual=node.individual,
                         metadata=metadata)
                 print(row, file=nodes)
 
@@ -2067,9 +2095,11 @@ class TreeSequence(object):
 
         :rtype: :class:`.Node`
         """
-        flags, time, population, metadata = self._ll_tree_sequence.get_node(id_)
+        (flags, time, population, individual,
+         metadata) = self._ll_tree_sequence.get_node(id_)
         return Node(
-            id_=id_, flags=flags, time=time, population=population, metadata=metadata)
+            id_=id_, flags=flags, time=time, population=population,
+            individual=individual, metadata=metadata)
 
     def mutation(self, id_):
         """
