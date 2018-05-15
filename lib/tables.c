@@ -1218,7 +1218,7 @@ mutation_table_expand_metadata(mutation_table_t *self, size_t additional_length)
         if (ret != 0) {
             goto out;
         }
-        self->max_metadata_length = (table_size_t) new_size;
+        self->max_metadata_length = new_size;
     }
 out:
     return ret;
@@ -1807,8 +1807,8 @@ individual_table_expand_main_columns(individual_table_t *self, table_size_t addi
         if (ret != 0) {
             goto out;
         }
-        ret = expand_column((void **) &self->location, new_size,
-                self->spatial_dimension * sizeof(double));
+        ret = expand_column((void **) &self->location_offset, new_size + 1,
+                sizeof(table_size_t));
         if (ret != 0) {
             goto out;
         }
@@ -1824,6 +1824,25 @@ out:
 }
 
 static int
+individual_table_expand_location(individual_table_t *self, table_size_t additional_length)
+{
+    int ret = 0;
+    table_size_t increment = MSP_MAX(additional_length,
+            self->max_location_length_increment);
+    table_size_t new_size = self->max_location_length + increment;
+
+    if ((self->location_length + additional_length) > self->max_location_length) {
+        ret = expand_column((void **) &self->location, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_location_length = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
 individual_table_expand_metadata(individual_table_t *self, table_size_t additional_length)
 {
     int ret = 0;
@@ -1832,7 +1851,7 @@ individual_table_expand_metadata(individual_table_t *self, table_size_t addition
     table_size_t new_size = self->max_metadata_length + increment;
 
     if ((self->metadata_length + additional_length) > self->max_metadata_length) {
-        ret = expand_column((void **) &self->metadata, new_size, sizeof(char *));
+        ret = expand_column((void **) &self->metadata, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
@@ -1843,24 +1862,8 @@ out:
 }
 
 int
-individual_table_set_spatial_dimension(individual_table_t *self, table_size_t spatial_dimension)
-{
-    int ret = 0;
-
-    if (spatial_dimension < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->spatial_dimension = spatial_dimension;
-    ret = expand_column((void **) &self->location, self->max_rows,
-            spatial_dimension * sizeof(double));
-out:
-    return ret;
-}
-
-int
 individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
-        size_t max_metadata_length_increment)
+        size_t max_location_length_increment, size_t max_metadata_length_increment)
 {
     int ret = 0;
 
@@ -1868,23 +1871,30 @@ individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
     if (max_rows_increment == 0) {
        max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
+    if (max_location_length_increment == 0) {
+        max_location_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
     if (max_metadata_length_increment == 0) {
         max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
     }
     self->max_rows_increment = (table_size_t) max_rows_increment;
+    self->max_location_length_increment = (table_size_t) max_location_length_increment;
     self->max_metadata_length_increment = (table_size_t) max_metadata_length_increment;
     self->max_rows = 0;
     self->num_rows = 0;
+    self->max_location_length = 0;
+    self->location_length = 0;
     self->max_metadata_length = 0;
     self->metadata_length = 0;
-    ret = individual_table_set_spatial_dimension(self, 0);
-    if (ret != 0) {
-        goto out;
-    }
     ret = individual_table_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
+    ret = individual_table_expand_location(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->location_offset[0] = 0;
     ret = individual_table_expand_metadata(self, 1);
     if (ret != 0) {
         goto out;
@@ -1898,13 +1908,12 @@ int WARN_UNUSED
 individual_table_copy(individual_table_t *self, individual_table_t *dest)
 {
     return individual_table_set_columns(dest, self->num_rows, self->flags,
-            self->spatial_dimension, self->location,
-            self->metadata, self->metadata_offset);
+            self->location, self->location_offset, self->metadata, self->metadata_offset);
 }
 
 int WARN_UNUSED
 individual_table_set_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
-        table_size_t spatial_dimension, double *location,
+        double *location, uint32_t *location_offset,
         const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
@@ -1913,29 +1922,24 @@ individual_table_set_columns(individual_table_t *self, size_t num_rows, uint32_t
     if (ret != 0) {
         goto out;
     }
-    ret = individual_table_set_spatial_dimension(self, spatial_dimension);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = individual_table_append_columns(self, num_rows, flags, location, metadata,
-            metadata_offset);
+    ret = individual_table_append_columns(self, num_rows, flags, location, location_offset,
+            metadata, metadata_offset);
 out:
     return ret;
 }
 
 int
 individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
-        double *location, const char *metadata, uint32_t *metadata_offset)
+        double *location, uint32_t *location_offset, const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
-    table_size_t j, metadata_length;
+    table_size_t j, metadata_length, location_length;
 
     if (flags == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if ((self->spatial_dimension < 0) ||
-            ((location == NULL) && (self->spatial_dimension != 0))) {
+    if ((location == NULL) != (location_offset == NULL)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -1948,9 +1952,26 @@ individual_table_append_columns(individual_table_t *self, size_t num_rows, uint3
         goto out;
     }
     memcpy(self->flags + self->num_rows, flags, num_rows * sizeof(uint32_t));
-    if (self->spatial_dimension > 0) {
-        memcpy(self->location + self->spatial_dimension * self->num_rows, location,
-                num_rows * self->spatial_dimension * sizeof(double));
+    if (location == NULL) {
+        for (j = 0; j < num_rows; j++) {
+            self->location_offset[self->num_rows + j + 1] = (table_size_t) self->location_length;
+        }
+    } else {
+        ret = check_offsets(num_rows, location_offset, 0, false);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < num_rows; j++) {
+            self->location_offset[self->num_rows + j] =
+                (table_size_t) self->location_length + location_offset[j];
+        }
+        location_length = location_offset[num_rows];
+        ret = individual_table_expand_location(self, location_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->location + self->location_length, location, location_length * sizeof(double));
+        self->location_length += location_length;
     }
     if (metadata == NULL) {
         for (j = 0; j < num_rows; j++) {
@@ -1974,6 +1995,7 @@ individual_table_append_columns(individual_table_t *self, size_t num_rows, uint3
         self->metadata_length += metadata_length;
     }
     self->num_rows += (table_size_t) num_rows;
+    self->location_offset[self->num_rows] = self->location_length;
     self->metadata_offset[self->num_rows] = self->metadata_length;
 out:
     return ret;
@@ -1981,16 +2003,17 @@ out:
 
 static individual_id_t
 individual_table_add_row_internal(individual_table_t *self, uint32_t flags, double *location,
-        const char *metadata, table_size_t metadata_length)
+        table_size_t location_length, const char *metadata, table_size_t metadata_length)
 {
     int k;
     assert(self->num_rows < self->max_rows);
     assert(self->metadata_length + metadata_length <= self->max_metadata_length);
-    memcpy(self->metadata + self->metadata_length, metadata, metadata_length);
+    assert(self->location_length + location_length <= self->max_location_length);
     self->flags[self->num_rows] = flags;
-    for (k = 0; k < self->spatial_dimension; k++) {
-        self->location[self->spatial_dimension * self->num_rows + k] = location[k];
-    }
+    memcpy(self->location + self->location_length, location, location_length * sizeof(double));
+    self->location_offset[self->num_rows + 1] = self->location_length + location_length;
+    self->location_length += location_length;
+    memcpy(self->metadata + self->metadata_length, metadata, metadata_length * sizeof(char));
     self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
     self->metadata_length += metadata_length;
     self->num_rows++;
@@ -1999,7 +2022,7 @@ individual_table_add_row_internal(individual_table_t *self, uint32_t flags, doub
 
 individual_id_t
 individual_table_add_row(individual_table_t *self, uint32_t flags, double *location,
-        const char *metadata, size_t metadata_length)
+        size_t location_length, const char *metadata, size_t metadata_length)
 {
     int ret = 0;
 
@@ -2007,12 +2030,16 @@ individual_table_add_row(individual_table_t *self, uint32_t flags, double *locat
     if (ret != 0) {
         goto out;
     }
+    ret = individual_table_expand_location(self, (table_size_t) location_length);
+    if (ret != 0) {
+        goto out;
+    }
     ret = individual_table_expand_metadata(self, (table_size_t) metadata_length);
     if (ret != 0) {
         goto out;
     }
-    ret = individual_table_add_row_internal(self, flags, location, metadata,
-            (table_size_t) metadata_length);
+    ret = individual_table_add_row_internal(self, flags, location,
+            (table_size_t) location_length, metadata, (table_size_t) metadata_length);
 out:
     return ret;
 }
@@ -2023,7 +2050,7 @@ individual_table_clear(individual_table_t *self)
     int ret = 0;
     self->num_rows = 0;
     self->metadata_length = 0;
-    ret = individual_table_set_spatial_dimension(self, 0);
+    self->location_length = 0;
     return ret;
 }
 
@@ -2033,6 +2060,7 @@ individual_table_free(individual_table_t *self)
     if (self->max_rows > 0) {
         msp_safe_free(self->flags);
         msp_safe_free(self->location);
+        msp_safe_free(self->location_offset);
         msp_safe_free(self->metadata);
         msp_safe_free(self->metadata_offset);
     }
@@ -2046,7 +2074,6 @@ individual_table_print_state(individual_table_t *self, FILE *out)
 
     fprintf(out, TABLE_SEP);
     fprintf(out, "individual_table: %p:\n", (void *) self);
-    fprintf(out, "spatial_dimension = %d\n", self->spatial_dimension);
     fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
             (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
     fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
@@ -2055,46 +2082,36 @@ individual_table_print_state(individual_table_t *self, FILE *out)
             (int) self->max_metadata_length_increment);
     fprintf(out, TABLE_SEP);
     /* We duplicate the dump_text code here because we want to output
-     * the metadata offset column. */
-    fprintf(out, "id\tflags\t");
-    for (i = 0; i < self->spatial_dimension; i++) {
-        fprintf(out, "location_%d\t", i);
-    }
+     * the offset columns. */
+    fprintf(out, "id\tflags\tlocation_offset\tlocation\t");
     fprintf(out, "metadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
         fprintf(out, "%d\t%d\t", (int) j, self->flags[j]);
-        for (i = 0; i < self->spatial_dimension; i++) {
-            fprintf(out, "%f\t", self->location[j * self->spatial_dimension + i]);
+        fprintf(out, "%d\t", self->location_offset[j]);
+        for (k = self->location_offset[j]; k < self->location_offset[j + 1]; k++) {
+            fprintf(out, "%f", self->location[k]);
+            if (k + 1 < self->location_offset[j + 1]) {
+                fprintf(out, ",");
+            }
         }
+        fprintf(out, "\t");
         fprintf(out, "%d\t", self->metadata_offset[j]);
         for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
             fprintf(out, "%c", self->metadata[k]);
         }
         fprintf(out, "\n");
     }
-    assert(self->metadata_offset[0] == 0);
-    assert(self->metadata_offset[self->num_rows] == self->metadata_length);
 }
 
 int
 individual_table_dump_text(individual_table_t *self, FILE *out)
 {
     int ret = 0;
-    size_t i, j;
+    size_t j, k;
     table_size_t metadata_len;
     int err;
 
-    err = fprintf(out, "id\tflags\t");
-    if (err < 0) {
-        goto out;
-    }
-    for (i = 0; i < self->spatial_dimension; i++) {
-        err = fprintf(out, "location_%d\t", i);
-        if (err < 0) {
-            goto out;
-        }
-    }
-    err = fprintf(out, "metadata\n");
+    err = fprintf(out, "id\tflags\tlocation\tmetadata\n");
     if (err < 0) {
         goto out;
     }
@@ -2104,12 +2121,13 @@ individual_table_dump_text(individual_table_t *self, FILE *out)
         if (err < 0) {
             goto out;
         }
-        for (i = 0; i < self->spatial_dimension; i++) {
-            err = fprintf(out, "%f\t", self->location[j * self->spatial_dimension + i]);
-            if (err < 0) {
-                goto out;
+        for (k = self->location_offset[j]; k < self->location_offset[j + 1]; k++) {
+            fprintf(out, "%f", self->location[k]);
+            if (k + 1 < self->location_offset[j + 1]) {
+                fprintf(out, ",");
             }
         }
+        fprintf(out, "\t");
         err = fprintf(out, "%.*s\n",
                 metadata_len, self->metadata + self->metadata_offset[j]);
         if (err < 0) {
@@ -2129,8 +2147,10 @@ individual_table_equal(individual_table_t *self, individual_table_t *other)
             && self->metadata_length == other->metadata_length) {
         ret = memcmp(self->flags, other->flags,
                     self->num_rows * sizeof(uint32_t)) == 0
+            && memcmp(self->location_offset, other->location_offset,
+                    (self->num_rows + 1) * sizeof(table_size_t)) == 0
             && memcmp(self->location, other->location,
-                    self->num_rows * self->spatial_dimension * sizeof(double)) == 0
+                    self->location_length * sizeof(double)) == 0
             && memcmp(self->metadata_offset, other->metadata_offset,
                     (self->num_rows + 1) * sizeof(table_size_t)) == 0
             && memcmp(self->metadata, other->metadata,
@@ -2143,10 +2163,10 @@ static int
 individual_table_dump(individual_table_t *self, kastore_t *store)
 {
     write_table_col_t write_cols[] = {
-        {"individuals/spatial_dimension", (void *) &(self->spatial_dimension), 1, KAS_UINT32},
         {"individuals/flags", (void *) self->flags, self->num_rows, KAS_UINT32},
-        {"individuals/location", (void *) self->location,
-            self->num_rows * self->spatial_dimension, KAS_FLOAT64},
+        {"individuals/location", (void *) self->location, self->location_length, KAS_FLOAT64},
+        {"individuals/location_offset", (void *) self->location_offset, self->num_rows + 1,
+            KAS_UINT32},
         {"individuals/metadata", (void *) self->metadata, self->metadata_length, KAS_UINT8},
         {"individuals/metadata_offset", (void *) self->metadata_offset, self->num_rows + 1,
             KAS_UINT32},
@@ -2158,25 +2178,14 @@ static int
 individual_table_load(individual_table_t *self, kastore_t *store)
 {
     int ret;
-    uint32_t *spatial_dimension;
     size_t len;
-
-    ret = kastore_gets_uint32(store, "individuals/spatial_dimension",
-            &spatial_dimension, &len);
-    if (ret != 0) {
-        ret = msp_set_kas_error(ret);
-        goto out;
-    }
-    if (len != 1) {
-        ret = MSP_ERR_FILE_FORMAT;
-        goto out;
-    }
-    self->spatial_dimension = (table_size_t) *spatial_dimension;
 
     read_table_col_t read_cols[] = {
         {"individuals/flags", (void **) &self->flags, &self->num_rows, 0, 1, KAS_UINT32},
-        {"individuals/location", (void **) &self->location, &self->num_rows, 0,
-            self->spatial_dimension, KAS_FLOAT64},
+        {"individuals/location", (void **) &self->location, &self->location_length, 0,
+            1, KAS_FLOAT64},
+        {"individuals/location_offset", (void **) &self->location_offset, &self->num_rows,
+            1, 1, KAS_UINT32},
         {"individuals/metadata", (void **) &self->metadata, &self->metadata_length, 0, 1,
             KAS_UINT8},
         {"individuals/metadata_offset", (void **) &self->metadata_offset, &self->num_rows,
@@ -2226,7 +2235,7 @@ provenance_table_expand_timestamp(provenance_table_t *self, table_size_t additio
     table_size_t new_size = self->max_timestamp_length + increment;
 
     if ((self->timestamp_length + additional_length) > self->max_timestamp_length) {
-        ret = expand_column((void **) &self->timestamp, new_size, sizeof(char *));
+        ret = expand_column((void **) &self->timestamp, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
@@ -2245,7 +2254,7 @@ provenance_table_expand_provenance(provenance_table_t *self, table_size_t additi
     table_size_t new_size = self->max_record_length + increment;
 
     if ((self->record_length + additional_length) > self->max_record_length) {
-        ret = expand_column((void **) &self->record, new_size, sizeof(char *));
+        ret = expand_column((void **) &self->record, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
@@ -4132,7 +4141,7 @@ table_collection_alloc(table_collection_t *self, int flags)
         if (ret != 0) {
             goto out;
         }
-        ret = individual_table_alloc(&self->individuals, 0, 0);
+        ret = individual_table_alloc(&self->individuals, 0, 0, 0);
         if (ret != 0) {
             goto out;
         }

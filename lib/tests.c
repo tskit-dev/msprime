@@ -467,13 +467,12 @@ parse_individuals(const char *text, individual_table_t *individual_table)
     char sub_line[MAX_LINE];
     const char *whitespace = " \t";
     char *p, *q;
-    size_t spatial_dimension;
     double location[MAX_LINE];
+    int location_len;
     int flags;
     char *name;
 
     c = 0;
-    individual_table->spatial_dimension = 0;
     while (text[c] != '\0') {
         /* Fill in the line */
         k = 0;
@@ -491,22 +490,18 @@ parse_individuals(const char *text, individual_table_t *individual_table)
         CU_ASSERT_FATAL(p != NULL);
         flags = atoi(p);
         // the locations are comma-separated
-        spatial_dimension = 1;
+        location_len = 1;
         q = p;
         while (*q != '\0') {
             if (*q == ',') {
-                spatial_dimension++;
+                location_len++;
             }
             q++;
         }
-        CU_ASSERT_FATAL(spatial_dimension >= 1);
-        if (individual_table->spatial_dimension <= 0) {
-            individual_table_set_spatial_dimension(individual_table, spatial_dimension);
-        }
-        CU_ASSERT_FATAL(spatial_dimension == individual_table->spatial_dimension);
+        CU_ASSERT_FATAL(location_len >= 1);
         strncpy(sub_line, p, MAX_LINE);
         q = strtok(sub_line, ",");
-        for (k = 0; k < spatial_dimension; k++) {
+        for (k = 0; k < location_len; k++) {
             CU_ASSERT_FATAL(q != NULL);
             location[k] = atoi(q);
             q = strtok(NULL, ",");
@@ -518,8 +513,8 @@ parse_individuals(const char *text, individual_table_t *individual_table)
         } else {
             name = p;
         }
-        ret = individual_table_add_row(individual_table, flags, location, name,
-                strlen(name));
+        ret = individual_table_add_row(individual_table, flags, location, location_len,
+                name, strlen(name));
         CU_ASSERT_FATAL(ret >= 0);
     }
 }
@@ -7116,6 +7111,7 @@ test_individual_table(void)
     double *location;
     char *metadata;
     uint32_t *metadata_offset;
+    uint32_t *location_offset;
 
     const char *test_metadata = "test";
     size_t test_metadata_length = 4;
@@ -7127,13 +7123,12 @@ test_individual_table(void)
         test_location[k] = (double) k;
     }
     metadata_copy[test_metadata_length] = '\0';
-    ret = individual_table_alloc(&table, 1, 1);
+    ret = individual_table_alloc(&table, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    individual_table_set_spatial_dimension(&table, spatial_dimension);
     individual_table_print_state(&table, _devnull);
 
     for (j = 0; j < num_rows; j++) {
-        ret = individual_table_add_row(&table, j, test_location,
+        ret = individual_table_add_row(&table, j, test_location, spatial_dimension,
                 test_metadata, test_metadata_length);
         CU_ASSERT_EQUAL_FATAL(ret, j);
         CU_ASSERT_EQUAL(table.flags[j], j);
@@ -7152,7 +7147,6 @@ test_individual_table(void)
     individual_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
-    CU_ASSERT_EQUAL(table.spatial_dimension, 0);
 
     num_rows *= 2;
     flags = malloc(num_rows * sizeof(uint32_t));
@@ -7161,6 +7155,11 @@ test_individual_table(void)
     location = malloc(spatial_dimension * num_rows * sizeof(double));
     CU_ASSERT_FATAL(location != NULL);
     memset(location, 0, spatial_dimension * num_rows * sizeof(double));
+    location_offset = malloc((num_rows + 1) * sizeof(table_size_t));
+    CU_ASSERT_FATAL(location_offset != NULL);
+    for (j = 0; j < num_rows + 1; j++) {
+        location_offset[j] = j * spatial_dimension;
+    }
     metadata = malloc(num_rows * sizeof(char));
     memset(metadata, 'a', num_rows * sizeof(char));
     CU_ASSERT_FATAL(metadata != NULL);
@@ -7169,22 +7168,25 @@ test_individual_table(void)
     for (j = 0; j < num_rows + 1; j++) {
         metadata_offset[j] = j;
     }
-    ret = individual_table_set_columns(&table, num_rows, flags, spatial_dimension,
-            location, metadata, metadata_offset);
+    ret = individual_table_set_columns(&table, num_rows, flags,
+            location, location_offset, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.location, location,
                 spatial_dimension * num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.location_offset, location_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
                 (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.location_length, spatial_dimension * num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, num_rows);
     individual_table_print_state(&table, _devnull);
 
     /* Append another num_rows onto the end */
-    ret = individual_table_append_columns(&table, num_rows, flags, location, metadata,
-            metadata_offset);
+    ret = individual_table_append_columns(&table, num_rows, flags, location,
+            location_offset, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.flags + num_rows, flags, num_rows * sizeof(uint32_t)), 0);
@@ -7201,25 +7203,49 @@ test_individual_table(void)
 
     /* flags can't be NULL */
     ret = individual_table_set_columns(&table, num_rows, NULL,
-            spatial_dimension, location, metadata, metadata_offset);
+            location, location_offset, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    /* location can only be NULL if spatial_dimension is 0 */
+    /* location and location offset must be simultaneously NULL or not */
     ret = individual_table_set_columns(&table, num_rows, flags,
-            2, NULL, metadata, metadata_offset);
+            location, NULL, metadata, metadata_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = individual_table_set_columns(&table, num_rows, flags,
+            NULL, location_offset, metadata, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     /* metadata and metadata offset must be simultaneously NULL or not */
     ret = individual_table_set_columns(&table, num_rows, flags,
-            spatial_dimension, location, NULL, metadata_offset);
+            location, location_offset, NULL, metadata_offset);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = individual_table_set_columns(&table, num_rows, flags,
-            spatial_dimension, location, metadata, NULL);
+            location, location_offset, metadata, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    /* if location and location_offset are both null, all locations are zero length */
+    num_rows = 10;
+    memset(location_offset, 0, (num_rows + 1) * sizeof(table_size_t));
+    ret = individual_table_set_columns(&table, num_rows, flags,
+            NULL, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.location_offset, location_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.location_length, 0);
+    ret = individual_table_append_columns(&table, num_rows, flags, NULL, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.location_offset, location_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.location_offset + num_rows, location_offset,
+                num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.location_length, 0);
+    individual_table_print_state(&table, _devnull);
+    individual_table_dump_text(&table, _devnull);
 
     /* if metadata and metadata_offset are both null, all metadatas are zero length */
     num_rows = 10;
     memset(metadata_offset, 0, (num_rows + 1) * sizeof(table_size_t));
-    ret = individual_table_set_columns(&table, num_rows, flags, spatial_dimension,
-            location, NULL, NULL);
+    ret = individual_table_set_columns(&table, num_rows, flags,
+            location, location_offset, NULL, NULL);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.location, location,
@@ -7228,12 +7254,11 @@ test_individual_table(void)
                 (num_rows + 1) * sizeof(table_size_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, num_rows);
     CU_ASSERT_EQUAL(table.metadata_length, 0);
-    ret = individual_table_append_columns(&table, num_rows, flags, location, NULL, NULL);
+    ret = individual_table_append_columns(&table, num_rows, flags, location,
+            location_offset, NULL, NULL);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.flags + spatial_dimension * num_rows, flags,
-                spatial_dimension * num_rows * sizeof(uint32_t)), 0);
-    CU_ASSERT_EQUAL(memcmp(table.location, location, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.location, location,
+                spatial_dimension * num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.location + spatial_dimension * num_rows,
                 location, spatial_dimension * num_rows * sizeof(double)), 0);
     CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
@@ -7252,7 +7277,7 @@ test_individual_table(void)
     individual_table_dump_text(&table, _devnull);
 
     // dump table from tree sequence
-    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, 
+    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL,
             paper_ex_individuals, NULL);
     tree_sequence_dump_tables(&ts, &tables, MSP_ALLOC_TABLES);
     CU_ASSERT_TRUE_FATAL(individual_table_equal(&tables.individuals, &table));
@@ -7287,6 +7312,7 @@ test_individual_table(void)
     CU_ASSERT_EQUAL(ret, 0);
     free(flags);
     free(location);
+    free(location_offset);
     free(metadata);
     free(metadata_offset);
 }
