@@ -5445,8 +5445,6 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the time of node u" },
     {"get_population", (PyCFunction) SparseTree_get_population, METH_VARARGS,
             "Returns the population of node u" },
-    {"get_individual", (PyCFunction) SparseTree_get_individual, METH_VARARGS,
-            "Returns the individual of node u" },
     {"get_left_child", (PyCFunction) SparseTree_get_left_child, METH_VARARGS,
             "Returns the left-most child of node u" },
     {"get_right_child", (PyCFunction) SparseTree_get_right_child, METH_VARARGS,

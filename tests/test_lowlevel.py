@@ -2049,7 +2049,7 @@ class TestTreeSequence(LowLevelTestCase):
             tree_sequence = populate_tree_sequence(sim)
             sim_times = [node[1] for node in sim.get_nodes()]
             for j in range(tree_sequence.get_num_nodes()):
-                _, generation, _, _ = tree_sequence.get_node(j)
+                _, generation, _, _, _ = tree_sequence.get_node(j)
                 self.assertAlmostEqual(generation, sim_times[j])
             self.assertGreater(sim.get_num_migrations(), 0)
             self.assertEqual(
@@ -2715,6 +2715,7 @@ class TestTablesInterface(LowLevelTestCase):
         self.assertGreater(nodes.num_rows, 0)
         # flags = nodes.flags
         population = nodes.population
+        individual = nodes.individual
         time = nodes.time
         for j in range(ts.get_num_nodes()):
             t = ts.get_node(j)
@@ -2722,6 +2723,7 @@ class TestTablesInterface(LowLevelTestCase):
             # self.assertEqual(flags[j], t[0])
             self.assertEqual(time[j], t[1])
             self.assertEqual(population[j], t[2])
+            self.assertEqual(individual[j], t[3])
 
     def verify_edge_table(self, edges, ts):
         """
@@ -3111,12 +3113,14 @@ class TestTablesInterface(LowLevelTestCase):
 
         new_nodes = _msprime.NodeTable()
         for j in range(ts.get_num_nodes()):
-            flags, time, population, metadata = ts.get_node(j)
+            flags, time, population, individual, metadata = ts.get_node(j)
             new_nodes.add_row(
-                flags=flags, time=time, population=population, metadata=metadata)
+                flags=flags, time=time, population=population,
+                individual=individual, metadata=metadata)
         self.assertEqual(list(nodes.time), list(new_nodes.time))
         self.assertEqual(list(nodes.flags), list(new_nodes.flags))
         self.assertEqual(list(nodes.population), list(new_nodes.population))
+        self.assertEqual(list(nodes.individual), list(new_nodes.individual))
         self.assertEqual(list(nodes.metadata), list(new_nodes.metadata))
 
         new_edges = _msprime.EdgeTable()

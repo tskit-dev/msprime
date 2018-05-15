@@ -6508,6 +6508,7 @@ test_node_table(void)
     free(time);
     free(metadata);
     free(metadata_offset);
+    free(individual);
 }
 
 static void
@@ -7281,6 +7282,7 @@ test_individual_table(void)
             paper_ex_individuals, NULL);
     tree_sequence_dump_tables(&ts, &tables, MSP_ALLOC_TABLES);
     CU_ASSERT_TRUE_FATAL(individual_table_equal(&tables.individuals, &table));
+    tree_sequence_free(&ts);
 
     // copy the table
     individual_table_clear(&table);
@@ -7294,6 +7296,8 @@ test_individual_table(void)
     ret = tree_sequence_dump_tables(&ts, &tables2, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE_FATAL(individual_table_equal(&tables2.individuals, &tables.individuals));
+    tree_sequence_free(&ts);
+    table_collection_free(&tables2);
 
     // Round trip tables -> kastore -> tables
     ret = table_collection_dump(&tables, _tmp_file_name, 0);

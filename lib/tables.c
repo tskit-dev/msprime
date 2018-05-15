@@ -2181,7 +2181,7 @@ individual_table_load(individual_table_t *self, kastore_t *store)
             KAS_FLOAT64},
         {"individuals/location_offset", (void **) &self->location_offset, &self->num_rows,
             1, KAS_UINT32},
-        {"individuals/metadata", (void **) &self->metadata, &self->metadata_length, 0, 
+        {"individuals/metadata", (void **) &self->metadata, &self->metadata_length, 0,
             KAS_UINT8},
         {"individuals/metadata_offset", (void **) &self->metadata_offset, &self->num_rows,
             1, KAS_UINT32},

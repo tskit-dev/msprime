@@ -492,6 +492,7 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     columns = [
         UInt32Column("flags"),
         DoubleColumn("time"),
+        Int32Column("individual"),
         Int32Column("population")]
     ragged_list_columns = [(CharColumn("metadata"),  UInt32Column("metadata_offset"))]
     string_colnames = []
