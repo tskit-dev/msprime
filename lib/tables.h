@@ -62,12 +62,15 @@ typedef struct {
     table_size_t num_rows;
     table_size_t max_rows;
     table_size_t max_rows_increment;
+    table_size_t location_length;
+    table_size_t max_location_length;
+    table_size_t max_location_length_increment;
     table_size_t metadata_length;
     table_size_t max_metadata_length;
     table_size_t max_metadata_length_increment;
-    table_size_t spatial_dimension;
     uint32_t *flags;
     double *location;
+    table_size_t *location_offset;
     char *metadata;
     table_size_t *metadata_offset;
 } individual_table_t;
@@ -370,16 +373,16 @@ int migration_table_dump_text(migration_table_t *self, FILE *out);
 void migration_table_print_state(migration_table_t *self, FILE *out);
 
 int individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
-        size_t max_metadata_length_increment);
-int individual_table_set_spatial_dimension(individual_table_t *self,
-        table_size_t spatial_dimension);
+        size_t max_location_length_increment, size_t max_metadata_length_increment);
 individual_id_t individual_table_add_row(individual_table_t *self, uint32_t flags,
-        double *location, const char *metadata, size_t metadata_length);
+        double *location, size_t location_length, 
+        const char *metadata, size_t metadata_length);
 int individual_table_set_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
-        table_size_t spatial_dimension, double *location,
+        double *location, table_size_t *location_length,
         const char *metadata, table_size_t *metadata_length);
-int individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
-        double *location, const char *metadata, table_size_t *metadata_length);
+int individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags, 
+        double *location, table_size_t *location_length,
+        const char *metadata, table_size_t *metadata_length);
 int individual_table_clear(individual_table_t *self);
 int individual_table_free(individual_table_t *self);
 int individual_table_dump_text(individual_table_t *self, FILE *out);
