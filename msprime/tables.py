@@ -1228,7 +1228,7 @@ class TableCollection(object):
         return {
             # Leaving individuals out for now to until stuff that depends on it
             # is implemented.
-            # "individuals": self.individuals,
+            "individuals": self.individuals,
             "nodes": self.nodes,
             "edges": self.edges,
             "migrations": self.migrations,
@@ -1272,7 +1272,7 @@ class TableCollection(object):
 
 def sort_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
-        provenances=None, edge_start=0):
+        provenances=None, individuals=None, edge_start=0):
     """
     Sorts the given tables **in place**, ensuring that all tree
     sequence ordering requirements are met. See
@@ -1316,6 +1316,7 @@ def sort_tables(
          required if ``sites`` is provided).
     :param ProvenanceTable provenances: Ignored. This argument is provided to
         support calling the function like ``sort_tables(**tables.asdict())``.
+    :param IndividualTable individuals: The tree sequence's individual data.
     :param int edge_start: The index in the edge table where sorting starts
         (default=0; must be <= len(edges)).
     """
@@ -1327,6 +1328,8 @@ def sort_tables(
         kwargs["sites"] = sites
     if mutations is not None:
         kwargs["mutations"] = mutations
+    if individuals is not None:
+        kwargs["individuals"] = individuals
     return _msprime.sort_tables(**kwargs)
 
 

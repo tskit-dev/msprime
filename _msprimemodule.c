@@ -4531,10 +4531,12 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     ProvenanceTable *py_provenances = NULL;
+    IndividualTable *py_individuals = NULL;
     table_collection_t tables;
     double sequence_length = 0.0;
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", "sequence_length", NULL};
+        "sites", "mutations", "provenances", "individuals",
+        "sequence_length", NULL};
 
     /* For now we keep a local table collection object, but we'll want to
      * update this method to take a TableCollection object. The tricky
@@ -4546,13 +4548,14 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
             &ProvenanceTableType, &py_provenances,
+            &IndividualTableType, &py_individuals,
             &sequence_length)) {
         goto out;
     }
@@ -4617,6 +4620,18 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+
+    if (py_individuals != NULL) {
+        if (IndividualTable_check_state(py_individuals) != 0) {
+            goto out;
+        }
+        err = individual_table_copy(py_individuals->individual_table, &tables.individuals);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+
     if ((py_mutations == NULL) != (py_sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
         goto out;
@@ -8912,28 +8927,32 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     EdgeTable *py_edges = NULL;
     MigrationTable *py_migrations = NULL;
     SiteTable *py_sites = NULL;
+    IndividualTable *py_individuals = NULL;
     MutationTable *py_mutations = NULL;
     node_table_t *nodes = NULL;
     edge_table_t *edges = NULL;
     migration_table_t *migrations = NULL;
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
+    individual_table_t *individuals = NULL;
     Py_ssize_t edge_start = 0;
     bool nodes_lock_acquired = false;
     bool edges_lock_acquired = false;
     bool migrations_lock_acquired = false;
     bool sites_lock_acquired = false;
     bool mutations_lock_acquired = false;
+    bool individuals_lock_acquired = false;
 
     static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations",
-        "edge_start", NULL};
+        "individuals", "edge_start", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!n", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!n", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
+            &IndividualTableType, &py_individuals,
             &edge_start)) {
         goto out;
     }
@@ -8973,6 +8992,14 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
         mutations_lock_acquired = true;
         mutations = py_mutations->mutation_table;
     }
+    if (py_individuals != NULL) {
+        if (IndividualTable_check_state(py_individuals) != 0) {
+            goto out;
+        }
+        py_individuals->locked = true;
+        individuals_lock_acquired = true;
+        individuals = py_individuals->individual_table;
+    }
     if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
         goto out;
@@ -8984,7 +9011,9 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     assert(py_nodes->locked);
     assert(py_edges->locked);
     Py_BEGIN_ALLOW_THREADS
-    err = sort_tables(nodes, edges, migrations, sites, mutations, (size_t) edge_start);
+    /* TODO add individuals to sort */
+    err = sort_tables(nodes, edges, migrations, sites, mutations,
+            (size_t) edge_start);
     Py_END_ALLOW_THREADS
     assert(py_nodes->locked);
     assert(py_edges->locked);
@@ -9009,6 +9038,9 @@ out:
     }
     if (mutations_lock_acquired) {
         py_mutations->locked = false;
+    }
+    if (individuals_lock_acquired) {
+        py_individuals->locked = false;
     }
     return ret;
 }

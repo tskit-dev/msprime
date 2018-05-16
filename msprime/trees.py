@@ -1085,7 +1085,7 @@ def load(path):
 
 def load_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
-        provenances=None, sequence_length=0):
+        provenances=None, individuals=None, sequence_length=0):
     """
     Loads the tree sequence data from the specified table objects, and
     returns the resulting :class:`.TreeSequence` object. These tables
@@ -1111,6 +1111,8 @@ def load_tables(
         must also be specified).
     :param ProvenanceTable provenances: The :ref:`provenance table
         <sec_provenance_table_definition>` (optional).
+    :param IndividualTable individuals: The :ref:`individual table
+        <sec_individual_table_definition>` (optional).
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
     :return: A :class:`.TreeSequence` consistent with the specified tables.
@@ -1126,6 +1128,8 @@ def load_tables(
         kwargs["mutations"] = mutations
     if provenances is not None:
         kwargs["provenances"] = provenances
+    if individuals is not None:
+        kwargs["individuals"] = individuals
     return TreeSequence.load_tables(**kwargs)
 
 
