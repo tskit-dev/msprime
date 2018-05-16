@@ -2685,6 +2685,7 @@ msp_get_num_migrations(msp_t *self)
     return self->num_migrations;
 }
 
+
 int WARN_UNUSED
 msp_get_ancestors(msp_t *self, segment_t **ancestors)
 {

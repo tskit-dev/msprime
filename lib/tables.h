@@ -161,6 +161,7 @@ typedef struct {
 /* Definitions for the basic objects */
 
 typedef struct {
+    individual_id_t id;
     uint32_t flags;
     double *location;
     table_size_t location_length;

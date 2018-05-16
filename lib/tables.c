@@ -4452,6 +4452,10 @@ table_collection_copy(table_collection_t *self, table_collection_t *dest)
     if (ret != 0) {
         goto out;
     }
+    ret = population_table_copy(&self->populations, &dest->populations);
+    if (ret != 0) {
+        goto out;
+    }
     ret = provenance_table_copy(&self->provenances, &dest->provenances);
     if (ret != 0) {
         goto out;

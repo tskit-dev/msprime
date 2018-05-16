@@ -5343,6 +5343,64 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_individual(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    individual_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_individuals(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_individual(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_individual(&record);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_population(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    tmp_population_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_populations(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_population(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_population(&record);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_provenance(TreeSequence *self, PyObject *args)
 {
     int err;
@@ -5396,6 +5454,36 @@ TreeSequence_get_num_migrations(TreeSequence *self, PyObject *args)
         goto out;
     }
     num_records = tree_sequence_get_num_migrations(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_individuals(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_individuals(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_populations(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_populations(self->tree_sequence);
     ret = Py_BuildValue("n", (Py_ssize_t) num_records);
 out:
     return ret;
@@ -5667,6 +5755,12 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_mutation",
         (PyCFunction) TreeSequence_get_mutation, METH_VARARGS,
         "Returns the mutation record at the specified index."},
+    {"get_individual",
+        (PyCFunction) TreeSequence_get_individual, METH_VARARGS,
+        "Returns the individual record at the specified index."},
+    {"get_population",
+        (PyCFunction) TreeSequence_get_population, METH_VARARGS,
+        "Returns the population record at the specified index."},
     {"get_provenance",
         (PyCFunction) TreeSequence_get_provenance, METH_VARARGS,
         "Returns the provenance record at the specified index."},
@@ -5674,6 +5768,10 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of coalescence records." },
     {"get_num_migrations", (PyCFunction) TreeSequence_get_num_migrations,
         METH_NOARGS, "Returns the number of migration records." },
+    {"get_num_populations", (PyCFunction) TreeSequence_get_num_populations,
+        METH_NOARGS, "Returns the number of population records." },
+    {"get_num_individuals", (PyCFunction) TreeSequence_get_num_individuals,
+        METH_NOARGS, "Returns the number of individual records." },
     {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,

@@ -315,6 +315,23 @@ timestamp           char                Timestamp in `ISO-8601 <https://en.wikip
 record              char                Provenance record.
 ================    ==============      ===========
 
+.. _sec_individual_table_definition:
+
+Individual Table
+----------------
+
+.. todo::
+    Document the individual table.
+
+
+.. _sec_population_table_definition:
+
+Population Table
+----------------
+
+.. todo::
+    Document the population table.
+
 
 .. _sec_metadata_definition:
 

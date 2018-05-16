@@ -618,6 +618,17 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     self->provenances.record = self->tables->provenances.record;
     self->provenances.record_offset = self->tables->provenances.record_offset;
 
+    self->individuals.num_records = self->tables->individuals.num_rows;
+    self->individuals.flags = self->tables->individuals.flags;
+    self->individuals.location = self->tables->individuals.location;
+    self->individuals.location_offset = self->tables->individuals.location_offset;
+    self->individuals.metadata = self->tables->individuals.metadata;
+    self->individuals.metadata_offset = self->tables->individuals.metadata_offset;
+
+    self->populations.num_records = self->tables->populations.num_rows;
+    self->populations.metadata = self->tables->populations.metadata;
+    self->populations.metadata_offset = self->tables->populations.metadata_offset;
+
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -733,6 +744,18 @@ size_t
 tree_sequence_get_num_mutations(tree_sequence_t *self)
 {
     return self->mutations.num_records;
+}
+
+size_t
+tree_sequence_get_num_populations(tree_sequence_t *self)
+{
+    return self->populations.num_records;
+}
+
+size_t
+tree_sequence_get_num_individuals(tree_sequence_t *self)
+{
+    return self->individuals.num_records;
 }
 
 size_t
@@ -926,6 +949,50 @@ tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
     record->position = self->sites.position[id];
     record->mutations = self->sites.site_mutations[id];
     record->mutations_length = self->sites.site_mutations_length[id];
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_individual(tree_sequence_t *self, size_t index, individual_t *individual)
+{
+    int ret = 0;
+    table_size_t offset, length;
+
+    if (index >= self->individuals.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    individual->id = (individual_id_t) index;
+    individual->flags = self->individuals.flags[index];
+    offset = self->individuals.location_offset[index];
+    length = self->individuals.location_offset[index + 1] - offset;
+    individual->location = self->individuals.location + offset;
+    individual->location_length = length;
+    offset = self->individuals.metadata_offset[index];
+    length = self->individuals.metadata_offset[index + 1] - offset;
+    individual->metadata = self->individuals.metadata + offset;
+    individual->metadata_length = length;
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_population(tree_sequence_t *self, size_t index,
+        tmp_population_t *population)
+{
+    int ret = 0;
+    table_size_t offset, length;
+
+    if (index >= self->populations.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    population->id = (table_size_t) index;
+    offset = self->populations.metadata_offset[index];
+    length = self->populations.metadata_offset[index + 1] - offset;
+    population->metadata = self->populations.metadata + offset;
+    population->metadata_length = length;
 out:
     return ret;
 }
