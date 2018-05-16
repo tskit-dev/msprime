@@ -62,6 +62,11 @@ MutationTableRow = collections.namedtuple(
     ["site", "node", "derived_state", "parent", "metadata"])
 
 
+PopulationTableRow = collections.namedtuple(
+    "PopulationTableRow",
+    ["metadata"])
+
+
 ProvenanceTableRow = collections.namedtuple(
     "ProvenanceTableRow",
     ["timestamp", "record"])
@@ -1097,6 +1102,78 @@ def _mutation_table_pickle(table):
     return MutationTable, tuple(), state
 
 
+class PopulationTable(_msprime.PopulationTable):
+    # FIXME
+    def add_row(self, metadata=None):
+        """
+        .. todo:: document.
+        """
+        if metadata is None:
+            metadata = datetime.datetime.now().isoformat()
+        return super(PopulationTable, self).add_row(metadata=metadata)
+
+    def __str__(self):
+        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        ret = "id\tmetadata\n"
+        for j in range(self.num_rows):
+            ret += "{}\t{}\n".format(j, metadata[j])
+        return ret[:-1]
+
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = (
+                np.array_equal(self.metadata, other.metadata) and
+                np.array_equal(self.metadata_offset, other.metadata_offset))
+        return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __len__(self):
+        return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return PopulationTableRow(*self.get_row(index))
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.set_columns(
+            metadata=state["metadata"],
+            metadata_offset=state["metadata_offset"])
+
+    def copy(self):
+        """
+        Returns a deep copy of this table.
+        """
+        copy = PopulationTable()
+        copy.set_columns(
+            metadata=self.metadata,
+            metadata_offset=self.metadata_offset)
+        return copy
+
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        super(PopulationTable, self).clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
+
+
+# Pickle support. See copyreg registration for this function below.
+def _population_table_pickle(table):
+    state = {
+        "metadata": table.metadata,
+        "metadata_offset": table.metadata_offset,
+    }
+    return PopulationTable, tuple(), state
+
+
 class ProvenanceTable(_msprime.ProvenanceTable):
     """
     .. todo::
@@ -1201,6 +1278,7 @@ copyreg.pickle(EdgeTable, _edge_table_pickle)
 copyreg.pickle(MigrationTable, _migration_table_pickle)
 copyreg.pickle(SiteTable, _site_table_pickle)
 copyreg.pickle(MutationTable, _mutation_table_pickle)
+copyreg.pickle(PopulationTable, _population_table_pickle)
 copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
@@ -1211,7 +1289,7 @@ class TableCollection(object):
     """
     def __init__(
             self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
-            provenances=None, individuals=None):
+            provenances=None, individuals=None, populations=None):
         self.individuals = individuals
         self.nodes = nodes
         self.edges = edges
@@ -1219,6 +1297,7 @@ class TableCollection(object):
         self.sites = sites
         self.mutations = mutations
         self.provenances = provenances
+        self.populations = populations
 
     def asdict(self):
         """
@@ -1234,6 +1313,7 @@ class TableCollection(object):
             "migrations": self.migrations,
             "sites": self.sites,
             "mutations": self.mutations,
+            "populations": self.populations,
             "provenances": self.provenances
         }
 
@@ -1272,7 +1352,7 @@ class TableCollection(object):
 
 def sort_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
-        provenances=None, individuals=None, edge_start=0):
+        provenances=None, individuals=None, populations=None, edge_start=0):
     """
     Sorts the given tables **in place**, ensuring that all tree
     sequence ordering requirements are met. See
@@ -1317,6 +1397,7 @@ def sort_tables(
     :param ProvenanceTable provenances: Ignored. This argument is provided to
         support calling the function like ``sort_tables(**tables.asdict())``.
     :param IndividualTable individuals: The tree sequence's individual data.
+    :param PopulationTable populations: The tree sequence's population data.
     :param int edge_start: The index in the edge table where sorting starts
         (default=0; must be <= len(edges)).
     """
@@ -1330,6 +1411,8 @@ def sort_tables(
         kwargs["mutations"] = mutations
     if individuals is not None:
         kwargs["individuals"] = individuals
+    if populations is not None:
+        kwargs["populations"] = populations
     return _msprime.sort_tables(**kwargs)
 
 

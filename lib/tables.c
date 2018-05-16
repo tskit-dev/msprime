@@ -184,7 +184,6 @@ out:
     return ret;
 }
 
-
 /*************************
  * node table
  *************************/
@@ -2191,6 +2190,259 @@ individual_table_load(individual_table_t *self, kastore_t *store)
 
 
 /*************************
+ * population table
+ *************************/
+
+static int
+population_table_expand_main_columns(population_table_t *self, table_size_t additional_rows)
+{
+    int ret = 0;
+    table_size_t increment = MSP_MAX(additional_rows, self->max_rows_increment);
+    table_size_t new_size = self->max_rows + increment;
+
+    if ((self->num_rows + additional_rows) > self->max_rows) {
+        ret = expand_column((void **) &self->metadata_offset, new_size + 1,
+                sizeof(table_size_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+population_table_expand_metadata(population_table_t *self, table_size_t additional_length)
+{
+    int ret = 0;
+    table_size_t increment = MSP_MAX(additional_length,
+            self->max_metadata_length_increment);
+    table_size_t new_size = self->max_metadata_length + increment;
+
+    if ((self->metadata_length + additional_length) > self->max_metadata_length) {
+        ret = expand_column((void **) &self->metadata, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_metadata_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+population_table_alloc(population_table_t *self, size_t max_rows_increment,
+        size_t max_metadata_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(population_table_t));
+    if (max_rows_increment == 0) {
+       max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (table_size_t) max_rows_increment;
+    self->max_metadata_length_increment = (table_size_t) max_metadata_length_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_metadata_length = 0;
+    self->metadata_length = 0;
+    ret = population_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = population_table_expand_metadata(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->metadata_offset[0] = 0;
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+population_table_copy(population_table_t *self, population_table_t *dest)
+{
+    return population_table_set_columns(dest, self->num_rows,
+            self->metadata, self->metadata_offset);
+}
+
+int
+population_table_set_columns(population_table_t *self, size_t num_rows,
+        char *metadata, uint32_t *metadata_offset)
+{
+    int ret;
+
+    ret = population_table_clear(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = population_table_append_columns(self, num_rows, metadata, metadata_offset);
+out:
+    return ret;
+}
+
+int
+population_table_append_columns(population_table_t *self, size_t num_rows,
+        char *metadata, uint32_t *metadata_offset)
+{
+    int ret;
+    table_size_t j, metadata_length;
+
+    if (metadata == NULL || metadata_offset == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = population_table_expand_main_columns(self, (table_size_t) num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+
+    ret = check_offsets(num_rows, metadata_offset, 0, false);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_rows; j++) {
+        self->metadata_offset[self->num_rows + j] =
+            (table_size_t) self->metadata_length + metadata_offset[j];
+    }
+    metadata_length = metadata_offset[num_rows];
+    ret = population_table_expand_metadata(self, metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->metadata + self->metadata_length, metadata,
+            metadata_length * sizeof(char));
+    self->metadata_length += metadata_length;
+
+    self->num_rows += (table_size_t) num_rows;
+    self->metadata_offset[self->num_rows] = self->metadata_length;
+out:
+    return ret;
+}
+
+static population_id_t
+population_table_add_row_internal(population_table_t *self,
+        const char *metadata, table_size_t metadata_length)
+{
+    int ret = 0;
+
+    assert(self->num_rows < self->max_rows);
+    assert(self->metadata_length + metadata_length <= self->max_metadata_length);
+    memcpy(self->metadata + self->metadata_length, metadata, metadata_length);
+    self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
+    self->metadata_length += metadata_length;
+    ret = (population_id_t) self->num_rows;
+    self->num_rows++;
+    return ret;
+}
+
+population_id_t
+population_table_add_row(population_table_t *self,
+        const char *metadata, size_t metadata_length)
+{
+    int ret = 0;
+
+    ret = population_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = population_table_expand_metadata(self, (table_size_t) metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = population_table_add_row_internal(self,
+            metadata, (table_size_t) metadata_length);
+out:
+    return ret;
+}
+
+int
+population_table_clear(population_table_t *self)
+{
+    self->num_rows = 0;
+    self->metadata_length = 0;
+    return 0;
+}
+
+int
+population_table_free(population_table_t *self)
+{
+    if (self->max_rows > 0) {
+        msp_safe_free(self->metadata);
+        msp_safe_free(self->metadata_offset);
+    }
+    return 0;
+}
+
+void
+population_table_print_state(population_table_t *self, FILE *out)
+{
+    size_t j, k;
+
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "population_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    fprintf(out, "metadata_length  = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->metadata_length,
+            (int) self->max_metadata_length,
+            (int) self->max_metadata_length_increment);
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "index\tmetadata_offset\tmetadata\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%d\t", (int) j, self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+    assert(self->metadata_offset[0] == 0);
+    assert(self->metadata_offset[self->num_rows] == self->metadata_length);
+}
+
+bool
+population_table_equal(population_table_t *self, population_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->metadata_length == other->metadata_length) {
+        ret = memcmp(self->metadata_offset, other->metadata_offset,
+                    (self->num_rows + 1) * sizeof(table_size_t)) == 0
+            && memcmp(self->metadata, other->metadata,
+                    self->metadata_length * sizeof(char)) == 0;
+    }
+    return ret;
+}
+
+static int
+population_table_dump(population_table_t *self, kastore_t *store)
+{
+    write_table_col_t write_cols[] = {
+        {"populations/metadata", (void *) self->metadata,
+            self->metadata_length, KAS_UINT8},
+        {"populations/metadata_offset", (void *) self->metadata_offset,
+            self->num_rows+ 1, KAS_UINT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+}
+
+static int
+population_table_load(population_table_t *self, kastore_t *store)
+{
+    read_table_col_t read_cols[] = {
+        {"populations/metadata", (void **) &self->metadata,
+            &self->metadata_length, 0, KAS_UINT8},
+        {"populations/metadata_offset", (void **) &self->metadata_offset,
+            &self->num_rows, 1, KAS_UINT32},
+    };
+    return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
+}
+
+/*************************
  * provenance table
  *************************/
 
@@ -4137,6 +4389,10 @@ table_collection_alloc(table_collection_t *self, int flags)
         if (ret != 0) {
             goto out;
         }
+        ret = population_table_alloc(&self->populations, 0, 0);
+        if (ret != 0) {
+            goto out;
+        }
         ret = provenance_table_alloc(&self->provenances, 0, 0, 0);
         if (ret != 0) {
             goto out;
@@ -4455,6 +4711,10 @@ table_collection_load(table_collection_t *self, const char *filename, int MSP_UN
     if (ret != 0) {
         goto out;
     }
+    ret = population_table_load(&self->populations, &self->store);
+    if (ret != 0) {
+        goto out;
+    }
     ret = provenance_table_load(&self->provenances, &self->store);
     if (ret != 0) {
         goto out;
@@ -4521,6 +4781,10 @@ table_collection_dump(table_collection_t *self, const char *filename, int MSP_UN
         goto out;
     }
     ret = individual_table_dump(&self->individuals, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = population_table_dump(&self->populations, &store);
     if (ret != 0) {
         goto out;
     }

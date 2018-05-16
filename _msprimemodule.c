@@ -106,6 +106,12 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     bool locked;
+    population_table_t *population_table;
+} PopulationTable;
+
+typedef struct {
+    PyObject_HEAD
+    bool locked;
     provenance_table_t *provenance_table;
 } ProvenanceTable;
 
@@ -480,6 +486,17 @@ make_mutation_id_list(mutation_t *mutations, size_t length)
     }
     ret = t;
 out:
+    return ret;
+}
+
+static PyObject *
+make_population(tmp_population_t *population)
+{
+    PyObject *ret = NULL;
+    PyObject *metadata = make_metadata(population->metadata,
+            (Py_ssize_t) population->metadata_length);
+
+    ret = Py_BuildValue("(O)", metadata);
     return ret;
 }
 
@@ -3525,6 +3542,348 @@ static PyTypeObject MutationTableType = {
 };
 
 /*===================================================================
+ * PopulationTable
+ *===================================================================
+ */
+
+static int
+PopulationTable_check_state(PopulationTable *self)
+{
+    int ret = -1;
+    if (self->population_table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "PopulationTable not initialised");
+        goto out;
+    }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "PopulationTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static void
+PopulationTable_dealloc(PopulationTable* self)
+{
+    if (self->population_table != NULL) {
+        population_table_free(self->population_table);
+        PyMem_Free(self->population_table);
+        self->population_table = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+PopulationTable_init(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"max_rows_increment", NULL};
+    Py_ssize_t max_rows_increment = 0;
+
+    self->population_table = NULL;
+    self->locked = false;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
+                &max_rows_increment)) {
+        goto out;
+    }
+    if (max_rows_increment < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    self->population_table = PyMem_Malloc(sizeof(population_table_t));
+    if (self->population_table == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    /* Take the default size increments for metadata and record */
+    err = population_table_alloc(self->population_table,
+            (size_t) max_rows_increment, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_add_row(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    PyObject *py_metadata = NULL;
+    char *metadata = NULL;
+    Py_ssize_t metadata_length = 0;
+    static char *kwlist[] = {"metadata", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist, &py_metadata)) {
+        goto out;
+    }
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+
+    if (py_metadata != Py_None) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
+    }
+    err = population_table_add_row(self->population_table, metadata, metadata_length);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_row(PopulationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows, row_id;
+    tmp_population_t population;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    num_rows = (Py_ssize_t) self->population_table->num_rows;
+    if (row_id < 0 || row_id >= num_rows) {
+        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+        goto out;
+    }
+    population.metadata = self->population_table->metadata
+        + self->population_table->metadata_offset[row_id];
+    population.metadata_length = self->population_table->metadata_offset[row_id + 1]
+        - self->population_table->metadata_offset[row_id];
+    ret = make_population(&population);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_set_or_append_columns(PopulationTable *self, PyObject *args, PyObject *kwds,
+        int method)
+{
+    PyObject *ret = NULL;
+    int err;
+    size_t num_rows, metadata_length;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+
+    static char *kwlist[] = {"metadata", "metadata_offset", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist,
+                &metadata_input, &metadata_offset_input)) {
+        goto out;
+    }
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+            &metadata_length, false);
+    if (metadata_array == NULL) {
+        goto out;
+    }
+    metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+            metadata_length, false);
+    if (metadata_offset_array == NULL) {
+        goto out;
+    }
+    if (method == SET_COLS) {
+        err = population_table_set_columns(self->population_table, num_rows,
+                PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
+    } else if (method == APPEND_COLS) {
+        err = population_table_append_columns(self->population_table, num_rows,
+                PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
+    } else {
+        assert(0);
+    }
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static PyObject *
+PopulationTable_append_columns(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    return PopulationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+PopulationTable_set_columns(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    return PopulationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+PopulationTable_clear(PopulationTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = population_table_clear(self->population_table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_max_rows_increment(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->population_table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_num_rows(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->population_table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_max_rows(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->population_table->max_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_metadata(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->population_table->metadata_length,
+            self->population_table->metadata, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_metadata_offset(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->population_table->num_rows + 1,
+            self->population_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyGetSetDef PopulationTable_getsetters[] = {
+    {"max_rows_increment",
+        (getter) PopulationTable_get_max_rows_increment, NULL, "The size increment"},
+    {"num_rows", (getter) PopulationTable_get_num_rows, NULL,
+        "The number of rows in the table."},
+    {"max_rows", (getter) PopulationTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
+    {"metadata", (getter) PopulationTable_get_metadata, NULL, "The metadata array"},
+    {"metadata_offset", (getter) PopulationTable_get_metadata_offset, NULL,
+        "The metadata offset array"},
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef PopulationTable_methods[] = {
+    {"add_row", (PyCFunction) PopulationTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
+    {"get_row", (PyCFunction) PopulationTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
+    {"append_columns", (PyCFunction) PopulationTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
+    {"set_columns", (PyCFunction) PopulationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
+    {"clear", (PyCFunction) PopulationTable_clear, METH_NOARGS,
+        "Clears this table."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject PopulationTableType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.PopulationTable",             /* tp_name */
+    sizeof(PopulationTable),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)PopulationTable_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "PopulationTable objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    PopulationTable_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    PopulationTable_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)PopulationTable_init,      /* tp_init */
+};
+
+
+/*===================================================================
  * ProvenanceTable
  *===================================================================
  */
@@ -4532,11 +4891,12 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     MutationTable *py_mutations = NULL;
     ProvenanceTable *py_provenances = NULL;
     IndividualTable *py_individuals = NULL;
+    PopulationTable *py_populations = NULL;
     table_collection_t tables;
     double sequence_length = 0.0;
     static char *kwlist[] = {"nodes", "edges", "migrations",
         "sites", "mutations", "provenances", "individuals",
-        "sequence_length", NULL};
+        "populations", "sequence_length", NULL};
 
     /* For now we keep a local table collection object, but we'll want to
      * update this method to take a TableCollection object. The tricky
@@ -4548,7 +4908,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!d", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!O!d", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
@@ -4556,6 +4916,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             &MutationTableType, &py_mutations,
             &ProvenanceTableType, &py_provenances,
             &IndividualTableType, &py_individuals,
+            &PopulationTableType, &py_populations,
             &sequence_length)) {
         goto out;
     }
@@ -4632,6 +4993,17 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         }
     }
 
+    if (py_populations != NULL) {
+        if (PopulationTable_check_state(py_populations) != 0) {
+            goto out;
+        }
+        err = population_table_copy(py_populations->population_table, &tables.populations);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+
     if ((py_mutations == NULL) != (py_sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
         goto out;
@@ -4663,10 +5035,11 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     SiteTable *py_sites = NULL;
     MutationTable *py_mutations = NULL;
     ProvenanceTable *py_provenances = NULL;
+    PopulationTable *py_populations = NULL;
     IndividualTable *py_individuals = NULL;
     table_collection_t tables;
     static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", "individuals", NULL};
+        "sites", "mutations", "provenances", "individuals", "populations", NULL};
 
     /* For now we keep a local table collection object, but we'll want to
      * update this method to take a TableCollection object. The tricky
@@ -4678,14 +5051,15 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!O!", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
             &ProvenanceTableType, &py_provenances,
-            &IndividualTableType, &py_individuals)) {
+            &IndividualTableType, &py_individuals,
+            &PopulationTableType, &py_populations)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
@@ -4762,12 +5136,25 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+
     if (py_individuals != NULL) {
         if (IndividualTable_check_state(py_individuals) != 0) {
             goto out;
         }
         err = individual_table_copy(&tables.individuals,
                 py_individuals->individual_table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+
+    if (py_populations != NULL) {
+        if (PopulationTable_check_state(py_populations) != 0) {
+            goto out;
+        }
+        err = population_table_copy(&tables.populations,
+                py_populations->population_table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -8928,6 +9315,7 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     MigrationTable *py_migrations = NULL;
     SiteTable *py_sites = NULL;
     IndividualTable *py_individuals = NULL;
+    PopulationTable *py_populations = NULL;
     MutationTable *py_mutations = NULL;
     node_table_t *nodes = NULL;
     edge_table_t *edges = NULL;
@@ -8935,6 +9323,7 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     site_table_t *sites = NULL;
     mutation_table_t *mutations = NULL;
     individual_table_t *individuals = NULL;
+    population_table_t *populations = NULL;
     Py_ssize_t edge_start = 0;
     bool nodes_lock_acquired = false;
     bool edges_lock_acquired = false;
@@ -8942,17 +9331,19 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
     bool sites_lock_acquired = false;
     bool mutations_lock_acquired = false;
     bool individuals_lock_acquired = false;
+    bool populations_lock_acquired = false;
 
     static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations",
-        "individuals", "edge_start", NULL};
+        "individuals", "populations", "edge_start", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!n", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!n", kwlist,
             &NodeTableType, &py_nodes,
             &EdgeTableType, &py_edges,
             &MigrationTableType, &py_migrations,
             &SiteTableType, &py_sites,
             &MutationTableType, &py_mutations,
             &IndividualTableType, &py_individuals,
+            &PopulationTableType, &py_populations,
             &edge_start)) {
         goto out;
     }
@@ -8999,6 +9390,16 @@ msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
         py_individuals->locked = true;
         individuals_lock_acquired = true;
         individuals = py_individuals->individual_table;
+        printf("WARNING: %p indiviauls ignored\n", (void *) individuals);
+    }
+    if (py_populations != NULL) {
+        if (PopulationTable_check_state(py_populations) != 0) {
+            goto out;
+        }
+        py_populations->locked = true;
+        populations_lock_acquired = true;
+        populations = py_populations->population_table;
+        printf("WARNING: %p populations ignored\n", (void *) populations);
     }
     if ((mutations == NULL) != (sites == NULL)) {
         PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
@@ -9041,6 +9442,9 @@ out:
     }
     if (individuals_lock_acquired) {
         py_individuals->locked = false;
+    }
+    if (populations_lock_acquired) {
+        py_populations->locked = false;
     }
     return ret;
 }
@@ -9380,6 +9784,14 @@ init_msprime(void)
     }
     Py_INCREF(&MutationTableType);
     PyModule_AddObject(module, "MutationTable", (PyObject *) &MutationTableType);
+
+    /* PopulationTable type */
+    PopulationTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&PopulationTableType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&PopulationTableType);
+    PyModule_AddObject(module, "PopulationTable", (PyObject *) &PopulationTableType);
 
     /* ProvenanceTable type */
     ProvenanceTableType.tp_new = PyType_GenericNew;

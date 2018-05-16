@@ -40,8 +40,6 @@
 #define MSP_MODEL_DTWF 5
 
 
-#define MSP_INITIALISED_MAGIC 0x1234567
-
 typedef struct segment_t_t {
     population_id_t population_id;
     /* During simulation we use genetic coordinates */

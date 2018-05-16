@@ -35,7 +35,7 @@ import msprime.exceptions as exceptions
 import tests.tsutil as tsutil
 
 
-CURRENT_FILE_MAJOR = 11
+CURRENT_FILE_MAJOR = 12
 
 
 def single_locus_no_mutation_example():
@@ -423,6 +423,8 @@ class TestDumpFormat(TestFileFormat):
            "nodes/metadata_offset",
            "nodes/population",
            "nodes/time",
+           "populations/metadata",
+           "populations/metadata_offset",
            "provenances/record",
            "provenances/record_offset",
            "provenances/timestamp",
@@ -534,6 +536,11 @@ class TestDumpFormat(TestFileFormat):
             tables.mutations.metadata, store["mutations/metadata"]))
         self.assertTrue(np.array_equal(
             tables.mutations.metadata_offset, store["mutations/metadata_offset"]))
+
+        self.assertTrue(np.array_equal(
+            tables.populations.metadata, store["populations/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.populations.metadata_offset, store["populations/metadata_offset"]))
 
         self.assertTrue(np.array_equal(
             tables.provenances.record, store["provenances/record"]))

@@ -116,6 +116,17 @@ typedef struct {
     table_size_t num_rows;
     table_size_t max_rows;
     table_size_t max_rows_increment;
+    table_size_t metadata_length;
+    table_size_t max_metadata_length;
+    table_size_t max_metadata_length_increment;
+    char *metadata;
+    table_size_t *metadata_offset;
+} population_table_t;
+
+typedef struct {
+    table_size_t num_rows;
+    table_size_t max_rows;
+    table_size_t max_rows_increment;
     table_size_t timestamp_length;
     table_size_t max_timestamp_length;
     table_size_t max_timestamp_length_increment;
@@ -136,6 +147,7 @@ typedef struct {
     site_table_t sites;
     mutation_table_t mutations;
     individual_table_t individuals;
+    population_table_t populations;
     provenance_table_t provenances;
     struct {
         edge_id_t *edge_insertion_order;
@@ -204,6 +216,16 @@ typedef struct {
     double right;
     double time;
 } migration_t;
+
+/* FIXME calling this tmp_population_t for now because we already have
+ * a population_t in msprime, which is a useful object. Once we have
+ * moved this code into tskit we can rename it, probably
+ * tsk_population_t */
+typedef struct {
+    table_size_t id;
+    const char *metadata;
+    table_size_t metadata_length;
+} tmp_population_t;
 
 typedef struct {
     table_size_t id;
@@ -399,6 +421,20 @@ int individual_table_dump_text(individual_table_t *self, FILE *out);
 int individual_table_copy(individual_table_t *self, individual_table_t *dest);
 void individual_table_print_state(individual_table_t *self, FILE *out);
 bool individual_table_equal(individual_table_t *self, individual_table_t *other);
+
+int population_table_alloc(population_table_t *self, size_t max_rows_increment,
+        size_t max_metadata_length_increment);
+population_id_t population_table_add_row(population_table_t *self,
+        const char *metadata, size_t metadata_length);
+int population_table_set_columns(population_table_t *self, size_t num_rows,
+       char *metadata, table_size_t *metadata_offset);
+int population_table_append_columns(population_table_t *self, size_t num_rows,
+        char *metadata, table_size_t *metadata_offset);
+int population_table_clear(population_table_t *self);
+int population_table_copy(population_table_t *self, population_table_t *dest);
+int population_table_free(population_table_t *self);
+void population_table_print_state(population_table_t *self, FILE *out);
+bool population_table_equal(population_table_t *self, population_table_t *other);
 
 int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
         size_t max_timestamp_length_increment,

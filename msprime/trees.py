@@ -1085,7 +1085,7 @@ def load(path):
 
 def load_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
-        provenances=None, individuals=None, sequence_length=0):
+        provenances=None, individuals=None, populations=None, sequence_length=0):
     """
     Loads the tree sequence data from the specified table objects, and
     returns the resulting :class:`.TreeSequence` object. These tables
@@ -1113,6 +1113,8 @@ def load_tables(
         <sec_provenance_table_definition>` (optional).
     :param IndividualTable individuals: The :ref:`individual table
         <sec_individual_table_definition>` (optional).
+    :param PopulationTable populations: The :ref:`population table
+        <sec_population_table_definition>` (optional).
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
     :return: A :class:`.TreeSequence` consistent with the specified tables.
@@ -1130,6 +1132,8 @@ def load_tables(
         kwargs["provenances"] = provenances
     if individuals is not None:
         kwargs["individuals"] = individuals
+    if populations is not None:
+        kwargs["populations"] = populations
     return TreeSequence.load_tables(**kwargs)
 
 
@@ -1513,14 +1517,15 @@ class TreeSequence(object):
         if provenances is None:
             provenances = tables.ProvenanceTable()
         individuals = tables.IndividualTable()
+        populations = tables.PopulationTable()
         self._ll_tree_sequence.dump_tables(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
             mutations=mutations, provenances=provenances,
-            individuals=individuals)
+            individuals=individuals, populations=populations)
         return tables.TableCollection(
             nodes=nodes, edges=edges, migrations=migrations, sites=sites,
             mutations=mutations, provenances=provenances,
-            individuals=individuals)
+            individuals=individuals, populations=populations)
 
     def dump_text(
             self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,

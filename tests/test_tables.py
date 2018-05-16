@@ -728,6 +728,27 @@ class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
+class TestPopulationTable(unittest.TestCase, CommonTestsMixin):
+    columns = []
+    ragged_list_columns = [
+        (CharColumn("metadata"), UInt32Column("metadata_offset"))]
+    equal_len_columns = [[]]
+    string_colnames = []
+    binary_colnames = ["metadata"]
+    input_parameters = [("max_rows_increment", 1024)]
+    table_class = msprime.PopulationTable
+
+    def test_simple_example(self):
+        t = msprime.PopulationTable()
+        t.add_row(metadata=b"0")
+        t.add_row(b"1")
+        self.assertEqual(len(t), 2)
+        self.assertEqual(t[0], (b"0",))
+        self.assertEqual(t[0].metadata, b"0")
+        self.assertEqual(t[1], (b"1",))
+        self.assertRaises(IndexError, t.__getitem__, -3)
+
+
 class TestStringPacking(unittest.TestCase):
     """
     Tests the code for packing and unpacking unicode string data into numpy arrays.
@@ -1436,6 +1457,7 @@ class TestTableCollection(unittest.TestCase):
             t.asdict(),
             {
                 "individuals": t.individuals,
+                "populations": t.populations,
                 "nodes": t.nodes,
                 "edges": t.edges,
                 "sites": t.sites,
@@ -1444,6 +1466,7 @@ class TestTableCollection(unittest.TestCase):
                 "provenances": t.provenances})
         d = t.asdict()
         self.assertEqual(id(t.individuals), id(d["individuals"]))
+        self.assertEqual(id(t.populations), id(d["populations"]))
         self.assertEqual(id(t.nodes), id(d["nodes"]))
         self.assertEqual(id(t.edges), id(d["edges"]))
         self.assertEqual(id(t.migrations), id(d["migrations"]))
