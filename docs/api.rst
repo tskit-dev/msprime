@@ -184,6 +184,13 @@ instances to define special values of various variables.
     defined, or population information was not available in the underlying tree
     sequence.
 
+.. data:: msprime.NULL_INDIVIDUAL == -1
+
+    Special reserved value, representing the null individual ID. This value is
+    returned if the individual associated with a particular node is not
+    defined, or individual information was not available in the underlying tree
+    sequence.
+
 .. data:: msprime.NULL_MUTATION == -1
 
     Special reserved value, representing the null mutation ID. If there is a

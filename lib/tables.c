@@ -145,8 +145,8 @@ read_table_cols(kastore_t *store, read_table_col_t *read_cols, size_t num_cols)
         }
         last_len = *read_cols[j].len_dest;
         if (last_len == (table_size_t) -1) {
-            *read_cols[j].len_dest = (table_size_t) len - read_cols[j].len_offset;
-        } else if (last_len + read_cols[j].len_offset != (table_size_t) len) {
+            *read_cols[j].len_dest = (table_size_t) (len - read_cols[j].len_offset);
+        } else if ((last_len + read_cols[j].len_offset) != (table_size_t) len) {
             ret = MSP_ERR_FILE_FORMAT;
             goto out;
         }
@@ -184,6 +184,69 @@ out:
     return ret;
 }
 
+/* ****
+ * Tab-separated parsing:
+ * These will be used on null-terminated strings, which are included,
+ * so `end`, if not NULL, will always be at least one before the end
+ * of the string.
+ *
+ * These return: 
+ *   1 if `sep` is found and delimits a nonzero-length token; 
+ *   0 if `sep` is found as the first character;
+ *   and -1 otherwise.
+ * ***/
+
+int
+get_sep_atoi(char **start, int *out, int sep)
+{
+    int ret;
+    char *next;
+    next = strchr(*start, sep);
+    if (next == NULL) {
+        ret = -1;
+    } else {
+        ret = (int) (next != *start);
+        *next = '\0';
+    }
+    *out = atoi(*start);
+    *start = (next == NULL) ? NULL : next + 1;
+    return ret;
+}
+
+int
+get_sep_atof(char **start, double *out, int sep)
+{
+    int ret;
+    char *next;
+    next = strchr(*start, sep);
+    if (next == NULL) {
+        ret = -1;
+    } else {
+        ret = (int) (next != *start);
+        *next = '\0';
+    }
+    *out = atof(*start);
+    *start = (next == NULL) ? NULL : next + 1;
+    return ret;
+}
+
+int
+get_sep_atoa(char **start, char **out, int sep)
+{
+    int ret;
+    char *next;
+    next = strchr(*start, sep);
+    if (next == NULL) {
+        ret = -1;
+    } else {
+        ret = (int) (next != *start);
+        *next = '\0';
+    }
+    *out = *start;
+    *start = (next == NULL) ? NULL : next + 1;
+    return ret;
+}
+
 
 /*************************
  * node table
@@ -206,6 +269,10 @@ node_table_expand_main_columns(node_table_t *self, table_size_t additional_rows)
             goto out;
         }
         ret = expand_column((void **) &self->population, new_size, sizeof(population_id_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->individual, new_size, sizeof(individual_id_t));
         if (ret != 0) {
             goto out;
         }
@@ -275,12 +342,14 @@ int WARN_UNUSED
 node_table_copy(node_table_t *self, node_table_t *dest)
 {
     return node_table_set_columns(dest, self->num_rows, self->flags,
-            self->time, self->population, self->metadata, self->metadata_offset);
+            self->time, self->population, self->individual,
+            self->metadata, self->metadata_offset);
 }
 
 int WARN_UNUSED
 node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, individual_id_t *individual, const char *metadata,
+        uint32_t *metadata_offset)
 {
     int ret;
 
@@ -288,15 +357,16 @@ node_table_set_columns(node_table_t *self, size_t num_rows, uint32_t *flags, dou
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_append_columns(self, num_rows, flags, time, population, metadata,
-            metadata_offset);
+    ret = node_table_append_columns(self, num_rows, flags, time, population, individual,
+            metadata, metadata_offset);
 out:
     return ret;
 }
 
 int
 node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, double *time,
-        population_id_t *population, const char *metadata, uint32_t *metadata_offset)
+        population_id_t *population, individual_id_t *individual, const char *metadata,
+        uint32_t *metadata_offset)
 {
     int ret;
     table_size_t j, metadata_length;
@@ -344,6 +414,14 @@ node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *flags, 
         memcpy(self->population + self->num_rows, population,
                 num_rows * sizeof(population_id_t));
     }
+    if (individual == NULL) {
+        /* Set individual to NULL_INDIVIDUAL (-1) if not specified */
+        memset(self->individual + self->num_rows, 0xff,
+                num_rows * sizeof(individual_id_t));
+    } else {
+        memcpy(self->individual + self->num_rows, individual,
+                num_rows * sizeof(individual_id_t));
+    }
     self->num_rows += (table_size_t) num_rows;
     self->metadata_offset[self->num_rows] = self->metadata_length;
 out:
@@ -352,7 +430,8 @@ out:
 
 static node_id_t
 node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *metadata, table_size_t metadata_length)
+        population_id_t population, individual_id_t individual,
+        const char *metadata, table_size_t metadata_length)
 {
     assert(self->num_rows < self->max_rows);
     assert(self->metadata_length + metadata_length <= self->max_metadata_length);
@@ -360,6 +439,7 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
     self->flags[self->num_rows] = flags;
     self->time[self->num_rows] = time;
     self->population[self->num_rows] = population;
+    self->individual[self->num_rows] = individual;
     self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
     self->metadata_length += metadata_length;
     self->num_rows++;
@@ -368,7 +448,8 @@ node_table_add_row_internal(node_table_t *self, uint32_t flags, double time,
 
 node_id_t
 node_table_add_row(node_table_t *self, uint32_t flags, double time,
-        population_id_t population, const char *metadata, size_t metadata_length)
+        population_id_t population, individual_id_t individual,
+        const char *metadata, size_t metadata_length)
 {
     int ret = 0;
 
@@ -380,8 +461,8 @@ node_table_add_row(node_table_t *self, uint32_t flags, double time,
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_add_row_internal(self, flags, time, population, metadata,
-            (table_size_t) metadata_length);
+    ret = node_table_add_row_internal(self, flags, time, population, individual,
+            metadata, (table_size_t) metadata_length);
 out:
     return ret;
 }
@@ -401,6 +482,7 @@ node_table_free(node_table_t *self)
         msp_safe_free(self->flags);
         msp_safe_free(self->time);
         msp_safe_free(self->population);
+        msp_safe_free(self->individual);
         msp_safe_free(self->metadata);
         msp_safe_free(self->metadata_offset);
     }
@@ -423,10 +505,10 @@ node_table_print_state(node_table_t *self, FILE *out)
     fprintf(out, TABLE_SEP);
     /* We duplicate the dump_text code here for simplicity because we want to output
      * the flags column directly. */
-    fprintf(out, "id\tflags\ttime\tpopulation\tmetadata_offset\tmetadata\n");
+    fprintf(out, "id\tflags\ttime\tpopulation\tindividual\tmetadata_offset\tmetadata\n");
     for (j = 0; j < self->num_rows; j++) {
-        fprintf(out, "%d\t%d\t%f\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
-                (int) self->population[j], self->metadata_offset[j]);
+        fprintf(out, "%d\t%d\t%f\t%d\t%d\t%d\t", (int) j, self->flags[j], self->time[j],
+                (int) self->population[j], self->individual[j], self->metadata_offset[j]);
         for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
             fprintf(out, "%c", self->metadata[k]);
         }
@@ -439,20 +521,20 @@ node_table_print_state(node_table_t *self, FILE *out)
 int
 node_table_dump_text(node_table_t *self, FILE *out)
 {
-    int ret = 0;
+    int ret = MSP_ERR_IO;
     size_t j;
     table_size_t metadata_len;
     int err;
 
-    err = fprintf(out, "id\tis_sample\ttime\tpopulation\tmetadata\n");
+    err = fprintf(out, "id\tis_sample\ttime\tpopulation\tindividual\tmetadata\n");
     if (err < 0) {
         goto out;
     }
     for (j = 0; j < self->num_rows; j++) {
         metadata_len = self->metadata_offset[j + 1] - self->metadata_offset[j];
-        err = fprintf(out, "%d\t%d\t%f\t%d\t%.*s\n", (int) j,
+        err = fprintf(out, "%d\t%d\t%.17g\t%d\t%d\t%.*s\n", (int) j,
                 (int) (self->flags[j] & MSP_NODE_IS_SAMPLE),
-                self->time[j], self->population[j],
+                self->time[j], self->population[j], self->individual[j],
                 metadata_len, self->metadata + self->metadata_offset[j]);
         if (err < 0) {
             goto out;
@@ -460,6 +542,82 @@ node_table_dump_text(node_table_t *self, FILE *out)
     }
     ret = 0;
 out:
+    return ret;
+}
+
+int
+node_table_load_text(node_table_t *node_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t k;
+    size_t MAX_LINE = 1024;
+    char *line = NULL;
+    double time;
+    int flags, population, individual, id, is_sample;
+    char *name;
+    const char *header = "id\tis_sample\ttime\tpopulation\tindividual\tmetadata\n";
+    char *start;
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = node_table_clear(node_table);
+    if (ret < 0) {
+        goto out;
+    }
+
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atoi(&start, &id, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &is_sample, '\t');
+        flags = (is_sample && MSP_NODE_IS_SAMPLE);
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atof(&start, &time, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &population, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &individual, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &name, '\n');
+        if (err < 0 || *start != '\0') {
+            goto out;
+        }
+        ret = node_table_add_row(node_table, flags, time, population, individual,
+                name, strlen(name));
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    free(line);
     return ret;
 }
 
@@ -475,6 +633,8 @@ node_table_equal(node_table_t *self, node_table_t *other)
                     self->num_rows * sizeof(uint32_t)) == 0
             && memcmp(self->population, other->population,
                     self->num_rows * sizeof(population_id_t)) == 0
+            && memcmp(self->individual, other->individual,
+                    self->num_rows * sizeof(individual_id_t)) == 0
             && memcmp(self->metadata_offset, other->metadata_offset,
                     (self->num_rows + 1) * sizeof(table_size_t)) == 0
             && memcmp(self->metadata, other->metadata,
@@ -490,6 +650,7 @@ node_table_dump(node_table_t *self, kastore_t *store)
         {"nodes/time", (void *) self->time, self->num_rows, KAS_FLOAT64},
         {"nodes/flags", (void *) self->flags, self->num_rows, KAS_UINT32},
         {"nodes/population", (void *) self->population, self->num_rows, KAS_INT32},
+        {"nodes/individual", (void *) self->individual, self->num_rows, KAS_INT32},
         {"nodes/metadata", (void *) self->metadata, self->metadata_length, KAS_UINT8},
         {"nodes/metadata_offset", (void *) self->metadata_offset, self->num_rows + 1,
             KAS_UINT32},
@@ -504,6 +665,8 @@ node_table_load(node_table_t *self, kastore_t *store)
         {"nodes/time", (void **) &self->time, &self->num_rows, 0, KAS_FLOAT64},
         {"nodes/flags", (void **) &self->flags, &self->num_rows, 0, KAS_UINT32},
         {"nodes/population", (void **) &self->population, &self->num_rows, 0,
+            KAS_INT32},
+        {"nodes/individual", (void **) &self->individual, &self->num_rows, 0,
             KAS_INT32},
         {"nodes/metadata", (void **) &self->metadata, &self->metadata_length, 0,
             KAS_UINT8},
@@ -678,7 +841,7 @@ edge_table_dump_text(edge_table_t *self, FILE *out)
         goto out;
     }
     for (j = 0; j < self->num_rows; j++) {
-        err = fprintf(out, "%.3f\t%.3f\t%d\t%d\n", self->left[j], self->right[j],
+        err = fprintf(out, "%.17g\t%.17g\t%d\t%d\n", self->left[j], self->right[j],
                 self->parent[j], self->child[j]);
         if (err < 0) {
             goto out;
@@ -688,6 +851,77 @@ edge_table_dump_text(edge_table_t *self, FILE *out)
 out:
     return ret;
 }
+
+int
+edge_table_load_text(edge_table_t *edge_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t k;
+    size_t MAX_LINE = 1024;
+    char *line = NULL;
+    double left, right;
+    node_id_t parent, child;
+    uint32_t num_children;
+    const char *header = "left\tright\tparent\tchild\n";
+    char *start, *childs;
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = edge_table_clear(edge_table);
+    if (ret < 0) {
+        goto out;
+    }
+    
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atof(&start, &left, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atof(&start, &right, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &parent, '\t');
+        if (err <= 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &childs, '\n');
+        if (err < 0) {
+            goto out;
+        }
+        do {
+            err = get_sep_atoi(&childs, &child, ',');
+            ret = edge_table_add_row(edge_table, left, right, parent, child);
+            if (ret < 0) {
+                goto out;
+            }
+        } while (err > 0);
+        assert(err == -1);
+    }
+    ret = 0;
+out:
+    free(line);
+    return ret;
+}
+
 
 bool
 edge_table_equal(edge_table_t *self, edge_table_t *other)
@@ -1043,7 +1277,7 @@ site_table_print_state(site_table_t *self, FILE *out)
             (int) self->ancestral_state_length,
             (int) self->max_ancestral_state_length,
             (int) self->max_ancestral_state_length_increment);
-    fprintf(out, "metadata_length = %d(\tmax= %d\tincrement = %d)\n",
+    fprintf(out, "metadata_length = %d\t(max= %d\tincrement = %d)\n",
             (int) self->metadata_length,
             (int) self->max_metadata_length,
             (int) self->max_metadata_length_increment);
@@ -1074,7 +1308,7 @@ site_table_dump_text(site_table_t *self, FILE *out)
         ancestral_state_len = self->ancestral_state_offset[j + 1] -
             self->ancestral_state_offset[j];
         metadata_len = self->metadata_offset[j + 1] - self->metadata_offset[j];
-        err = fprintf(out, "%d\t%f\t%.*s\t%.*s\n", (int) j, self->position[j],
+        err = fprintf(out, "%d\t%.17g\t%.*s\t%.*s\n", (int) j, self->position[j],
                 ancestral_state_len, self->ancestral_state + self->ancestral_state_offset[j],
                 metadata_len, self->metadata + self->metadata_offset[j]);
         if (err < 0) {
@@ -1083,6 +1317,73 @@ site_table_dump_text(site_table_t *self, FILE *out)
     }
     ret = 0;
 out:
+    return ret;
+}
+
+int
+site_table_load_text(site_table_t *site_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t k;
+    size_t MAX_LINE = 1024;
+    char *line = NULL;
+    int id;
+    double position;
+    char *ancestral_state, *metadata;
+    const char *header = "id\tposition\tancestral_state\tmetadata\n";
+    char *start;
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = site_table_clear(site_table);
+    if (ret < 0) {
+        goto out;
+    }
+    
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atoi(&start, &id, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atof(&start, &position, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &ancestral_state, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &metadata, '\n');
+        if (err < 0 || *start != '\0') {
+            goto out;
+        }
+        ret = site_table_add_row(site_table, position, ancestral_state,
+                strlen(ancestral_state), metadata, strlen(metadata));
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    free(line);
     return ret;
 }
 
@@ -1193,7 +1494,7 @@ mutation_table_expand_metadata(mutation_table_t *self, size_t additional_length)
         if (ret != 0) {
             goto out;
         }
-        self->max_metadata_length = (table_size_t) new_size;
+        self->max_metadata_length = new_size;
     }
 out:
     return ret;
@@ -1503,6 +1804,84 @@ out:
     return ret;
 }
 
+int
+mutation_table_load_text(mutation_table_t *mutation_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t k;
+    size_t MAX_LINE = 1024;
+    char *line;
+    const char *tabsep = "\t\n";
+    int id;
+    node_id_t node;
+    site_id_t site;
+    mutation_id_t parent;
+    char *derived_state, *metadata;
+    const char *header = "id\tsite\tnode\tparent\tderived_state\tmetadata\n";
+    char *start;
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = mutation_table_clear(mutation_table);
+    if (ret < 0) {
+        goto out;
+    }
+    
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atoi(&start, &id, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &site, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &node, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &parent, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &derived_state, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &metadata, '\n');
+        if (err < 0 || *start != '\0') {
+            goto out;
+        }
+        ret = mutation_table_add_row(mutation_table, site, node, parent,
+                derived_state, strlen(derived_state), metadata, strlen(metadata));
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    free(line);
+    return ret;
+}
+
 static int
 mutation_table_dump(mutation_table_t *self, kastore_t *store)
 {
@@ -1726,7 +2105,7 @@ migration_table_dump_text(migration_table_t *self, FILE *out)
         goto out;
     }
     for (j = 0; j < self->num_rows; j++) {
-        err = fprintf(out, "%.3f\t%.3f\t%d\t%d\t%d\t%f\n", self->left[j],
+        err = fprintf(out, "%.17g\t%.17g\t%d\t%d\t%d\t%.17g\n", self->left[j],
                 self->right[j], (int) self->node[j], (int) self->source[j],
                 (int) self->dest[j], self->time[j]);
         if (err < 0) {
@@ -1735,6 +2114,80 @@ migration_table_dump_text(migration_table_t *self, FILE *out)
     }
     ret = 0;
 out:
+    return ret;
+}
+
+int
+migration_table_load_text(migration_table_t *migration_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t k;
+    size_t MAX_LINE = 1024;
+    char *line = NULL;
+    double left, right, time;
+    int node, source, dest;
+    const char *header = "left\tright\tnode\tsource\tdest\ttime\n";
+    char *start;
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = migration_table_clear(migration_table);
+    if (ret < 0) {
+        goto out;
+    }
+
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atof(&start, &left, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atof(&start, &right, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &node, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &source, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &dest, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atof(&start, &time, '\n');
+        if (err < 0) {
+            goto out;
+        }
+        ret = migration_table_add_row(migration_table, left, right, node,
+                source, dest, time);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    free(line);
     return ret;
 }
 
@@ -1765,6 +2218,482 @@ migration_table_load(migration_table_t *self, kastore_t *store)
     };
     return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
+
+/*************************
+ * individual table
+ *************************/
+
+static int
+individual_table_expand_main_columns(individual_table_t *self, table_size_t additional_rows)
+{
+    int ret = 0;
+    table_size_t increment = MSP_MAX(additional_rows, self->max_rows_increment);
+    table_size_t new_size = self->max_rows + increment;
+
+    if ((self->num_rows + additional_rows) > self->max_rows) {
+        ret = expand_column((void **) &self->flags, new_size, sizeof(uint32_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->location_offset, new_size + 1,
+                sizeof(table_size_t));
+        if (ret != 0) {
+            goto out;
+        }
+        ret = expand_column((void **) &self->metadata_offset, new_size + 1,
+                sizeof(table_size_t));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_rows = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+individual_table_expand_location(individual_table_t *self, table_size_t additional_length)
+{
+    int ret = 0;
+    table_size_t increment = MSP_MAX(additional_length,
+            self->max_location_length_increment);
+    table_size_t new_size = self->max_location_length + increment;
+
+    if ((self->location_length + additional_length) > self->max_location_length) {
+        ret = expand_column((void **) &self->location, new_size, sizeof(double));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_location_length = new_size;
+    }
+out:
+    return ret;
+}
+
+static int
+individual_table_expand_metadata(individual_table_t *self, table_size_t additional_length)
+{
+    int ret = 0;
+    table_size_t increment = MSP_MAX(additional_length,
+            self->max_metadata_length_increment);
+    table_size_t new_size = self->max_metadata_length + increment;
+
+    if ((self->metadata_length + additional_length) > self->max_metadata_length) {
+        ret = expand_column((void **) &self->metadata, new_size, sizeof(char));
+        if (ret != 0) {
+            goto out;
+        }
+        self->max_metadata_length = new_size;
+    }
+out:
+    return ret;
+}
+
+int
+individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
+        size_t max_location_length_increment, size_t max_metadata_length_increment)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(individual_table_t));
+    if (max_rows_increment == 0) {
+       max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_location_length_increment == 0) {
+        max_location_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (table_size_t) max_rows_increment;
+    self->max_location_length_increment = (table_size_t) max_location_length_increment;
+    self->max_metadata_length_increment = (table_size_t) max_metadata_length_increment;
+    self->max_rows = 0;
+    self->num_rows = 0;
+    self->max_location_length = 0;
+    self->location_length = 0;
+    self->max_metadata_length = 0;
+    self->metadata_length = 0;
+    ret = individual_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_expand_location(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->location_offset[0] = 0;
+    ret = individual_table_expand_metadata(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    self->metadata_offset[0] = 0;
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+individual_table_copy(individual_table_t *self, individual_table_t *dest)
+{
+    return individual_table_set_columns(dest, self->num_rows, self->flags,
+            self->location, self->location_offset, self->metadata, self->metadata_offset);
+}
+
+int WARN_UNUSED
+individual_table_set_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
+        double *location, uint32_t *location_offset,
+        const char *metadata, uint32_t *metadata_offset)
+{
+    int ret;
+
+    ret = individual_table_clear(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_append_columns(self, num_rows, flags, location, location_offset,
+            metadata, metadata_offset);
+out:
+    return ret;
+}
+
+int
+individual_table_append_columns(individual_table_t *self, size_t num_rows, uint32_t *flags,
+        double *location, uint32_t *location_offset, const char *metadata, uint32_t *metadata_offset)
+{
+    int ret;
+    table_size_t j, metadata_length, location_length;
+
+    if (flags == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if ((location == NULL) != (location_offset == NULL)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if ((metadata == NULL) != (metadata_offset == NULL)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = individual_table_expand_main_columns(self, (table_size_t) num_rows);
+    if (ret != 0) {
+        goto out;
+    }
+    memcpy(self->flags + self->num_rows, flags, num_rows * sizeof(uint32_t));
+    if (location == NULL) {
+        for (j = 0; j < num_rows; j++) {
+            self->location_offset[self->num_rows + j + 1] = (table_size_t) self->location_length;
+        }
+    } else {
+        ret = check_offsets(num_rows, location_offset, 0, false);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < num_rows; j++) {
+            self->location_offset[self->num_rows + j] =
+                (table_size_t) self->location_length + location_offset[j];
+        }
+        location_length = location_offset[num_rows];
+        ret = individual_table_expand_location(self, location_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->location + self->location_length, location, location_length * sizeof(double));
+        self->location_length += location_length;
+    }
+    if (metadata == NULL) {
+        for (j = 0; j < num_rows; j++) {
+            self->metadata_offset[self->num_rows + j + 1] = (table_size_t) self->metadata_length;
+        }
+    } else {
+        ret = check_offsets(num_rows, metadata_offset, 0, false);
+        if (ret != 0) {
+            goto out;
+        }
+        for (j = 0; j < num_rows; j++) {
+            self->metadata_offset[self->num_rows + j] =
+                (table_size_t) self->metadata_length + metadata_offset[j];
+        }
+        metadata_length = metadata_offset[num_rows];
+        ret = individual_table_expand_metadata(self, metadata_length);
+        if (ret != 0) {
+            goto out;
+        }
+        memcpy(self->metadata + self->metadata_length, metadata, metadata_length * sizeof(char));
+        self->metadata_length += metadata_length;
+    }
+    self->num_rows += (table_size_t) num_rows;
+    self->location_offset[self->num_rows] = self->location_length;
+    self->metadata_offset[self->num_rows] = self->metadata_length;
+out:
+    return ret;
+}
+
+static individual_id_t
+individual_table_add_row_internal(individual_table_t *self, uint32_t flags, double *location,
+        table_size_t location_length, const char *metadata, table_size_t metadata_length)
+{
+    assert(self->num_rows < self->max_rows);
+    assert(self->metadata_length + metadata_length <= self->max_metadata_length);
+    assert(self->location_length + location_length <= self->max_location_length);
+    self->flags[self->num_rows] = flags;
+    memcpy(self->location + self->location_length, location, location_length * sizeof(double));
+    self->location_offset[self->num_rows + 1] = self->location_length + location_length;
+    self->location_length += location_length;
+    memcpy(self->metadata + self->metadata_length, metadata, metadata_length * sizeof(char));
+    self->metadata_offset[self->num_rows + 1] = self->metadata_length + metadata_length;
+    self->metadata_length += metadata_length;
+    self->num_rows++;
+    return (individual_id_t) self->num_rows - 1;
+}
+
+individual_id_t
+individual_table_add_row(individual_table_t *self, uint32_t flags, double *location,
+        size_t location_length, const char *metadata, size_t metadata_length)
+{
+    int ret = 0;
+
+    ret = individual_table_expand_main_columns(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_expand_location(self, (table_size_t) location_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_expand_metadata(self, (table_size_t) metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_add_row_internal(self, flags, location,
+            (table_size_t) location_length, metadata, (table_size_t) metadata_length);
+out:
+    return ret;
+}
+
+int
+individual_table_clear(individual_table_t *self)
+{
+    int ret = 0;
+    self->num_rows = 0;
+    self->metadata_length = 0;
+    self->location_length = 0;
+    return ret;
+}
+
+int
+individual_table_free(individual_table_t *self)
+{
+    if (self->max_rows > 0) {
+        msp_safe_free(self->flags);
+        msp_safe_free(self->location);
+        msp_safe_free(self->location_offset);
+        msp_safe_free(self->metadata);
+        msp_safe_free(self->metadata_offset);
+    }
+    return 0;
+}
+
+void
+individual_table_print_state(individual_table_t *self, FILE *out)
+{
+    size_t j, k;
+
+    fprintf(out, TABLE_SEP);
+    fprintf(out, "individual_table: %p:\n", (void *) self);
+    fprintf(out, "num_rows          = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->num_rows, (int) self->max_rows, (int) self->max_rows_increment);
+    fprintf(out, "metadata_length = %d\tmax= %d\tincrement = %d)\n",
+            (int) self->metadata_length,
+            (int) self->max_metadata_length,
+            (int) self->max_metadata_length_increment);
+    fprintf(out, TABLE_SEP);
+    /* We duplicate the dump_text code here because we want to output
+     * the offset columns. */
+    fprintf(out, "id\tflags\tlocation_offset\tlocation\t");
+    fprintf(out, "metadata_offset\tmetadata\n");
+    for (j = 0; j < self->num_rows; j++) {
+        fprintf(out, "%d\t%d\t", (int) j, self->flags[j]);
+        fprintf(out, "%d\t", self->location_offset[j]);
+        for (k = self->location_offset[j]; k < self->location_offset[j + 1]; k++) {
+            fprintf(out, "%f", self->location[k]);
+            if (k + 1 < self->location_offset[j + 1]) {
+                fprintf(out, ",");
+            }
+        }
+        fprintf(out, "\t");
+        fprintf(out, "%d\t", self->metadata_offset[j]);
+        for (k = self->metadata_offset[j]; k < self->metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+}
+
+int
+individual_table_dump_text(individual_table_t *self, FILE *out)
+{
+    int ret = MSP_ERR_IO;
+    size_t j, k;
+    table_size_t metadata_len;
+    int err;
+
+    err = fprintf(out, "id\tflags\tlocation\tmetadata\n");
+    if (err < 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_rows; j++) {
+        metadata_len = self->metadata_offset[j + 1] - self->metadata_offset[j];
+        err = fprintf(out, "%d\t%d\t", (int) j, (int) self->flags[j]);
+        if (err < 0) {
+            goto out;
+        }
+        for (k = self->location_offset[j]; k < self->location_offset[j + 1]; k++) {
+            fprintf(out, "%.17g", self->location[k]);
+            if (k + 1 < self->location_offset[j + 1]) {
+                fprintf(out, ",");
+            }
+        }
+        fprintf(out, "\t");
+        err = fprintf(out, "%.*s\n",
+                metadata_len, self->metadata + self->metadata_offset[j]);
+        if (err < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+individual_table_load_text(individual_table_t *individual_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t j, k;
+    size_t MAX_LINE = 1024;
+    char *line, *start, *loc;
+    const char *tabsep = "\t\n";
+    double location[MAX_LINE];
+    int flags, id;
+    char *metadata;
+    const char *header = "id\tflags\tlocation\tmetadata\n";
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = individual_table_clear(individual_table);
+    if (ret < 0) {
+        goto out;
+    }
+    
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atoi(&start, &id, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoi(&start, &flags, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        j = 0;
+        err = get_sep_atoa(&start, &loc, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        if (err > 0) {
+            while ((err = get_sep_atof(&loc, location + j, ',')) > 0) {
+                j++;
+            }
+            if (err < 0) {
+                goto out;
+            }
+        }
+        err = get_sep_atoa(&start, &metadata, '\n');
+        if (err < 0 || *start != '\0') {
+            goto out;
+        }
+        ret = individual_table_add_row(individual_table, flags, location, j,
+                metadata, strlen(metadata));
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    free(line);
+    return ret;
+}
+
+bool
+individual_table_equal(individual_table_t *self, individual_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows
+            && self->metadata_length == other->metadata_length) {
+        ret = memcmp(self->flags, other->flags,
+                    self->num_rows * sizeof(uint32_t)) == 0
+            && memcmp(self->location_offset, other->location_offset,
+                    (self->num_rows + 1) * sizeof(table_size_t)) == 0
+            && memcmp(self->location, other->location,
+                    self->location_length * sizeof(double)) == 0
+            && memcmp(self->metadata_offset, other->metadata_offset,
+                    (self->num_rows + 1) * sizeof(table_size_t)) == 0
+            && memcmp(self->metadata, other->metadata,
+                    self->metadata_length * sizeof(char)) == 0;
+    }
+    return ret;
+}
+
+static int
+individual_table_dump(individual_table_t *self, kastore_t *store)
+{
+    write_table_col_t write_cols[] = {
+        {"individuals/flags", (void *) self->flags, self->num_rows, KAS_UINT32},
+        {"individuals/location", (void *) self->location, self->location_length, KAS_FLOAT64},
+        {"individuals/location_offset", (void *) self->location_offset, self->num_rows + 1,
+            KAS_UINT32},
+        {"individuals/metadata", (void *) self->metadata, self->metadata_length, KAS_UINT8},
+        {"individuals/metadata_offset", (void *) self->metadata_offset, self->num_rows + 1,
+            KAS_UINT32},
+    };
+    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+}
+
+static int
+individual_table_load(individual_table_t *self, kastore_t *store)
+{
+    read_table_col_t read_cols[] = {
+        {"individuals/flags", (void **) &self->flags, &self->num_rows, 0, KAS_UINT32},
+        {"individuals/location", (void **) &self->location, &self->location_length, 0,
+            KAS_FLOAT64},
+        {"individuals/location_offset", (void **) &self->location_offset, &self->num_rows,
+            1, KAS_UINT32},
+        {"individuals/metadata", (void **) &self->metadata, &self->metadata_length, 0, 
+            KAS_UINT8},
+        {"individuals/metadata_offset", (void **) &self->metadata_offset, &self->num_rows,
+            1, KAS_UINT32},
+    };
+    return read_table_cols(store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
+}
+
 
 /*************************
  * provenance table
@@ -1803,7 +2732,7 @@ provenance_table_expand_timestamp(provenance_table_t *self, table_size_t additio
     table_size_t new_size = self->max_timestamp_length + increment;
 
     if ((self->timestamp_length + additional_length) > self->max_timestamp_length) {
-        ret = expand_column((void **) &self->timestamp, new_size, sizeof(char *));
+        ret = expand_column((void **) &self->timestamp, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
@@ -1822,7 +2751,7 @@ provenance_table_expand_provenance(provenance_table_t *self, table_size_t additi
     table_size_t new_size = self->max_record_length + increment;
 
     if ((self->record_length + additional_length) > self->max_record_length) {
-        ret = expand_column((void **) &self->record, new_size, sizeof(char *));
+        ret = expand_column((void **) &self->record, new_size, sizeof(char));
         if (ret != 0) {
             goto out;
         }
@@ -2060,6 +2989,90 @@ provenance_table_print_state(provenance_table_t *self, FILE *out)
     assert(self->timestamp_offset[self->num_rows] == self->timestamp_length);
     assert(self->record_offset[0] == 0);
     assert(self->record_offset[self->num_rows] == self->record_length);
+}
+
+int
+provenance_table_dump_text(provenance_table_t *self, FILE *out)
+{
+    int ret = MSP_ERR_IO;
+    int err;
+    size_t j;
+    table_size_t timestamp_len, record_len;
+
+    err = fprintf(out, "record\ttimestamp\n");
+    if (err < 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_rows; j++) {
+        record_len = self->record_offset[j + 1] -
+            self->record_offset[j];
+        timestamp_len = self->timestamp_offset[j + 1] - self->timestamp_offset[j];
+        err = fprintf(out, "%.*s\t%.*s\n", record_len, self->record + self->record_offset[j],
+                timestamp_len, self->timestamp + self->timestamp_offset[j]);
+        if (err < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int
+provenance_table_load_text(provenance_table_t *provenance_table, FILE *file)
+{
+    int ret;
+    int err;
+    size_t c, k;
+    size_t MAX_LINE = 1024;
+    char *line = NULL;
+    char *record, *timestamp;
+    char *start;
+    const char *header = "record\ttimestamp\n";
+
+    line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    k = MAX_LINE;
+
+    ret = provenance_table_clear(provenance_table);
+    if (ret < 0) {
+        goto out;
+    }
+    
+    // check the header
+    ret = MSP_ERR_FILE_FORMAT;
+    err = getline(&line, &k, file);
+    if (err < 0) {
+        goto out;
+    }
+    err = strcmp(line, header);
+    if (err != 0) {
+        goto out;
+    }
+
+    while ((err = getline(&line, &k, file)) != -1) {
+        start = line;
+        err = get_sep_atoa(&start, &record, '\t');
+        if (err < 0) {
+            goto out;
+        }
+        err = get_sep_atoa(&start, &timestamp, '\n');
+        if (err < 0 || *start != '\0') {
+            goto out;
+        }
+        ret = provenance_table_add_row(provenance_table, timestamp, strlen(timestamp), 
+                record, strlen(record));
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    free(line);
+    return ret;
 }
 
 bool
@@ -2716,6 +3729,7 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
     self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
     ret = node_table_add_row_internal(self->nodes, flags,
             self->input_nodes.time[input_id], self->input_nodes.population[input_id],
+            self->input_nodes.individual[input_id],
             self->input_nodes.metadata + offset, length);
     return ret;
 }
@@ -3046,7 +4060,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
     ret = node_table_set_columns(&self->input_nodes, nodes->num_rows,
             nodes->flags, nodes->time, nodes->population,
-            nodes->metadata, nodes->metadata_offset);
+            nodes->individual, nodes->metadata, nodes->metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -3646,6 +4660,11 @@ table_collection_check_offsets(table_collection_t *self)
     if (ret != 0) {
         goto out;
     }
+    ret = check_offsets(self->individuals.num_rows, self->individuals.metadata_offset,
+            self->individuals.metadata_length, true);
+    if (ret != 0) {
+        goto out;
+    }
     ret = check_offsets(self->provenances.num_rows, self->provenances.timestamp_offset,
             self->provenances.timestamp_length, true);
     if (ret != 0) {
@@ -3671,6 +4690,7 @@ table_collection_print_state(table_collection_t *self, FILE *out)
     migration_table_print_state(&self->migrations, out);
     site_table_print_state(&self->sites, out);
     mutation_table_print_state(&self->mutations, out);
+    individual_table_print_state(&self->individuals, out);
     provenance_table_print_state(&self->provenances, out);
     return 0;
 }
@@ -3702,6 +4722,10 @@ table_collection_alloc(table_collection_t *self, int flags)
         if (ret != 0) {
             goto out;
         }
+        ret = individual_table_alloc(&self->individuals, 0, 0, 0);
+        if (ret != 0) {
+            goto out;
+        }
         ret = provenance_table_alloc(&self->provenances, 0, 0, 0);
         if (ret != 0) {
             goto out;
@@ -3721,6 +4745,7 @@ table_collection_free(table_collection_t *self)
     migration_table_free(&self->migrations);
     site_table_free(&self->sites);
     mutation_table_free(&self->mutations);
+    individual_table_free(&self->individuals);
     provenance_table_free(&self->provenances);
     if (self->indexes.malloced_locally) {
         msp_safe_free(self->indexes.edge_insertion_order);
@@ -3753,6 +4778,10 @@ table_collection_copy(table_collection_t *self, table_collection_t *dest)
         goto out;
     }
     ret = mutation_table_copy(&self->mutations, &dest->mutations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_copy(&self->individuals, &dest->individuals);
     if (ret != 0) {
         goto out;
     }
@@ -4011,6 +5040,10 @@ table_collection_load(table_collection_t *self, const char *filename, int flags)
     if (ret != 0) {
         goto out;
     }
+    ret = individual_table_load(&self->individuals, &self->store);
+    if (ret != 0) {
+        goto out;
+    }
     ret = provenance_table_load(&self->provenances, &self->store);
     if (ret != 0) {
         goto out;
@@ -4073,6 +5106,10 @@ table_collection_dump(table_collection_t *self, const char *filename, int flags)
         goto out;
     }
     ret = mutation_table_dump(&self->mutations, &store);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_dump(&self->individuals, &store);
     if (ret != 0) {
         goto out;
     }
@@ -4372,5 +5409,84 @@ table_collection_compute_mutation_parents(table_collection_t *self, int flags)
 out:
     msp_safe_free(parent);
     msp_safe_free(bottom_mutation);
+    return ret;
+}
+
+
+/*************************
+ * load_text
+ *************************/
+
+
+/****
+ * Simple utilities to parse text, mostly for debugging purposes.
+ * General assumptions:
+ *  files are strictly tab-separated (columns separated by exactly one tab)
+ *  columns are in the expected order
+ *  only the last column (metadata) is optional
+ ****/
+
+
+int
+table_collection_load_text(table_collection_t *tables, FILE *nodes, FILE *edges,
+        FILE *sites, FILE *mutations, FILE *migrations, FILE *individuals, 
+        FILE *provenances)
+{
+    int ret;
+    int j;
+    double sequence_length;
+
+    ret = node_table_load_text(&tables->nodes, nodes);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edge_table_load_text(&tables->edges, edges);
+    if (ret != 0) {
+        goto out;
+    }
+    if (sites != NULL) {
+        ret = site_table_load_text(&tables->sites, sites);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (mutations != NULL) {
+        ret = mutation_table_load_text(&tables->mutations, mutations);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (migrations != NULL) {
+        ret = migration_table_load_text(&tables->migrations, migrations);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (individuals != NULL) {
+        ret = individual_table_load_text(&tables->individuals, individuals);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (provenances != NULL) {
+        ret = provenance_table_load_text(&tables->provenances, provenances);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    /* infer sequence length from the edges and/or sites */
+    sequence_length = 0.0;
+    for (j = 0; j < tables->edges.num_rows; j++) {
+        sequence_length = MSP_MAX(sequence_length, tables->edges.right[j]);
+    }
+    for (j = 0; j < tables->sites.num_rows; j++) {
+        sequence_length = MSP_MAX(sequence_length, tables->sites.position[j]);
+    }
+    if (sequence_length <= 0.0) {
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+        goto out;
+    }
+    tables->sequence_length = sequence_length;
+out :
     return ret;
 }

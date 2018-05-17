@@ -39,6 +39,7 @@ typedef struct {
         double *time;
         uint32_t *flags;
         population_id_t *population;
+        individual_id_t *individual;
         char *metadata;
         table_size_t *metadata_offset;
         node_id_t *sample_index_map;

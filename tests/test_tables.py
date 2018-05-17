@@ -502,14 +502,15 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
 
     def test_simple_example(self):
         t = msprime.NodeTable()
-        t.add_row(flags=0, time=1, population=2, metadata=b"123")
-        t.add_row(flags=1, time=2, population=3, metadata=b"456")
+        t.add_row(flags=0, time=1, population=2, individual=0, metadata=b"123")
+        t.add_row(flags=1, time=2, population=3, individual=1, metadata=b"456")
         self.assertEqual(len(t), 2)
-        self.assertEqual(t[0], (0, 1, 2, b"123"))
-        self.assertEqual(t[1], (1, 2, 3, b"456"))
+        self.assertEqual(t[0], (0, 1, 2, 0, b"123"))
+        self.assertEqual(t[1], (1, 2, 3, 1, b"456"))
         self.assertEqual(t[0].flags, 0)
         self.assertEqual(t[0].time, 1)
         self.assertEqual(t[0].population, 2)
+        self.assertEqual(t[0].individual, 0)
         self.assertEqual(t[0].metadata, b"123")
         self.assertEqual(t[0], t[-2])
         self.assertEqual(t[1], t[-1])
@@ -521,6 +522,7 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         self.assertEqual(t.time[0], 0)
         self.assertEqual(t.flags[0], 0)
         self.assertEqual(t.population[0], msprime.NULL_POPULATION)
+        self.assertEqual(t.individual[0], msprime.NULL_INDIVIDUAL)
         self.assertEqual(len(t.metadata), 0)
         self.assertEqual(t.metadata_offset[0], 0)
 

@@ -26,7 +26,8 @@ main(int argc, char **argv)
     for (j = 0; j < 10; j++) {
         /* node and edge_table_add_row return < 0 in the case of an error,
          * or the ID of the node/edge just added otherwise. */
-        ret = node_table_add_row(&tables.nodes, j == 0, j, 0, NULL, 0);
+        ret = node_table_add_row(&tables.nodes, j == 0, j, 0, MSP_NULL_INDIVIDUAL,
+                NULL, 0);
         if (ret < 0) {
             goto out;
         }

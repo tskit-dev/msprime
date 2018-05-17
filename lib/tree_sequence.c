@@ -84,9 +84,10 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
     }
     fprintf(out, "nodes (%d)\n", (int) self->nodes.num_records);
     for (j = 0; j < self->nodes.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%d\t%f\t%d\t", (int) j,
+        fprintf(out, "\t%d\t%d\t%d\t%d\t%f\t%d\t", (int) j,
                 self->nodes.flags[j],
                 (int) self->nodes.population[j],
+                (int) self->nodes.individual[j],
                 self->nodes.time[j],
                 self->nodes.sample_index_map[j]);
         for (k = self->nodes.metadata_offset[j]; k < self->nodes.metadata_offset[j + 1]; k++) {
@@ -288,7 +289,7 @@ tree_sequence_check(tree_sequence_t *self)
     /* Check the sites */
     for (j = 0; j < self->sites.num_records; j++) {
         if (self->sites.position[j] < 0
-                || self->sites.position[j] >= self->sequence_length) {
+                || self->sites.position[j] > self->sequence_length) {
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }
@@ -378,7 +379,7 @@ tree_sequence_init_sites(tree_sequence_t *self)
     k = 0;
     for (j = 0; j < (site_id_t) self->sites.num_records; j++) {
         if (self->sites.position[j] < 0
-                || self->sites.position[j] >= self->sequence_length) {
+                || self->sites.position[j] > self->sequence_length) {
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }
@@ -568,13 +569,14 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
         goto out;
     }
-    /* TODO It's messy having two copyies of this value. Should be in one place. */
+    /* TODO It's messy having two copies of this value. Should be in one place. */
     self->tables->sequence_length = self->sequence_length;
 
     self->nodes.num_records = self->tables->nodes.num_rows;
     self->nodes.flags = self->tables->nodes.flags;
     self->nodes.time = self->tables->nodes.time;
     self->nodes.population = self->tables->nodes.population;
+    self->nodes.individual = self->tables->nodes.individual;
     self->nodes.metadata = self->tables->nodes.metadata;
     self->nodes.metadata_offset = self->tables->nodes.metadata_offset;
 
@@ -829,6 +831,7 @@ tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node)
     }
     node->time = self->nodes.time[index];
     node->population = self->nodes.population[index];
+    node->individual = self->nodes.individual[index];
     node->flags = self->nodes.flags[index];
     offset = self->nodes.metadata_offset[index];
     length = self->nodes.metadata_offset[index + 1] - offset;
