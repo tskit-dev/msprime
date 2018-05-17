@@ -2466,7 +2466,8 @@ out:
 
 int WARN_UNUSED
 msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
-        edge_table_t *edges, migration_table_t *migrations)
+        edge_table_t *edges, migration_table_t *migrations,
+        population_table_t *populations)
 {
     int ret = 0;
     size_t j;
@@ -2523,6 +2524,18 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
         }
         ret = migration_table_add_row(migrations, left, right, migration->node,
                 migration->source, migration->dest, migration->time);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    /* Add the populations. We don't have any metadata here. Users can add
+     * metadata to the table if they wish. */
+    ret = population_table_clear(populations);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_populations; j++) {
+        ret = population_table_add_row(populations, NULL, 0);
         if (ret < 0) {
             goto out;
         }

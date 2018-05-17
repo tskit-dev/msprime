@@ -82,6 +82,29 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         }
         fprintf(out, "\n");
     }
+    fprintf(out, "populations (%d)\n", (int) self->populations.num_records);
+    for (j = 0; j < self->populations.num_records; j++) {
+        fprintf(out, "\t%d\t", (int) j);
+        for (k = self->populations.metadata_offset[j];
+                k < self->populations.metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->populations.metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+    fprintf(out, "individuals (%d)\n", (int) self->individuals.num_records);
+    for (j = 0; j < self->individuals.num_records; j++) {
+        fprintf(out, "\t%d\t%d\t", (int) j, self->individuals.flags[j]);
+        for (k = self->individuals.location_offset[j];
+                k < self->individuals.location_offset[j + 1]; k++) {
+            fprintf(out, "%f,", self->individuals.location[k]);
+        }
+        fprintf(out, "\t");
+        for (k = self->individuals.metadata_offset[j];
+                k < self->individuals.metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->individuals.metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
     fprintf(out, "nodes (%d)\n", (int) self->nodes.num_records);
     for (j = 0; j < self->nodes.num_records; j++) {
         fprintf(out, "\t%d\t%d\t%d\t%d\t%f\t%d\t", (int) j,

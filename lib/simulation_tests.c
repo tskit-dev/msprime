@@ -727,12 +727,15 @@ test_dtwf_deterministic(void)
     node_table_t nodes[2];
     edge_table_t edges[2];
     migration_table_t migrations;
+    population_table_t populations;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
     ret = migration_table_alloc(&migrations, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = population_table_alloc(&populations, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     memset(samples, 0, n * sizeof(sample_t));
     for (j = 0; j < 2; j++) {
@@ -757,7 +760,8 @@ test_dtwf_deterministic(void)
         ret = msp_run(msp, DBL_MAX, UINT32_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
-        ret = msp_populate_tables(msp, NULL, &nodes[j], &edges[j], &migrations);
+        ret = msp_populate_tables(msp, NULL, &nodes[j], &edges[j], &migrations,
+                &populations);
         CU_ASSERT_EQUAL(ret, 0);
         msp_free(msp);
         CU_ASSERT_EQUAL(migrations.num_rows, 0);
@@ -777,6 +781,7 @@ test_dtwf_deterministic(void)
         edge_table_free(&edges[j]);
     }
     migration_table_free(&migrations);
+    population_table_free(&populations);
 }
 
 static void
@@ -860,7 +865,7 @@ test_mixed_model_simulation(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* Make sure we can build a tree sequence from the tables. */
     ret = msp_populate_tables(msp, NULL, &tables.nodes, &tables.edges,
-            &tables.migrations);
+            &tables.migrations, &tables.populations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* TODO remove this when populate tables takes table_collection as arg */
@@ -1286,7 +1291,7 @@ test_simulation_replicates(void)
         msp_verify(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_populate_tables(&msp, NULL, &tables.nodes, &tables.edges,
-                &tables.migrations);
+                &tables.migrations, &tables.populations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = mutgen_generate_tables_tmp(&mutgen, &tables.nodes, &tables.edges);
         CU_ASSERT_EQUAL_FATAL(ret, 0);

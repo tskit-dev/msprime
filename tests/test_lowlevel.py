@@ -221,14 +221,17 @@ def populate_tree_sequence(sim, mutation_generator=None, provenances=[]):
     migrations = _msprime.MigrationTable()
     sites = _msprime.SiteTable()
     mutations = _msprime.MutationTable()
+    populations = _msprime.PopulationTable()
     provenance_table = _msprime.ProvenanceTable()
     ts = _msprime.TreeSequence()
-    sim.populate_tables(nodes, edges, migrations)
+    sim.populate_tables(nodes, edges, migrations, populations)
     if mutation_generator is not None:
         mutation_generator.generate(nodes, edges, sites, mutations)
     for timestamp, record in provenances:
         provenance_table.add_row(timestamp=timestamp, record=record)
-    ts.load_tables(nodes, edges, migrations, sites, mutations, provenance_table)
+    ts.load_tables(
+        nodes, edges, migrations, sites, mutations, provenance_table,
+        populations=populations)
     return ts
 
 
@@ -464,17 +467,21 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sites = _msprime.SiteTable()
         mutations = _msprime.MutationTable()
         provenances = _msprime.ProvenanceTable()
+        populations = _msprime.PopulationTable()
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
         for j in range(num_provenance_records):
             provenances.add_row(timestamp="y" * j, record="x" * j)
-        sim.populate_tables(nodes, edges, migrations)
+        sim.populate_tables(nodes, edges, migrations, populations)
         mutgen.generate(nodes, edges, sites, mutations)
-        ts.load_tables(nodes, edges, migrations, sites, mutations, provenances)
+        ts.load_tables(
+            nodes, edges, migrations, sites, mutations, provenances,
+            populations=populations)
         self.assertEqual(ts.get_num_nodes(), nodes.num_rows)
         self.assertEqual(ts.get_num_mutations(), mutations.num_rows)
         self.assertEqual(ts.get_num_edges(), edges.num_rows)
         self.assertEqual(ts.get_num_provenances(), provenances.num_rows)
+        self.assertEqual(ts.get_num_populations(), populations.num_rows)
         return ts
 
     def get_nonbinary_tree_sequence(self):
@@ -513,10 +520,12 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             provenances.add_row(timestamp="y" * (j + 1), record="x" * j)
         for j in range(n):
             individuals.add_row(flags=1, location=[j, j], metadata=b'x' * j)
+        ts = _msprime.TreeSequence()
+        sim.populate_tables(nodes, edges, migrations, populations)
+        # Add in our own pops so we can have metadata
+        populations.clear()
         for j in range(num_populations):
             populations.add_row(metadata=b'x' * j)
-        ts = _msprime.TreeSequence()
-        sim.populate_tables(nodes, edges, migrations)
         mutation_rate = 10
         mutgen = _msprime.MutationGenerator(_msprime.RandomGenerator(1), mutation_rate)
         mutgen.generate(nodes, edges, sites, mutations)
@@ -1822,6 +1831,7 @@ class TestSimulator(LowLevelTestCase):
         node_table = _msprime.NodeTable()
         edge_table = _msprime.EdgeTable()
         migration_table = _msprime.MigrationTable()
+        population_table = _msprime.PopulationTable()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
         sim.run()
 
@@ -1837,7 +1847,8 @@ class TestSimulator(LowLevelTestCase):
         kwargs = {
             "nodes": node_table,
             "edges": edge_table,
-            "migrations": migration_table
+            "migrations": migration_table,
+            "populations": population_table,
         }
         for bad_type in ["", {}, [], None]:
             for k in kwargs.keys():

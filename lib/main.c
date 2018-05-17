@@ -890,7 +890,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* TODO this is messy; we should pass the table_collection to populate_tables */
         tables.sequence_length = recomb_map->sequence_length;
         ret = msp_populate_tables(msp, recomb_map, &tables.nodes, &tables.edges,
-                &tables.migrations);
+                &tables.migrations, &tables.populations);
         if (ret != 0) {
             goto out;
         }

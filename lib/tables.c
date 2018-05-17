@@ -4413,6 +4413,7 @@ table_collection_free(table_collection_t *self)
     site_table_free(&self->sites);
     mutation_table_free(&self->mutations);
     individual_table_free(&self->individuals);
+    population_table_free(&self->populations);
     provenance_table_free(&self->provenances);
     if (self->indexes.malloced_locally) {
         msp_safe_free(self->indexes.edge_insertion_order);

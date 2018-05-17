@@ -766,6 +766,29 @@ verify_provenances_equal(provenance_t *p1, provenance_t *p2)
     CU_ASSERT_NSTRING_EQUAL_FATAL(p1->record, p2->record, p1->record_length);
 }
 
+static void
+verify_individuals_equal(individual_t *i1, individual_t *i2)
+{
+    table_size_t j;
+
+    CU_ASSERT_FATAL(i1->id == i2->id);
+    CU_ASSERT_FATAL(i1->flags == i2->flags);
+    CU_ASSERT_FATAL(i1->metadata_length == i2->metadata_length);
+    CU_ASSERT_NSTRING_EQUAL_FATAL(i1->metadata, i2->metadata, i1->metadata_length);
+    CU_ASSERT_FATAL(i1->location_length == i2->location_length);
+    for (j = 0; j < i1->location_length; j++) {
+        CU_ASSERT_EQUAL_FATAL(i1->location[j], i2->location[j]);
+    }
+}
+
+static void
+verify_populations_equal(tmp_population_t *p1, tmp_population_t *p2)
+{
+    CU_ASSERT_FATAL(p1->id == p2->id);
+    CU_ASSERT_FATAL(p1->metadata_length == p2->metadata_length);
+    CU_ASSERT_NSTRING_EQUAL_FATAL(p1->metadata, p2->metadata, p1->metadata_length);
+}
+
 static sparse_tree_t *
 get_tree_list(tree_sequence_t *ts)
 {
@@ -1358,6 +1381,8 @@ get_example_tree_sequence(uint32_t num_samples,
     table_collection_t tables;
     char *timestamp = "timestamp";
     char *record = "get_example_tree_sequence";
+    char *metadata = "metadata";
+    double location[2] = {0, 1};
     uint32_t j;
     size_t num_populations = 3;
     double migration_matrix[] = {
@@ -1426,7 +1451,7 @@ get_example_tree_sequence(uint32_t num_samples,
      * to cancel scaling factor. */
     tables.sequence_length = sequence_length;
     ret = msp_populate_tables(msp, recomb_map, &tables.nodes, &tables.edges,
-            &tables.migrations);
+            &tables.migrations, &tables.populations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate_tables_tmp(mutgen, &tables.nodes, &tables.edges);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1435,6 +1460,22 @@ get_example_tree_sequence(uint32_t num_samples,
     ret = provenance_table_add_row(&tables.provenances,
             timestamp, strlen(timestamp), record, strlen(record));
     CU_ASSERT_FATAL(ret >= 0);
+    /* Add an individual for each sample and update the node table to
+     * point to it. */
+    for (j = 0; j < num_samples; j++) {
+        ret = individual_table_add_row(&tables.individuals, 0,
+            location, j % 3, metadata, j % strlen(metadata));
+        CU_ASSERT_FATAL(ret >= 0);
+        tables.nodes.individual[j] = j;
+    }
+    /* Clear out the populations added by msprime so that we can
+     * add metadata */
+    population_table_clear(&tables.populations);
+    for (j = 0; j < num_samples; j++) {
+        ret = population_table_add_row(&tables.populations, metadata,
+                j % strlen(metadata));
+        CU_ASSERT_FATAL(ret >= 0);
+    }
     ret = tree_sequence_load_tables(tree_seq, &tables, 0);
     /* edge_table_print_state(edges, stdout); */
     /* printf("ret = %s\n", msp_strerror(ret)); */
@@ -5752,6 +5793,8 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
     node_t n1, n2;
     migration_t m1, m2;
     provenance_t p1, p2;
+    individual_t i1, i2;
+    tmp_population_t pop1, pop2;
     size_t num_mutations = tree_sequence_get_num_mutations(ts1);
     site_t site_1, site_2;
     mutation_t mutation_1, mutation_2;
@@ -5856,6 +5899,29 @@ verify_tree_sequences_equal(tree_sequence_t *ts1, tree_sequence_t *ts2,
             verify_provenances_equal(&p1, &p2);
         }
     }
+
+    CU_ASSERT_EQUAL_FATAL(
+        tree_sequence_get_num_individuals(ts1),
+        tree_sequence_get_num_individuals(ts2));
+    for (j = 0; j < tree_sequence_get_num_individuals(ts1); j++) {
+        ret = tree_sequence_get_individual(ts1, j, &i1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_individual(ts2, j, &i2);
+        CU_ASSERT_EQUAL(ret, 0);
+        verify_individuals_equal(&i1, &i2);
+    }
+
+    CU_ASSERT_EQUAL_FATAL(
+        tree_sequence_get_num_populations(ts1),
+        tree_sequence_get_num_populations(ts2));
+    for (j = 0; j < tree_sequence_get_num_populations(ts1); j++) {
+        ret = tree_sequence_get_population(ts1, j, &pop1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tree_sequence_get_population(ts2, j, &pop2);
+        CU_ASSERT_EQUAL(ret, 0);
+        verify_populations_equal(&pop1, &pop2);
+    }
+
     ret = sparse_tree_alloc(&t1, ts1, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_alloc(&t2, ts2, 0);
@@ -7322,6 +7388,12 @@ test_individual_table(void)
 }
 
 static void
+test_population_table(void)
+{
+    printf("\n\n\nIMPLEMENT TEST POPULATION TABLE\n\n\n");
+}
+
+static void
 test_provenance_table(void)
 {
     int ret;
@@ -7923,6 +7995,7 @@ main(int argc, char **argv)
         {"test_mutation_table", test_mutation_table},
         {"test_migration_table", test_migration_table},
         {"test_individual_table", test_individual_table},
+        {"test_population_table", test_population_table},
         {"test_provenance_table", test_provenance_table},
         {"test_format_data_load_errors", test_format_data_load_errors},
         {"test_dump_unindexed", test_dump_unindexed},
