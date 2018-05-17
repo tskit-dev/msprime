@@ -6320,6 +6320,112 @@ test_dump_tables_kas(void)
     table_collection_free(&tables);
 }
 
+static void
+test_load_text(void)
+{
+    int ret;
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    tree_sequence_t ts2;
+    tree_sequence_t *ts1;
+    size_t j;
+    table_collection_t tables, tables2;
+    FILE *tmpfile;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_alloc(&tables2, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(examples != NULL);
+
+    for (j = 0; examples[j] != NULL; j++) {
+        ts1 = examples[j];
+        ret = tree_sequence_dump_tables(ts1, &tables, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+fprintf(stdout, "BEGIN example %d  ::::::::::::::::::::::::::::::::::::::\n", (int) j); fflush(stdout);
+table_collection_print_state(&tables, stdout);
+fprintf(stdout, "::::::::::::::::::::::::::::::::::::::\n"); fflush(stdout);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = node_table_dump_text(&tables.nodes, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = node_table_load_text(&tables2.nodes, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = edge_table_dump_text(&tables.edges, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = edge_table_load_text(&tables2.edges, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = site_table_dump_text(&tables.sites, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = site_table_load_text(&tables2.sites, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = mutation_table_dump_text(&tables.mutations, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = mutation_table_load_text(&tables2.mutations, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = migration_table_dump_text(&tables.migrations, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = migration_table_load_text(&tables2.migrations, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = individual_table_dump_text(&tables.individuals, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = individual_table_load_text(&tables2.individuals, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+        tmpfile = fopen(_tmp_file_name, "w");
+        ret = provenance_table_dump_text(&tables.provenances, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+        tmpfile = fopen(_tmp_file_name, "r");
+        ret = provenance_table_load_text(&tables2.provenances, tmpfile);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(tmpfile);
+
+table_collection_print_state(&tables2, stdout);
+fprintf(stdout, "END example %d  ::::::::::::::::::::::::::::::::::::::\n", (int) j); fflush(stdout);
+
+        ret = tree_sequence_load_tables(&ts2, &tables2, 0);
+fprintf(stdout, "XX ret = %s\n", msp_strerror(ret)); fflush(stdout);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+
+        tree_sequence_free(&ts2);
+        tree_sequence_free(ts1);
+        free(ts1);
+    }
+
+    free(examples);
+    table_collection_free(&tables);
+    table_collection_free(&tables2);
+}
 
 static void
 test_strerror(void)
@@ -7912,6 +8018,7 @@ main(int argc, char **argv)
         {"test_deduplicate_sites", test_deduplicate_sites},
         {"test_deduplicate_sites_errors", test_deduplicate_sites_errors},
         {"test_dump_tables_kas", test_dump_tables_kas},
+        {"test_load_text", test_load_text},
         {"test_strerror", test_strerror},
         {"test_node_table", test_node_table},
         {"test_edge_table", test_edge_table},

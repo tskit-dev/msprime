@@ -296,6 +296,7 @@ int node_table_append_columns(node_table_t *self, size_t num_rows, uint32_t *fla
 int node_table_clear(node_table_t *self);
 int node_table_free(node_table_t *self);
 int node_table_dump_text(node_table_t *self, FILE *out);
+int node_table_load_text(node_table_t *self, FILE *file);
 int node_table_copy(node_table_t *self, node_table_t *dest);
 void node_table_print_state(node_table_t *self, FILE *out);
 bool node_table_equal(node_table_t *self, node_table_t *other);
@@ -310,6 +311,7 @@ int edge_table_append_columns(edge_table_t *self, size_t num_rows, double *left,
 int edge_table_clear(edge_table_t *self);
 int edge_table_free(edge_table_t *self);
 int edge_table_dump_text(edge_table_t *self, FILE *out);
+int edge_table_load_text(edge_table_t *self, FILE *file);
 int edge_table_copy(edge_table_t *self, edge_table_t *dest);
 void edge_table_print_state(edge_table_t *self, FILE *out);
 bool edge_table_equal(edge_table_t *self, edge_table_t *other);
@@ -332,6 +334,7 @@ int site_table_clear(site_table_t *self);
 int site_table_copy(site_table_t *self, site_table_t *dest);
 int site_table_free(site_table_t *self);
 int site_table_dump_text(site_table_t *self, FILE *out);
+int site_table_load_text(site_table_t *self, FILE *file);
 void site_table_print_state(site_table_t *self, FILE *out);
 
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
@@ -355,6 +358,7 @@ int mutation_table_clear(mutation_table_t *self);
 int mutation_table_copy(mutation_table_t *self, mutation_table_t *dest);
 int mutation_table_free(mutation_table_t *self);
 int mutation_table_dump_text(mutation_table_t *self, FILE *out);
+int mutation_table_load_text(mutation_table_t *self, FILE *file);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
 
 int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
@@ -371,6 +375,7 @@ int migration_table_clear(migration_table_t *self);
 int migration_table_free(migration_table_t *self);
 int migration_table_copy(migration_table_t *self, migration_table_t *dest);
 int migration_table_dump_text(migration_table_t *self, FILE *out);
+int migration_table_load_text(migration_table_t *self, FILE *file);
 void migration_table_print_state(migration_table_t *self, FILE *out);
 
 int individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
@@ -387,6 +392,7 @@ int individual_table_append_columns(individual_table_t *self, size_t num_rows, u
 int individual_table_clear(individual_table_t *self);
 int individual_table_free(individual_table_t *self);
 int individual_table_dump_text(individual_table_t *self, FILE *out);
+int individual_table_load_text(individual_table_t *self, FILE *file);
 int individual_table_copy(individual_table_t *self, individual_table_t *dest);
 void individual_table_print_state(individual_table_t *self, FILE *out);
 bool individual_table_equal(individual_table_t *self, individual_table_t *other);
@@ -406,6 +412,8 @@ int provenance_table_append_columns(provenance_table_t *self, size_t num_rows,
 int provenance_table_clear(provenance_table_t *self);
 int provenance_table_copy(provenance_table_t *self, provenance_table_t *dest);
 int provenance_table_free(provenance_table_t *self);
+int provenance_table_dump_text(provenance_table_t *self, FILE *out);
+int provenance_table_load_text(provenance_table_t *self, FILE *file);
 void provenance_table_print_state(provenance_table_t *self, FILE *out);
 bool provenance_table_equal(provenance_table_t *self, provenance_table_t *other);
 
