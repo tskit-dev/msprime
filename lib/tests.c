@@ -6329,7 +6329,38 @@ test_load_text(void)
     tree_sequence_t *ts1;
     size_t j;
     table_collection_t tables, tables2;
-    FILE *tmpfile;
+    FILE *node_file, *edge_file, *site_file, *muta_file;
+    FILE *migr_file, *indi_file, *prov_file;
+    char *node_file_name, *edge_file_name, *site_file_name, *muta_file_name;
+    char *migr_file_name, *indi_file_name, *prov_file_name;
+
+    node_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(node_file_name, _tmp_file_name);
+    strcat(node_file_name, "node");
+
+    edge_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(edge_file_name, _tmp_file_name);
+    strcat(edge_file_name, "edge");
+
+    site_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(site_file_name, _tmp_file_name);
+    strcat(site_file_name, "site");
+
+    muta_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(muta_file_name, _tmp_file_name);
+    strcat(muta_file_name, "muta");
+
+    migr_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(migr_file_name, _tmp_file_name);
+    strcat(migr_file_name, "migr");
+
+    indi_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(indi_file_name, _tmp_file_name);
+    strcat(indi_file_name, "indi");
+
+    prov_file_name = malloc(strlen(_tmp_file_name) + 4);
+    strcpy(prov_file_name, _tmp_file_name);
+    strcat(prov_file_name, "prov");
 
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6342,86 +6373,93 @@ test_load_text(void)
         ret = tree_sequence_dump_tables(ts1, &tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-fprintf(stdout, "BEGIN example %d  ::::::::::::::::::::::::::::::::::::::\n", (int) j); fflush(stdout);
-table_collection_print_state(&tables, stdout);
-fprintf(stdout, "::::::::::::::::::::::::::::::::::::::\n"); fflush(stdout);
+        node_file = fopen(node_file_name, "w");
+        ret = node_table_dump_text(&tables.nodes, node_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        fclose(node_file);
+        node_file = fopen(node_file_name, "r");
+        /* ret = node_table_load_text(&tables2.nodes, node_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = node_table_dump_text(&tables.nodes, tmpfile);
+        edge_file = fopen(edge_file_name, "w");
+        ret = edge_table_dump_text(&tables.edges, edge_file);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = node_table_load_text(&tables2.nodes, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
+        fclose(edge_file);
+        edge_file = fopen(edge_file_name, "r");
+        /* ret = edge_table_load_text(&tables2.edges, edge_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = edge_table_dump_text(&tables.edges, tmpfile);
+        site_file = fopen(site_file_name, "w");
+        ret = site_table_dump_text(&tables.sites, site_file);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = edge_table_load_text(&tables2.edges, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
+        fclose(site_file);
+        site_file = fopen(site_file_name, "r");
+        /* ret = site_table_load_text(&tables2.sites, site_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = site_table_dump_text(&tables.sites, tmpfile);
+        muta_file = fopen(muta_file_name, "w");
+        ret = mutation_table_dump_text(&tables.mutations, muta_file);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = site_table_load_text(&tables2.sites, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
+        fclose(muta_file);
+        muta_file = fopen(muta_file_name, "r");
+        /* ret = mutation_table_load_text(&tables2.mutations, muta_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = mutation_table_dump_text(&tables.mutations, tmpfile);
+        migr_file = fopen(migr_file_name, "w");
+        ret = migration_table_dump_text(&tables.migrations, migr_file);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = mutation_table_load_text(&tables2.mutations, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
+        fclose(migr_file);
+        migr_file = fopen(migr_file_name, "r");
+        /* ret = migration_table_load_text(&tables2.migrations, migr_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = migration_table_dump_text(&tables.migrations, tmpfile);
+        indi_file = fopen(indi_file_name, "w");
+        ret = individual_table_dump_text(&tables.individuals, indi_file);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = migration_table_load_text(&tables2.migrations, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
+        fclose(indi_file);
+        indi_file = fopen(indi_file_name, "r");
+        /* ret = individual_table_load_text(&tables2.individuals, indi_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = individual_table_dump_text(&tables.individuals, tmpfile);
+        prov_file = fopen(prov_file_name, "w");
+        ret = provenance_table_dump_text(&tables.provenances, prov_file);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = individual_table_load_text(&tables2.individuals, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
+        fclose(prov_file);
+        prov_file = fopen(prov_file_name, "r");
+        /* ret = provenance_table_load_text(&tables2.provenances, prov_file);
+        CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-        tmpfile = fopen(_tmp_file_name, "w");
-        ret = provenance_table_dump_text(&tables.provenances, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-        tmpfile = fopen(_tmp_file_name, "r");
-        ret = provenance_table_load_text(&tables2.provenances, tmpfile);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        fclose(tmpfile);
-
-table_collection_print_state(&tables2, stdout);
-fprintf(stdout, "END example %d  ::::::::::::::::::::::::::::::::::::::\n", (int) j); fflush(stdout);
-
-        ret = tree_sequence_load_tables(&ts2, &tables2, 0);
-fprintf(stdout, "XX ret = %s\n", msp_strerror(ret)); fflush(stdout);
+        ret = table_collection_load_text(&tables2, node_file, edge_file,
+                site_file, muta_file, migr_file, indi_file, prov_file);
+        /* fprintf(stdout, "\ntesting (%d)::::::::::::::::::\n", (int) j); fflush(stdout); */
+        /* table_collection_print_state(&tables, stdout); */
+        /* fprintf(stdout, "\n(%d) ::::::::::::::::::::::::::::::\n", (int) j); fflush(stdout); */
+        /* table_collection_print_state(&tables2, stdout); */
+        /* fprintf(stdout, "\n(%d) ::::::::::::::::::::::::::::::\n", (int) j); fflush(stdout); */
+        /* ret = tree_sequence_load_tables(&ts2, &tables2, 0); */
+        /* fprintf(stdout, "\nret = %s\n", msp_strerror(ret)); fflush(stdout); */
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_tree_sequences_equal(ts1, &ts2, true, true, true);
+        fclose(prov_file);
+        fclose(indi_file);
+        fclose(migr_file);
+        fclose(muta_file);
+        fclose(site_file);
+        fclose(edge_file);
+        fclose(node_file);
 
         tree_sequence_free(&ts2);
         tree_sequence_free(ts1);
         free(ts1);
     }
 
+    free(prov_file_name);
+    free(indi_file_name);
+    free(migr_file_name);
+    free(muta_file_name);
+    free(site_file_name);
+    free(edge_file_name);
+    free(node_file_name);
     free(examples);
     table_collection_free(&tables);
     table_collection_free(&tables2);

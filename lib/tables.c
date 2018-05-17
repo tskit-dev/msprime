@@ -548,7 +548,7 @@ out:
 int
 node_table_load_text(node_table_t *node_table, FILE *file)
 {
-    int ret = MSP_ERR_FILE_FORMAT;
+    int ret;
     int err;
     size_t k;
     size_t MAX_LINE = 1024;
@@ -560,6 +560,10 @@ node_table_load_text(node_table_t *node_table, FILE *file)
     char *start;
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = node_table_clear(node_table);
@@ -568,6 +572,7 @@ node_table_load_text(node_table_t *node_table, FILE *file)
     }
 
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -606,7 +611,9 @@ node_table_load_text(node_table_t *node_table, FILE *file)
         }
         ret = node_table_add_row(node_table, flags, time, population, individual,
                 name, strlen(name));
-        assert(ret >= 0);
+        if (ret < 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -848,7 +855,7 @@ out:
 int
 edge_table_load_text(edge_table_t *edge_table, FILE *file)
 {
-    int ret = MSP_ERR_FILE_FORMAT;
+    int ret;
     int err;
     size_t k;
     size_t MAX_LINE = 1024;
@@ -860,6 +867,10 @@ edge_table_load_text(edge_table_t *edge_table, FILE *file)
     char *start, *childs;
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = edge_table_clear(edge_table);
@@ -868,6 +879,7 @@ edge_table_load_text(edge_table_t *edge_table, FILE *file)
     }
     
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -898,7 +910,9 @@ edge_table_load_text(edge_table_t *edge_table, FILE *file)
         do {
             err = get_sep_atoi(&childs, &child, ',');
             ret = edge_table_add_row(edge_table, left, right, parent, child);
-            assert(ret >= 0);
+            if (ret < 0) {
+                goto out;
+            }
         } while (err > 0);
         assert(err == -1);
     }
@@ -1309,7 +1323,7 @@ out:
 int
 site_table_load_text(site_table_t *site_table, FILE *file)
 {
-    int ret = MSP_ERR_FILE_FORMAT;
+    int ret;
     int err;
     size_t k;
     size_t MAX_LINE = 1024;
@@ -1321,6 +1335,10 @@ site_table_load_text(site_table_t *site_table, FILE *file)
     char *start;
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = site_table_clear(site_table);
@@ -1329,6 +1347,7 @@ site_table_load_text(site_table_t *site_table, FILE *file)
     }
     
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -1358,7 +1377,9 @@ site_table_load_text(site_table_t *site_table, FILE *file)
         }
         ret = site_table_add_row(site_table, position, ancestral_state,
                 strlen(ancestral_state), metadata, strlen(metadata));
-        assert(ret >= 0);
+        if (ret < 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -1786,7 +1807,7 @@ out:
 int
 mutation_table_load_text(mutation_table_t *mutation_table, FILE *file)
 {
-    int ret = MSP_ERR_FILE_FORMAT;
+    int ret;
     int err;
     size_t k;
     size_t MAX_LINE = 1024;
@@ -1801,6 +1822,10 @@ mutation_table_load_text(mutation_table_t *mutation_table, FILE *file)
     char *start;
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = mutation_table_clear(mutation_table);
@@ -1809,6 +1834,7 @@ mutation_table_load_text(mutation_table_t *mutation_table, FILE *file)
     }
     
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -2094,7 +2120,7 @@ out:
 int
 migration_table_load_text(migration_table_t *migration_table, FILE *file)
 {
-    int ret = MSP_ERR_FILE_FORMAT;
+    int ret;
     int err;
     size_t k;
     size_t MAX_LINE = 1024;
@@ -2105,6 +2131,10 @@ migration_table_load_text(migration_table_t *migration_table, FILE *file)
     char *start;
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = migration_table_clear(migration_table);
@@ -2113,6 +2143,7 @@ migration_table_load_text(migration_table_t *migration_table, FILE *file)
     }
 
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -2150,7 +2181,9 @@ migration_table_load_text(migration_table_t *migration_table, FILE *file)
         }
         ret = migration_table_add_row(migration_table, left, right, node,
                 source, dest, time);
-        assert(ret >= 0);
+        if (ret < 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -2536,7 +2569,7 @@ out:
 int
 individual_table_load_text(individual_table_t *individual_table, FILE *file)
 {
-    int ret = MSP_ERR_FILE_FORMAT;
+    int ret;
     int err;
     size_t j, k;
     size_t MAX_LINE = 1024;
@@ -2548,6 +2581,10 @@ individual_table_load_text(individual_table_t *individual_table, FILE *file)
     const char *header = "id\tflags\tlocation\tmetadata\n";
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = individual_table_clear(individual_table);
@@ -2556,6 +2593,7 @@ individual_table_load_text(individual_table_t *individual_table, FILE *file)
     }
     
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -2594,7 +2632,9 @@ individual_table_load_text(individual_table_t *individual_table, FILE *file)
         }
         ret = individual_table_add_row(individual_table, flags, location, j,
                 metadata, strlen(metadata));
-        assert(ret >= 0);
+        if (ret < 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -2981,7 +3021,7 @@ out:
 int
 provenance_table_load_text(provenance_table_t *provenance_table, FILE *file)
 {
-    int ret = MSP_ERR_IO;
+    int ret;
     int err;
     size_t c, k;
     size_t MAX_LINE = 1024;
@@ -2991,6 +3031,10 @@ provenance_table_load_text(provenance_table_t *provenance_table, FILE *file)
     const char *header = "record\ttimestamp\n";
 
     line = malloc(MAX_LINE);
+    if (line == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     k = MAX_LINE;
 
     ret = provenance_table_clear(provenance_table);
@@ -2999,6 +3043,7 @@ provenance_table_load_text(provenance_table_t *provenance_table, FILE *file)
     }
     
     // check the header
+    ret = MSP_ERR_FILE_FORMAT;
     err = getline(&line, &k, file);
     if (err < 0) {
         goto out;
@@ -3020,7 +3065,9 @@ provenance_table_load_text(provenance_table_t *provenance_table, FILE *file)
         }
         ret = provenance_table_add_row(provenance_table, timestamp, strlen(timestamp), 
                 record, strlen(record));
-        assert(ret >= 0);
+        if (ret < 0) {
+            goto out;
+        }
     }
     ret = 0;
 out:
@@ -5409,6 +5456,12 @@ table_collection_load_text(table_collection_t *tables, FILE *nodes, FILE *edges,
             goto out;
         }
     }
+    if (migrations != NULL) {
+        ret = migration_table_load_text(&tables->migrations, migrations);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     if (individuals != NULL) {
         ret = individual_table_load_text(&tables->individuals, individuals);
         if (ret != 0) {
@@ -5421,10 +5474,13 @@ table_collection_load_text(table_collection_t *tables, FILE *nodes, FILE *edges,
             goto out;
         }
     }
-    /* infer sequence length from the edges */
+    /* infer sequence length from the edges and/or sites */
     sequence_length = 0.0;
     for (j = 0; j < tables->edges.num_rows; j++) {
         sequence_length = MSP_MAX(sequence_length, tables->edges.right[j]);
+    }
+    for (j = 0; j < tables->sites.num_rows; j++) {
+        sequence_length = MSP_MAX(sequence_length, tables->sites.position[j]);
     }
     if (sequence_length <= 0.0) {
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
