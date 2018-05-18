@@ -25,6 +25,7 @@ from __future__ import division
 import os
 import tempfile
 import unittest
+import uuid as _uuid
 
 import h5py
 import kastore
@@ -435,10 +436,17 @@ class TestDumpFormat(TestFileFormat):
            "sites/metadata",
            "sites/metadata_offset",
            "sites/position",
+           "uuid",
         ]
         ts.dump(self.temp_file)
         store = kastore.load(self.temp_file)
         self.assertEqual(sorted(list(store.keys())), keys)
+
+    def verify_uuid(self, uuid):
+        self.assertEqual(len(uuid), 36)
+        # Check that the UUID is well-formed.
+        parsed = _uuid.UUID("{" + uuid + "}")
+        self.assertEqual(str(parsed), uuid)
 
     def verify_dump_format(self, ts):
         ts.dump(self.temp_file)
@@ -454,6 +462,7 @@ class TestDumpFormat(TestFileFormat):
         self.assertEqual(format_version[0], CURRENT_FILE_MAJOR)
         self.assertEqual(format_version[1], 0)
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
+        self.verify_uuid(store["uuid"].tobytes().decode())
 
         tables = ts.tables
 

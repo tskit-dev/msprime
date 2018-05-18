@@ -7747,6 +7747,8 @@ void
 test_load_node_table_errors(void)
 {
     char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
+    size_t uuid_size = 36;
+    char uuid[uuid_size];
     double L = 1;
     double time = 0;
     double flags = 0;
@@ -7765,6 +7767,7 @@ test_load_node_table_errors(void)
         {"nodes/metadata_offset", (void *) metadata_offset, 2, KAS_UINT32},
         {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
         {"format/version", (void *) version, 2, KAS_UINT32},
+        {"uuid", (void *) uuid, uuid_size, KAS_INT8},
         {"sequence_length", (void *) &L, 1, KAS_FLOAT64},
     };
     table_collection_t tables;
@@ -7772,6 +7775,8 @@ test_load_node_table_errors(void)
     int ret;
 
     memcpy(format_name, MSP_FILE_FORMAT_NAME, sizeof(format_name));
+    /* Note: this will fail if we ever start parsing the form of the UUID */
+    memset(uuid, 0, uuid_size);
 
     ret = kastore_open(&store, _tmp_file_name, "w", 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
