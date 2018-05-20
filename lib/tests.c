@@ -7416,6 +7416,7 @@ test_provenance_table(void)
     ret = provenance_table_alloc(&table, 1, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     provenance_table_print_state(&table, _devnull);
+    provenance_table_dump_text(&table, _devnull);
 
     for (j = 0; j < num_rows; j++) {
         ret = provenance_table_add_row(&table, test_timestamp, test_timestamp_length,
