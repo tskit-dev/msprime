@@ -664,6 +664,42 @@ unsort_sites(site_table_t *sites, mutation_table_t *mutations)
 }
 
 static void
+add_individuals(tree_sequence_t *ts)
+{
+    int ret;
+    int max_inds = 20;
+    node_id_t j;
+    int k = 0;
+    int ploidy = 2;
+    table_collection_t tables;
+    char *metadata = "abc";
+    size_t metadata_length = 3;
+
+    ret = tree_sequence_dump_tables(ts, &tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    individual_table_clear(&(tables.individuals));
+    memset(tables.nodes.individual, 0xff, tables.nodes.num_rows * sizeof(individual_id_t));
+
+    for (j = 0; j < tables.nodes.num_rows; j++) {
+        if (tables.nodes.flags[j] && MSP_NODE_IS_SAMPLE) {
+            if ((k % ploidy) == 0) {
+                individual_table_add_row(&(tables.individuals), (uint32_t) k,
+                        NULL, 0, metadata, metadata_length);
+            }
+            tables.nodes.individual[j] = k / ploidy;
+            k += 1;
+        }
+        if (k >= ploidy * max_inds) {
+            break;
+        }
+    }
+    ret = tree_sequence_load_tables(ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    table_collection_free(&tables);
+}
+
+static void
 verify_nodes_equal(node_t *n1, node_t *n2)
 {
     double eps = 1e-6;
@@ -5494,12 +5530,30 @@ verify_tree_diffs(tree_sequence_t *ts)
 }
 
 static void
+test_individual_nodes_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_individual_nodes(examples[j]);
+        add_individuals(examples[j]);
+        verify_individual_nodes(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
 test_tree_sequence_diff_iter(void)
 {
     int ret;
     tree_sequence_t ts;
 
-    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, paper_ex_individuals, NULL);
+    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL,
+            paper_ex_individuals, NULL);
     verify_tree_diffs(&ts);
 
     ret = tree_sequence_free(&ts);
@@ -5694,21 +5748,6 @@ test_compute_mutation_parents_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_compute_mutation_parents(examples[j]);
-        tree_sequence_free(examples[j]);
-        free(examples[j]);
-    }
-    free(examples);
-}
-
-static void
-test_individual_nodes_from_examples(void)
-{
-    tree_sequence_t **examples = get_example_tree_sequences(1);
-    uint32_t j;
-
-    CU_ASSERT_FATAL(examples != NULL);
-    for (j = 0; examples[j] != NULL; j++) {
-        verify_individual_nodes(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
