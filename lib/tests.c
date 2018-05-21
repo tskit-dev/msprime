@@ -1098,6 +1098,26 @@ verify_compute_mutation_parents(tree_sequence_t *ts)
 }
 
 static void
+verify_individual_nodes(tree_sequence_t *ts)
+{
+    int ret;
+    individual_t individual;
+    individual_id_t k;
+    size_t j;
+
+    for (k = 0; k < (individual_id_t) ts->individuals.num_records; k++) {
+        ret = tree_sequence_get_individual(ts, k, &individual);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_FATAL(individual.nodes_length >= 0);
+        for (j = 0; j < individual.nodes_length; j++) {
+            CU_ASSERT_FATAL(individual.nodes[j] < ts->nodes.num_records);
+            CU_ASSERT_EQUAL_FATAL(k,
+                    ts->nodes.individual[individual.nodes[j]]);
+        }
+    }
+}
+
+static void
 verify_trees(tree_sequence_t *ts, uint32_t num_trees, node_id_t* parents)
 {
     int ret;
@@ -4507,6 +4527,9 @@ test_single_tree_compute_mutation_parents(void)
     verify_compute_mutation_parents(&ts);
     tree_sequence_free(&ts);
 
+    /* Verify consistency of individuals */
+    verify_individual_nodes(&ts);
+
     /* Bad site reference */
     tables.mutations.site[0] = -1;
     ret = table_collection_compute_mutation_parents(&tables, 0);
@@ -4783,7 +4806,8 @@ test_sparse_tree_errors(void)
     node_id_t bad_nodes[] = {num_nodes, num_nodes + 1, -1};
     node_id_t tracked_samples[] = {0, 0, 0};
 
-    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, NULL, NULL);
+    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL,
+            paper_ex_individuals, NULL);
 
     ret = sparse_tree_alloc(&t, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -4829,7 +4853,8 @@ test_sparse_tree_errors(void)
     ret = sparse_tree_set_tracked_samples_from_sample_list(&t, NULL, NULL);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    tree_sequence_from_text(&other_ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, NULL, NULL);
+    tree_sequence_from_text(&other_ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL,
+            paper_ex_individuals, NULL);
     ret = sparse_tree_alloc(&other_t, &other_ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_copy(&t, &t);
@@ -4857,7 +4882,7 @@ test_tree_sequence_iter(void)
     tree_sequence_t ts;
 
     tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL,
-            paper_ex_sites, paper_ex_mutations, NULL, NULL);
+            paper_ex_sites, paper_ex_mutations, paper_ex_individuals, NULL);
     verify_trees(&ts, num_trees, parents);
     tree_sequence_free(&ts);
 }
@@ -5313,7 +5338,7 @@ test_sample_sets(void)
     uint32_t num_tests = 6;
     tree_sequence_t ts;
 
-    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, NULL, NULL);
+    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, paper_ex_individuals, NULL);
     verify_sample_counts(&ts, num_tests, tests);
     verify_sample_sets(&ts);
 
@@ -5373,6 +5398,7 @@ test_tree_sequence_bad_records(void)
 
     parse_nodes(paper_ex_nodes, &tables.nodes);
     parse_edges(paper_ex_edges, &tables.edges);
+    parse_individuals(paper_ex_individuals, &tables.individuals);
 
     /* Make sure we have a good set of records */
     ret = tree_sequence_load_tables(&ts, &tables, 0);
@@ -5473,7 +5499,7 @@ test_tree_sequence_diff_iter(void)
     int ret;
     tree_sequence_t ts;
 
-    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, NULL, NULL);
+    tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL, paper_ex_individuals, NULL);
     verify_tree_diffs(&ts);
 
     ret = tree_sequence_free(&ts);
@@ -5668,6 +5694,21 @@ test_compute_mutation_parents_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_compute_mutation_parents(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
+test_individual_nodes_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_individual_nodes(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -7984,6 +8025,8 @@ main(int argc, char **argv)
         {"test_stats_from_examples", test_stats_from_examples},
         {"test_compute_mutation_parents_from_examples",
             test_compute_mutation_parents_from_examples},
+        {"test_individual_nodes_from_examples",
+            test_individual_nodes_from_examples},
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
         {"test_save_empty_kas", test_save_empty_kas},
