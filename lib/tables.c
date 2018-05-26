@@ -3694,8 +3694,7 @@ out:
 int
 simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,
-        node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations, int flags)
+        table_collection_t *tables, int flags)
 {
     int ret = 0;
     size_t j, num_nodes_alloc;
@@ -3703,21 +3702,24 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     memset(self, 0, sizeof(simplifier_t));
     self->num_samples = num_samples;
     self->flags = flags;
-    self->nodes = nodes;
-    self->edges = edges;
-    self->sites = sites;
-    self->mutations = mutations;
+    self->nodes = &tables->nodes;
+    self->edges = &tables->edges;
+    self->sites = &tables->sites;
+    self->mutations = &tables->mutations;
+    self->individuals = &tables->individuals;
+    self->populations = &tables->populations;
+    self->provenances = &tables->provenances;
 
-    if (nodes == NULL || edges == NULL || samples == NULL
-            || sites == NULL || mutations == NULL || migrations == NULL) {
+    if (samples == NULL || tables == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+
     if (sequence_length == 0) {
         /* infer sequence length from the edges */
         sequence_length = 0.0;
-        for (j = 0; j < edges->num_rows; j++) {
-            sequence_length = MSP_MAX(sequence_length, edges->right[j]);
+        for (j = 0; j < tables->edges.num_rows; j++) {
+            sequence_length = MSP_MAX(sequence_length, tables->edges.right[j]);
         }
         if (sequence_length <= 0.0) {
             ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
@@ -3735,7 +3737,7 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
 
     /* If we have more then 256K blocks or edges just allocate this much */
     /* Need to avoid malloc(0) so make sure we have at least 1. */
-    num_nodes_alloc = 1 + nodes->num_rows;
+    num_nodes_alloc = 1 + tables->nodes.num_rows;
 
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
@@ -3745,13 +3747,15 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
 
     /* Make a copy of the input nodes and clear the table ready for output */
-    ret = node_table_alloc(&self->input_nodes, nodes->num_rows, nodes->metadata_length);
+    ret = node_table_alloc(&self->input_nodes, tables->nodes.num_rows,
+            tables->nodes.metadata_length);
     if (ret != 0) {
         goto out;
     }
-    ret = node_table_set_columns(&self->input_nodes, nodes->num_rows,
-            nodes->flags, nodes->time, nodes->population,
-            nodes->individual, nodes->metadata, nodes->metadata_offset);
+    ret = node_table_set_columns(&self->input_nodes, tables->nodes.num_rows,
+            tables->nodes.flags, tables->nodes.time, tables->nodes.population,
+            tables->nodes.individual, tables->nodes.metadata,
+            tables->nodes.metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -3760,12 +3764,13 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         goto out;
     }
     /* Make a copy of the input edges and clear the input table, ready for output. */
-    ret = edge_table_alloc(&self->input_edges, edges->num_rows);
+    ret = edge_table_alloc(&self->input_edges, tables->edges.num_rows);
     if (ret != 0) {
         goto out;
     }
-    ret = edge_table_set_columns(&self->input_edges, edges->num_rows,
-            edges->left, edges->right, edges->parent, edges->child);
+    ret = edge_table_set_columns(&self->input_edges, tables->edges.num_rows,
+            tables->edges.left, tables->edges.right, tables->edges.parent,
+            tables->edges.child);
     if (ret != 0) {
         goto out;
     }
@@ -3775,14 +3780,15 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
     }
 
     /* Make a copy of the input sites and clear the input table, ready for output. */
-    ret = site_table_alloc(&self->input_sites, sites->num_rows,
-            sites->ancestral_state_length, sites->metadata_length);
+    ret = site_table_alloc(&self->input_sites, tables->sites.num_rows,
+            tables->sites.ancestral_state_length, tables->sites.metadata_length);
     if (ret != 0) {
         goto out;
     }
-    ret = site_table_set_columns(&self->input_sites, sites->num_rows, sites->position,
-            sites->ancestral_state, sites->ancestral_state_offset,
-            sites->metadata, sites->metadata_offset);
+    ret = site_table_set_columns(&self->input_sites, tables->sites.num_rows,
+            tables->sites.position, tables->sites.ancestral_state,
+            tables->sites.ancestral_state_offset, tables->sites.metadata,
+            tables->sites.metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -3791,15 +3797,15 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         goto out;
     }
     /* Make a copy of the input mutations and clear the input table, ready for output. */
-    ret = mutation_table_alloc(&self->input_mutations, mutations->num_rows,
-            mutations->derived_state_length, mutations->metadata_length);
+    ret = mutation_table_alloc(&self->input_mutations, tables->mutations.num_rows,
+            tables->mutations.derived_state_length, tables->mutations.metadata_length);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_set_columns(&self->input_mutations, mutations->num_rows,
-            mutations->site, mutations->node, mutations->parent,
-            mutations->derived_state, mutations->derived_state_offset,
-            mutations->metadata, mutations->metadata_offset);
+    ret = mutation_table_set_columns(&self->input_mutations, tables->mutations.num_rows,
+            tables->mutations.site, tables->mutations.node, tables->mutations.parent,
+            tables->mutations.derived_state, tables->mutations.derived_state_offset,
+            tables->mutations.metadata, tables->mutations.metadata_offset);
     if (ret != 0) {
         goto out;
     }
@@ -4859,10 +4865,8 @@ table_collection_simplify(table_collection_t *self,
     int ret = 0;
     simplifier_t simplifier;
 
-    /* TODO the simplifier object should take a table collection as a parameter */
     ret = simplifier_alloc(&simplifier, self->sequence_length,
-            samples, num_samples, &self->nodes, &self->edges, &self->migrations,
-            &self->sites, &self->mutations, flags);
+            samples, num_samples, self, flags);
     if (ret != 0) {
         goto out;
     }

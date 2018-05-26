@@ -288,6 +288,9 @@ typedef struct {
     edge_table_t *edges;
     site_table_t *sites;
     mutation_table_t *mutations;
+    individual_table_t *individuals;
+    population_table_t *populations;
+    provenance_table_t *provenances;
     /* State for topology */
     simplify_segment_t **ancestor_map_head;
     simplify_segment_t **ancestor_map_tail;
@@ -474,8 +477,7 @@ int table_collection_compute_mutation_parents(table_collection_t *self, int flag
 
 int simplifier_alloc(simplifier_t *self, double sequence_length,
         node_id_t *samples, size_t num_samples,
-        node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations, int flags);
+        table_collection_t *tables, int flags);
 int simplifier_free(simplifier_t *self);
 int simplifier_run(simplifier_t *self, node_id_t *node_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);
