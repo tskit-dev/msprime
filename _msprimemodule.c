@@ -924,16 +924,41 @@ out:
     return ret;
 }
 
+static int
+IndividualTable_traverse(IndividualTable *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->table_collection);
+    return 0;
+}
+
+static int
+IndividualTable_clear_gc(IndividualTable *self)
+{
+    Py_CLEAR(self->table_collection);
+    return 0;
+}
+
 static void
 IndividualTable_dealloc(IndividualTable* self)
 {
+    /* printf("dealloc individual table %p\n", (void *) self); */
+    PyObject_GC_UnTrack(self);
+    IndividualTable_clear_gc(self);
     if (self->individual_table != NULL) {
         individual_table_free(self->individual_table);
         PyMem_Free(self->individual_table);
         self->individual_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject *
+IndividualTable_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    IndividualTable *self;
+    self = (IndividualTable *) type->tp_alloc(type, 0);
+    /* printf("alloc individual table   %p\n", (void *) self); */
+    return (PyObject *) self;
 }
 
 static int
@@ -1349,10 +1374,11 @@ static PyTypeObject IndividualTableType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT |
-        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+        Py_TPFLAGS_BASETYPE |
+        Py_TPFLAGS_HAVE_GC,    /* tp_flags */
     "IndividualTable objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
+    (traverseproc) IndividualTable_traverse,     /* tp_traverse */
+    (inquiry) IndividualTable_clear_gc,          /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
@@ -1366,6 +1392,8 @@ static PyTypeObject IndividualTableType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)IndividualTable_init,      /* tp_init */
+    0,                         /* tp_alloc */
+    IndividualTable_new,       /* tp_new */
 };
 
 
@@ -1379,7 +1407,6 @@ NodeTable_check_state(NodeTable *self)
 {
     int ret = -1;
     if (self->node_table == NULL) {
-        printf("RAISING ERROR in node table %p\n", (void *) self);
         PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
         goto out;
     }
@@ -4332,38 +4359,42 @@ static PyTypeObject ProvenanceTableType = {
  *===================================================================
  */
 
-/* static int */
-/* TableCollection_check_state(TableCollection *self) */
-/* { */
-/*     int ret = -1; */
-/*     if (self->provenance_table == NULL) { */
-/*         PyErr_SetString(PyExc_SystemError, "TableCollection not initialised"); */
-/*         goto out; */
-/*     } */
-/*     if (self->locked) { */
-/*         PyErr_SetString(PyExc_RuntimeError, "TableCollection in use by other thread."); */
-/*         goto out; */
-/*     } */
-/*     ret = 0; */
-/* out: */
-/*     return ret; */
-/* } */
+static int
+TableCollection_traverse(TableCollection *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->individuals);
+    return 0;
+}
 
+static int
+TableCollection_clear(TableCollection *self)
+{
+    PyObject *tmp;
+
+    /* The underlying tables associated with the Python objects have already
+     * been freed so set them to NULL */
+    if (self->individuals != NULL) {
+        self->individuals->individual_table = NULL;
+        tmp = (PyObject *) self->individuals;
+        self->individuals = NULL;
+        Py_DECREF(tmp);
+    }
+    return 0;
+}
 
 static void
 TableCollection_dealloc(TableCollection* self)
 {
+    /* printf("dealloc table collection %p\n", (void *) self); */
+    PyObject_GC_UnTrack(self);
+    TableCollection_clear(self);
+
     if (self->tables != NULL) {
         table_collection_free(self->tables);
         PyMem_Free(self->tables);
         self->tables = NULL;
     }
-    /* The underlying tables associated with the Python objects have already
-     * been freed so set them to NULL */
-    if (self->individuals != NULL) {
-        self->individuals->individual_table = NULL;
-        Py_DECREF(self->individuals);
-    }
+
     if (self->nodes != NULL) {
         self->nodes->node_table = NULL;
         Py_DECREF(self->nodes);
@@ -4393,6 +4424,15 @@ TableCollection_dealloc(TableCollection* self)
         Py_DECREF(self->provenances);
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject *
+TableCollection_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    TableCollection *self;
+    self = (TableCollection *) type->tp_alloc(type, 0);
+    /* printf("alloc table collection  %p\n", (void *) self); */
+    return (PyObject *) self;
 }
 
 static int
@@ -4426,15 +4466,15 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
      * tables increments the reference count for this table collection. */
 
     /* individuals */
-    self->individuals = PyObject_New(IndividualTable, &IndividualTableType);
+    self->individuals = PyObject_GC_New(IndividualTable, &IndividualTableType);
     if (self->individuals == NULL) {
         goto out;
     }
     self->individuals->locked = false;
     self->individuals->individual_table = &self->tables->individuals;
-    /* self->individuals->table_collection = NULL; */
     self->individuals->table_collection = (PyObject *) self;
     Py_INCREF(self);
+    PyObject_GC_Track(self->individuals);
 
     /* nodes */
     self->nodes = PyObject_New(NodeTable, &NodeTableType);
@@ -4611,10 +4651,11 @@ static PyTypeObject TableCollectionType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT |
-        Py_TPFLAGS_BASETYPE,   /* tp_flags */
-    "TableCollection objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
+        Py_TPFLAGS_BASETYPE |
+        Py_TPFLAGS_HAVE_GC,       /* tp_flags */
+    "TableCollection objects",    /* tp_doc */
+    (traverseproc) TableCollection_traverse,     /* tp_traverse */
+    (inquiry) TableCollection_clear,             /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
@@ -4628,6 +4669,8 @@ static PyTypeObject TableCollectionType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)TableCollection_init,      /* tp_init */
+    0,                         /* tp_alloc */
+    TableCollection_new,       /* tp_new */
 };
 
 /*===================================================================
@@ -10197,7 +10240,6 @@ init_msprime(void)
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
 
     /* IndividualTable type */
-    IndividualTableType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&IndividualTableType) < 0) {
         INITERROR;
     }
@@ -10261,7 +10303,6 @@ init_msprime(void)
     PyModule_AddObject(module, "ProvenanceTable", (PyObject *) &ProvenanceTableType);
 
     /* TableCollectionTable type */
-    TableCollectionType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&TableCollectionType) < 0) {
         INITERROR;
     }
