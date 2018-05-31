@@ -446,7 +446,7 @@ tree_sequence_init_individuals(tree_sequence_t *self)
     size_t num_inds = self->individuals.num_records;
 
     // First find number of nodes per individual
-    // TODO: if nodes for each individual were contiguous 
+    // TODO: if nodes for each individual were contiguous
     // this would require just one pass, not two
     self->individuals.individual_nodes_length = calloc(
             MSP_MAX(1, num_inds), sizeof(table_size_t));
@@ -460,7 +460,7 @@ tree_sequence_init_individuals(tree_sequence_t *self)
     for (k = 0; k < (node_id_t) self->nodes.num_records; k++) {
         j = self->nodes.individual[k];
         if (j != MSP_NULL_INDIVIDUAL) {
-            if (j >= num_inds) {
+            if (j >= (individual_id_t) num_inds) {
                 ret = MSP_ERR_BAD_INDIVIDUAL;
                 goto out;
             }
@@ -489,16 +489,16 @@ tree_sequence_init_individuals(tree_sequence_t *self)
         j = self->nodes.individual[k];
         if (j != MSP_NULL_INDIVIDUAL) {
             node_array = self->individuals.individual_nodes[j];
-            assert(node_array - self->individuals.individual_nodes_mem < total_nodes - num_nodes[j]);
+            assert(node_array - self->individuals.individual_nodes_mem
+                    < total_nodes - num_nodes[j]);
             node_array[num_nodes[j]] = k;
             num_nodes[j] += 1;
         }
     }
 out:
-    free(num_nodes);
+    msp_safe_free(num_nodes);
     return ret;
 }
-
 
 /* Initialises memory associated with the trees.
  */

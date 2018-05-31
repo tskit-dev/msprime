@@ -127,7 +127,7 @@ def get_gap_examples():
     t = ts.dump_tables()
     L = 2
     sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
-    ts_new = ts.load_tables(
+    ts_new = msprime.load_tables(
         nodes=t.nodes, edges=t.edges, sites=sites, mutations=mutations,
         sequence_length=L)
     yield ts_new
@@ -1042,7 +1042,13 @@ class TestTreeSequence(HighLevelTestCase):
                 new_edges.append(msprime.Edge(
                     edgeset.left, edgeset.right, edgeset.parent, child))
         # squash the edges.
+        tables = ts.dump_tables()
+        # print(tables)
+        # print(tables.nodes)
+        print("HERE time = ", tables.nodes.time)
+
         t = ts.dump_tables().nodes.time
+        # t = tables.nodes.time
         new_edges.sort(key=lambda e: (t[e.parent], e.parent, e.child, e.left))
 
         squashed = []

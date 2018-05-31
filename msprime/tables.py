@@ -72,8 +72,84 @@ ProvenanceTableRow = collections.namedtuple(
     ["timestamp", "record"])
 
 
-class IndividualTable(_msprime.IndividualTable):
-    # FIXME
+# TODO We could abstract quite a lot more functionality up into this baseclass
+# if each class kept a list of its columns. Then it would be pretty simple to
+# define generic implementation of copy, etc.
+
+
+class BaseTable(object):
+    """
+    Superclass of high-level tables. Not intended for direct instantiation.
+    """
+    def __init__(self, ll_table, row_class):
+        self.ll_table = ll_table
+        self.row_class = row_class
+
+    @property
+    def num_rows(self):
+        return self.ll_table.num_rows
+
+    @property
+    def max_rows(self):
+        return self.ll_table.max_rows
+
+    @property
+    def max_rows_increment(self):
+        return self.ll_table.max_rows_increment
+
+    def __ne__(self, other):
+        # __eq__ must be defined in the subclass
+        return not self.__eq__(other)
+
+    def __len__(self):
+        return self.num_rows
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        return self.row_class(*self.ll_table.get_row(index))
+
+    def clear(self):
+        """
+        Deletes all rows in this table.
+        """
+        self.ll_table.clear()
+
+    def reset(self):
+        # Deprecated alias for clear
+        self.clear()
+
+    # Unpickle support
+    def __setstate__(self, state):
+        self.set_columns(**state)
+
+
+class IndividualTable(BaseTable):
+    # FIXME Document
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.IndividualTable(max_rows_increment=max_rows_increment)
+        super(IndividualTable, self).__init__(ll_table, IndividualTableRow)
+
+    @property
+    def flags(self):
+        return self.ll_table.flags
+
+    @property
+    def location(self):
+        return self.ll_table.location
+
+    @property
+    def location_offset(self):
+        return self.ll_table.location_offset
+
+    @property
+    def metadata(self):
+        return self.ll_table.metadata
+
+    @property
+    def metadata_offset(self):
+        return self.ll_table.metadata_offset
 
     def __str__(self):
         flags = self.flags
@@ -99,24 +175,6 @@ class IndividualTable(_msprime.IndividualTable):
                 np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        return IndividualTableRow(*self.get_row(index))
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            flags=state["flags"],
-            location=state["location"], location_offset=state["location_offset"],
-            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -128,25 +186,15 @@ class IndividualTable(_msprime.IndividualTable):
             metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
 
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(IndividualTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
-
     def add_row(self, flags=0, location=None, metadata=None):
-        return super(IndividualTable, self).add_row(
+        return self.ll_table.add_row(
                 flags=flags, location=location, metadata=metadata)
 
     def set_columns(
             self, flags, location=None, location_offset=None,
             metadata=None, metadata_offset=None):
         # FIXME
-        super(IndividualTable, self).set_columns(
+        self.ll_table.set_columns(
             flags, location=location, location_offset=location_offset,
             metadata=metadata, metadata_offset=metadata_offset)
 
@@ -154,7 +202,7 @@ class IndividualTable(_msprime.IndividualTable):
             self, flags, location=None, location_offset=None, metadata=None,
             metadata_offset=None):
         # FIXME
-        super(IndividualTable, self).append_columns(
+        self.ll_table.append_columns(
             flags, location=location, location_offset=location_offset,
             metadata=metadata, metadata_offset=metadata_offset)
 
@@ -171,7 +219,7 @@ def _pickle_individual_table(table):
     return IndividualTable, tuple(), state
 
 
-class NodeTable(_msprime.NodeTable):
+class NodeTable(BaseTable):
     """
     A table defining the nodes in a tree sequence. See the
     :ref:`definitions <sec_node_table_definition>` for details on the columns
@@ -199,6 +247,38 @@ class NodeTable(_msprime.NodeTable):
         :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.NodeTable(max_rows_increment=max_rows_increment)
+        super(NodeTable, self).__init__(ll_table, NodeTableRow)
+
+    @property
+    def time(self):
+        return self.ll_table.time
+
+    @property
+    def flags(self):
+        return self.ll_table.flags
+
+    @property
+    def population(self):
+        return self.ll_table.population
+
+    @property
+    def individual(self):
+        return self.ll_table.individual
+
+    @property
+    def metadata(self):
+        return self.ll_table.metadata
+
+    @property
+    def metadata_offset(self):
+        return self.ll_table.metadata_offset
+
+    @property
+    def time(self):
+        return self.ll_table.time
 
     def __str__(self):
         time = self.time
@@ -225,24 +305,6 @@ class NodeTable(_msprime.NodeTable):
                 np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        return NodeTableRow(*self.get_row(index))
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            time=state["time"], flags=state["flags"], population=state["population"],
-            individual=state["individual"], metadata=state["metadata"],
-            metadata_offset=state["metadata_offset"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -253,16 +315,6 @@ class NodeTable(_msprime.NodeTable):
             individual=self.individual, metadata=self.metadata,
             metadata_offset=self.metadata_offset)
         return copy
-
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(NodeTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
 
     def add_row(self, flags=0, time=0, population=-1, individual=-1, metadata=None):
         """
@@ -280,8 +332,7 @@ class NodeTable(_msprime.NodeTable):
         :return: The ID of the newly added node.
         :rtype: int
         """
-        return super(NodeTable, self).add_row(
-            flags, time, population, individual, metadata)
+        return self.ll_table.add_row(flags, time, population, individual, metadata)
 
     def set_columns(
             self, flags, time, population=None, individual=None, metadata=None,
@@ -313,7 +364,7 @@ class NodeTable(_msprime.NodeTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        super(NodeTable, self).set_columns(
+        self.ll_table.set_columns(
             flags, time, population=population, individual=individual, metadata=metadata,
             metadata_offset=metadata_offset)
 
@@ -347,7 +398,7 @@ class NodeTable(_msprime.NodeTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        super(NodeTable, self).append_columns(
+        self.ll_table.append_columns(
             flags, time, population=population, individual=individual,
             metadata=metadata, metadata_offset=metadata_offset)
 
@@ -365,7 +416,7 @@ def _pickle_node_table(table):
     return NodeTable, tuple(), state
 
 
-class EdgeTable(_msprime.EdgeTable):
+class EdgeTable(BaseTable):
     """
     A table defining the edges in a tree sequence. See the
     :ref:`definitions <sec_edge_table_definition>` for details on the columns
@@ -388,6 +439,27 @@ class EdgeTable(_msprime.EdgeTable):
     :ivar child: The array of child node IDs.
     :vartype child: numpy.ndarray, dtype=np.int32
     """
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.EdgeTable(max_rows_increment=max_rows_increment)
+        super(EdgeTable, self).__init__(ll_table, EdgeTableRow)
+
+    @property
+    def left(self):
+        return self.ll_table.left
+
+    @property
+    def right(self):
+        return self.ll_table.right
+
+    @property
+    def parent(self):
+        return self.ll_table.parent
+
+    @property
+    def child(self):
+        return self.ll_table.child
+
     def __str__(self):
         left = self.left
         right = self.right
@@ -409,23 +481,6 @@ class EdgeTable(_msprime.EdgeTable):
                 np.array_equal(self.child, other.child))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        return EdgeTableRow(*self.get_row(index))
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            left=state["left"], right=state["right"], parent=state["parent"],
-            child=state["child"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -434,16 +489,6 @@ class EdgeTable(_msprime.EdgeTable):
         copy.set_columns(
             left=self.left, right=self.right, parent=self.parent, child=self.child)
         return copy
-
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(EdgeTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
 
     def add_row(self, left, right, parent, child):
         """
@@ -457,7 +502,7 @@ class EdgeTable(_msprime.EdgeTable):
         :return: The ID of the newly added edge.
         :rtype: int
         """
-        return super(EdgeTable, self).add_row(left, right, parent, child)
+        return self.ll_table.add_row(left, right, parent, child)
 
     def set_columns(self, left, right, parent, child):
         """
@@ -476,7 +521,7 @@ class EdgeTable(_msprime.EdgeTable):
         :param child: The child node IDs.
         :type child: numpy.ndarray, dtype=np.int32
         """
-        super(EdgeTable, self).set_columns(left, right, parent, child)
+        self.ll_table.set_columns(left, right, parent, child)
 
     def append_columns(self, left, right, parent, child):
         """
@@ -496,7 +541,7 @@ class EdgeTable(_msprime.EdgeTable):
         :param child: The child node IDs.
         :type child: numpy.ndarray, dtype=np.int32
         """
-        super(EdgeTable, self).append_columns(left, right, parent, child)
+        self.ll_table.append_columns(left, right, parent, child)
 
 
 # Pickle support. See copyreg registration for this function below.
@@ -510,7 +555,7 @@ def _edge_table_pickle(table):
     return EdgeTable, tuple(), state
 
 
-class MigrationTable(_msprime.MigrationTable):
+class MigrationTable(BaseTable):
     """
     A table defining the migrations in a tree sequence. See the
     :ref:`definitions <sec_migration_table_definition>` for details on the columns
@@ -538,6 +583,34 @@ class MigrationTable(_msprime.MigrationTable):
     :ivar time: The array of time values.
     :vartype time: numpy.ndarray, dtype=np.float64
     """
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.MigrationTable(max_rows_increment=max_rows_increment)
+        super(MigrationTable, self).__init__(ll_table, MigrationTableRow)
+
+    @property
+    def left(self):
+        return self.ll_table.left
+
+    @property
+    def right(self):
+        return self.ll_table.right
+
+    @property
+    def node(self):
+        return self.ll_table.node
+
+    @property
+    def source(self):
+        return self.ll_table.source
+
+    @property
+    def dest(self):
+        return self.ll_table.dest
+
+    @property
+    def time(self):
+        return self.ll_table.time
 
     def __str__(self):
         left = self.left
@@ -564,23 +637,6 @@ class MigrationTable(_msprime.MigrationTable):
                 np.array_equal(self.time, other.time))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        return MigrationTableRow(*self.get_row(index))
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            left=state["left"], right=state["right"], node=state["node"],
-            source=state["source"], dest=state["dest"], time=state["time"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -590,16 +646,6 @@ class MigrationTable(_msprime.MigrationTable):
             left=self.left, right=self.right, node=self.node, source=self.source,
             dest=self.dest, time=self.time)
         return copy
-
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(MigrationTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
 
     def add_row(self, left, right, node, source, dest, time):
         """
@@ -615,7 +661,7 @@ class MigrationTable(_msprime.MigrationTable):
         :return: The ID of the newly added migration.
         :rtype: int
         """
-        return super(MigrationTable, self).add_row(left, right, node, source, dest, time)
+        return self.ll_table.add_row(left, right, node, source, dest, time)
 
     def set_columns(self, left, right, node, source, dest, time):
         """
@@ -638,7 +684,7 @@ class MigrationTable(_msprime.MigrationTable):
         :param time: The time of each migration.
         :type time: numpy.ndarray, dtype=np.int64
         """
-        super(MigrationTable, self).set_columns(left, right, node, source, dest, time)
+        self.ll_table.set_columns(left, right, node, source, dest, time)
 
     def append_columns(self, left, right, node, source, dest, time):
         """
@@ -662,8 +708,7 @@ class MigrationTable(_msprime.MigrationTable):
         :param time: The time of each migration.
         :type time: numpy.ndarray, dtype=np.int64
         """
-        super(MigrationTable, self).append_columns(
-            left, right, node, source, dest, time)
+        self.ll_table.append_columns(left, right, node, source, dest, time)
 
 
 # Pickle support. See copyreg registration for this function below.
@@ -679,7 +724,7 @@ def _migration_table_pickle(table):
     return MigrationTable, tuple(), state
 
 
-class SiteTable(_msprime.SiteTable):
+class SiteTable(BaseTable):
     """
     A table defining the sites in a tree sequence. See the
     :ref:`definitions <sec_site_table_definition>` for details on the columns
@@ -709,6 +754,30 @@ class SiteTable(_msprime.SiteTable):
         :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.SiteTable(max_rows_increment=max_rows_increment)
+        super(SiteTable, self).__init__(ll_table, SiteTableRow)
+
+    @property
+    def position(self):
+        return self.ll_table.position
+
+    @property
+    def ancestral_state(self):
+        return self.ll_table.ancestral_state
+
+    @property
+    def ancestral_state_offset(self):
+        return self.ll_table.ancestral_state_offset
+
+    @property
+    def metadata(self):
+        return self.ll_table.metadata
+
+    @property
+    def metadata_offset(self):
+        return self.ll_table.metadata_offset
 
     def __str__(self):
         position = self.position
@@ -734,27 +803,6 @@ class SiteTable(_msprime.SiteTable):
                 np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        pos, ancestral_state, _, _, metadata = self.get_row(index)
-        return SiteTableRow(pos, ancestral_state, metadata)
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            position=state["position"],
-            ancestral_state=state["ancestral_state"],
-            ancestral_state_offset=state["ancestral_state_offset"],
-            metadata=state["metadata"],
-            metadata_offset=state["metadata_offset"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -768,16 +816,6 @@ class SiteTable(_msprime.SiteTable):
             metadata_offset=self.metadata_offset)
         return copy
 
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(SiteTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
-
     def add_row(self, position, ancestral_state, metadata=None):
         """
         Adds a new row to this :class:`SiteTable` and returns the ID of the
@@ -790,7 +828,7 @@ class SiteTable(_msprime.SiteTable):
         :return: The ID of the newly added site.
         :rtype: int
         """
-        return super(SiteTable, self).add_row(position, ancestral_state, metadata)
+        return self.ll_table.add_row(position, ancestral_state, metadata)
 
     def set_columns(
             self, position, ancestral_state, ancestral_state_offset,
@@ -824,7 +862,7 @@ class SiteTable(_msprime.SiteTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        super(SiteTable, self).set_columns(
+        self.ll_table.set_columns(
             position, ancestral_state=ancestral_state,
             ancestral_state_offset=ancestral_state_offset,
             metadata=metadata, metadata_offset=metadata_offset)
@@ -862,7 +900,7 @@ class SiteTable(_msprime.SiteTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        super(SiteTable, self).append_columns(
+        self.ll_table.append_columns(
             position, ancestral_state=ancestral_state,
             ancestral_state_offset=ancestral_state_offset,
             metadata=metadata, metadata_offset=metadata_offset)
@@ -880,7 +918,7 @@ def _site_table_pickle(table):
     return SiteTable, tuple(), state
 
 
-class MutationTable(_msprime.MutationTable):
+class MutationTable(BaseTable):
     """
     A table defining the mutations in a tree sequence. See the
     :ref:`definitions <sec_mutation_table_definition>` for details on the columns
@@ -914,6 +952,38 @@ class MutationTable(_msprime.MutationTable):
         :ref:`sec_tables_api_binary_columns` for more details.
     :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
     """
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.MutationTable(max_rows_increment=max_rows_increment)
+        super(MutationTable, self).__init__(ll_table, MutationTableRow)
+
+    @property
+    def site(self):
+        return self.ll_table.site
+
+    @property
+    def node(self):
+        return self.ll_table.node
+
+    @property
+    def parent(self):
+        return self.ll_table.parent
+
+    @property
+    def derived_state(self):
+        return self.ll_table.derived_state
+
+    @property
+    def derived_state_offset(self):
+        return self.ll_table.derived_state_offset
+
+    @property
+    def metadata(self):
+        return self.ll_table.metadata
+
+    @property
+    def metadata_offset(self):
+        return self.ll_table.metadata_offset
 
     def __str__(self):
         site = self.site
@@ -942,26 +1012,6 @@ class MutationTable(_msprime.MutationTable):
                 np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        site, node, derived_state, parent, metadata = self.get_row(index)
-        return MutationTableRow(site, node, derived_state, parent, metadata)
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            site=state["site"], node=state["node"], parent=state["parent"],
-            derived_state=state["derived_state"],
-            derived_state_offset=state["derived_state_offset"],
-            metadata=state["metadata"], metadata_offset=state["metadata_offset"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -973,16 +1023,6 @@ class MutationTable(_msprime.MutationTable):
             derived_state_offset=self.derived_state_offset,
             metadata=self.metadata, metadata_offset=self.metadata_offset)
         return copy
-
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(MutationTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
 
     def add_row(self, site, node, derived_state, parent=-1, metadata=None):
         """
@@ -999,7 +1039,7 @@ class MutationTable(_msprime.MutationTable):
         :return: The ID of the newly added mutation.
         :rtype: int
         """
-        return super(MutationTable, self).add_row(
+        return self.ll_table.add_row(
                 site, node, derived_state, parent, metadata)
 
     def set_columns(
@@ -1039,7 +1079,7 @@ class MutationTable(_msprime.MutationTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        super(MutationTable, self).set_columns(
+        self.ll_table.set_columns(
             site=site, node=node, parent=parent,
             derived_state=derived_state, derived_state_offset=derived_state_offset,
             metadata=metadata, metadata_offset=metadata_offset)
@@ -1082,7 +1122,7 @@ class MutationTable(_msprime.MutationTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        super(MutationTable, self).append_columns(
+        self.ll_table.append_columns(
             site=site, node=node, parent=parent,
             derived_state=derived_state, derived_state_offset=derived_state_offset,
             metadata=metadata, metadata_offset=metadata_offset)
@@ -1102,15 +1142,28 @@ def _mutation_table_pickle(table):
     return MutationTable, tuple(), state
 
 
-class PopulationTable(_msprime.PopulationTable):
+class PopulationTable(BaseTable):
     # FIXME
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.PopulationTable(max_rows_increment=max_rows_increment)
+        super(PopulationTable, self).__init__(ll_table, PopulationTableRow)
+
+    @property
+    def metadata(self):
+        return self.ll_table.metadata
+
+    @property
+    def metadata_offset(self):
+        return self.ll_table.metadata_offset
+
     def add_row(self, metadata=None):
         """
         .. todo:: document.
         """
         if metadata is None:
             metadata = datetime.datetime.now().isoformat()
-        return super(PopulationTable, self).add_row(metadata=metadata)
+        return self.ll_table.add_row(metadata=metadata)
 
     def __str__(self):
         metadata = unpack_strings(self.metadata, self.metadata_offset)
@@ -1127,23 +1180,6 @@ class PopulationTable(_msprime.PopulationTable):
                 np.array_equal(self.metadata_offset, other.metadata_offset))
         return ret
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        return PopulationTableRow(*self.get_row(index))
-
-    # Unpickle support
-    def __setstate__(self, state):
-        self.set_columns(
-            metadata=state["metadata"],
-            metadata_offset=state["metadata_offset"])
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -1154,15 +1190,11 @@ class PopulationTable(_msprime.PopulationTable):
             metadata_offset=self.metadata_offset)
         return copy
 
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(PopulationTable, self).clear()
+    def set_columns(self, metadata=None, metadata_offset=None):
+        self.ll_table.set_columns(metadata=metadata, metadata_offset=metadata_offset)
 
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
+    def append_columns(self, metadata=None, metadata_offset=None):
+        self.ll_table.append_columns(metadata=metadata, metadata_offset=metadata_offset)
 
 
 # Pickle support. See copyreg registration for this function below.
@@ -1174,11 +1206,33 @@ def _population_table_pickle(table):
     return PopulationTable, tuple(), state
 
 
-class ProvenanceTable(_msprime.ProvenanceTable):
+class ProvenanceTable(BaseTable):
     """
     .. todo::
         This class is provisional, and the API may change in the future.
     """
+    # FIXME
+    def __init__(self, max_rows_increment=0, ll_table=None):
+        if ll_table is None:
+            ll_table = _msprime.ProvenanceTable(max_rows_increment=max_rows_increment)
+        super(ProvenanceTable, self).__init__(ll_table, ProvenanceTableRow)
+
+    @property
+    def record(self):
+        return self.ll_table.record
+
+    @property
+    def record_offset(self):
+        return self.ll_table.record_offset
+
+    @property
+    def timestamp(self):
+        return self.ll_table.timestamp
+
+    @property
+    def timestamp_offset(self):
+        return self.ll_table.timestamp_offset
+
     def add_row(self, record, timestamp=None):
         """
         Adds a new row to this ProvenanceTable consisting of the specified record and
@@ -1195,7 +1249,21 @@ class ProvenanceTable(_msprime.ProvenanceTable):
         # from the low-level module, which is a bit confusing. However, we
         # want the default behaviour here to be to add a row to the table at
         # the current time as simply as possible.
-        return super(ProvenanceTable, self).add_row(record=record, timestamp=timestamp)
+        return self.ll_table.add_row(record=record, timestamp=timestamp)
+
+    def set_columns(
+            self, timestamp=None, timestamp_offset=None,
+            record=None, record_offset=None):
+        self.ll_table.set_columns(
+            timestamp=timestamp, timestamp_offset=timestamp_offset,
+            record=record, record_offset=record_offset)
+
+    def append_columns(
+            self, timestamp=None, timestamp_offset=None,
+            record=None, record_offset=None):
+        self.ll_table.append_columns(
+            timestamp=timestamp, timestamp_offset=timestamp_offset,
+            record=record, record_offset=record_offset)
 
     def __str__(self):
         timestamp = unpack_strings(self.timestamp, self.timestamp_offset)
@@ -1214,17 +1282,6 @@ class ProvenanceTable(_msprime.ProvenanceTable):
                 np.array_equal(self.record, other.record) and
                 np.array_equal(self.record_offset, other.record_offset))
         return ret
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __len__(self):
-        return self.num_rows
-
-    def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        return ProvenanceTableRow(*self.get_row(index))
 
     # Unpickle support
     def __setstate__(self, state):
@@ -1245,17 +1302,6 @@ class ProvenanceTable(_msprime.ProvenanceTable):
             record=self.record,
             record_offset=self.record_offset)
         return copy
-
-    def clear(self):
-        """
-        Deletes all rows in this table.
-        """
-        super(ProvenanceTable, self).clear()
-
-    def reset(self):
-        # Deprecated alias for clear
-        self.clear()
-
 
 # Pickle support. See copyreg registration for this function below.
 def _provenance_table_pickle(table):
@@ -1282,22 +1328,69 @@ copyreg.pickle(PopulationTable, _population_table_pickle)
 copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
+# class TableCollection(object):
+#     """
+#     A collection of tables. This is a convenience class allowing for convenient
+#     printing and comparisons of a collection of related tables.
+#     """
+#     def __init__(
+#             self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
+#             provenances=None, individuals=None, populations=None):
+#         self.individuals = individuals
+#         self.nodes = nodes
+#         self.edges = edges
+#         self.migrations = migrations
+#         self.sites = sites
+#         self.mutations = mutations
+#         self.provenances = provenances
+#         self.populations = populations
+
 class TableCollection(object):
-    """
-    A collection of tables. This is a convenience class allowing for convenient
-    printing and comparisons of a collection of related tables.
-    """
-    def __init__(
-            self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
-            provenances=None, individuals=None, populations=None):
-        self.individuals = individuals
-        self.nodes = nodes
-        self.edges = edges
-        self.migrations = migrations
-        self.sites = sites
-        self.mutations = mutations
-        self.provenances = provenances
-        self.populations = populations
+
+    def __init__(self, ll_tables=None):
+        if ll_tables is None:
+            ll_tables = _msprime.TableCollection()
+        self.ll_tables = ll_tables
+        self.__individuals = IndividualTable(ll_table=self.ll_tables.individuals)
+        self.__nodes = NodeTable(ll_table=self.ll_tables.nodes)
+        self.__edges = EdgeTable(ll_table=self.ll_tables.edges)
+        self.__migrations = MigrationTable(ll_table=self.ll_tables.migrations)
+        self.__sites = SiteTable(ll_table=self.ll_tables.sites)
+        self.__mutations = MutationTable(ll_table=self.ll_tables.mutations)
+        self.__populations = PopulationTable(ll_table=self.ll_tables.populations)
+        self.__provenances = ProvenanceTable(ll_table=self.ll_tables.provenances)
+
+    @property
+    def individuals(self):
+        return self.__individuals
+
+    @property
+    def nodes(self):
+        return self.__nodes
+
+    @property
+    def edges(self):
+        return self.__edges
+
+    @property
+    def migrations(self):
+        return self.__migrations
+
+    @property
+    def sites(self):
+        return self.__sites
+
+    @property
+    def mutations(self):
+        return self.__mutations
+
+    @property
+    def populations(self):
+        return self.__populations
+
+    @property
+    def provenances(self):
+        return self.__provenances
 
     def asdict(self):
         """
@@ -1402,17 +1495,21 @@ def sort_tables(
         (default=0; must be <= len(edges)).
     """
     # TODO update the low-level module to accept None and remove this
-    kwargs = {"nodes": nodes, "edges": edges, "edge_start": edge_start}
-    if migrations is not None:
-        kwargs["migrations"] = migrations
-    if sites is not None:
-        kwargs["sites"] = sites
-    if mutations is not None:
-        kwargs["mutations"] = mutations
-    if individuals is not None:
-        kwargs["individuals"] = individuals
-    if populations is not None:
-        kwargs["populations"] = populations
+    try:
+        kwargs = {
+            "nodes": nodes.ll_table, "edges": edges.ll_table, "edge_start": edge_start}
+        if migrations is not None:
+            kwargs["migrations"] = migrations.ll_table
+        if sites is not None:
+            kwargs["sites"] = sites.ll_table
+        if mutations is not None:
+            kwargs["mutations"] = mutations.ll_table
+        if individuals is not None:
+            kwargs["individuals"] = individuals.ll_table
+        if populations is not None:
+            kwargs["populations"] = populations.ll_table
+    except AttributeError as e:
+        raise TypeError(str(e))
     return _msprime.sort_tables(**kwargs)
 
 
@@ -1453,16 +1550,19 @@ def simplify_tables(
     :rtype: numpy array (dtype=np.int32).
     """
     # TODO update the low-level module to accept None and remove this
-    kwargs = {
-        "samples": samples, "nodes": nodes, "edges": edges,
-        "sequence_length": sequence_length,
-        "filter_zero_mutation_sites": filter_zero_mutation_sites}
-    if migrations is not None:
-        kwargs["migrations"] = migrations
-    if sites is not None:
-        kwargs["sites"] = sites
-    if mutations is not None:
-        kwargs["mutations"] = mutations
+    try:
+        kwargs = {
+            "samples": samples, "nodes": nodes.ll_table, "edges": edges.ll_table,
+            "sequence_length": sequence_length,
+            "filter_zero_mutation_sites": filter_zero_mutation_sites}
+        if migrations is not None:
+            kwargs["migrations"] = migrations.ll_table
+        if sites is not None:
+            kwargs["sites"] = sites.ll_table
+        if mutations is not None:
+            kwargs["mutations"] = mutations.ll_table
+    except AttributeError as e:
+        raise TypeError(str(e))
     return _msprime.simplify_tables(**kwargs)
 
 

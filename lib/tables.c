@@ -3692,12 +3692,12 @@ out:
 }
 
 int
-simplifier_alloc(simplifier_t *self, double sequence_length,
-        node_id_t *samples, size_t num_samples,
+simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags)
 {
     int ret = 0;
     size_t j, num_nodes_alloc;
+    double sequence_length;
 
     memset(self, 0, sizeof(simplifier_t));
     self->num_samples = num_samples;
@@ -3714,7 +3714,8 @@ simplifier_alloc(simplifier_t *self, double sequence_length,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-
+    /* TODO is this the correct semantics now? */
+    sequence_length = tables->sequence_length;
     if (sequence_length == 0) {
         /* infer sequence length from the edges */
         sequence_length = 0.0;
@@ -4865,8 +4866,7 @@ table_collection_simplify(table_collection_t *self,
     int ret = 0;
     simplifier_t simplifier;
 
-    ret = simplifier_alloc(&simplifier, self->sequence_length,
-            samples, num_samples, self, flags);
+    ret = simplifier_alloc(&simplifier, samples, num_samples, self, flags);
     if (ret != 0) {
         goto out;
     }

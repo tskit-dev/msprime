@@ -1121,19 +1121,21 @@ def load_tables(
     :rtype: TreeSequence
     """
     # TODO update the low-level module to accept None and remove this
-    kwargs = {"nodes": nodes, "edges": edges, "sequence_length": sequence_length}
+    kwargs = {
+        "nodes": nodes.ll_table, "edges": edges.ll_table,
+        "sequence_length": sequence_length}
     if migrations is not None:
-        kwargs["migrations"] = migrations
+        kwargs["migrations"] = migrations.ll_table
     if sites is not None:
-        kwargs["sites"] = sites
+        kwargs["sites"] = sites.ll_table
     if mutations is not None:
-        kwargs["mutations"] = mutations
+        kwargs["mutations"] = mutations.ll_table
     if provenances is not None:
-        kwargs["provenances"] = provenances
+        kwargs["provenances"] = provenances.ll_table
     if individuals is not None:
-        kwargs["individuals"] = individuals
+        kwargs["individuals"] = individuals.ll_table
     if populations is not None:
-        kwargs["populations"] = populations
+        kwargs["populations"] = populations.ll_table
     return TreeSequence.load_tables(**kwargs)
 
 
@@ -1484,9 +1486,10 @@ class TreeSequence(object):
         """
         return self.dump_tables()
 
-    def dump_tables(
-            self, nodes=None, edges=None, migrations=None, sites=None,
-            mutations=None, provenances=None):
+    def dump_tables(self):
+        # Setting this to zero args for now to get it all working.
+        # self, nodes=None, edges=None, migrations=None, sites=None,
+        # mutations=None, provenances=None):
         """
         Copy the contents of the tables underlying the tree sequence to the
         specified objects.
@@ -1502,30 +1505,35 @@ class TreeSequence(object):
             the tree sequence.
         :rtype: TableCollection
         """
-        # TODO document this and test the semantics to passing in new tables
-        # as well as returning the updated tables.
-        if nodes is None:
-            nodes = tables.NodeTable()
-        if edges is None:
-            edges = tables.EdgeTable()
-        if migrations is None:
-            migrations = tables.MigrationTable()
-        if sites is None:
-            sites = tables.SiteTable()
-        if mutations is None:
-            mutations = tables.MutationTable()
-        if provenances is None:
-            provenances = tables.ProvenanceTable()
-        individuals = tables.IndividualTable()
-        populations = tables.PopulationTable()
+        # # TODO document this and test the semantics to passing in new tables
+        # # as well as returning the updated tables.
+        # if nodes is None:
+        #     nodes = tables.NodeTable()
+        # if edges is None:
+        #     edges = tables.EdgeTable()
+        # if migrations is None:
+        #     migrations = tables.MigrationTable()
+        # if sites is None:
+        #     sites = tables.SiteTable()
+        # if mutations is None:
+        #     mutations = tables.MutationTable()
+        # if provenances is None:
+        #     provenances = tables.ProvenanceTable()
+
+        t = tables.TableCollection()
         self._ll_tree_sequence.dump_tables(
-            nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations, provenances=provenances,
-            individuals=individuals, populations=populations)
-        return tables.TableCollection(
-            nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-            mutations=mutations, provenances=provenances,
-            individuals=individuals, populations=populations)
+            nodes=t.nodes.ll_table, edges=t.edges.ll_table,
+            migrations=t.migrations.ll_table,
+            sites=t.sites.ll_table,
+            mutations=t.mutations.ll_table,
+            provenances=t.provenances.ll_table,
+            individuals=t.individuals.ll_table,
+            populations=t.populations.ll_table)
+        return t
+        # return tables.TableCollection(
+        #     nodes=nodes, edges=edges, migrations=migrations, sites=sites,
+        #     mutations=mutations, provenances=provenances,
+        #     individuals=individuals, populations=populations)
 
     def dump_text(
             self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
