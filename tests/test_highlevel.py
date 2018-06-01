@@ -974,7 +974,6 @@ class TestNumpySamples(unittest.TestCase):
             pi2 = ts.pairwise_diversity(list(samples))
             self.assertEqual(pi1, pi2)
 
-    @unittest.skip("SEGFAULT")
     def test_simplify(self):
         num_demes = 3
         ts = self.get_tree_sequence(num_demes)
@@ -1363,7 +1362,7 @@ class TestTreeSequence(HighLevelTestCase):
                 a2 = [variant.alleles[g] for g in variant.genotypes]
                 self.assertEqual(a1, a2)
 
-    @unittest.skip("SEGFAULT")
+    @unittest.skip("Simplfy sequence length issue")
     def test_simplify(self):
         num_mutations = 0
         for ts in get_example_tree_sequences():
@@ -1380,7 +1379,6 @@ class TestTreeSequence(HighLevelTestCase):
                 self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
-    @unittest.skip("SEGFAULT")
     def test_simplify_bugs(self):
         prefix = "tests/data/simplify-bugs/"
         j = 1

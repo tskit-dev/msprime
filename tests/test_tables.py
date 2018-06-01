@@ -1203,7 +1203,6 @@ class TestSortMutations(unittest.TestCase):
             sequence_length=1, strict=False)
 
 
-@unittest.skip("Segfaulting")
 class TestSimplifyTables(unittest.TestCase):
     """
     Tests for the simplify_tables function.
@@ -1364,7 +1363,7 @@ class TestSimplifyTables(unittest.TestCase):
         edges = tables.edges.copy()
         for bad_type in [None, {}]:
             self.assertRaises(
-                TypeError, msprime.simplify_tables, bad_type, nodes, edges)
+                ValueError, msprime.simplify_tables, bad_type, nodes, edges)
         # We only accept numpy arrays of the right type
         for bad_dtype in [np.uint32, np.int64, np.float64]:
             self.assertRaises(
@@ -1405,13 +1404,6 @@ class TestSimplifyTables(unittest.TestCase):
             self.assertRaises(
                 TypeError, msprime.simplify_tables, samples=samples, nodes=None,
                 edges=msprime.EdgeTable(), migrations=bad_type)
-        # Must specify sites and mutations together.
-        self.assertRaises(
-            TypeError, msprime.simplify_tables, samples=samples, nodes=nodes,
-            edges=edges, sites=msprime.SiteTable())
-        self.assertRaises(
-            TypeError, msprime.simplify_tables, samples=samples, nodes=nodes,
-            edges=edges, mutations=msprime.MutationTable())
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
         # Verify that tables are OK.
@@ -1423,11 +1415,6 @@ class TestSimplifyTables(unittest.TestCase):
                 TypeError, msprime.simplify_tables,
                 nodes=nodes, edges=edges, sites=sites, mutations=mutations,
                 migrations=bad_type)
-        # Trying to supply migrations fails for now.
-        self.assertRaises(
-            ValueError, msprime.simplify_tables, samples=samples,
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            migrations=msprime.MigrationTable())
 
     def test_node_table_empty_name_bug(self):
         # Issue #236. Calling simplify on copied tables unexpectedly fails.

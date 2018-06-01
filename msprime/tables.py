@@ -1537,21 +1537,27 @@ def simplify_tables(
         corresponding node IDs in the output tables.
     :rtype: numpy array (dtype=np.int32).
     """
-    # TODO update the low-level module to accept None and remove this
+    if migrations is None:
+        migrations = MigrationTable()
+    if sites is None:
+        sites = SiteTable()
+    if mutations is None:
+        mutations = MutationTable()
     try:
-        kwargs = {
-            "samples": samples, "nodes": nodes.ll_table, "edges": edges.ll_table,
-            "sequence_length": sequence_length,
-            "filter_zero_mutation_sites": filter_zero_mutation_sites}
-        if migrations is not None:
-            kwargs["migrations"] = migrations.ll_table
-        if sites is not None:
-            kwargs["sites"] = sites.ll_table
-        if mutations is not None:
-            kwargs["mutations"] = mutations.ll_table
+        ll_tables = _msprime.TableCollection(
+            individuals=_msprime.IndividualTable(),
+            nodes=nodes.ll_table,
+            edges=edges.ll_table,
+            migrations=migrations.ll_table,
+            sites=sites.ll_table,
+            mutations=mutations.ll_table,
+            populations=_msprime.PopulationTable(),
+            provenances=_msprime.ProvenanceTable(),
+            sequence_length=sequence_length)
     except AttributeError as e:
         raise TypeError(str(e))
-    return _msprime.simplify_tables(**kwargs)
+    return ll_tables.simplify(
+        samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
 
 
 def pack_bytes(data):

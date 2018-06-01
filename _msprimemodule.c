@@ -4497,6 +4497,56 @@ TableCollection_get_provenances(TableCollection *self, void *closure)
     return (PyObject *) self->provenances;
 }
 
+static PyObject *
+TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    PyObject *samples = NULL;
+    PyArrayObject *samples_array = NULL;
+    PyArrayObject *node_map_array = NULL;
+    npy_intp *shape, dims;
+    size_t num_samples;
+    int flags = 0;
+    int filter_zero_mutation_sites = true;
+    static char *kwlist[] = {"samples", "filter_zero_mutation_sites", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|i", kwlist,
+            &samples, &filter_zero_mutation_sites)) {
+        goto out;
+    }
+    samples_array = (PyArrayObject *) PyArray_FROMANY(samples, NPY_INT32, 1, 1,
+            NPY_ARRAY_IN_ARRAY);
+    if (samples_array == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(samples_array);
+    num_samples = shape[0];
+    if (filter_zero_mutation_sites) {
+        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
+    }
+
+    /* Allocate a new array to hold the node map. */
+    dims = self->nodes->node_table->num_rows;
+    node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
+    if (node_map_array == NULL) {
+        goto out;
+    }
+    err = table_collection_simplify(self->tables,
+            PyArray_DATA(samples_array), num_samples, flags,
+            PyArray_DATA(node_map_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = (PyObject *) node_map_array;
+    node_map_array = NULL;
+out:
+    Py_XDECREF(samples_array);
+    Py_XDECREF(node_map_array);
+    return ret;
+}
+
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4510,6 +4560,8 @@ static PyGetSetDef TableCollection_getsetters[] = {
 };
 
 static PyMethodDef TableCollection_methods[] = {
+    {"simplify", (PyCFunction) TableCollection_simplify, METH_VARARGS|METH_KEYWORDS,
+            "Simplifies for a given sample subset." },
     {NULL}  /* Sentinel */
 };
 
@@ -9827,228 +9879,6 @@ out:
 }
 
 static PyObject *
-msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    PyObject *ret = NULL;
-    PyObject *samples = NULL;
-    PyArrayObject *samples_array = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    node_table_t *nodes = NULL;
-    edge_table_t *edges = NULL;
-    migration_table_t *migrations = NULL;
-    site_table_t *sites = NULL;
-    mutation_table_t *mutations = NULL;
-    PyArrayObject *node_map_array = NULL;
-    npy_intp *shape, dims;
-    size_t num_samples;
-    simplifier_t *simplifier = NULL;
-    int flags = 0;
-    int filter_zero_mutation_sites = true;
-    bool migrations_allocated = false;
-    bool sites_allocated = false;
-    bool mutations_allocated = false;
-    bool nodes_lock_acquired = false;
-    bool edges_lock_acquired = false;
-    bool sites_lock_acquired = false;
-    bool mutations_lock_acquired = false;
-    double sequence_length = 0;
-    static char *kwlist[] = {
-        "samples", "nodes", "edges", "migrations",
-        "sites", "mutations", "sequence_length",
-        "filter_zero_mutation_sites", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!di", kwlist,
-            &samples,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &sequence_length, &filter_zero_mutation_sites)) {
-        goto out;
-    }
-    samples_array = (PyArrayObject *) PyArray_FROM_OTF(samples, NPY_INT32,
-            NPY_ARRAY_IN_ARRAY);
-    if (samples_array == NULL) {
-        goto out;
-    }
-    if (PyArray_NDIM(samples_array) != 1) {
-        PyErr_SetString(PyExc_ValueError, "samples must 1D array");
-        goto out;
-    }
-    shape = PyArray_DIMS(samples_array);
-    num_samples = shape[0];
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    nodes = py_nodes->node_table;
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-
-    /* Set the locks on the node and edge tables. We set the x_lock_acquired flags
-     * here so that we know that we should release the locks in this specific
-     * thread and not others. */
-    py_nodes->locked = true;
-    nodes_lock_acquired = true;
-    py_edges->locked = true;
-    edges_lock_acquired = true;
-    edges = py_edges->edge_table;
-    if (py_migrations != NULL) {
-        PyErr_SetString(PyExc_ValueError,
-                "Migrations not yet supported in simplify. Please file a bug report.");
-        goto out;
-    }
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        py_sites->locked = true;
-        sites_lock_acquired = true;
-        sites = py_sites->site_table;
-    }
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        py_mutations->locked = true;
-        mutations_lock_acquired = true;
-        mutations = py_mutations->mutation_table;
-    }
-    if ((mutations == NULL) != (sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
-        goto out;
-    }
-    if (filter_zero_mutation_sites) {
-        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
-    }
-
-    /* If migrations, sites or mutations is NULL on the input, allocate an empty
-     * table for convenience. */
-    if (migrations == NULL) {
-        migrations = PyMem_Malloc(sizeof(migration_table_t));
-        if (migrations == NULL) {
-            ret = PyErr_NoMemory();
-            goto out;
-        }
-        migrations_allocated = true;
-        err = migration_table_alloc(migrations, 0);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if (sites == NULL) {
-        sites = PyMem_Malloc(sizeof(site_table_t));
-        if (sites == NULL) {
-            ret = PyErr_NoMemory();
-            goto out;
-        }
-        sites_allocated = true;
-        err = site_table_alloc(sites, 0, 0, 0);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if (mutations == NULL) {
-        mutations = PyMem_Malloc(sizeof(mutation_table_t));
-        if (mutations == NULL) {
-            ret = PyErr_NoMemory();
-            goto out;
-        }
-        mutations_allocated = true;
-        err = mutation_table_alloc(mutations, 0, 0, 0);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    /* Allocate a new array to hold the node map. Since we've allocated
-     * this array outside of the context of the interpreter, it _should_
-     * be safe to use a pointer to the underlying memory while the GIL
-     * is released. */
-    dims = nodes->num_rows;
-    node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
-    if (node_map_array == NULL) {
-        goto out;
-    }
-    /* Allocate the simplifier and run */
-    simplifier = PyMem_Malloc(sizeof(simplifier_t));
-    if (simplifier == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    /* We cannot release the GIL during alloc here because we are accessing
-     * the memory for the samples array which could change. We could avoid
-     * this by taking a copy before. */
-    /* err = simplifier_alloc(simplifier, sequence_length, */
-    /*         (node_id_t *) PyArray_DATA(samples_array), num_samples, */
-    /*         nodes, edges, migrations, sites, mutations, flags); */
-
-    /* Rubbish to make the code compile for now */
-    if (num_samples > 0 && edges != NULL) {
-        err = 0;
-    }
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    Py_BEGIN_ALLOW_THREADS
-    err = simplifier_run(simplifier, (node_id_t *) PyArray_DATA(node_map_array));
-    Py_END_ALLOW_THREADS
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = (PyObject *) node_map_array;
-    node_map_array = NULL;
-out:
-    /* Release the table locks IF we acquired them in this thread. */
-    if (nodes_lock_acquired) {
-        py_nodes->locked = false;
-    }
-    if (edges_lock_acquired) {
-        py_edges->locked = false;
-    }
-    if (sites_lock_acquired) {
-        py_sites->locked = false;
-    }
-    if (mutations_lock_acquired) {
-        py_mutations->locked = false;
-    }
-    if (simplifier != NULL) {
-        simplifier_free(simplifier);
-        PyMem_Free(simplifier);
-    }
-    Py_XDECREF(samples_array);
-    Py_XDECREF(node_map_array);
-    if (migrations_allocated) {
-        migration_table_free(migrations);
-        PyMem_Free(migrations);
-    }
-    if (sites_allocated) {
-        site_table_free(sites);
-        PyMem_Free(sites);
-    }
-    if (mutations_allocated) {
-        mutation_table_free(mutations);
-        PyMem_Free(mutations);
-    }
-    return ret;
-}
-
-static PyObject *
 msprime_get_gsl_version(PyObject *self)
 {
     return Py_BuildValue("ii", GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
@@ -10063,8 +9893,6 @@ msprime_get_library_version_str(PyObject *self)
 static PyMethodDef msprime_methods[] = {
     {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
             "Sorts tables, in place, into canonical ordering for tree sequence input." },
-    {"simplify_tables", (PyCFunction) msprime_simplify_tables, METH_VARARGS|METH_KEYWORDS,
-            "Simplifies the specified set of tables for a given sample subset." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
