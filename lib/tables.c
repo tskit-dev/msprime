@@ -145,8 +145,8 @@ read_table_cols(kastore_t *store, read_table_col_t *read_cols, size_t num_cols)
         }
         last_len = *read_cols[j].len_dest;
         if (last_len == (table_size_t) -1) {
-            *read_cols[j].len_dest = (table_size_t) len - read_cols[j].len_offset;
-        } else if (last_len + read_cols[j].len_offset != (table_size_t) len) {
+            *read_cols[j].len_dest = (table_size_t) (len - read_cols[j].len_offset);
+        } else if ((last_len + read_cols[j].len_offset) != (table_size_t) len) {
             ret = MSP_ERR_FILE_FORMAT;
             goto out;
         }
@@ -3801,7 +3801,7 @@ table_collection_drop_indexes(table_collection_t *self)
 }
 
 int WARN_UNUSED
-table_collection_build_indexes(table_collection_t *self, int flags)
+table_collection_build_indexes(table_collection_t *self, int MSP_UNUSED(flags))
 {
     int ret = MSP_ERR_GENERIC;
     size_t j;
@@ -3973,7 +3973,7 @@ table_collection_load_indexes(table_collection_t *self)
 }
 
 int WARN_UNUSED
-table_collection_load(table_collection_t *self, const char *filename, int flags)
+table_collection_load(table_collection_t *self, const char *filename, int MSP_UNUSED(flags))
 {
     int ret = 0;
 
@@ -4042,7 +4042,7 @@ table_collection_write_format_data(table_collection_t *self, kastore_t *store)
 }
 
 int WARN_UNUSED
-table_collection_dump(table_collection_t *self, const char *filename, int flags)
+table_collection_dump(table_collection_t *self, const char *filename, int MSP_UNUSED(flags))
 {
     int ret = 0;
     kastore_t store;
@@ -4120,7 +4120,7 @@ out:
  * one. Assumes the tables have been sorted, throwing an error if not.
  */
 int WARN_UNUSED
-table_collection_deduplicate_sites(table_collection_t *self, int flags)
+table_collection_deduplicate_sites(table_collection_t *self, int MSP_UNUSED(flags))
 {
     int ret = 0;
     table_size_t j, site_j;
@@ -4237,7 +4237,7 @@ out:
 }
 
 int WARN_UNUSED
-table_collection_compute_mutation_parents(table_collection_t *self, int flags)
+table_collection_compute_mutation_parents(table_collection_t *self, int MSP_UNUSED(flags))
 {
     int ret = 0;
     const edge_id_t *I, *O;
