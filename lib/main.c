@@ -953,7 +953,7 @@ load_tree_sequence(tree_sequence_t *ts, const char *filename)
 }
 
 static void
-run_ld(const char *filename, int verbose)
+run_ld(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -963,7 +963,7 @@ run_ld(const char *filename, int verbose)
 }
 
 static void
-run_haplotypes(const char *filename, int verbose)
+run_haplotypes(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -973,7 +973,7 @@ run_haplotypes(const char *filename, int verbose)
 }
 
 static void
-run_variants(const char *filename, int verbose)
+run_variants(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1003,7 +1003,7 @@ run_print(const char *filename, int verbose)
 }
 
 static void
-run_newick(const char *filename, int verbose)
+run_newick(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1013,7 +1013,7 @@ run_newick(const char *filename, int verbose)
 }
 
 static void
-run_stats(const char *filename, int verbose)
+run_stats(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 

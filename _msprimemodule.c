@@ -4550,6 +4550,29 @@ out:
     return ret;
 }
 
+static PyObject *
+TableCollection_sort(TableCollection *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t edge_start = 0;
+    int flags = 0;
+
+    static char *kwlist[] = {"edge_start", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &edge_start)) {
+        goto out;
+    }
+    err = table_collection_sort(self->tables, (size_t) edge_start, flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4565,6 +4588,8 @@ static PyGetSetDef TableCollection_getsetters[] = {
 static PyMethodDef TableCollection_methods[] = {
     {"simplify", (PyCFunction) TableCollection_simplify, METH_VARARGS|METH_KEYWORDS,
             "Simplifies for a given sample subset." },
+    {"sort", (PyCFunction) TableCollection_sort, METH_VARARGS|METH_KEYWORDS,
+            "Sorts the tables to satisfy tree sequence requirements." },
     {NULL}  /* Sentinel */
 };
 
@@ -9738,150 +9763,6 @@ static PyTypeObject SimulatorType = {
  */
 
 static PyObject *
-msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
-{
-    int err;
-    PyObject *ret = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    IndividualTable *py_individuals = NULL;
-    PopulationTable *py_populations = NULL;
-    MutationTable *py_mutations = NULL;
-    node_table_t *nodes = NULL;
-    edge_table_t *edges = NULL;
-    migration_table_t *migrations = NULL;
-    site_table_t *sites = NULL;
-    mutation_table_t *mutations = NULL;
-    individual_table_t *individuals = NULL;
-    population_table_t *populations = NULL;
-    Py_ssize_t edge_start = 0;
-    bool nodes_lock_acquired = false;
-    bool edges_lock_acquired = false;
-    bool migrations_lock_acquired = false;
-    bool sites_lock_acquired = false;
-    bool mutations_lock_acquired = false;
-    bool individuals_lock_acquired = false;
-    bool populations_lock_acquired = false;
-
-    static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations",
-        "individuals", "populations", "edge_start", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!n", kwlist,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &IndividualTableType, &py_individuals,
-            &PopulationTableType, &py_populations,
-            &edge_start)) {
-        goto out;
-    }
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    py_nodes->locked = true;
-    nodes_lock_acquired = true;
-    nodes = py_nodes->node_table;
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-    py_edges->locked = true;
-    edges_lock_acquired = true;
-    edges = py_edges->edge_table;
-    if (py_migrations != NULL) {
-        if (MigrationTable_check_state(py_migrations) != 0) {
-            goto out;
-        }
-        py_migrations->locked = true;
-        migrations_lock_acquired = true;
-        migrations = py_migrations->migration_table;
-    }
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        py_sites->locked = true;
-        sites_lock_acquired = true;
-        sites = py_sites->site_table;
-    }
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        py_mutations->locked = true;
-        mutations_lock_acquired = true;
-        mutations = py_mutations->mutation_table;
-    }
-    if (py_individuals != NULL) {
-        if (IndividualTable_check_state(py_individuals) != 0) {
-            goto out;
-        }
-        py_individuals->locked = true;
-        individuals_lock_acquired = true;
-        individuals = py_individuals->individual_table;
-        printf("WARNING: %p indiviauls ignored\n", (void *) individuals);
-    }
-    if (py_populations != NULL) {
-        if (PopulationTable_check_state(py_populations) != 0) {
-            goto out;
-        }
-        py_populations->locked = true;
-        populations_lock_acquired = true;
-        populations = py_populations->population_table;
-        printf("WARNING: %p populations ignored\n", (void *) populations);
-    }
-    if ((mutations == NULL) != (sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
-        goto out;
-    }
-    if (edge_start < 0 || edge_start > py_edges->edge_table->num_rows) {
-        PyErr_SetString(PyExc_ValueError,
-                "edge_start must be between 0 and len(edges)");
-    }
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    Py_BEGIN_ALLOW_THREADS
-    /* TODO add individuals to sort */
-    err = sort_tables(nodes, edges, migrations, sites, mutations,
-            (size_t) edge_start);
-    Py_END_ALLOW_THREADS
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    /* Release the table locks IF we acquired them */
-    if (nodes_lock_acquired) {
-        py_nodes->locked = false;
-    }
-    if (edges_lock_acquired) {
-        py_edges->locked = false;
-    }
-    if (migrations_lock_acquired) {
-        py_migrations->locked = false;
-    }
-    if (sites_lock_acquired) {
-        py_sites->locked = false;
-    }
-    if (mutations_lock_acquired) {
-        py_mutations->locked = false;
-    }
-    if (individuals_lock_acquired) {
-        py_individuals->locked = false;
-    }
-    if (populations_lock_acquired) {
-        py_populations->locked = false;
-    }
-    return ret;
-}
-
-static PyObject *
 msprime_get_gsl_version(PyObject *self)
 {
     return Py_BuildValue("ii", GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
@@ -9894,8 +9775,6 @@ msprime_get_library_version_str(PyObject *self)
 }
 
 static PyMethodDef msprime_methods[] = {
-    {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
-            "Sorts tables, in place, into canonical ordering for tree sequence input." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,

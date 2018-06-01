@@ -1456,6 +1456,44 @@ class TableCollection(object):
         """
         return self.ll_tables.simplify(samples, filter_zero_mutation_sites)
 
+    def sort(self, edge_start=0):
+        """
+        Sorts the tables in place, ensuring that all tree sequence ordering
+        requirements are met. See the
+        :ref:`sec_valid_tree_sequence_requirements` section for details on
+        these requirements.
+
+        If the ``edge_start`` parameter is provided, this specifies the index
+        in the edge table where sorting should start. Only rows with index
+        greater than or equal to ``edge_start`` are sorted; rows before this index
+        are not affected. This parameter is provided to allow for efficient sorting
+        when the user knows that the edges up to a given index are already sorted.
+
+        The individual, node, population and provenance tables are not affected
+        by this method.
+
+        Edges are sorted as follows:
+
+        - time of parent, then
+        - parent node ID, then
+        - child node ID, then
+        - left endpoint.
+
+        Note that this sorting order exceeds the
+        :ref:`edge sorting requirements <sec_edge_requirements>` for a valid
+        tree sequence. For a valid tree sequence, we require that all edges for a
+        given parent ID are adjacent, but we do not require that they be listed in
+        sorted order.
+
+        Sites are sorted by position.
+
+        Mutations are sorted by site ID.
+
+        :param int edge_start: The index in the edge table where sorting starts
+            (default=0; must be <= len(edges)).
+        """
+        self.ll_tables.sort(edge_start)
+
 
 #############################################
 # Table functions.
@@ -1508,28 +1546,32 @@ def sort_tables(
          required if ``sites`` is provided).
     :param ProvenanceTable provenances: Ignored. This argument is provided to
         support calling the function like ``sort_tables(**tables.asdict())``.
-    :param IndividualTable individuals: The tree sequence's individual data.
-    :param PopulationTable populations: The tree sequence's population data.
+    :param PopulationTable populations: Ignored. This argument is provided to
+        support calling the function like ``sort_tables(**tables.asdict())``.
+    :param IndividualTable individuals: Ignored. This argument is provided to
+        support calling the function like ``sort_tables(**tables.asdict())``.
     :param int edge_start: The index in the edge table where sorting starts
         (default=0; must be <= len(edges)).
     """
-    # TODO update the low-level module to accept None and remove this
+    if migrations is None:
+        migrations = MigrationTable()
+    if sites is None:
+        sites = SiteTable()
+    if mutations is None:
+        mutations = MutationTable()
     try:
-        kwargs = {
-            "nodes": nodes.ll_table, "edges": edges.ll_table, "edge_start": edge_start}
-        if migrations is not None:
-            kwargs["migrations"] = migrations.ll_table
-        if sites is not None:
-            kwargs["sites"] = sites.ll_table
-        if mutations is not None:
-            kwargs["mutations"] = mutations.ll_table
-        if individuals is not None:
-            kwargs["individuals"] = individuals.ll_table
-        if populations is not None:
-            kwargs["populations"] = populations.ll_table
+        ll_tables = _msprime.TableCollection(
+            individuals=_msprime.IndividualTable(),
+            nodes=nodes.ll_table,
+            edges=edges.ll_table,
+            migrations=migrations.ll_table,
+            sites=sites.ll_table,
+            mutations=mutations.ll_table,
+            populations=_msprime.PopulationTable(),
+            provenances=_msprime.ProvenanceTable())
     except AttributeError as e:
         raise TypeError(str(e))
-    return _msprime.sort_tables(**kwargs)
+    return ll_tables.sort(edge_start)
 
 
 def simplify_tables(

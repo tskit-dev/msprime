@@ -2892,21 +2892,21 @@ cmp_edge(const void *a, const void *b) {
 }
 
 static int
-table_sorter_alloc(table_sorter_t *self, node_table_t *nodes, edge_table_t *edges,
-        site_table_t *sites, mutation_table_t *mutations, migration_table_t *migrations)
+table_sorter_alloc(table_sorter_t *self, table_collection_t *tables,
+        int MSP_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(table_sorter_t));
-    if (nodes == NULL || edges == NULL) {
+    if (tables == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->nodes = nodes;
-    self->edges = edges;
-    self->mutations = mutations;
-    self->sites = sites;
-    self->migrations = migrations;
+    self->nodes = tables->nodes;
+    self->edges = tables->edges;
+    self->mutations = tables->mutations;
+    self->sites = tables->sites;
+    self->migrations = tables->migrations;
 
     if (self->sites != NULL) {
         /* If you provide a site table, you must provide a mutation table (even if it is
@@ -2915,7 +2915,7 @@ table_sorter_alloc(table_sorter_t *self, node_table_t *nodes, edge_table_t *edge
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
-        self->site_id_map = malloc(sites->num_rows * sizeof(site_id_t));
+        self->site_id_map = malloc(self->sites->num_rows * sizeof(site_id_t));
         if (self->site_id_map == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -3159,30 +3159,6 @@ table_sorter_free(table_sorter_t *self)
     msp_safe_free(self->site_id_map);
 }
 
-int
-sort_tables(node_table_t *nodes, edge_table_t *edges, migration_table_t *migrations,
-        site_table_t *sites, mutation_table_t *mutations, size_t edge_start)
-{
-    int ret = 0;
-    table_sorter_t *sorter = NULL;
-
-    sorter = malloc(sizeof(table_sorter_t));
-    if (sorter == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = table_sorter_alloc(sorter, nodes, edges, sites, mutations, migrations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = table_sorter_run(sorter, edge_start);
-out:
-    if (sorter != NULL) {
-        table_sorter_free(sorter);
-        free(sorter);
-    }
-    return ret;
-}
 
 /*************************
  * simplifier
@@ -4973,6 +4949,30 @@ table_collection_simplify(table_collection_t *self,
     }
 out:
     simplifier_free(&simplifier);
+    return ret;
+}
+
+int WARN_UNUSED
+table_collection_sort(table_collection_t *self, size_t edge_start, int flags)
+{
+    int ret = 0;
+    table_sorter_t *sorter = NULL;
+
+    sorter = malloc(sizeof(table_sorter_t));
+    if (sorter == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = table_sorter_alloc(sorter, self, flags);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = table_sorter_run(sorter, edge_start);
+out:
+    if (sorter != NULL) {
+        table_sorter_free(sorter);
+        free(sorter);
+    }
     return ret;
 }
 

@@ -820,7 +820,6 @@ class TestBytePacking(unittest.TestCase):
         self.assertEqual(data, unpickled)
 
 
-@unittest.skip("TEMP")
 class TestSortTables(unittest.TestCase):
     """
     Tests for the sort_tables method.
@@ -1089,13 +1088,6 @@ class TestSortTables(unittest.TestCase):
             self.assertRaises(
                 TypeError, msprime.sort_tables, nodes=None,
                 edges=msprime.EdgeTable(), migrations=bad_type)
-        # Must specify sites and mutations together.
-        self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=nodes, edges=edges,
-            sites=msprime.SiteTable())
-        self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=nodes, edges=edges,
-            mutations=msprime.MutationTable())
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
         # Verify that tables are OK.
