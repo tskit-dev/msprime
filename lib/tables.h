@@ -141,20 +141,21 @@ typedef struct {
 
 typedef struct {
     double sequence_length;
-    node_table_t nodes;
-    edge_table_t edges;
-    migration_table_t migrations;
-    site_table_t sites;
-    mutation_table_t mutations;
-    individual_table_t individuals;
-    population_table_t populations;
-    provenance_table_t provenances;
+    individual_table_t *individuals;
+    node_table_t *nodes;
+    edge_table_t *edges;
+    migration_table_t *migrations;
+    site_table_t *sites;
+    mutation_table_t *mutations;
+    population_table_t *populations;
+    provenance_table_t *provenances;
     struct {
         edge_id_t *edge_insertion_order;
         edge_id_t *edge_removal_order;
         bool malloced_locally;
     } indexes;
-    kastore_t store;
+    kastore_t *store;
+    bool external_tables;
     /* TODO Add in reserved space for future tables. */
 } table_collection_t;
 
@@ -462,6 +463,11 @@ void provenance_table_print_state(provenance_table_t *self, FILE *out);
 bool provenance_table_equal(provenance_table_t *self, provenance_table_t *other);
 
 int table_collection_alloc(table_collection_t *self, int flags);
+int table_collection_set_tables(table_collection_t *self,
+        individual_table_t *individuals, node_table_t *nodes, edge_table_t *edges,
+        migration_table_t *migrations, site_table_t *sites,
+        mutation_table_t *mutations, population_table_t *populations,
+        provenance_table_t *provenances);
 int table_collection_print_state(table_collection_t *self, FILE *out);
 bool table_collection_is_indexed(table_collection_t *self);
 int table_collection_drop_indexes(table_collection_t *self);

@@ -78,7 +78,6 @@ typedef struct {
     PyObject_HEAD
     bool locked;
     node_table_t *node_table;
-    PyObject *table_collection;
 } NodeTable;
 
 typedef struct {
@@ -924,41 +923,16 @@ out:
     return ret;
 }
 
-static int
-IndividualTable_traverse(IndividualTable *self, visitproc visit, void *arg)
-{
-    Py_VISIT(self->table_collection);
-    return 0;
-}
-
-static int
-IndividualTable_clear_gc(IndividualTable *self)
-{
-    Py_CLEAR(self->table_collection);
-    return 0;
-}
-
 static void
 IndividualTable_dealloc(IndividualTable* self)
 {
-    /* printf("dealloc individual table %p\n", (void *) self); */
-    PyObject_GC_UnTrack(self);
-    IndividualTable_clear_gc(self);
     if (self->individual_table != NULL) {
         individual_table_free(self->individual_table);
         PyMem_Free(self->individual_table);
         self->individual_table = NULL;
     }
+    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static PyObject *
-IndividualTable_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-    IndividualTable *self;
-    self = (IndividualTable *) type->tp_alloc(type, 0);
-    /* printf("alloc individual table   %p\n", (void *) self); */
-    return (PyObject *) self;
 }
 
 static int
@@ -1374,11 +1348,10 @@ static PyTypeObject IndividualTableType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT |
-        Py_TPFLAGS_BASETYPE |
-        Py_TPFLAGS_HAVE_GC,    /* tp_flags */
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "IndividualTable objects",           /* tp_doc */
-    (traverseproc) IndividualTable_traverse,     /* tp_traverse */
-    (inquiry) IndividualTable_clear_gc,          /* tp_clear */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
@@ -1392,8 +1365,6 @@ static PyTypeObject IndividualTableType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)IndividualTable_init,      /* tp_init */
-    0,                         /* tp_alloc */
-    IndividualTable_new,       /* tp_new */
 };
 
 
@@ -1407,6 +1378,7 @@ NodeTable_check_state(NodeTable *self)
 {
     int ret = -1;
     if (self->node_table == NULL) {
+        printf("RAISING ERROR in node table %p\n", (void *) self);
         PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
         goto out;
     }
@@ -1427,7 +1399,6 @@ NodeTable_dealloc(NodeTable* self)
         PyMem_Free(self->node_table);
         self->node_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -1442,7 +1413,6 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
 
     self->node_table = NULL;
     self->locked = false;
-    self->table_collection = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
@@ -4359,80 +4329,69 @@ static PyTypeObject ProvenanceTableType = {
  *===================================================================
  */
 
-static int
-TableCollection_traverse(TableCollection *self, visitproc visit, void *arg)
-{
-    Py_VISIT(self->individuals);
-    return 0;
-}
+/* static int */
+/* TableCollection_check_state(TableCollection *self) */
+/* { */
+/*     int ret = -1; */
+/*     if (self->provenance_table == NULL) { */
+/*         PyErr_SetString(PyExc_SystemError, "TableCollection not initialised"); */
+/*         goto out; */
+/*     } */
+/*     if (self->locked) { */
+/*         PyErr_SetString(PyExc_RuntimeError, "TableCollection in use by other thread."); */
+/*         goto out; */
+/*     } */
+/*     ret = 0; */
+/* out: */
+/*     return ret; */
+/* } */
 
-static int
-TableCollection_clear(TableCollection *self)
-{
-    PyObject *tmp;
-
-    /* The underlying tables associated with the Python objects have already
-     * been freed so set them to NULL */
-    if (self->individuals != NULL) {
-        self->individuals->individual_table = NULL;
-        tmp = (PyObject *) self->individuals;
-        self->individuals = NULL;
-        Py_DECREF(tmp);
-    }
-    return 0;
-}
 
 static void
 TableCollection_dealloc(TableCollection* self)
 {
-    /* printf("dealloc table collection %p\n", (void *) self); */
-    PyObject_GC_UnTrack(self);
-    TableCollection_clear(self);
-
     if (self->tables != NULL) {
+        self->tables->nodes = NULL;
         table_collection_free(self->tables);
         PyMem_Free(self->tables);
         self->tables = NULL;
     }
+    Py_XDECREF(self->nodes);
 
-    if (self->nodes != NULL) {
-        self->nodes->node_table = NULL;
-        Py_DECREF(self->nodes);
-    }
-    if (self->edges != NULL) {
-        self->edges->edge_table = NULL;
-        Py_DECREF(self->edges);
-    }
-    if (self->migrations != NULL) {
-        self->migrations->migration_table = NULL;
-        Py_DECREF(self->migrations);
-    }
-    if (self->sites != NULL) {
-        self->sites->site_table = NULL;
-        Py_DECREF(self->sites);
-    }
-    if (self->mutations != NULL) {
-        self->mutations->mutation_table = NULL;
-        Py_DECREF(self->mutations);
-    }
-    if (self->populations != NULL) {
-        self->populations->population_table = NULL;
-        Py_DECREF(self->populations);
-    }
-    if (self->provenances != NULL) {
-        self->provenances->provenance_table = NULL;
-        Py_DECREF(self->provenances);
-    }
+    /* The underlying tables associated with the Python objects have already
+     * been freed so set them to NULL */
+    /* if (self->individuals != NULL) { */
+    /*     self->individuals->individual_table = NULL; */
+    /*     Py_DECREF(self->individuals); */
+    /* } */
+    /* if (self->nodes != NULL) { */
+    /*     Py_DECREF(self->nodes); */
+    /* } */
+    /* if (self->edges != NULL) { */
+    /*     self->edges->edge_table = NULL; */
+    /*     Py_DECREF(self->edges); */
+    /* } */
+    /* if (self->migrations != NULL) { */
+    /*     self->migrations->migration_table = NULL; */
+    /*     Py_DECREF(self->migrations); */
+    /* } */
+    /* if (self->sites != NULL) { */
+    /*     self->sites->site_table = NULL; */
+    /*     Py_DECREF(self->sites); */
+    /* } */
+    /* if (self->mutations != NULL) { */
+    /*     self->mutations->mutation_table = NULL; */
+    /*     Py_DECREF(self->mutations); */
+    /* } */
+    /* if (self->populations != NULL) { */
+    /*     self->populations->population_table = NULL; */
+    /*     Py_DECREF(self->populations); */
+    /* } */
+    /* if (self->provenances != NULL) { */
+    /*     self->provenances->provenance_table = NULL; */
+    /*     Py_DECREF(self->provenances); */
+    /* } */
     Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static PyObject *
-TableCollection_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-    TableCollection *self;
-    self = (TableCollection *) type->tp_alloc(type, 0);
-    /* printf("alloc table collection  %p\n", (void *) self); */
-    return (PyObject *) self;
 }
 
 static int
@@ -4440,6 +4399,15 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
+    static char *kwlist[] = {"nodes", NULL};
+    IndividualTable *individuals = NULL;
+    NodeTable *nodes = NULL;
+    EdgeTable *edges = NULL;
+    MigrationTable *migrations = NULL;
+    SiteTable *sites = NULL;
+    MutationTable *mutations = NULL;
+    PopulationTable *populations = NULL;
+    ProvenanceTable *provenances = NULL;
 
     self->tables = NULL;
     self->individuals = NULL;
@@ -4451,107 +4419,142 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     self->populations = NULL;
     self->provenances = NULL;
     self->locked = false;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!O!O!O!O!", kwlist,
+            &NodeTableType, &individuals,
+            &NodeTableType, &nodes,
+            &NodeTableType, &edges,
+            &NodeTableType, &migrations,
+            &NodeTableType, &sites,
+            &NodeTableType, &mutations,
+            &NodeTableType, &populations,
+            &NodeTableType, &provenances)) {
+        goto out;
+    }
+
     self->tables = PyMem_Malloc(sizeof(table_collection_t));
     if (self->tables == NULL) {
         PyErr_NoMemory();
     }
-
-    err = table_collection_alloc(self->tables, MSP_ALLOC_TABLES);
+    err = table_collection_alloc(self->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    if (IndividualTable_check_state(individuals) != 0
+            || NodeTable_check_state(nodes) != 0
+            || EdgeTable_check_state(edges) != 0
+            || MigrationTable_check_state(migrations) != 0
+            || SiteTable_check_state(sites) != 0
+            || MutationTable_check_state(mutations) != 0
+            || PopulationTable_check_state(populations) != 0
+            || ProvenanceTable_check_state(provenances) != 0) {
+        goto out;
+    }
+    self->nodes = nodes;
+    Py_INCREF(nodes);
+    free(self->tables->nodes);
+    self->tables->nodes = nodes->node_table;
+
+/*     table_collection_set_tables(self->tables, */
+/*         individuals->individual_table, */
+/*         nodes->node_table, */
+/*         edges->edge_table, */
+
+
+
+
     /* To make sure that we have can keep valid references to the tables
      * even after the table collection has gone out of scope, each of the
      * tables increments the reference count for this table collection. */
 
-    /* individuals */
-    self->individuals = PyObject_GC_New(IndividualTable, &IndividualTableType);
-    if (self->individuals == NULL) {
-        goto out;
-    }
-    self->individuals->locked = false;
-    self->individuals->individual_table = &self->tables->individuals;
-    self->individuals->table_collection = (PyObject *) self;
-    Py_INCREF(self);
-    PyObject_GC_Track(self->individuals);
-
-    /* nodes */
-    self->nodes = PyObject_New(NodeTable, &NodeTableType);
-    if (self->nodes == NULL) {
-        goto out;
-    }
-    self->nodes->locked = false;
-    self->nodes->node_table = &self->tables->nodes;
-    self->nodes->table_collection = NULL;
-    /* self->nodes->table_collection = (PyObject *) self; */
+    /* /1* individuals *1/ */
+    /* self->individuals = PyObject_New(IndividualTable, &IndividualTableType); */
+    /* if (self->individuals == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->individuals->locked = false; */
+    /* self->individuals->individual_table = &self->tables->individuals; */
+    /* /1* self->individuals->table_collection = NULL; *1/ */
+    /* self->individuals->table_collection = (PyObject *) self; */
     /* Py_INCREF(self); */
 
-    /* edges */
-    self->edges = PyObject_New(EdgeTable, &EdgeTableType);
-    if (self->edges == NULL) {
-        goto out;
-    }
-    self->edges->locked = false;
-    self->edges->edge_table = &self->tables->edges;
-    self->edges->table_collection = NULL;
-    /* self->edges->table_collection = (PyObject *) self; */
-    /* Py_INCREF(self); */
+    /* /1* nodes *1/ */
+    /* self->nodes = PyObject_New(NodeTable, &NodeTableType); */
+    /* if (self->nodes == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->nodes->locked = false; */
+    /* self->nodes->node_table = &self->tables->nodes; */
+    /* self->nodes->table_collection = NULL; */
+    /* /1* self->nodes->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
 
-    /* migrations */
-    self->migrations = PyObject_New(MigrationTable, &MigrationTableType);
-    if (self->migrations == NULL) {
-        goto out;
-    }
-    self->migrations->locked = false;
-    self->migrations->migration_table = &self->tables->migrations;
-    self->migrations->table_collection = NULL;
-    /* self->migrations->table_collection = (PyObject *) self; */
-    /* Py_INCREF(self); */
+    /* /1* edges *1/ */
+    /* self->edges = PyObject_New(EdgeTable, &EdgeTableType); */
+    /* if (self->edges == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->edges->locked = false; */
+    /* self->edges->edge_table = &self->tables->edges; */
+    /* self->edges->table_collection = NULL; */
+    /* /1* self->edges->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
 
-    /* sites */
-    self->sites = PyObject_New(SiteTable, &SiteTableType);
-    if (self->sites == NULL) {
-        goto out;
-    }
-    self->sites->locked = false;
-    self->sites->site_table = &self->tables->sites;
-    self->sites->table_collection = NULL;
-    /* self->sites->table_collection = (PyObject *) self; */
-    /* Py_INCREF(self); */
+    /* /1* migrations *1/ */
+    /* self->migrations = PyObject_New(MigrationTable, &MigrationTableType); */
+    /* if (self->migrations == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->migrations->locked = false; */
+    /* self->migrations->migration_table = &self->tables->migrations; */
+    /* self->migrations->table_collection = NULL; */
+    /* /1* self->migrations->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
 
-    /* mutations */
-    self->mutations = PyObject_New(MutationTable, &MutationTableType);
-    if (self->mutations == NULL) {
-        goto out;
-    }
-    self->mutations->locked = false;
-    self->mutations->mutation_table = &self->tables->mutations;
-    self->mutations->table_collection = NULL;
-    /* self->mutations->table_collection = (PyObject *) self; */
-    /* Py_INCREF(self); */
+    /* /1* sites *1/ */
+    /* self->sites = PyObject_New(SiteTable, &SiteTableType); */
+    /* if (self->sites == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->sites->locked = false; */
+    /* self->sites->site_table = &self->tables->sites; */
+    /* self->sites->table_collection = NULL; */
+    /* /1* self->sites->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
 
-    /* populations */
-    self->populations = PyObject_New(PopulationTable, &PopulationTableType);
-    if (self->populations == NULL) {
-        goto out;
-    }
-    self->populations->locked = false;
-    self->populations->population_table = &self->tables->populations;
-    self->populations->table_collection = NULL;
-    /* self->populations->table_collection = (PyObject *) self; */
-    /* Py_INCREF(self); */
+    /* /1* mutations *1/ */
+    /* self->mutations = PyObject_New(MutationTable, &MutationTableType); */
+    /* if (self->mutations == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->mutations->locked = false; */
+    /* self->mutations->mutation_table = &self->tables->mutations; */
+    /* self->mutations->table_collection = NULL; */
+    /* /1* self->mutations->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
 
-    /* provenances */
-    self->provenances = PyObject_New(ProvenanceTable, &ProvenanceTableType);
-    if (self->provenances == NULL) {
-        goto out;
-    }
-    self->provenances->locked = false;
-    self->provenances->provenance_table = &self->tables->provenances;
-    self->provenances->table_collection = NULL;
-    /* self->provenances->table_collection = (PyObject *) self; */
-    /* Py_INCREF(self); */
+    /* /1* populations *1/ */
+    /* self->populations = PyObject_New(PopulationTable, &PopulationTableType); */
+    /* if (self->populations == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->populations->locked = false; */
+    /* self->populations->population_table = &self->tables->populations; */
+    /* self->populations->table_collection = NULL; */
+    /* /1* self->populations->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
+
+    /* /1* provenances *1/ */
+    /* self->provenances = PyObject_New(ProvenanceTable, &ProvenanceTableType); */
+    /* if (self->provenances == NULL) { */
+    /*     goto out; */
+    /* } */
+    /* self->provenances->locked = false; */
+    /* self->provenances->provenance_table = &self->tables->provenances; */
+    /* self->provenances->table_collection = NULL; */
+    /* /1* self->provenances->table_collection = (PyObject *) self; *1/ */
+    /* /1* Py_INCREF(self); *1/ */
 
     ret = 0;
 out:
@@ -4568,7 +4571,12 @@ TableCollection_get_individuals(TableCollection *self, void *closure)
 static PyObject *
 TableCollection_get_nodes(TableCollection *self, void *closure)
 {
+    if (self->nodes == NULL) {
+        PyErr_SetString(PyExc_SystemError, "Nodes not initialised");
+        goto out;
+    }
     Py_INCREF(self->nodes);
+out:
     return (PyObject *) self->nodes;
 }
 
@@ -4651,11 +4659,10 @@ static PyTypeObject TableCollectionType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT |
-        Py_TPFLAGS_BASETYPE |
-        Py_TPFLAGS_HAVE_GC,       /* tp_flags */
-    "TableCollection objects",    /* tp_doc */
-    (traverseproc) TableCollection_traverse,     /* tp_traverse */
-    (inquiry) TableCollection_clear,             /* tp_clear */
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "TableCollection objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
@@ -4669,8 +4676,6 @@ static PyTypeObject TableCollectionType = {
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
     (initproc)TableCollection_init,      /* tp_init */
-    0,                         /* tp_alloc */
-    TableCollection_new,       /* tp_new */
 };
 
 /*===================================================================
@@ -5317,7 +5322,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    err = node_table_copy(py_nodes->node_table, &tables.nodes);
+    err = node_table_copy(py_nodes->node_table, tables.nodes);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5468,7 +5473,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    err = node_table_copy(&tables.nodes, py_nodes->node_table);
+    err = node_table_copy(tables.nodes, py_nodes->node_table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -10240,6 +10245,7 @@ init_msprime(void)
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
 
     /* IndividualTable type */
+    IndividualTableType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&IndividualTableType) < 0) {
         INITERROR;
     }
@@ -10303,6 +10309,7 @@ init_msprime(void)
     PyModule_AddObject(module, "ProvenanceTable", (PyObject *) &ProvenanceTableType);
 
     /* TableCollectionTable type */
+    TableCollectionType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&TableCollectionType) < 0) {
         INITERROR;
     }

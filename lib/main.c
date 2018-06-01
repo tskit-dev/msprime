@@ -862,7 +862,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    record_provenance(&tables.provenances);
+    record_provenance(tables.provenances);
 
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
@@ -889,16 +889,16 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         /* Create the tree_sequence from the state of the simulator. */
         /* TODO this is messy; we should pass the table_collection to populate_tables */
         tables.sequence_length = recomb_map->sequence_length;
-        ret = msp_populate_tables(msp, recomb_map, &tables.nodes, &tables.edges,
-                &tables.migrations, &tables.populations);
+        ret = msp_populate_tables(msp, recomb_map, tables.nodes, tables.edges,
+                tables.migrations, tables.populations);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, &tables.nodes, &tables.edges);
+        ret = mutgen_generate_tables_tmp(mutgen, tables.nodes, tables.edges);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_populate_tables(mutgen, &tables.sites, &tables.mutations);
+        ret = mutgen_populate_tables(mutgen, tables.sites, tables.mutations);
         if (ret != 0) {
             goto out;
         }

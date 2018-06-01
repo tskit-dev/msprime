@@ -35,13 +35,13 @@ main(int argc, char **argv)
         for (j = 0; j < 10; j++) {
             /* node and edge_table_add_row return < 0 in the case of an error,
              * or the ID of the node/edge just added otherwise. */
-            ret = node_table_add_row(&tables.nodes, j == 0, j, 0,
+            ret = node_table_add_row(tables.nodes, j == 0, j, 0,
                     MSP_NULL_INDIVIDUAL, NULL, 0);
             if (ret < 0) {
                 raise_exception(ret);
             }
             if (j > 0) {
-                ret = edge_table_add_row(&tables.edges, 0, 1, j, j - 1);
+                ret = edge_table_add_row(tables.edges, 0, 1, j, j - 1);
                 if (ret < 0) {
                     raise_exception(ret);
                 }
@@ -62,8 +62,8 @@ main(int argc, char **argv)
             raise_exception(ret);
         }
         /* After simplify, we only have 1 node left and no edges */
-        node_table_print_state(&tables.nodes, stdout);
-        edge_table_print_state(&tables.edges, stdout);
+        node_table_print_state(tables.nodes, stdout);
+        edge_table_print_state(tables.edges, stdout);
     } catch (exception &e) {
         cerr << "Error: " << e.what() << '\n';
         exit_status = 1;

@@ -653,9 +653,9 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     self->sequence_length = tables->sequence_length;
     if (tables->sequence_length == 0) {
         /* Infer the sequence_length as the maximum right value in the edges */
-        for (j = 0; j < tables->edges.num_rows; j++) {
+        for (j = 0; j < tables->edges->num_rows; j++) {
             self->sequence_length = MSP_MAX(self->sequence_length,
-                    tables->edges.right[j]);
+                    tables->edges->right[j]);
         }
     }
     if (self->sequence_length <= 0) {
@@ -665,62 +665,62 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     /* TODO It's messy having two copyies of this value. Should be in one place. */
     self->tables->sequence_length = self->sequence_length;
 
-    self->nodes.num_records = self->tables->nodes.num_rows;
-    self->nodes.flags = self->tables->nodes.flags;
-    self->nodes.time = self->tables->nodes.time;
-    self->nodes.population = self->tables->nodes.population;
-    self->nodes.individual = self->tables->nodes.individual;
-    self->nodes.metadata = self->tables->nodes.metadata;
-    self->nodes.metadata_offset = self->tables->nodes.metadata_offset;
+    self->individuals.num_records = self->tables->individuals->num_rows;
+    self->individuals.flags = self->tables->individuals->flags;
+    self->individuals.location = self->tables->individuals->location;
+    self->individuals.location_offset = self->tables->individuals->location_offset;
+    self->individuals.metadata = self->tables->individuals->metadata;
+    self->individuals.metadata_offset = self->tables->individuals->metadata_offset;
 
-    self->edges.num_records = self->tables->edges.num_rows;
-    self->edges.left = self->tables->edges.left;
-    self->edges.right = self->tables->edges.right;
-    self->edges.parent = self->tables->edges.parent;
-    self->edges.child = self->tables->edges.child;
+    self->nodes.num_records = self->tables->nodes->num_rows;
+    self->nodes.flags = self->tables->nodes->flags;
+    self->nodes.time = self->tables->nodes->time;
+    self->nodes.population = self->tables->nodes->population;
+    self->nodes.individual = self->tables->nodes->individual;
+    self->nodes.metadata = self->tables->nodes->metadata;
+    self->nodes.metadata_offset = self->tables->nodes->metadata_offset;
+
+    self->edges.num_records = self->tables->edges->num_rows;
+    self->edges.left = self->tables->edges->left;
+    self->edges.right = self->tables->edges->right;
+    self->edges.parent = self->tables->edges->parent;
+    self->edges.child = self->tables->edges->child;
     self->edges.indexes.removal_order = self->tables->indexes.edge_removal_order;
     self->edges.indexes.insertion_order = self->tables->indexes.edge_insertion_order;
 
-    self->sites.num_records = self->tables->sites.num_rows;
-    self->sites.position = self->tables->sites.position;
-    self->sites.ancestral_state = self->tables->sites.ancestral_state;
-    self->sites.ancestral_state_offset = self->tables->sites.ancestral_state_offset;
-    self->sites.metadata = self->tables->sites.metadata;
-    self->sites.metadata_offset = self->tables->sites.metadata_offset;
+    self->migrations.num_records = self->tables->migrations->num_rows;
+    self->migrations.left = self->tables->migrations->left;
+    self->migrations.right = self->tables->migrations->right;
+    self->migrations.node = self->tables->migrations->node;
+    self->migrations.source = self->tables->migrations->source;
+    self->migrations.dest = self->tables->migrations->dest;
+    self->migrations.time = self->tables->migrations->time;
 
-    self->mutations.num_records = self->tables->mutations.num_rows;
-    self->mutations.site = self->tables->mutations.site;
-    self->mutations.node = self->tables->mutations.node;
-    self->mutations.parent = self->tables->mutations.parent;
-    self->mutations.derived_state = self->tables->mutations.derived_state;
-    self->mutations.derived_state_offset = self->tables->mutations.derived_state_offset;
-    self->mutations.metadata = self->tables->mutations.metadata;
-    self->mutations.metadata_offset = self->tables->mutations.metadata_offset;
+    self->sites.num_records = self->tables->sites->num_rows;
+    self->sites.position = self->tables->sites->position;
+    self->sites.ancestral_state = self->tables->sites->ancestral_state;
+    self->sites.ancestral_state_offset = self->tables->sites->ancestral_state_offset;
+    self->sites.metadata = self->tables->sites->metadata;
+    self->sites.metadata_offset = self->tables->sites->metadata_offset;
 
-    self->migrations.num_records = self->tables->migrations.num_rows;
-    self->migrations.left = self->tables->migrations.left;
-    self->migrations.right = self->tables->migrations.right;
-    self->migrations.node = self->tables->migrations.node;
-    self->migrations.source = self->tables->migrations.source;
-    self->migrations.dest = self->tables->migrations.dest;
-    self->migrations.time = self->tables->migrations.time;
+    self->mutations.num_records = self->tables->mutations->num_rows;
+    self->mutations.site = self->tables->mutations->site;
+    self->mutations.node = self->tables->mutations->node;
+    self->mutations.parent = self->tables->mutations->parent;
+    self->mutations.derived_state = self->tables->mutations->derived_state;
+    self->mutations.derived_state_offset = self->tables->mutations->derived_state_offset;
+    self->mutations.metadata = self->tables->mutations->metadata;
+    self->mutations.metadata_offset = self->tables->mutations->metadata_offset;
 
-    self->provenances.num_records = self->tables->provenances.num_rows;
-    self->provenances.timestamp = self->tables->provenances.timestamp;
-    self->provenances.timestamp_offset = self->tables->provenances.timestamp_offset;
-    self->provenances.record = self->tables->provenances.record;
-    self->provenances.record_offset = self->tables->provenances.record_offset;
+    self->populations.num_records = self->tables->populations->num_rows;
+    self->populations.metadata = self->tables->populations->metadata;
+    self->populations.metadata_offset = self->tables->populations->metadata_offset;
 
-    self->individuals.num_records = self->tables->individuals.num_rows;
-    self->individuals.flags = self->tables->individuals.flags;
-    self->individuals.location = self->tables->individuals.location;
-    self->individuals.location_offset = self->tables->individuals.location_offset;
-    self->individuals.metadata = self->tables->individuals.metadata;
-    self->individuals.metadata_offset = self->tables->individuals.metadata_offset;
-
-    self->populations.num_records = self->tables->populations.num_rows;
-    self->populations.metadata = self->tables->populations.metadata;
-    self->populations.metadata_offset = self->tables->populations.metadata_offset;
+    self->provenances.num_records = self->tables->provenances->num_rows;
+    self->provenances.timestamp = self->tables->provenances->timestamp;
+    self->provenances.timestamp_offset = self->tables->provenances->timestamp_offset;
+    self->provenances.record = self->tables->provenances->record;
+    self->provenances.record_offset = self->tables->provenances->record_offset;
 
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {

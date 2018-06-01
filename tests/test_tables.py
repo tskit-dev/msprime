@@ -523,7 +523,6 @@ class TestIndividualTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixi
         self.assertEqual(t.metadata_offset[0], 0)
 
 
-@unittest.skip("TEMP")
 class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
 
     columns = [
@@ -1452,7 +1451,7 @@ class TestSimplifyTables(unittest.TestCase):
         self.assertEqual(edges, tables.edges)
 
 
-# @unittest.skip("TEMP")
+@unittest.skip("TEMP")
 class TestTableCollection(unittest.TestCase):
     """
     Tests for the convenience wrapper around a collection of related tables.
