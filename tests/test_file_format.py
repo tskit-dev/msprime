@@ -210,7 +210,6 @@ class TestLoadLegacyExamples(TestFileFormat):
         self.verify_tree_sequence(ts)
 
 
-@unittest.skip("SEGFAULT")
 class TestRoundTrip(TestFileFormat):
     """
     Tests if we can round trip convert a tree sequence in memory

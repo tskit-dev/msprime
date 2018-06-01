@@ -1362,7 +1362,6 @@ class TestTreeSequence(HighLevelTestCase):
                 a2 = [variant.alleles[g] for g in variant.genotypes]
                 self.assertEqual(a1, a2)
 
-    @unittest.skip("Simplfy sequence length issue")
     def test_simplify(self):
         num_mutations = 0
         for ts in get_example_tree_sequences():

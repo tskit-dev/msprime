@@ -53,20 +53,16 @@ class WrightFisherSimulator(object):
         return min(1.0, max(0.0, 2 * random.random() - 0.5))
 
     def run(self, ngens):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        migrations = msprime.MigrationTable()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
-        provenances = msprime.ProvenanceTable()
+        tables = msprime.TableCollection()
         if self.deep_history:
             # initial population
             init_ts = msprime.simulate(self.N, recombination_rate=1.0)
-            init_ts.dump_tables(nodes=nodes, edges=edges)
-            nodes.set_columns(time=nodes.time + ngens, flags=nodes.flags)
+            init_tables = init_ts.dump_tables()
+            tables.nodes.set_columns(
+                time=init_tables.nodes.time + ngens, flags=init_tables.nodes.flags)
         else:
             for _ in range(self.N):
-                nodes.add_row(time=ngens)
+                tables.nodes.add_row(time=ngens)
 
         pop = list(range(self.N))
         for t in range(ngens - 1, -1, -1):
@@ -84,8 +80,8 @@ class WrightFisherSimulator(object):
             for j in range(self.N):
                 if dead[j]:
                     # this is: offspring ID, lparent, rparent, breakpoint
-                    offspring = nodes.num_rows
-                    nodes.add_row(time=t)
+                    offspring = len(tables.nodes)
+                    tables.nodes.add_row(time=t)
                     lparent, rparent = new_parents[k]
                     k += 1
                     bp = self.random_breakpoint()
@@ -93,26 +89,26 @@ class WrightFisherSimulator(object):
                         print("--->", offspring, lparent, rparent, bp)
                     pop[j] = offspring
                     if bp > 0.0:
-                        edges.add_row(
+                        tables.edges.add_row(
                             left=0.0, right=bp, parent=lparent, child=offspring)
                     if bp < 1.0:
-                        edges.add_row(
+                        tables.edges.add_row(
                             left=bp, right=1.0, parent=rparent, child=offspring)
 
         if self.debug:
             print("Done! Final pop:")
             print(pop)
         flags = [
-            (msprime.NODE_IS_SAMPLE if u in pop else 0) for u in range(nodes.num_rows)]
-        nodes.set_columns(time=nodes.time, flags=flags)
+            (msprime.NODE_IS_SAMPLE if u in pop else 0)
+            for u in range(len(tables.nodes))]
+        tables.nodes.set_columns(time=tables.nodes.time, flags=flags)
         if self.debug:
             print("Done.")
             print("Nodes:")
             print(nodes)
             print("Edges:")
             print(edges)
-        return msprime.TableCollection(
-            nodes, edges, migrations, sites, mutations, provenances)
+        return tables
 
 
 def wf_sim(N, ngens, survival=0.0, deep_history=True, debug=False, seed=None):
@@ -121,13 +117,13 @@ def wf_sim(N, ngens, survival=0.0, deep_history=True, debug=False, seed=None):
     return sim.run(ngens)
 
 
-@unittest.skip("UPDATE API")
 class TestSimulation(unittest.TestCase):
     """
     Tests that the simulations produce the output we expect.
     """
     random_seed = 5678
 
+    @unittest.skip("Rooting issue")
     def test_non_overlapping_generations(self):
         tables = wf_sim(N=10, ngens=10, survival=0.0, seed=self.random_seed)
         self.assertGreater(tables.nodes.num_rows, 0)
@@ -135,11 +131,13 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
+        # tables.sort()
         nodes = tables.nodes
         edges = tables.edges
         msprime.sort_tables(nodes=nodes, edges=edges)
         samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
+        # msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
+        tables.simplify(samples)
         ts = msprime.load_tables(nodes=nodes, edges=edges)
         # All trees should have exactly one root and the leaves should be the samples,
         # and all internal nodes should have arity > 1
@@ -151,6 +149,7 @@ class TestSimulation(unittest.TestCase):
                 if tree.is_internal(u):
                     self.assertGreater(len(tree.children(u)), 1)
 
+    @unittest.skip("Rooting issue")
     def test_overlapping_generations(self):
         tables = wf_sim(N=30, ngens=10, survival=0.85, seed=self.random_seed)
         self.assertGreater(tables.nodes.num_rows, 0)

@@ -176,8 +176,7 @@ class TestLdCalculatorReplicates(unittest.TestCase):
 # @unittest.skipIf(IS_PY2, "Cannot test thread support on Py2.")
 # Temporarily skipping these on windows too. See
 # https://github.com/jeromekelleher/msprime/issues/344
-# @unittest.skipIf(IS_PY2 or IS_WINDOWS, "Cannot test thread support on Py2.")
-@unittest.skip("SEGFAULT")
+@unittest.skipIf(IS_PY2 or IS_WINDOWS, "Cannot test thread support on Py2.")
 class TestTables(unittest.TestCase):
     """
     Tests to ensure that attempts to access tables in threads correctly

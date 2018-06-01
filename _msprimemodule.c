@@ -4355,7 +4355,7 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {
         "individuals", "nodes", "edges", "migrations", "sites", "mutations",
-        "populations", "provenances", NULL};
+        "populations", "provenances", "sequence_length", NULL};
     IndividualTable *individuals = NULL;
     NodeTable *nodes = NULL;
     EdgeTable *edges = NULL;
@@ -4364,6 +4364,7 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     MutationTable *mutations = NULL;
     PopulationTable *populations = NULL;
     ProvenanceTable *provenances = NULL;
+    double sequence_length = 0;
 
     self->tables = NULL;
     self->individuals = NULL;
@@ -4375,7 +4376,7 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     self->populations = NULL;
     self->provenances = NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!O!O!O!O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!O!O!O!O!|d", kwlist,
             &IndividualTableType, &individuals,
             &NodeTableType, &nodes,
             &EdgeTableType, &edges,
@@ -4383,7 +4384,8 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
             &SiteTableType, &sites,
             &MutationTableType, &mutations,
             &PopulationTableType, &populations,
-            &ProvenanceTableType, &provenances)) {
+            &ProvenanceTableType, &provenances,
+            &sequence_length)) {
         goto out;
     }
 
@@ -4396,6 +4398,7 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    self->tables->sequence_length = sequence_length;
     if (IndividualTable_check_state(individuals) != 0
             || NodeTable_check_state(nodes) != 0
             || EdgeTable_check_state(edges) != 0

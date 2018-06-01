@@ -1425,6 +1425,37 @@ class TableCollection(object):
 
     # TODO add support for __eq__ and __ne__
 
+    def simplify(self, samples, filter_zero_mutation_sites=True):
+        """
+        Simplifies the tables in place to retain only the information necessary
+        to reconstruct the tree sequence describing the given ``samples``.
+        This will change the ID of the nodes, so that the individual
+        ``samples[k]]`` will have ID ``k`` in the result. The resulting
+        NodeTable will have only the first ``len(samples)`` individuals marked
+        as samples. The mapping from node IDs in the current set of tables to
+        their equivalent values in the simplified tables is returned as a numpy
+        array. If an array ``a`` is returned by this function and ``u`` is the
+        ID of a node in the input table, then ``a[u]`` is the ID of this node
+        in the output table. For any node ``u`` that is not mapped into the
+        output tables, this mapping will equal ``-1``.
+
+        Tables operated on by this function must: be sorted (see
+        :meth:`TableCollection.sort`)), have children be born strictly after their
+        parents, and the intervals on which any individual is a child must be
+        disjoint; but other than this the tables need not satisfy remaining
+        requirements to specify a valid tree sequence (but the resulting tables
+        will).
+
+        :param list[int] samples: A list of Node IDs of individuals to retain
+            as samples.
+        :param bool filter_zero_mutation_sites: Whether to remove sites that have no
+            mutations from the output (default: True).
+        :return: A numpy array mapping node IDs in the input tables to their
+            corresponding node IDs in the output tables.
+        :rtype: numpy array (dtype=np.int32).
+        """
+        return self.ll_tables.simplify(samples, filter_zero_mutation_sites)
+
 
 #############################################
 # Table functions.
