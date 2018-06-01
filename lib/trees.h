@@ -355,5 +355,5 @@ void vargen_print_state(vargen_t *self, FILE *out);
 }
 #endif
 
-// end of #ifndef TSK_TREES_H
-#endif
+#endif /* TSK_TREES_H */
+
