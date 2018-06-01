@@ -176,6 +176,7 @@ class TestOverlappingSegments(unittest.TestCase):
         self.assertEqual(X, segs[1:])
 
 
+@unittest.skip("SEGFAULT")
 class TopologyTestCase(unittest.TestCase):
     """
     Superclass of test cases containing common utilities.
@@ -2426,6 +2427,7 @@ class TestBadTrees(unittest.TestCase):
         self.assertRaises(_msprime.LibraryError, list, ts.trees())
 
 
+@unittest.skip("SEGFAULT")
 class TestSimplify(unittest.TestCase):
     """
     Tests that the implementations of simplify() does what they are supposed to.

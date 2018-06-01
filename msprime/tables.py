@@ -276,10 +276,6 @@ class NodeTable(BaseTable):
     def metadata_offset(self):
         return self.ll_table.metadata_offset
 
-    @property
-    def time(self):
-        return self.ll_table.time
-
     def __str__(self):
         time = self.time
         flags = self.flags
@@ -1303,6 +1299,7 @@ class ProvenanceTable(BaseTable):
             record_offset=self.record_offset)
         return copy
 
+
 # Pickle support. See copyreg registration for this function below.
 def _provenance_table_pickle(table):
     state = {
@@ -1328,28 +1325,19 @@ copyreg.pickle(PopulationTable, _population_table_pickle)
 copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
-# class TableCollection(object):
-#     """
-#     A collection of tables. This is a convenience class allowing for convenient
-#     printing and comparisons of a collection of related tables.
-#     """
-#     def __init__(
-#             self, nodes=None, edges=None, migrations=None, sites=None, mutations=None,
-#             provenances=None, individuals=None, populations=None):
-#         self.individuals = individuals
-#         self.nodes = nodes
-#         self.edges = edges
-#         self.migrations = migrations
-#         self.sites = sites
-#         self.mutations = mutations
-#         self.provenances = provenances
-#         self.populations = populations
-
 class TableCollection(object):
 
     def __init__(self, ll_tables=None):
         if ll_tables is None:
-            ll_tables = _msprime.TableCollection()
+            ll_tables = _msprime.TableCollection(
+                individuals=_msprime.IndividualTable(),
+                nodes=_msprime.NodeTable(),
+                edges=_msprime.EdgeTable(),
+                migrations=_msprime.MigrationTable(),
+                sites=_msprime.SiteTable(),
+                mutations=_msprime.MutationTable(),
+                populations=_msprime.PopulationTable(),
+                provenances=_msprime.ProvenanceTable())
         self.ll_tables = ll_tables
         self.__individuals = IndividualTable(ll_table=self.ll_tables.individuals)
         self.__nodes = NodeTable(ll_table=self.ll_tables.nodes)

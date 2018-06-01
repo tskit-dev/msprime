@@ -577,9 +577,6 @@ class Simulator(object):
             t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
             t.sites.ll_table, t.mutations.ll_table, t.provenances.ll_table,
             populations=t.populations.ll_table)
-            # self.node_table, self.edge_table, self.migration_table,
-            # self.site_table, self.mutation_table, self.provenance_table,
-            # populations=self.population_table)
         return trees.TreeSequence(ll_tree_sequence)
 
     def reset(self):

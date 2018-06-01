@@ -487,7 +487,6 @@ class MetadataTestsMixin(object):
                 list(table.metadata_offset), [0 for _ in range(num_rows + 1)])
 
 
-@unittest.skip("TEMP")
 class TestIndividualTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
 
     columns = [UInt32Column("flags")]
@@ -584,7 +583,6 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
             self.assertEqual(list(table.time), time)
 
 
-@unittest.skip("TEMP")
 class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
 
     columns = [
@@ -615,7 +613,6 @@ class TestEdgeTable(unittest.TestCase, CommonTestsMixin):
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
-@unittest.skip("TEMP")
 class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     columns = [DoubleColumn("position")]
     ragged_list_columns = [
@@ -642,7 +639,6 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
-@unittest.skip("TEMP")
 class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
     columns = [
         Int32Column("site"),
@@ -674,7 +670,6 @@ class TestMutationTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin)
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
-@unittest.skip("TEMP")
 class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
     columns = [
         DoubleColumn("left"),
@@ -708,7 +703,6 @@ class TestMigrationTable(unittest.TestCase, CommonTestsMixin):
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
-@unittest.skip("TEMP")
 class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
     columns = []
     ragged_list_columns = [
@@ -734,7 +728,6 @@ class TestProvenanceTable(unittest.TestCase, CommonTestsMixin):
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
-@unittest.skip("TEMP")
 class TestPopulationTable(unittest.TestCase, CommonTestsMixin):
     columns = []
     ragged_list_columns = [
@@ -756,7 +749,6 @@ class TestPopulationTable(unittest.TestCase, CommonTestsMixin):
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 
-@unittest.skip("TEMP")
 class TestStringPacking(unittest.TestCase):
     """
     Tests the code for packing and unpacking unicode string data into numpy arrays.
@@ -792,7 +784,6 @@ class TestStringPacking(unittest.TestCase):
         self.verify_packing([u'abcdé', u'€'])
 
 
-@unittest.skip("TEMP")
 class TestBytePacking(unittest.TestCase):
     """
     Tests the code for packing and unpacking binary data into numpy arrays.
@@ -1117,7 +1108,6 @@ class TestSortTables(unittest.TestCase):
                 migrations=bad_type)
 
 
-@unittest.skip("TEMP")
 class TestSortMutations(unittest.TestCase):
     """
     Tests that mutations are correctly sorted by sort_tables.
@@ -1451,49 +1441,46 @@ class TestSimplifyTables(unittest.TestCase):
         self.assertEqual(edges, tables.edges)
 
 
-@unittest.skip("TEMP")
 class TestTableCollection(unittest.TestCase):
     """
     Tests for the convenience wrapper around a collection of related tables.
     """
     def test_table_references(self):
         ts = msprime.simulate(10, mutation_rate=2, random_seed=1)
-        # tables = ts.tables
-        # before_individuals = str(tables.individuals)
-        # individuals = tables.individuals
-        # before_nodes = str(tables.nodes)
-        # nodes = tables.nodes
-        # before_edges = str(tables.edges)
-        # edges = tables.edges
-        # before_migrations = str(tables.migrations)
-        # migrations = tables.migrations
-        # before_sites = str(tables.sites)
-        # sites = tables.sites
-        # before_mutations = str(tables.mutations)
-        # mutations = tables.mutations
-        # before_populations = str(tables.populations)
-        # populations = tables.populations
-        # before_nodes = str(tables.nodes)
-        # provenances = tables.provenances
-        # before_provenances = str(tables.provenances)
-        # del tables
-        # self.assertEqual(str(individuals), before_individuals)
-        # self.assertEqual(str(nodes), before_nodes)
-        # self.assertEqual(str(edges), before_edges)
-        # self.assertEqual(str(migrations), before_migrations)
-        # self.assertEqual(str(sites), before_sites)
-        # self.assertEqual(str(mutations), before_mutations)
-        # self.assertEqual(str(populations), before_populations)
-        # self.assertEqual(str(provenances), before_provenances)
+        tables = ts.tables
+        before_individuals = str(tables.individuals)
+        individuals = tables.individuals
+        before_nodes = str(tables.nodes)
+        nodes = tables.nodes
+        before_edges = str(tables.edges)
+        edges = tables.edges
+        before_migrations = str(tables.migrations)
+        migrations = tables.migrations
+        before_sites = str(tables.sites)
+        sites = tables.sites
+        before_mutations = str(tables.mutations)
+        mutations = tables.mutations
+        before_populations = str(tables.populations)
+        populations = tables.populations
+        before_nodes = str(tables.nodes)
+        provenances = tables.provenances
+        before_provenances = str(tables.provenances)
+        del tables
+        self.assertEqual(str(individuals), before_individuals)
+        self.assertEqual(str(nodes), before_nodes)
+        self.assertEqual(str(edges), before_edges)
+        self.assertEqual(str(migrations), before_migrations)
+        self.assertEqual(str(sites), before_sites)
+        self.assertEqual(str(mutations), before_mutations)
+        self.assertEqual(str(populations), before_populations)
+        self.assertEqual(str(provenances), before_provenances)
 
-    @unittest.skip("refcount")
     def test_str(self):
         ts = msprime.simulate(10, random_seed=1)
         tables = ts.tables
         s = str(tables)
         self.assertGreater(len(s), 0)
 
-    @unittest.skip("refcount")
     def test_asdict(self):
         ts = msprime.simulate(10, random_seed=1)
         t = ts.tables
