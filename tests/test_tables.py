@@ -147,13 +147,40 @@ class CommonTestsMixin(object):
             for bad_type in [Exception, msprime]:
                 error_kwargs = dict(kwargs)
                 error_kwargs[focal_col.name] = bad_type
-                self.assertRaises(TypeError, table.set_columns, **error_kwargs)
-                self.assertRaises(TypeError, table.append_columns, **error_kwargs)
+                self.assertRaises(ValueError, table.set_columns, **error_kwargs)
+                self.assertRaises(ValueError, table.append_columns, **error_kwargs)
             for bad_value in ["qwer", [0, "sd"]]:
                 error_kwargs = dict(kwargs)
                 error_kwargs[focal_col.name] = bad_value
                 self.assertRaises(ValueError, table.set_columns, **error_kwargs)
                 self.assertRaises(ValueError, table.append_columns, **error_kwargs)
+
+    def test_set_columns_dimension(self):
+        kwargs = {c.name: c.get_input(1) for c in self.columns}
+        for list_col, offset_col in self.ragged_list_columns:
+            value = list_col.get_input(1)
+            kwargs[list_col.name] = value
+            kwargs[offset_col.name] = [0, 1]
+        table = self.table_class()
+        table.set_columns(**kwargs)
+        table.append_columns(**kwargs)
+        for focal_col in self.columns:
+            table = self.table_class()
+            for bad_dims in [5, [[1], [1]], np.zeros((2, 2))]:
+                error_kwargs = dict(kwargs)
+                error_kwargs[focal_col.name] = bad_dims
+                self.assertRaises(ValueError, table.set_columns, **error_kwargs)
+                self.assertRaises(ValueError, table.append_columns, **error_kwargs)
+        for list_col, offset_col in self.ragged_list_columns:
+            value = list_col.get_input(1)
+            error_kwargs = dict(kwargs)
+            for bad_dims in [5, [[1], [1]], np.zeros((2, 2))]:
+                error_kwargs[offset_col.name] = bad_dims
+                self.assertRaises(ValueError, table.set_columns, **error_kwargs)
+                self.assertRaises(ValueError, table.append_columns, **error_kwargs)
+            # Empty offset columns are caught also
+            error_kwargs[offset_col.name] = []
+            self.assertRaises(ValueError, table.set_columns, **error_kwargs)
 
     def test_set_columns_input_sizes(self):
         num_rows = 100

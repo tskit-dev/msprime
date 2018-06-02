@@ -410,6 +410,7 @@ int migration_table_free(migration_table_t *self);
 int migration_table_copy(migration_table_t *self, migration_table_t *dest);
 int migration_table_dump_text(migration_table_t *self, FILE *out);
 void migration_table_print_state(migration_table_t *self, FILE *out);
+bool migration_table_equal(migration_table_t *self, migration_table_t *other);
 
 int individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
         size_t max_location_length_increment, size_t max_metadata_length_increment);
@@ -482,6 +483,7 @@ int table_collection_simplify(table_collection_t *self,
 int table_collection_sort(table_collection_t *self, size_t edge_start, int flags);
 int table_collection_deduplicate_sites(table_collection_t *tables, int flags);
 int table_collection_compute_mutation_parents(table_collection_t *self, int flags);
+bool table_collection_equal(table_collection_t *self, table_collection_t *other);
 
 int simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags);

@@ -6003,7 +6003,6 @@ test_save_kas_tables(void)
     int ret;
     size_t j, k;
     tree_sequence_t **examples = get_example_tree_sequences(1);
-    tree_sequence_t ts2;
     tree_sequence_t *ts1;
     table_collection_t t1, t2;
     int dump_flags[] = {0, MSP_DUMP_ZLIB_COMPRESSION};
@@ -6026,11 +6025,7 @@ test_save_kas_tables(void)
             ret = table_collection_load(&t2, _tmp_file_name, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-            ret = tree_sequence_load_tables(&ts2, &t2, 0);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_tree_sequences_equal(ts1, &ts2, true, true, true);
-
-            tree_sequence_free(&ts2);
+            CU_ASSERT_TRUE(table_collection_equal(&t1, &t2));
             table_collection_free(&t2);
         }
         table_collection_free(&t1);
@@ -7593,6 +7588,8 @@ write_table_cols(kastore_t *store, write_table_col_t *write_cols, size_t num_col
 static void
 test_format_data_load_errors(void)
 {
+    size_t uuid_size = 36;
+    char uuid[uuid_size];
     char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
     double L[2];
     uint32_t version[2] = {
@@ -7601,6 +7598,7 @@ test_format_data_load_errors(void)
         {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
         {"format/version", (void *) version, 2, KAS_UINT32},
         {"sequence_length", (void *) L, 1, KAS_FLOAT64},
+        {"uuid", (void *) uuid, uuid_size, KAS_INT8},
     };
     table_collection_t tables;
     kastore_t store;
@@ -7610,6 +7608,8 @@ test_format_data_load_errors(void)
     L[0] = 1;
     L[1] = 0;
     memcpy(format_name, MSP_FILE_FORMAT_NAME, sizeof(format_name));
+    /* Note: this will fail if we ever start parsing the form of the UUID */
+    memset(uuid, 0, uuid_size);
 
     ret = kastore_open(&store, _tmp_file_name, "w", 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -7744,6 +7744,22 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SEQUENCE_LENGTH);
     ret = table_collection_free(&tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    L[0] = 1;
+
+    /* Wrong length for uuid */
+    write_cols[3].len = 1;
+    ret = kastore_open(&store, _tmp_file_name, "w", 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = kastore_close(&store);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_alloc(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_load(&tables, _tmp_file_name, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
+    ret = table_collection_free(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    write_cols[3].len = uuid_size;
 
     /* Missing keys */
     for (j = 0; j < sizeof(write_cols) / sizeof(*write_cols) - 1; j++) {
@@ -7854,8 +7870,43 @@ test_table_collection_set_tables(void)
     CU_ASSERT_EQUAL_FATAL(t1.mutations, t2.mutations);
     CU_ASSERT_EQUAL_FATAL(t1.populations, t2.populations);
     CU_ASSERT_EQUAL_FATAL(t1.provenances, t2.provenances);
+    CU_ASSERT_TRUE(table_collection_equal(&t1, &t2));
     table_collection_print_state(&t2, _devnull);
     table_collection_free(&t2);
+
+    /* Setting any of the tables to NULL is an error */
+    ret = table_collection_set_tables(&t2,
+            NULL, t1.nodes, t1.edges, t1.migrations,
+            t1.sites, t1.mutations, t1.populations, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, NULL, t1.edges, t1.migrations,
+            t1.sites, t1.mutations, t1.populations, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, t1.nodes, NULL, t1.migrations,
+            t1.sites, t1.mutations, t1.populations, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, t1.nodes, t1.edges, NULL,
+            t1.sites, t1.mutations, t1.populations, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, t1.nodes, t1.edges, t1.migrations,
+            NULL, t1.mutations, t1.populations, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, t1.nodes, t1.edges, t1.migrations,
+            t1.sites, NULL, t1.populations, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, t1.nodes, t1.edges, t1.migrations,
+            t1.sites, t1.mutations, NULL, t1.provenances);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = table_collection_set_tables(&t2,
+            t1.individuals, t1.nodes, t1.edges, t1.migrations,
+            t1.sites, t1.mutations, t1.populations, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     CU_ASSERT_EQUAL_FATAL(t1.nodes->num_rows, 1);
     table_collection_print_state(&t1, _devnull);
@@ -7969,10 +8020,9 @@ test_load_node_table_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_FILE_FORMAT);
     ret = table_collection_free(&tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    write_cols[4].len = 2;
+    write_cols[5].len = 2;
+
 }
-
-
 
 static int
 msprime_suite_init(void)

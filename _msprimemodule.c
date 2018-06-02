@@ -71,7 +71,6 @@ typedef struct {
     PyObject_HEAD
     bool locked;
     individual_table_t *individual_table;
-    PyObject *table_collection;
 } IndividualTable;
 
 typedef struct {
@@ -84,42 +83,36 @@ typedef struct {
     PyObject_HEAD
     bool locked;
     edge_table_t *edge_table;
-    PyObject *table_collection;
 } EdgeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     site_table_t *site_table;
-    PyObject *table_collection;
 } SiteTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     mutation_table_t *mutation_table;
-    PyObject *table_collection;
 } MutationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     migration_table_t *migration_table;
-    PyObject *table_collection;
 } MigrationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     population_table_t *population_table;
-    PyObject *table_collection;
 } PopulationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     provenance_table_t *provenance_table;
-    PyObject *table_collection;
 } ProvenanceTable;
 
 typedef struct {
@@ -838,12 +831,8 @@ table_read_column_array(PyObject *input, int npy_type, size_t *num_rows, bool ch
     PyArrayObject *array = NULL;
     npy_intp *shape;
 
-    array = (PyArrayObject *) PyArray_FROM_OTF(input, npy_type, NPY_ARRAY_IN_ARRAY);
+    array = (PyArrayObject *) PyArray_FROMANY(input, npy_type, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (array == NULL) {
-        goto out;
-    }
-    if (PyArray_NDIM(array) != 1) {
-        PyErr_SetString(PyExc_ValueError, "Dim != 1");
         goto out;
     }
     shape = PyArray_DIMS(array);
@@ -870,12 +859,8 @@ table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool c
     PyArrayObject *array = NULL;
     npy_intp *shape;
 
-    array = (PyArrayObject *) PyArray_FROM_OTF(input, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
+    array = (PyArrayObject *) PyArray_FROMANY(input, NPY_UINT32, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (array == NULL) {
-        goto out;
-    }
-    if (PyArray_NDIM(array) != 1) {
-        PyErr_SetString(PyExc_ValueError, "Dim != 1");
         goto out;
     }
     shape = PyArray_DIMS(array);
@@ -930,7 +915,6 @@ IndividualTable_dealloc(IndividualTable* self)
         PyMem_Free(self->individual_table);
         self->individual_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -1377,7 +1361,6 @@ NodeTable_check_state(NodeTable *self)
 {
     int ret = -1;
     if (self->node_table == NULL) {
-        printf("RAISING ERROR in node table %p\n", (void *) self);
         PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
         goto out;
     }
@@ -1860,7 +1843,6 @@ EdgeTable_dealloc(EdgeTable* self)
         PyMem_Free(self->edge_table);
         self->edge_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -2239,7 +2221,6 @@ MigrationTable_dealloc(MigrationTable* self)
         PyMem_Free(self->migration_table);
         self->migration_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -2659,7 +2640,6 @@ SiteTable_dealloc(SiteTable* self)
         PyMem_Free(self->site_table);
         self->site_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -3107,7 +3087,6 @@ MutationTable_dealloc(MutationTable* self)
         PyMem_Free(self->mutation_table);
         self->mutation_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -3614,7 +3593,6 @@ PopulationTable_dealloc(PopulationTable* self)
         PyMem_Free(self->population_table);
         self->population_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -3731,6 +3709,11 @@ PopulationTable_set_or_append_columns(PopulationTable *self, PyObject *args, PyO
         goto out;
     }
     if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if ((metadata_input == Py_None) || (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified");
         goto out;
     }
     metadata_array = table_read_column_array(metadata_input, NPY_INT8,
@@ -3957,7 +3940,6 @@ ProvenanceTable_dealloc(ProvenanceTable* self)
         PyMem_Free(self->provenance_table);
         self->provenance_table = NULL;
     }
-    Py_XDECREF(self->table_collection);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -4079,6 +4061,13 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
                 &timestamp_input, &timestamp_offset_input,
                 &record_input, &record_offset_input)) {
+        goto out;
+    }
+    if ((timestamp_input == Py_None)
+            || (timestamp_offset_input == Py_None)
+            || (record_input == Py_None)
+            || (record_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError, "All arguments must be non None");
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {

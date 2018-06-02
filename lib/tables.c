@@ -458,7 +458,7 @@ node_table_print_state(node_table_t *self, FILE *out)
 int
 node_table_dump_text(node_table_t *self, FILE *out)
 {
-    int ret = 0;
+    int ret = MSP_ERR_IO;
     size_t j;
     table_size_t metadata_len;
     int err;
@@ -1762,6 +1762,27 @@ out:
     return ret;
 }
 
+bool
+migration_table_equal(migration_table_t *self, migration_table_t *other)
+{
+    bool ret = false;
+    if (self->num_rows == other->num_rows) {
+        ret = memcmp(self->left, other->left,
+                self->num_rows * sizeof(double)) == 0
+            && memcmp(self->right, other->right,
+                    self->num_rows * sizeof(double)) == 0
+            && memcmp(self->node, other->node,
+                    self->num_rows * sizeof(node_id_t)) == 0
+            && memcmp(self->source, other->source,
+                    self->num_rows * sizeof(population_id_t)) == 0
+            && memcmp(self->dest, other->dest,
+                    self->num_rows * sizeof(population_id_t)) == 0
+            && memcmp(self->time, other->time,
+                    self->num_rows * sizeof(double)) == 0;
+    }
+    return ret;
+}
+
 static int
 migration_table_dump(migration_table_t *self, kastore_t *store)
 {
@@ -2104,7 +2125,7 @@ individual_table_print_state(individual_table_t *self, FILE *out)
 int
 individual_table_dump_text(individual_table_t *self, FILE *out)
 {
-    int ret = 0;
+    int ret = MSP_ERR_IO;
     size_t j, k;
     table_size_t metadata_len;
     int err;
@@ -2120,13 +2141,18 @@ individual_table_dump_text(individual_table_t *self, FILE *out)
             goto out;
         }
         for (k = self->location_offset[j]; k < self->location_offset[j + 1]; k++) {
-            fprintf(out, "%f", self->location[k]);
+            err = fprintf(out, "%f", self->location[k]);
+            if (err < 0) {
+                goto out;
+            }
             if (k + 1 < self->location_offset[j + 1]) {
-                fprintf(out, ",");
+                err = fprintf(out, ",");
+                if (err < 0) {
+                    goto out;
+                }
             }
         }
-        fprintf(out, "\t");
-        err = fprintf(out, "%.*s\n",
+        err = fprintf(out, "\t%.*s\n",
                 metadata_len, self->metadata + self->metadata_offset[j]);
         if (err < 0) {
             goto out;
@@ -4551,6 +4577,24 @@ table_collection_free(table_collection_t *self)
     return ret;
 }
 
+/* Returns true if all the tables and collection metadata are equal. Note
+ * this does *not* consider the indexes, since these are derived from the
+ * tables. */
+bool
+table_collection_equal(table_collection_t *self, table_collection_t *other)
+{
+    bool ret = self->sequence_length == other->sequence_length
+        && individual_table_equal(self->individuals, other->individuals)
+        && node_table_equal(self->nodes, other->nodes)
+        && edge_table_equal(self->edges, other->edges)
+        && migration_table_equal(self->migrations, other->migrations)
+        && site_table_equal(self->sites, other->sites)
+        && mutation_table_equal(self->mutations, other->mutations)
+        && population_table_equal(self->populations, other->populations)
+        && provenance_table_equal(self->provenances, other->provenances);
+    return ret;
+}
+
 int WARN_UNUSED
 table_collection_copy(table_collection_t *self, table_collection_t *dest)
 {
@@ -4981,23 +5025,15 @@ int WARN_UNUSED
 table_collection_sort(table_collection_t *self, size_t edge_start, int flags)
 {
     int ret = 0;
-    table_sorter_t *sorter = NULL;
+    table_sorter_t sorter;
 
-    sorter = malloc(sizeof(table_sorter_t));
-    if (sorter == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = table_sorter_alloc(sorter, self, flags);
+    ret = table_sorter_alloc(&sorter, self, flags);
     if (ret != 0) {
         goto out;
     }
-    ret = table_sorter_run(sorter, edge_start);
+    ret = table_sorter_run(&sorter, edge_start);
 out:
-    if (sorter != NULL) {
-        table_sorter_free(sorter);
-        free(sorter);
-    }
+    table_sorter_free(&sorter);
     return ret;
 }
 
