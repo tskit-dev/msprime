@@ -4666,6 +4666,12 @@ TableCollection_get_provenances(TableCollection *self, void *closure)
 }
 
 static PyObject *
+TableCollection_get_sequence_length(TableCollection *self, void *closure)
+{
+    return Py_BuildValue("f", self->tables->sequence_length);
+}
+
+static PyObject *
 TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
 {
     int err;
@@ -4738,6 +4744,22 @@ out:
     return ret;
 }
 
+static PyObject *
+TableCollection_compute_mutation_parents(TableCollection *self)
+{
+    int err;
+    PyObject *ret = NULL;
+
+    err = table_collection_compute_mutation_parents(self->tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4747,6 +4769,8 @@ static PyGetSetDef TableCollection_getsetters[] = {
     {"mutations", (getter) TableCollection_get_mutations, NULL, "The mutation table."},
     {"populations", (getter) TableCollection_get_populations, NULL, "The population table."},
     {"provenances", (getter) TableCollection_get_provenances, NULL, "The provenance table."},
+    {"sequence_length", (getter) TableCollection_get_sequence_length, NULL,
+        "The sequence length."},
     {NULL}  /* Sentinel */
 };
 
@@ -4755,6 +4779,8 @@ static PyMethodDef TableCollection_methods[] = {
             "Simplifies for a given sample subset." },
     {"sort", (PyCFunction) TableCollection_sort, METH_VARARGS|METH_KEYWORDS,
             "Sorts the tables to satisfy tree sequence requirements." },
+    {"compute_mutation_parents", (PyCFunction) TableCollection_compute_mutation_parents,
+        METH_NOARGS, "Computes the mutation parents for a the tables." },
     {NULL}  /* Sentinel */
 };
 

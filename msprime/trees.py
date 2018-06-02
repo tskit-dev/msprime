@@ -1520,7 +1520,7 @@ class TreeSequence(object):
         # if provenances is None:
         #     provenances = tables.ProvenanceTable()
 
-        t = tables.TableCollection()
+        t = tables.TableCollection(sequence_length=self.sequence_length)
         self._ll_tree_sequence.dump_tables(
             nodes=t.nodes.ll_table, edges=t.edges.ll_table,
             migrations=t.migrations.ll_table,
@@ -1530,10 +1530,6 @@ class TreeSequence(object):
             individuals=t.individuals.ll_table,
             populations=t.populations.ll_table)
         return t
-        # return tables.TableCollection(
-        #     nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-        #     mutations=mutations, provenances=provenances,
-        #     individuals=individuals, populations=populations)
 
     def dump_text(
             self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
@@ -2071,10 +2067,6 @@ class TreeSequence(object):
         :rtype: numpy.ndarray (dtype=np.uint8)
         """
         return self._ll_tree_sequence.get_genotype_matrix()
-
-    def compute_mutation_parents(self):
-        # TODO document.
-        return self._ll_tree_sequence.compute_mutation_parents()
 
     def get_pairwise_diversity(self, samples=None):
         # Deprecated alias for self.pairwise_diversity

@@ -3024,10 +3024,14 @@ class TestMutationParent(unittest.TestCase):
         parent = tsutil.compute_mutation_parent(ts)
         tables = ts.tables
         self.assertTrue(np.array_equal(parent, tables.mutations.parent))
-        # TODO reinstate this when we get the TableCollection.compute_mutation_parents
-        # method implemented
-        # parent = ts.compute_mutation_parents()
-        # self.assertTrue(np.array_equal(parent, tables.mutations.parent))
+        mutations = tables.mutations
+        mutations.set_columns(
+            site=mutations.site, node=mutations.node,
+            derived_state=mutations.derived_state,
+            derived_state_offset=mutations.derived_state_offset)
+        self.assertTrue(np.all(mutations.parent == msprime.NULL_MUTATION))
+        tables.compute_mutation_parents()
+        self.assertTrue(np.array_equal(parent, tables.mutations.parent))
 
     def test_example(self):
         nodes = six.StringIO("""\

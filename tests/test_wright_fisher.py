@@ -204,7 +204,7 @@ class TestSimulation(unittest.TestCase):
         N = 10
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
-        msprime.sort_tables(**tables.asdict())
+        tables.sort()
         ts = msprime.load_tables(**tables.asdict())
         ts = tsutil.jukes_cantor(ts, 10, 0.1, seed=self.random_seed)
         tables = ts.tables
@@ -230,7 +230,7 @@ class TestSimulation(unittest.TestCase):
         N = 10
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
-        msprime.sort_tables(**tables.asdict())
+        tables.sort()
         ts = msprime.load_tables(**tables.asdict())
         ts = tsutil.jukes_cantor(ts, 1, 10, seed=self.random_seed)
         tables = ts.tables
@@ -290,7 +290,7 @@ class TestSimplify(unittest.TestCase):
                 for mut in [0.01, 1.0]:
                     for nloci in [1, 2, 3]:
                         tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
-                        msprime.sort_tables(**tables.asdict())
+                        tables.sort()
                         ts = msprime.load_tables(**tables.asdict())
                         ts = tsutil.jukes_cantor(ts, num_sites=nloci, mu=mut, seed=seed)
                         self.verify_simulation(ts, ngens=N)

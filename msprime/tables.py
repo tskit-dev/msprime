@@ -1242,8 +1242,8 @@ copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
 class TableCollection(object):
-
-    def __init__(self, ll_tables=None):
+    # TODO document.
+    def __init__(self, sequence_length=0, ll_tables=None):
         if ll_tables is None:
             ll_tables = _msprime.TableCollection(
                 individuals=_msprime.IndividualTable(),
@@ -1253,7 +1253,8 @@ class TableCollection(object):
                 sites=_msprime.SiteTable(),
                 mutations=_msprime.MutationTable(),
                 populations=_msprime.PopulationTable(),
-                provenances=_msprime.ProvenanceTable())
+                provenances=_msprime.ProvenanceTable(),
+                sequence_length=sequence_length)
         self.ll_tables = ll_tables
         self.__individuals = IndividualTable(ll_table=self.ll_tables.individuals)
         self.__nodes = NodeTable(ll_table=self.ll_tables.nodes)
@@ -1295,6 +1296,10 @@ class TableCollection(object):
     @property
     def provenances(self):
         return self.__provenances
+
+    @property
+    def sequence_length(self):
+        return self.ll_tables.sequence_length
 
     def asdict(self):
         """
@@ -1409,6 +1414,10 @@ class TableCollection(object):
             (default=0; must be <= len(edges)).
         """
         self.ll_tables.sort(edge_start)
+
+    def compute_mutation_parents(self):
+        # TODO document
+        self.ll_tables.compute_mutation_parents()
 
 
 #############################################

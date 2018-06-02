@@ -5177,6 +5177,8 @@ table_collection_compute_mutation_parents(table_collection_t *self, int MSP_UNUS
     /* Using unsigned values here avoids potentially undefined behaviour */
     uint32_t j, mutation, first_mutation;
 
+    /* TODO the loops below will break if sequence length is 0. */
+    assert(self->sequence_length > 0 && self->edges->num_rows > 0);
     ret = table_collection_build_indexes(self, 0);
     if (ret != 0) {
         goto out;

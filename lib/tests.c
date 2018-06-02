@@ -688,6 +688,7 @@ add_individuals(tree_sequence_t *ts)
             if ((k % ploidy) == 0) {
                 individual_table_add_row(tables.individuals, (uint32_t) k,
                         NULL, 0, metadata, metadata_length);
+                CU_ASSERT_TRUE(ret >= 0)
             }
             tables.nodes->individual[j] = k / ploidy;
             k += 1;
@@ -7508,6 +7509,7 @@ test_provenance_table(void)
         CU_ASSERT_NSTRING_EQUAL(record_copy, test_record, test_record_length);
     }
     provenance_table_print_state(&table, _devnull);
+    provenance_table_dump_text(&table, _devnull);
     provenance_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
     CU_ASSERT_EQUAL(table.timestamp_length, 0);
