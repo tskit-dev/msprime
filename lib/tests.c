@@ -7374,7 +7374,89 @@ test_individual_table(void)
 static void
 test_population_table(void)
 {
-    printf("\n\n\nIMPLEMENT TEST POPULATION TABLE\n\n\n");
+    int ret;
+    population_table_t table;
+    size_t num_rows = 100;
+    size_t max_len = 20;
+    size_t j, k, len;
+    char *metadata;
+    char c[max_len + 1];
+    table_size_t *metadata_offset;
+
+    for (j = 0; j < max_len; j++) {
+        c[j] = 'A' + j;
+    }
+
+    ret = population_table_alloc(&table, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    population_table_print_state(&table, _devnull);
+    population_table_dump_text(&table, _devnull);
+
+    len = 0;
+    for (j = 0; j < num_rows; j++) {
+        k = GSL_MIN(j + 1, max_len);
+        ret = population_table_add_row(&table, c, k);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
+        CU_ASSERT_EQUAL(table.metadata_offset[j], len);
+        CU_ASSERT_EQUAL(table.num_rows, j + 1);
+        len += k;
+        CU_ASSERT_EQUAL(table.metadata_offset[j + 1], len);
+        CU_ASSERT_EQUAL(table.metadata_length, len);
+    }
+    population_table_print_state(&table, _devnull);
+    population_table_dump_text(&table, _devnull);
+
+    num_rows *= 2;
+    metadata = malloc(num_rows * sizeof(char));
+    CU_ASSERT_FATAL(metadata != NULL);
+    metadata_offset = malloc((num_rows + 1) * sizeof(table_size_t));
+    CU_ASSERT_FATAL(metadata_offset != NULL);
+
+    for (j = 0; j < num_rows; j++) {
+        metadata[j] = 'M';
+        metadata_offset[j] = j;
+    }
+
+    metadata_offset[num_rows] = num_rows;
+    ret = population_table_set_columns(&table, num_rows, metadata, metadata_offset);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+
+    /* Append another num_rows */
+    ret = population_table_append_columns(&table, num_rows, metadata, metadata_offset);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata + num_rows, metadata,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.metadata_length, 2 * num_rows);
+    CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+
+    /* Metadata = NULL gives an error */
+    ret = population_table_set_columns(&table, num_rows, NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = population_table_set_columns(&table, num_rows, metadata, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = population_table_set_columns(&table, num_rows, NULL, metadata_offset);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    /* Test for bad offsets */
+    metadata_offset[0] = 1;
+    ret = population_table_set_columns(&table, num_rows, metadata, metadata_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+    metadata_offset[0] = 0;
+    metadata_offset[num_rows] = 0;
+    ret = population_table_set_columns(&table, num_rows, metadata, metadata_offset);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_OFFSET);
+
+    population_table_clear(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
+    CU_ASSERT_EQUAL(table.metadata_length, 0);
+
+    population_table_free(&table);
+    free(metadata);
+    free(metadata_offset);
 }
 
 static void

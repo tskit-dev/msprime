@@ -67,7 +67,7 @@ cmp_infinite_sites_mutation(const void *a, const void *b) {
 }
 
 static void
-mutgen_check_state(mutgen_t *self)
+mutgen_check_state(mutgen_t *MSP_UNUSED(self))
 {
     /* TODO some checks! */
 }

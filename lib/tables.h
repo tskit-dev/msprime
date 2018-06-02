@@ -441,6 +441,7 @@ int population_table_clear(population_table_t *self);
 int population_table_copy(population_table_t *self, population_table_t *dest);
 int population_table_free(population_table_t *self);
 void population_table_print_state(population_table_t *self, FILE *out);
+int population_table_dump_text(population_table_t *self, FILE *out);
 bool population_table_equal(population_table_t *self, population_table_t *other);
 
 int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,

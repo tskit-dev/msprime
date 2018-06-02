@@ -730,7 +730,7 @@ out:
 }
 
 static void
-msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
+msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 {
     segment_t *s = head;
 
@@ -2921,7 +2921,7 @@ out:
 }
 
 static void
-msp_print_population_parameters_change(msp_t *self,
+msp_print_population_parameters_change(msp_t * MSP_UNUSED(self),
         demographic_event_t *event, FILE *out)
 {
     fprintf(out,
@@ -3023,7 +3023,7 @@ out:
 }
 
 static void
-msp_print_migration_rate_change(msp_t *self,
+msp_print_migration_rate_change(msp_t * MSP_UNUSED(self),
         demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tmigration_rate_change: %d -> %f\n",
@@ -3106,7 +3106,7 @@ out:
 }
 
 static void
-msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_mass_migration(msp_t * MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
             event->time,
@@ -3199,7 +3199,7 @@ out:
 }
 
 static void
-msp_print_simple_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_simple_bottleneck(msp_t * MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tsimple_bottleneck: %d I = %f\n",
             event->time,
@@ -3373,7 +3373,8 @@ out:
 }
 
 static void
-msp_print_instantaneous_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_instantaneous_bottleneck(msp_t *MSP_UNUSED(self),
+        demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tinstantaneous_bottleneck: %d T2 = %f\n",
             event->time,
@@ -3769,25 +3770,25 @@ out:
  * TODO provide background and documentation.
  **************************************************************/
 static double
-dtwf_model_time_to_generations(simulation_model_t *model, double t)
+dtwf_model_time_to_generations(simulation_model_t *MSP_UNUSED(model), double t)
 {
     return t;
 }
 
 static double
-dtwf_generations_to_model_time(simulation_model_t *model, double g)
+dtwf_generations_to_model_time(simulation_model_t *MSP_UNUSED(model), double g)
 {
     return g;
 }
 
 static double
-dtwf_generation_rate_to_model_rate(simulation_model_t *model, double rate)
+dtwf_generation_rate_to_model_rate(simulation_model_t *MSP_UNUSED(model), double rate)
 {
     return rate;
 }
 
 static double
-dtwf_model_rate_to_generation_rate(simulation_model_t *model, double rate)
+dtwf_model_rate_to_generation_rate(simulation_model_t *MSP_UNUSED(model), double rate)
 {
     return rate;
 }

@@ -10033,5 +10033,3 @@ init_msprime(void)
     return module;
 #endif
 }
-
-

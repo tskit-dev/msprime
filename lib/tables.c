@@ -2405,6 +2405,31 @@ population_table_print_state(population_table_t *self, FILE *out)
     assert(self->metadata_offset[self->num_rows] == self->metadata_length);
 }
 
+int
+population_table_dump_text(population_table_t *self, FILE *out)
+{
+    int ret = MSP_ERR_IO;
+    int err;
+    size_t j;
+    table_size_t metadata_len;
+
+    err = fprintf(out, "metadata\n");
+    if (err < 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_rows; j++) {
+        metadata_len = self->metadata_offset[j + 1] - self->metadata_offset[j];
+        err = fprintf(out, "%.*s\n", metadata_len,
+                self->metadata + self->metadata_offset[j]);
+        if (err < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 bool
 population_table_equal(population_table_t *self, population_table_t *other)
 {
