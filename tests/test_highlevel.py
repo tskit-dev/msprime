@@ -127,7 +127,7 @@ def get_gap_examples():
     t = ts.dump_tables()
     L = 2
     sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
-    ts_new = ts.load_tables(
+    ts_new = msprime.load_tables(
         nodes=t.nodes, edges=t.edges, sites=sites, mutations=mutations,
         sequence_length=L)
     yield ts_new
@@ -195,7 +195,13 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
             for rho in [0, 0.1, 0.5]:
                 recomb_map = msprime.RecombinationMap.uniform_map(m, rho, num_loci=m)
                 ts = msprime.simulate(
-                    n, recombination_map=recomb_map, mutation_rate=0.1, random_seed=seed)
+                    recombination_map=recomb_map, mutation_rate=0.1,
+                    random_seed=seed,
+                    population_configurations=[
+                        msprime.PopulationConfiguration(n),
+                        msprime.PopulationConfiguration(0)],
+                    migration_matrix=[[0, 1], [1, 0]])
+                ts = tsutil.insert_random_ploidy_individuals(ts, 4, seed=seed)
                 yield tsutil.add_random_metadata(ts, seed=seed)
                 seed += 1
     for ts in get_bottleneck_examples():
@@ -1085,12 +1091,13 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             self.verify_coalescence_records(ts)
 
-    @unittest.skip("Implement TableCollection.compute_mutation_parents")
     def test_compute_mutation_parent(self):
         for ts in get_example_tree_sequences():
-            computed_parent = ts.compute_mutation_parents()
+            tables = ts.dump_tables()
+            before = tables.mutations.parent[:]
+            tables.compute_mutation_parents()
             parent = ts.tables.mutations.parent
-            self.assertTrue(np.array_equal(parent, computed_parent))
+            self.assertTrue(np.array_equal(parent, before))
 
     def verify_tracked_samples(self, ts):
         # Should be empty list by default.
@@ -1240,16 +1247,58 @@ class TestTreeSequence(HighLevelTestCase):
                     ts.get_pairwise_diversity(samples[:2]),
                     ts.get_pairwise_diversity(reversed(samples[:2])))
 
+    def test_populations(self):
+        more_than_zero = False
+        for ts in get_example_tree_sequences():
+            N = ts.num_populations
+            if N > 0:
+                more_than_zero = True
+            pops = list(ts.populations())
+            self.assertEqual(len(pops), N)
+            for j in range(N):
+                self.assertEqual(pops[j], ts.population(j))
+                self.assertEqual(pops[j].id, j)
+                self.assertTrue(isinstance(pops[j].metadata, bytes))
+        self.assertTrue(more_than_zero)
+
+    def test_individuals(self):
+        more_than_zero = False
+        mapped_to_nodes = False
+        for ts in get_example_tree_sequences():
+            ind_node_map = collections.defaultdict(list)
+            for node in ts.nodes():
+                if node.individual != msprime.NULL_INDIVIDUAL:
+                    ind_node_map[node.individual].append(node.id)
+            if len(ind_node_map) > 0:
+                mapped_to_nodes = True
+            N = ts.num_individuals
+            if N > 0:
+                more_than_zero = True
+            inds = list(ts.individuals())
+            self.assertEqual(len(inds), N)
+            for j in range(N):
+                self.assertEqual(inds[j], ts.individual(j))
+                self.assertEqual(inds[j].id, j)
+                self.assertTrue(isinstance(inds[j].metadata, bytes))
+                self.assertTrue(isinstance(inds[j].location, np.ndarray))
+                self.assertTrue(isinstance(inds[j].nodes, np.ndarray))
+                self.assertEqual(ind_node_map[j], list(inds[j].nodes))
+
+        self.assertTrue(more_than_zero)
+        self.assertTrue(mapped_to_nodes)
+
     def test_get_population(self):
+        # Deprecated interface for ts.node(id).population
         for ts in get_example_tree_sequences():
             N = ts.get_num_nodes()
             self.assertRaises(ValueError, ts.get_population, -1)
             self.assertRaises(ValueError, ts.get_population, N)
             self.assertRaises(ValueError, ts.get_population, N + 1)
-            self.assertEqual(ts.get_population(0), 0)
-            self.assertEqual(ts.get_population(N - 1), 0)
+            for node in [0, N - 1]:
+                self.assertEqual(ts.get_population(node), ts.node(node).population)
 
     def test_get_time(self):
+        # Deprecated interface for ts.node(id).time
         for ts in get_example_tree_sequences():
             N = ts.get_num_nodes()
             self.assertRaises(ValueError, ts.get_time, -1)
@@ -1340,11 +1389,13 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(s1.num_samples,  len(sample))
             self.assertEqual(s2.num_samples,  len(sample))
             self.assertTrue(all(node_map1 == node_map2))
-            self.assertEqual(t1.nodes, t2.nodes)
+            self.assertEqual(t1.individuals, t2.individuals)
+            # self.assertEqual(t1.nodes, t2.nodes)
             self.assertEqual(t1.edges, t2.edges)
             self.assertEqual(t1.migrations, t2.migrations)
             self.assertEqual(t1.sites, t2.sites)
             self.assertEqual(t1.mutations, t2.mutations)
+            self.assertEqual(t1.populations, t2.populations)
 
     def verify_simplify_variants(self, ts, sample):
         subset = ts.simplify(sample)
@@ -1418,18 +1469,15 @@ class TestTreeSequence(HighLevelTestCase):
     def test_generate_mutations_on_tree_sequence(self):
         some_mutations = False
         for ts in get_example_tree_sequences():
-            nodes = msprime.NodeTable()
-            edges = msprime.EdgeTable()
-            sites = msprime.SiteTable()
-            mutations = msprime.MutationTable()
-            ts.dump_tables(nodes=nodes, edges=edges)
+            tables = ts.dump_tables()
             mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
-            mutgen.generate(nodes, edges, sites, mutations)
-            if mutations.num_rows > 0:
+            mutgen.generate(
+                tables.nodes.ll_table, tables.edges.ll_table,
+                tables.sites.ll_table, tables.mutations.ll_table)
+            if tables.mutations.num_rows > 0:
                 some_mutations = True
-            tsp = msprime.load_tables(
-                nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-            self.assertEqual(tsp.num_mutations, mutations.num_rows)
+            tsp = msprime.load_tables(**tables.asdict())
+            self.assertEqual(tsp.num_mutations, tables.mutations.num_rows)
         self.assertTrue(some_mutations)
 
     def test_sites(self):
@@ -1523,14 +1571,15 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(len(output_nodes) - 1, ts.num_nodes)
         self.assertEqual(
             list(output_nodes[0].split()),
-            ["id", "is_sample", "time", "population", "metadata"])
+            ["id", "is_sample", "time", "population", "individual", "metadata"])
         for node, line in zip(ts.nodes(), output_nodes[1:]):
             splits = line.split("\t")
             self.assertEqual(str(node.id), splits[0])
             self.assertEqual(str(node.is_sample()), splits[1])
             self.assertEqual(convert(node.time), splits[2])
             self.assertEqual(str(node.population), splits[3])
-            self.assertEqual(tests.base64_encode(node.metadata), splits[4])
+            self.assertEqual(str(node.individual), splits[4])
+            self.assertEqual(tests.base64_encode(node.metadata), splits[5])
 
     def verify_edges_format(self, ts, edges_file, precision):
         """
@@ -1657,6 +1706,13 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             edges_file = six.StringIO()
             sites_file = six.StringIO()
             mutations_file = six.StringIO()
+            # FIXME Dropping the individuals references because we don't have
+            # text APIs for them yet.
+            tables = ts1.dump_tables()
+            tables.nodes.individual = np.full_like(
+                tables.nodes.individual, msprime.NULL_INDIVIDUAL)
+            ts1 = msprime.load_tables(
+                sequence_length=ts1.sequence_length, **tables.asdict())
             ts1.dump_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
                 mutations=mutations_file, precision=16)

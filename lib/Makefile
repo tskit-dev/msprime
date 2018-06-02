@@ -1,6 +1,5 @@
 CC=gcc
 EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
-  -Wno-unused-parameter\
   -Wmissing-prototypes -Wstrict-prototypes \
   -Wconversion -Wshadow -Wpointer-arith \
   -Wcast-align -Wcast-qual \

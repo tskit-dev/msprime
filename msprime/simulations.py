@@ -326,11 +326,9 @@ class Simulator(object):
         self.demographic_events = []
         self.model_change_events = []
         self.store_migrations = False
-        # Set default block sizes to 64K objects.
-        # TODO does this give good performance in a range of scenarios?
-        block_size = 64 * 1024
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
+        block_size = 64 * 1024
         self.segment_block_size = max(block_size, self.sample_size)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
@@ -340,12 +338,7 @@ class Simulator(object):
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self.max_memory = sys.maxsize
-        self.node_table = tables.NodeTable(block_size)
-        self.edge_table = tables.EdgeTable(block_size)
-        self.migration_table = tables.MigrationTable(block_size)
-        self.site_table = tables.SiteTable()
-        self.mutation_table = tables.MutationTable(block_size)
-        self.provenance_table = tables.ProvenanceTable()
+        self.tables = tables.TableCollection()
 
     @property
     def num_loci(self):
@@ -568,19 +561,22 @@ class Simulator(object):
         Returns a TreeSequence representing the state of the simulation.
         """
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
+        t = self.tables
         self.ll_sim.populate_tables(
-            self.node_table, self.edge_table, self.migration_table,
-            recombination_map=ll_recomb_map)
+            t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
+            t.populations.ll_table, recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(
-                self.node_table, self.edge_table, self.site_table, self.mutation_table)
-        self.provenance_table.reset()
+                t.nodes.ll_table, t.edges.ll_table, t.sites.ll_table,
+                t.mutations.ll_table)
+        t.provenances.reset()
         if provenance_record is not None:
-            self.provenance_table.add_row(provenance_record)
+            t.provenances.add_row(provenance_record)
         ll_tree_sequence = _msprime.TreeSequence()
         ll_tree_sequence.load_tables(
-            self.node_table, self.edge_table, self.migration_table,
-            self.site_table, self.mutation_table, self.provenance_table)
+            t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
+            t.sites.ll_table, t.mutations.ll_table, t.provenances.ll_table,
+            populations=t.populations.ll_table)
         return trees.TreeSequence(ll_tree_sequence)
 
     def reset(self):

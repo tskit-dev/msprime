@@ -730,7 +730,7 @@ out:
 }
 
 static void
-msp_print_segment_chain(msp_t *self, segment_t *head, FILE *out)
+msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 {
     segment_t *s = head;
 
@@ -1203,6 +1203,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     node->flags = flags;
     node->population = population_id;
     node->time = scaled_time;
+    node->individual = MSP_NULL_INDIVIDUAL;
     node->metadata = NULL;
     node->metadata_length = 0;
     self->num_nodes++;
@@ -2465,7 +2466,8 @@ out:
 
 int WARN_UNUSED
 msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
-        edge_table_t *edges, migration_table_t *migrations)
+        edge_table_t *edges, migration_table_t *migrations,
+        population_table_t *populations)
 {
     int ret = 0;
     size_t j;
@@ -2482,7 +2484,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
         ret = node_table_add_row(nodes, node->flags, node->time, node->population,
-                NULL, 0);
+                node->individual, NULL, 0);
         if (ret < 0) {
             goto out;
         }
@@ -2522,6 +2524,18 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
         }
         ret = migration_table_add_row(migrations, left, right, migration->node,
                 migration->source, migration->dest, migration->time);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    /* Add the populations. We don't have any metadata here. Users can add
+     * metadata to the table if they wish. */
+    ret = population_table_clear(populations);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < self->num_populations; j++) {
+        ret = population_table_add_row(populations, NULL, 0);
         if (ret < 0) {
             goto out;
         }
@@ -2683,6 +2697,7 @@ msp_get_num_migrations(msp_t *self)
 {
     return self->num_migrations;
 }
+
 
 int WARN_UNUSED
 msp_get_ancestors(msp_t *self, segment_t **ancestors)
@@ -2906,7 +2921,7 @@ out:
 }
 
 static void
-msp_print_population_parameters_change(msp_t *self,
+msp_print_population_parameters_change(msp_t * MSP_UNUSED(self),
         demographic_event_t *event, FILE *out)
 {
     fprintf(out,
@@ -3008,7 +3023,7 @@ out:
 }
 
 static void
-msp_print_migration_rate_change(msp_t *self,
+msp_print_migration_rate_change(msp_t * MSP_UNUSED(self),
         demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tmigration_rate_change: %d -> %f\n",
@@ -3091,7 +3106,7 @@ out:
 }
 
 static void
-msp_print_mass_migration(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_mass_migration(msp_t * MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tmass_migration: %d -> %d p = %f\n",
             event->time,
@@ -3184,7 +3199,7 @@ out:
 }
 
 static void
-msp_print_simple_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_simple_bottleneck(msp_t * MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tsimple_bottleneck: %d I = %f\n",
             event->time,
@@ -3358,7 +3373,8 @@ out:
 }
 
 static void
-msp_print_instantaneous_bottleneck(msp_t *self, demographic_event_t *event, FILE *out)
+msp_print_instantaneous_bottleneck(msp_t *MSP_UNUSED(self),
+        demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tinstantaneous_bottleneck: %d T2 = %f\n",
             event->time,
@@ -3754,25 +3770,25 @@ out:
  * TODO provide background and documentation.
  **************************************************************/
 static double
-dtwf_model_time_to_generations(simulation_model_t *model, double t)
+dtwf_model_time_to_generations(simulation_model_t *MSP_UNUSED(model), double t)
 {
     return t;
 }
 
 static double
-dtwf_generations_to_model_time(simulation_model_t *model, double g)
+dtwf_generations_to_model_time(simulation_model_t *MSP_UNUSED(model), double g)
 {
     return g;
 }
 
 static double
-dtwf_generation_rate_to_model_rate(simulation_model_t *model, double rate)
+dtwf_generation_rate_to_model_rate(simulation_model_t *MSP_UNUSED(model), double rate)
 {
     return rate;
 }
 
 static double
-dtwf_model_rate_to_generation_rate(simulation_model_t *model, double rate)
+dtwf_model_rate_to_generation_rate(simulation_model_t *MSP_UNUSED(model), double rate)
 {
     return rate;
 }

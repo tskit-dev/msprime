@@ -82,11 +82,35 @@ tree_sequence_print_state(tree_sequence_t *self, FILE *out)
         }
         fprintf(out, "\n");
     }
+    fprintf(out, "populations (%d)\n", (int) self->populations.num_records);
+    for (j = 0; j < self->populations.num_records; j++) {
+        fprintf(out, "\t%d\t", (int) j);
+        for (k = self->populations.metadata_offset[j];
+                k < self->populations.metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->populations.metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
+    fprintf(out, "individuals (%d)\n", (int) self->individuals.num_records);
+    for (j = 0; j < self->individuals.num_records; j++) {
+        fprintf(out, "\t%d\t%d\t", (int) j, self->individuals.flags[j]);
+        for (k = self->individuals.location_offset[j];
+                k < self->individuals.location_offset[j + 1]; k++) {
+            fprintf(out, "%f,", self->individuals.location[k]);
+        }
+        fprintf(out, "\t");
+        for (k = self->individuals.metadata_offset[j];
+                k < self->individuals.metadata_offset[j + 1]; k++) {
+            fprintf(out, "%c", self->individuals.metadata[k]);
+        }
+        fprintf(out, "\n");
+    }
     fprintf(out, "nodes (%d)\n", (int) self->nodes.num_records);
     for (j = 0; j < self->nodes.num_records; j++) {
-        fprintf(out, "\t%d\t%d\t%d\t%f\t%d\t", (int) j,
+        fprintf(out, "\t%d\t%d\t%d\t%d\t%f\t%d\t", (int) j,
                 self->nodes.flags[j],
                 (int) self->nodes.population[j],
+                (int) self->nodes.individual[j],
                 self->nodes.time[j],
                 self->nodes.sample_index_map[j]);
         for (k = self->nodes.metadata_offset[j]; k < self->nodes.metadata_offset[j + 1]; k++) {
@@ -194,6 +218,9 @@ tree_sequence_free(tree_sequence_t *self)
     msp_safe_free(self->sites.site_mutations_mem);
     msp_safe_free(self->sites.site_mutations_length);
     msp_safe_free(self->sites.site_mutations);
+    msp_safe_free(self->individuals.individual_nodes_mem);
+    msp_safe_free(self->individuals.individual_nodes_length);
+    msp_safe_free(self->individuals.individual_nodes);
     return 0;
 }
 
@@ -406,6 +433,73 @@ out:
     return ret;
 }
 
+static int
+tree_sequence_init_individuals(tree_sequence_t *self)
+{
+    int ret = 0;
+    individual_id_t j;
+    node_id_t k;
+    table_size_t offset = 0;
+    table_size_t total_nodes = 0;
+    table_size_t *num_nodes;
+    node_id_t *node_array;
+    size_t num_inds = self->individuals.num_records;
+
+    // First find number of nodes per individual
+    // TODO: if nodes for each individual were contiguous
+    // this would require just one pass, not two
+    self->individuals.individual_nodes_length = calloc(
+            MSP_MAX(1, num_inds), sizeof(table_size_t));
+    num_nodes = calloc(MSP_MAX(1, num_inds), sizeof(size_t));
+    if (self->individuals.individual_nodes_length == NULL
+            || num_nodes == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    for (k = 0; k < (node_id_t) self->nodes.num_records; k++) {
+        j = self->nodes.individual[k];
+        if (j != MSP_NULL_INDIVIDUAL) {
+            if (j >= (individual_id_t) num_inds) {
+                ret = MSP_ERR_BAD_INDIVIDUAL;
+                goto out;
+            }
+            self->individuals.individual_nodes_length[j] += 1;
+        }
+        total_nodes++;
+    }
+
+    // now fill in the node IDs
+    self->individuals.individual_nodes_mem = malloc(
+            MSP_MAX(total_nodes, 1) * sizeof(node_id_t));
+    self->individuals.individual_nodes = malloc(
+            MSP_MAX(1, num_inds) * sizeof(node_id_t *));
+    if (self->individuals.individual_nodes_mem == NULL
+            || self->individuals.individual_nodes == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    for (j = 0; j < (individual_id_t) num_inds; j++) {
+        self->individuals.individual_nodes[j] = self->individuals.individual_nodes_mem + offset;
+        offset += self->individuals.individual_nodes_length[j];
+    }
+
+    for (k = 0; k < (node_id_t) self->nodes.num_records; k++) {
+        j = self->nodes.individual[k];
+        if (j != MSP_NULL_INDIVIDUAL) {
+            node_array = self->individuals.individual_nodes[j];
+            assert(node_array - self->individuals.individual_nodes_mem
+                    < total_nodes - num_nodes[j]);
+            node_array[num_nodes[j]] = k;
+            num_nodes[j] += 1;
+        }
+    }
+out:
+    msp_safe_free(num_nodes);
+    return ret;
+}
+
 /* Initialises memory associated with the trees.
  */
 static int
@@ -559,9 +653,9 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     self->sequence_length = tables->sequence_length;
     if (tables->sequence_length == 0) {
         /* Infer the sequence_length as the maximum right value in the edges */
-        for (j = 0; j < tables->edges.num_rows; j++) {
+        for (j = 0; j < tables->edges->num_rows; j++) {
             self->sequence_length = MSP_MAX(self->sequence_length,
-                    tables->edges.right[j]);
+                    tables->edges->right[j]);
         }
     }
     if (self->sequence_length <= 0) {
@@ -571,56 +665,72 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     /* TODO It's messy having two copyies of this value. Should be in one place. */
     self->tables->sequence_length = self->sequence_length;
 
-    self->nodes.num_records = self->tables->nodes.num_rows;
-    self->nodes.flags = self->tables->nodes.flags;
-    self->nodes.time = self->tables->nodes.time;
-    self->nodes.population = self->tables->nodes.population;
-    self->nodes.metadata = self->tables->nodes.metadata;
-    self->nodes.metadata_offset = self->tables->nodes.metadata_offset;
+    self->individuals.num_records = self->tables->individuals->num_rows;
+    self->individuals.flags = self->tables->individuals->flags;
+    self->individuals.location = self->tables->individuals->location;
+    self->individuals.location_offset = self->tables->individuals->location_offset;
+    self->individuals.metadata = self->tables->individuals->metadata;
+    self->individuals.metadata_offset = self->tables->individuals->metadata_offset;
 
-    self->edges.num_records = self->tables->edges.num_rows;
-    self->edges.left = self->tables->edges.left;
-    self->edges.right = self->tables->edges.right;
-    self->edges.parent = self->tables->edges.parent;
-    self->edges.child = self->tables->edges.child;
+    self->nodes.num_records = self->tables->nodes->num_rows;
+    self->nodes.flags = self->tables->nodes->flags;
+    self->nodes.time = self->tables->nodes->time;
+    self->nodes.population = self->tables->nodes->population;
+    self->nodes.individual = self->tables->nodes->individual;
+    self->nodes.metadata = self->tables->nodes->metadata;
+    self->nodes.metadata_offset = self->tables->nodes->metadata_offset;
+
+    self->edges.num_records = self->tables->edges->num_rows;
+    self->edges.left = self->tables->edges->left;
+    self->edges.right = self->tables->edges->right;
+    self->edges.parent = self->tables->edges->parent;
+    self->edges.child = self->tables->edges->child;
     self->edges.indexes.removal_order = self->tables->indexes.edge_removal_order;
     self->edges.indexes.insertion_order = self->tables->indexes.edge_insertion_order;
 
-    self->sites.num_records = self->tables->sites.num_rows;
-    self->sites.position = self->tables->sites.position;
-    self->sites.ancestral_state = self->tables->sites.ancestral_state;
-    self->sites.ancestral_state_offset = self->tables->sites.ancestral_state_offset;
-    self->sites.metadata = self->tables->sites.metadata;
-    self->sites.metadata_offset = self->tables->sites.metadata_offset;
+    self->migrations.num_records = self->tables->migrations->num_rows;
+    self->migrations.left = self->tables->migrations->left;
+    self->migrations.right = self->tables->migrations->right;
+    self->migrations.node = self->tables->migrations->node;
+    self->migrations.source = self->tables->migrations->source;
+    self->migrations.dest = self->tables->migrations->dest;
+    self->migrations.time = self->tables->migrations->time;
 
-    self->mutations.num_records = self->tables->mutations.num_rows;
-    self->mutations.site = self->tables->mutations.site;
-    self->mutations.node = self->tables->mutations.node;
-    self->mutations.parent = self->tables->mutations.parent;
-    self->mutations.derived_state = self->tables->mutations.derived_state;
-    self->mutations.derived_state_offset = self->tables->mutations.derived_state_offset;
-    self->mutations.metadata = self->tables->mutations.metadata;
-    self->mutations.metadata_offset = self->tables->mutations.metadata_offset;
+    self->sites.num_records = self->tables->sites->num_rows;
+    self->sites.position = self->tables->sites->position;
+    self->sites.ancestral_state = self->tables->sites->ancestral_state;
+    self->sites.ancestral_state_offset = self->tables->sites->ancestral_state_offset;
+    self->sites.metadata = self->tables->sites->metadata;
+    self->sites.metadata_offset = self->tables->sites->metadata_offset;
 
-    self->migrations.num_records = self->tables->migrations.num_rows;
-    self->migrations.left = self->tables->migrations.left;
-    self->migrations.right = self->tables->migrations.right;
-    self->migrations.node = self->tables->migrations.node;
-    self->migrations.source = self->tables->migrations.source;
-    self->migrations.dest = self->tables->migrations.dest;
-    self->migrations.time = self->tables->migrations.time;
+    self->mutations.num_records = self->tables->mutations->num_rows;
+    self->mutations.site = self->tables->mutations->site;
+    self->mutations.node = self->tables->mutations->node;
+    self->mutations.parent = self->tables->mutations->parent;
+    self->mutations.derived_state = self->tables->mutations->derived_state;
+    self->mutations.derived_state_offset = self->tables->mutations->derived_state_offset;
+    self->mutations.metadata = self->tables->mutations->metadata;
+    self->mutations.metadata_offset = self->tables->mutations->metadata_offset;
 
-    self->provenances.num_records = self->tables->provenances.num_rows;
-    self->provenances.timestamp = self->tables->provenances.timestamp;
-    self->provenances.timestamp_offset = self->tables->provenances.timestamp_offset;
-    self->provenances.record = self->tables->provenances.record;
-    self->provenances.record_offset = self->tables->provenances.record_offset;
+    self->populations.num_records = self->tables->populations->num_rows;
+    self->populations.metadata = self->tables->populations->metadata;
+    self->populations.metadata_offset = self->tables->populations->metadata_offset;
+
+    self->provenances.num_records = self->tables->provenances->num_rows;
+    self->provenances.timestamp = self->tables->provenances->timestamp;
+    self->provenances.timestamp_offset = self->tables->provenances->timestamp_offset;
+    self->provenances.record = self->tables->provenances->record;
+    self->provenances.record_offset = self->tables->provenances->record_offset;
 
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
     }
     ret = tree_sequence_init_sites(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tree_sequence_init_individuals(self);
     if (ret != 0) {
         goto out;
     }
@@ -734,6 +844,18 @@ tree_sequence_get_num_mutations(tree_sequence_t *self)
 }
 
 size_t
+tree_sequence_get_num_populations(tree_sequence_t *self)
+{
+    return self->populations.num_records;
+}
+
+size_t
+tree_sequence_get_num_individuals(tree_sequence_t *self)
+{
+    return self->individuals.num_records;
+}
+
+size_t
 tree_sequence_get_num_provenances(tree_sequence_t *self)
 {
     return self->provenances.num_records;
@@ -829,6 +951,7 @@ tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node)
     }
     node->time = self->nodes.time[index];
     node->population = self->nodes.population[index];
+    node->individual = self->nodes.individual[index];
     node->flags = self->nodes.flags[index];
     offset = self->nodes.metadata_offset[index];
     length = self->nodes.metadata_offset[index + 1] - offset;
@@ -923,6 +1046,52 @@ tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
     record->position = self->sites.position[id];
     record->mutations = self->sites.site_mutations[id];
     record->mutations_length = self->sites.site_mutations_length[id];
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_individual(tree_sequence_t *self, size_t index, individual_t *individual)
+{
+    int ret = 0;
+    table_size_t offset, length;
+
+    if (index >= self->individuals.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    individual->id = (individual_id_t) index;
+    individual->flags = self->individuals.flags[index];
+    offset = self->individuals.location_offset[index];
+    length = self->individuals.location_offset[index + 1] - offset;
+    individual->location = self->individuals.location + offset;
+    individual->location_length = length;
+    offset = self->individuals.metadata_offset[index];
+    length = self->individuals.metadata_offset[index + 1] - offset;
+    individual->metadata = self->individuals.metadata + offset;
+    individual->metadata_length = length;
+    individual->nodes = self->individuals.individual_nodes[index];
+    individual->nodes_length = self->individuals.individual_nodes_length[index];
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_get_population(tree_sequence_t *self, size_t index,
+        tmp_population_t *population)
+{
+    int ret = 0;
+    table_size_t offset, length;
+
+    if (index >= self->populations.num_records) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    population->id = (table_size_t) index;
+    offset = self->populations.metadata_offset[index];
+    length = self->populations.metadata_offset[index + 1] - offset;
+    population->metadata = self->populations.metadata + offset;
+    population->metadata_length = length;
 out:
     return ret;
 }

@@ -159,6 +159,30 @@ def insert_multichar_mutations(ts, seed=1, max_len=10):
         provenances=tables.provenances)
 
 
+def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
+    """
+    Takes random contiguous subsets of the samples an assigns them to individuals.
+    Also creates random locations in variable dimensions in the unit interval.
+    """
+    rng = random.Random(seed)
+    samples = np.array(ts.samples(), dtype=int)
+    j = 0
+    tables = ts.dump_tables()
+    tables.individuals.clear()
+    individual = tables.nodes.individual[:]
+    individual[:] = msprime.NULL_INDIVIDUAL
+    while j < len(samples):
+        ploidy = rng.randint(0, max_ploidy)
+        nodes = samples[j: min(j + ploidy, len(samples))]
+        dimension = rng.randint(0, max_dimension)
+        location = [rng.random() for _ in range(dimension)]
+        ind_id = tables.individuals.add_row(location=location)
+        individual[nodes] = ind_id
+        j += ploidy
+    tables.nodes.individual = individual
+    return msprime.load_tables(**tables.asdict())
+
+
 def permute_nodes(ts, node_map):
     """
     Returns a copy of the specified tree sequence such that the nodes are
@@ -261,7 +285,8 @@ def add_random_metadata(ts, seed=1, max_length=10):
     nodes = tables.nodes
     nodes.set_columns(
         flags=nodes.flags, population=nodes.population, time=nodes.time,
-        metadata_offset=offset, metadata=metadata)
+        metadata_offset=offset, metadata=metadata,
+        individual=nodes.individual)
 
     length = np.random.randint(0, max_length, ts.num_sites)
     offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
@@ -284,10 +309,25 @@ def add_random_metadata(ts, seed=1, max_length=10):
         derived_state=mutations.derived_state,
         derived_state_offset=mutations.derived_state_offset,
         metadata_offset=offset, metadata=metadata)
+
+    length = np.random.randint(0, max_length, ts.num_individuals)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    individuals = tables.individuals
+    individuals.set_columns(
+        flags=individuals.flags,
+        location=individuals.location,
+        location_offset=individuals.location_offset,
+        metadata_offset=offset, metadata=metadata)
+
+    length = np.random.randint(0, max_length, ts.num_populations)
+    offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
+    metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
+    populations = tables.populations
+    populations.set_columns(metadata_offset=offset, metadata=metadata)
+
     add_provenance(tables.provenances, "add_random_metadata")
-    ts = msprime.load_tables(
-        nodes=nodes, edges=tables.edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances, migrations=tables.migrations)
+    ts = msprime.load_tables(**tables.asdict())
     return ts
 
 
@@ -306,8 +346,7 @@ def jiggle_samples(ts):
     flags[oldest_parent - n // 2: oldest_parent] = 1
     nodes.set_columns(flags, nodes.time)
     add_provenance(tables.provenances, "jiggle_samples")
-    return msprime.load_tables(
-        nodes=nodes, edges=tables.edges, provenances=tables.provenances)
+    return msprime.load_tables(**tables.asdict())
 
 
 def generate_site_mutations(tree, position, mu, site_table, mutation_table,
@@ -354,20 +393,18 @@ def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
     random.seed(seed)
     positions = [ts.sequence_length * random.random() for _ in range(num_sites)]
     positions.sort()
-    sites = msprime.SiteTable(num_sites)
-    mutations = msprime.MutationTable(num_sites)
+    tables = ts.dump_tables()
+    tables.sites.clear()
+    tables.mutations.clear()
     trees = ts.trees()
     t = next(trees)
     for position in positions:
         while position >= t.interval[1]:
             t = next(trees)
-        generate_site_mutations(t, position, mu, sites, mutations,
+        generate_site_mutations(t, position, mu, tables.sites, tables.mutations,
                                 multiple_per_node=multiple_per_node)
-    tables = ts.dump_tables()
     add_provenance(tables.provenances, "jukes_cantor")
-    new_ts = msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances)
+    new_ts = msprime.load_tables(**tables.asdict())
     return new_ts
 
 

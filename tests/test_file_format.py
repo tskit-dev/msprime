@@ -25,6 +25,7 @@ from __future__ import division
 import os
 import tempfile
 import unittest
+import uuid as _uuid
 
 import h5py
 import kastore
@@ -35,7 +36,7 @@ import msprime.exceptions as exceptions
 import tests.tsutil as tsutil
 
 
-CURRENT_FILE_MAJOR = 11
+CURRENT_FILE_MAJOR = 12
 
 
 def single_locus_no_mutation_example():
@@ -59,17 +60,14 @@ def recurrent_mutation_example():
 
 def general_mutation_example():
     ts = msprime.simulate(10, recombination_rate=1, length=10, random_seed=2)
-    nodes = msprime.NodeTable()
-    edges = msprime.EdgeTable()
-    ts.dump_tables(nodes=nodes, edges=edges)
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
-    sites.add_row(position=0, ancestral_state="A", metadata=b"{}")
-    sites.add_row(position=1, ancestral_state="C", metadata=b"{'id':1}")
-    mutations.add_row(site=0, node=0, derived_state="T")
-    mutations.add_row(site=1, node=0, derived_state="G")
+    tables = ts.dump_tables()
+    tables.sites.add_row(position=0, ancestral_state="A", metadata=b"{}")
+    tables.sites.add_row(position=1, ancestral_state="C", metadata=b"{'id':1}")
+    tables.mutations.add_row(site=0, node=0, derived_state="T")
+    tables.mutations.add_row(site=1, node=0, derived_state="G")
     return msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+        nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
+        mutations=tables.mutations)
 
 
 def multichar_mutation_example():
@@ -132,15 +130,14 @@ def provenance_timestamp_only_example():
 def node_metadata_example():
     ts = msprime.simulate(
         sample_size=100, recombination_rate=0.1, length=10, random_seed=1)
-    nodes = msprime.NodeTable()
-    edges = msprime.EdgeTable()
-    ts.dump_tables(nodes=nodes, edges=edges)
+    tables = ts.dump_tables()
     new_nodes = msprime.NodeTable()
     metadatas = ["n_{}".format(u) for u in range(ts.num_nodes)]
     packed, offset = msprime.pack_strings(metadatas)
     new_nodes.set_columns(
-        metadata=packed, metadata_offset=offset, flags=nodes.flags, time=nodes.time)
-    return msprime.load_tables(nodes=new_nodes, edges=edges)
+        metadata=packed, metadata_offset=offset,
+        flags=tables.nodes.flags, time=tables.nodes.time)
+    return msprime.load_tables(nodes=new_nodes, edges=tables.edges)
 
 
 def site_metadata_example():
@@ -389,25 +386,69 @@ class TestDumpFormat(TestFileFormat):
     """
     Tests on the on-disk file format.
     """
+    def verify_keys(self, ts):
+        keys = [
+           "edges/child",
+           "edges/left",
+           "edges/parent",
+           "edges/right",
+           "format/name",
+           "format/version",
+           "indexes/edge_insertion_order",
+           "indexes/edge_removal_order",
+           "individuals/flags",
+           "individuals/location",
+           "individuals/location_offset",
+           "individuals/metadata",
+           "individuals/metadata_offset",
+           "migrations/dest",
+           "migrations/left",
+           "migrations/node",
+           "migrations/right",
+           "migrations/source",
+           "migrations/time",
+           "mutations/derived_state",
+           "mutations/derived_state_offset",
+           "mutations/metadata",
+           "mutations/metadata_offset",
+           "mutations/node",
+           "mutations/parent",
+           "mutations/site",
+           "nodes/flags",
+           "nodes/individual",
+           "nodes/metadata",
+           "nodes/metadata_offset",
+           "nodes/population",
+           "nodes/time",
+           "populations/metadata",
+           "populations/metadata_offset",
+           "provenances/record",
+           "provenances/record_offset",
+           "provenances/timestamp",
+           "provenances/timestamp_offset",
+           "sequence_length",
+           "sites/ancestral_state",
+           "sites/ancestral_state_offset",
+           "sites/metadata",
+           "sites/metadata_offset",
+           "sites/position",
+           "uuid",
+        ]
+        ts.dump(self.temp_file)
+        store = kastore.load(self.temp_file)
+        self.assertEqual(sorted(list(store.keys())), keys)
 
-    def verify_metadata(self, group, num_rows):
-
-        self.assertEqual(group["metadata_offset"].dtype, np.uint32)
-        metadata_offset = list(group["metadata_offset"])
-        metadata_length = 0
-        if metadata_offset[-1] > 0:
-            self.assertEqual(group["metadata"].dtype, np.int8)
-            metadata = list(group["metadata"])
-            metadata_length = len(metadata)
-            self.assertEqual(metadata_offset[-1], metadata_length)
-        else:
-            self.assertNotIn("metadata", group)
-        self.assertEqual(len(metadata_offset), num_rows + 1)
+    def verify_uuid(self, uuid):
+        self.assertEqual(len(uuid), 36)
+        # Check that the UUID is well-formed.
+        parsed = _uuid.UUID("{" + uuid + "}")
+        self.assertEqual(str(parsed), uuid)
 
     def verify_dump_format(self, ts):
         ts.dump(self.temp_file)
         self.assertTrue(os.path.exists(self.temp_file))
         self.assertGreater(os.path.getsize(self.temp_file), 0)
+        self.verify_keys(ts)
         store = kastore.load(self.temp_file, use_mmap=False)
         # Check the basic root attributes
         format_name = store['format/name']
@@ -417,12 +458,27 @@ class TestDumpFormat(TestFileFormat):
         self.assertEqual(format_version[0], CURRENT_FILE_MAJOR)
         self.assertEqual(format_version[1], 0)
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
+        self.verify_uuid(store["uuid"].tobytes().decode())
 
         tables = ts.tables
+
+        self.assertTrue(np.array_equal(
+            tables.individuals.flags, store["individuals/flags"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.location, store["individuals/location"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.location_offset, store["individuals/location_offset"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.metadata, store["individuals/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.individuals.metadata_offset, store["individuals/metadata_offset"]))
+
         self.assertTrue(np.array_equal(tables.nodes.flags, store["nodes/flags"]))
         self.assertTrue(np.array_equal(tables.nodes.time, store["nodes/time"]))
         self.assertTrue(np.array_equal(
             tables.nodes.population, store["nodes/population"]))
+        self.assertTrue(np.array_equal(
+            tables.nodes.individual, store["nodes/individual"]))
         self.assertTrue(np.array_equal(
             tables.nodes.metadata, store["nodes/metadata"]))
         self.assertTrue(np.array_equal(
@@ -485,6 +541,11 @@ class TestDumpFormat(TestFileFormat):
             tables.mutations.metadata, store["mutations/metadata"]))
         self.assertTrue(np.array_equal(
             tables.mutations.metadata_offset, store["mutations/metadata_offset"]))
+
+        self.assertTrue(np.array_equal(
+            tables.populations.metadata, store["populations/metadata"]))
+        self.assertTrue(np.array_equal(
+            tables.populations.metadata_offset, store["populations/metadata_offset"]))
 
         self.assertTrue(np.array_equal(
             tables.provenances.record, store["provenances/record"]))
