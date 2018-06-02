@@ -531,6 +531,7 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(list(ts.samples()), [0, 1])
         self.assertEqual(list(ts.samples(0)), [0])
         self.assertEqual(list(ts.samples(1)), [1])
+        self.assertEqual(ts.num_populations, 3)
 
     def test_two_pops_multiple_samples(self):
         # Made absolutely sure that all samples have coalesced within
@@ -566,6 +567,7 @@ class TestCoalescenceLocations(unittest.TestCase):
             ts.samples(1), np.arange(n // 2, n, dtype=np.int32)))
         self.assertTrue(np.array_equal(
             ts.samples(2), np.array([], dtype=np.int32)))
+        self.assertEqual(ts.num_populations, 3)
 
         # self.assertEqual(ts.samples(0), list(range(n // 2)))
         # self.assertEqual(ts.samples(1), list(range(n // 2, n)))
@@ -695,6 +697,7 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(tree.population(u), 3)
         g = tree.time(u) * 4
         self.assertGreater(g, t3)
+        self.assertEqual(ts.num_populations, 4)
 
     def test_migration_rate_directionality(self):
         population_configurations = [
@@ -777,6 +780,7 @@ class TestCoalescenceLocations(unittest.TestCase):
                 tree.get_parent(u) for u in ts.samples(population=pop)]
             for v in parents:
                 self.assertEqual(tree.population(v), pop)
+        self.assertEqual(ts.num_populations, 3)
 
 
 class TestMigrationRecords(unittest.TestCase):

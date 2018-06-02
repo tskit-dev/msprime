@@ -112,11 +112,20 @@ class Simplifier(object):
         self.input_sites = list(ts.sites())
         self.A_head = [None for _ in range(ts.num_nodes)]
         self.A_tail = [None for _ in range(ts.num_nodes)]
-        self.mutation_table = msprime.MutationTable(ts.num_mutations)
-        self.node_table = msprime.NodeTable(ts.num_nodes)
-        self.edge_table = msprime.EdgeTable(ts.num_edges)
-        self.site_table = msprime.SiteTable(ts.num_sites)
-        self.mutation_table = msprime.MutationTable(ts.num_mutations)
+        self.tables = msprime.TableCollection(sequence_length=ts.sequence_length)
+        # We don't touch populations, so add them straigtht in.
+        t = ts.tables
+        self.tables.populations.set_columns(
+            metadata=t.populations.metadata,
+            metadata_offset=t.populations.metadata_offset)
+        # For now we don't remove individuals that have no nodes referring to
+        # them, so we can just copy the table.
+        self.tables.individuals.set_columns(
+            flags=t.individuals.flags,
+            location=t.individuals.location,
+            location_offset=t.individuals.location_offset,
+            metadata=t.individuals.metadata,
+            metadata_offset=t.individuals.metadata_offset)
         self.edge_buffer = {}
         self.node_id_map = np.zeros(ts.num_nodes, dtype=np.int32) - 1
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
@@ -144,9 +153,9 @@ class Simplifier(object):
         flags &= ~msprime.NODE_IS_SAMPLE
         if is_sample:
             flags |= msprime.NODE_IS_SAMPLE
-        output_id = self.node_table.add_row(
+        output_id = self.tables.nodes.add_row(
             flags=flags, time=node.time, population=node.population,
-            metadata=node.metadata)
+            metadata=node.metadata, individual=node.individual)
         self.node_id_map[input_id] = output_id
         return output_id
 
@@ -157,7 +166,7 @@ class Simplifier(object):
         """
         for child in sorted(self.edge_buffer.keys()):
             for edge in self.edge_buffer[child]:
-                self.edge_table.add_row(edge.left, edge.right, edge.parent, edge.child)
+                self.tables.edges.add_row(edge.left, edge.right, edge.parent, edge.child)
         self.edge_buffer.clear()
 
     def record_edge(self, left, right, parent, child):
@@ -195,14 +204,8 @@ class Simplifier(object):
         print("Mutation node map")
         for j in range(self.num_mutations):
             print("\t", j, "->", self.mutation_node_map[j])
-        print("Output nodes:")
-        print(self.node_table)
-        print("Output Edges: ")
-        print(self.edge_table)
-        print("Output sites:")
-        print(self.site_table)
-        print("Output mutations: ")
-        print(self.mutation_table)
+        print("Output:")
+        print(self.tables)
         self.check_state()
 
     def add_ancestry(self, input_id, left, right, node):
@@ -302,13 +305,13 @@ class Simplifier(object):
                         mapped_parent = -1
                         if mut.parent != -1:
                             mapped_parent = mutation_id_map[mut.parent]
-                        self.mutation_table.add_row(
-                            site=len(self.site_table),
+                        self.tables.mutations.add_row(
+                            site=len(self.tables.sites),
                             node=self.mutation_node_map[mut.id],
                             parent=mapped_parent,
                             derived_state=mut.derived_state,
                             metadata=mut.metadata)
-                self.site_table.add_row(
+                self.tables.sites.add_row(
                     position=site.position, ancestral_state=site.ancestral_state,
                     metadata=site.metadata)
 
@@ -343,9 +346,8 @@ class Simplifier(object):
         self.map_mutation_nodes()
         self.finalise_sites()
         ts = msprime.load_tables(
-            nodes=self.node_table, edges=self.edge_table,
-            sites=self.site_table, mutations=self.mutation_table,
-            sequence_length=self.sequence_length)
+            sequence_length=self.sequence_length,
+            **self.tables.asdict())
         return ts, self.node_id_map
 
     def check_state(self):

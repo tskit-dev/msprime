@@ -73,6 +73,44 @@ class SimpleContainer(object):
         return repr(self.__dict__)
 
 
+class Individual(SimpleContainer):
+    """
+    A :ref:`individual <sec_individual_table_definition>` in a tree sequence.
+
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
+    :ivar id: The integer ID of this individual. Varies from 0 to
+        :attr:`.TreeSequence.num_individuals` - 1.
+    :vartype id: int
+    :ivar flags: The bitwise flags for this individual.
+    :vartype flags: int
+    :ivar location: The spatial location of this individual as a numpy array. The
+        location is an empty array if no spatial location is defined.
+    :vartype location: numpy.ndarray
+    :ivar nodes: The IDs of the nodes that are associated with this individual as
+        a numpy array (dtype=np.int32). If no nodes are associated with the
+        individual this array will be empty.
+    :vartype location: numpy.ndarray
+    :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this individual.
+    :vartype metadata: bytes
+    """
+    def __init__(self, id_=None, flags=0, location=None, nodes=None, metadata=""):
+        self.id = id_
+        self.flags = flags
+        self.location = location
+        self.metadata = metadata
+        self.nodes = nodes
+
+    def __eq__(self, other):
+        return (
+            self.id == other.id and
+            self.flags == other.flags and
+            self.metadata == other.metadata and
+            np.array_equal(self.nodes, other.nodes) and
+            np.array_equal(self.location, other.location))
+
+
 class Node(SimpleContainer):
     """
     A :ref:`node <sec_node_table_definition>` in a tree sequence.
@@ -86,7 +124,7 @@ class Node(SimpleContainer):
     :ivar flags: The bitwise flags for this node.
     :vartype flags: int
     :ivar time: The birth time of the individual represented by this node.
-    :vartype float: float
+    :vartype time: float
     :ivar population: The integer ID of the population that this node was born in.
     :vartype population: int
     :ivar individual: The integer ID of the individual that this node was a part of.
@@ -249,6 +287,24 @@ class Migration(SimpleContainer):
         self.source = source
         self.dest = dest
         self.time = time
+
+
+class Population(SimpleContainer):
+    """
+    A :ref:`population <sec_population_table_definition>` in a tree sequence.
+
+    Modifying the attributes in this class will have **no effect** on the
+    underlying tree sequence data.
+
+    :ivar id: The integer ID of this population. Varies from 0 to
+        :attr:`.TreeSequence.num_populations` - 1.
+    :vartype id: int
+    :ivar metadata: The :ref:`metadata <sec_metadata_definition>` for this population.
+    :vartype metadata: bytes
+    """
+    def __init__(self, id_, metadata=""):
+        self.id = id_
+        self.metadata = metadata
 
 
 class Variant(SimpleContainer):
@@ -514,17 +570,6 @@ class SparseTree(object):
         :rtype: int
         """
         return self._ll_sparse_tree.get_population(u)
-
-    def individual(self, u):
-        """
-        Returns the individual associated with the specified node.
-        Equivalent to ``tree.tree_sequence.node(u).individual``.
-
-        :param int u: The node of interest.
-        :return: The ID of the individual associated with node u.
-        :rtype: int
-        """
-        return self._ll_sparse_tree.get_individual(u)
 
     def is_internal(self, u):
         """
@@ -1736,6 +1781,17 @@ class TreeSequence(object):
         return self.num_nodes
 
     @property
+    def num_individuals(self):
+        """
+        Returns the number of :ref:`individuals <sec_individual_table_definition>` in
+        this tree sequence.
+
+        :return: The number of individuals in this tree sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_individuals()
+
+    @property
     def num_nodes(self):
         """
         Returns the number of :ref:`nodes <sec_node_table_definition>` in
@@ -1756,6 +1812,17 @@ class TreeSequence(object):
         :rtype: int
         """
         return self._ll_tree_sequence.get_num_provenances()
+
+    @property
+    def num_populations(self):
+        """
+        Returns the number of :ref:`populations <sec_population_table_definition>`
+        in this tree sequence.
+
+        :return: The number of populations in this tree sequence.
+        :rtype: int
+        """
+        return self._ll_tree_sequence.get_num_populations()
 
     @property
     def num_migrations(self):
@@ -1781,9 +1848,16 @@ class TreeSequence(object):
         for j in range(self._ll_tree_sequence.get_num_migrations()):
             yield Migration(*self._ll_tree_sequence.get_migration(j))
 
-    def provenances(self):
-        for j in range(self.num_provenances):
-            yield self.provenance(j)
+    def individuals(self):
+        """
+        Returns an iterator over all the
+        :ref:`individuals <sec_individual_table_definition>` in this tree sequence.
+
+        :return: An iterator over all individuals.
+        :rtype: iter(:class:`.Individual`)
+        """
+        for j in range(self.num_individuals):
+            yield self.individual(j)
 
     def nodes(self):
         """
@@ -1885,6 +1959,28 @@ class TreeSequence(object):
         for site in self.sites():
             for mutation in site.mutations:
                 yield add_deprecated_mutation_attrs(site, mutation)
+
+    def populations(self):
+        """
+        Returns an iterator over all the
+        :ref:`populations <sec_population_table_definition>` in this tree sequence.
+
+        :return: An iterator over all populations.
+        :rtype: iter(:class:`.Population`)
+        """
+        for j in range(self.num_populations):
+            yield self.population(j)
+
+    def provenances(self):
+        """
+        Returns an iterator over all the
+        :ref:`provenances <sec_provenance_table_definition>` in this tree sequence.
+
+        :return: An iterator over all provenances.
+        :rtype: iter(:class:`.Provenance`)
+        """
+        for j in range(self.num_provenances):
+            yield self.provenance(j)
 
     def breakpoints(self):
         """
@@ -2092,6 +2188,17 @@ class TreeSequence(object):
             samples = self.samples()
         return self._ll_tree_sequence.get_pairwise_diversity(list(samples))
 
+    def individual(self, id_):
+        """
+        Returns the :ref:`individual <sec_individual_table_definition>`
+        in this tree sequence with the specified ID.
+
+        :rtype: :class:`.Individual`
+        """
+        flags, location, metadata, nodes = self._ll_tree_sequence.get_individual(id_)
+        return Individual(
+            id_=id_, flags=flags, location=location, metadata=metadata, nodes=nodes)
+
     def node(self, id_):
         """
         Returns the :ref:`node <sec_node_table_definition>` in this tree sequence
@@ -2131,6 +2238,16 @@ class TreeSequence(object):
             id_=id_, position=pos, ancestral_state=ancestral_state,
             mutations=mutations, metadata=metadata)
 
+    def population(self, id_):
+        """
+        Returns the :ref:`population <sec_population_table_definition>`
+        in this tree sequence with the specified ID.
+
+        :rtype: :class:`.Population`
+        """
+        metadata, = self._ll_tree_sequence.get_population(id_)
+        return Population(id_=id_, metadata=metadata)
+
     def provenance(self, id_):
         timestamp, record = self._ll_tree_sequence.get_provenance(id_)
         return Provenance(id_=id_, timestamp=timestamp, record=record)
@@ -2161,7 +2278,7 @@ class TreeSequence(object):
         samples = self._ll_tree_sequence.get_samples()
         if population is not None:
             samples = [
-                u for u in samples if self.get_population(u) == population]
+                u for u in samples if self.node(u).population == population]
         return np.array(samples, dtype=np.int32)
 
     def write_vcf(self, output, ploidy=1, contig_id="1"):
@@ -2215,7 +2332,7 @@ class TreeSequence(object):
 
         If you wish to convert a set of tables that do not satisfy all
         requirements for building a TreeSequence, then use
-        :func:`.simplify_tables()`.
+        :meth:`TableCollection.simplify`.
 
         :param list samples: The list of nodes for which to retain information. This
             may be a numpy array (or array-like) object (dtype=np.int32).
@@ -2231,21 +2348,18 @@ class TreeSequence(object):
             sequence.
         :rtype: .TreeSequence or a (.TreeSequence, numpy.array) tuple
         """
-        t = self.dump_tables()
+        tables = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
-        node_map = tables.simplify_tables(
-            samples=samples, sequence_length=self.sequence_length,
-            nodes=t.nodes, edges=t.edges,
-            sites=t.sites, mutations=t.mutations,
+        node_map = tables.simplify(
+            samples=samples,
             filter_zero_mutation_sites=filter_zero_mutation_sites)
         # TODO add simplify arguments here??
-        t.provenances.add_row(record=json.dumps(
+        tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
         new_ts = load_tables(
-            nodes=t.nodes, edges=t.edges, migrations=t.migrations, sites=t.sites,
-            mutations=t.mutations, provenances=t.provenances,
-            sequence_length=self.sequence_length)
+            sequence_length=self.sequence_length,
+            **tables.asdict())
         if map_nodes:
             return new_ts, node_map
         else:

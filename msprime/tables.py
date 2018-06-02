@@ -262,6 +262,15 @@ class NodeTable(BaseTable):
     def individual(self):
         return self.ll_table.individual
 
+    # EXPERIMENTAL interface for setting a single column. This is done
+    # quite a bit in tests. Not part of the public API as yet, but we
+    # probably will want to allow something like this in general.
+    @individual.setter
+    def individual(self, individual):
+        self.set_columns(
+            flags=self.flags, time=self.time, metadata=self.metadata,
+            metadata_offset=self.metadata_offset, individual=individual)
+
     @property
     def metadata(self):
         return self.ll_table.metadata

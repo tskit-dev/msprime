@@ -4422,6 +4422,17 @@ table_collection_print_state(table_collection_t *self, FILE *out)
     return 0;
 }
 
+/* TODO make sequence_length a parameter here, and only support setting it
+ * through this interface. That way, sequence_length is set at the initialisation
+ * time and can be assumed to be fixed for ever after that. This might
+ * finally get rid of the inferring sequence length stuff that we've
+ * been plagued with forever.
+ *
+ * HOWEVER this disagrees with the usage of calling table_collection_alloc
+ * before table_collection_load. Perhaps this is a good reason for allowing
+ * the user to call table_collection_load directly without calling alloc
+ * first. This is certainly more user-friendly.
+ * */
 int
 table_collection_alloc(table_collection_t *self, int flags)
 {

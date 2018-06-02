@@ -525,13 +525,15 @@ make_provenance(provenance_t *provenance)
 }
 
 static PyObject *
-make_individual(individual_t *r)
+make_individual_row(individual_t *r)
 {
     PyObject *ret = NULL;
     PyObject *metadata = make_metadata(r->metadata, (Py_ssize_t) r->metadata_length);
-    npy_intp dims = (npy_intp) r->location_length;
-    PyArrayObject *location = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+    PyArrayObject *location = NULL;
+    npy_intp dims;
 
+    dims = (npy_intp) r->location_length;
+    location = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
     if (metadata == NULL || location == NULL) {
         goto out;
     }
@@ -540,6 +542,32 @@ make_individual(individual_t *r)
 out:
     Py_XDECREF(location);
     Py_XDECREF(metadata);
+    return ret;
+}
+
+static PyObject *
+make_individual_object(individual_t *r)
+{
+    PyObject *ret = NULL;
+    PyObject *metadata = make_metadata(r->metadata, (Py_ssize_t) r->metadata_length);
+    PyArrayObject *location = NULL;
+    PyArrayObject *nodes = NULL;
+    npy_intp dims;
+
+    dims = (npy_intp) r->location_length;
+    location = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+    dims = (npy_intp) r->nodes_length;
+    nodes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
+    if (metadata == NULL || location == NULL || nodes == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(location), r->location, r->location_length * sizeof(double));
+    memcpy(PyArray_DATA(nodes), r->nodes, r->nodes_length * sizeof(node_id_t));
+    ret = Py_BuildValue("IOOO", (unsigned int) r->flags, location, metadata, nodes);
+out:
+    Py_XDECREF(location);
+    Py_XDECREF(metadata);
+    Py_XDECREF(nodes);
     return ret;
 }
 
@@ -578,7 +606,7 @@ make_migration(migration_t *r)
 }
 
 static PyObject *
-make_site(site_t *site)
+make_site_row(site_t *site)
 {
     PyObject *ret = NULL;
     PyObject* metadata = NULL;
@@ -1056,7 +1084,7 @@ IndividualTable_get_row(IndividualTable *self, PyObject *args)
         + self->table->metadata_offset[row_id];
     individual.metadata_length = self->table->metadata_offset[row_id + 1]
         - self->table->metadata_offset[row_id];
-    ret = make_individual(&individual);
+    ret = make_individual_row(&individual);
 out:
     return ret;
 }
@@ -2848,7 +2876,7 @@ SiteTable_get_row(SiteTable *self, PyObject *args)
     site.metadata_length = self->table->metadata_offset[row_id + 1]
         - self->table->metadata_offset[row_id];
     site.mutations_length = 0;
-    ret = make_site(&site);
+    ret = make_site_row(&site);
 out:
     return ret;
 }
@@ -4529,6 +4557,9 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     MutationTable *mutations = NULL;
     PopulationTable *populations = NULL;
     ProvenanceTable *provenances = NULL;
+    /* TODO make sequence_length a mandatory parameter which is set at
+     * initialisation time and cannot be modified. This way we can finally
+     * get rid of the infering sequence length rubbish */
     double sequence_length = 0;
 
     self->tables = NULL;
@@ -5910,7 +5941,7 @@ TreeSequence_get_individual(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = make_individual(&record);
+    ret = make_individual_object(&record);
 out:
     return ret;
 }

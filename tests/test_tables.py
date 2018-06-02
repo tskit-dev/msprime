@@ -203,6 +203,7 @@ class CommonTestsMixin(object):
                     self.assertRaises(ValueError, table.set_columns, **kwargs)
                     self.assertRaises(ValueError, table.append_columns, **kwargs)
 
+    @unittest.skip("Fix or remove when column setter done. #492")
     def test_set_read_only_attributes(self):
         table = self.table_class()
         with self.assertRaises(AttributeError):
