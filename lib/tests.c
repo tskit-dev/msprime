@@ -4732,8 +4732,8 @@ test_single_tree_mutgen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_populate_tables(&mutgen, &sites_after, &mutations_after);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutation_table_equal(&mutations, &mutations_after));
-    CU_ASSERT_TRUE(site_table_equal(&sites, &sites_after));
+    CU_ASSERT_TRUE(mutation_table_equals(&mutations, &mutations_after));
+    CU_ASSERT_TRUE(site_table_equals(&sites, &sites_after));
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -6025,7 +6025,7 @@ test_save_kas_tables(void)
             ret = table_collection_load(&t2, _tmp_file_name, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-            CU_ASSERT_TRUE(table_collection_equal(&t1, &t2));
+            CU_ASSERT_TRUE(table_collection_equals(&t1, &t2));
             table_collection_free(&t2);
         }
         table_collection_free(&t1);
@@ -7324,21 +7324,21 @@ test_individual_table(void)
     tree_sequence_from_text(&ts, 0, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL,
             paper_ex_individuals, NULL);
     tree_sequence_dump_tables(&ts, &tables, MSP_ALLOC_TABLES);
-    CU_ASSERT_TRUE_FATAL(individual_table_equal(tables.individuals, &table));
+    CU_ASSERT_TRUE_FATAL(individual_table_equals(tables.individuals, &table));
     tree_sequence_free(&ts);
 
     // copy the table
     individual_table_clear(&table);
     ret = individual_table_copy(tables.individuals, &table);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE_FATAL(individual_table_equal(tables.individuals, &table));
+    CU_ASSERT_TRUE_FATAL(individual_table_equals(tables.individuals, &table));
 
     // Round trip tables -> tree sequence -> tables
     ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_dump_tables(&ts, &tables2, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE_FATAL(individual_table_equal(tables2.individuals, tables.individuals));
+    CU_ASSERT_TRUE_FATAL(individual_table_equals(tables2.individuals, tables.individuals));
     tree_sequence_free(&ts);
     table_collection_free(&tables2);
 
@@ -7349,7 +7349,7 @@ test_individual_table(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = table_collection_load(&tables2, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE_FATAL(individual_table_equal(tables2.individuals, tables.individuals));
+    CU_ASSERT_TRUE_FATAL(individual_table_equals(tables2.individuals, tables.individuals));
 
     ret = table_collection_free(&tables);
     CU_ASSERT_EQUAL(ret, 0);
@@ -7386,6 +7386,17 @@ test_population_table(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     population_table_print_state(&table, _devnull);
     population_table_dump_text(&table, _devnull);
+    /* Adding zero length metadata with NULL should be fine */
+
+    ret = population_table_add_row(&table, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    CU_ASSERT_EQUAL(table.metadata_length, 0);
+    CU_ASSERT_EQUAL(table.num_rows, 1);
+    CU_ASSERT_EQUAL(table.metadata_offset[0], 0);
+    CU_ASSERT_EQUAL(table.metadata_offset[1], 0);
+    population_table_clear(&table);
+    CU_ASSERT_EQUAL(table.num_rows, 0);
 
     len = 0;
     for (j = 0; j < num_rows; j++) {
@@ -7802,8 +7813,8 @@ test_dump_unindexed(void)
     ret = table_collection_load(&loaded, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(table_collection_is_indexed(&loaded));
-    CU_ASSERT_TRUE(node_table_equal(tables.nodes, loaded.nodes));
-    CU_ASSERT_TRUE(edge_table_equal(tables.edges, loaded.edges));
+    CU_ASSERT_TRUE(node_table_equals(tables.nodes, loaded.nodes));
+    CU_ASSERT_TRUE(edge_table_equals(tables.edges, loaded.edges));
 
     table_collection_free(&loaded);
     table_collection_free(&tables);
@@ -7870,7 +7881,7 @@ test_table_collection_set_tables(void)
     CU_ASSERT_EQUAL_FATAL(t1.mutations, t2.mutations);
     CU_ASSERT_EQUAL_FATAL(t1.populations, t2.populations);
     CU_ASSERT_EQUAL_FATAL(t1.provenances, t2.provenances);
-    CU_ASSERT_TRUE(table_collection_equal(&t1, &t2));
+    CU_ASSERT_TRUE(table_collection_equals(&t1, &t2));
     table_collection_print_state(&t2, _devnull);
     table_collection_free(&t2);
 

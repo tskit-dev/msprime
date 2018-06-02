@@ -70,49 +70,49 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     bool locked;
-    individual_table_t *individual_table;
+    individual_table_t *table;
 } IndividualTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    node_table_t *node_table;
+    node_table_t *table;
 } NodeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    edge_table_t *edge_table;
+    edge_table_t *table;
 } EdgeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    site_table_t *site_table;
+    site_table_t *table;
 } SiteTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    mutation_table_t *mutation_table;
+    mutation_table_t *table;
 } MutationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    migration_table_t *migration_table;
+    migration_table_t *table;
 } MigrationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    population_table_t *population_table;
+    population_table_t *table;
 } PopulationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    provenance_table_t *provenance_table;
+    provenance_table_t *table;
 } ProvenanceTable;
 
 typedef struct {
@@ -894,7 +894,7 @@ static int
 IndividualTable_check_state(IndividualTable *self)
 {
     int ret = -1;
-    if (self->individual_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "IndividualTable not initialised");
         goto out;
     }
@@ -910,10 +910,10 @@ out:
 static void
 IndividualTable_dealloc(IndividualTable* self)
 {
-    if (self->individual_table != NULL) {
-        individual_table_free(self->individual_table);
-        PyMem_Free(self->individual_table);
-        self->individual_table = NULL;
+    if (self->table != NULL) {
+        individual_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -928,7 +928,7 @@ IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
     Py_ssize_t max_position_length_increment = 0;
     Py_ssize_t max_metadata_length_increment = 0;
 
-    self->individual_table = NULL;
+    self->table = NULL;
     self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
@@ -938,12 +938,12 @@ IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->individual_table = PyMem_Malloc(sizeof(individual_table_t));
-    if (self->individual_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(individual_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = individual_table_alloc(self->individual_table,
+    err = individual_table_alloc(self->table,
             (size_t) max_rows_increment,
             (size_t) max_position_length_increment,
             (size_t) max_metadata_length_increment);
@@ -996,7 +996,7 @@ IndividualTable_add_row(IndividualTable *self, PyObject *args, PyObject *kwds)
         location_length = (table_size_t) shape[0];
         location_data = PyArray_DATA(location_array);
     }
-    err = individual_table_add_row(self->individual_table, (uint32_t) flags,
+    err = individual_table_add_row(self->table, (uint32_t) flags,
             location_data, location_length, metadata, metadata_length);
     if (err < 0) {
         handle_library_error(err);
@@ -1005,6 +1005,27 @@ IndividualTable_add_row(IndividualTable *self, PyObject *args, PyObject *kwds)
     ret = Py_BuildValue("i", err);
 out:
     Py_XDECREF(location_array);
+    return ret;
+}
+
+
+/* Forward declaration */
+static PyTypeObject IndividualTableType;
+
+static PyObject *
+IndividualTable_equals(IndividualTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    IndividualTable *other = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &IndividualTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", individual_table_equals(self->table, other->table));
+out:
     return ret;
 }
 
@@ -1021,20 +1042,20 @@ IndividualTable_get_row(IndividualTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->individual_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    individual.flags = self->individual_table->flags[row_id];
-    individual.location = self->individual_table->location
-        + self->individual_table->location_offset[row_id];
-    individual.location_length = self->individual_table->location_offset[row_id + 1]
-        - self->individual_table->location_offset[row_id];
-    individual.metadata = self->individual_table->metadata
-        + self->individual_table->metadata_offset[row_id];
-    individual.metadata_length = self->individual_table->metadata_offset[row_id + 1]
-        - self->individual_table->metadata_offset[row_id];
+    individual.flags = self->table->flags[row_id];
+    individual.location = self->table->location
+        + self->table->location_offset[row_id];
+    individual.location_length = self->table->location_offset[row_id + 1]
+        - self->table->location_offset[row_id];
+    individual.metadata = self->table->metadata
+        + self->table->metadata_offset[row_id];
+    individual.metadata_length = self->table->metadata_offset[row_id + 1]
+        - self->table->metadata_offset[row_id];
     ret = make_individual(&individual);
 out:
     return ret;
@@ -1115,12 +1136,12 @@ IndividualTable_set_or_append_columns(IndividualTable *self, PyObject *args, PyO
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
     }
     if (method == SET_COLS) {
-        err = individual_table_set_columns(self->individual_table, num_rows,
+        err = individual_table_set_columns(self->table, num_rows,
                 PyArray_DATA(flags_array),
                 location_data, location_offset_data,
                 metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = individual_table_append_columns(self->individual_table, num_rows,
+        err = individual_table_append_columns(self->table, num_rows,
                 PyArray_DATA(flags_array),
                 location_data, location_offset_data,
                 metadata_data, metadata_offset_data);
@@ -1162,7 +1183,7 @@ IndividualTable_clear(IndividualTable *self)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    err = individual_table_clear(self->individual_table);
+    err = individual_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1172,6 +1193,7 @@ out:
     return ret;
 }
 
+
 static PyObject *
 IndividualTable_get_max_rows_increment(IndividualTable *self, void *closure)
 {
@@ -1179,7 +1201,7 @@ IndividualTable_get_max_rows_increment(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->individual_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -1191,7 +1213,7 @@ IndividualTable_get_num_rows(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->individual_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -1203,7 +1225,7 @@ IndividualTable_get_max_rows(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->individual_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -1216,7 +1238,7 @@ IndividualTable_get_flags(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->individual_table->num_rows, self->individual_table->flags,
+    ret = table_get_column_array(self->table->num_rows, self->table->flags,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -1230,8 +1252,8 @@ IndividualTable_get_location(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->individual_table->location_length,
-            self->individual_table->location, NPY_FLOAT64, sizeof(double));
+    ret = table_get_column_array(self->table->location_length,
+            self->table->location, NPY_FLOAT64, sizeof(double));
 out:
     return ret;
 }
@@ -1244,8 +1266,8 @@ IndividualTable_get_location_offset(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->individual_table->num_rows + 1,
-            self->individual_table->location_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->location_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1258,8 +1280,8 @@ IndividualTable_get_metadata(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->individual_table->metadata_length,
-            self->individual_table->metadata, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -1272,8 +1294,8 @@ IndividualTable_get_metadata_offset(IndividualTable *self, void *closure)
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->individual_table->num_rows + 1,
-            self->individual_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1300,6 +1322,8 @@ static PyMethodDef IndividualTable_methods[] = {
         "Adds a new row to this table."},
     {"get_row", (PyCFunction) IndividualTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
+    {"equals", (PyCFunction) IndividualTable_equals, METH_VARARGS,
+        "Returns true if the specified individual table is equal."},
     {"append_columns", (PyCFunction) IndividualTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
@@ -1360,7 +1384,7 @@ static int
 NodeTable_check_state(NodeTable *self)
 {
     int ret = -1;
-    if (self->node_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
         goto out;
     }
@@ -1376,10 +1400,10 @@ out:
 static void
 NodeTable_dealloc(NodeTable* self)
 {
-    if (self->node_table != NULL) {
-        node_table_free(self->node_table);
-        PyMem_Free(self->node_table);
-        self->node_table = NULL;
+    if (self->table != NULL) {
+        node_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1393,7 +1417,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     Py_ssize_t max_rows_increment = 0;
     Py_ssize_t max_metadata_length_increment = 0;
 
-    self->node_table = NULL;
+    self->table = NULL;
     self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
@@ -1403,12 +1427,12 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->node_table = PyMem_Malloc(sizeof(node_table_t));
-    if (self->node_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(node_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = node_table_alloc(self->node_table, (size_t) max_rows_increment,
+    err = node_table_alloc(self->table, (size_t) max_rows_increment,
             (size_t) max_metadata_length_increment);
     if (err != 0) {
         handle_library_error(err);
@@ -1445,13 +1469,33 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = node_table_add_row(self->node_table, (uint32_t) flags, time,
+    err = node_table_add_row(self->table, (uint32_t) flags, time,
             (population_id_t) population, individual, metadata, metadata_length);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject NodeTableType;
+
+static PyObject *
+NodeTable_equals(NodeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    NodeTable *other = NULL;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &NodeTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", node_table_equals(self->table, other->table));
 out:
     return ret;
 }
@@ -1469,19 +1513,19 @@ NodeTable_get_row(NodeTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->node_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    node.time = self->node_table->time[row_id];
-    node.flags = self->node_table->flags[row_id];
-    node.population = self->node_table->population[row_id];
-    node.individual = self->node_table->individual[row_id];
-    node.metadata = self->node_table->metadata
-        + self->node_table->metadata_offset[row_id];
-    node.metadata_length = self->node_table->metadata_offset[row_id + 1]
-        - self->node_table->metadata_offset[row_id];
+    node.time = self->table->time[row_id];
+    node.flags = self->table->flags[row_id];
+    node.population = self->table->population[row_id];
+    node.individual = self->table->individual[row_id];
+    node.metadata = self->table->metadata
+        + self->table->metadata_offset[row_id];
+    node.metadata_length = self->table->metadata_offset[row_id + 1]
+        - self->table->metadata_offset[row_id];
     ret = make_node(&node);
 out:
     return ret;
@@ -1565,11 +1609,11 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
     }
     if (method == SET_COLS) {
-        err = node_table_set_columns(self->node_table, num_rows,
+        err = node_table_set_columns(self->table, num_rows,
                 PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
                 individual_data, metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = node_table_append_columns(self->node_table, num_rows,
+        err = node_table_append_columns(self->table, num_rows,
                 PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
                 individual_data, metadata_data, metadata_offset_data);
     } else {
@@ -1611,7 +1655,7 @@ NodeTable_clear(NodeTable *self)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    err = node_table_clear(self->node_table);
+    err = node_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1628,7 +1672,7 @@ NodeTable_get_max_rows_increment(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -1640,7 +1684,7 @@ NodeTable_get_num_rows(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -1652,7 +1696,7 @@ NodeTable_get_max_rows(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -1665,7 +1709,7 @@ NodeTable_get_time(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->time,
+    ret = table_get_column_array(self->table->num_rows, self->table->time,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -1679,7 +1723,7 @@ NodeTable_get_flags(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->flags,
+    ret = table_get_column_array(self->table->num_rows, self->table->flags,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -1693,7 +1737,7 @@ NodeTable_get_population(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->population,
+    ret = table_get_column_array(self->table->num_rows, self->table->population,
             NPY_INT32, sizeof(int32_t));
 out:
     return ret;
@@ -1707,7 +1751,7 @@ NodeTable_get_individual(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->individual,
+    ret = table_get_column_array(self->table->num_rows, self->table->individual,
             NPY_INT32, sizeof(int32_t));
 out:
     return ret;
@@ -1721,8 +1765,8 @@ NodeTable_get_metadata(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->metadata_length,
-            self->node_table->metadata, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -1735,8 +1779,8 @@ NodeTable_get_metadata_offset(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows + 1,
-            self->node_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -1761,6 +1805,8 @@ static PyGetSetDef NodeTable_getsetters[] = {
 static PyMethodDef NodeTable_methods[] = {
     {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) NodeTable_equals, METH_VARARGS,
+        "Returns True if the specified NodeTable is equal to this one."},
     {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"append_columns", (PyCFunction) NodeTable_append_columns,
@@ -1822,7 +1868,7 @@ static int
 EdgeTable_check_state(EdgeTable *self)
 {
     int ret = -1;
-    if (self->edge_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "EdgeTable not initialised");
         goto out;
     }
@@ -1838,10 +1884,10 @@ out:
 static void
 EdgeTable_dealloc(EdgeTable* self)
 {
-    if (self->edge_table != NULL) {
-        edge_table_free(self->edge_table);
-        PyMem_Free(self->edge_table);
-        self->edge_table = NULL;
+    if (self->table != NULL) {
+        edge_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1854,7 +1900,7 @@ EdgeTable_init(EdgeTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->edge_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
@@ -1862,12 +1908,12 @@ EdgeTable_init(EdgeTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->edge_table = PyMem_Malloc(sizeof(edge_table_t));
-    if (self->edge_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(edge_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = edge_table_alloc(self->edge_table, (size_t) max_rows_increment);
+    err = edge_table_alloc(self->table, (size_t) max_rows_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1895,12 +1941,32 @@ EdgeTable_add_row(EdgeTable *self, PyObject *args, PyObject *kwds)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    err = edge_table_add_row(self->edge_table, left, right, parent, child);
+    err = edge_table_add_row(self->table, left, right, parent, child);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject EdgeTableType;
+
+static PyObject *
+EdgeTable_equals(EdgeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    EdgeTable *other = NULL;
+
+    if (EdgeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &EdgeTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", edge_table_equals(self->table, other->table));
 out:
     return ret;
 }
@@ -1918,15 +1984,15 @@ EdgeTable_get_row(EdgeTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->edge_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    edge.left = self->edge_table->left[row_id];
-    edge.right = self->edge_table->right[row_id];
-    edge.parent = self->edge_table->parent[row_id];
-    edge.child = self->edge_table->child[row_id];
+    edge.left = self->table->left[row_id];
+    edge.right = self->table->right[row_id];
+    edge.parent = self->table->parent[row_id];
+    edge.child = self->table->child[row_id];
     ret = make_edge(&edge);
 out:
     return ret;
@@ -1971,11 +2037,11 @@ EdgeTable_set_or_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds,
         goto out;
     }
     if (method == SET_COLS) {
-        err = edge_table_set_columns(self->edge_table, num_rows,
+        err = edge_table_set_columns(self->table, num_rows,
                 PyArray_DATA(left_array), PyArray_DATA(right_array),
                 PyArray_DATA(parent_array), PyArray_DATA(child_array));
     } else if (method == APPEND_COLS) {
-        err = edge_table_append_columns(self->edge_table, num_rows,
+        err = edge_table_append_columns(self->table, num_rows,
                 PyArray_DATA(left_array), PyArray_DATA(right_array),
                 PyArray_DATA(parent_array), PyArray_DATA(child_array));
     } else {
@@ -2016,7 +2082,7 @@ EdgeTable_clear(EdgeTable *self)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    err = edge_table_clear(self->edge_table);
+    err = edge_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2033,7 +2099,7 @@ EdgeTable_get_max_rows_increment(EdgeTable *self, void *closure)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edge_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -2045,7 +2111,7 @@ EdgeTable_get_num_rows(EdgeTable *self, void *closure)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edge_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -2057,7 +2123,7 @@ EdgeTable_get_max_rows(EdgeTable *self, void *closure)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edge_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -2071,7 +2137,7 @@ EdgeTable_get_left(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->left, NPY_FLOAT64,
+            self->table->num_rows, self->table->left, NPY_FLOAT64,
             sizeof(double));
 out:
     return ret;
@@ -2086,7 +2152,7 @@ EdgeTable_get_right(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->right, NPY_FLOAT64,
+            self->table->num_rows, self->table->right, NPY_FLOAT64,
             sizeof(double));
 out:
     return ret;
@@ -2101,7 +2167,7 @@ EdgeTable_get_parent(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->parent, NPY_INT32,
+            self->table->num_rows, self->table->parent, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -2116,7 +2182,7 @@ EdgeTable_get_child(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->child, NPY_INT32,
+            self->table->num_rows, self->table->child, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -2140,6 +2206,8 @@ static PyGetSetDef EdgeTable_getsetters[] = {
 static PyMethodDef EdgeTable_methods[] = {
     {"add_row", (PyCFunction) EdgeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) EdgeTable_equals, METH_VARARGS,
+        "Returns True if the specified EdgeTable is equal to this one."},
     {"get_row", (PyCFunction) EdgeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"set_columns", (PyCFunction) EdgeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
@@ -2200,7 +2268,7 @@ static int
 MigrationTable_check_state(MigrationTable *self)
 {
     int ret = -1;
-    if (self->migration_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "MigrationTable not initialised");
         goto out;
     }
@@ -2216,10 +2284,10 @@ out:
 static void
 MigrationTable_dealloc(MigrationTable* self)
 {
-    if (self->migration_table != NULL) {
-        migration_table_free(self->migration_table);
-        PyMem_Free(self->migration_table);
-        self->migration_table = NULL;
+    if (self->table != NULL) {
+        migration_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -2232,7 +2300,7 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->migration_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
@@ -2241,12 +2309,12 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->migration_table = PyMem_Malloc(sizeof(migration_table_t));
-    if (self->migration_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(migration_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = migration_table_alloc(self->migration_table, (size_t) max_rows_increment);
+    err = migration_table_alloc(self->table, (size_t) max_rows_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2272,13 +2340,33 @@ MigrationTable_add_row(MigrationTable *self, PyObject *args, PyObject *kwds)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    err = migration_table_add_row(self->migration_table, left, right, node,
+    err = migration_table_add_row(self->table, left, right, node,
             source, dest, time);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject MigrationTableType;
+
+static PyObject *
+MigrationTable_equals(MigrationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    MigrationTable *other = NULL;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &MigrationTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", migration_table_equals(self->table, other->table));
 out:
     return ret;
 }
@@ -2296,17 +2384,17 @@ MigrationTable_get_row(MigrationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->migration_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    migration.left = self->migration_table->left[row_id];
-    migration.right = self->migration_table->right[row_id];
-    migration.node = self->migration_table->node[row_id];
-    migration.source = self->migration_table->source[row_id];
-    migration.dest = self->migration_table->dest[row_id];
-    migration.time = self->migration_table->time[row_id];
+    migration.left = self->table->left[row_id];
+    migration.right = self->table->right[row_id];
+    migration.node = self->table->node[row_id];
+    migration.source = self->table->source[row_id];
+    migration.dest = self->table->dest[row_id];
+    migration.time = self->table->time[row_id];
     ret = make_migration(&migration);
 out:
     return ret;
@@ -2363,11 +2451,11 @@ MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObj
         goto out;
     }
     if (method == SET_COLS) {
-        err = migration_table_set_columns(self->migration_table, num_rows,
+        err = migration_table_set_columns(self->table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
             PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
     } else if (method == APPEND_COLS) {
-        err = migration_table_append_columns(self->migration_table, num_rows,
+        err = migration_table_append_columns(self->table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
             PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
     } else {
@@ -2409,7 +2497,7 @@ MigrationTable_clear(MigrationTable *self)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    err = migration_table_clear(self->migration_table);
+    err = migration_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2426,7 +2514,7 @@ MigrationTable_get_max_rows_increment(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -2438,7 +2526,7 @@ MigrationTable_get_num_rows(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -2450,7 +2538,7 @@ MigrationTable_get_max_rows(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -2463,7 +2551,7 @@ MigrationTable_get_left(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->left,
+    ret = table_get_column_array(self->table->num_rows, self->table->left,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -2477,7 +2565,7 @@ MigrationTable_get_right(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->right,
+    ret = table_get_column_array(self->table->num_rows, self->table->right,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -2491,7 +2579,7 @@ MigrationTable_get_time(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->time,
+    ret = table_get_column_array(self->table->num_rows, self->table->time,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -2505,7 +2593,7 @@ MigrationTable_get_node(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->node,
+    ret = table_get_column_array(self->table->num_rows, self->table->node,
             NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
@@ -2519,7 +2607,7 @@ MigrationTable_get_source(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->source,
+    ret = table_get_column_array(self->table->num_rows, self->table->source,
             NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
@@ -2533,7 +2621,7 @@ MigrationTable_get_dest(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->dest,
+    ret = table_get_column_array(self->table->num_rows, self->table->dest,
             NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
@@ -2558,6 +2646,8 @@ static PyGetSetDef MigrationTable_getsetters[] = {
 static PyMethodDef MigrationTable_methods[] = {
     {"add_row", (PyCFunction) MigrationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) MigrationTable_equals, METH_VARARGS,
+        "Returns True if the specified MigrationTable is equal to this one."},
     {"get_row", (PyCFunction) MigrationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
@@ -2619,7 +2709,7 @@ static int
 SiteTable_check_state(SiteTable *self)
 {
     int ret = -1;
-    if (self->site_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "SiteTable not initialised");
         goto out;
     }
@@ -2635,10 +2725,10 @@ out:
 static void
 SiteTable_dealloc(SiteTable* self)
 {
-    if (self->site_table != NULL) {
-        site_table_free(self->site_table);
-        PyMem_Free(self->site_table);
-        self->site_table = NULL;
+    if (self->table != NULL) {
+        site_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -2651,7 +2741,7 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->site_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
@@ -2659,12 +2749,12 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->site_table = PyMem_Malloc(sizeof(site_table_t));
-    if (self->site_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(site_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = site_table_alloc(self->site_table, (size_t) max_rows_increment, 0, 0);
+    err = site_table_alloc(self->table, (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2699,13 +2789,33 @@ SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = site_table_add_row(self->site_table, position, ancestral_state,
+    err = site_table_add_row(self->table, position, ancestral_state,
             ancestral_state_length, metadata, metadata_length);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject SiteTableType;
+
+static PyObject *
+SiteTable_equals(SiteTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    SiteTable *other = NULL;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &SiteTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", site_table_equals(self->table, other->table));
 out:
     return ret;
 }
@@ -2723,20 +2833,20 @@ SiteTable_get_row(SiteTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->site_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    site.position = self->site_table->position[row_id];
-    site.ancestral_state = self->site_table->ancestral_state
-        + self->site_table->ancestral_state_offset[row_id];
-    site.ancestral_state_length = self->site_table->ancestral_state_offset[row_id + 1]
-        - self->site_table->ancestral_state_offset[row_id];
-    site.metadata = self->site_table->metadata
-        + self->site_table->metadata_offset[row_id];
-    site.metadata_length = self->site_table->metadata_offset[row_id + 1]
-        - self->site_table->metadata_offset[row_id];
+    site.position = self->table->position[row_id];
+    site.ancestral_state = self->table->ancestral_state
+        + self->table->ancestral_state_offset[row_id];
+    site.ancestral_state_length = self->table->ancestral_state_offset[row_id + 1]
+        - self->table->ancestral_state_offset[row_id];
+    site.metadata = self->table->metadata
+        + self->table->metadata_offset[row_id];
+    site.metadata_length = self->table->metadata_offset[row_id + 1]
+        - self->table->metadata_offset[row_id];
     site.mutations_length = 0;
     ret = make_site(&site);
 out:
@@ -2812,11 +2922,11 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
     }
 
     if (method == SET_COLS) {
-        err = site_table_set_columns(self->site_table, num_rows,
+        err = site_table_set_columns(self->table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
             PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = site_table_append_columns(self->site_table, num_rows,
+        err = site_table_append_columns(self->table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
             PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
     } else {
@@ -2857,7 +2967,7 @@ SiteTable_clear(SiteTable *self)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    err = site_table_clear(self->site_table);
+    err = site_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2875,7 +2985,7 @@ SiteTable_get_max_rows_increment(SiteTable *self, void *closure)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -2887,7 +2997,7 @@ SiteTable_get_num_rows(SiteTable *self, void *closure)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -2899,7 +3009,7 @@ SiteTable_get_max_rows(SiteTable *self, void *closure)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -2913,8 +3023,8 @@ SiteTable_get_position(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows,
-            self->site_table->position, NPY_FLOAT64, sizeof(double));
+            self->table->num_rows,
+            self->table->position, NPY_FLOAT64, sizeof(double));
 out:
     return ret;
 }
@@ -2928,8 +3038,8 @@ SiteTable_get_ancestral_state(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->ancestral_state_length,
-            self->site_table->ancestral_state, NPY_INT8, sizeof(char));
+            self->table->ancestral_state_length,
+            self->table->ancestral_state, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -2943,8 +3053,8 @@ SiteTable_get_ancestral_state_offset(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows + 1,
-            self->site_table->ancestral_state_offset, NPY_UINT32, sizeof(uint32_t));
+            self->table->num_rows + 1,
+            self->table->ancestral_state_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -2958,8 +3068,8 @@ SiteTable_get_metadata(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->metadata_length,
-            self->site_table->metadata, NPY_INT8, sizeof(char));
+            self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -2973,8 +3083,8 @@ SiteTable_get_metadata_offset(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows + 1,
-            self->site_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+            self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -3005,6 +3115,8 @@ static PyGetSetDef SiteTable_getsetters[] = {
 static PyMethodDef SiteTable_methods[] = {
     {"add_row", (PyCFunction) SiteTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) SiteTable_equals, METH_VARARGS,
+        "Returns True if the specified SiteTable is equal to this one."},
     {"get_row", (PyCFunction) SiteTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
@@ -3066,7 +3178,7 @@ static int
 MutationTable_check_state(MutationTable *self)
 {
     int ret = -1;
-    if (self->mutation_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "MutationTable not initialised");
         goto out;
     }
@@ -3082,10 +3194,10 @@ out:
 static void
 MutationTable_dealloc(MutationTable* self)
 {
-    if (self->mutation_table != NULL) {
-        mutation_table_free(self->mutation_table);
-        PyMem_Free(self->mutation_table);
-        self->mutation_table = NULL;
+    if (self->table != NULL) {
+        mutation_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3098,7 +3210,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->mutation_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
@@ -3106,12 +3218,12 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
-    if (self->mutation_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(mutation_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = mutation_table_alloc(self->mutation_table, (size_t) max_rows_increment, 0, 0);
+    err = mutation_table_alloc(self->table, (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3149,7 +3261,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = mutation_table_add_row(self->mutation_table, (site_id_t) site,
+    err = mutation_table_add_row(self->table, (site_id_t) site,
             (node_id_t) node, (mutation_id_t) parent,
             derived_state, derived_state_length,
             metadata, metadata_length);
@@ -3158,6 +3270,26 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject MutationTableType;
+
+static PyObject *
+MutationTable_equals(MutationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    MutationTable *other = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &MutationTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", mutation_table_equals(self->table, other->table));
 out:
     return ret;
 }
@@ -3175,22 +3307,22 @@ MutationTable_get_row(MutationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->mutation_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    mutation.site = self->mutation_table->site[row_id];
-    mutation.node = self->mutation_table->node[row_id];
-    mutation.parent = self->mutation_table->parent[row_id];
-    mutation.derived_state = self->mutation_table->derived_state
-        + self->mutation_table->derived_state_offset[row_id];
-    mutation.derived_state_length = self->mutation_table->derived_state_offset[row_id + 1]
-        - self->mutation_table->derived_state_offset[row_id];
-    mutation.metadata = self->mutation_table->metadata
-        + self->mutation_table->metadata_offset[row_id];
-    mutation.metadata_length = self->mutation_table->metadata_offset[row_id + 1]
-        - self->mutation_table->metadata_offset[row_id];
+    mutation.site = self->table->site[row_id];
+    mutation.node = self->table->node[row_id];
+    mutation.parent = self->table->parent[row_id];
+    mutation.derived_state = self->table->derived_state
+        + self->table->derived_state_offset[row_id];
+    mutation.derived_state_length = self->table->derived_state_offset[row_id + 1]
+        - self->table->derived_state_offset[row_id];
+    mutation.metadata = self->table->metadata
+        + self->table->metadata_offset[row_id];
+    mutation.metadata_length = self->table->metadata_offset[row_id + 1]
+        - self->table->metadata_offset[row_id];
     ret = make_mutation(&mutation);
 out:
     return ret;
@@ -3283,13 +3415,13 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     }
 
     if (method == SET_COLS) {
-        err = mutation_table_set_columns(self->mutation_table, num_rows,
+        err = mutation_table_set_columns(self->table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
                 PyArray_DATA(derived_state_offset_array),
                 metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = mutation_table_append_columns(self->mutation_table, num_rows,
+        err = mutation_table_append_columns(self->table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
                 PyArray_DATA(derived_state_offset_array),
@@ -3334,7 +3466,7 @@ MutationTable_clear(MutationTable *self)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    err = mutation_table_clear(self->mutation_table);
+    err = mutation_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3351,7 +3483,7 @@ MutationTable_get_max_rows_increment(MutationTable *self, void *closure)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -3363,7 +3495,7 @@ MutationTable_get_num_rows(MutationTable *self, void *closure)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -3375,7 +3507,7 @@ MutationTable_get_max_rows(MutationTable *self, void *closure)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -3389,7 +3521,7 @@ MutationTable_get_site(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->site, NPY_INT32,
+            self->table->num_rows, self->table->site, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -3404,7 +3536,7 @@ MutationTable_get_node(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->node, NPY_INT32,
+            self->table->num_rows, self->table->node, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -3419,7 +3551,7 @@ MutationTable_get_parent(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->parent, NPY_INT32,
+            self->table->num_rows, self->table->parent, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -3434,7 +3566,7 @@ MutationTable_get_derived_state(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->derived_state_length, self->mutation_table->derived_state,
+            self->table->derived_state_length, self->table->derived_state,
             NPY_INT8, sizeof(char));
 out:
     return ret;
@@ -3449,7 +3581,7 @@ MutationTable_get_derived_state_offset(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows + 1, self->mutation_table->derived_state_offset,
+            self->table->num_rows + 1, self->table->derived_state_offset,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -3464,7 +3596,7 @@ MutationTable_get_metadata(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->metadata_length, self->mutation_table->metadata,
+            self->table->metadata_length, self->table->metadata,
             NPY_INT8, sizeof(char));
 out:
     return ret;
@@ -3479,7 +3611,7 @@ MutationTable_get_metadata_offset(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows + 1, self->mutation_table->metadata_offset,
+            self->table->num_rows + 1, self->table->metadata_offset,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -3512,6 +3644,8 @@ static PyGetSetDef MutationTable_getsetters[] = {
 static PyMethodDef MutationTable_methods[] = {
     {"add_row", (PyCFunction) MutationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) MutationTable_equals, METH_VARARGS,
+        "Returns True if the specified MutationTable is equal to this one."},
     {"get_row", (PyCFunction) MutationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
@@ -3572,7 +3706,7 @@ static int
 PopulationTable_check_state(PopulationTable *self)
 {
     int ret = -1;
-    if (self->population_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "PopulationTable not initialised");
         goto out;
     }
@@ -3588,10 +3722,10 @@ out:
 static void
 PopulationTable_dealloc(PopulationTable* self)
 {
-    if (self->population_table != NULL) {
-        population_table_free(self->population_table);
-        PyMem_Free(self->population_table);
-        self->population_table = NULL;
+    if (self->table != NULL) {
+        population_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3604,7 +3738,7 @@ PopulationTable_init(PopulationTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->population_table = NULL;
+    self->table = NULL;
     self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
@@ -3614,13 +3748,13 @@ PopulationTable_init(PopulationTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->population_table = PyMem_Malloc(sizeof(population_table_t));
-    if (self->population_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(population_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     /* Take the default size increments for metadata and record */
-    err = population_table_alloc(self->population_table,
+    err = population_table_alloc(self->table,
             (size_t) max_rows_increment, 0);
     if (err != 0) {
         handle_library_error(err);
@@ -3636,7 +3770,7 @@ PopulationTable_add_row(PopulationTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
-    PyObject *py_metadata = NULL;
+    PyObject *py_metadata = Py_None;
     char *metadata = NULL;
     Py_ssize_t metadata_length = 0;
     static char *kwlist[] = {"metadata", NULL};
@@ -3653,12 +3787,32 @@ PopulationTable_add_row(PopulationTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = population_table_add_row(self->population_table, metadata, metadata_length);
+    err = population_table_add_row(self->table, metadata, metadata_length);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject PopulationTableType;
+
+static PyObject *
+PopulationTable_equals(PopulationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PopulationTable *other = NULL;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &PopulationTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", population_table_equals(self->table, other->table));
 out:
     return ret;
 }
@@ -3676,15 +3830,15 @@ PopulationTable_get_row(PopulationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->population_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    population.metadata = self->population_table->metadata
-        + self->population_table->metadata_offset[row_id];
-    population.metadata_length = self->population_table->metadata_offset[row_id + 1]
-        - self->population_table->metadata_offset[row_id];
+    population.metadata = self->table->metadata
+        + self->table->metadata_offset[row_id];
+    population.metadata_length = self->table->metadata_offset[row_id + 1]
+        - self->table->metadata_offset[row_id];
     ret = make_population(&population);
 out:
     return ret;
@@ -3727,10 +3881,10 @@ PopulationTable_set_or_append_columns(PopulationTable *self, PyObject *args, PyO
         goto out;
     }
     if (method == SET_COLS) {
-        err = population_table_set_columns(self->population_table, num_rows,
+        err = population_table_set_columns(self->table, num_rows,
                 PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
     } else if (method == APPEND_COLS) {
-        err = population_table_append_columns(self->population_table, num_rows,
+        err = population_table_append_columns(self->table, num_rows,
                 PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
     } else {
         assert(0);
@@ -3767,7 +3921,7 @@ PopulationTable_clear(PopulationTable *self)
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    err = population_table_clear(self->population_table);
+    err = population_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3784,7 +3938,7 @@ PopulationTable_get_max_rows_increment(PopulationTable *self, void *closure)
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->population_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -3796,7 +3950,7 @@ PopulationTable_get_num_rows(PopulationTable *self, void *closure)
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->population_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -3808,7 +3962,7 @@ PopulationTable_get_max_rows(PopulationTable *self, void *closure)
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->population_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -3821,8 +3975,8 @@ PopulationTable_get_metadata(PopulationTable *self, void *closure)
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->population_table->metadata_length,
-            self->population_table->metadata, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -3835,8 +3989,8 @@ PopulationTable_get_metadata_offset(PopulationTable *self, void *closure)
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->population_table->num_rows + 1,
-            self->population_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -3857,6 +4011,8 @@ static PyGetSetDef PopulationTable_getsetters[] = {
 static PyMethodDef PopulationTable_methods[] = {
     {"add_row", (PyCFunction) PopulationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) PopulationTable_equals, METH_VARARGS,
+        "Returns True if the specified PopulationTable is equal to this one."},
     {"get_row", (PyCFunction) PopulationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"append_columns", (PyCFunction) PopulationTable_append_columns,
@@ -3919,7 +4075,7 @@ static int
 ProvenanceTable_check_state(ProvenanceTable *self)
 {
     int ret = -1;
-    if (self->provenance_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "ProvenanceTable not initialised");
         goto out;
     }
@@ -3935,10 +4091,10 @@ out:
 static void
 ProvenanceTable_dealloc(ProvenanceTable* self)
 {
-    if (self->provenance_table != NULL) {
-        provenance_table_free(self->provenance_table);
-        PyMem_Free(self->provenance_table);
-        self->provenance_table = NULL;
+    if (self->table != NULL) {
+        provenance_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3951,7 +4107,7 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->provenance_table = NULL;
+    self->table = NULL;
     self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
@@ -3961,13 +4117,13 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->provenance_table = PyMem_Malloc(sizeof(provenance_table_t));
-    if (self->provenance_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(provenance_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     /* Take the default size increments for timestamp and record */
-    err = provenance_table_alloc(self->provenance_table,
+    err = provenance_table_alloc(self->table,
             (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
@@ -3977,7 +4133,6 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
-
 static PyObject *
 ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
 {
@@ -3996,7 +4151,7 @@ ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    err = provenance_table_add_row(self->provenance_table,
+    err = provenance_table_add_row(self->table,
             timestamp, timestamp_length, record, record_length);
     if (err < 0) {
         handle_library_error(err);
@@ -4007,6 +4162,25 @@ out:
     return ret;
 }
 
+/* Forward declaration */
+static PyTypeObject ProvenanceTableType;
+
+static PyObject *
+ProvenanceTable_equals(ProvenanceTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    ProvenanceTable *other = NULL;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &ProvenanceTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", provenance_table_equals(self->table, other->table));
+out:
+    return ret;
+}
 
 static PyObject *
 ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
@@ -4021,19 +4195,19 @@ ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->provenance_table->num_rows;
+    num_rows = (Py_ssize_t) self->table->num_rows;
     if (row_id < 0 || row_id >= num_rows) {
         PyErr_SetString(PyExc_IndexError, "row index out of bounds");
         goto out;
     }
-    provenance.timestamp = self->provenance_table->timestamp
-        + self->provenance_table->timestamp_offset[row_id];
-    provenance.timestamp_length = self->provenance_table->timestamp_offset[row_id + 1]
-        - self->provenance_table->timestamp_offset[row_id];
-    provenance.record = self->provenance_table->record
-        + self->provenance_table->record_offset[row_id];
-    provenance.record_length = self->provenance_table->record_offset[row_id + 1]
-        - self->provenance_table->record_offset[row_id];
+    provenance.timestamp = self->table->timestamp
+        + self->table->timestamp_offset[row_id];
+    provenance.timestamp_length = self->table->timestamp_offset[row_id + 1]
+        - self->table->timestamp_offset[row_id];
+    provenance.record = self->table->record
+        + self->table->record_offset[row_id];
+    provenance.record_length = self->table->record_offset[row_id + 1]
+        - self->table->record_offset[row_id];
     ret = make_provenance(&provenance);
 out:
     return ret;
@@ -4094,11 +4268,11 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
         goto out;
     }
     if (method == SET_COLS) {
-        err = provenance_table_set_columns(self->provenance_table, num_rows,
+        err = provenance_table_set_columns(self->table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
                 PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else if (method == APPEND_COLS) {
-        err = provenance_table_append_columns(self->provenance_table, num_rows,
+        err = provenance_table_append_columns(self->table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
                 PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else {
@@ -4138,7 +4312,7 @@ ProvenanceTable_clear(ProvenanceTable *self)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    err = provenance_table_clear(self->provenance_table);
+    err = provenance_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4155,7 +4329,7 @@ ProvenanceTable_get_max_rows_increment(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -4167,7 +4341,7 @@ ProvenanceTable_get_num_rows(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -4179,7 +4353,7 @@ ProvenanceTable_get_max_rows(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
@@ -4192,8 +4366,8 @@ ProvenanceTable_get_timestamp(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->timestamp_length,
-            self->provenance_table->timestamp, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->timestamp_length,
+            self->table->timestamp, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -4206,8 +4380,8 @@ ProvenanceTable_get_timestamp_offset(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->num_rows + 1,
-            self->provenance_table->timestamp_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->timestamp_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -4220,8 +4394,8 @@ ProvenanceTable_get_record(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->record_length,
-            self->provenance_table->record, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->record_length,
+            self->table->record, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -4234,8 +4408,8 @@ ProvenanceTable_get_record_offset(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->num_rows + 1,
-            self->provenance_table->record_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->record_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -4259,6 +4433,8 @@ static PyGetSetDef ProvenanceTable_getsetters[] = {
 static PyMethodDef ProvenanceTable_methods[] = {
     {"add_row", (PyCFunction) ProvenanceTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) ProvenanceTable_equals, METH_VARARGS,
+        "Returns True if the specified ProvenanceTable is equal to this one."},
     {"get_row", (PyCFunction) ProvenanceTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
     {"append_columns", (PyCFunction) ProvenanceTable_append_columns,
@@ -4416,14 +4592,14 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     Py_INCREF(provenances);
 
     err = table_collection_set_tables(self->tables,
-        individuals->individual_table,
-        nodes->node_table,
-        edges->edge_table,
-        migrations->migration_table,
-        sites->site_table,
-        mutations->mutation_table,
-        populations->population_table,
-        provenances->provenance_table);
+        individuals->table,
+        nodes->table,
+        edges->table,
+        migrations->table,
+        sites->table,
+        mutations->table,
+        populations->table,
+        provenances->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4519,7 +4695,7 @@ TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
     }
 
     /* Allocate a new array to hold the node map. */
-    dims = self->nodes->node_table->num_rows;
+    dims = self->nodes->table->num_rows;
     node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
     if (node_map_array == NULL) {
         goto out;
@@ -4741,14 +4917,14 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     if (MutationTable_check_state(mutations) != 0) {
         goto out;
     }
-    err = mutgen_generate_tables_tmp(self->mutgen, nodes->node_table,
-            edges->edge_table);
+    err = mutgen_generate_tables_tmp(self->mutgen, nodes->table,
+            edges->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    err = mutgen_populate_tables(self->mutgen, sites->site_table,
-            mutations->mutation_table);
+    err = mutgen_populate_tables(self->mutgen, sites->table,
+            mutations->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5266,7 +5442,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    err = node_table_copy(py_nodes->node_table, tables.nodes);
+    err = node_table_copy(py_nodes->table, tables.nodes);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5275,7 +5451,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
-    err = edge_table_copy(py_edges->edge_table, tables.edges);
+    err = edge_table_copy(py_edges->table, tables.edges);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5285,7 +5461,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (MigrationTable_check_state(py_migrations) != 0) {
             goto out;
         }
-        err = migration_table_copy(py_migrations->migration_table, tables.migrations);
+        err = migration_table_copy(py_migrations->table, tables.migrations);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5296,7 +5472,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
-        err = site_table_copy(py_sites->site_table, tables.sites);
+        err = site_table_copy(py_sites->table, tables.sites);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5307,7 +5483,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (MutationTable_check_state(py_mutations) != 0) {
             goto out;
         }
-        err = mutation_table_copy(py_mutations->mutation_table, tables.mutations);
+        err = mutation_table_copy(py_mutations->table, tables.mutations);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5318,7 +5494,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (ProvenanceTable_check_state(py_provenances) != 0) {
             goto out;
         }
-        err = provenance_table_copy(py_provenances->provenance_table, tables.provenances);
+        err = provenance_table_copy(py_provenances->table, tables.provenances);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5329,7 +5505,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (IndividualTable_check_state(py_individuals) != 0) {
             goto out;
         }
-        err = individual_table_copy(py_individuals->individual_table, tables.individuals);
+        err = individual_table_copy(py_individuals->table, tables.individuals);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5340,7 +5516,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (PopulationTable_check_state(py_populations) != 0) {
             goto out;
         }
-        err = population_table_copy(py_populations->population_table, tables.populations);
+        err = population_table_copy(py_populations->table, tables.populations);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5417,7 +5593,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (NodeTable_check_state(py_nodes) != 0) {
         goto out;
     }
-    err = node_table_copy(tables.nodes, py_nodes->node_table);
+    err = node_table_copy(tables.nodes, py_nodes->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5426,7 +5602,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (EdgeTable_check_state(py_edges) != 0) {
         goto out;
     }
-    err = edge_table_copy(tables.edges, py_edges->edge_table);
+    err = edge_table_copy(tables.edges, py_edges->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5436,7 +5612,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (MigrationTable_check_state(py_migrations) != 0) {
             goto out;
         }
-        err = migration_table_copy(tables.migrations, py_migrations->migration_table);
+        err = migration_table_copy(tables.migrations, py_migrations->table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5447,7 +5623,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (SiteTable_check_state(py_sites) != 0) {
             goto out;
         }
-        err = site_table_copy(tables.sites, py_sites->site_table);
+        err = site_table_copy(tables.sites, py_sites->table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5457,7 +5633,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (MutationTable_check_state(py_mutations) != 0) {
             goto out;
         }
-        err = mutation_table_copy(tables.mutations, py_mutations->mutation_table);
+        err = mutation_table_copy(tables.mutations, py_mutations->table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5473,7 +5649,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (ProvenanceTable_check_state(py_provenances) != 0) {
             goto out;
         }
-        err = provenance_table_copy(tables.provenances, py_provenances->provenance_table);
+        err = provenance_table_copy(tables.provenances, py_provenances->table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5484,8 +5660,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
         if (IndividualTable_check_state(py_individuals) != 0) {
             goto out;
         }
-        err = individual_table_copy(tables.individuals,
-                py_individuals->individual_table);
+        err = individual_table_copy(tables.individuals, py_individuals->table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -5497,7 +5672,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         err = population_table_copy(tables.populations,
-                py_populations->population_table);
+                py_populations->table);
         if (err != 0) {
             handle_library_error(err);
             goto out;
@@ -9503,9 +9678,9 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
         }
         recomb_map = recombination_map->recomb_map;
     }
-    err = msp_populate_tables(self->sim, recomb_map, nodes->node_table,
-            edges->edge_table, migrations->migration_table,
-            populations->population_table);
+    err = msp_populate_tables(self->sim, recomb_map, nodes->table,
+            edges->table, migrations->table,
+            populations->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;

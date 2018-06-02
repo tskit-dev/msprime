@@ -97,8 +97,13 @@ class BaseTable(object):
     def max_rows_increment(self):
         return self.ll_table.max_rows_increment
 
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = bool(self.ll_table.equals(other.ll_table))
+        return ret
+
     def __ne__(self, other):
-        # __eq__ must be defined in the subclass
         return not self.__eq__(other)
 
     def __len__(self):
@@ -163,17 +168,6 @@ class IndividualTable(BaseTable):
                 str, location[location_offset[j]: location_offset[j + 1]]))
             ret += "{}\t{}\t{}\t{}\n".format(j, flags[j], location_str, md)
         return ret[:-1]
-
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.flags, other.flags) and
-                np.array_equal(self.location, other.location) and
-                np.array_equal(self.location_offset, other.location_offset) and
-                np.array_equal(self.metadata, other.metadata) and
-                np.array_equal(self.metadata_offset, other.metadata_offset))
-        return ret
 
     def copy(self):
         """
@@ -288,18 +282,6 @@ class NodeTable(BaseTable):
             ret += "{}\t{}\t{}\t{}\t{:.14f}\t{}\n".format(
                 j, flags[j], population[j], individual[j], time[j], md)
         return ret[:-1]
-
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.flags, other.flags) and
-                np.array_equal(self.population, other.population) and
-                np.array_equal(self.individual, other.individual) and
-                np.array_equal(self.time, other.time) and
-                np.array_equal(self.metadata, other.metadata) and
-                np.array_equal(self.metadata_offset, other.metadata_offset))
-        return ret
 
     def copy(self):
         """
@@ -467,16 +449,6 @@ class EdgeTable(BaseTable):
                 j, left[j], right[j], parent[j], child[j])
         return ret[:-1]
 
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.left, other.left) and
-                np.array_equal(self.right, other.right) and
-                np.array_equal(self.parent, other.parent) and
-                np.array_equal(self.child, other.child))
-        return ret
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -620,18 +592,6 @@ class MigrationTable(BaseTable):
             ret += "{}\t{:.8f}\t{:.8f}\t{}\t{}\t{}\t{:.8f}\n".format(
                 j, left[j], right[j], node[j], source[j], dest[j], time[j])
         return ret[:-1]
-
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.left, other.left) and
-                np.array_equal(self.right, other.right) and
-                np.array_equal(self.node, other.node) and
-                np.array_equal(self.source, other.source) and
-                np.array_equal(self.dest, other.dest) and
-                np.array_equal(self.time, other.time))
-        return ret
 
     def copy(self):
         """
@@ -786,18 +746,6 @@ class SiteTable(BaseTable):
             ret += "{}\t{:.8f}\t{}\t{}\n".format(
                 j, position[j], ancestral_state[j], md)
         return ret[:-1]
-
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.position, other.position) and
-                np.array_equal(self.ancestral_state, other.ancestral_state) and
-                np.array_equal(
-                    self.ancestral_state_offset, other.ancestral_state_offset) and
-                np.array_equal(self.metadata, other.metadata) and
-                np.array_equal(self.metadata_offset, other.metadata_offset))
-        return ret
 
     def copy(self):
         """
@@ -994,20 +942,6 @@ class MutationTable(BaseTable):
                 j, site[j], node[j], derived_state[j], parent[j], md)
         return ret[:-1]
 
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.site, other.site) and
-                np.array_equal(self.node, other.node) and
-                np.array_equal(self.parent, other.parent) and
-                np.array_equal(self.derived_state, other.derived_state) and
-                np.array_equal(
-                    self.derived_state_offset, other.derived_state_offset) and
-                np.array_equal(self.metadata, other.metadata) and
-                np.array_equal(self.metadata_offset, other.metadata_offset))
-        return ret
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -1168,14 +1102,6 @@ class PopulationTable(BaseTable):
             ret += "{}\t{}\n".format(j, metadata[j])
         return ret[:-1]
 
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.metadata, other.metadata) and
-                np.array_equal(self.metadata_offset, other.metadata_offset))
-        return ret
-
     def copy(self):
         """
         Returns a deep copy of this table.
@@ -1268,16 +1194,6 @@ class ProvenanceTable(BaseTable):
         for j in range(self.num_rows):
             ret += "{}\t{}\t{}\n".format(j, timestamp[j], record[j])
         return ret[:-1]
-
-    def __eq__(self, other):
-        ret = False
-        if type(other) is type(self):
-            ret = (
-                np.array_equal(self.timestamp, other.timestamp) and
-                np.array_equal(self.timestamp_offset, other.timestamp_offset) and
-                np.array_equal(self.record, other.record) and
-                np.array_equal(self.record_offset, other.record_offset))
-        return ret
 
     # Unpickle support
     def __setstate__(self, state):

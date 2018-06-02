@@ -483,7 +483,7 @@ out:
 }
 
 bool
-node_table_equal(node_table_t *self, node_table_t *other)
+node_table_equals(node_table_t *self, node_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
@@ -714,7 +714,7 @@ out:
 }
 
 bool
-edge_table_equal(edge_table_t *self, edge_table_t *other)
+edge_table_equals(edge_table_t *self, edge_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows) {
@@ -1010,7 +1010,7 @@ out:
 }
 
 bool
-site_table_equal(site_table_t *self, site_table_t *other)
+site_table_equals(site_table_t *self, site_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
@@ -1422,7 +1422,7 @@ out:
 }
 
 bool
-mutation_table_equal(mutation_table_t *self, mutation_table_t *other)
+mutation_table_equals(mutation_table_t *self, mutation_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
@@ -1763,7 +1763,7 @@ out:
 }
 
 bool
-migration_table_equal(migration_table_t *self, migration_table_t *other)
+migration_table_equals(migration_table_t *self, migration_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows) {
@@ -2164,7 +2164,7 @@ out:
 }
 
 bool
-individual_table_equal(individual_table_t *self, individual_table_t *other)
+individual_table_equals(individual_table_t *self, individual_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
@@ -2457,7 +2457,7 @@ out:
 }
 
 bool
-population_table_equal(population_table_t *self, population_table_t *other)
+population_table_equals(population_table_t *self, population_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
@@ -2818,7 +2818,7 @@ out:
 }
 
 bool
-provenance_table_equal(provenance_table_t *self, provenance_table_t *other)
+provenance_table_equals(provenance_table_t *self, provenance_table_t *other)
 {
     bool ret = false;
     if (self->num_rows == other->num_rows
@@ -4581,17 +4581,17 @@ table_collection_free(table_collection_t *self)
  * this does *not* consider the indexes, since these are derived from the
  * tables. */
 bool
-table_collection_equal(table_collection_t *self, table_collection_t *other)
+table_collection_equals(table_collection_t *self, table_collection_t *other)
 {
     bool ret = self->sequence_length == other->sequence_length
-        && individual_table_equal(self->individuals, other->individuals)
-        && node_table_equal(self->nodes, other->nodes)
-        && edge_table_equal(self->edges, other->edges)
-        && migration_table_equal(self->migrations, other->migrations)
-        && site_table_equal(self->sites, other->sites)
-        && mutation_table_equal(self->mutations, other->mutations)
-        && population_table_equal(self->populations, other->populations)
-        && provenance_table_equal(self->provenances, other->provenances);
+        && individual_table_equals(self->individuals, other->individuals)
+        && node_table_equals(self->nodes, other->nodes)
+        && edge_table_equals(self->edges, other->edges)
+        && migration_table_equals(self->migrations, other->migrations)
+        && site_table_equals(self->sites, other->sites)
+        && mutation_table_equals(self->mutations, other->mutations)
+        && population_table_equals(self->populations, other->populations)
+        && provenance_table_equals(self->provenances, other->provenances);
     return ret;
 }
 

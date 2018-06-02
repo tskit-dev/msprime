@@ -3284,6 +3284,91 @@ class TestTablesInterface(LowLevelTestCase):
                 metadata=bad_type)
 
 
+class TestTableEquals(unittest.TestCase):
+    """
+    Simple tests for the equality functions.
+    """
+    def test_individual_table_equal(self):
+        table = _msprime.IndividualTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.IndividualTable()
+        self.assertTrue(table.equals(other))
+        other.add_row()
+        self.assertFalse(table.equals(other))
+
+    def test_node_table_equal(self):
+        table = _msprime.NodeTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.NodeTable()
+        self.assertTrue(table.equals(other))
+        other.add_row()
+        self.assertFalse(table.equals(other))
+
+    def test_edge_table_equal(self):
+        table = _msprime.EdgeTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.EdgeTable()
+        self.assertTrue(table.equals(other))
+        other.add_row(0, 1, 2, 3)
+        self.assertFalse(table.equals(other))
+
+    def test_migration_table_equal(self):
+        table = _msprime.MigrationTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.MigrationTable()
+        self.assertTrue(table.equals(other))
+        other.add_row(0, 1, 2, 3, 4, 5)
+        self.assertFalse(table.equals(other))
+
+    def test_site_table_equal(self):
+        table = _msprime.SiteTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.SiteTable()
+        self.assertTrue(table.equals(other))
+        other.add_row(0, "A")
+        self.assertFalse(table.equals(other))
+
+    def test_mutation_table_equal(self):
+        table = _msprime.MutationTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.MutationTable()
+        self.assertTrue(table.equals(other))
+        other.add_row(0, 0, "A")
+        self.assertFalse(table.equals(other))
+
+    def test_population_table_equal(self):
+        table = _msprime.PopulationTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.PopulationTable()
+        self.assertTrue(table.equals(other))
+        other.add_row()
+        self.assertFalse(table.equals(other))
+
+    def test_provenance_table_equal(self):
+        table = _msprime.ProvenanceTable()
+        for bad_type in [None, "1234", 4, {}]:
+            self.assertRaises(TypeError, table.equals, bad_type)
+        self.assertTrue(table.equals(table))
+        other = _msprime.ProvenanceTable()
+        self.assertTrue(table.equals(other))
+        other.add_row("123", "123")
+        self.assertFalse(table.equals(other))
+
+
 class TestSampleListIterator(LowLevelTestCase):
     """
     Tests for the low-level sample list iterator.

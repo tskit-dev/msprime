@@ -769,8 +769,8 @@ test_dtwf_deterministic(void)
         CU_ASSERT(edges[j].num_rows > 0);
 
     }
-    CU_ASSERT_TRUE(node_table_equal(&nodes[0], &nodes[1]));
-    CU_ASSERT_TRUE(edge_table_equal(&edges[0], &edges[1]));
+    CU_ASSERT_TRUE(node_table_equals(&nodes[0], &nodes[1]));
+    CU_ASSERT_TRUE(edge_table_equals(&edges[0], &edges[1]));
 
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
