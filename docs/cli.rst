@@ -125,7 +125,7 @@ Supported Features
 ++++++++++++++++++
 
 :command:`mspms` supports a subset of :command:`ms`'s functionality. Please
-`open an issue <https://github.com/jeromekelleher/msprime/issues>`_ on
+`open an issue <https://github.com/tskit-dev/msprime/issues>`_ on
 GitHub if there is a feature of :command:`ms` that you would like to see
 added. We  currently support:
 

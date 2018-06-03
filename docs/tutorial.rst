@@ -558,7 +558,7 @@ sizes and growth rates are all as you intend during each epoch::
     is intended only for debugging purposes, and is not meant to be machine
     readable. The format is also preliminary; if there is other information
     that you think would be useful, please `open an issue on GitHub
-    <https://github.com/jeromekelleher/msprime/issues>`_
+    <https://github.com/tskit-dev/msprime/issues>`_
 
 Once you are satisfied that the demographic history that you have built
 is correct, it can then be simulated by calling the :func:`.simulate`

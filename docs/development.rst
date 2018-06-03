@@ -6,14 +6,14 @@ Developer documentation
 
 If you would like to add some features to ``msprime``, please read the
 following. If you think there is anything missing,
-please open an `issue <http://github.com/jeromekelleher/msprime/issues>`_ or
-`pull request <http://github.com/jeromekelleher/msprime/pulls>`_ on GitHub!
+please open an `issue <http://github.com/tskit-dev/msprime/issues>`_ or
+`pull request <http://github.com/tskit-dev/msprime/pulls>`_ on GitHub!
 
 **********
 Quickstart
 **********
 
-- Make a fork of the msprime repo on `GitHub <github.com/jeromekelleher/msprime>`_
+- Make a fork of the msprime repo on `GitHub <github.com/tskit-dev/msprime>`_
 - Clone your fork into a local directory.
 - Install the :ref:`basic requirements <sec-requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
@@ -144,7 +144,7 @@ smaller test files with more focussed tests are preferred (e.g., ``test_vcf.py``
 ``test_demography.py``).
 
 All new code must have high test coverage, which will be checked as part of the
-continuous integration tests by `CodeCov <https://codecov.io/gh/jeromekelleher/msprime/>`_.
+continuous integration tests by `CodeCov <https://codecov.io/gh/tskit-dev/msprime/>`_.
 
 +++++++++++++++++++++++++++++++++
 Interfacing with low-level module
@@ -275,7 +275,7 @@ e.g.:
 While 100% test coverage is not feasible for C code, we aim to cover all code
 that can be reached. (Some classes of error such as malloc failures
 and IO errors are difficult to simulate in C.) Code coverage statistics are
-automatically tracked using `CodeCov <https://codecov.io/gh/jeromekelleher/msprime/>`_.
+automatically tracked using `CodeCov <https://codecov.io/gh/tskit-dev/msprime/>`_.
 
 ++++++++++++++++++
 Coding conventions
