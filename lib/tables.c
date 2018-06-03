@@ -25,10 +25,10 @@
 #include <float.h>
 
 #include "tables.h"
+#include "uuid.h"
 #include "kastore.h"
 
 #define DEFAULT_SIZE_INCREMENT 1024
-#define UUID_SIZE 36
 
 #define TABLE_SEP "-----------------------------------------\n"
 
@@ -4823,7 +4823,7 @@ table_collection_read_format_data(table_collection_t *self)
         ret = msp_set_kas_error(ret);
         goto out;
     }
-    if (len != UUID_SIZE) {
+    if (len != TSK_UUID_SIZE) {
         ret = MSP_ERR_FILE_FORMAT;
         goto out;
     }
@@ -4934,23 +4934,28 @@ out:
 static int WARN_UNUSED
 table_collection_write_format_data(table_collection_t *self, kastore_t *store)
 {
-    /* Until we implement UUID generation, put in a null UUID as a placeholder. */
-    const char *zero_uuid = "00000000-0000-0000-0000-000000000000";
+    int ret = 0;
     char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
-    char uuid[UUID_SIZE]; // exclude trailing \0
+    char uuid[TSK_UUID_SIZE + 1]; // Must include space for trailing null.
     uint32_t version[2] = {
         MSP_FILE_FORMAT_VERSION_MAJOR, MSP_FILE_FORMAT_VERSION_MINOR};
     write_table_col_t write_cols[] = {
         {"format/name", (void *) format_name, sizeof(format_name), KAS_INT8},
         {"format/version", (void *) version, 2, KAS_UINT32},
         {"sequence_length", (void *) &self->sequence_length, 1, KAS_FLOAT64},
-        {"uuid", (void *) uuid, UUID_SIZE, KAS_INT8},
+        {"uuid", (void *) uuid, TSK_UUID_SIZE, KAS_INT8},
     };
+
+    ret = tsk_generate_uuid(uuid, 0);
+    if (ret != 0) {
+        goto out;
+    }
     /* This stupid dance is to workaround the fact that compilers won't allow
      * casts to discard the 'const' qualifier. */
     memcpy(format_name, MSP_FILE_FORMAT_NAME, sizeof(format_name));
-    memcpy(uuid, zero_uuid, UUID_SIZE);
-    return write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+    ret = write_table_cols(store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
+out:
+    return ret;
 }
 
 int WARN_UNUSED

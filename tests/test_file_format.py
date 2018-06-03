@@ -592,6 +592,20 @@ class TestDumpFormat(TestFileFormat):
         self.verify_dump_format(multichar_mutation_example())
 
 
+class TestUuid(TestFileFormat):
+    """
+    Basic tests for the UUID generation.
+    """
+    def test_different_files_same_ts(self):
+        ts = msprime.simulate(10)
+        uuids = []
+        for _ in range(10):
+            ts.dump(self.temp_file)
+            with kastore.load(self.temp_file, use_mmap=False) as store:
+                uuids.append(store["uuid"].tobytes().decode())
+        self.assertEqual(len(uuids), len(set(uuids)))
+
+
 class TestFileFormatErrors(TestFileFormat):
     """
     Tests for errors in the HDF5 format.
