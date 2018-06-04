@@ -17,17 +17,20 @@
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
-#include <string.h>
-#include <assert.h>
-#include <stdlib.h>
 #include <stdint.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#include <wincrypt.h>
+#endif
 
 #include "util.h"
 #include "uuid.h"
 
-
 #define NUM_BYTES 16
 
+#ifdef  __unix__
+/* Assuming the existance of /dev/urandom on Unix platforms */
 static int WARN_UNUSED
 get_random_bytes(uint8_t *buf)
 {
@@ -47,6 +50,38 @@ get_random_bytes(uint8_t *buf)
 out:
     return ret;
 }
+
+#elif defined(_WIN32)
+
+static int WARN_UNUSED
+get_random_bytes(uint8_t *buf)
+{
+    /* Based on CPython's code in bootstrap_hash.c */
+    int ret = MSP_ERR_GENERATE_UUID;
+    HCRYPTPROV hCryptProv = NULL;
+
+    if (!CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+        goto out;
+    }
+    if (!CryptGenRandom(hCryptProv, (DWORD) NUM_BYTES, buf)) {
+        goto out;
+    }
+    if (!CryptReleaseContext(hCryptProv, 0)) {
+        hCryptProv = NULL;
+        goto out;
+    }
+    hCryptProv = NULL;
+    ret = 0;
+out:
+    if (hCryptProv != NULL) {
+        CryptReleaseContext(hCryptProv, 0);
+    }
+    return ret;
+}
+
+#else
+    #error "unsupported platform"
+#endif
 
 /* Generate a new UUID4 using a system-generated source of randomness.
  * Note that this function writes a NULL terminator to the end of this
