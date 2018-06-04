@@ -21,6 +21,7 @@
  * Unit tests for the low-level msprime API.
  */
 #include "msprime.h"
+#include "uuid.h"
 
 #include <float.h>
 #include <limits.h>
@@ -8037,6 +8038,28 @@ test_load_node_table_errors(void)
 
 }
 
+void
+test_generate_uuid(void)
+{
+    size_t uuid_size = 36;
+    char uuid[uuid_size + 1];
+    char other_uuid[uuid_size + 1];
+    int ret;
+
+    ret = tsk_generate_uuid(uuid, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(strlen(uuid), uuid_size);
+    CU_ASSERT_EQUAL(uuid[8], '-');
+    CU_ASSERT_EQUAL(uuid[13], '-');
+    CU_ASSERT_EQUAL(uuid[18], '-');
+    CU_ASSERT_EQUAL(uuid[23], '-');
+
+    ret = tsk_generate_uuid(other_uuid, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(strlen(other_uuid), uuid_size);
+    CU_ASSERT_STRING_NOT_EQUAL(uuid, other_uuid);
+}
+
 static int
 msprime_suite_init(void)
 {
@@ -8202,6 +8225,7 @@ main(int argc, char **argv)
         {"test_table_collection_dump_errors", test_table_collection_dump_errors},
         {"test_table_collection_set_tables", test_table_collection_set_tables},
         {"test_load_node_table_errors", test_load_node_table_errors},
+        {"test_generate_uuid", test_generate_uuid},
         CU_TEST_INFO_NULL,
     };
 

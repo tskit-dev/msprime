@@ -11,7 +11,7 @@ LDFLAGS=-lgsl -lgslcblas -lm
 HEADERS=msprime.h util.h trees.h tables.h
 COMPILED=msprime.o fenwick.o tree_sequence.o object_heap.o newick.o \
     hapgen.o recomb_map.o mutgen.o vargen.o vcf.o ld.o avl.o tables.o util.o \
-    kastore.o
+    uuid.o kastore.o
 
 all: main simulation_tests tests table_example table_example_cpp
 
@@ -59,9 +59,9 @@ coverity:
 
 # Examples using just the tables API.
 table_example: table_example.c
-	gcc -Ikastore/c -o table_example table_example.c tables.c util.c kastore/c/kastore.c
+	gcc -Ikastore/c -o table_example table_example.c tables.c uuid.c util.c kastore/c/kastore.c
 
 # Make sure that all the files are compiled as C code.
 table_example_cpp: table_example_cpp.cc tables.o util.o
 	g++ -std=c++11 -Ikastore/c -o table_example_cpp table_example_cpp.cc tables.o util.o \
-		kastore.o
+		uuid.o kastore.o

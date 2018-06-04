@@ -250,6 +250,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_INDIVIDUAL:
             ret = "Individual ID not in individual table.";
             break;
+        case MSP_ERR_GENERATE_UUID:
+            ret = "Error generating UUID";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

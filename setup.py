@@ -93,7 +93,7 @@ configurator = PathConfigurator()
 source_files = [
     "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
     "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
-    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c",
+    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c", "uuid.c",
     os.path.join(kastore_dir, "kastore.c")]
 
 
@@ -126,14 +126,19 @@ class DefineMacros(object):
         return defines[index]
 
 
+libraries = ["gsl", "gslcblas"]
+if IS_WINDOWS:
+    # Needed for generating UUIDs
+    libraries.append("Advapi32")
+
 _msprime_module = Extension(
     '_msprime',
     sources=["_msprimemodule.c"] + [os.path.join(libdir, f) for f in source_files],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
+    libraries=libraries,
     define_macros=DefineMacros(),
-    libraries=["gsl", "gslcblas"],
     include_dirs=includes + [
         os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
