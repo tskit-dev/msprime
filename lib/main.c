@@ -479,7 +479,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_alloc(msp, num_samples, samples, rng);
+    ret = msp_alloc(msp, num_samples, samples, NULL, rng);
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }

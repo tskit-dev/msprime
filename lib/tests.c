@@ -1539,7 +1539,7 @@ get_example_tree_sequence(uint32_t num_samples,
     for (j = 0; j < num_historical_samples; j++) {
         samples[j].time = 0.1 * (j + 1);
     }
-    ret = msp_alloc(msp, num_samples, samples, rng);
+    ret = msp_alloc(msp, num_samples, samples, NULL, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, num_loci);
     CU_ASSERT_EQUAL(ret, 0);

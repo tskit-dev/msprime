@@ -247,7 +247,8 @@ typedef struct {
     block_allocator_t allocator;
 } mutgen_t;
 
-int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
+int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
+        tree_sequence_t *from, gsl_rng *rng);
 int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);
 int msp_set_simulation_model_smc_prime(msp_t *self, double population_size);

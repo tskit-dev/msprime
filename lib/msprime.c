@@ -410,22 +410,66 @@ out:
     return ret;
 }
 
+static int
+msp_set_initial_state_from_ts(msp_t *self, tree_sequence_t *ts)
+{
+    int ret = 0;
+    sparse_tree_t t;
+    node_id_t root;
+
+    assert(self != NULL);
+
+    ret = sparse_tree_alloc(&t, ts, MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
+    if (ret != 0) {
+        goto out;
+    }
+    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
+        for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
+            printf("Seg = (%f, %f, %d)\n", t.left, t.right, root);
+            seg = msp_alloc_segment(
+
+        }
+    }
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    sparse_tree_free(&t);
+    return ret;
+
+}
+
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng) {
+msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
+        tree_sequence_t *from, gsl_rng *rng) {
     int ret = -1;
     size_t j, k, initial_samples;
 
     memset(self, 0, sizeof(msp_t));
-    if (num_samples < 2 || samples == NULL || rng == NULL) {
+    if (rng == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->num_samples = (uint32_t) num_samples;
+    if (samples == NULL && from == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    } else if (samples != NULL && num_samples < 2) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->rng = rng;
     self->num_loci = 1;
     self->recombination_rate = 0.0;
+    self->num_samples = (uint32_t) num_samples;
+    if (from != NULL) {
+        ret = msp_set_initial_state_from_ts(self, from);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
     self->samples = malloc(num_samples * sizeof(sample_t));
     if (self->samples == NULL) {
         ret = MSP_ERR_NO_MEMORY;
