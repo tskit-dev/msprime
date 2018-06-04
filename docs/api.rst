@@ -138,6 +138,20 @@ Variable recombination rates
 .. autoclass:: msprime.RecombinationMap
     :members:
 
+++++++++++++++++++++
+Simulating mutations
+++++++++++++++++++++
+
+When running coalescent simulations it's usually most convenient to use the
+``mutation_rate`` argument to the :func:`.simulate` function to throw neutral
+mutations down on the trees. However, sometimes we wish to throw mutations
+down on an existing tree sequence: for example, if we want to see the outcome
+of different random mutational processes on top of a single simulated topology,
+or if we have obtained the tree sequence from another program and wish to
+overlay neutral mutations on this tree sequence.
+
+.. autofunction:: msprime.mutate
+
 
 ************************
 Using simulation results

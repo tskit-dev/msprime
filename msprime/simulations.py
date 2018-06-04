@@ -30,7 +30,7 @@ import random
 import sys
 
 import _msprime
-import msprime.tables as tables
+import msprime.tables as _tables
 import msprime.trees as trees
 import msprime.provenance as provenance
 
@@ -303,6 +303,44 @@ def simulate(
             sim, mutation_generator, num_replicates, provenance_dict)
 
 
+def mutate(tree_sequence, rate=None, random_seed=None):
+    """
+    Simulates mutations on the specified ancestry and returns the resulting
+    :class:`.TreeSequence`. Mutations are generated at the specified rate in
+    measured generations. Mutations are generated under the infinite sites
+    model, and so the rate of new mutations is per unit of sequence length per
+    generation. If a random seed is specified, this is used to seed the random
+    number generator. If the same seed is specified and all other parameters
+    are equal then the same mutations will be generated. If no random seed is
+    specified then one is generated automatically.
+
+    :param TreeSequence tree_sequence: The tree sequence onto which we
+        wish to throw mutations.
+    :param float rate: The rate of mutation per generation.
+    :param int random_seed: The random seed. If this is `None`, a
+        random seed will be automatically generated. Valid random
+        seeds must be between 1 and :math:`2^{32} - 1`.
+    :return: The :class:`.TreeSequence` object  resulting from overlaying
+        mutations on the input tree sequence.
+    :rtype: :class:`.TreeSequence`
+    """
+    try:
+        tables = tree_sequence.dump_tables()
+    except AttributeError:
+        raise ValueError("First argument must be a TreeSequence instance.")
+    if random_seed is None:
+        random_seed = _get_random_seed()
+    rng = RandomGenerator(int(random_seed))
+    mutation_generator = MutationGenerator(rng, rate)
+    mutation_generator.generate(
+        tables.nodes.ll_table, tables.edges.ll_table, tables.sites.ll_table,
+        tables.mutations.ll_table)
+    parameters = {"rate": rate, "random_seed": random_seed}
+    provenance_dict = provenance.get_provenance_dict("mutate", parameters)
+    tables.provenances.add_row(json.dumps(provenance_dict))
+    return trees.load_tables(**tables.asdict())
+
+
 class Simulator(object):
     """
     Class to simulate trees under a variety of population models.
@@ -338,7 +376,7 @@ class Simulator(object):
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self.max_memory = sys.maxsize
-        self.tables = tables.TableCollection()
+        self.tables = _tables.TableCollection()
 
     @property
     def num_loci(self):
