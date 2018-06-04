@@ -2141,7 +2141,7 @@ individual_table_dump_text(individual_table_t *self, FILE *out)
             goto out;
         }
         for (k = self->location_offset[j]; k < self->location_offset[j + 1]; k++) {
-            err = fprintf(out, "%f", self->location[k]);
+            err = fprintf(out, "%.*g", MSP_DBL_DECIMAL_DIG, self->location[k]);
             if (err < 0) {
                 goto out;
             }
@@ -2299,7 +2299,7 @@ population_table_copy(population_table_t *self, population_table_t *dest)
 
 int
 population_table_set_columns(population_table_t *self, size_t num_rows,
-        char *metadata, uint32_t *metadata_offset)
+        const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
 
@@ -2314,7 +2314,7 @@ out:
 
 int
 population_table_append_columns(population_table_t *self, size_t num_rows,
-        char *metadata, uint32_t *metadata_offset)
+        const char *metadata, uint32_t *metadata_offset)
 {
     int ret;
     table_size_t j, metadata_length;
