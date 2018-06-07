@@ -26,6 +26,7 @@ import unittest
 import json
 
 import msprime
+from tests import tsutil
 
 
 class TestMutate(unittest.TestCase):
@@ -184,3 +185,118 @@ class TestMutate(unittest.TestCase):
         for s1, s2 in zip(binary.sites(), nucleotides.sites()):
             self.assertEqual(s1.position, s2.position)
             self.assertEqual(s1.mutations[0].node, s2.mutations[0].node)
+
+
+class TestKeep(unittest.TestCase):
+    """
+    Tests for the "keep" functionality in which we append new mutations
+    to an existing set.
+    """
+    def verify(self, ts, rate, random_seed):
+        no_keep = msprime.mutate(ts, rate=rate, random_seed=random_seed)
+        self.assertGreater(no_keep.num_sites, 0)
+        keep = msprime.mutate(ts, rate=rate, random_seed=random_seed, keep=True)
+        # Can assume there's no collisions here, very unlikely.
+        self.assertEqual(ts.num_sites + no_keep.num_sites, keep.num_sites)
+        # Mutations are all infinite sites, so must be equal
+        self.assertEqual(ts.num_mutations + no_keep.num_mutations, keep.num_mutations)
+        old = set(site.position for site in ts.sites())
+        new = set(site.position for site in no_keep.sites())
+        both = set(site.position for site in keep.sites())
+        self.assertEqual(old | new, both)
+
+        site_map = {site.position: site for site in ts.sites()}
+        found = 0
+        inserted_mutations = 0
+        for site in keep.sites():
+            if site.position in site_map:
+                old_site = site_map[site.position]
+                self.assertEqual(site.position, old_site.position)
+                self.assertEqual(len(site.mutations), len(old_site.mutations))
+                for mutation, old_mutation in zip(site.mutations, old_site.mutations):
+                    self.assertEqual(mutation.metadata, old_mutation.metadata)
+                    self.assertEqual(mutation.node, old_mutation.node)
+                    self.assertEqual(mutation.derived_state, old_mutation.derived_state)
+                    if old_mutation.parent == msprime.NULL_MUTATION:
+                        self.assertEqual(mutation.parent, old_mutation.parent)
+                    else:
+                        self.assertEqual(
+                            mutation.parent, old_mutation.parent + inserted_mutations)
+                self.assertEqual(site.ancestral_state, old_site.ancestral_state)
+                self.assertEqual(site.metadata, old_site.metadata)
+                found += 1
+            else:
+                inserted_mutations += len(site.mutations)
+        self.assertEqual(found, ts.num_sites)
+
+    def test_simple_binary(self):
+        ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
+        self.assertGreater(ts.num_sites, 0)
+        self.verify(ts, 1, random_seed=2)
+
+    def test_simple_nucleotide(self):
+        ts = msprime.mutate(
+            msprime.simulate(10, random_seed=2),
+            rate=1,
+            random_seed=2,
+            model=msprime.InfiniteSites(msprime.NUCLEOTIDES))
+        self.assertGreater(ts.num_sites, 0)
+        self.verify(ts, 2, random_seed=3)
+
+    def test_branch_mutations(self):
+        ts = tsutil.insert_branch_mutations(
+            msprime.simulate(10, recombination_rate=1, random_seed=2))
+        self.assertGreater(ts.num_sites, 1)
+        self.verify(ts, 3, random_seed=7)
+
+    def test_multichar_mutations(self):
+        ts = tsutil.insert_multichar_mutations(
+            msprime.simulate(12, recombination_rate=4, random_seed=3))
+        self.assertGreater(ts.num_sites, 5)
+        self.verify(ts, 3, random_seed=7)
+
+    def test_random_metadata(self):
+        ts = tsutil.add_random_metadata(
+            msprime.simulate(12, random_seed=3, mutation_rate=1))
+        self.assertGreater(ts.num_sites, 5)
+        self.verify(ts, 3, random_seed=7)
+
+    def test_no_sites(self):
+        ts = msprime.simulate(12, random_seed=3)
+        self.assertEqual(ts.num_sites, 0)
+        self.verify(ts, 3, random_seed=7)
+
+    def test_keep_multichar_muts_same_seeds(self):
+        ts = msprime.simulate(12, random_seed=3)
+        ts = msprime.mutate(ts, rate=1, random_seed=1)
+        self.assertGreater(ts.num_sites, 2)
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
+        for site in ts.sites():
+            tables.sites.add_row(position=site.position, ancestral_state="A" * site.id)
+            for mutation in site.mutations:
+                tables.mutations.add_row(
+                    site=site.id, node=mutation.node,
+                    derived_state="T" * site.id)
+        # FAILS
+        original = msprime.load_tables(**tables.asdict())
+        print(original)
+        # updated = msprime.mutate(original, rate=1, random_seed=1, keep=True)
+        # new_tables = updated.dump_tables()
+        # self.assertEqual(tables.sites, update.sites)
+        # self.assertEqual(tables.mutations, update.mutations)
+
+    def test_keep_metadata_same_seeds(self):
+        ts = msprime.simulate(12, random_seed=3)
+        ts = msprime.mutate(ts, rate=1, random_seed=1)
+        self.assertGreater(ts.num_sites, 2)
+        # Set metadata on this ts so that we can be sure we keep the original
+        # mutations.
+        ts = tsutil.add_random_metadata(ts)
+        t = ts.dump_tables()
+        ts = msprime.load_tables(**t.asdict())
+        other = msprime.mutate(ts, rate=1, random_seed=1, keep=True).dump_tables()
+        print(other.sites)
+        self.assertEqual(t.sites, other.sites)
+        self.assertEqual(t.mutations, other.mutations)

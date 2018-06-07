@@ -1295,6 +1295,10 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = mutgen_generate_tables_tmp(&mutgen, tables.nodes, tables.edges);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = site_table_clear(tables.sites);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = mutation_table_clear(tables.mutations);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = mutgen_populate_tables(&mutgen, tables.sites, tables.mutations);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         /* TODO remove this when populate tables takes table_collection as arg */

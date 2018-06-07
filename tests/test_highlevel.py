@@ -1474,6 +1474,8 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             tables = ts.dump_tables()
             mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
+            tables.sites.clear()
+            tables.mutations.clear()
             mutgen.generate(
                 tables.nodes.ll_table, tables.edges.ll_table,
                 tables.sites.ll_table, tables.mutations.ll_table)

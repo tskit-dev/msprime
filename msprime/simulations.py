@@ -576,6 +576,8 @@ class Simulator(object):
         self.ll_sim.populate_tables(
             t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
             t.populations.ll_table, recombination_map=ll_recomb_map)
+        t.sites.clear()
+        t.mutations.clear()
         if mutation_generator is not None:
             mutation_generator.generate(
                 t.nodes.ll_table, t.edges.ll_table, t.sites.ll_table,

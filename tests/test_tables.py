@@ -1632,3 +1632,24 @@ class TestDeduplicateSites(unittest.TestCase):
         t1.deduplicate_sites()
         self.assertEqual(len(t1.sites), 1)
         self.assertEqual(t1.sites.ancestral_state.tobytes(), b"first")
+
+    def test_multichar_ancestral_state(self):
+        ts = msprime.simulate(8, random_seed=3, mutation_rate=1)
+        self.assertGreater(ts.num_sites, 2)
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
+        for site in ts.sites():
+            site_id = tables.sites.add_row(
+                position=site.position, ancestral_state="A" * site.id)
+            tables.sites.add_row(position=site.position, ancestral_state="0")
+            for mutation in site.mutations:
+                tables.mutations.add_row(
+                    site=site_id, node=mutation.node, derived_state="T" * site.id)
+        print(tables.sites)
+        tables.deduplicate_sites()
+        print(tables.sites)
+        new_ts = msprime.load_tables(**tables.asdict())
+        self.assertEqual(new_ts.num_sites, ts.num_sites)
+        for site in ts.sites():
+            self.assertEqual(site.ancestral_state, site.id * "A")
