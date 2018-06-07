@@ -4791,6 +4791,39 @@ out:
     return ret;
 }
 
+static PyObject *
+TableCollection_deduplicate_sites(TableCollection *self)
+{
+    int err;
+    PyObject *ret = NULL;
+
+    err = table_collection_deduplicate_sites(self->tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject TableCollectionType;
+
+static PyObject *
+TableCollection_equals(TableCollection *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    TableCollection *other = NULL;
+
+    if (!PyArg_ParseTuple(args, "O!", &TableCollectionType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", table_collection_equals(self->tables, other->tables));
+out:
+    return ret;
+}
+
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4810,8 +4843,12 @@ static PyMethodDef TableCollection_methods[] = {
             "Simplifies for a given sample subset." },
     {"sort", (PyCFunction) TableCollection_sort, METH_VARARGS|METH_KEYWORDS,
             "Sorts the tables to satisfy tree sequence requirements." },
+    {"equals", (PyCFunction) TableCollection_equals, METH_VARARGS,
+            "Returns True if the parameter table collection is equal to this one." },
     {"compute_mutation_parents", (PyCFunction) TableCollection_compute_mutation_parents,
         METH_NOARGS, "Computes the mutation parents for a the tables." },
+    {"deduplicate_sites", (PyCFunction) TableCollection_deduplicate_sites,
+        METH_NOARGS, "Removes sites with duplicate positions." },
     {NULL}  /* Sentinel */
 };
 

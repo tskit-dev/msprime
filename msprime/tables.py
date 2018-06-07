@@ -1353,7 +1353,14 @@ class TableCollection(object):
         s += str(self.provenances)
         return s
 
-    # TODO add support for __eq__ and __ne__
+    def __eq__(self, other):
+        ret = False
+        if type(other) is type(self):
+            ret = bool(self.ll_tables.equals(other.ll_tables))
+        return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def simplify(self, samples, filter_zero_mutation_sites=True):
         """
@@ -1427,6 +1434,10 @@ class TableCollection(object):
     def compute_mutation_parents(self):
         # TODO document
         self.ll_tables.compute_mutation_parents()
+
+    def deduplicate_sites(self):
+        # TODO document
+        self.ll_tables.deduplicate_sites()
 
 
 #############################################
