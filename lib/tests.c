@@ -40,11 +40,6 @@ FILE * _devnull;
 #define SIMPLE_BOTTLENECK 0
 #define INSTANTANEOUS_BOTTLENECK 1
 
-/* Defining this here for now to avoid breaking code, but this should be
- * removed when we udpate the mutation generator inferface */
-#define MSP_ALPHABET_BINARY 0
-#define MSP_ALPHABET_ASCII 1
-
 typedef struct {
     int type;
     double time;
@@ -1574,9 +1569,9 @@ get_example_nonbinary_tree_sequences(void)
     ret[1] = get_example_tree_sequence(10, 2, 100, 10.0, 1.0, 2.0,
             1, bottlenecks, MSP_ALPHABET_BINARY);
     ret[2] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
-            2, bottlenecks, MSP_ALPHABET_ASCII);
+            2, bottlenecks, MSP_ALPHABET_NUCLEOTIDE);
     ret[3] = get_example_tree_sequence(100, 0, 100, 1.0, 1.0, 0.0,
-            3, other_bottlenecks, MSP_ALPHABET_ASCII);
+            3, other_bottlenecks, MSP_ALPHABET_NUCLEOTIDE);
     ret[4] = NULL;
     return ret;
 }
@@ -1869,9 +1864,9 @@ get_example_tree_sequences(int include_nonbinary)
     ret[1] = get_example_tree_sequence(2, 0, 1, 0.1, 1.0, 1.0, 0, NULL,
             MSP_ALPHABET_BINARY);
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 10.0, 0.0, 0, NULL,
-            MSP_ALPHABET_ASCII);
+            MSP_ALPHABET_NUCLEOTIDE);
     ret[3] = get_example_tree_sequence(10, 0, UINT32_MAX, 10.0,
-            9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_ASCII);
+            9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_NUCLEOTIDE);
     ret[4] = make_recurrent_and_back_mutations_copy(ret[0]);
     ret[5] = make_permuted_nodes_copy(ret[0]);
     ret[6] = make_gappy_copy(ret[0]);

@@ -28,6 +28,7 @@ import json
 import math
 import random
 import sys
+import warnings
 
 import _msprime
 import msprime.tables as _tables
@@ -35,6 +36,8 @@ import msprime.trees as trees
 import msprime.provenance as provenance
 
 # Make the low-level generator appear like its from this module
+# NOTE: Using these classes directly from client code is undocumented
+# and may be removed in future versions.
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 
@@ -223,8 +226,12 @@ def simulate(
         values are encoded within the map. Defaults to a uniform rate as
         described in the ``recombination_rate`` parameter if not specified.
     :type recombination_map: :class:`.RecombinationMap`
-    :param float mutation_rate: The rate of mutation per base per
-        generation. If not specified, no mutations are generated.
+    :param float mutation_rate: The rate of mutation infinite sites
+        mutations per unit of sequence length per generation.
+        If not specified, no mutations are generated. This option only
+        allows for infinite sites mutations with a binary (i.e., 0/1)
+        alphabet. For more control over the mutational process, please
+        use the :func:`.mutate` function.
     :param list population_configurations: The list of
         :class:`.PopulationConfiguration` instances describing the
         sampling configuration, relative sizes and growth rates of
@@ -293,6 +300,10 @@ def simulate(
         mu = 0 if mutation_rate is None else mutation_rate
         mutation_generator = MutationGenerator(rng, mu)
     else:
+        warnings.warn(
+            "Specifying a MutationGenerator instance is deprecated and will be "
+            "removed in future versions. Use msprime.mutate() instead",
+            DeprecationWarning)
         if mutation_rate is not None:
             raise ValueError(
                 "Cannot specify both mutation_rate and mutation_generator")
@@ -301,44 +312,6 @@ def simulate(
     else:
         return _replicate_generator(
             sim, mutation_generator, num_replicates, provenance_dict)
-
-
-def mutate(tree_sequence, rate=None, random_seed=None):
-    """
-    Simulates mutations on the specified ancestry and returns the resulting
-    :class:`.TreeSequence`. Mutations are generated at the specified rate in
-    measured generations. Mutations are generated under the infinite sites
-    model, and so the rate of new mutations is per unit of sequence length per
-    generation. If a random seed is specified, this is used to seed the random
-    number generator. If the same seed is specified and all other parameters
-    are equal then the same mutations will be generated. If no random seed is
-    specified then one is generated automatically.
-
-    :param TreeSequence tree_sequence: The tree sequence onto which we
-        wish to throw mutations.
-    :param float rate: The rate of mutation per generation.
-    :param int random_seed: The random seed. If this is `None`, a
-        random seed will be automatically generated. Valid random
-        seeds must be between 1 and :math:`2^{32} - 1`.
-    :return: The :class:`.TreeSequence` object  resulting from overlaying
-        mutations on the input tree sequence.
-    :rtype: :class:`.TreeSequence`
-    """
-    try:
-        tables = tree_sequence.dump_tables()
-    except AttributeError:
-        raise ValueError("First argument must be a TreeSequence instance.")
-    if random_seed is None:
-        random_seed = _get_random_seed()
-    rng = RandomGenerator(int(random_seed))
-    mutation_generator = MutationGenerator(rng, rate)
-    mutation_generator.generate(
-        tables.nodes.ll_table, tables.edges.ll_table, tables.sites.ll_table,
-        tables.mutations.ll_table)
-    parameters = {"rate": rate, "random_seed": random_seed}
-    provenance_dict = provenance.get_provenance_dict("mutate", parameters)
-    tables.provenances.add_row(json.dumps(provenance_dict))
-    return trees.load_tables(**tables.asdict())
 
 
 class Simulator(object):

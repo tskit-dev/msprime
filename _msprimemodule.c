@@ -4892,19 +4892,24 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     size_t block_size = 1024 * 1024;
-    static char *kwlist[] = {"random_generator", "mutation_rate", NULL};
+    int alphabet = 0;
+    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet", NULL};
     double mutation_rate = 0;
     RandomGenerator *random_generator = NULL;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d", kwlist,
-            &RandomGeneratorType, &random_generator, &mutation_rate)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|i", kwlist,
+            &RandomGeneratorType, &random_generator, &mutation_rate, &alphabet)) {
         goto out;
     }
     self->random_generator = random_generator;
     Py_INCREF(self->random_generator);
     if (RandomGenerator_check_state(self->random_generator) != 0) {
+        goto out;
+    }
+    if (alphabet != MSP_ALPHABET_BINARY && alphabet != MSP_ALPHABET_NUCLEOTIDE) {
+        PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
         goto out;
     }
     if (mutation_rate < 0) {
@@ -4917,7 +4922,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            0, block_size);
+            alphabet, block_size);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4940,6 +4945,18 @@ out:
     return ret;
 }
 
+static PyObject *
+MutationGenerator_get_alphabet(MutationGenerator *self)
+{
+    PyObject *ret = NULL;
+
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->mutgen->alphabet);
+out:
+    return ret;
+}
 
 static PyObject *
 MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kwds)
@@ -4998,6 +5015,8 @@ static PyMemberDef MutationGenerator_members[] = {
 static PyMethodDef MutationGenerator_methods[] = {
     {"get_mutation_rate", (PyCFunction) MutationGenerator_get_mutation_rate,
         METH_NOARGS, "Returns the mutation rate for this mutation generator."},
+    {"get_alphabet", (PyCFunction) MutationGenerator_get_alphabet,
+        METH_NOARGS, "Returns the alphabet for this mutation generator."},
     {"generate", (PyCFunction) MutationGenerator_generate,
         METH_VARARGS|METH_KEYWORDS,
         "Generate mutations and write to the specified table."},

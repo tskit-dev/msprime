@@ -3535,19 +3535,40 @@ class TestMutationGenerator(unittest.TestCase):
     """
     Tests for the mutation generator class.
     """
-    def test_constructor(self):
+    def test_basic_constructor(self):
         self.assertRaises(TypeError, _msprime.MutationGenerator)
+        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), 0)
+        self.assertEqual(mg.get_mutation_rate(), 0)
+
+    def test_rng(self):
+        for bad_type in ["x", {}, None]:
+            self.assertRaises(
+                TypeError, _msprime.MutationGenerator, random_generator=bad_type)
+
+    def test_mutation_rate(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None]:
             self.assertRaises(TypeError, _msprime.MutationGenerator, rng, bad_type)
         for bad_value in [-1, -1e-3]:
             self.assertRaises(ValueError, _msprime.MutationGenerator, rng, bad_value)
-
-    def test_mutation_rate(self):
-        rng = _msprime.RandomGenerator(1)
         for rate in [0, 1e-12, 1e12, 1000, 0.01]:
             mutgen = _msprime.MutationGenerator(rng, rate)
             self.assertEqual(mutgen.get_mutation_rate(), rate)
+
+    def test_alphabet(self):
+        rng = _msprime.RandomGenerator(1)
+        for bad_type in ["x", {}, None]:
+            self.assertRaises(
+                TypeError, _msprime.MutationGenerator, random_generator=rng,
+                mutation_rate=0, alphabet=bad_type)
+        for bad_value in [-1, 2, 10**6]:
+            self.assertRaises(
+                ValueError, _msprime.MutationGenerator, random_generator=rng,
+                mutation_rate=0, alphabet=bad_value)
+        for alphabet in [0, 1]:
+            mg = _msprime.MutationGenerator(
+                random_generator=rng, mutation_rate=0, alphabet=alphabet)
+            self.assertEqual(alphabet, mg.get_alphabet())
 
 
 class TestDemographyDebugger(unittest.TestCase):

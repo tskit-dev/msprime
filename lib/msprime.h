@@ -39,6 +39,9 @@
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
 
+#define MSP_ALPHABET_BINARY     0
+#define MSP_ALPHABET_NUCLEOTIDE 1
+
 
 typedef struct segment_t_t {
     population_id_t population_id;

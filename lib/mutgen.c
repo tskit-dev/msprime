@@ -100,9 +100,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
 
     assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
-    /* TODO This is a bad interface anyway and needs to be fixed. Keep this
-     * for now to avoid breaking too much stuff */
-    if (! (alphabet == 0 || alphabet == 1)) {
+    if (! (alphabet == MSP_ALPHABET_BINARY || alphabet == MSP_ALPHABET_NUCLEOTIDE)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
