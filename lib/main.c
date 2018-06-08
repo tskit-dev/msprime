@@ -764,7 +764,8 @@ print_newick_trees(tree_sequence_t *ts)
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
     for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
-        ret = sparse_tree_get_newick(&tree, precision, 1, 0, newick_buffer_size, newick);
+        ret = sparse_tree_get_newick(&tree, tree.left_root, precision,
+                0, newick_buffer_size, newick);
         if (ret != 0) {
             fatal_library_error(ret ,"newick");
         }

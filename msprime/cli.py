@@ -124,11 +124,8 @@ class SimulationRunner(object):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
-        # We use unscaled per-generation rates. By setting Ne = 1 we
-        # don't need to rescale, but we still need to divide by 4 to
-        # cancel the factor introduced when calculated the scaled rates.
-        self._recombination_rate = scaled_recombination_rate / 4
-        self._mutation_rate = scaled_mutation_rate / 4
+        self._recombination_rate = scaled_recombination_rate
+        self._mutation_rate = scaled_mutation_rate
         # For strict ms-compability we want to have m non-recombining loci
         recomb_map = msprime.RecombinationMap.uniform_map(
             num_loci, self._recombination_rate, num_loci)
@@ -138,6 +135,7 @@ class SimulationRunner(object):
         if population_configurations is not None:
             sample_size = None
         self._simulator = msprime.simulator_factory(
+            Ne=0.25,
             sample_size=sample_size,
             recombination_map=recomb_map,
             population_configurations=population_configurations,
@@ -183,15 +181,14 @@ class SimulationRunner(object):
         simulation and write out a tree for each one.
         """
         breakpoints = self._simulator.breakpoints + [self._num_loci]
-        time_scale = 0.25
         if self._num_loci == 1:
             tree = next(tree_sequence.trees())
-            newick = tree.newick(precision=self._precision, time_scale=time_scale)
+            newick = tree.newick(precision=self._precision)
             print(newick, file=output)
         else:
             j = 0
             for tree in tree_sequence.trees():
-                newick = tree.newick(precision=self._precision, time_scale=time_scale)
+                newick = tree.newick(precision=self._precision)
                 left, right = tree.interval
                 while j < len(breakpoints) and breakpoints[j] <= right:
                     length = breakpoints[j] - left

@@ -74,6 +74,7 @@ class PythonSparseTree(object):
         ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
         ret.left_root = sparse_tree.left_root
+        ret.sparse_tree = sparse_tree
         for u in range(ret.num_nodes):
             ret.parent[u] = sparse_tree.parent(u)
             ret.left_child[u] = sparse_tree.left_child(u)
@@ -181,12 +182,10 @@ class PythonSparseTree(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def newick(self, precision=0, time_scale=0):
-        # We only support 0 branch lengths here because this information isn't
-        # immediately available.
-        assert time_scale == 0 and precision == 0
-        assert len(self.roots) == 1
-        return self._build_newick(self.left_root) + ";"
+    def newick(self, root=None):
+        if root is None:
+            root = self.left_root
+        return self._build_newick(root) + ";"
 
     def _build_newick(self, node):
         if self.left_child[node] == msprime.NULL_NODE:
@@ -194,7 +193,8 @@ class PythonSparseTree(object):
         else:
             s = "("
             for child in self.children(node):
-                s += self._build_newick(child) + ":0,"
+                branch_length = self.sparse_tree.branch_length(child)
+                s += self._build_newick(child) + ":{:0.16f},".format(branch_length)
             s = s[:-1] + ")"
         return s
 

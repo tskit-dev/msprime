@@ -1072,7 +1072,7 @@ class SparseTree(object):
             for v in iterator(u):
                 yield v
 
-    def newick(self, precision=14, time_scale=1):
+    def newick(self, precision=14, root=None):
         """
         Returns a `newick encoding <https://en.wikipedia.org/wiki/Newick_format>`_
         of this tree. Leaf nodes are labelled with their numerical ID + 1,
@@ -1087,7 +1087,14 @@ class SparseTree(object):
         :return: A newick representation of this tree.
         :rtype: str
         """
-        s = self._ll_sparse_tree.get_newick(precision=precision, time_scale=time_scale)
+        if root is None:
+            if self.num_roots > 1:
+                raise ValueError(
+                    "Cannot get newick for multiroot trees. Try "
+                    "[t.newick(root) for root in t.roots] to get a list of "
+                    "newick trees, one for each root.")
+            root = self.root
+        s = self._ll_sparse_tree.get_newick(precision=precision, root=root)
         if not IS_PY2:
             s = s.decode()
         return s

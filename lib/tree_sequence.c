@@ -1805,17 +1805,17 @@ sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, table_size_t *sites_l
 }
 
 int WARN_UNUSED
-sparse_tree_get_newick(sparse_tree_t *self, size_t precision, double time_scale,
+sparse_tree_get_newick(sparse_tree_t *self, node_id_t root, size_t precision,
         int flags, size_t buffer_size, char *newick_buffer)
 {
     int ret = 0;
     newick_converter_t nc;
 
-    ret = newick_converter_alloc(&nc, self, precision, time_scale, flags);
+    ret = newick_converter_alloc(&nc, self, precision, flags);
     if (ret != 0) {
         goto out;
     }
-    ret = newick_converter_run(&nc, buffer_size, newick_buffer);
+    ret = newick_converter_run(&nc, root, buffer_size, newick_buffer);
 out:
     newick_converter_free(&nc);
     return ret;

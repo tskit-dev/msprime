@@ -122,7 +122,7 @@
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
 #define MSP_ERR_BAD_POPULATION_SIZE                                 -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
-#define MSP_ERR_MULTIROOT_NEWICK                                    -29
+
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_CANNOT_SIMPLIFY                                     -32
@@ -167,6 +167,9 @@
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 #define MSP_ERR_BAD_INDIVIDUAL                                      -72
 #define MSP_ERR_GENERATE_UUID                                       -73
+
+/* REUSE: * -29, -57 */
+
 
 /* This bit is 0 for any errors originating from kastore */
 #define MSP_KAS_ERR_BIT 14

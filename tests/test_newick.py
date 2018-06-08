@@ -29,25 +29,27 @@ import msprime
 import newick
 
 
-class NewickTest(unittest.TestCase):
+class TestNewick(unittest.TestCase):
     """
     Tests that the newick output has the properties that we need using
     external Newick parser.
     """
     random_seed = 155
 
-    def verify_newick_topology(self, tree, time_scale=1):
-        ns = tree.newick(precision=16, time_scale=time_scale)
+    def verify_newick_topology(self, tree, root=None):
+        if root is None:
+            root = tree.root
+        ns = tree.newick(precision=16, root=root)
         newick_tree = newick.loads(ns)[0]
         leaf_names = newick_tree.get_leaf_names()
         self.assertEqual(
             sorted(leaf_names),
-            sorted([str(u + 1) for u in tree.leaves()]))
-        for u in tree.leaves():
+            sorted([str(u + 1) for u in tree.leaves(root)]))
+        for u in tree.leaves(root):
             name = str(u + 1)
             node = newick_tree.get_node(name)
-            while tree.parent(u) != msprime.NULL_NODE:
-                self.assertAlmostEqual(node.length, time_scale * tree.branch_length(u))
+            while u != root:
+                self.assertAlmostEqual(node.length, tree.branch_length(u))
                 node = node.ancestor
                 u = tree.parent(u)
             self.assertIsNone(node.ancestor)
@@ -72,8 +74,7 @@ class NewickTest(unittest.TestCase):
         return ts
 
     def get_multiroot_example(self):
-        ts = msprime.simulate(
-            sample_size=50, recombination_rate=5, random_seed=self.random_seed)
+        ts = msprime.simulate(sample_size=50, random_seed=self.random_seed)
         tables = ts.dump_tables()
         edges = tables.edges
         n = len(edges) // 2
@@ -92,7 +93,15 @@ class NewickTest(unittest.TestCase):
         for t in ts.trees():
             self.verify_newick_topology(t)
 
-    def test_time_scale(self):
-        tree = next(self.get_binary_example().trees())
-        for scale in [0, -1, 0.5, 1e6]:
-            self.verify_newick_topology(tree, scale)
+    def test_multiroot(self):
+        ts = self.get_multiroot_example()
+        t = ts.first()
+        self.assertRaises(ValueError, t.newick)
+        for root in t.roots:
+            self.verify_newick_topology(t, root=root)
+
+    def test_all_nodes(self):
+        ts = msprime.simulate(10, random_seed=5)
+        tree = ts.first()
+        for u in tree.nodes():
+            self.verify_newick_topology(tree, root=u)

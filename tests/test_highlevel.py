@@ -1827,13 +1827,26 @@ class TestSparseTree(HighLevelTestCase):
         """
         Verifies that we output the newick tree as expected.
         """
+        # TODO to make this work we may need to clamp the precision of node
+        # times because Python and C float printing algorithms work slightly
+        # differently. Seems to work OK now, so leaving alone.
         if tree.num_roots == 1:
             py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
-            newick1 = tree.newick(precision=0, time_scale=0)
-            newick2 = py_tree.newick(precision=0, time_scale=0)
+            newick1 = tree.newick(precision=16)
+            newick2 = py_tree.newick()
+            self.assertEqual(newick1, newick2)
+
+            # Make sure we get the same results for a leaf root.
+            newick1 = tree.newick(root=0, precision=16)
+            newick2 = py_tree.newick(root=0)
             self.assertEqual(newick1, newick2)
         else:
-            self.assertRaises(_msprime.LibraryError, tree.newick)
+            self.assertRaises(ValueError, tree.newick)
+            for root in tree.roots:
+                py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+                newick1 = tree.newick(precision=16, root=root)
+                newick2 = py_tree.newick(root=root)
+                self.assertEqual(newick1, newick2)
 
     def test_newick(self):
         for ts in get_example_tree_sequences():

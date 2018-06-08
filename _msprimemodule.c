@@ -6748,17 +6748,16 @@ static PyObject *
 SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
-    static char *kwlist[] = {"precision", "time_scale", NULL};
+    static char *kwlist[] = {"root", "precision", NULL};
     int precision = 14;
-    double time_scale = 1.0;
-    int err;
+    int root, err;
     size_t buffer_size;
     char *buffer = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|id", kwlist, &precision, &time_scale)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "i|i", kwlist, &root, &precision)) {
         goto out;
     }
     if (precision < 0 || precision > 16) {
@@ -6775,7 +6774,7 @@ SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
     if (buffer == NULL) {
         PyErr_NoMemory();
     }
-    err = sparse_tree_get_newick(self->sparse_tree, precision, time_scale, 0,
+    err = sparse_tree_get_newick(self->sparse_tree, (node_id_t) root, precision, 0,
             buffer_size, buffer);
     if (err != 0) {
         handle_library_error(err);
