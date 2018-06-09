@@ -1508,9 +1508,7 @@ get_example_tree_sequence(uint32_t num_samples,
     ret = msp_populate_tables(msp, recomb_map, tables.nodes, tables.edges,
             tables.migrations, tables.populations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(mutgen, tables.nodes, tables.edges);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_populate_tables(mutgen, tables.sites, tables.mutations);
+    ret = mutgen_generate(mutgen, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_add_row(tables.provenances,
             timestamp, strlen(timestamp), record, strlen(record));
@@ -4665,34 +4663,23 @@ test_single_tree_mutgen(void)
     size_t j;
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    node_table_t node_table;
-    edge_table_t edge_table;
-    site_table_t sites, sites_after;
-    mutation_table_t mutations, mutations_after;
+    table_collection_t tables1, tables2;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = node_table_alloc(&node_table, 0, 0);
+    ret = table_collection_alloc(&tables1, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edge_table_alloc(&edge_table, 0);
+    ret = table_collection_alloc(&tables2, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    parse_nodes(nodes, &node_table);
-    parse_edges(edges, &edge_table);
-    ret = site_table_alloc(&sites, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites_after, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations_after, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    parse_nodes(nodes, tables1.nodes);
+    parse_edges(edges, tables1.edges);
+    parse_nodes(nodes, tables2.nodes);
+    parse_edges(edges, tables2.edges);
 
     ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edge_table);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_populate_tables(&mutgen, &sites, &mutations);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutations.num_rows == 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows == 0);
     mutgen_print_state(&mutgen, _devnull);
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4700,19 +4687,17 @@ test_single_tree_mutgen(void)
     gsl_rng_set(rng, 1);
     ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edge_table);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_print_state(&mutgen, _devnull);
-    ret = mutgen_populate_tables(&mutgen, &sites, &mutations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutations.num_rows > 0);
-    CU_ASSERT_TRUE(mutations.num_rows == sites.num_rows);
-    for (j = 0; j < mutations.num_rows; j++) {
-        CU_ASSERT_TRUE(mutations.site[j] == j);
-        CU_ASSERT_TRUE(sites.position[j] <= 1.0);
-        CU_ASSERT_TRUE(mutations.node[j] < 6);
-        CU_ASSERT_EQUAL(sites.ancestral_state[j], '0');
-        CU_ASSERT_EQUAL(mutations.derived_state[j], '1');
+    CU_ASSERT_TRUE(tables1.mutations->num_rows > 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows == tables1.sites->num_rows);
+    for (j = 0; j < tables1.mutations->num_rows; j++) {
+        CU_ASSERT_TRUE(tables1.mutations->site[j] == j);
+        CU_ASSERT_TRUE(tables1.sites->position[j] <= 1.0);
+        CU_ASSERT_TRUE(tables1.mutations->node[j] < 6);
+        CU_ASSERT_EQUAL(tables1.sites->ancestral_state[j], '0');
+        CU_ASSERT_EQUAL(tables1.mutations->derived_state[j], '1');
     }
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4725,21 +4710,14 @@ test_single_tree_mutgen(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edge_table);
+    , 0ret = mutgen_generate(&mutgen, &tables2, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_populate_tables(&mutgen, &sites_after, &mutations_after);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutation_table_equals(&mutations, &mutations_after));
-    CU_ASSERT_TRUE(site_table_equals(&sites, &sites_after));
+    CU_ASSERT_TRUE(table_collection_equals(&tables1, &tables2));
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    edge_table_free(&edge_table);
-    node_table_free(&node_table);
-    mutation_table_free(&mutations);
-    site_table_free(&sites);
-    mutation_table_free(&mutations_after);
-    site_table_free(&sites_after);
+    table_collection_free(&tables1);
+    table_collection_free(&tables2);
     gsl_rng_free(rng);
 }
 

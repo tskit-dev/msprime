@@ -355,11 +355,7 @@ void recomb_map_print_state(recomb_map_t *self, FILE *out);
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
         int alphabet, size_t mutation_block_size);
 int mutgen_free(mutgen_t *self);
-/* TODO finalise this interface */
-int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
-        edge_table_t *edges);
-int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
-        mutation_table_t *mutations);
+int mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 double compute_falling_factorial_log(unsigned int  m);

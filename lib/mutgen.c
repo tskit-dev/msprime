@@ -185,14 +185,39 @@ out:
     return ret;
 }
 
-/* temporary interface while we're working out the details of passing around
- * data via tables. */
+static int
+mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mutations)
+{
+    int ret = 0;
+    infinite_sites_mutation_t *mut;
+    site_id_t site_id;
+    size_t j;
+
+    for (j = 0; j < self->num_mutations; j++) {
+        mut = self->mutations + j;
+        site_id = site_table_add_row(sites, mut->position, mut->ancestral_state, 1, NULL, 0);
+        if (site_id < 0) {
+            ret = site_id;
+            goto out;
+        }
+        ret = mutation_table_add_row(mutations, site_id, mut->node,
+                MSP_NULL_MUTATION, mut->derived_state, 1, NULL, 0);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 int WARN_UNUSED
-mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
-        edge_table_t *edges)
+mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
 {
     int ret;
-    size_t j, l,  branch_mutations;
+    node_table_t *nodes = tables->nodes;
+    edge_table_t *edges = tables->edges;
+    size_t j, l, branch_mutations;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
     const mutation_type_t *mutation_types;
@@ -201,6 +226,17 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     unsigned long type;
     avl_tree_t positions;
     avl_node_t *avl_node;
+
+    assert(flags == 0);
+
+    ret = site_table_clear(tables->sites);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_clear(tables->mutations);
+    if (ret != 0) {
+        goto out;
+    }
 
     if (self->alphabet == 0) {
         mutation_types = binary_mutation_types;
@@ -253,33 +289,9 @@ mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
     for (avl_node = positions.head; avl_node != NULL; avl_node = avl_node->next) {
         object_heap_free_object(&self->avl_node_heap, avl_node);
     }
-    ret = 0;
+    ret = mutgen_populate_tables(self, tables->sites, tables->mutations);
 out:
     return ret;
 }
 
-int
-mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mutations)
-{
-    int ret = 0;
-    infinite_sites_mutation_t *mut;
-    site_id_t site_id;
-    size_t j;
 
-    for (j = 0; j < self->num_mutations; j++) {
-        mut = self->mutations + j;
-        site_id = site_table_add_row(sites, mut->position, mut->ancestral_state, 1, NULL, 0);
-        if (site_id < 0) {
-            ret = site_id;
-            goto out;
-        }
-        ret = mutation_table_add_row(mutations, site_id, mut->node,
-                MSP_NULL_MUTATION, mut->derived_state, 1, NULL, 0);
-        if (ret < 0) {
-            goto out;
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}

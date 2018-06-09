@@ -894,19 +894,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, tables.nodes, tables.edges);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = site_table_clear(tables.sites);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = mutation_table_clear(tables.mutations);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = mutgen_populate_tables(mutgen, tables.sites, tables.mutations);
+        ret = mutgen_generate(mutgen, &tables, 0);
         if (ret != 0) {
             goto out;
         }
