@@ -39,8 +39,12 @@
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
 
+/* Alphabets for mutation generator */
 #define MSP_ALPHABET_BINARY     0
 #define MSP_ALPHABET_NUCLEOTIDE 1
+
+/* Flags for mutgen */
+#define MSP_KEEP_SITES  1
 
 
 typedef struct segment_t_t {

@@ -576,13 +576,9 @@ class Simulator(object):
         self.ll_sim.populate_tables(
             t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
             t.populations.ll_table, recombination_map=ll_recomb_map)
-        t.sites.clear()
-        t.mutations.clear()
         if mutation_generator is not None:
-            mutation_generator.generate(
-                t.nodes.ll_table, t.edges.ll_table, t.sites.ll_table,
-                t.mutations.ll_table)
-        t.provenances.reset()
+            mutation_generator.generate(self.tables.ll_tables)
+        t.provenances.clear()
         if provenance_record is not None:
             t.provenances.add_row(provenance_record)
         ll_tree_sequence = _msprime.TreeSequence()

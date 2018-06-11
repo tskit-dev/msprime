@@ -1476,9 +1476,7 @@ class TestTreeSequence(HighLevelTestCase):
             mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
             tables.sites.clear()
             tables.mutations.clear()
-            mutgen.generate(
-                tables.nodes.ll_table, tables.edges.ll_table,
-                tables.sites.ll_table, tables.mutations.ll_table)
+            mutgen.generate(tables.ll_tables)
             if tables.mutations.num_rows > 0:
                 some_mutations = True
             tsp = msprime.load_tables(**tables.asdict())

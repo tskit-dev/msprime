@@ -4720,6 +4720,69 @@ test_single_tree_mutgen(void)
 }
 
 static void
+test_single_tree_mutgen_keep_sites(void)
+{
+    int ret = 0;
+    tree_sequence_t ts;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    table_collection_t tables;
+    table_collection_t copy;
+    mutgen_t mutgen;
+
+    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges,
+            NULL, single_tree_ex_sites, single_tree_ex_mutations, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 7);
+
+    ret = tree_sequence_dump_tables(&ts, &tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &copy, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_equals(&tables, &copy));
+
+    /* With a mutation rate of 0, we should keep exactly the same set
+     * of mutations */
+    ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_equals(&tables, &copy));
+    mutgen_free(&mutgen);
+
+    gsl_rng_set(rng, 2);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.sites->num_rows > copy.sites->num_rows);
+    CU_ASSERT_TRUE(tables.mutations->num_rows > copy.mutations->num_rows);
+    mutgen_free(&mutgen);
+
+    /* If we run precisely the same mutations again we should rejection
+     * sample away all of the original positions */
+    gsl_rng_set(rng, 2);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.sites->num_rows > copy.sites->num_rows);
+    CU_ASSERT_TRUE(tables.mutations->num_rows > copy.mutations->num_rows);
+
+    /* add a duplicate site to the original */
+    ret = site_table_add_row(tables.sites, 0.1, "A", 1, NULL, 0);
+    CU_ASSERT_TRUE(ret > 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
+
+    mutgen_free(&mutgen);
+    tree_sequence_free(&ts);
+    table_collection_free(&tables);
+    table_collection_free(&copy);
+    gsl_rng_free(rng);
+}
+
+static void
 test_sparse_tree_errors(void)
 {
     int ret;
@@ -8138,6 +8201,7 @@ main(int argc, char **argv)
         {"test_single_tree_compute_mutation_parents", test_single_tree_compute_mutation_parents},
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"test_single_tree_mutgen", test_single_tree_mutgen},
+        {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
         {"test_sparse_tree_errors", test_sparse_tree_errors},
         {"test_tree_sequence_iter", test_tree_sequence_iter},
         {"test_sample_sets", test_sample_sets},

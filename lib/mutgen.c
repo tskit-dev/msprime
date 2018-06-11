@@ -16,22 +16,18 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
 #include <gsl/gsl_randist.h>
 
-#include "util.h"
 #include "msprime.h"
-#include "object_heap.h"
 
 typedef struct {
     const char *ancestral_state;
     const char *derived_state;
 } mutation_type_t;
-
 
 static const mutation_type_t binary_mutation_types[] = {
     {"0", "1"}
@@ -59,20 +55,30 @@ cmp_site(const void *a, const void *b) {
     return (ia->position > ib->position) - (ia->position < ib->position);
 }
 
-static void
-mutgen_check_state(mutgen_t *MSP_UNUSED(self))
-{
-    /* TODO some checks! */
-}
-
 void
 mutgen_print_state(mutgen_t *self, FILE *out)
 {
+    avl_node_t *a;
+    site_t *site;
+    mutation_t *mutation;
+    table_size_t j;
+
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
     block_allocator_print_state(&self->allocator, out);
-    printf("TODO write out AVL tree\n");
-    mutgen_check_state(self);
+
+    for (a = self->sites.head; a != NULL; a = a->next) {
+        site = (site_t *) a->item;
+        fprintf(out, "%f\t%.*s\t%.*s\n", site->position,
+                (int) site->ancestral_state_length, site->ancestral_state,
+                (int) site->metadata_length, site->metadata);
+        for (j = 0; j < site->mutations_length; j++) {
+            mutation = site->mutations + j;
+            fprintf(out, "\t%d\t%d\t%.*s\t%.*s\n", mutation->node, mutation->parent,
+                    (int) mutation->derived_state_length, mutation->derived_state,
+                    (int) mutation->metadata_length, mutation->metadata);
+        }
+    }
 }
 
 int WARN_UNUSED
@@ -95,7 +101,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
     if (block_size == 0) {
         block_size = 8192;
     }
-    /* In pracitise this is the minimum we can support */
+    /* In practice this is the minimum we can support */
     block_size = MSP_MAX(block_size, 128);
     ret = block_allocator_alloc(&self->allocator, block_size);
     if (ret != 0) {
@@ -144,6 +150,113 @@ out:
     return ret;
 }
 
+static int WARN_UNUSED
+mutget_initialise_sites(mutgen_t *self, table_collection_t *tables)
+{
+    int ret = 0;
+    site_table_t *sites = tables->sites;
+    mutation_table_t *mutations = tables->mutations;
+    mutation_id_t mutation_id;
+    site_id_t site_id;
+    site_t *site;
+    avl_node_t *avl_node;
+    mutation_t *site_mutations;
+    table_size_t j, num_mutations, length;
+    char *buff;
+
+    mutation_id = 0;
+    for (site_id = 0; site_id < (site_id_t) sites->num_rows; site_id++) {
+        j = (table_size_t) mutation_id;
+        while (j < mutations->num_rows && mutations->site[j] == site_id) {
+            j++;
+        }
+        num_mutations = j - (table_size_t) mutation_id;
+
+        site = block_allocator_get(&self->allocator, sizeof(*site));
+        avl_node = block_allocator_get(&self->allocator, sizeof(*avl_node));
+        site_mutations = block_allocator_get(&self->allocator,
+                num_mutations * sizeof(*mutations));
+        if (site == NULL || avl_node == NULL || site_mutations == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        site->position = sites->position[site_id];
+        site->mutations = site_mutations;
+        site->mutations_length = num_mutations;
+        /* ancestral state */
+        length = sites->ancestral_state_offset[site_id + 1]
+            - sites->ancestral_state_offset[site_id];
+        buff = block_allocator_get(&self->allocator, length);
+        if (buff == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        memcpy(buff, sites->ancestral_state +
+            sites->ancestral_state_offset[site_id], length);
+        site->ancestral_state = buff;
+        site->ancestral_state_length = length;
+
+        /* metadata */
+        length = sites->metadata_offset[site_id + 1]
+            - sites->metadata_offset[site_id];
+        buff = block_allocator_get(&self->allocator, length);
+        if (buff == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        memcpy(buff, sites->metadata +
+            sites->metadata_offset[site_id], length);
+        site->metadata = buff;
+        site->metadata_length = length;
+
+        for (j = 0; j < num_mutations; j++) {
+            /* We don't use the mutation ID directly here, so we can use it as a
+             * flag to indicate when a mutation was imported from outside or not.
+             * This is used when computing updated mutation parents when we
+             * re-export to the tables.. */
+            site_mutations[j].id = 1;
+            site_mutations[j].node = mutations->node[mutation_id];
+            site_mutations[j].parent = mutations->parent[mutation_id];
+
+            /* ancestral state */
+            length = mutations->derived_state_offset[mutation_id + 1]
+                - mutations->derived_state_offset[mutation_id];
+            buff = block_allocator_get(&self->allocator, length);
+            if (buff == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            memcpy(buff, mutations->derived_state +
+                mutations->derived_state_offset[mutation_id], length);
+            site_mutations[j].derived_state = buff;
+            site_mutations[j].derived_state_length = length;
+
+            /* metadata */
+            length = mutations->metadata_offset[mutation_id + 1]
+                - mutations->metadata_offset[mutation_id];
+            buff = block_allocator_get(&self->allocator, length);
+            if (buff == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            memcpy(buff, mutations->metadata +
+                mutations->metadata_offset[mutation_id], length);
+            site_mutations[j].metadata = buff;
+            site_mutations[j].metadata_length = length;
+
+            mutation_id++;
+        }
+        avl_init_node(avl_node, site);
+        avl_node = avl_insert_node(&self->sites, avl_node);
+        if (avl_node == NULL) {
+            ret = MSP_ERR_DUPLICATE_SITE_POSITION;
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
 static int
 mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mutations)
 {
@@ -153,6 +266,8 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
     avl_node_t *a;
     site_t *site;
     mutation_t *mutation;
+    mutation_id_t new_mutations = 0;
+    mutation_id_t parent;
 
     for (a = self->sites.head; a != NULL; a = a->next) {
         site = (site_t *) a->item;
@@ -164,12 +279,22 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
         }
         for (j = 0; j < site->mutations_length; j++) {
             mutation = site->mutations + j;
+            parent = mutation->parent;
+            if (parent != MSP_NULL_MUTATION) {
+                parent += new_mutations;
+            }
             ret = mutation_table_add_row(mutations, site_id,
-                    mutation->node, mutation->parent,
+                    mutation->node, parent,
                     mutation->derived_state, mutation->derived_state_length,
                     mutation->metadata, mutation->metadata_length);
             if (ret < 0) {
                 goto out;
+            }
+            if (mutation->id == 0) {
+                /* We use this flag to track the number of extra mutations we have
+                 * generated, which enables us to compute the new mutation parent
+                 * ID efficiently. See above for more notes on this */
+                new_mutations++;
             }
         }
     }
@@ -181,7 +306,7 @@ out:
 int WARN_UNUSED
 mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
 {
-    int ret;
+    int ret = 0;
     node_table_t *nodes = tables->nodes;
     edge_table_t *edges = tables->edges;
     size_t j, l, branch_mutations;
@@ -189,15 +314,19 @@ mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
     node_id_t parent, child;
     const mutation_type_t *mutation_types;
     unsigned long num_mutation_types;
-    const char *ancestral_state, *derived_state;
     unsigned long type;
     avl_node_t *avl_node;
-
-    assert(flags == 0);
+    site_t search;
 
     avl_clear_tree(&self->sites);
     block_allocator_reset(&self->allocator);
 
+    if (flags & MSP_KEEP_SITES) {
+        ret = mutget_initialise_sites(self, tables);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     ret = site_table_clear(tables->sites);
     if (ret != 0) {
         goto out;
@@ -230,14 +359,14 @@ mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
             /* TODO add a maximum number of rejections here */
             do {
                 position = gsl_ran_flat(self->rng, left, right);
-                avl_node = avl_search(&self->sites, &position);
+                search.position = position;
+                avl_node = avl_search(&self->sites, &search);
             } while (avl_node != NULL);
             assert(left <= position && position < right);
             type = gsl_rng_uniform_int(self->rng, num_mutation_types);
-            ancestral_state = mutation_types[type].ancestral_state;
-            derived_state = mutation_types[type].derived_state;
-            ret = mutgen_add_mutation(self, child, position, ancestral_state,
-                    derived_state);
+            ret = mutgen_add_mutation(self, child, position,
+                    mutation_types[type].ancestral_state,
+                    mutation_types[type].derived_state);
             if (ret != 0) {
                 goto out;
             }

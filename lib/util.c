@@ -253,6 +253,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_GENERATE_UUID:
             ret = "Error generating UUID";
             break;
+        case MSP_ERR_DUPLICATE_SITE_POSITION:
+            ret = "Duplicate site positions.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
