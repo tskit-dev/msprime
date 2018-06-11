@@ -30,6 +30,11 @@ import numpy as np
 from six.moves import copyreg
 
 import _msprime
+# This circular import is ugly but it seems hard to avoid it since table collection
+# and tree sequence depend on each other. Unless they're in the same module they
+# need to import each other. In Py3 at least we can import the modules but we
+# can't do this in Py3.
+import msprime
 
 
 IndividualTableRow = collections.namedtuple(
@@ -1361,6 +1366,21 @@ class TableCollection(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def tree_sequence(self):
+        """
+        Returns a :class:`TreeSequence` instance with the structure defined by the
+        tables in this :class:`TableCollection`. If the table collection is not
+        in canonical form (i.e., does not meet sorting requirements) or cannot be
+        interpreted as a tree sequence an exception is raised. The
+        :meth:`.sort` method may be used to ensure that input sorting requirements
+        are met.
+
+        :return: A :class:`TreeSequence` instance reflecting the structures
+            defined in this set of tables.
+        :rtype: .TreeSequence
+        """
+        return msprime.TreeSequence.load_tables(self)
 
     def simplify(self, samples, filter_zero_mutation_sites=True):
         """

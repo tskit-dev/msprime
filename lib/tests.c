@@ -1504,10 +1504,9 @@ get_example_tree_sequence(uint32_t num_samples,
     /* Create the tree_sequence from the state of the simulator.
      * We want to use coalescent time here, so use an Ne of 1/4
      * to cancel scaling factor. */
-    tables.sequence_length = sequence_length;
-    ret = msp_populate_tables(msp, recomb_map, tables.nodes, tables.edges,
-            tables.migrations, tables.populations);
+    ret = msp_populate_tables(msp, recomb_map, &tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(tables.sequence_length, sequence_length);
     ret = mutgen_generate(mutgen, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_add_row(tables.provenances,

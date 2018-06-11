@@ -2465,9 +2465,7 @@ out:
 }
 
 int WARN_UNUSED
-msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
-        edge_table_t *edges, migration_table_t *migrations,
-        population_table_t *populations)
+msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *tables)
 {
     int ret = 0;
     size_t j;
@@ -2476,14 +2474,19 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     node_t *node;
     migration_t *migration;
 
+    tables->sequence_length = self->num_loci;
+    if (recomb_map != NULL) {
+        tables->sequence_length = recomb_map->sequence_length;
+    }
+
     /* Add the nodes */
-    ret = node_table_clear(nodes);
+    ret = node_table_clear(tables->nodes);
     if (ret != 0) {
         goto out;
     }
     for (j = 0; j < self->num_nodes; j++) {
         node = self->nodes + j;
-        ret = node_table_add_row(nodes, node->flags, node->time, node->population,
+        ret = node_table_add_row(tables->nodes, node->flags, node->time, node->population,
                 node->individual, NULL, 0);
         if (ret < 0) {
             goto out;
@@ -2491,7 +2494,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     }
 
     /* Add the edges */
-    ret = edge_table_clear(edges);
+    ret = edge_table_clear(tables->edges);
     if (ret != 0) {
         goto out;
     }
@@ -2503,14 +2506,14 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
             left = recomb_map_genetic_to_phys(recomb_map, left);
             right = recomb_map_genetic_to_phys(recomb_map, right);
         }
-        ret = edge_table_add_row(edges, left, right, edge->parent, edge->child);
+        ret = edge_table_add_row(tables->edges, left, right, edge->parent, edge->child);
         if (ret < 0) {
             goto out;
         }
     }
 
     /* Add in the migrations */
-    ret = migration_table_clear(migrations);
+    ret = migration_table_clear(tables->migrations);
     if (ret != 0) {
         goto out;
     }
@@ -2522,7 +2525,7 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
             left = recomb_map_genetic_to_phys(recomb_map, left);
             right = recomb_map_genetic_to_phys(recomb_map, right);
         }
-        ret = migration_table_add_row(migrations, left, right, migration->node,
+        ret = migration_table_add_row(tables->migrations, left, right, migration->node,
                 migration->source, migration->dest, migration->time);
         if (ret < 0) {
             goto out;
@@ -2530,12 +2533,12 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, node_table_t *nodes,
     }
     /* Add the populations. We don't have any metadata here. Users can add
      * metadata to the table if they wish. */
-    ret = population_table_clear(populations);
+    ret = population_table_clear(tables->populations);
     if (ret != 0) {
         goto out;
     }
     for (j = 0; j < self->num_populations; j++) {
-        ret = population_table_add_row(populations, NULL, 0);
+        ret = population_table_add_row(tables->populations, NULL, 0);
         if (ret < 0) {
             goto out;
         }

@@ -5495,143 +5495,24 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    ProvenanceTable *py_provenances = NULL;
-    IndividualTable *py_individuals = NULL;
-    PopulationTable *py_populations = NULL;
-    table_collection_t tables;
-    double sequence_length = 0.0;
-    static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", "individuals",
-        "populations", "sequence_length", NULL};
+    TableCollection *tables = NULL;
+    static char *kwlist[] = {"tables", NULL};
 
-    /* For now we keep a local table collection object, but we'll want to
-     * update this method to take a TableCollection object. The tricky
-     * bit is keeping API compatability with existing code, but hopefully
-     * this can be handled at the high-level API. */
-    err = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
-    if (ret != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!O!d", kwlist,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &ProvenanceTableType, &py_provenances,
-            &IndividualTableType, &py_individuals,
-            &PopulationTableType, &py_populations,
-            &sequence_length)) {
-        goto out;
-    }
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    err = node_table_copy(py_nodes->table, tables.nodes);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-    err = edge_table_copy(py_edges->table, tables.edges);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (py_migrations != NULL) {
-        if (MigrationTable_check_state(py_migrations) != 0) {
-            goto out;
-        }
-        err = migration_table_copy(py_migrations->table, tables.migrations);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        err = site_table_copy(py_sites->table, tables.sites);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        err = mutation_table_copy(py_mutations->table, tables.mutations);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_provenances != NULL) {
-        if (ProvenanceTable_check_state(py_provenances) != 0) {
-            goto out;
-        }
-        err = provenance_table_copy(py_provenances->table, tables.provenances);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_individuals != NULL) {
-        if (IndividualTable_check_state(py_individuals) != 0) {
-            goto out;
-        }
-        err = individual_table_copy(py_individuals->table, tables.individuals);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_populations != NULL) {
-        if (PopulationTable_check_state(py_populations) != 0) {
-            goto out;
-        }
-        err = population_table_copy(py_populations->table, tables.populations);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if ((py_mutations == NULL) != (py_sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     err = TreeSequence_alloc(self);
     if (err != 0) {
         goto out;
     }
-    tables.sequence_length = sequence_length;
-    err = tree_sequence_load_tables(self->tree_sequence, &tables, 0);
+    err = tree_sequence_load_tables(self->tree_sequence, tables->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    table_collection_free(&tables);
     return ret;
 }
 
@@ -5640,140 +5521,23 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    ProvenanceTable *py_provenances = NULL;
-    PopulationTable *py_populations = NULL;
-    IndividualTable *py_individuals = NULL;
-    table_collection_t tables;
-    static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", "individuals", "populations", NULL};
+    TableCollection *tables = NULL;
+    static char *kwlist[] = {"tables", NULL};
 
-    /* For now we keep a local table collection object, but we'll want to
-     * update this method to take a TableCollection object. The tricky
-     * bit is keeping API compatability with existing code, but hopefully
-     * this can be handled at the high-level API. */
-    err = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
-    if (ret != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!O!O!", kwlist,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &ProvenanceTableType, &py_provenances,
-            &IndividualTableType, &py_individuals,
-            &PopulationTableType, &py_populations)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    err = tree_sequence_dump_tables(self->tree_sequence, &tables, 0);
+    err = tree_sequence_dump_tables(self->tree_sequence, tables->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    err = node_table_copy(tables.nodes, py_nodes->table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-    err = edge_table_copy(tables.edges, py_edges->table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (py_migrations != NULL) {
-        if (MigrationTable_check_state(py_migrations) != 0) {
-            goto out;
-        }
-        err = migration_table_copy(tables.migrations, py_migrations->table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        err = site_table_copy(tables.sites, py_sites->table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        err = mutation_table_copy(tables.mutations, py_mutations->table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if ((py_mutations == NULL) != (py_sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and sites");
-        goto out;
-    }
-
-    if (py_provenances != NULL) {
-        if (ProvenanceTable_check_state(py_provenances) != 0) {
-            goto out;
-        }
-        err = provenance_table_copy(tables.provenances, py_provenances->table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_individuals != NULL) {
-        if (IndividualTable_check_state(py_individuals) != 0) {
-            goto out;
-        }
-        err = individual_table_copy(tables.individuals, py_individuals->table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_populations != NULL) {
-        if (PopulationTable_check_state(py_populations) != 0) {
-            goto out;
-        }
-        err = population_table_copy(tables.populations,
-                py_populations->table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
     ret = Py_BuildValue("");
 out:
-    table_collection_free(&tables);
     return ret;
 }
 
@@ -9732,36 +9496,17 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgeTable *edges = NULL;
-    MigrationTable *migrations = NULL;
-    PopulationTable *populations = NULL;
+    TableCollection *tables = NULL;
     RecombinationMap *recombination_map = NULL;
     recomb_map_t *recomb_map = NULL;
-    static char *kwlist[] = {"nodes", "edges", "migrations", "populations",
-        "recombination_map", NULL};
+    static char *kwlist[] = {"tables", "recombination_map", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgeTableType, &edges,
-            &MigrationTableType, &migrations,
-            &PopulationTableType, &populations,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+            &TableCollectionType, &tables,
             &RecombinationMapType, &recombination_map)) {
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    if (NodeTable_check_state(nodes) != 0) {
-        goto out;
-    }
-    if (EdgeTable_check_state(edges) != 0) {
-        goto out;
-    }
-    if (MigrationTable_check_state(migrations) != 0) {
-        goto out;
-    }
-    if (PopulationTable_check_state(populations) != 0) {
         goto out;
     }
     if (recombination_map != NULL) {
@@ -9770,9 +9515,7 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
         }
         recomb_map = recombination_map->recomb_map;
     }
-    err = msp_populate_tables(self->sim, recomb_map, nodes->table,
-            edges->table, migrations->table,
-            populations->table);
+    err = msp_populate_tables(self->sim, recomb_map, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;
