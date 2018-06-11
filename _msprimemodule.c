@@ -9496,36 +9496,17 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgeTable *edges = NULL;
-    MigrationTable *migrations = NULL;
-    PopulationTable *populations = NULL;
+    TableCollection *tables = NULL;
     RecombinationMap *recombination_map = NULL;
     recomb_map_t *recomb_map = NULL;
-    static char *kwlist[] = {"nodes", "edges", "migrations", "populations",
-        "recombination_map", NULL};
+    static char *kwlist[] = {"tables", "recombination_map", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgeTableType, &edges,
-            &MigrationTableType, &migrations,
-            &PopulationTableType, &populations,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+            &TableCollectionType, &tables,
             &RecombinationMapType, &recombination_map)) {
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    if (NodeTable_check_state(nodes) != 0) {
-        goto out;
-    }
-    if (EdgeTable_check_state(edges) != 0) {
-        goto out;
-    }
-    if (MigrationTable_check_state(migrations) != 0) {
-        goto out;
-    }
-    if (PopulationTable_check_state(populations) != 0) {
         goto out;
     }
     if (recombination_map != NULL) {
@@ -9534,9 +9515,7 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
         }
         recomb_map = recombination_map->recomb_map;
     }
-    err = msp_populate_tables(self->sim, recomb_map, nodes->table,
-            edges->table, migrations->table,
-            populations->table);
+    err = msp_populate_tables(self->sim, recomb_map, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;

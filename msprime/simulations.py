@@ -571,15 +571,13 @@ class Simulator(object):
         Returns a TreeSequence representing the state of the simulation.
         """
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        t = self.tables
         self.ll_sim.populate_tables(
-            t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
-            t.populations.ll_table, recombination_map=ll_recomb_map)
+            self.tables.ll_tables, recombination_map=ll_recomb_map)
         if mutation_generator is not None:
             mutation_generator.generate(self.tables.ll_tables)
-        t.provenances.clear()
+        self.tables.provenances.clear()
         if provenance_record is not None:
-            t.provenances.add_row(provenance_record)
+            self.tables.provenances.add_row(provenance_record)
         return self.tables.tree_sequence()
 
     def reset(self):

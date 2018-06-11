@@ -233,8 +233,7 @@ def get_example_simulator(
 def populate_tree_sequence(sim, mutation_generator=None, provenances=[]):
     tables = new_table_collection()
     ts = _msprime.TreeSequence()
-    sim.populate_tables(
-        tables.nodes, tables.edges, tables.migrations, tables.populations)
+    sim.populate_tables(tables)
     if mutation_generator is not None:
         mutation_generator.generate(tables)
     for timestamp, record in provenances:
@@ -474,8 +473,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
         for j in range(num_provenance_records):
             tables.provenances.add_row(timestamp="y" * j, record="x" * j)
-        sim.populate_tables(
-            tables.nodes, tables.edges, tables.migrations, tables.populations)
+        sim.populate_tables(tables)
         mutgen.generate(tables)
         ts.load_tables(tables)
         self.assertEqual(ts.get_num_nodes(), tables.nodes.num_rows)
@@ -515,8 +513,7 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         for j in range(n):
             tables.individuals.add_row(flags=1, location=[j, j], metadata=b'x' * j)
         ts = _msprime.TreeSequence()
-        sim.populate_tables(
-            tables.nodes, tables.edges, tables.migrations, tables.populations)
+        sim.populate_tables(tables)
         # Add in our own pops so we can have metadata
         tables.populations.clear()
         for j in range(num_populations):
@@ -1821,43 +1818,24 @@ class TestSimulator(LowLevelTestCase):
             self.assertEqual(sim.get_time(), 0)
 
     def test_populate_tables_interface(self):
-        node_table = _msprime.NodeTable()
-        edge_table = _msprime.EdgeTable()
-        migration_table = _msprime.MigrationTable()
-        population_table = _msprime.PopulationTable()
+        tables = new_table_collection()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
         sim.run()
 
         recomb_map = uniform_recombination_map(sim)
-        # nodes, edges and migrations are mandatory.
+        # tables is mandatory.
         self.assertRaises(TypeError, sim.populate_tables)
-        self.assertRaises(TypeError, sim.populate_tables, nodes=node_table)
-        self.assertRaises(
-            TypeError, sim.populate_tables, nodes=node_table, migrations=migration_table)
-        self.assertRaises(
-            TypeError, sim.populate_tables, nodes=node_table, edges=edge_table)
 
-        kwargs = {
-            "nodes": node_table,
-            "edges": edge_table,
-            "migrations": migration_table,
-            "populations": population_table,
-        }
         for bad_type in ["", {}, [], None]:
-            for k in kwargs.keys():
-                d = dict(kwargs)
-                d[k] = bad_type
-                self.assertRaises(TypeError, sim.populate_tables, **d)
+            self.assertRaises(TypeError, sim.populate_tables, tables=bad_type)
             self.assertRaises(
-                TypeError, sim.populate_tables, recombination_map=bad_type, **kwargs)
-            self.assertRaises(
-                TypeError, sim.populate_tables, Ne=bad_type, **kwargs)
+                TypeError, sim.populate_tables, tables=tables,
+                recombination_map=bad_type)
 
-        sim.populate_tables(**kwargs)
-        self.assertEqual(edge_table.num_rows, sim.get_num_edges())
-        kwargs["recombination_map"] = recomb_map
-        sim.populate_tables(**kwargs)
-        self.assertEqual(edge_table.num_rows, sim.get_num_edges())
+        sim.populate_tables(tables)
+        self.assertEqual(tables.edges.num_rows, sim.get_num_edges())
+        sim.populate_tables(tables, recomb_map)
+        self.assertEqual(tables.edges.num_rows, sim.get_num_edges())
 
 
 class TestTreeSequence(LowLevelTestCase):

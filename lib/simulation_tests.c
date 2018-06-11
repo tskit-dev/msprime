@@ -724,24 +724,15 @@ test_dtwf_deterministic(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    node_table_t nodes[2];
-    edge_table_t edges[2];
-    migration_table_t migrations;
-    population_table_t populations;
+    table_collection_t tables[2];
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = migration_table_alloc(&migrations, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = population_table_alloc(&populations, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     memset(samples, 0, n * sizeof(sample_t));
     for (j = 0; j < 2; j++) {
-        ret = node_table_alloc(&nodes[j], 0, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = edge_table_alloc(&edges[j], 0);
+        ret = table_collection_alloc(&tables[j], MSP_ALLOC_TABLES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         gsl_rng_set(rng, seed);
@@ -760,28 +751,24 @@ test_dtwf_deterministic(void)
         ret = msp_run(msp, DBL_MAX, UINT32_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
-        ret = msp_populate_tables(msp, NULL, &nodes[j], &edges[j], &migrations,
-                &populations);
+        ret = msp_populate_tables(msp, NULL, &tables[j]);
         CU_ASSERT_EQUAL(ret, 0);
         msp_free(msp);
-        CU_ASSERT_EQUAL(migrations.num_rows, 0);
-        CU_ASSERT(nodes[j].num_rows > 0);
-        CU_ASSERT(edges[j].num_rows > 0);
+        CU_ASSERT_EQUAL(tables[j].migrations->num_rows, 0);
+        CU_ASSERT(tables[j].nodes->num_rows > 0);
+        CU_ASSERT(tables[j].edges->num_rows > 0);
 
     }
-    CU_ASSERT_TRUE(node_table_equals(&nodes[0], &nodes[1]));
-    CU_ASSERT_TRUE(edge_table_equals(&edges[0], &edges[1]));
+    CU_ASSERT_TRUE(node_table_equals(tables[0].nodes, tables[1].nodes));
+    CU_ASSERT_TRUE(edge_table_equals(tables[0].edges, tables[1].edges));
 
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     free(msp);
     free(samples);
     for (j = 0; j < 2; j++) {
-        node_table_free(&nodes[j]);
-        edge_table_free(&edges[j]);
+        table_collection_free(&tables[j]);
     }
-    migration_table_free(&migrations);
-    population_table_free(&populations);
 }
 
 static void
@@ -864,12 +851,12 @@ test_mixed_model_simulation(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* Make sure we can build a tree sequence from the tables. */
-    ret = msp_populate_tables(msp, NULL, tables.nodes, tables.edges,
-            tables.migrations, tables.populations);
+    ret = msp_populate_tables(msp, NULL, &tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* TODO remove this when populate tables takes table_collection as arg */
     tables.sequence_length = msp->num_loci;
+    CU_ASSERT_EQUAL_FATAL(tables.sequence_length, msp->num_loci);
     ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tree_sequence_print_state(&ts, _devnull);
@@ -1290,8 +1277,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_populate_tables(&msp, NULL, tables.nodes, tables.edges,
-                tables.migrations, tables.populations);
+        ret = msp_populate_tables(&msp, NULL, &tables);
         ret = mutgen_generate(&mutgen, &tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         /* TODO remove this when populate tables takes table_collection as arg */
