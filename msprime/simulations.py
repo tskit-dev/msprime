@@ -32,7 +32,6 @@ import warnings
 
 import _msprime
 import msprime.tables as _tables
-import msprime.trees as trees
 import msprime.provenance as provenance
 
 # Make the low-level generator appear like its from this module
@@ -581,12 +580,7 @@ class Simulator(object):
         t.provenances.clear()
         if provenance_record is not None:
             t.provenances.add_row(provenance_record)
-        ll_tree_sequence = _msprime.TreeSequence()
-        ll_tree_sequence.load_tables(
-            t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
-            t.sites.ll_table, t.mutations.ll_table, t.provenances.ll_table,
-            populations=t.populations.ll_table)
-        return trees.TreeSequence(ll_tree_sequence)
+        return self.tables.tree_sequence()
 
     def reset(self):
         """

@@ -2476,20 +2476,19 @@ class TestNodeOrdering(HighLevelTestCase):
         random.shuffle(internal_nodes)
         for j, node in enumerate(internal_nodes):
             node_map[n + j] = node
-        node_table = msprime.NodeTable()
+        other_tables = msprime.TableCollection(ts.sequence_length)
         # Insert the new nodes into the table.
         inv_node_map = {v: k for k, v in node_map.items()}
         for j in range(ts.num_nodes):
             node = ts.node(inv_node_map[j])
-            node_table.add_row(
+            other_tables.nodes.add_row(
                 flags=node.flags, time=node.time, population=node.population)
-        edge_table = msprime.EdgeTable()
         for e in ts.edges():
-            edge_table.add_row(
+            other_tables.edges.add_row(
                 left=e.left, right=e.right, parent=node_map[e.parent],
                 child=node_map[e.child])
-        msprime.sort_tables(nodes=node_table, edges=edge_table)
-        other_ts = msprime.load_tables(nodes=node_table, edges=edge_table)
+        other_tables.sort()
+        other_ts = other_tables.tree_sequence()
 
         self.assertEqual(ts.get_num_trees(), other_ts.get_num_trees())
         self.assertEqual(ts.get_sample_size(), other_ts.get_sample_size())

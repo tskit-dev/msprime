@@ -1165,26 +1165,42 @@ def load_tables(
     :return: A :class:`.TreeSequence` consistent with the specified tables.
     :rtype: TreeSequence
     """
-    # TODO update the low-level module to accept None and remove this
+    if sequence_length is None:
+        sequence_length = 0
     kwargs = {
         "nodes": nodes.ll_table, "edges": edges.ll_table,
         "sequence_length": sequence_length}
     if migrations is not None:
         kwargs["migrations"] = migrations.ll_table
+    else:
+        kwargs["migrations"] = _msprime.MigrationTable()
     if sites is not None:
         kwargs["sites"] = sites.ll_table
+    else:
+        kwargs["sites"] = _msprime.SiteTable()
     if mutations is not None:
         kwargs["mutations"] = mutations.ll_table
+    else:
+        kwargs["mutations"] = _msprime.MutationTable()
     if provenances is not None:
         kwargs["provenances"] = provenances.ll_table
+    else:
+        kwargs["provenances"] = _msprime.ProvenanceTable()
     if individuals is not None:
         kwargs["individuals"] = individuals.ll_table
+    else:
+        kwargs["individuals"] = _msprime.IndividualTable()
     if populations is not None:
         kwargs["populations"] = populations.ll_table
-    return TreeSequence.load_tables(**kwargs)
+    else:
+        kwargs["populations"] = _msprime.PopulationTable()
+
+    ll_tables = _msprime.TableCollection(**kwargs)
+    return TreeSequence.load_tables(tables.TableCollection(ll_tables=ll_tables))
 
 
-def parse_nodes(source, strict=True, encoding='utf8', base64_metadata=True):
+def parse_nodes(
+        source, strict=True, encoding='utf8', base64_metadata=True, table=None):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a node table and returns the corresponding :class:`NodeTable`
@@ -1202,12 +1218,15 @@ def parse_nodes(source, strict=True, encoding='utf8', base64_metadata=True):
     :param string encoding: Encoding used for text representation.
     :param bool base64_metadata: If True, metadata is encoded using Base64
         encoding; otherwise, as plain text.
+    :param NodeTable table: If specified write into this table. If not,
+        create a new :class:`.NodeTable` instance.
     """
     sep = None
     if strict:
         sep = "\t"
+    if table is None:
+        table = tables.NodeTable()
     # Read the header and find the indexes of the required fields.
-    table = tables.NodeTable()
     header = source.readline().strip("\n").split(sep)
     is_sample_index = header.index("is_sample")
     time_index = header.index("time")
@@ -1251,7 +1270,7 @@ def parse_nodes(source, strict=True, encoding='utf8', base64_metadata=True):
     return table
 
 
-def parse_edges(source, strict=True):
+def parse_edges(source, strict=True, table=None):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a edge table and returns the corresponding :class:`EdgeTable`
@@ -1265,17 +1284,19 @@ def parse_edges(source, strict=True):
     :param stream source: The file-like object containing the text.
     :param bool strict: If True, require strict tab delimiting (default). If
         False, a relaxed whitespace splitting algorithm is used.
+    :param EdgeTable table: If specified, write the edges into this table. If
+        not, create a new :class:`.EdgeTable` instance and return.
     """
     sep = None
     if strict:
         sep = "\t"
-    table = tables.EdgeTable()
+    if table is None:
+        table = tables.EdgeTable()
     header = source.readline().strip("\n").split(sep)
     left_index = header.index("left")
     right_index = header.index("right")
     parent_index = header.index("parent")
     children_index = header.index("child")
-    table = tables.EdgeTable()
     for line in source:
         tokens = line.split(sep)
         if len(tokens) >= 4:
@@ -1288,7 +1309,8 @@ def parse_edges(source, strict=True):
     return table
 
 
-def parse_sites(source, strict=True, encoding='utf8', base64_metadata=True):
+def parse_sites(
+        source, strict=True, encoding='utf8', base64_metadata=True, table=None):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a site table and returns the corresponding :class:`SiteTable`
@@ -1306,10 +1328,14 @@ def parse_sites(source, strict=True, encoding='utf8', base64_metadata=True):
     :param string encoding: Encoding used for text representation.
     :param bool base64_metadata: If True, metadata is encoded using Base64
         encoding; otherwise, as plain text.
+    :param SiteTable table: If specified write site into this table. If not,
+        create a new :class:`.SiteTable` instance.
     """
     sep = None
     if strict:
         sep = "\t"
+    if table is None:
+        table = tables.SiteTable()
     header = source.readline().strip("\n").split(sep)
     position_index = header.index("position")
     ancestral_state_index = header.index("ancestral_state")
@@ -1318,7 +1344,6 @@ def parse_sites(source, strict=True, encoding='utf8', base64_metadata=True):
         metadata_index = header.index("metadata")
     except ValueError:
         pass
-    table = tables.SiteTable()
     for line in source:
         tokens = line.split(sep)
         if len(tokens) >= 2:
@@ -1334,7 +1359,8 @@ def parse_sites(source, strict=True, encoding='utf8', base64_metadata=True):
     return table
 
 
-def parse_mutations(source, strict=True, encoding='utf8', base64_metadata=True):
+def parse_mutations(
+        source, strict=True, encoding='utf8', base64_metadata=True, table=None):
     """
     Parse the specified file-like object containing a whitespace delimited
     description of a mutation table and returns the corresponding :class:`MutationTable`
@@ -1352,10 +1378,14 @@ def parse_mutations(source, strict=True, encoding='utf8', base64_metadata=True):
     :param string encoding: Encoding used for text representation.
     :param bool base64_metadata: If True, metadata is encoded using Base64
         encoding; otherwise, as plain text.
+    :param MutationTable table: If specified, write mutations into this table.
+        If not, create a new :class:`.MutationTable` instance.
     """
     sep = None
     if strict:
         sep = "\t"
+    if table is None:
+        table = tables.MutationTable()
     header = source.readline().strip("\n").split(sep)
     site_index = header.index("site")
     node_index = header.index("node")
@@ -1371,7 +1401,6 @@ def parse_mutations(source, strict=True, encoding='utf8', base64_metadata=True):
         metadata_index = header.index("metadata")
     except ValueError:
         pass
-    table = tables.MutationTable()
     for line in source:
         tokens = line.split(sep)
         if len(tokens) >= 3:
@@ -1449,22 +1478,21 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
-    node_table = parse_nodes(nodes, strict=strict, encoding=encoding,
-                             base64_metadata=base64_metadata)
-    edge_table = parse_edges(edges, strict=strict)
-    site_table = tables.SiteTable()
-    mutation_table = tables.MutationTable()
+    tc = tables.TableCollection(sequence_length)
+    parse_nodes(
+        nodes, strict=strict, encoding=encoding, base64_metadata=base64_metadata,
+        table=tc.nodes)
+    parse_edges(edges, strict=strict, table=tc.edges)
     if sites is not None:
-        site_table = parse_sites(sites, strict=strict, encoding=encoding,
-                                 base64_metadata=base64_metadata)
+        parse_sites(
+            sites, strict=strict, encoding=encoding, base64_metadata=base64_metadata,
+            table=tc.sites)
     if mutations is not None:
-        mutation_table = parse_mutations(mutations, strict=strict, encoding=encoding,
-                                         base64_metadata=base64_metadata)
-    tables.sort_tables(
-        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table)
-    return load_tables(
-        nodes=node_table, edges=edge_table, sites=site_table, mutations=mutation_table,
-        sequence_length=sequence_length)
+        parse_mutations(
+            mutations, strict=strict, encoding=encoding,
+            base64_metadata=base64_metadata, table=tc.mutations)
+    tc.sort()
+    return tc.tree_sequence()
 
 
 class TreeSequence(object):
@@ -1502,9 +1530,9 @@ class TreeSequence(object):
         return TreeSequence(ts)
 
     @classmethod
-    def load_tables(cls, **kwargs):
+    def load_tables(cls, tables):
         ts = _msprime.TreeSequence()
-        ts.load_tables(**kwargs)
+        ts.load_tables(tables.ll_tables)
         return TreeSequence(ts)
 
     def dump(self, path, zlib_compression=False):
@@ -1566,14 +1594,7 @@ class TreeSequence(object):
         #     provenances = tables.ProvenanceTable()
 
         t = tables.TableCollection(sequence_length=self.sequence_length)
-        self._ll_tree_sequence.dump_tables(
-            nodes=t.nodes.ll_table, edges=t.edges.ll_table,
-            migrations=t.migrations.ll_table,
-            sites=t.sites.ll_table,
-            mutations=t.mutations.ll_table,
-            provenances=t.provenances.ll_table,
-            individuals=t.individuals.ll_table,
-            populations=t.populations.ll_table)
+        self._ll_tree_sequence.dump_tables(t.ll_tables)
         return t
 
     def dump_text(
