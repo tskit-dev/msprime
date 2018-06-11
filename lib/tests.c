@@ -4706,11 +4706,9 @@ test_single_tree_mutgen(void)
      * block size.
      */
     gsl_rng_set(rng, 1);
-    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    , 0ret = mutgen_generate(&mutgen, &tables2, 0);
+    ret = mutgen_generate(&mutgen, &tables2, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(table_collection_equals(&tables1, &tables2));
     ret = mutgen_free(&mutgen);

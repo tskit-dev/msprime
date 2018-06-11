@@ -239,12 +239,8 @@ typedef struct {
     int alphabet;
     gsl_rng *rng;
     double mutation_rate;
-    size_t num_mutations;
-    size_t max_num_mutations;
-    size_t mutation_block_size;
-    site_table_t *sites;
-    infinite_sites_mutation_t *mutations;
-    object_heap_t avl_node_heap;
+    avl_tree_t sites;
+    block_allocator_t allocator;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
