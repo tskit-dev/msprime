@@ -138,6 +138,32 @@ Variable recombination rates
 .. autoclass:: msprime.RecombinationMap
     :members:
 
+++++++++++++++++++++
+Simulating mutations
+++++++++++++++++++++
+
+When running coalescent simulations it's usually most convenient to use the
+``mutation_rate`` argument to the :func:`.simulate` function to throw neutral
+mutations down on the trees. However, sometimes we wish to throw mutations
+down on an existing tree sequence: for example, if we want to see the outcome
+of different random mutational processes on top of a single simulated topology,
+or if we have obtained the tree sequence from another program and wish to
+overlay neutral mutations on this tree sequence.
+
+.. data:: msprime.BINARY == 0
+
+    The binary mutation alphabet where ancestral states are always "0" and
+    derived states "1".
+
+.. data:: msprime.NUCLEOTIDES == 1
+
+    The nucleotides mutation alphabet in which ancestral and derived states are
+    chosen from the characters "A", "C", "G" and "T".
+
+.. autoclass:: msprime.InfiniteSites
+
+.. autofunction:: msprime.mutate
+
 
 ************************
 Using simulation results

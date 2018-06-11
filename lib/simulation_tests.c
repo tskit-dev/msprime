@@ -1292,10 +1292,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_populate_tables(&msp, NULL, tables.nodes, tables.edges,
                 tables.migrations, tables.populations);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = mutgen_generate_tables_tmp(&mutgen, tables.nodes, tables.edges);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = mutgen_populate_tables(&mutgen, tables.sites, tables.mutations);
+        ret = mutgen_generate(&mutgen, &tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         /* TODO remove this when populate tables takes table_collection as arg */
         tables.sequence_length = m;

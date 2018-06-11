@@ -51,6 +51,21 @@ IS_PY2 = sys.version_info[0] < 3
 IS_WINDOWS = platform.system() == "Windows"
 
 
+def new_table_collection():
+    """
+    Simplifies allocating table collections from the low level module.
+    """
+    return _msprime.TableCollection(
+        individuals=_msprime.IndividualTable(),
+        nodes=_msprime.NodeTable(),
+        edges=_msprime.EdgeTable(),
+        migrations=_msprime.MigrationTable(),
+        sites=_msprime.SiteTable(),
+        mutations=_msprime.MutationTable(),
+        populations=_msprime.PopulationTable(),
+        provenances=_msprime.ProvenanceTable())
+
+
 def uniform_recombination_map(sim):
     """
     Returns a uniform recombination map for the specified simulator.
@@ -216,22 +231,17 @@ def get_example_simulator(
 
 
 def populate_tree_sequence(sim, mutation_generator=None, provenances=[]):
-    nodes = _msprime.NodeTable()
-    edges = _msprime.EdgeTable()
-    migrations = _msprime.MigrationTable()
-    sites = _msprime.SiteTable()
-    mutations = _msprime.MutationTable()
-    populations = _msprime.PopulationTable()
-    provenance_table = _msprime.ProvenanceTable()
+    tables = new_table_collection()
     ts = _msprime.TreeSequence()
-    sim.populate_tables(nodes, edges, migrations, populations)
+    sim.populate_tables(
+        tables.nodes, tables.edges, tables.migrations, tables.populations)
     if mutation_generator is not None:
-        mutation_generator.generate(nodes, edges, sites, mutations)
+        mutation_generator.generate(tables)
     for timestamp, record in provenances:
-        provenance_table.add_row(timestamp=timestamp, record=record)
+        tables.provenances.add_row(timestamp=timestamp, record=record)
     ts.load_tables(
-        nodes, edges, migrations, sites, mutations, provenance_table,
-        populations=populations)
+        tables.nodes, tables.edges, tables.migrations, tables.sites,
+        tables.mutations, tables.provenances, populations=tables.populations)
     return ts
 
 
@@ -461,27 +471,22 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             recombination_rate=rho,
             demographic_events=demographic_events)
         sim.run()
-        nodes = _msprime.NodeTable()
-        edges = _msprime.EdgeTable()
-        migrations = _msprime.MigrationTable()
-        sites = _msprime.SiteTable()
-        mutations = _msprime.MutationTable()
-        provenances = _msprime.ProvenanceTable()
-        populations = _msprime.PopulationTable()
+        tables = new_table_collection()
         ts = _msprime.TreeSequence()
         mutgen = _msprime.MutationGenerator(rng, mutation_rate)
         for j in range(num_provenance_records):
-            provenances.add_row(timestamp="y" * j, record="x" * j)
-        sim.populate_tables(nodes, edges, migrations, populations)
-        mutgen.generate(nodes, edges, sites, mutations)
+            tables.provenances.add_row(timestamp="y" * j, record="x" * j)
+        sim.populate_tables(
+            tables.nodes, tables.edges, tables.migrations, tables.populations)
+        mutgen.generate(tables)
         ts.load_tables(
-            nodes, edges, migrations, sites, mutations, provenances,
-            populations=populations)
-        self.assertEqual(ts.get_num_nodes(), nodes.num_rows)
-        self.assertEqual(ts.get_num_mutations(), mutations.num_rows)
-        self.assertEqual(ts.get_num_edges(), edges.num_rows)
-        self.assertEqual(ts.get_num_provenances(), provenances.num_rows)
-        self.assertEqual(ts.get_num_populations(), populations.num_rows)
+            tables.nodes, tables.edges, tables.migrations, tables.sites,
+            tables.mutations, tables.provenances, populations=tables.populations)
+        self.assertEqual(ts.get_num_nodes(), tables.nodes.num_rows)
+        self.assertEqual(ts.get_num_mutations(), tables.mutations.num_rows)
+        self.assertEqual(ts.get_num_edges(), tables.edges.num_rows)
+        self.assertEqual(ts.get_num_provenances(), tables.provenances.num_rows)
+        self.assertEqual(ts.get_num_populations(), tables.populations.num_rows)
         return ts
 
     def get_nonbinary_tree_sequence(self):
@@ -508,30 +513,24 @@ class LowLevelTestCase(tests.MsprimeTestCase):
         sim = get_example_simulator(
             n, num_populations=num_populations, store_migrations=True)
         sim.run()
-        nodes = _msprime.NodeTable()
-        edges = _msprime.EdgeTable()
-        migrations = _msprime.MigrationTable()
-        sites = _msprime.SiteTable()
-        mutations = _msprime.MutationTable()
-        provenances = _msprime.ProvenanceTable()
-        individuals = _msprime.IndividualTable()
-        populations = _msprime.PopulationTable()
+        tables = new_table_collection()
         for j in range(4):
-            provenances.add_row(timestamp="y" * (j + 1), record="x" * j)
+            tables.provenances.add_row(timestamp="y" * (j + 1), record="x" * j)
         for j in range(n):
-            individuals.add_row(flags=1, location=[j, j], metadata=b'x' * j)
+            tables.individuals.add_row(flags=1, location=[j, j], metadata=b'x' * j)
         ts = _msprime.TreeSequence()
-        sim.populate_tables(nodes, edges, migrations, populations)
+        sim.populate_tables(
+            tables.nodes, tables.edges, tables.migrations, tables.populations)
         # Add in our own pops so we can have metadata
-        populations.clear()
+        tables.populations.clear()
         for j in range(num_populations):
-            populations.add_row(metadata=b'x' * j)
+            tables.populations.add_row(metadata=b'x' * j)
         mutation_rate = 10
         mutgen = _msprime.MutationGenerator(_msprime.RandomGenerator(1), mutation_rate)
-        mutgen.generate(nodes, edges, sites, mutations)
+        mutgen.generate(tables)
         ts.load_tables(
-            nodes, edges, migrations, sites, mutations, provenances,
-            individuals, populations)
+            tables.nodes, tables.edges, tables.migrations, tables.sites,
+            tables.mutations, tables.provenances, tables.individuals, tables.populations)
         self.assertEqual(ts.get_num_populations(), num_populations)
         self.assertGreater(sim.get_num_migrations(), 0)
         self.assertGreater(ts.get_num_mutations(), 0)
@@ -3535,19 +3534,40 @@ class TestMutationGenerator(unittest.TestCase):
     """
     Tests for the mutation generator class.
     """
-    def test_constructor(self):
+    def test_basic_constructor(self):
         self.assertRaises(TypeError, _msprime.MutationGenerator)
+        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), 0)
+        self.assertEqual(mg.get_mutation_rate(), 0)
+
+    def test_rng(self):
+        for bad_type in ["x", {}, None]:
+            self.assertRaises(
+                TypeError, _msprime.MutationGenerator, random_generator=bad_type)
+
+    def test_mutation_rate(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None]:
             self.assertRaises(TypeError, _msprime.MutationGenerator, rng, bad_type)
         for bad_value in [-1, -1e-3]:
             self.assertRaises(ValueError, _msprime.MutationGenerator, rng, bad_value)
-
-    def test_mutation_rate(self):
-        rng = _msprime.RandomGenerator(1)
         for rate in [0, 1e-12, 1e12, 1000, 0.01]:
             mutgen = _msprime.MutationGenerator(rng, rate)
             self.assertEqual(mutgen.get_mutation_rate(), rate)
+
+    def test_alphabet(self):
+        rng = _msprime.RandomGenerator(1)
+        for bad_type in ["x", {}, None]:
+            self.assertRaises(
+                TypeError, _msprime.MutationGenerator, random_generator=rng,
+                mutation_rate=0, alphabet=bad_type)
+        for bad_value in [-1, 2, 10**6]:
+            self.assertRaises(
+                ValueError, _msprime.MutationGenerator, random_generator=rng,
+                mutation_rate=0, alphabet=bad_value)
+        for alphabet in [0, 1]:
+            mg = _msprime.MutationGenerator(
+                random_generator=rng, mutation_rate=0, alphabet=alphabet)
+            self.assertEqual(alphabet, mg.get_alphabet())
 
 
 class TestDemographyDebugger(unittest.TestCase):

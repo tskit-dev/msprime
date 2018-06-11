@@ -40,11 +40,6 @@ FILE * _devnull;
 #define SIMPLE_BOTTLENECK 0
 #define INSTANTANEOUS_BOTTLENECK 1
 
-/* Defining this here for now to avoid breaking code, but this should be
- * removed when we udpate the mutation generator inferface */
-#define MSP_ALPHABET_BINARY 0
-#define MSP_ALPHABET_ASCII 1
-
 typedef struct {
     int type;
     double time;
@@ -1513,9 +1508,7 @@ get_example_tree_sequence(uint32_t num_samples,
     ret = msp_populate_tables(msp, recomb_map, tables.nodes, tables.edges,
             tables.migrations, tables.populations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(mutgen, tables.nodes, tables.edges);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_populate_tables(mutgen, tables.sites, tables.mutations);
+    ret = mutgen_generate(mutgen, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = provenance_table_add_row(tables.provenances,
             timestamp, strlen(timestamp), record, strlen(record));
@@ -1574,9 +1567,9 @@ get_example_nonbinary_tree_sequences(void)
     ret[1] = get_example_tree_sequence(10, 2, 100, 10.0, 1.0, 2.0,
             1, bottlenecks, MSP_ALPHABET_BINARY);
     ret[2] = get_example_tree_sequence(500, 10, 10, 1000.0, 0.5, 3.0,
-            2, bottlenecks, MSP_ALPHABET_ASCII);
+            2, bottlenecks, MSP_ALPHABET_NUCLEOTIDE);
     ret[3] = get_example_tree_sequence(100, 0, 100, 1.0, 1.0, 0.0,
-            3, other_bottlenecks, MSP_ALPHABET_ASCII);
+            3, other_bottlenecks, MSP_ALPHABET_NUCLEOTIDE);
     ret[4] = NULL;
     return ret;
 }
@@ -1869,9 +1862,9 @@ get_example_tree_sequences(int include_nonbinary)
     ret[1] = get_example_tree_sequence(2, 0, 1, 0.1, 1.0, 1.0, 0, NULL,
             MSP_ALPHABET_BINARY);
     ret[2] = get_example_tree_sequence(3, 0, 3, 10.0, 10.0, 0.0, 0, NULL,
-            MSP_ALPHABET_ASCII);
+            MSP_ALPHABET_NUCLEOTIDE);
     ret[3] = get_example_tree_sequence(10, 0, UINT32_MAX, 10.0,
-            9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_ASCII);
+            9.31322575049e-08, 10.0, 0, NULL, MSP_ALPHABET_NUCLEOTIDE);
     ret[4] = make_recurrent_and_back_mutations_copy(ret[0]);
     ret[5] = make_permuted_nodes_copy(ret[0]);
     ret[6] = make_gappy_copy(ret[0]);
@@ -4670,34 +4663,23 @@ test_single_tree_mutgen(void)
     size_t j;
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    node_table_t node_table;
-    edge_table_t edge_table;
-    site_table_t sites, sites_after;
-    mutation_table_t mutations, mutations_after;
+    table_collection_t tables1, tables2;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = node_table_alloc(&node_table, 0, 0);
+    ret = table_collection_alloc(&tables1, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = edge_table_alloc(&edge_table, 0);
+    ret = table_collection_alloc(&tables2, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    parse_nodes(nodes, &node_table);
-    parse_edges(edges, &edge_table);
-    ret = site_table_alloc(&sites, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = site_table_alloc(&sites_after, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutation_table_alloc(&mutations_after, 0, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    parse_nodes(nodes, tables1.nodes);
+    parse_edges(edges, tables1.edges);
+    parse_nodes(nodes, tables2.nodes);
+    parse_edges(edges, tables2.edges);
 
     ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edge_table);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_populate_tables(&mutgen, &sites, &mutations);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutations.num_rows == 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows == 0);
     mutgen_print_state(&mutgen, _devnull);
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4705,19 +4687,17 @@ test_single_tree_mutgen(void)
     gsl_rng_set(rng, 1);
     ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edge_table);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_print_state(&mutgen, _devnull);
-    ret = mutgen_populate_tables(&mutgen, &sites, &mutations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutations.num_rows > 0);
-    CU_ASSERT_TRUE(mutations.num_rows == sites.num_rows);
-    for (j = 0; j < mutations.num_rows; j++) {
-        CU_ASSERT_TRUE(mutations.site[j] == j);
-        CU_ASSERT_TRUE(sites.position[j] <= 1.0);
-        CU_ASSERT_TRUE(mutations.node[j] < 6);
-        CU_ASSERT_EQUAL(sites.ancestral_state[j], '0');
-        CU_ASSERT_EQUAL(mutations.derived_state[j], '1');
+    CU_ASSERT_TRUE(tables1.mutations->num_rows > 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows == tables1.sites->num_rows);
+    for (j = 0; j < tables1.mutations->num_rows; j++) {
+        CU_ASSERT_TRUE(tables1.mutations->site[j] == j);
+        CU_ASSERT_TRUE(tables1.sites->position[j] <= 1.0);
+        CU_ASSERT_TRUE(tables1.mutations->node[j] < 6);
+        CU_ASSERT_EQUAL(tables1.sites->ancestral_state[j], '0');
+        CU_ASSERT_EQUAL(tables1.mutations->derived_state[j], '1');
     }
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4726,25 +4706,79 @@ test_single_tree_mutgen(void)
      * block size.
      */
     gsl_rng_set(rng, 1);
-    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate_tables_tmp(&mutgen, &node_table, &edge_table);
+    ret = mutgen_generate(&mutgen, &tables2, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_populate_tables(&mutgen, &sites_after, &mutations_after);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(mutation_table_equals(&mutations, &mutations_after));
-    CU_ASSERT_TRUE(site_table_equals(&sites, &sites_after));
+    CU_ASSERT_TRUE(table_collection_equals(&tables1, &tables2));
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    edge_table_free(&edge_table);
-    node_table_free(&node_table);
-    mutation_table_free(&mutations);
-    site_table_free(&sites);
-    mutation_table_free(&mutations_after);
-    site_table_free(&sites_after);
+    table_collection_free(&tables1);
+    table_collection_free(&tables2);
+    gsl_rng_free(rng);
+}
+
+static void
+test_single_tree_mutgen_keep_sites(void)
+{
+    int ret = 0;
+    tree_sequence_t ts;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    table_collection_t tables;
+    table_collection_t copy;
+    mutgen_t mutgen;
+
+    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges,
+            NULL, single_tree_ex_sites, single_tree_ex_mutations, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 7);
+
+    ret = tree_sequence_dump_tables(&ts, &tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &copy, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_equals(&tables, &copy));
+
+    /* With a mutation rate of 0, we should keep exactly the same set
+     * of mutations */
+    ret = mutgen_alloc(&mutgen, 0.0, rng, MSP_ALPHABET_BINARY, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_equals(&tables, &copy));
+    mutgen_free(&mutgen);
+
+    gsl_rng_set(rng, 2);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.sites->num_rows > copy.sites->num_rows);
+    CU_ASSERT_TRUE(tables.mutations->num_rows > copy.mutations->num_rows);
+    mutgen_free(&mutgen);
+
+    /* If we run precisely the same mutations again we should rejection
+     * sample away all of the original positions */
+    gsl_rng_set(rng, 2);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.sites->num_rows > copy.sites->num_rows);
+    CU_ASSERT_TRUE(tables.mutations->num_rows > copy.mutations->num_rows);
+
+    /* add a duplicate site to the original */
+    ret = site_table_add_row(tables.sites, 0.1, "A", 1, NULL, 0);
+    CU_ASSERT_TRUE(ret > 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
+
+    mutgen_free(&mutgen);
+    tree_sequence_free(&ts);
+    table_collection_free(&tables);
+    table_collection_free(&copy);
     gsl_rng_free(rng);
 }
 
@@ -8167,6 +8201,7 @@ main(int argc, char **argv)
         {"test_single_tree_compute_mutation_parents", test_single_tree_compute_mutation_parents},
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"test_single_tree_mutgen", test_single_tree_mutgen},
+        {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
         {"test_sparse_tree_errors", test_sparse_tree_errors},
         {"test_tree_sequence_iter", test_tree_sequence_iter},
         {"test_sample_sets", test_sample_sets},

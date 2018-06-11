@@ -28,13 +28,16 @@ import json
 import math
 import random
 import sys
+import warnings
 
 import _msprime
-import msprime.tables as tables
+import msprime.tables as _tables
 import msprime.trees as trees
 import msprime.provenance as provenance
 
 # Make the low-level generator appear like its from this module
+# NOTE: Using these classes directly from client code is undocumented
+# and may be removed in future versions.
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 
@@ -223,8 +226,12 @@ def simulate(
         values are encoded within the map. Defaults to a uniform rate as
         described in the ``recombination_rate`` parameter if not specified.
     :type recombination_map: :class:`.RecombinationMap`
-    :param float mutation_rate: The rate of mutation per base per
-        generation. If not specified, no mutations are generated.
+    :param float mutation_rate: The rate of mutation infinite sites
+        mutations per unit of sequence length per generation.
+        If not specified, no mutations are generated. This option only
+        allows for infinite sites mutations with a binary (i.e., 0/1)
+        alphabet. For more control over the mutational process, please
+        use the :func:`.mutate` function.
     :param list population_configurations: The list of
         :class:`.PopulationConfiguration` instances describing the
         sampling configuration, relative sizes and growth rates of
@@ -293,6 +300,10 @@ def simulate(
         mu = 0 if mutation_rate is None else mutation_rate
         mutation_generator = MutationGenerator(rng, mu)
     else:
+        warnings.warn(
+            "Specifying a MutationGenerator instance is deprecated and will be "
+            "removed in future versions. Use msprime.mutate() instead",
+            DeprecationWarning)
         if mutation_rate is not None:
             raise ValueError(
                 "Cannot specify both mutation_rate and mutation_generator")
@@ -338,7 +349,7 @@ class Simulator(object):
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self.max_memory = sys.maxsize
-        self.tables = tables.TableCollection()
+        self.tables = _tables.TableCollection()
 
     @property
     def num_loci(self):
@@ -566,10 +577,8 @@ class Simulator(object):
             t.nodes.ll_table, t.edges.ll_table, t.migrations.ll_table,
             t.populations.ll_table, recombination_map=ll_recomb_map)
         if mutation_generator is not None:
-            mutation_generator.generate(
-                t.nodes.ll_table, t.edges.ll_table, t.sites.ll_table,
-                t.mutations.ll_table)
-        t.provenances.reset()
+            mutation_generator.generate(self.tables.ll_tables)
+        t.provenances.clear()
         if provenance_record is not None:
             t.provenances.add_row(provenance_record)
         ll_tree_sequence = _msprime.TreeSequence()

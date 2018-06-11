@@ -1512,4 +1512,168 @@ class TestTableCollection(unittest.TestCase):
         self.assertEqual(id(t.mutations), id(d["mutations"]))
         self.assertEqual(id(t.provenances), id(d["provenances"]))
 
-    # TODO tests for equality.
+    def test_equals_empty(self):
+        self.assertEqual(msprime.TableCollection(), msprime.TableCollection())
+
+    def test_equals_sequence_length(self):
+        self.assertNotEqual(
+            msprime.TableCollection(sequence_length=1),
+            msprime.TableCollection(sequence_length=2))
+
+    def test_equals(self):
+        pop_configs = [msprime.PopulationConfiguration(5) for _ in range(2)]
+        migration_matrix = [[0, 1], [1, 0]]
+        t1 = msprime.simulate(
+               population_configurations=pop_configs,
+               migration_matrix=migration_matrix,
+               mutation_rate=1,
+               record_migrations=True,
+               random_seed=1).dump_tables()
+        t2 = msprime.simulate(
+               population_configurations=pop_configs,
+               migration_matrix=migration_matrix,
+               mutation_rate=1,
+               record_migrations=True,
+               random_seed=1).dump_tables()
+        self.assertEqual(t1, t1)
+        # The provenances may or may not be equal depending on the clock
+        # precision for record. So clear them first.
+        t1.provenances.clear()
+        t2.provenances.clear()
+        self.assertEqual(t1, t2)
+        self.assertTrue(t1 == t2)
+        self.assertFalse(t1 != t2)
+
+        t1.nodes.clear()
+        self.assertNotEqual(t1, t2)
+        t2.nodes.clear()
+        self.assertEqual(t1, t2)
+
+        t1.edges.clear()
+        self.assertNotEqual(t1, t2)
+        t2.edges.clear()
+        self.assertEqual(t1, t2)
+
+        t1.migrations.clear()
+        self.assertNotEqual(t1, t2)
+        t2.migrations.clear()
+        self.assertEqual(t1, t2)
+
+        t1.sites.clear()
+        self.assertNotEqual(t1, t2)
+        t2.sites.clear()
+        self.assertEqual(t1, t2)
+
+        t1.mutations.clear()
+        self.assertNotEqual(t1, t2)
+        t2.mutations.clear()
+        self.assertEqual(t1, t2)
+
+        t1.populations.clear()
+        self.assertNotEqual(t1, t2)
+        t2.populations.clear()
+        self.assertEqual(t1, t2)
+
+
+class TestDeduplicateSites(unittest.TestCase):
+    """
+    Tests for the TableCollection.deduplicate_sites method.
+    """
+    def test_empty(self):
+        tables = msprime.TableCollection()
+        tables.deduplicate_sites()
+        self.assertEqual(tables, msprime.TableCollection())
+
+    def test_unsorted(self):
+        tables = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()
+        self.assertGreater(len(tables.sites), 0)
+        position = tables.sites.position
+        for j in range(len(position) - 1):
+            position = np.roll(position, 1)
+            tables.sites.set_columns(
+                position=position, ancestral_state=tables.sites.ancestral_state,
+                ancestral_state_offset=tables.sites.ancestral_state_offset)
+            self.assertRaises(_msprime.LibraryError, tables.deduplicate_sites)
+
+    def test_bad_position(self):
+        for bad_position in [-1, -0.001]:
+            tables = msprime.TableCollection()
+            tables.sites.add_row(bad_position, "0")
+            self.assertRaises(_msprime.LibraryError, tables.deduplicate_sites)
+
+    def test_no_effect(self):
+        t1 = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()
+        t2 = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()
+        self.assertGreater(len(t1.sites), 0)
+        t1.deduplicate_sites()
+        t1.provenances.clear()
+        t2.provenances.clear()
+        self.assertEqual(t1, t2)
+
+    def test_same_sites(self):
+        t1 = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()
+        t2 = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()
+        self.assertGreater(len(t1.sites), 0)
+        t1.sites.append_columns(
+            position=t1.sites.position,
+            ancestral_state=t1.sites.ancestral_state,
+            ancestral_state_offset=t1.sites.ancestral_state_offset)
+        self.assertEqual(len(t1.sites), 2 * len(t2.sites))
+        t1.sort()
+        t1.deduplicate_sites()
+        t1.provenances.clear()
+        t2.provenances.clear()
+        self.assertEqual(t1, t2)
+
+    def test_order_maintained(self):
+        t1 = msprime.TableCollection()
+        t1.sites.add_row(position=0, ancestral_state="first")
+        t1.sites.add_row(position=0, ancestral_state="second")
+        t1.deduplicate_sites()
+        self.assertEqual(len(t1.sites), 1)
+        self.assertEqual(t1.sites.ancestral_state.tobytes(), b"first")
+
+    @unittest.skip("BUG: deduplicate with mixtures of different lengths")
+    def test_multichar_ancestral_state(self):
+        ts = msprime.simulate(8, random_seed=3, mutation_rate=1)
+        self.assertGreater(ts.num_sites, 2)
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
+        for site in ts.sites():
+            site_id = tables.sites.add_row(
+                position=site.position, ancestral_state="A" * site.id)
+            tables.sites.add_row(position=site.position, ancestral_state="0")
+            for mutation in site.mutations:
+                tables.mutations.add_row(
+                    site=site_id, node=mutation.node, derived_state="T" * site.id)
+        print(tables.sites)
+        tables.deduplicate_sites()
+        print(tables.sites)
+        new_ts = msprime.load_tables(**tables.asdict())
+        self.assertEqual(new_ts.num_sites, ts.num_sites)
+        for site in ts.sites():
+            self.assertEqual(site.ancestral_state, site.id * "A")
+
+    @unittest.skip("BUG: deduplicate with mixtures of different lengths")
+    def test_multichar_metadata(self):
+        ts = msprime.simulate(8, random_seed=3, mutation_rate=1)
+        self.assertGreater(ts.num_sites, 2)
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
+        for site in ts.sites():
+            site_id = tables.sites.add_row(
+                position=site.position, ancestral_state="0", metadata=b"A" * site.id)
+            tables.sites.add_row(position=site.position, ancestral_state="0")
+            for mutation in site.mutations:
+                tables.mutations.add_row(
+                    site=site_id, node=mutation.node, derived_state="1",
+                    metadata=b"T" * site.id)
+        print(tables.sites)
+        tables.deduplicate_sites()
+        print(tables.sites)
+        new_ts = msprime.load_tables(**tables.asdict())
+        self.assertEqual(new_ts.num_sites, ts.num_sites)
+        for site in ts.sites():
+            self.assertEqual(site.metadata, site.id * b"A")

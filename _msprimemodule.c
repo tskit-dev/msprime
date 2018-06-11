@@ -4791,6 +4791,39 @@ out:
     return ret;
 }
 
+static PyObject *
+TableCollection_deduplicate_sites(TableCollection *self)
+{
+    int err;
+    PyObject *ret = NULL;
+
+    err = table_collection_deduplicate_sites(self->tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject TableCollectionType;
+
+static PyObject *
+TableCollection_equals(TableCollection *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    TableCollection *other = NULL;
+
+    if (!PyArg_ParseTuple(args, "O!", &TableCollectionType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", table_collection_equals(self->tables, other->tables));
+out:
+    return ret;
+}
+
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4810,8 +4843,12 @@ static PyMethodDef TableCollection_methods[] = {
             "Simplifies for a given sample subset." },
     {"sort", (PyCFunction) TableCollection_sort, METH_VARARGS|METH_KEYWORDS,
             "Sorts the tables to satisfy tree sequence requirements." },
+    {"equals", (PyCFunction) TableCollection_equals, METH_VARARGS,
+            "Returns True if the parameter table collection is equal to this one." },
     {"compute_mutation_parents", (PyCFunction) TableCollection_compute_mutation_parents,
         METH_NOARGS, "Computes the mutation parents for a the tables." },
+    {"deduplicate_sites", (PyCFunction) TableCollection_deduplicate_sites,
+        METH_NOARGS, "Removes sites with duplicate positions." },
     {NULL}  /* Sentinel */
 };
 
@@ -4891,20 +4928,24 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    size_t block_size = 1024 * 1024;
-    static char *kwlist[] = {"random_generator", "mutation_rate", NULL};
+    int alphabet = 0;
+    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet", NULL};
     double mutation_rate = 0;
     RandomGenerator *random_generator = NULL;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d", kwlist,
-            &RandomGeneratorType, &random_generator, &mutation_rate)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|i", kwlist,
+            &RandomGeneratorType, &random_generator, &mutation_rate, &alphabet)) {
         goto out;
     }
     self->random_generator = random_generator;
     Py_INCREF(self->random_generator);
     if (RandomGenerator_check_state(self->random_generator) != 0) {
+        goto out;
+    }
+    if (alphabet != MSP_ALPHABET_BINARY && alphabet != MSP_ALPHABET_NUCLEOTIDE) {
+        PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
         goto out;
     }
     if (mutation_rate < 0) {
@@ -4917,7 +4958,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            0, block_size);
+            alphabet, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4940,48 +4981,40 @@ out:
     return ret;
 }
 
+static PyObject *
+MutationGenerator_get_alphabet(MutationGenerator *self)
+{
+    PyObject *ret = NULL;
+
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->mutgen->alphabet);
+out:
+    return ret;
+}
 
 static PyObject *
 MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgeTable *edges = NULL;
-    MutationTable *mutations = NULL;
-    SiteTable *sites = NULL;
-    static char *kwlist[] = {"nodes", "edges", "sites", "mutations", NULL};
+    TableCollection *tables = NULL;
+    int flags = 0;
+    int keep = 0;
+    static char *kwlist[] = {"tables", "keep", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgeTableType, &edges,
-            &SiteTableType, &sites,
-            &MutationTableType, &mutations)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
+            &TableCollectionType, &tables, &keep)) {
         goto out;
     }
     if (MutationGenerator_check_state(self) != 0) {
         goto out;
     }
-    if (NodeTable_check_state(nodes) != 0) {
-        goto out;
+    if (keep) {
+        flags = MSP_KEEP_SITES;
     }
-    if (EdgeTable_check_state(edges) != 0) {
-        goto out;
-    }
-    if (SiteTable_check_state(sites) != 0) {
-        goto out;
-    }
-    if (MutationTable_check_state(mutations) != 0) {
-        goto out;
-    }
-    err = mutgen_generate_tables_tmp(self->mutgen, nodes->table,
-            edges->table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = mutgen_populate_tables(self->mutgen, sites->table,
-            mutations->table);
+    err = mutgen_generate(self->mutgen, tables->tables, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4998,6 +5031,8 @@ static PyMemberDef MutationGenerator_members[] = {
 static PyMethodDef MutationGenerator_methods[] = {
     {"get_mutation_rate", (PyCFunction) MutationGenerator_get_mutation_rate,
         METH_NOARGS, "Returns the mutation rate for this mutation generator."},
+    {"get_alphabet", (PyCFunction) MutationGenerator_get_alphabet,
+        METH_NOARGS, "Returns the alphabet for this mutation generator."},
     {"generate", (PyCFunction) MutationGenerator_generate,
         METH_VARARGS|METH_KEYWORDS,
         "Generate mutations and write to the specified table."},

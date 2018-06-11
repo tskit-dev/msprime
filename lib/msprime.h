@@ -39,6 +39,13 @@
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
 
+/* Alphabets for mutation generator */
+#define MSP_ALPHABET_BINARY     0
+#define MSP_ALPHABET_NUCLEOTIDE 1
+
+/* Flags for mutgen */
+#define MSP_KEEP_SITES  1
+
 
 typedef struct segment_t_t {
     population_id_t population_id;
@@ -236,12 +243,8 @@ typedef struct {
     int alphabet;
     gsl_rng *rng;
     double mutation_rate;
-    size_t num_mutations;
-    size_t max_num_mutations;
-    size_t mutation_block_size;
-    site_table_t *sites;
-    infinite_sites_mutation_t *mutations;
-    object_heap_t avl_node_heap;
+    avl_tree_t sites;
+    block_allocator_t allocator;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, gsl_rng *rng);
@@ -352,11 +355,7 @@ void recomb_map_print_state(recomb_map_t *self, FILE *out);
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
         int alphabet, size_t mutation_block_size);
 int mutgen_free(mutgen_t *self);
-/* TODO finalise this interface */
-int mutgen_generate_tables_tmp(mutgen_t *self, node_table_t *nodes,
-        edge_table_t *edges);
-int mutgen_populate_tables(mutgen_t *self, site_table_t *sites,
-        mutation_table_t *mutations);
+int mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 double compute_falling_factorial_log(unsigned int  m);

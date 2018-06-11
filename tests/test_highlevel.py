@@ -42,6 +42,7 @@ import six
 import sys
 import tempfile
 import unittest
+import warnings
 
 import numpy as np
 
@@ -205,7 +206,9 @@ def get_example_tree_sequences(back_mutations=True, gaps=True, internal_samples=
                 yield tsutil.add_random_metadata(ts, seed=seed)
                 seed += 1
     for ts in get_bottleneck_examples():
-        yield ts
+        yield msprime.mutate(
+            ts, rate=0.1, random_seed=seed,
+            model=msprime.InfiniteSites(msprime.NUCLEOTIDES))
     ts = msprime.simulate(15, length=4, recombination_rate=1)
     assert ts.num_trees > 1
     if back_mutations:
@@ -1471,9 +1474,9 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             tables = ts.dump_tables()
             mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
-            mutgen.generate(
-                tables.nodes.ll_table, tables.edges.ll_table,
-                tables.sites.ll_table, tables.mutations.ll_table)
+            tables.sites.clear()
+            tables.mutations.clear()
+            mutgen.generate(tables.ll_tables)
             if tables.mutations.num_rows > 0:
                 some_mutations = True
             tsp = msprime.load_tables(**tables.asdict())
@@ -2398,6 +2401,19 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sample_size(), n)
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 0)
+
+    @unittest.skipIf(
+        sys.version_info[:2] < (3, 4), "Warnings work differently in Py <= 3.3")
+    def test_mutation_generator_deprecated(self):
+        n = 10
+        rng = msprime.RandomGenerator(1)
+        mutgen = msprime.MutationGenerator(rng, 10)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            msprime.simulate(n, mutation_generator=mutgen)
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[-1].category, DeprecationWarning))
+            self.assertIn("deprecated", str(w[-1].message))
 
     def test_mutation_interface(self):
         for bad_type in ["x", [], {}]:
