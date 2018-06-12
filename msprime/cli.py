@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2016 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -134,6 +134,9 @@ class SimulationRunner(object):
         sample_size = self._sample_size
         if population_configurations is not None:
             sample_size = None
+        # msprime measure's time in units of generations, given a specific
+        # Ne value whereas ms uses coalescent time. To be compatible with ms,
+        # we therefore need to use an Ne value of 1/4.
         self._simulator = msprime.simulator_factory(
             Ne=0.25,
             sample_size=sample_size,
@@ -341,8 +344,7 @@ def create_simulation_runner(parser, arg_list):
     # Check the structure format.
     symmetric_migration_rate = 0.0
     num_populations = 1
-    population_configurations = [
-        msprime.PopulationConfiguration(args.sample_size)]
+    population_configurations = [msprime.PopulationConfiguration(args.sample_size)]
     migration_matrix = [[0.0]]
     if args.structure is not None:
         num_populations = convert_int(args.structure[0], parser)
@@ -511,19 +513,16 @@ def create_simulation_runner(parser, arg_list):
                         t, matrix[j][k], (j, k))
                     demographic_events.append((index, msp_event))
 
-    # We've created all the events, now we need to rescale the migration rates
-    # We assume Ne = 1 here.
+    # We've created all the events and PopulationConfiguration objects. Because
+    # msprime uses absolute population sizes we need to rescale these relative
+    # to Ne, since this is what ms does.
     for _, msp_event in demographic_events:
-        msp_event.time *= 4
         if isinstance(msp_event, msprime.PopulationParametersChange):
-            msp_event.growth_rate /= 4
-        if isinstance(msp_event, msprime.MigrationRateChange):
-            # Divide by 4 to get a per-generation rate, assuming Ne=1
-            msp_event.rate /= 4
-    # We also need to rescale the migration matrix and growth rates.
-    migration_matrix = [[m / 4 for m in row] for row in migration_matrix]
+            if msp_event.initial_size is not None:
+                msp_event.initial_size /= 4
     for config in population_configurations:
-        config.growth_rate /= 4
+        if config.initial_size is not None:
+            config.initial_size /= 4
 
     demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)

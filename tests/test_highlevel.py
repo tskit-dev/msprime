@@ -1840,6 +1840,13 @@ class TestSparseTree(HighLevelTestCase):
             newick1 = tree.newick(root=0, precision=16)
             newick2 = py_tree.newick(root=0)
             self.assertEqual(newick1, newick2)
+
+            # When we specify the node_labels we should get precisely the
+            # same result as we are using Python code now.
+            for precision in [0, 3, 19]:
+                newick1 = tree.newick(precision=precision, node_labels={})
+                newick2 = py_tree.newick(precision=precision, node_labels={})
+                self.assertEqual(newick1, newick2)
         else:
             self.assertRaises(ValueError, tree.newick)
             for root in tree.roots:

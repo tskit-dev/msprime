@@ -36,17 +36,19 @@ class TestNewick(unittest.TestCase):
     """
     random_seed = 155
 
-    def verify_newick_topology(self, tree, root=None):
+    def verify_newick_topology(self, tree, root=None, node_labels=None):
         if root is None:
             root = tree.root
-        ns = tree.newick(precision=16, root=root)
+        ns = tree.newick(precision=16, root=root, node_labels=node_labels)
+        if node_labels is None:
+            leaf_labels = {u: str(u + 1) for u in tree.leaves(root)}
+        else:
+            leaf_labels = {u: node_labels[u] for u in tree.leaves(root)}
         newick_tree = newick.loads(ns)[0]
         leaf_names = newick_tree.get_leaf_names()
-        self.assertEqual(
-            sorted(leaf_names),
-            sorted([str(u + 1) for u in tree.leaves(root)]))
+        self.assertEqual(sorted(leaf_names), sorted(leaf_labels.values()))
         for u in tree.leaves(root):
-            name = str(u + 1)
+            name = leaf_labels[u]
             node = newick_tree.get_node(name)
             while u != root:
                 self.assertAlmostEqual(node.length, tree.branch_length(u))
@@ -105,3 +107,33 @@ class TestNewick(unittest.TestCase):
         tree = ts.first()
         for u in tree.nodes():
             self.verify_newick_topology(tree, root=u)
+
+    def test_binary_leaf_labels(self):
+        tree = self.get_binary_example().first()
+        labels = {u: "x_{}".format(u) for u in tree.leaves()}
+        self.verify_newick_topology(tree, node_labels=labels)
+
+    def test_nonbinary_leaf_labels(self):
+        ts = self.get_nonbinary_example()
+        for t in ts.trees():
+            labels = {u: str(u) for u in t.leaves()}
+            self.verify_newick_topology(t, node_labels=labels)
+
+    def test_all_node_labels(self):
+        tree = msprime.simulate(5, random_seed=2).first()
+        labels = {u: "x_{}".format(u) for u in tree.nodes()}
+        ns = tree.newick(node_labels=labels)
+        root = newick.loads(ns)[0]
+        self.assertEqual(root.name, labels[tree.root])
+        self.assertEqual(
+            sorted([n.name for n in root.walk()]), sorted(labels.values()))
+
+    def test_single_node_label(self):
+        tree = msprime.simulate(5, random_seed=2).first()
+        labels = {tree.root: "XXX"}
+        ns = tree.newick(node_labels=labels)
+        root = newick.loads(ns)[0]
+        self.assertEqual(root.name, labels[tree.root])
+        self.assertEqual(
+            [n.name for n in root.walk()],
+            [labels[tree.root]] + [None for _ in range(len(list(tree.nodes())) - 1)])

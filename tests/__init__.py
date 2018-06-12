@@ -182,20 +182,24 @@ class PythonSparseTree(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def newick(self, root=None):
+    def newick(self, root=None, precision=16, node_labels=None):
+        if node_labels is None:
+            node_labels = {u: str(u + 1) for u in self.sparse_tree.leaves()}
         if root is None:
             root = self.left_root
-        return self._build_newick(root) + ";"
+        return self._build_newick(root, precision, node_labels) + ";"
 
-    def _build_newick(self, node):
+    def _build_newick(self, node, precision, node_labels):
+        label = node_labels.get(node, "")
         if self.left_child[node] == msprime.NULL_NODE:
-            s = "{0}".format(node + 1)
+            s = label
         else:
             s = "("
             for child in self.children(node):
                 branch_length = self.sparse_tree.branch_length(child)
-                s += self._build_newick(child) + ":{:0.16f},".format(branch_length)
-            s = s[:-1] + ")"
+                subtree = self._build_newick(child, precision, node_labels)
+                s += subtree + ":{0:.{1}f},".format(branch_length, precision)
+            s = s[:-1] + label + ")"
         return s
 
 

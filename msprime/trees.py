@@ -1072,18 +1072,46 @@ class SparseTree(object):
             for v in iterator(u):
                 yield v
 
-    def newick(self, precision=14, root=None):
+    # TODO make this a bit less embarrassing by using an iterative method.
+    def __build_newick(self, node, precision, node_labels):
+        """
+        Simple recursive version of the newick generator used when non-default
+        node labels are needed.
+        """
+        label = node_labels.get(node, "")
+        if self.is_leaf(node):
+            s = "{0}".format(label)
+        else:
+            s = "("
+            for child in self.children(node):
+                branch_length = self.branch_length(child)
+                subtree = self.__build_newick(child, precision, node_labels)
+                s += subtree + ":{0:.{1}f},".format(branch_length, precision)
+            s = s[:-1] + "){}".format(label)
+        return s
+
+    def newick(self, precision=14, root=None, node_labels=None):
         """
         Returns a `newick encoding <https://en.wikipedia.org/wiki/Newick_format>`_
-        of this tree. Leaf nodes are labelled with their numerical ID + 1,
-        and internal nodes are not labelled.
+        of this tree. If the ``root`` argument is specified, return a representation
+        of the specified subtree, otherwise the full tree is returned. If the tree
+        has multiple roots then seperate newick strings for each rooted subtree
+        must be found (i.e., we do not attempt to concatenate the different trees).
 
-        This method is currently primarily for ms-compatibility and
-        is not intended as a consistent means of data interchange.
+        By default, leaf nodes are labelled with their numerical ID + 1,
+        and internal nodes are not labelled. Arbitrary node labels can be specified
+        using the ``node_labels`` argument, which maps node IDs to the desired
+        labels.
+
+        .. warning:: Node labels are **not** Newick escaped, so care must be taken
+            to provide labels that will not break the encoding.
 
         :param int precision: The numerical precision with which branch lengths are
             printed.
-        :param float time_scale: A value which all branch lengths are multiplied by.
+        :param int root: If specified, return the tree rooted at this node.
+        :param map node_labels: If specified, show custom labels for the nodes
+            that are present in the map. Any nodes not specified in the map will
+            not have a node label.
         :return: A newick representation of this tree.
         :rtype: str
         """
@@ -1094,9 +1122,12 @@ class SparseTree(object):
                     "[t.newick(root) for root in t.roots] to get a list of "
                     "newick trees, one for each root.")
             root = self.root
-        s = self._ll_sparse_tree.get_newick(precision=precision, root=root)
-        if not IS_PY2:
-            s = s.decode()
+        if node_labels is None:
+            s = self._ll_sparse_tree.get_newick(precision=precision, root=root)
+            if not IS_PY2:
+                s = s.decode()
+        else:
+            return self.__build_newick(root, precision, node_labels) + ";"
         return s
 
     @property
