@@ -103,11 +103,14 @@ class Simplifier(object):
     Simplifies a tree sequence to its minimal representation given a subset
     of the leaves.
     """
-    def __init__(self, ts, sample, filter_zero_mutation_sites=True):
+    def __init__(
+            self, ts, sample, filter_zero_mutation_sites=True,
+            filter_zero_node_individuals=True):
         self.ts = ts
         self.n = len(sample)
         self.sequence_length = ts.sequence_length
         self.filter_zero_mutation_sites = filter_zero_mutation_sites
+        self.filter_zero_node_individuals = filter_zero_node_individuals
         self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
         self.A_head = [None for _ in range(ts.num_nodes)]
@@ -118,14 +121,8 @@ class Simplifier(object):
         self.tables.populations.set_columns(
             metadata=t.populations.metadata,
             metadata_offset=t.populations.metadata_offset)
-        # For now we don't remove individuals that have no nodes referring to
-        # them, so we can just copy the table.
-        self.tables.individuals.set_columns(
-            flags=t.individuals.flags,
-            location=t.individuals.location,
-            location_offset=t.individuals.location_offset,
-            metadata=t.individuals.metadata,
-            metadata_offset=t.individuals.metadata_offset)
+        # Map of input individual IDs to output individual IDs.
+        self.individual_map = np.zeros(ts.num_individuals, dtype=np.int32) - 1
         self.edge_buffer = {}
         self.node_id_map = np.zeros(ts.num_nodes, dtype=np.int32) - 1
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
@@ -153,9 +150,16 @@ class Simplifier(object):
         flags &= ~msprime.NODE_IS_SAMPLE
         if is_sample:
             flags |= msprime.NODE_IS_SAMPLE
+        individual_id = msprime.NULL_INDIVIDUAL
+        if node.individual != msprime.NULL_INDIVIDUAL:
+            if self.individual_map[node.individual] == msprime.NULL_INDIVIDUAL:
+                ind = self.ts.individual(node.individual)
+                self.individual_map[node.individual] = self.tables.individuals.add_row(
+                    flags=ind.flags, location=ind.location, metadata=ind.metadata)
+            individual_id = self.individual_map[node.individual]
         output_id = self.tables.nodes.add_row(
             flags=flags, time=node.time, population=node.population,
-            metadata=node.metadata, individual=node.individual)
+            metadata=node.metadata, individual=individual_id)
         self.node_id_map[input_id] = output_id
         return output_id
 
@@ -331,6 +335,13 @@ class Simplifier(object):
                     assert x < seg.left
                     m_index += 1
 
+    def finalise_individuals(self):
+        if not self.filter_zero_node_individuals:
+            for ind in self.ts.individuals():
+                if self.individual_map[ind.id] == msprime.NULL_INDIVIDUAL:
+                    self.tables.individuals.add_row(
+                        flags=ind.flags, location=ind.location, metadata=ind.metadata)
+
     def simplify(self):
         # self.print_state()
         if self.ts.num_edges > 0:
@@ -343,6 +354,7 @@ class Simplifier(object):
                 edges.append(e)
             self.process_parent_edges(edges)
         # self.print_state()
+        self.finalise_individuals()
         self.map_mutation_nodes()
         self.finalise_sites()
         ts = msprime.load_tables(

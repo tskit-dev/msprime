@@ -2373,7 +2373,9 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_zero_mutation_sites=True, map_nodes=False):
+    def simplify(
+            self, samples=None, filter_zero_mutation_sites=True, map_nodes=False,
+            filter_zero_node_individuals=True):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -2401,6 +2403,9 @@ class TreeSequence(object):
             tree sequence and a numpy array mapping node IDs in the current tree
             sequence to their corresponding node IDs in the returned tree sequence.
             If False (the default), return only the tree sequence object itself.
+        :param bool filter_zero_node_individuals: If True, remove any individuals
+            that have no associated nodes in the simplified tree sequence.
+            Defaults to True.
         :return: The simplified tree sequence, or (if ``map_nodes`` is True)
             a tuple containing the simplified tree sequence and a numpy array
             mapping source node IDs to their corresponding IDs in the new tree
