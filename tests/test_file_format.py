@@ -216,6 +216,7 @@ class TestRoundTrip(TestFileFormat):
     through a V2 file format and a V3 format.
     """
     def verify_tree_sequences_equal(self, ts, tsp, simplify=True):
+        self.assertEqual(ts.sequence_length, tsp.sequence_length)
         t1 = ts.tables
         # We need to sort and squash the edges in the new format because it
         # has gone through an edgesets representation. Simplest way to do this
@@ -310,6 +311,15 @@ class TestRoundTrip(TestFileFormat):
 
     def test_multichar_mutation_example(self):
         self.verify_round_trip(multichar_mutation_example(), 10)
+
+    def test_empty_file(self):
+        tables = msprime.TableCollection(sequence_length=3)
+        self.verify_round_trip(tables.tree_sequence(), 10)
+
+    def test_zero_edges(self):
+        tables = msprime.TableCollection(sequence_length=3)
+        tables.nodes.add_row(time=0)
+        self.verify_round_trip(tables.tree_sequence(), 10)
 
     def test_v2_no_samples(self):
         ts = multi_locus_with_mutation_example()

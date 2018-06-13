@@ -2602,6 +2602,43 @@ test_simplest_multiple_root_records(void)
 }
 
 static void
+test_simplest_zero_root_tree(void)
+{
+    int ret;
+    const char *nodes =
+        "0  0   0\n"
+        "0  0   0\n"
+        "0  0   0\n"
+        "0  0   0\n"
+        "0  1   0\n"
+        "0  1   0\n";
+    const char *edges =
+        "0  1   4   0,1\n"
+        "0  1   5   2,3\n";
+    tree_sequence_t ts;
+    sparse_tree_t t;
+
+    tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 1.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 6);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+
+    ret = sparse_tree_alloc(&t, &ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&t);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&t), 0);
+    CU_ASSERT_EQUAL(t.left_root, MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(t.right_sib[2], 3);
+    CU_ASSERT_EQUAL(t.right_sib[3], MSP_NULL_NODE);
+
+    sparse_tree_free(&t);
+    tree_sequence_free(&ts);
+}
+
+static void
 test_simplest_root_mutations(void)
 {
     int ret;
@@ -2933,6 +2970,107 @@ test_simplest_initial_gap_tree_sequence(void)
         CU_ASSERT_STRING_EQUAL(haplotype, haplotypes[j]);
     }
     hapgen_free(&hapgen);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_simplest_initial_gap_zero_roots(void)
+{
+    const char *nodes =
+        "0  0   0\n"
+        "0  0   0\n"
+        "0  1   0";
+    const char *edges =
+        "2  3   2   0,1\n";
+    int ret;
+    tree_sequence_t ts;
+    const node_id_t z = MSP_NULL_NODE;
+    node_id_t parents[] = {
+        z, z, z,
+        2, 2, z,
+    };
+    uint32_t num_trees = 2;
+    sparse_tree_t tree;
+
+    tree_sequence_from_text(&ts, 0, nodes, edges, NULL, NULL, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 2);
+
+    verify_trees(&ts, num_trees, parents);
+
+    ret = sparse_tree_alloc(&tree, &ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(tree.left_root, MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&tree), 0);
+    ret = sparse_tree_next(&tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(tree.left_root, MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&tree), 0);
+    CU_ASSERT_EQUAL(tree.parent[0], 2);
+    CU_ASSERT_EQUAL(tree.parent[1], 2);
+
+    sparse_tree_free(&tree);
+    tree_sequence_free(&ts);
+}
+
+static void
+test_simplest_holey_tree_sequence_zero_roots(void)
+{
+    const char *nodes_txt =
+        "0  0   0\n"
+        "0  0   0\n"
+        "0  1   0";
+    const char *edges_txt =
+        "0  1   2   0\n"
+        "2  3   2   0\n"
+        "0  1   2   1\n"
+        "2  3   2   1\n";
+    int ret;
+    tree_sequence_t ts;
+    const node_id_t z = MSP_NULL_NODE;
+    node_id_t parents[] = {
+        2, 2, z,
+        z, z, z,
+        2, 2, z,
+    };
+    uint32_t num_trees = 3;
+    sparse_tree_t tree;
+
+    tree_sequence_from_text(&ts, 0, nodes_txt, edges_txt, NULL, NULL, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_sequence_length(&ts), 3.0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 0);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 3);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 3);
+
+    verify_trees(&ts, num_trees, parents);
+
+    ret = sparse_tree_alloc(&tree, &ts, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = sparse_tree_first(&tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(tree.left_root, MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(tree.parent[0], 2);
+    CU_ASSERT_EQUAL(tree.parent[1], 2);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&tree), 0);
+
+    ret = sparse_tree_next(&tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(tree.left_root, MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&tree), 0);
+
+    ret = sparse_tree_next(&tree);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(tree.left_root, MSP_NULL_NODE);
+    CU_ASSERT_EQUAL(sparse_tree_get_num_roots(&tree), 0);
+    CU_ASSERT_EQUAL(tree.parent[0], 2);
+    CU_ASSERT_EQUAL(tree.parent[1], 2);
+
+    sparse_tree_free(&tree);
     tree_sequence_free(&ts);
 }
 
@@ -8237,13 +8375,17 @@ main(int argc, char **argv)
         {"test_simplest_degenerate_multiple_root_records",
             test_simplest_degenerate_multiple_root_records},
         {"test_simplest_multiple_root_records", test_simplest_multiple_root_records},
+        {"test_simplest_zero_root_tree", test_simplest_zero_root_tree},
         {"test_simplest_root_mutations", test_simplest_root_mutations},
         {"test_simplest_back_mutations", test_simplest_back_mutations},
         {"test_simplest_general_samples", test_simplest_general_samples},
         {"test_simplest_holey_tree_sequence", test_simplest_holey_tree_sequence},
+        {"test_simplest_holey_tree_sequence_zero_roots",
+            test_simplest_holey_tree_sequence_zero_roots},
         {"test_simplest_holey_tree_sequence_mutation_parents",
             test_simplest_holey_tree_sequence_mutation_parents},
         {"test_simplest_initial_gap_tree_sequence", test_simplest_initial_gap_tree_sequence},
+        {"test_simplest_initial_gap_zero_roots", test_simplest_initial_gap_zero_roots},
         {"test_simplest_initial_gap_tree_sequence_mutation_parents",
             test_simplest_initial_gap_tree_sequence_mutation_parents},
         {"test_simplest_final_gap_tree_sequence", test_simplest_final_gap_tree_sequence},

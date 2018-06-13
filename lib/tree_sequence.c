@@ -2168,7 +2168,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
                 self->left_root = root;
             } else {
                 /* Remove c from root list */
-                /* self->left_root = MSP_NULL_NODE; */
+                self->left_root = MSP_NULL_NODE;
                 if (lsib != MSP_NULL_NODE) {
                     self->right_sib[lsib] = rsib;
                     self->left_root = lsib;
@@ -2181,9 +2181,11 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
         }
     }
 
-    /* Ensure that left_root is the left-most root */
-    while (self->left_sib[self->left_root] != MSP_NULL_NODE) {
-        self->left_root = self->left_sib[self->left_root];
+    if (self->left_root != MSP_NULL_NODE) {
+        /* Ensure that left_root is the left-most root */
+        while (self->left_sib[self->left_root] != MSP_NULL_NODE) {
+            self->left_root = self->left_sib[self->left_root];
+        }
     }
 
     self->direction = direction;

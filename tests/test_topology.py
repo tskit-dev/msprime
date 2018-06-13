@@ -232,6 +232,39 @@ class TopologyTestCase(unittest.TestCase):
                 self.assertEqual(u, v)
 
 
+class TestZeroRoots(unittest.TestCase):
+    """
+    Tests that for the case in which we have zero samples and therefore
+    zero roots in our trees.
+    """
+    def remove_samples(self, ts):
+        tables = ts.dump_tables()
+        tables.nodes.set_columns(
+            flags=np.zeros_like(tables.nodes.flags),
+            time=tables.nodes.time)
+        return tables.tree_sequence()
+
+    def verify(self, ts, no_root_ts):
+        self.assertEqual(ts.num_trees, no_root_ts.num_trees)
+        for tree, no_root in zip(ts.trees(), no_root_ts.trees()):
+            self.assertEqual(no_root.num_roots, 0)
+            self.assertEqual(no_root.left_root, msprime.NULL_NODE)
+            self.assertEqual(no_root.roots, [])
+            self.assertEqual(tree.parent_dict, no_root.parent_dict)
+
+    def test_single_tree(self):
+        ts = msprime.simulate(10, random_seed=1)
+        no_root_ts = self.remove_samples(ts)
+        self.assertEqual(ts.num_trees, 1)
+        self.verify(ts, no_root_ts)
+
+    def test_multiple_trees(self):
+        ts = msprime.simulate(10, recombination_rate=2, random_seed=1)
+        no_root_ts = self.remove_samples(ts)
+        self.assertGreater(ts.num_trees, 1)
+        self.verify(ts, no_root_ts)
+
+
 class TestEmptyTreeSequences(TopologyTestCase):
     """
     Tests covering tree sequences that have zero edges.
@@ -417,6 +450,12 @@ class TestHoleyTreeSequences(TopologyTestCase):
             observed.append((interval, parent_dict))
         self.assertEqual(expected, observed)
 
+    def verify_zero_roots(self, ts):
+        for tree in ts.trees():
+            self.assertEqual(tree.num_roots, 0)
+            self.assertEqual(tree.left_root, msprime.NULL_NODE)
+            self.assertEqual(tree.roots, [])
+
     def test_simple_hole(self):
         nodes = six.StringIO("""\
         id  is_sample   time
@@ -438,6 +477,28 @@ class TestHoleyTreeSequences(TopologyTestCase):
             ((2, 3), {0: 2, 1: 2})]
         self.verify_trees(ts, expected)
 
+    def test_simple_hole_zero_roots(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   0           0
+        1   0           0
+        2   0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       1       2       0
+        2       3       2       0
+        0       1       2       1
+        2       3       2       1
+        """)
+        ts = msprime.load_text(nodes, edges, strict=False)
+        expected = [
+            ((0, 1), {0: 2, 1: 2}),
+            ((1, 2), {}),
+            ((2, 3), {0: 2, 1: 2})]
+        self.verify_trees(ts, expected)
+        self.verify_zero_roots(ts)
+
     def test_initial_gap(self):
         nodes = six.StringIO("""\
         id  is_sample   time
@@ -454,6 +515,24 @@ class TestHoleyTreeSequences(TopologyTestCase):
             ((0, 1), {}),
             ((1, 2), {0: 2, 1: 2})]
         self.verify_trees(ts, expected)
+
+    def test_initial_gap_zero_roots(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   0           0
+        1   0           0
+        2   0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        1       2       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edges, strict=False)
+        expected = [
+            ((0, 1), {}),
+            ((1, 2), {0: 2, 1: 2})]
+        self.verify_trees(ts, expected)
+        self.verify_zero_roots(ts)
 
     def test_final_gap(self):
         nodes = six.StringIO("""\
@@ -472,6 +551,24 @@ class TestHoleyTreeSequences(TopologyTestCase):
             ((2, 3), {})]
         self.verify_trees(ts, expected)
 
+    def test_final_gap_zero_roots(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   0           0
+        1   0           0
+        2   0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        0       2       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edges, sequence_length=3, strict=False)
+        expected = [
+            ((0, 2), {0: 2, 1: 2}),
+            ((2, 3), {})]
+        self.verify_trees(ts, expected)
+        self.verify_zero_roots(ts)
+
     def test_initial_and_final_gap(self):
         nodes = six.StringIO("""\
         id  is_sample   time
@@ -489,6 +586,25 @@ class TestHoleyTreeSequences(TopologyTestCase):
             ((1, 2), {0: 2, 1: 2}),
             ((2, 3), {})]
         self.verify_trees(ts, expected)
+
+    def test_initial_and_final_gap_zero_roots(self):
+        nodes = six.StringIO("""\
+        id  is_sample   time
+        0   0           0
+        1   0           0
+        2   0           1
+        """)
+        edges = six.StringIO("""\
+        left    right   parent  child
+        1       2       2       0,1
+        """)
+        ts = msprime.load_text(nodes, edges, sequence_length=3, strict=False)
+        expected = [
+            ((0, 1), {}),
+            ((1, 2), {0: 2, 1: 2}),
+            ((2, 3), {})]
+        self.verify_trees(ts, expected)
+        self.verify_zero_roots(ts)
 
 
 class TestTsinferExamples(TopologyTestCase):
