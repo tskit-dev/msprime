@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -2592,11 +2592,12 @@ class TestSparseTree(LowLevelTestCase):
         ts = self.get_tree_sequence(num_samples=10, num_loci=5)
         st = _msprime.SparseTree(ts)
         for st in _msprime.SparseTreeIterator(st):
-            self.assertRaises(ValueError, st.get_newick, precision=-1)
-            self.assertRaises(ValueError, st.get_newick, precision=17)
-            self.assertRaises(ValueError, st.get_newick, precision=100)
+            self.assertRaises(ValueError, st.get_newick, root=0, precision=-1)
+            self.assertRaises(ValueError, st.get_newick, root=0, precision=17)
+            self.assertRaises(ValueError, st.get_newick, root=0, precision=100)
             for precision in range(17):
-                tree = st.get_newick(precision=precision).decode()
+                tree = st.get_newick(
+                    root=st.get_left_root(), precision=precision).decode()
                 times = get_times(tree)
                 self.assertGreater(len(times), ts.get_num_samples())
                 for t in times:

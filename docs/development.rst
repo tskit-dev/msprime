@@ -499,10 +499,6 @@ this script using:
 
     $ python verification.py
 
-.. warning::
-
-    The ``verification.py`` currently does not support Python 3 because of odd
-    behaviour from dendropy.
 
 The statistical tests depend on compiled programs in the ``data`` directory.
 This includes a customised version of ``ms`` and a locally compiled version of

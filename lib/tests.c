@@ -4782,6 +4782,49 @@ test_single_tree_mutgen_keep_sites(void)
 }
 
 static void
+test_single_tree_newick(void)
+{
+    int ret;
+    tree_sequence_t ts;
+    sparse_tree_t t;
+    size_t buffer_size = 1024;
+    char newick[buffer_size];
+
+    tree_sequence_from_text(&ts, 0, single_tree_ex_nodes, single_tree_ex_edges,
+            NULL, NULL, NULL, NULL, NULL);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_samples(&ts), 4);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+
+    ret = sparse_tree_alloc(&t, &ts, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0)
+    ret = sparse_tree_first(&t);
+    CU_ASSERT_EQUAL_FATAL(ret, 1)
+
+
+    ret = sparse_tree_get_newick(&t, -1, 1, 0, buffer_size, newick);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    ret = sparse_tree_get_newick(&t, 7, 1, 0, buffer_size, newick);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+
+    ret = sparse_tree_get_newick(&t, 0, 0, 0, buffer_size, newick);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* Seems odd, but this is what a single node newick tree looks like.
+     * Newick parsers seems to accept it in any case */
+    CU_ASSERT_STRING_EQUAL(newick, "1;");
+
+    ret = sparse_tree_get_newick(&t, 4, 0, 0, buffer_size, newick);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(newick, "(1:1,2:1);");
+
+    ret = sparse_tree_get_newick(&t, 6, 0, 0, buffer_size, newick);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_STRING_EQUAL(newick, "((1:1,2:1):2,(3:2,4:2):1);");
+
+    sparse_tree_free(&t);
+    tree_sequence_free(&ts);
+}
+
+static void
 test_sparse_tree_errors(void)
 {
     int ret;
@@ -5756,6 +5799,7 @@ verify_newick(tree_sequence_t *ts)
 {
     int ret, err;
     sparse_tree_t t;
+    node_id_t root;
     size_t precision = 4;
     size_t buffer_size = 1024 * 1024;
     char *newick = malloc(buffer_size);
@@ -5767,30 +5811,28 @@ verify_newick(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_first(&t);
     CU_ASSERT_FATAL(ret == 1);
-    if (sparse_tree_get_num_roots(&t) == 1) {
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
+    for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
+        err = sparse_tree_get_newick(&t, root, precision, 0, buffer_size, newick);
         CU_ASSERT_EQUAL_FATAL(err, 0);
         size = strlen(newick);
         CU_ASSERT_TRUE(size > 0);
         CU_ASSERT_TRUE(size < buffer_size);
         for (j = 0; j <= size; j++) {
-            err = sparse_tree_get_newick(&t, precision, 1.0, 0, j, newick);
+            err = sparse_tree_get_newick(&t, root, precision, 0, j, newick);
             CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BUFFER_OVERFLOW);
         }
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, size + 1, newick);
+        err = sparse_tree_get_newick(&t, root, precision, 0, size + 1, newick);
         CU_ASSERT_EQUAL_FATAL(err, 0);
     }
 
     for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
-        err = sparse_tree_get_newick(&t, precision, 1.0, 0, 0, NULL);
-        if (sparse_tree_get_num_roots(&t) == 1) {
+        for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
+            err = sparse_tree_get_newick(&t, root, precision, 0, 0, NULL);
             CU_ASSERT_EQUAL_FATAL(err, MSP_ERR_BAD_PARAM_VALUE);
-            err = sparse_tree_get_newick(&t, precision, 1.0, 0, buffer_size, newick);
+            err = sparse_tree_get_newick(&t, root, precision, 0, buffer_size, newick);
             CU_ASSERT_EQUAL_FATAL(err, 0);
             size = strlen(newick);
             CU_ASSERT_EQUAL(newick[size - 1], ';');
-        } else {
-            CU_ASSERT_EQUAL(err, MSP_ERR_MULTIROOT_NEWICK);
         }
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -8201,6 +8243,7 @@ main(int argc, char **argv)
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
+        {"test_single_tree_newick", test_single_tree_newick},
         {"test_sparse_tree_errors", test_sparse_tree_errors},
         {"test_tree_sequence_iter", test_tree_sequence_iter},
         {"test_sample_sets", test_sample_sets},

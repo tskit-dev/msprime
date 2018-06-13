@@ -18,11 +18,11 @@ import pandas as pd
 import numpy as np
 import numpy.random
 import statsmodels.api as sm
-import seaborn as sns
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 from matplotlib import pyplot
+import seaborn as sns
 
 import dendropy
 import msprime.cli as cli
@@ -126,7 +126,7 @@ class SimulationVerifier(object):
             sim.reset()
             sim.run()
             num_trees[j] = sim.num_breakpoints + 1
-            time[j] = sim.time / 4  # Convert to coalescent units
+            time[j] = sim.time
             ca_events[j] = sim.num_common_ancestor_events
             re_events[j] = sim.num_recombination_events
             mig_events[j] = [r for row in sim.num_migration_events for r in row]
@@ -192,7 +192,7 @@ class SimulationVerifier(object):
         j = 0
         for line in output.splitlines():
             if line.startswith(b"("):
-                t = dendropy.Tree.get_from_string(str(line), schema="newick")
+                t = dendropy.Tree.get_from_string(line.decode(), schema="newick")
                 a = t.calc_node_ages()
                 T[j] = a[-1]
                 j += 1
@@ -243,7 +243,7 @@ class SimulationVerifier(object):
         max_s = 200
         hist = np.zeros(max_s)
         for line in output.splitlines():
-            if line.startswith("segsites"):
+            if line.startswith(b"segsites"):
                 s = int(line.split()[1])
                 if s <= max_s:
                     hist[s] += 1
@@ -357,8 +357,8 @@ class SimulationVerifier(object):
         tbl = np.zeros(R)
         j = 0
         for line in output.splitlines():
-            if line.startswith("("):
-                t = dendropy.Tree.get_from_string(line, schema="newick")
+            if line.startswith(b"("):
+                t = dendropy.Tree.get_from_string(line.decode(), schema="newick")
                 tbl[j] = t.length()
                 j += 1
         return tbl
@@ -418,9 +418,9 @@ class SimulationVerifier(object):
         T = np.zeros(R)
         j = -1
         for line in output.splitlines():
-            if line.startswith("//"):
+            if line.startswith(b"//"):
                 j += 1
-            if line.startswith("["):
+            if line.startswith(b"["):
                 T[j] += 1
         return T
 
@@ -430,9 +430,9 @@ class SimulationVerifier(object):
         T = np.zeros(R)
         j = -1
         for line in output.splitlines():
-            if line.startswith("//"):
+            if line.startswith(b"//"):
                 j += 1
-            if line.startswith("time"):
+            if line.startswith(b"time"):
                 T[j] += 1
         return T
 
@@ -442,9 +442,9 @@ class SimulationVerifier(object):
         T = np.zeros(R)
         j = -1
         for line in output.splitlines():
-            if line.startswith("//"):
+            if line.startswith(b"//"):
                 j += 1
-            if line.startswith("time:"):
+            if line.startswith(b"time:"):
                 T[j] = max(T[j], float(line.split()[1]))
         return T
 
