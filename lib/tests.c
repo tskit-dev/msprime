@@ -6219,6 +6219,42 @@ test_sort_tables(void)
 }
 
 static void
+test_deduplicate_sites_multichar(void)
+{
+    int ret;
+    table_collection_t tables;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = site_table_add_row(tables.sites, 0, "AA", 1, "M", 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = site_table_add_row(tables.sites, 0, "0", 1, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = site_table_add_row(tables.sites, 1, "BBBBB", 5, "NNNNN", 5);
+    CU_ASSERT_EQUAL_FATAL(ret, 2);
+    ret = site_table_add_row(tables.sites, 1, "0", 1, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 3);
+
+    ret = table_collection_deduplicate_sites(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->num_rows, 2);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->position[0], 0);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->position[1], 1);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->ancestral_state[0], 'A');
+    CU_ASSERT_EQUAL_FATAL(tables.sites->ancestral_state_offset[1], 1);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->metadata[0], 'M');
+    CU_ASSERT_EQUAL_FATAL(tables.sites->metadata_offset[1], 1);
+
+    CU_ASSERT_NSTRING_EQUAL(tables.sites->ancestral_state + 1, "BBBBB", 5);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->ancestral_state_offset[2], 6);
+    CU_ASSERT_NSTRING_EQUAL(tables.sites->metadata + 1, "NNNNN", 5);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->metadata_offset[2], 6);
+
+    table_collection_free(&tables);
+}
+
+static void
 test_deduplicate_sites(void)
 {
     int ret;
@@ -8284,6 +8320,7 @@ main(int argc, char **argv)
         {"test_save_kas_tables", test_save_kas_tables},
         {"test_dump_tables", test_dump_tables},
         {"test_sort_tables", test_sort_tables},
+        {"test_deduplicate_sites_multichar", test_deduplicate_sites_multichar},
         {"test_deduplicate_sites", test_deduplicate_sites},
         {"test_deduplicate_sites_errors", test_deduplicate_sites_errors},
         {"test_dump_tables_kas", test_dump_tables_kas},
