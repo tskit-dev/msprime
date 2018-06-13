@@ -59,12 +59,24 @@ class TestTreeDraw(unittest.TestCase):
     def get_zero_edge_tree(self):
         tables = msprime.TableCollection(sequence_length=2)
         # These must be samples or we will have zero roots.
-        tables.nodes.add_row(flags=1, time=0)
-        tables.nodes.add_row(flags=1, time=0)
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
         tables.sites.add_row(position=0, ancestral_state="0")
         tables.mutations.add_row(site=0, node=0, derived_state="1")
         tables.mutations.add_row(site=0, node=1, derived_state="1")
         return tables.tree_sequence().first()
+
+    def get_zero_roots_tree(self):
+        tables = msprime.TableCollection(sequence_length=2)
+        # If we have no samples we have zero roots
+        tables.nodes.add_row(time=0)
+        tables.nodes.add_row(time=0)
+        tables.nodes.add_row(time=1)
+        tables.edges.add_row(0, 2, 2, 0)
+        tables.edges.add_row(0, 2, 2, 1)
+        tree = tables.tree_sequence().first()
+        self.assertEqual(tree.num_roots, 0)
+        return tree
 
     def get_multiroot_tree(self):
         ts = msprime.simulate(15, random_seed=1)
@@ -212,8 +224,11 @@ class TestDrawText(TestTreeDraw):
 
     def test_draw_empty_tree(self):
         t = self.get_empty_tree()
-        text = t.draw(format=self.drawing_format)
-        self.verify_basic_text(text)
+        self.assertRaises(ValueError, t.draw, format=self.drawing_format)
+
+    def test_draw_zero_roots_tree(self):
+        t = self.get_zero_roots_tree()
+        self.assertRaises(ValueError, t.draw, format=self.drawing_format)
 
     def test_draw_zero_edge_tree(self):
         t = self.get_zero_edge_tree()
@@ -463,8 +478,11 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_empty(self):
         t = self.get_empty_tree()
-        svg = t.draw()
-        self.verify_basic_svg(svg)
+        self.assertRaises(ValueError, t.draw)
+
+    def test_draw_zero_roots(self):
+        t = self.get_zero_roots_tree()
+        self.assertRaises(ValueError, t.draw)
 
     def test_draw_zero_edge(self):
         t = self.get_zero_edge_tree()

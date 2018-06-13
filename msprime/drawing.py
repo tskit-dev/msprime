@@ -64,6 +64,10 @@ def draw_tree(
             raise ValueError("Unicode tree drawing not supported on Python 2")
         cls = UnicodeTreeDrawer
 
+    # We can't draw trees with zero roots.
+    if tree.num_roots == 0:
+        raise ValueError("Cannot draw a tree with zero roots")
+
     td = cls(
         tree, width=width, height=height,
         node_labels=node_labels, node_colours=node_colours,
