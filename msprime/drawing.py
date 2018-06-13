@@ -141,6 +141,9 @@ class SvgTreeDrawer(TreeDrawer):
         t = 1
         if self._tree.num_roots > 0:
             t = max(self._tree.time(root) for root in self._tree.roots)
+        # In pathological cases, all the roots are at time 0
+        if t == 0:
+            t = 1
         # Do we have any mutations over a root?
         mutations_over_root = any(
             self._tree.parent(mut.node) == NULL_NODE for mut in self._tree.mutations())

@@ -57,10 +57,13 @@ class TestTreeDraw(unittest.TestCase):
         assert False
 
     def get_zero_edge_tree(self):
-        tables = msprime.TableCollection(sequence_length=1)
-        tables.nodes.add_row(time=0)
+        tables = msprime.TableCollection(sequence_length=2)
+        # These must be samples or we will have zero roots.
+        tables.nodes.add_row(flags=1, time=0)
+        tables.nodes.add_row(flags=1, time=0)
         tables.sites.add_row(position=0, ancestral_state="0")
         tables.mutations.add_row(site=0, node=0, derived_state="1")
+        tables.mutations.add_row(site=0, node=1, derived_state="1")
         return tables.tree_sequence().first()
 
     def get_multiroot_tree(self):
