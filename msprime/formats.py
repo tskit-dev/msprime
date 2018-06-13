@@ -457,6 +457,8 @@ def _dump_legacy_hdf5_v10(tree_sequence, root):
 
 def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
     # We cannot have duplicate positions in v10, so this parameter is ignored
+    sequence_length = root.attrs["sequence_length"]
+
     nodes_group = root["nodes"]
     nodes = msprime.NodeTable()
     metadata = None
@@ -464,20 +466,22 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
     if "metadata" in nodes_group:
         metadata = nodes_group["metadata"]
         metadata_offset = nodes_group["metadata_offset"]
-    nodes.set_columns(
-        flags=nodes_group["flags"],
-        population=nodes_group["population"],
-        time=nodes_group["time"],
-        metadata=metadata,
-        metadata_offset=metadata_offset)
+    if "flags" in nodes_group:
+        nodes.set_columns(
+            flags=nodes_group["flags"],
+            population=nodes_group["population"],
+            time=nodes_group["time"],
+            metadata=metadata,
+            metadata_offset=metadata_offset)
 
     edges_group = root["edges"]
     edges = msprime.EdgeTable()
-    edges.set_columns(
-        left=edges_group["left"],
-        right=edges_group["right"],
-        parent=edges_group["parent"],
-        child=edges_group["child"])
+    if "left" in edges_group:
+        edges.set_columns(
+            left=edges_group["left"],
+            right=edges_group["right"],
+            parent=edges_group["parent"],
+            child=edges_group["child"])
 
     migrations_group = root["migrations"]
     migrations = msprime.MigrationTable()
@@ -542,7 +546,8 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
 
     return msprime.load_tables(
         nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-        mutations=mutations, provenances=provenances)
+        mutations=mutations, provenances=provenances,
+        sequence_length=sequence_length)
 
 
 def dump_legacy(tree_sequence, filename, version=3):
