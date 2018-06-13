@@ -1344,7 +1344,7 @@ class TableCollection(object):
     def __str__(self):
         s = self.__banner("Individuals")
         s += str(self.individuals) + "\n"
-        s = self.__banner("Nodes")
+        s += self.__banner("Nodes")
         s += str(self.nodes) + "\n"
         s += self.__banner("Edges")
         s += str(self.edges) + "\n"

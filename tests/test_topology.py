@@ -2578,7 +2578,8 @@ class TestSimplify(unittest.TestCase):
     """
 
     def do_simplify(
-            self, ts, samples=None, compare_lib=True, filter_zero_mutation_sites=True):
+            self, ts, samples=None, compare_lib=True,
+            filter_zero_mutation_sites=True, filter_zero_node_individuals=True):
         """
         Runs the Python test implementation of simplify.
         """
@@ -2594,6 +2595,7 @@ class TestSimplify(unittest.TestCase):
                 samples=samples, nodes=lib_tables.nodes, edges=lib_tables.edges,
                 sites=lib_tables.sites, mutations=lib_tables.mutations,
                 filter_zero_mutation_sites=filter_zero_mutation_sites,
+                # filter_zero_node_individuals=filter_zero_node_individuals,
                 sequence_length=ts.sequence_length)
             py_tables = new_ts.dump_tables()
             # print("lib = ")
@@ -2602,7 +2604,9 @@ class TestSimplify(unittest.TestCase):
             # print("py = ")
             # print(py_tables.nodes)
             # print(py_tables.edges)
-
+            # print(lib_tables.individuals)
+            # print(py_tables.individuals)
+            self.assertEqual(lib_tables.individuals, py_tables.individuals)
             self.assertEqual(lib_tables.nodes, py_tables.nodes)
             self.assertEqual(lib_tables.edges, py_tables.edges)
             self.assertEqual(lib_tables.migrations, py_tables.migrations)
@@ -2653,6 +2657,39 @@ class TestSimplify(unittest.TestCase):
             if t2.interval[1] == t1.interval[1]:
                 t2 = next(trees2, None)
 
+    def verify_individuals(self, ts, filter_zero_node_individuals=False):
+        samples = ts.samples()
+        for j in range(1, ts.num_samples):
+            tss, node_id_map = self.do_simplify(
+                ts, samples=samples[:j],
+                filter_zero_node_individuals=filter_zero_node_individuals,
+                compare_lib=False)  # FIXME remove when implemented in lib.
+            for node in ts.nodes():
+                if node_id_map[node.id] != msprime.NULL_NODE:
+                    if node.individual != msprime.NULL_INDIVIDUAL:
+                        individual = ts.individual(node.individual)
+                        new_node = tss.node(node_id_map[node.id])
+                        new_individual = tss.individual(new_node.individual)
+                        self.assertEqual(individual.flags, new_individual.flags)
+                        self.assertTrue(
+                            np.array_equal(individual.location, new_individual.location))
+                        self.assertTrue(
+                            np.array_equal(individual.metadata, new_individual.metadata))
+                    else:
+                        new_node = tss.node(node_id_map[node.id])
+                        self.assertEqual(new_node.individual, msprime.NULL_INDIVIDUAL)
+            if filter_zero_node_individuals:
+                # There should be no unreferenced individuals in the set.
+                references = np.zeros(tss.num_individuals)
+                for node in tss.nodes():
+                    references[node.individual] += 1
+                self.assertTrue(np.all(references > 0))
+            else:
+                # This isn't true --- it'll be a permutation of the old table.
+                # self.assertEqual(ts.tables.individuals, tss.tables.individuals)
+                print("FIXME")
+                pass
+
     def test_single_tree(self):
         ts = msprime.simulate(10, random_seed=self.random_seed)
         self.verify_single_childified(ts)
@@ -2677,6 +2714,11 @@ class TestSimplify(unittest.TestCase):
         self.assertGreater(ts.num_trees, 2)
         self.verify_single_childified(ts)
         self.verify_multiroot_internal_samples(ts)
+
+    def test_single_tree_individuals(self):
+        ts = msprime.simulate(12, random_seed=self.random_seed)
+        ts = tsutil.insert_random_ploidy_individuals(ts, seed=2)
+        self.verify_individuals(ts)
 
     def test_small_tree_internal_samples(self):
         ts = msprime.load_text(

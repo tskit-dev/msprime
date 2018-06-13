@@ -1448,8 +1448,7 @@ class TestSimplifyTables(unittest.TestCase):
         tables = ts.dump_tables()
         nodes = tables.nodes.copy()
         edges = tables.edges.copy()
-        msprime.simplify_tables(
-            samples=ts.samples(), nodes=nodes, edges=edges)
+        msprime.simplify_tables(samples=ts.samples(), nodes=nodes, edges=edges)
         self.assertEqual(nodes, tables.nodes)
         self.assertEqual(edges, tables.edges)
 
