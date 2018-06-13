@@ -56,6 +56,13 @@ class TestTreeDraw(unittest.TestCase):
                     return t
         assert False
 
+    def get_zero_edge_tree(self):
+        tables = msprime.TableCollection(sequence_length=1)
+        tables.nodes.add_row(time=0)
+        tables.sites.add_row(position=0, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=0, derived_state="1")
+        return tables.tree_sequence().first()
+
     def get_multiroot_tree(self):
         ts = msprime.simulate(15, random_seed=1)
         # Take off the top quarter of edges
@@ -202,6 +209,11 @@ class TestDrawText(TestTreeDraw):
 
     def test_draw_empty_tree(self):
         t = self.get_empty_tree()
+        text = t.draw(format=self.drawing_format)
+        self.verify_basic_text(text)
+
+    def test_draw_zero_edge_tree(self):
+        t = self.get_zero_edge_tree()
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
@@ -448,6 +460,11 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_empty(self):
         t = self.get_empty_tree()
+        svg = t.draw()
+        self.verify_basic_svg(svg)
+
+    def test_draw_zero_edge(self):
+        t = self.get_zero_edge_tree()
         svg = t.draw()
         self.verify_basic_svg(svg)
 
