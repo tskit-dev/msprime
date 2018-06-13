@@ -1373,6 +1373,12 @@ class TestSimplifyTables(unittest.TestCase):
                 samples=[0, 1], nodes=tables.nodes, edges=tables.edges,
                 sites=sites, mutations=tables.mutations)
 
+    def test_duplicate_positions(self):
+        tables = msprime.TableCollection(sequence_length=1)
+        tables.sites.add_row(0, ancestral_state="0")
+        tables.sites.add_row(0, ancestral_state="0")
+        self.assertRaises(_msprime.LibraryError, tables.simplify, [])
+
     def test_samples_interface(self):
         tables = msprime.simulate(50, random_seed=1).dump_tables()
         for good_form in [[], [0, 1], (0, 1), np.array([0, 1], dtype=np.int32)]:

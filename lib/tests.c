@@ -8177,6 +8177,41 @@ test_table_collection_set_tables(void)
 }
 
 void
+test_table_collection_simplify_errors(void)
+{
+    int ret;
+    table_collection_t tables;
+    node_id_t samples[] = {0, 1};
+
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
+
+    ret = site_table_add_row(tables.sites, 0, "A", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = site_table_add_row(tables.sites, 0, "A", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = table_collection_simplify(&tables, samples, 0, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
+
+    /* Out of order positions */
+    tables.sites->position[0] = 0.5;
+    ret = table_collection_simplify(&tables, samples, 0, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSORTED_SITES);
+
+    /* Position out of bounds */
+    tables.sites->position[0] = 1.5;
+    ret = table_collection_simplify(&tables, samples, 0, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SITE_POSITION);
+
+    /* TODO More tests for this: see
+     * https://github.com/tskit-dev/msprime/issues/517 */
+
+    table_collection_free(&tables);
+}
+
+void
 test_load_node_table_errors(void)
 {
     char format_name[MSP_FILE_FORMAT_NAME_LENGTH];
@@ -8480,6 +8515,7 @@ main(int argc, char **argv)
         {"test_table_collection_load_errors", test_table_collection_load_errors},
         {"test_table_collection_dump_errors", test_table_collection_dump_errors},
         {"test_table_collection_set_tables", test_table_collection_set_tables},
+        {"test_table_collection_simplify_errors", test_table_collection_simplify_errors},
         {"test_load_node_table_errors", test_load_node_table_errors},
         {"test_generate_uuid", test_generate_uuid},
         CU_TEST_INFO_NULL,
