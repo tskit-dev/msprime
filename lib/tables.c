@@ -3629,8 +3629,11 @@ simplifier_check_input(simplifier_t *self)
             goto out;
         }
         if (j > 0) {
-            if (self->sites->position[j - 1] >= self->sites->position[j]) {
+            if (self->sites->position[j - 1] > self->sites->position[j]) {
                 ret = MSP_ERR_UNSORTED_SITES;
+                goto out;
+            } else if (self->sites->position[j - 1] == self->sites->position[j]) {
+                ret = MSP_ERR_DUPLICATE_SITE_POSITION;
                 goto out;
             }
         }
@@ -3726,12 +3729,11 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     size_t j, num_nodes_alloc;
     double sequence_length;
 
+    memset(self, 0, sizeof(simplifier_t));
     if (samples == NULL || tables == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-
-    memset(self, 0, sizeof(simplifier_t));
     self->num_samples = num_samples;
     self->flags = flags;
     self->nodes = tables->nodes;
