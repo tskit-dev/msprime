@@ -1147,10 +1147,10 @@ class SparseTree(object):
 def load(path):
     """
     Loads a tree sequence from the specified file path. This file must be in the
-    :ref:`HDF5 file format <sec_hdf5_file_format>` produced by the
+    :ref:`ancestry file format <sec_ancestry_file_format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
-    :param str path: The file path of the HDF5 file containing the
+    :param str path: The file path of the ``.trees`` file containing the
         tree sequence we wish to load.
     :return: The tree sequence object containing the information
         stored in the specified file path.
@@ -1467,9 +1467,9 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
     and is produced by the :meth:`.TreeSequence.dump_text` method. Further
     properties required for an input tree sequence are described in the
     :ref:`sec_valid_tree_sequence_requirements` section. This method is intended as a
-    convenient interface for importing external data into msprime; the HDF5
-    based file format using by :meth:`msprime.load` is many times more
-    efficient than this text format.
+    convenient interface for importing external data into msprime; the binary
+    file format using by :meth:`msprime.load` is many times more efficient than
+    this text format.
 
     The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
     objects containing text with whitespace delimited columns,  parsable by

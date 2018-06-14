@@ -29,11 +29,11 @@ scenarios. The library is a reimplementation of Hudson's seminal
    in Python, which is both simpler and far more efficient.
 
 3. ``msprime`` does not use Newick trees for interchange as they
-   are extremely inefficient in terms of the time required to
-   generate and parse, as well as the space required to store them.
-   Instead, we use a :ref:`well_defined <sec_hdf5_file_format>` format using the
-   powerful `HDF5 <https://www.hdfgroup.org/HDF5/>`_ standard. This
-   format allows us to store genealogical data very concisely,
+   are extremely inefficient in terms of storage space and the
+   time needed to generate and parse them. Instead, we use an efficient
+   :ref:`columnar binary file format <sec_ancestry_file_format>`
+   using the `kastore <https://pypi.org/project/kastore/>`_ library.
+   This format allows us to store genealogical data very concisely,
    particularly for large sample sizes.
 
 

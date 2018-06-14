@@ -15,8 +15,8 @@ the basic concepts that we need and the structure of the tables in the
 be used as simple interchange mechanism for small amounts of data in the
 `Text file formats`_ section. The `Binary interchange`_ section then describes
 the efficient Python API for table interchange using numpy arrays. Finally,
-we describe the HDF5-based file format using by msprime to efficiently
-store tree sequences in the `HDF5 file format`_ section.
+we describe the binary format using by msprime to efficiently
+store tree sequences in the `Ancestry file format`_ section.
 
 
 .. _sec_data_model:
@@ -703,153 +703,145 @@ Note that for a table with ``n`` rows, any offset column must have ``n + 1``
 values. The values in this column must be nondecreasing, and cannot exceed
 the length of the ragged column in question.
 
-.. _sec_hdf5_file_format:
+.. _sec_ancestry_file_format:
 
-****************
-HDF5 file format
-****************
+********************
+Ancestry file format
+********************
 
 To make tree sequence data as efficient and easy as possible to use, we store the
-data on disk in a `HDF5 <https://www.hdfgroup.org/HDF5/>`_ based file format.
-Using the specification defined here, it should be straightforward to access tree
-sequence information produced by ``msprime`` in any language with `HDF5 support
-<https://en.wikipedia.org/wiki/Hierarchical_Data_Format#Interfaces>`_.
+data on file in a columnar, binary format. The format is based on the
+`kastore <https://pypi.org/project/kastore/>`_ package, which is a simple
+key-value store for numerical data. There is a one-to-one correspondence
+between the tables described above and the arrays stored in these files.
 
-The file format is broken into a number of groups, and each group
-corresponds to one of the tables above (possibly including some extra
-information for efficiency). In general, each group will contain a dataset
-corresponding to a column in the table in question. All groups must be
-present.
+By convention, these files are given the ``.trees`` suffix (although this
+is not enforced in any way), and we will sometimes refer to them as ".trees"
+files. We also refer to them as "ancestry files".
 
-To work around limitations in some versions of the HDF5 library, empty
-columns are **not** stored. For example, if there is no metadata associated
-with nodes, the ``metadata`` column in the node table will be empty, and
-the corresponding ``metadata`` dataset will not be present in the HDF5 file.
+.. todo::
+    Link to the documentation for kastore, and describe the arrays that are
+    stored as well as a the top-level metadata.
 
-Variable length data is handled in the same manner as the
-:ref:`Tables API <sec_encoding_ragged_columns>`
-above: we store two arrays, one containing the flattened data, and another
-storing offsets into this array.
+.. The root group contains two attributes, ``format_version`` and ``sequence_length``.
+.. The ``format_version`` is a pair ``(major, minor)`` describing the file format version.
+.. This document describes version 10.0. The ``sequence_length`` attribute defines the
+.. coordinate space over which edges and sites are defined. This must be present
+.. and be greater than or equal to the largest coordinate present.
 
-The root group contains two attributes, ``format_version`` and ``sequence_length``.
-The ``format_version`` is a pair ``(major, minor)`` describing the file format version.
-This document describes version 10.0. The ``sequence_length`` attribute defines the
-coordinate space over which edges and sites are defined. This must be present
-and be greater than or equal to the largest coordinate present.
+.. ================    ==============      ======      ===========
+.. Path                Type                Dim         Description
+.. ================    ==============      ======      ===========
+.. /format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
+.. /sequence_length    H5T_IEEE_F64LE      1           The maximum value of a sequence coordinate.
+.. ================    ==============      ======      ===========
 
-================    ==============      ======      ===========
-Path                Type                Dim         Description
-================    ==============      ======      ===========
-/format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
-/sequence_length    H5T_IEEE_F64LE      1           The maximum value of a sequence coordinate.
-================    ==============      ======      ===========
+.. Nodes group
+.. ===========
 
-Nodes group
-===========
+.. The ``/nodes`` group stores the :ref:`sec_node_table_definition`.
 
-The ``/nodes`` group stores the :ref:`sec_node_table_definition`.
+.. =======================     ==============
+.. Path                        Type
+.. =======================     ==============
+.. /nodes/flags                H5T_STD_U32LE
+.. /nodes/population           H5T_STD_I32LE
+.. /nodes/time                 H5T_IEEE_F64LE
+.. /nodes/metadata             H5T_STD_I8LE
+.. /nodes/metadata_offset      H5T_STD_U32LE
+.. =======================     ==============
 
-=======================     ==============
-Path                        Type
-=======================     ==============
-/nodes/flags                H5T_STD_U32LE
-/nodes/population           H5T_STD_I32LE
-/nodes/time                 H5T_IEEE_F64LE
-/nodes/metadata             H5T_STD_I8LE
-/nodes/metadata_offset      H5T_STD_U32LE
-=======================     ==============
+.. Edges group
+.. ===========
 
-Edges group
-===========
+.. The ``/edges`` group stores the :ref:`sec_edge_table_definition`.
 
-The ``/edges`` group stores the :ref:`sec_edge_table_definition`.
+.. ===================       ==============
+.. Path                      Type
+.. ===================       ==============
+.. /edges/left               H5T_IEEE_F64LE
+.. /edges/right              H5T_IEEE_F64LE
+.. /edges/parent             H5T_STD_I32LE
+.. /edges/child              H5T_STD_I32LE
+.. ===================       ==============
 
-===================       ==============
-Path                      Type
-===================       ==============
-/edges/left               H5T_IEEE_F64LE
-/edges/right              H5T_IEEE_F64LE
-/edges/parent             H5T_STD_I32LE
-/edges/child              H5T_STD_I32LE
-===================       ==============
+.. Indexes group
+.. -------------
 
-Indexes group
--------------
+.. The ``/edges/indexes`` group records information required to efficiently
+.. reconstruct the individual trees from the tree sequence. The
+.. ``insertion_order`` dataset contains the order in which records must be applied
+.. and the ``removal_order`` dataset the order in which records must be
+.. removed for a left-to-right traversal of the trees.
 
-The ``/edges/indexes`` group records information required to efficiently
-reconstruct the individual trees from the tree sequence. The
-``insertion_order`` dataset contains the order in which records must be applied
-and the ``removal_order`` dataset the order in which records must be
-removed for a left-to-right traversal of the trees.
+.. ==============================     ==============
+.. Path                               Type
+.. ==============================     ==============
+.. /edges/indexes/insertion_order     H5T_STD_I32LE
+.. /edges/indexes/removal_order       H5T_STD_I32LE
+.. ==============================     ==============
 
-==============================     ==============
-Path                               Type
-==============================     ==============
-/edges/indexes/insertion_order     H5T_STD_I32LE
-/edges/indexes/removal_order       H5T_STD_I32LE
-==============================     ==============
+.. Sites group
+.. ===========
 
-Sites group
-===========
+.. The sites group stores the :ref:`sec_site_table_definition`.
 
-The sites group stores the :ref:`sec_site_table_definition`.
+.. =============================   ==============
+.. Path                            Type
+.. =============================   ==============
+.. /sites/position                 H5T_IEEE_F64LE
+.. /sites/ancestral_state          H5T_STD_I8LE
+.. /sites/ancestral_state_offset   H5T_STD_U32LE
+.. /sites/metadata                 H5T_STD_I8LE
+.. /sites/metadata_offset          H5T_STD_U32LE
+.. =============================   ==============
 
-=============================   ==============
-Path                            Type
-=============================   ==============
-/sites/position                 H5T_IEEE_F64LE
-/sites/ancestral_state          H5T_STD_I8LE
-/sites/ancestral_state_offset   H5T_STD_U32LE
-/sites/metadata                 H5T_STD_I8LE
-/sites/metadata_offset          H5T_STD_U32LE
-=============================   ==============
+.. Mutations group
+.. ===============
 
-Mutations group
-===============
+.. The mutations group stores the :ref:`sec_mutation_table_definition`.
 
-The mutations group stores the :ref:`sec_mutation_table_definition`.
+.. ===============================  ==============
+.. Path                             Type
+.. ===============================  ==============
+.. /mutations/site                  H5T_STD_I32LE
+.. /mutations/node                  H5T_STD_I32LE
+.. /mutations/parent                H5T_STD_I32LE
+.. /mutations/derived_state         H5T_STD_I8LE
+.. /mutations/derived_state_offset  H5T_STD_U32LE
+.. /mutations/metadata              H5T_STD_I8LE
+.. /mutations/metadata_offset       H5T_STD_U32LE
+.. ===============================  ==============
 
-===============================  ==============
-Path                             Type
-===============================  ==============
-/mutations/site                  H5T_STD_I32LE
-/mutations/node                  H5T_STD_I32LE
-/mutations/parent                H5T_STD_I32LE
-/mutations/derived_state         H5T_STD_I8LE
-/mutations/derived_state_offset  H5T_STD_U32LE
-/mutations/metadata              H5T_STD_I8LE
-/mutations/metadata_offset       H5T_STD_U32LE
-===============================  ==============
+.. Migrations group
+.. ================
 
-Migrations group
-================
+.. The ``/migrations`` group stores the :ref:`sec_migration_table_definition`.
 
-The ``/migrations`` group stores the :ref:`sec_migration_table_definition`.
+.. ===================       ==============
+.. Path                      Type
+.. ===================       ==============
+.. /migrations/left          H5T_IEEE_F64LE
+.. /migrations/right         H5T_IEEE_F64LE
+.. /migrations/node          H5T_STD_I32LE
+.. /migrations/source        H5T_STD_I32LE
+.. /migrations/dest          H5T_STD_I32LE
+.. /migrations/time          H5T_IEEE_F64LE
+.. ===================       ==============
 
-===================       ==============
-Path                      Type
-===================       ==============
-/migrations/left          H5T_IEEE_F64LE
-/migrations/right         H5T_IEEE_F64LE
-/migrations/node          H5T_STD_I32LE
-/migrations/source        H5T_STD_I32LE
-/migrations/dest          H5T_STD_I32LE
-/migrations/time          H5T_IEEE_F64LE
-===================       ==============
+.. Provenances group
+.. =================
 
-Provenances group
-=================
+.. The provenances group stores the :ref:`sec_provenance_table_definition`.
 
-The provenances group stores the :ref:`sec_provenance_table_definition`.
-
-===============================  ==============
-Path                             Type
-===============================  ==============
-/provenances/timestamp           H5T_STD_I8LE
-/provenances/timestamp_offset    H5T_STD_U32LE
-/provenances/record              H5T_STD_I8LE
-/provenances/record_offset       H5T_STD_U32LE
-===============================  ==============
+.. ===============================  ==============
+.. Path                             Type
+.. ===============================  ==============
+.. /provenances/timestamp           H5T_STD_I8LE
+.. /provenances/timestamp_offset    H5T_STD_U32LE
+.. /provenances/record              H5T_STD_I8LE
+.. /provenances/record_offset       H5T_STD_U32LE
+.. ===============================  ==============
 
 
 Legacy Versions
@@ -859,9 +851,12 @@ Tree sequence files written by older versions of msprime are not readable by
 newer versions of msprime. For major releases of msprime, :ref:`sec_msp_upgrade`
 will convert older tree sequence files to the latest version.
 
+File formats from version 11 onwards are based on
+`kastore <https://pypi.org/project/kastore/>`_;
+previous to this, the file format was based on HDF5.
+
 However many changes to the tree sequence format are not part of major
-releases. The table below gives these versions (contained in the root group
-attribute, ``format_version`` as a pair ``(major, minor)``).
+releases. The table below gives these versions.
 
 .. to obtain hashes where versions were changed:
         git log --oneline -L40,41:lib/msprime.h
@@ -869,11 +864,15 @@ attribute, ``format_version`` as a pair ``(major, minor)``).
         git log --merges --pretty=format:"%h" fc17dbd | head -n 1
    in some cases this didn't work so required hand manipulation. checks were
    done (after checkign out and rebuilding) with:
-        python msp_dev.py simulate 10 tmp.hdf5 && h5dump tmp.hdf5 | head
+        python msp_dev.py simulate 10 tmp.trees && h5dump tmp.trees | head
+   For versions 11 and onwards, use kastore to get the version:
+        kastore dump format/version tmp.trees
 
 =======    =================
 Version    Commit Short Hash
 =======    =================
+11.0       5646cd3
+10.0       e4396a7
 9.0        e504abd
 8.0        299ddc9
 7.0        ca9c0c5
