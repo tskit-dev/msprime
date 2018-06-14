@@ -76,7 +76,7 @@ class SimpleContainer(object):
 
 class Individual(SimpleContainer):
     """
-    A :ref:`individual <sec_individual_table_definition>` in a tree sequence.
+    An :ref:`individual <sec_individual_table_definition>` in a tree sequence.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.

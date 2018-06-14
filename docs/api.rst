@@ -245,6 +245,9 @@ in the :ref:`sec_data_model`. These classes are not intended to be instantiated
 directly, but are the return types for the various iterators provided by the
 :class:`.TreeSequence` and :class:`.SparseTree` classes.
 
+.. autoclass:: msprime.Individual()
+    :members:
+
 .. autoclass:: msprime.Node()
     :members:
 
@@ -261,6 +264,9 @@ directly, but are the return types for the various iterators provided by the
     :members:
 
 .. autoclass:: msprime.Migration()
+    :members:
+
+.. autoclass:: msprime.Population()
     :members:
 
 ++++++++++++
@@ -554,27 +560,35 @@ Table classes
 
 .. autoclass:: msprime.IndividualTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.NodeTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.EdgeTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.MigrationTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.SiteTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.MutationTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.PopulationTable()
     :members:
+    :inherited-members:
 
 .. autoclass:: msprime.ProvenanceTable()
-
+    :members:
+    :inherited-members:
 
 +++++++++++++++++
 Table Collections

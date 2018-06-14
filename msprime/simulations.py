@@ -1060,7 +1060,7 @@ class DiracCoalescent(ParametricSimulationModel):
         self.c = c
 
 
-class Population(object):
+class PopulationParameters(object):
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
@@ -1150,7 +1150,7 @@ class DemographyDebugger(object):
             growth_rates = [
                 conf["growth_rate"] for conf in ll_sim.get_population_configuration()]
             populations = [
-                Population(
+                PopulationParameters(
                     start_size=ll_sim.compute_population_size(j, start_time),
                     end_size=ll_sim.compute_population_size(j, end_time),
                     growth_rate=growth_rates[j]) for j in range(N)]

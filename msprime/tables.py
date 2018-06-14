@@ -135,7 +135,35 @@ class BaseTable(object):
 
 
 class IndividualTable(BaseTable):
-    # FIXME Document
+    """
+    A table defining the individuals in a tree sequence. See the
+    :ref:`definitions <sec_individual_table_definition>` for details on the columns
+    in this table and the
+    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
+    for the properties needed for an individual table to be a part of a valid tree
+    sequence.
+
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
+
+        **NOTE:** this behaviour may change in future.
+
+    :ivar flags: The array of flags values.
+    :vartype flags: numpy.ndarray, dtype=np.uint32
+    :ivar location: The flattened array of floating point location values. See
+        :ref:`sec_encoding_ragged_columns` for more details.
+    :vartype location: numpy.ndarray, dtype=np.float64
+    :ivar location_offset: The array of offsets into the location column. See
+        :ref:`sec_encoding_ragged_columns` for more details.
+    :vartype location_offset: numpy.ndarray, dtype=np.uint32
+    :ivar metadata: The flattened array of binary metadata values. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata: numpy.ndarray, dtype=np.int8
+    :ivar metadata_offset: The array of offsets into the metadata column. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
+    """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
             ll_table = _msprime.IndividualTable(max_rows_increment=max_rows_increment)
@@ -186,13 +214,52 @@ class IndividualTable(BaseTable):
         return copy
 
     def add_row(self, flags=0, location=None, metadata=None):
-        return self.ll_table.add_row(
-                flags=flags, location=location, metadata=metadata)
+        """
+        Adds a new row to this :class:`IndividualTable` and returns the ID of the
+        corresponding individual.
+
+        :param int flags: The bitwise flags for the new node.
+        :param array-like location: A list of numeric values or one-dimensional numpy
+            array describing the location of this individual. If not specified
+            or None, a zero-dimensional location is stored.
+        :param bytes metadata: The binary-encoded metadata for the new node. If not
+            specified or None, a zero-length byte string is stored.
+        :return: The ID of the newly added node.
+        :rtype: int
+        """
+        return self.ll_table.add_row(flags=flags, location=location, metadata=metadata)
 
     def set_columns(
             self, flags, location=None, location_offset=None,
             metadata=None, metadata_offset=None):
-        # FIXME
+        """
+        Sets the values for each column in this :class:`.IndividualTable` using the
+        values in the specified arrays. Overwrites any data currently stored in
+        the table.
+
+        The ``flags`` array is mandatory and defines the number of individuals
+        the table will contain.
+        The ``location`` and ``location_offset`` parameters must be supplied
+        together, and meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        The ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        See :ref:`sec_tables_api_binary_columns` for more information.
+
+        :param flags: The bitwise flags for each node. Required.
+        :type flags: numpy.ndarray, dtype=np.uint32
+        :param location: The flattened location array. Must be specified along
+            with ``location_offset``. If not specified or None, an empty location
+            value is stored for each node.
+        :type location: numpy.ndarray, dtype=np.float64
+        :param location_offset: The offsets into the ``location`` array.
+        :type location_offset: numpy.ndarray, dtype=np.uint32.
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
         self.ll_table.set_columns(
             flags, location=location, location_offset=location_offset,
             metadata=metadata, metadata_offset=metadata_offset)
@@ -200,7 +267,33 @@ class IndividualTable(BaseTable):
     def append_columns(
             self, flags, location=None, location_offset=None, metadata=None,
             metadata_offset=None):
-        # FIXME
+        """
+        Appends the specified arrays to the end of the columns in this
+        :class:`IndividualTable`. This allows many new rows to be added at once.
+
+        The ``flags`` array is mandatory and defines the number of
+        extra individuals to add to the table.
+        The ``location`` and ``location_offset`` parameters must be supplied
+        together, and meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        The ``metadata`` and ``metadata_offset`` parameters must be supplied
+        together, and meet the requirements for :ref:`sec_encoding_ragged_columns`.
+        See :ref:`sec_tables_api_binary_columns` for more information.
+
+        :param flags: The bitwise flags for each node. Required.
+        :type flags: numpy.ndarray, dtype=np.uint32
+        :param location: The flattened location array. Must be specified along
+            with ``location_offset``. If not specified or None, an empty location
+            value is stored for each node.
+        :type location: numpy.ndarray, dtype=np.float64
+        :param location_offset: The offsets into the ``location`` array.
+        :type location_offset: numpy.ndarray, dtype=np.uint32.
+        :param metadata: The flattened metadata array. Must be specified along
+            with ``metadata_offset``. If not specified or None, an empty metadata
+            value is stored for each node.
+        :type metadata: numpy.ndarray, dtype=np.int8
+        :param metadata_offset: The offsets into the ``metadata`` array.
+        :type metadata_offset: numpy.ndarray, dtype=np.uint32.
+        """
         self.ll_table.append_columns(
             flags, location=location, location_offset=location_offset,
             metadata=metadata, metadata_offset=metadata_offset)

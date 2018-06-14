@@ -38,16 +38,24 @@ tree sequence
     what differs between them.
 
 node
-    Each branching point in each tree is associated with a particular ancestor,
-    called "nodes".  Since each node represents a certain ancestor, it has a
-    unique ``time``, thought of as her birth time, which determines the height
-    of any branching points she is associated with.
+    Each branching point in each tree is associated with a particular chromosome
+    in a particular ancestor, called "nodes".  Since each node represents a
+    specific gamete it has a unique ``time``, thought of as its birth time,
+    which determines the height of any branching points it is associated with.
+
+individual
+    In certain situations we are interested in how nodes (representing individual
+    homologous chromosomes) are grouped together into polyploid individuals.
+    For example, when we are working with polyploid samples it is useful
+    to associate metadata with a specific individual rather than duplicate
+    this information on the constituent nodes.
 
 sample
     Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
-    genome. (See :ref:`sec_node_table_definition` for information on how the sample
+    genome. (See the :ref:`node table definitions <sec_node_table_definition>`
+    for information on how the sample
     status a node is encoded in the ``flags`` column.)
 
 edge
@@ -89,16 +97,20 @@ Sequence length
 
 .. todo:: Define migration and provenance types.
 
-A tree sequence can be stored in a collection of six tables:
+A tree sequence can be stored in a collection of eight tables:
 :ref:`Node <sec_node_table_definition>`,
 :ref:`Edge <sec_edge_table_definition>`,
+:ref:`Individual <sec_individual_table_definition>`,
 :ref:`Site <sec_site_table_definition>`,
 :ref:`Mutation <sec_mutation_table_definition>`,
-:ref:`Migration <sec_migration_table_definition>`, and
+:ref:`Migration <sec_migration_table_definition>`,
+:ref:`Population <sec_population_table_definition>`, and
 :ref:`Provenance <sec_provenance_table_definition>`.
-The first two store the genealogical
-relationships that define the trees; the next two describe where mutations fall
-on those trees; the Migration table describes how lineages move across space;
+The Node and Edge tables store the genealogical
+relationships that define the trees, and the Individual table
+describes how multiple chromosomes are grouped within individuals;
+the Site and Mutation tables describe where mutations fall
+on the trees; the Migration table describes how lineages move across space;
 and the Provenance table contains information on where the data came from.
 In the following sections we define these components of a tree sequence in
 more detail.
@@ -108,16 +120,16 @@ more detail.
 Table definitions
 =================
 
-
 .. _sec_node_table_definition:
 
 Node Table
 ----------
 
-A **node** defines a specific ancestor that was born at some time in
+A **node** defines single chromosome in a specific ancestor
+that was born at some time in
 the past. Every vertex in the marginal trees of a tree sequence corresponds
 to exactly one node, and a node may be present in many trees. The
-node table contains four columns, of which ``flags`` and ``time`` are
+node table contains five columns, of which ``flags`` and ``time`` are
 mandatory:
 
 ================    ==============      ===========
@@ -126,6 +138,7 @@ Column              Type                Description
 flags               uint32              Bitwise flags.
 time                double              Birth time of node
 population          int32               Birth population of node.
+individual          int32               The individual the node belongs to.
 metadata            binary              Node :ref:`sec_metadata_definition`
 ================    ==============      ===========
 
@@ -133,7 +146,12 @@ The ``time`` column records the birth time of the individual in question,
 and is a floating point value. Similarly,
 the ``population`` column records the ID of the population where this
 individual was born. If not provided, ``population`` defaults to the
-null ID (-1).
+null ID (-1). The population ID must refer to a row in the
+:ref:`sec_population_table_definition`.
+The ``individual`` column records the ID of the polyploid
+:ref:`Individual <sec_individual_table_definition>`
+individual that this node belongs to. If not provided, ``individual``
+defaults to the null ID (-1).
 
 The ``flags`` column stores information about a particular node, and
 is composed of 32 bitwise boolean values. Currently, the only flag defined
@@ -159,6 +177,47 @@ more details on how metadata columns should be used.
     The distinction between ``flags`` and ``metadata`` is that flags
     holds information about a node that the library understands, whereas
     metadata holds information about a node that the library *does not*
+    understand. Metadata is for storing auxiliarly information that is
+    not necessary for the core tree sequence algorithms.
+
+.. _sec_individual_table_definition:
+
+
+Individual Table
+----------------
+
+An **individual** defines how nodes (which can be seen
+as representing single chromosomes) group together in a polyploid individual.
+The individual table contains three columns of which ``flags`` is mandatory.
+
+================    ==============      ===========
+Column              Type                Description
+================    ==============      ===========
+flags               uint32              Bitwise flags.
+location            double              Location in arbitrary dimensions
+metadata            binary              Individual :ref:`sec_metadata_definition`
+================    ==============      ===========
+
+See the :ref:`sec_individual_requirements` section for details on the properties
+required for a valid set of individuals.
+
+The ``flags`` column stores information about a particular individual, and
+is composed of 32 bitwise boolean values. Currently, no flags are
+defined.
+
+The ``location`` column stores the location of an individual in arbitrary
+dimensions. This column is :ref:`ragged <sec_encoding_ragged_columns>`, and
+so different individuals can have locations with different dimensions (i.e.,
+one individual may have location ``[]`` and another ``[0, 1, 0]``.
+
+The ``metadata`` column provides a location for client code to store
+information about each individual. See the :ref:`sec_metadata_definition` section for
+more details on how metadata columns should be used.
+
+.. note::
+    The distinction between ``flags`` and ``metadata`` is that flags
+    holds information about a individual that the library understands, whereas
+    metadata holds information about a individual that the library *does not*
     understand. Metadata is for storing auxiliarly information that is
     not necessary for the core tree sequence algorithms.
 
@@ -238,7 +297,7 @@ site                int32               The ID of the site the mutation occurs a
 node                int32               The node this mutation occurs at.
 parent              int32               The ID of the parent mutation.
 derived_state       char                The mutational state at the defined node.
-metadata            char                Mutation :ref:`sec_metadata_definition`.
+metadata            binary              Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
 The ``site`` column is an integer value defining the ID of the
@@ -300,6 +359,31 @@ point values recording the time of the event.
 See the :ref:`sec_migration_requirements` section for details on the properties
 required for a valid set of mutations.
 
+.. _sec_population_table_definition:
+
+Population Table
+----------------
+
+A **population** defines a grouping of individuals that a node can
+be said to belong to.
+
+The population table contains one column, ``metadata``.
+
+================    ==============      ===========
+Column              Type                Description
+================    ==============      ===========
+metadata            binary              Population :ref:`sec_metadata_definition`.
+================    ==============      ===========
+
+
+The ``metadata`` column provides a location for client code to store
+information about each population. See the :ref:`sec_metadata_definition` section for
+more details on how metadata columns should be used.
+
+See the :ref:`sec_population_requirements` section for details on the properties
+required for a valid set of populations.
+
+
 .. _sec_provenance_table_definition:
 
 Provenance Table
@@ -308,6 +392,7 @@ Provenance Table
 .. todo::
     Document the provenance table.
 
+
 ================    ==============      ===========
 Column              Type                Description
 ================    ==============      ===========
@@ -315,22 +400,6 @@ timestamp           char                Timestamp in `ISO-8601 <https://en.wikip
 record              char                Provenance record.
 ================    ==============      ===========
 
-.. _sec_individual_table_definition:
-
-Individual Table
-----------------
-
-.. todo::
-    Document the individual table.
-
-
-.. _sec_population_table_definition:
-
-Population Table
-----------------
-
-.. todo::
-    Document the population table.
 
 
 .. _sec_metadata_definition:
@@ -371,32 +440,50 @@ Valid tree sequence requirements
 ================================
 
 Arbitrary data can be stored in tables using the classes in the
-:ref:`sec_tables_api`. However, only tables that fulfil a set of
-requirements represent a valid :class:`.TreeSequence` object, and
-can be loaded using :func:`.load_tables`. In this
+:ref:`sec_tables_api`. However, only a :class:`.TableCollection`
+that fulfils a set of requirements represents
+a valid :class:`.TreeSequence` object which can be obtained
+using the :meth:`.TableCollection.tree_sequence` method. In this
 section we list these requirements, and explain their rationale.
 Violations of most of these requirements are detected when the
 user attempts to load a tree sequence via :func:`.load` or
-:func:`.load_tables`, raising an informative error message. Some
-more complex requirements may not be detectable at load-time,
+:meth:`.TableCollection.tree_sequence`, raising an informative
+error message. Some more complex requirements may not be detectable at load-time,
 and errors may not occur until certain operations are attempted.
 These are documented below.
 
+.. _sec_individual_requirements:
+
+Individual requirements
+-----------------------
+
+Individuals are a basic type in a tree sequence and are not defined with
+respect to any other tables. Therefore, there are no requirements on
+individuals.
+
+There are no requirements regarding the ordering of individuals.
+Sorting a set of tables using :meth:`.TableCollection.sort` has
+no effect on the individuals.
 
 .. _sec_node_requirements:
 
 Node requirements
 -----------------
 
-Nodes are the most basic type in a tree sequence, and are not defined with
-respect to any other tables. Therefore, the requirements for nodes are
-trivial.
+Given a valid set of individuals and populations, the requirements for
+each node are:
 
-- Node times must be non-negative.
+- Node times must be non-negative;
+- ``population`` must either be null (-1) or refer to a valid population ID;
+- ``individual`` must either be null (-1) or refer to a valid individual ID.
 
-There are no requirements regarding the ordering of nodes with respect to time
-or any other field. Sorting a set of tables using :func:`.sort_tables` has
-no effect on the nodes.
+There are no requirements regarding the ordering of nodes with respect to time.
+
+For simplicity and algorithmic efficiency, all nodes referring to the same
+(non-null) individual must be contiguous.
+
+Sorting a set of tables using :meth:`.TableCollection.sort`
+has no effect on nodes.
 
 .. _sec_edge_requirements:
 
@@ -435,7 +522,7 @@ sortedness properties:
   first by ``child`` ID and then by ``left`` coordinate.
 
 Violations of these requirements are detected at load time.
-The :func:`.sort_tables` function will ensure that these sortedness
+The :meth:`.TableCollection.sort` method will ensure that these sortedness
 properties are fulfilled.
 
 .. _sec_site_requirements:
@@ -454,7 +541,7 @@ For simplicity and algorithmic efficiency, sites must also:
 - Be sorted in increasing order of ``position``.
 
 Violations of these requirements are detected at load time.
-The :func:`.sort_tables` function ensures that sites are sorted
+The :meth:`.TableCollection.sort` method ensures that sites are sorted
 according to these criteria.
 
 .. _sec_mutation_requirements:
@@ -478,7 +565,7 @@ For simplicity and algorithmic efficiency, mutations must also:
   ``parent`` with ID :math:`y`, then we must have :math:`y < x`).
 
 Violations of these sorting requirements are detected at load time.
-The :func:`.sort_tables` function ensures that mutationsare sorted
+The :meth:`.TableCollection.sort` method ensures that mutations are sorted
 according to these criteria.
 
 Mutations also have the requirement that they must result in a
@@ -513,6 +600,14 @@ such that ``m1.right`` = ``m2.left`` and with the ``node``, ``source``,
 ``dest`` and ``time`` fields equal. This is because such records will usually
 represent two independent ancestral segments migrating at the same time, and
 as such squashing them into a single record would result in a loss of information.
+
+
+.. _sec_population_requirements:
+
+Population requirements
+-----------------------
+
+There are no requirements on a population table.
 
 .. _sec_text_file_format:
 
@@ -721,7 +816,7 @@ files. We also refer to them as "ancestry files".
 
 .. todo::
     Link to the documentation for kastore, and describe the arrays that are
-    stored as well as a the top-level metadata.
+    stored as well as the top-level metadata.
 
 .. The root group contains two attributes, ``format_version`` and ``sequence_length``.
 .. The ``format_version`` is a pair ``(major, minor)`` describing the file format version.
