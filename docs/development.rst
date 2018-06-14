@@ -15,12 +15,12 @@ Quickstart
 
 - Make a fork of the msprime repo on `GitHub <github.com/tskit-dev/msprime>`_
 - Clone your fork into a local directory.
-- Install the :ref:`basic requirements <sec-requirements>`.
+- Install the :ref:`basic requirements <sec_installation_system_requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root. If you
   are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
   run ``make ext3``. Python 3.x is the default if no arguments are provided.
-- Run the tests to ensure everything has worked: ``nosetests -vs``. These should
+- Run the tests to ensure everything has worked: ``python -m nose -vs``. These should
   all pass.
 - Make your changes in a local branch, and open a pull request on GitHub when you
   are ready. Please make sure that (a) the tests pass before you open the PR; and

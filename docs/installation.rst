@@ -9,6 +9,25 @@ pre-built binary packages using :ref:`sec_installation_conda` or
 by compiling locally using :ref:`sec_installation_pip`. We recommend using ``conda``
 for most users, although ``pip`` can be more convenient in certain cases.
 
+
+.. _sec_installation_requirements:
+
+============
+Requirements
+============
+
+Msprime requires Python 2.7 or Python 3.3+
+and the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_.
+GSL can either be installed automatically as part of a
+:ref:`sec_installation_conda` installation **or** via system packages
+(see :ref:`sec_pip_platform_specific_installation`)
+
+.. warning::
+    If you installed Python using anaconda/miniconda, please install
+    msprime using ``conda``. Link/load time errors will occur if you mix
+    a conda installed Python with system libraries.
+
+
 .. _sec_installation_conda:
 
 =====
@@ -149,18 +168,87 @@ Installing using ``pip`` is more flexible than ``conda`` as it
 can support more versions of Python, and the locations of the
 various dependencies can be specified.
 
-***********
-Quick Start
-***********
+Installing via ``pip`` is the recommended method when using the
+system provided Python installations.
+
+.. _sec_installation_system_requirements:
+
+******************************
+Installing system requirements
+******************************
+
+When installing via ``pip``, GSL must be installed using system packages
+(we do not recommend installing GSL from source). GSL packages are available
+on all major platforms.
+
+For example, to install on Debian/Ubuntu use (as root)::
+
+    $ apt-get install python-dev libgsl0-dev
+
+For Redhat/Fedora use::
+
+    $ yum install gsl-devel
+
+On FreeBSD we can use ``pkg`` to install the requirements::
+
+    $ pkg install gsl
+
+To install the dependencies on OS X, we can use `Homebrew <http://brew.sh/>`_::
+
+    $ brew update
+    $ brew install gsl
+
+
+************
+Installation
+************
+
+We can install ``msprime`` easily using pip::
+
+    $ python -m pip install msprime
+
+(It is generally better to use ``python -m pip`` rather than call ``pip``
+directly since this allows you to control which installation of Python the
+package is installed to.) This will work in most cases, once the GSL has been
+installed. See below for platform specific build instructions when this fails.
+
+If you do not have root access to your machine, you can install
+``msprime`` into your local Python installation as follows::
+
+    $ python -m pip install msprime --user
+
+To use the ``mspms`` program you must ensure
+that the ``~/.local/bin`` directory is in your ``PATH``, or
+simply run it using::
+
+    $ ~/.local/bin/mspms
+
+To uninstall ``msprime``, simply run::
+
+    $ python -m pip uninstall msprime
+
+
+.. _sec_pip_platform_specific_installation:
+
+******************************
+Platform specific installation
+******************************
+
+This section contains instructions to build on platforms
+that require build time flags for GSL.
+
++++++++++++++
+Debian/Ubuntu
++++++++++++++
 
 To install and run ``msprime`` on a fresh Ubuntu 15.10 installation, do the
 following:
 
 .. code-block:: bash
 
-    $ sudo apt-get install pkg-config python-dev python-pip libgsl0-dev hdf5-tools libhdf5-serial-dev
-    $ sudo pip install msprime
-    $ mspms 2 1 -t 1
+    $ sudo apt-get install pkg-config python-dev python-pip libgsl0-dev
+    $ pip install msprime --user
+    $ ~/.local/bin/mspms 2 1 -t 1
     /usr/local/bin/mspms 2 1 -t 1
     5338 8035 23205
 
@@ -171,101 +259,33 @@ following:
     011
 
 
-If you do not wish to install ``msprime`` to your system, you can try
-it out in a `virtualenv <http://virtualenv.pypa.io/en/latest/>`_ as
-follows::
-
-    $ virtualenv msprime-env
-    $ source msprime-env/bin/activate
-    (msprime-env) $ pip install msprime
-    (msprime-env) $ mspms
-
-See below for installation instructions for Macs.
-
-.. _sec-requirements:
-
-*************
-Requirements
-*************
-
-Msprime requires Python 2.7+ (Python 3 versions are fully supported from
-3.1 onwards), the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_,
-and `HDF5 <https://www.hdfgroup.org/HDF5/>`_ version 1.8 or later. These
-packages are available for all major platforms. For example, to install on
-Debian/Ubuntu use (as root)::
-
-    $ apt-get install python-dev libgsl0-dev libhdf5-serial-dev pkg-config
-
-For Redhat/Fedora use::
-
-    $ yum install gsl-devel hdf5-devel
-
-On FreeBSD we can use ``pkg`` to install the requirements::
-
-    $ pkg install gsl hdf5-18
-
-To install the dependencies on OS X, we can use `Homebrew <http://brew.sh/>`_::
-
-    $ brew update
-    $ brew install gsl homebrew/science/hdf5
-
-************
-Installation
-************
-
-The simplest method of installation is to use PyPI and pip::
-
-    $ pip install msprime
-
-This will work in most cases, once the `Requirements`_ have been
-satisfied. See below for platform specific build instructions when this
-fails.
-
-If you do not have root access to your machine, you can install
-``msprime`` into your local Python installation as follows::
-
-    $ pip install msprime --user
-
-To use the ``mspms`` program you must ensure
-that the ``~/.local/bin`` directory is in your ``PATH``, or
-simply run it using::
-
-    $ ~/.local/bin/mspms
-
-To uninstall ``msprime``, simply run::
-
-    $ pip uninstall msprime
-
-------------------------------
-Platform specific installation
-------------------------------
-
-This section contains instructions to build on platforms
-that require build time flags for GSL and HDF5.
-
 ++++++++++++
 FreeBSD 10.0
 ++++++++++++
 
 Install the prerequisitites, and build ``msprime`` as follows::
 
-    $ pkg install gsl hdf5-18
+    $ pkg install gsl
     $ CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib pip install msprime
 
 This assumes that root is logged in using a bash shell. For other shells,
 different methods are need to set the ``CFLAGS`` and ``LDFLAGS`` environment
 variables.
 
-++++
-OS X
-++++
++++++++++++++
+OS X Homebrew
++++++++++++++
+
+We recommend using :ref:`sec_installation_conda` to install ``msprime`` on OS X.
+However, it is also possible to install using Homebrew to satisfy the
+GSL dependency.
 
 First, ensure that Homebrew is installed and up-to-date::
 
     $ brew update
 
 We need to ensure that the version of Python we used is installed via Homebrew
-(there can be issues with linking to HDF5 if we use the built-in version of
+(there can be linking issues if we use the built-in version of
 Python or a version from Anaconda). Therefore, we install Python 3 using
 homebrew::
 
@@ -277,7 +297,7 @@ and already have a working pip.
 
 Now install the dependencies and msprime::
 
-    $ brew install gsl homebrew/science/hdf5
+    $ brew install gsl
     $ pip3 install msprime
 
 Check if it works::
