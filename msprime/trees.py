@@ -1538,15 +1538,16 @@ class TreeSequence(object):
     """
     A single tree sequence, as defined by the :ref:`data model <sec_data_model>`.
     A TreeSequence instance can be created from a set of
-    :ref:`tables <sec_table_definitions>` using :func:`.load_tables`; or loaded
-    from a set of text files using :func:`.load_text`; or, loaded from a
-    native file using :func:`load`.
+    :ref:`tables <sec_table_definitions>` using
+    :meth:`.TableCollection.tree_sequence`; or loaded from a set of text files
+    using :func:`.load_text`; or, loaded from a native binary file using
+    :func:`load`.
 
     TreeSequences are immutable. To change the data held in a particular
-    tree sequence, first output the informatinn to a set of tables
-    (using :meth:`.dump_tables`), edit those tables using the
+    tree sequence, first get the table information as a :class:`.TableCollection`
+    instance (using :meth:`.dump_tables`), edit those tables using the
     :ref:`tables api <sec_tables_api>`, and create a new tree sequence using
-    :func:`.load_tables`.
+    :meth:`.TableCollection.tree_sequence`.
 
     The :meth:`.trees` method iterates over all trees in a tree sequence, and
     the :meth:`.variants` method iterates over all sites and their genotypes.
@@ -1579,6 +1580,7 @@ class TreeSequence(object):
         Writes the tree sequence to the specified file path.
 
         :param str path: The file path to write the TreeSequence to.
+        :param bool zlib_compression: This parameter is deprecated and ignored.
         """
         if zlib_compression:
             warnings.warn(
@@ -1592,6 +1594,12 @@ class TreeSequence(object):
         A copy of the tables underlying this tree sequence. See also
         :meth:`.dump_tables`.
 
+        .. warning:: This propery currently returns a copy of the tables
+            underlying a tree sequence but it may return a read-only
+            **view** in the future. Thus, if the tables will subsequently be
+            updated, please use the :meth:`.dump_tables` method instead as
+            this will always return a new copy of the TableCollection.
+
         :return: A :class:`.TableCollection` containing all a copy of the
             tables underlying this tree sequence.
         :rtype: TableCollection
@@ -1599,39 +1607,13 @@ class TreeSequence(object):
         return self.dump_tables()
 
     def dump_tables(self):
-        # Setting this to zero args for now to get it all working.
-        # self, nodes=None, edges=None, migrations=None, sites=None,
-        # mutations=None, provenances=None):
         """
-        Copy the contents of the tables underlying the tree sequence to the
-        specified objects.
+        A copy of the tables defining this tree sequence.
 
-        :param NodeTable nodes: The NodeTable to load the nodes into.
-        :param EdgeTable edges: The EdgeTable to load the edges into.
-        :param MigrationTable migrations: The MigrationTable to load the migrations into.
-        :param SiteTable sites: The SiteTable to load the sites into.
-        :param MutationTable mutations: The MutationTable to load the mutations into.
-        :param ProvenanceTable provenances: The ProvenanceTable to load the provenances
-            into.
         :return: A :class:`.TableCollection` containing all tables underlying
             the tree sequence.
         :rtype: TableCollection
         """
-        # # TODO document this and test the semantics to passing in new tables
-        # # as well as returning the updated tables.
-        # if nodes is None:
-        #     nodes = tables.NodeTable()
-        # if edges is None:
-        #     edges = tables.EdgeTable()
-        # if migrations is None:
-        #     migrations = tables.MigrationTable()
-        # if sites is None:
-        #     sites = tables.SiteTable()
-        # if mutations is None:
-        #     mutations = tables.MutationTable()
-        # if provenances is None:
-        #     provenances = tables.ProvenanceTable()
-
         t = tables.TableCollection(sequence_length=self.sequence_length)
         self._ll_tree_sequence.dump_tables(t.ll_tables)
         return t
