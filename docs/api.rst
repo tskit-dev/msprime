@@ -176,7 +176,7 @@ These classes are the interfaces used to interact with the trees
 and mutational information stored in a tree sequence returned from a simulation.
 There are also methods for loading data into these objects, either from the native
 format using :func:`msprime.load`, or from another sources
-using :func:`msprime.load_text` or :func:`msprime.load_tables`.
+using :func:`msprime.load_text` or :meth:`.TableCollection.tree_sequence`.
 
 +++++++++++++++++
 Top level-classes
@@ -245,6 +245,9 @@ in the :ref:`sec_data_model`. These classes are not intended to be instantiated
 directly, but are the return types for the various iterators provided by the
 :class:`.TreeSequence` and :class:`.SparseTree` classes.
 
+.. autoclass:: msprime.Individual()
+    :members:
+
 .. autoclass:: msprime.Node()
     :members:
 
@@ -263,24 +266,26 @@ directly, but are the return types for the various iterators provided by the
 .. autoclass:: msprime.Migration()
     :members:
 
+.. autoclass:: msprime.Population()
+    :members:
+
 ++++++++++++
 Loading data
 ++++++++++++
 
 There are several methods for loading data into a :class:`.TreeSequence`
 instance. The simplest and most convenient is the use the :func:`msprime.load`
-function to load a :ref:`HDF ancestry file <sec_hdf5_file_format>`. For small
+function to load an :ref:`tree sequence file <sec_tree_sequence_file_format>`. For small
 scale data and debugging, it is often convenient to use the
 :func:`msprime.load_text` to read data in the :ref:`text file format
-<sec_text_file_format>`. The :func:`msprime.load_tables` function efficiently
-loads large volumes of data using the :ref:`Tables API <sec_tables_api>`.
+<sec_text_file_format>`. The :meth:`.TableCollection.tree_sequence` function
+efficiently creates a :class:`.TreeSequence` object from a set of tables
+using the :ref:`Tables API <sec_tables_api>`.
 
 
 .. autofunction:: msprime.load
 
 .. autofunction:: msprime.load_text
-
-.. autofunction:: msprime.load_tables
 
 
 **********************
@@ -346,7 +351,7 @@ computations using the :mod:`multiprocessing` module). ::
     1       1.00000000      2.00000000      9       11
 
 However, pickling will not be as efficient as storing tables
-in the native :ref:`HDF5 format <sec_hdf5_file_format>`.
+in the native :ref:`format <sec_tree_sequence_file_format>`.
 
 Tables support the equality operator ``==`` based on the data
 held in the columns::
@@ -549,30 +554,64 @@ for encoding data in these columns.
 Table classes
 +++++++++++++
 
-.. autoclass:: msprime.NodeTable
+.. Overriding the default signatures for the tables here as they will be
+.. confusing to most users.
+
+.. autoclass:: msprime.IndividualTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.NodeTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.EdgeTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.MigrationTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.SiteTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.MutationTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.PopulationTable()
+    :members:
+    :inherited-members:
+
+.. autoclass:: msprime.ProvenanceTable()
+    :members:
+    :inherited-members:
+
++++++++++++++++++
+Table Collections
++++++++++++++++++
+
+Each of the table classes defines a different aspect of the structure of
+a tree sequence. It is convenient to be able to refer to a set of these
+tables which together define a tree sequence. We
+refer to this grouping of related tables as a ``TableCollection``.
+The :class:`.TableCollection` and :class:`.TreeSequence` classes are
+deeply related. A ``TreeSequence`` instance is based on the information
+encoded in a ``TableCollection``. Tree sequences are **immutable**, and
+provide methods for obtaining trees from the sequence. A ``TableCollection``
+is **mutable**, and does not have any methods for obtaining trees.
+The ``TableCollection`` class essentially exists to allow the
+dynamic creation of tree sequences.
+
+.. autoclass:: msprime.TableCollection(sequence_length=0)
     :members:
 
-.. autoclass:: msprime.EdgeTable
-    :members:
-
-.. autoclass:: msprime.MigrationTable
-    :members:
-
-.. autoclass:: msprime.SiteTable
-    :members:
-
-.. autoclass:: msprime.MutationTable
-    :members:
-
-.. autoclass:: msprime.ProvenanceTable
 
 +++++++++++++++
 Table functions
 +++++++++++++++
-
-.. autofunction:: msprime.sort_tables
-
-.. autofunction:: msprime.simplify_tables
 
 .. autofunction:: msprime.parse_nodes
 

@@ -83,8 +83,6 @@
 /* Flags for load tables */
 #define MSP_BUILD_INDEXES 1
 
-/* Flags for tree sequence dump/load */
-#define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
 #define MSP_FILE_FORMAT_NAME          "tskit.trees"

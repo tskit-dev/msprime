@@ -15,12 +15,12 @@ Quickstart
 
 - Make a fork of the msprime repo on `GitHub <github.com/tskit-dev/msprime>`_
 - Clone your fork into a local directory.
-- Install the :ref:`basic requirements <sec-requirements>`.
+- Install the :ref:`basic requirements <sec_installation_system_requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root. If you
   are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
   run ``make ext3``. Python 3.x is the default if no arguments are provided.
-- Run the tests to ensure everything has worked: ``nosetests -vs``. These should
+- Run the tests to ensure everything has worked: ``python -m nose -vs``. These should
   all pass.
 - Make your changes in a local branch, and open a pull request on GitHub when you
   are ready. Please make sure that (a) the tests pass before you open the PR; and
@@ -233,11 +233,11 @@ options.
 
 The most important command for simulator development is ``simulate``,
 which takes a configuration file as a parameter and writes the resulting
-simulation to an output file in HDF5 format. For example,
+simulation to an output file in the native ``.trees`` format. For example,
 
 .. code-block:: bash
 
-    $ ./main simulate dev.cfg -o out.hdf5
+    $ ./main simulate dev.cfg -o out.trees
 
 The development configuration file describes the simulation that we want to
 run, and uses the
@@ -315,10 +315,7 @@ and use ``self`` to refer to the current instance.
 Most objects also provide a ``print_state`` method, which is useful for
 debugging.
 
-This object-oriented structure means that the vast majority of the code is
-fully thread safe. The only exceptions to this rule is the ``msp_strerror``,
-``tree_sequence_load`` and ``tree_sequence_dump`` functions which are not
-threadsafe due to their interaction with HDF5's error handling code.
+This object-oriented structure means that the code is fully thread safe.
 
 
 ++++++++++++++
@@ -386,50 +383,10 @@ It is difficult to run valgrind on a Python extension module, and so the simples
 way to ensure that the low-level code is memory-tight is to separate it out
 into an independent library.)
 
-Unfortunately due to a bug in HDF5, when running valgrind on either the tests or the
-development CLI, it appears that there is a memory leak::
-
-    $ valgrind ./tests fenwick_tree
-    ==23308== Memcheck, a memory error detector
-    ==23308== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
-    ==23308== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
-    ==23308== Command: ./tests fenwick_tree
-    ==23308==
-
-
-         CUnit - A unit testing framework for C - Version 2.1-3
-         http://cunit.sourceforge.net/
-
-
-    Suite: msprime
-      Test: fenwick_tree ...passed
-
-    Run Summary:    Type  Total    Ran Passed Failed Inactive
-                  suites      1      0    n/a      0        0
-                   tests     74      1      1      0        0
-                 asserts  39798  39798  39798      0      n/a
-
-    Elapsed time =    0.342 seconds
-    ==23308==
-    ==23308== HEAP SUMMARY:
-    ==23308==     in use at exit: 1,360 bytes in 3 blocks
-    ==23308==   total heap usage: 12,752 allocs, 12,749 frees, 8,295,436 bytes allocated
-    ==23308==
-    ==23308== LEAK SUMMARY:
-    ==23308==    definitely lost: 0 bytes in 0 blocks
-    ==23308==    indirectly lost: 0 bytes in 0 blocks
-    ==23308==      possibly lost: 0 bytes in 0 blocks
-    ==23308==    still reachable: 1,360 bytes in 3 blocks
-    ==23308==         suppressed: 0 bytes in 0 blocks
-    ==23308== Rerun with --leak-check=full to see details of leaked memory
-    ==23308==
-    ==23308== For counts of detected and suppressed errors, rerun with: -v
-    ==23308== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
-
-
-Note the "1,360 bytes in 3 blocks" reported as lost. This is harmless,
-and can be ignored.
-
+Any new C unit tests that are written should be verified using valgrind to
+ensure that no memory is leaked. The entire test suite should be run
+through valgrind periodically also to detect any leaks or illegal
+memory accesses that have been overlooked.
 
 ******************
 Python C Interface

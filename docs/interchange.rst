@@ -15,8 +15,8 @@ the basic concepts that we need and the structure of the tables in the
 be used as simple interchange mechanism for small amounts of data in the
 `Text file formats`_ section. The `Binary interchange`_ section then describes
 the efficient Python API for table interchange using numpy arrays. Finally,
-we describe the HDF5-based file format using by msprime to efficiently
-store tree sequences in the `HDF5 file format`_ section.
+we describe the binary format using by msprime to efficiently
+store tree sequences in the `Tree sequence file format`_ section.
 
 
 .. _sec_data_model:
@@ -38,16 +38,25 @@ tree sequence
     what differs between them.
 
 node
-    Each branching point in each tree is associated with a particular ancestor,
-    called "nodes".  Since each node represents a certain ancestor, it has a
-    unique ``time``, thought of as her birth time, which determines the height
-    of any branching points she is associated with.
+    Each branching point in each tree is associated with a particular chromosome
+    in a particular ancestor, called "nodes".  Since each node represents a
+    specific gamete it has a unique ``time``, thought of as its birth time,
+    which determines the height of any branching points it is associated with.
+
+individual
+
+    In certain situations we are interested in how nodes (representing
+    individual homologous chromosomes) are grouped together into individuals
+    (e.g., two nodes per diploid individual). For example, when we are working
+    with polyploid samples it is useful to associate metadata with a specific
+    individual rather than duplicate this information on the constituent nodes.
 
 sample
     Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
-    genome. (See :ref:`sec_node_table_definition` for information on how the sample
+    genome. (See the :ref:`node table definitions <sec_node_table_definition>`
+    for information on how the sample
     status a node is encoded in the ``flags`` column.)
 
 edge
@@ -89,17 +98,24 @@ Sequence length
 
 .. todo:: Define migration and provenance types.
 
-A tree sequence can be stored in a collection of six tables:
+A tree sequence can be stored in a collection of eight tables:
 :ref:`Node <sec_node_table_definition>`,
 :ref:`Edge <sec_edge_table_definition>`,
+:ref:`Individual <sec_individual_table_definition>`,
 :ref:`Site <sec_site_table_definition>`,
 :ref:`Mutation <sec_mutation_table_definition>`,
-:ref:`Migration <sec_migration_table_definition>`, and
+:ref:`Migration <sec_migration_table_definition>`,
+:ref:`Population <sec_population_table_definition>`, and
 :ref:`Provenance <sec_provenance_table_definition>`.
-The first two store the genealogical
-relationships that define the trees; the next two describe where mutations fall
-on those trees; the Migration table describes how lineages move across space;
+The Node and Edge tables store the genealogical
+relationships that define the trees, and the Individual table
+describes how multiple chromosomes are grouped within individuals;
+the Site and Mutation tables describe where mutations fall
+on the trees; the Migration table describes how lineages move across space;
 and the Provenance table contains information on where the data came from.
+Only Node and Edge tables are necessary to encode the genealogical trees;
+Sites and Mutations are optional but necessary to encode polymorphism
+(sequence) data; the remainder are optional.
 In the following sections we define these components of a tree sequence in
 more detail.
 
@@ -108,16 +124,17 @@ more detail.
 Table definitions
 =================
 
-
 .. _sec_node_table_definition:
 
 Node Table
 ----------
 
-A **node** defines a specific ancestor that was born at some time in
-the past. Every vertex in the marginal trees of a tree sequence corresponds
+A **node** defines the haploid set of chromosomes of a specific
+individual that was born at some time in the past: the set of
+chromosomes inherited from a particular one of the individual's parents.
+Every vertex in the marginal trees of a tree sequence corresponds
 to exactly one node, and a node may be present in many trees. The
-node table contains four columns, of which ``flags`` and ``time`` are
+node table contains five columns, of which ``flags`` and ``time`` are
 mandatory:
 
 ================    ==============      ===========
@@ -126,6 +143,7 @@ Column              Type                Description
 flags               uint32              Bitwise flags.
 time                double              Birth time of node
 population          int32               Birth population of node.
+individual          int32               The individual the node belongs to.
 metadata            binary              Node :ref:`sec_metadata_definition`
 ================    ==============      ===========
 
@@ -133,7 +151,13 @@ The ``time`` column records the birth time of the individual in question,
 and is a floating point value. Similarly,
 the ``population`` column records the ID of the population where this
 individual was born. If not provided, ``population`` defaults to the
-null ID (-1).
+null ID (-1). Otherwise, the population ID must refer to a row in the
+:ref:`sec_population_table_definition`.
+The ``individual`` column records the ID of the
+:ref:`Individual <sec_individual_table_definition>`
+individual that this node belongs to. If specified, the ID must refer
+to a valid individual. If not provided, ``individual``
+defaults to the null ID (-1).
 
 The ``flags`` column stores information about a particular node, and
 is composed of 32 bitwise boolean values. Currently, the only flag defined
@@ -159,6 +183,47 @@ more details on how metadata columns should be used.
     The distinction between ``flags`` and ``metadata`` is that flags
     holds information about a node that the library understands, whereas
     metadata holds information about a node that the library *does not*
+    understand. Metadata is for storing auxiliarly information that is
+    not necessary for the core tree sequence algorithms.
+
+.. _sec_individual_table_definition:
+
+
+Individual Table
+----------------
+
+An **individual** defines how nodes (which can be seen
+as representing single chromosomes) group together in a polyploid individual.
+The individual table contains three columns, of which ``flags`` is mandatory.
+
+================    ==============      ===========
+Column              Type                Description
+================    ==============      ===========
+flags               uint32              Bitwise flags.
+location            double              Location in arbitrary dimensions
+metadata            binary              Individual :ref:`sec_metadata_definition`
+================    ==============      ===========
+
+See the :ref:`sec_individual_requirements` section for details on the properties
+required for a valid set of individuals.
+
+The ``flags`` column stores information about a particular individual, and
+is composed of 32 bitwise boolean values. Currently, no flags are
+defined.
+
+The ``location`` column stores the location of an individual in arbitrary
+dimensions. This column is :ref:`ragged <sec_encoding_ragged_columns>`, and
+so different individuals can have locations with different dimensions (i.e.,
+one individual may have location ``[]`` and another ``[0, 1, 0]``.
+
+The ``metadata`` column provides a location for client code to store
+information about each individual. See the :ref:`sec_metadata_definition` section for
+more details on how metadata columns should be used.
+
+.. note::
+    The distinction between ``flags`` and ``metadata`` is that flags
+    holds information about a individual that the library understands, whereas
+    metadata holds information about a individual that the library *does not*
     understand. Metadata is for storing auxiliarly information that is
     not necessary for the core tree sequence algorithms.
 
@@ -238,7 +303,7 @@ site                int32               The ID of the site the mutation occurs a
 node                int32               The node this mutation occurs at.
 parent              int32               The ID of the parent mutation.
 derived_state       char                The mutational state at the defined node.
-metadata            char                Mutation :ref:`sec_metadata_definition`.
+metadata            binary              Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
 The ``site`` column is an integer value defining the ID of the
@@ -300,6 +365,31 @@ point values recording the time of the event.
 See the :ref:`sec_migration_requirements` section for details on the properties
 required for a valid set of mutations.
 
+.. _sec_population_table_definition:
+
+Population Table
+----------------
+
+A **population** defines a grouping of individuals that a node can
+be said to belong to.
+
+The population table contains one column, ``metadata``.
+
+================    ==============      ===========
+Column              Type                Description
+================    ==============      ===========
+metadata            binary              Population :ref:`sec_metadata_definition`.
+================    ==============      ===========
+
+
+The ``metadata`` column provides a location for client code to store
+information about each population. See the :ref:`sec_metadata_definition` section for
+more details on how metadata columns should be used.
+
+See the :ref:`sec_population_requirements` section for details on the properties
+required for a valid set of populations.
+
+
 .. _sec_provenance_table_definition:
 
 Provenance Table
@@ -308,6 +398,7 @@ Provenance Table
 .. todo::
     Document the provenance table.
 
+
 ================    ==============      ===========
 Column              Type                Description
 ================    ==============      ===========
@@ -315,22 +406,6 @@ timestamp           char                Timestamp in `ISO-8601 <https://en.wikip
 record              char                Provenance record.
 ================    ==============      ===========
 
-.. _sec_individual_table_definition:
-
-Individual Table
-----------------
-
-.. todo::
-    Document the individual table.
-
-
-.. _sec_population_table_definition:
-
-Population Table
-----------------
-
-.. todo::
-    Document the population table.
 
 
 .. _sec_metadata_definition:
@@ -371,32 +446,49 @@ Valid tree sequence requirements
 ================================
 
 Arbitrary data can be stored in tables using the classes in the
-:ref:`sec_tables_api`. However, only tables that fulfil a set of
-requirements represent a valid :class:`.TreeSequence` object, and
-can be loaded using :func:`.load_tables`. In this
+:ref:`sec_tables_api`. However, only a :class:`.TableCollection`
+that fulfils a set of requirements represents
+a valid :class:`.TreeSequence` object which can be obtained
+using the :meth:`.TableCollection.tree_sequence` method. In this
 section we list these requirements, and explain their rationale.
 Violations of most of these requirements are detected when the
 user attempts to load a tree sequence via :func:`.load` or
-:func:`.load_tables`, raising an informative error message. Some
-more complex requirements may not be detectable at load-time,
+:meth:`.TableCollection.tree_sequence`, raising an informative
+error message. Some more complex requirements may not be detectable at load-time,
 and errors may not occur until certain operations are attempted.
 These are documented below.
 
+.. _sec_individual_requirements:
+
+Individual requirements
+-----------------------
+
+Individuals are a basic type in a tree sequence and are not defined with
+respect to any other tables. Therefore, there are no requirements on
+individuals.
+
+There are no requirements regarding the ordering of individuals.
+Sorting a set of tables using :meth:`.TableCollection.sort` has
+no effect on the individuals.
 
 .. _sec_node_requirements:
 
 Node requirements
 -----------------
 
-Nodes are the most basic type in a tree sequence, and are not defined with
-respect to any other tables. Therefore, the requirements for nodes are
-trivial.
+Given a valid set of individuals and populations, the requirements for
+each node are:
 
-- Node times must be non-negative.
+- ``population`` must either be null (-1) or refer to a valid population ID;
+- ``individual`` must either be null (-1) or refer to a valid individual ID.
 
-There are no requirements regarding the ordering of nodes with respect to time
-or any other field. Sorting a set of tables using :func:`.sort_tables` has
-no effect on the nodes.
+There are no requirements regarding the ordering of nodes with respect to time.
+
+For simplicity and algorithmic efficiency, all nodes referring to the same
+(non-null) individual must be contiguous.
+
+Sorting a set of tables using :meth:`.TableCollection.sort`
+has no effect on nodes.
 
 .. _sec_edge_requirements:
 
@@ -435,7 +527,7 @@ sortedness properties:
   first by ``child`` ID and then by ``left`` coordinate.
 
 Violations of these requirements are detected at load time.
-The :func:`.sort_tables` function will ensure that these sortedness
+The :meth:`.TableCollection.sort` method will ensure that these sortedness
 properties are fulfilled.
 
 .. _sec_site_requirements:
@@ -454,7 +546,7 @@ For simplicity and algorithmic efficiency, sites must also:
 - Be sorted in increasing order of ``position``.
 
 Violations of these requirements are detected at load time.
-The :func:`.sort_tables` function ensures that sites are sorted
+The :meth:`.TableCollection.sort` method ensures that sites are sorted
 according to these criteria.
 
 .. _sec_mutation_requirements:
@@ -478,7 +570,7 @@ For simplicity and algorithmic efficiency, mutations must also:
   ``parent`` with ID :math:`y`, then we must have :math:`y < x`).
 
 Violations of these sorting requirements are detected at load time.
-The :func:`.sort_tables` function ensures that mutationsare sorted
+The :meth:`.TableCollection.sort` method ensures that mutations are sorted
 according to these criteria.
 
 Mutations also have the requirement that they must result in a
@@ -513,6 +605,14 @@ such that ``m1.right`` = ``m2.left`` and with the ``node``, ``source``,
 ``dest`` and ``time`` fields equal. This is because such records will usually
 represent two independent ancestral segments migrating at the same time, and
 as such squashing them into a single record would result in a loss of information.
+
+
+.. _sec_population_requirements:
+
+Population requirements
+-----------------------
+
+There are no requirements on a population table.
 
 .. _sec_text_file_format:
 
@@ -703,153 +803,145 @@ Note that for a table with ``n`` rows, any offset column must have ``n + 1``
 values. The values in this column must be nondecreasing, and cannot exceed
 the length of the ragged column in question.
 
-.. _sec_hdf5_file_format:
+.. _sec_tree_sequence_file_format:
 
-****************
-HDF5 file format
-****************
+**************************
+Tree sequence file format
+**************************
 
 To make tree sequence data as efficient and easy as possible to use, we store the
-data on disk in a `HDF5 <https://www.hdfgroup.org/HDF5/>`_ based file format.
-Using the specification defined here, it should be straightforward to access tree
-sequence information produced by ``msprime`` in any language with `HDF5 support
-<https://en.wikipedia.org/wiki/Hierarchical_Data_Format#Interfaces>`_.
+data on file in a columnar, binary format. The format is based on the
+`kastore <https://pypi.org/project/kastore/>`_ package, which is a simple
+key-value store for numerical data. There is a one-to-one correspondence
+between the tables described above and the arrays stored in these files.
 
-The file format is broken into a number of groups, and each group
-corresponds to one of the tables above (possibly including some extra
-information for efficiency). In general, each group will contain a dataset
-corresponding to a column in the table in question. All groups must be
-present.
+By convention, these files are given the ``.trees`` suffix (although this
+is not enforced in any way), and we will sometimes refer to them as ".trees"
+files. We also refer to them as "tree sequence files".
 
-To work around limitations in some versions of the HDF5 library, empty
-columns are **not** stored. For example, if there is no metadata associated
-with nodes, the ``metadata`` column in the node table will be empty, and
-the corresponding ``metadata`` dataset will not be present in the HDF5 file.
+.. todo::
+    Link to the documentation for kastore, and describe the arrays that are
+    stored as well as the top-level metadata.
 
-Variable length data is handled in the same manner as the
-:ref:`Tables API <sec_encoding_ragged_columns>`
-above: we store two arrays, one containing the flattened data, and another
-storing offsets into this array.
+.. The root group contains two attributes, ``format_version`` and ``sequence_length``.
+.. The ``format_version`` is a pair ``(major, minor)`` describing the file format version.
+.. This document describes version 10.0. The ``sequence_length`` attribute defines the
+.. coordinate space over which edges and sites are defined. This must be present
+.. and be greater than or equal to the largest coordinate present.
 
-The root group contains two attributes, ``format_version`` and ``sequence_length``.
-The ``format_version`` is a pair ``(major, minor)`` describing the file format version.
-This document describes version 10.0. The ``sequence_length`` attribute defines the
-coordinate space over which edges and sites are defined. This must be present
-and be greater than or equal to the largest coordinate present.
+.. ================    ==============      ======      ===========
+.. Path                Type                Dim         Description
+.. ================    ==============      ======      ===========
+.. /format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
+.. /sequence_length    H5T_IEEE_F64LE      1           The maximum value of a sequence coordinate.
+.. ================    ==============      ======      ===========
 
-================    ==============      ======      ===========
-Path                Type                Dim         Description
-================    ==============      ======      ===========
-/format_version     H5T_STD_U32LE       2           The (major, minor) file format version.
-/sequence_length    H5T_IEEE_F64LE      1           The maximum value of a sequence coordinate.
-================    ==============      ======      ===========
+.. Nodes group
+.. ===========
 
-Nodes group
-===========
+.. The ``/nodes`` group stores the :ref:`sec_node_table_definition`.
 
-The ``/nodes`` group stores the :ref:`sec_node_table_definition`.
+.. =======================     ==============
+.. Path                        Type
+.. =======================     ==============
+.. /nodes/flags                H5T_STD_U32LE
+.. /nodes/population           H5T_STD_I32LE
+.. /nodes/time                 H5T_IEEE_F64LE
+.. /nodes/metadata             H5T_STD_I8LE
+.. /nodes/metadata_offset      H5T_STD_U32LE
+.. =======================     ==============
 
-=======================     ==============
-Path                        Type
-=======================     ==============
-/nodes/flags                H5T_STD_U32LE
-/nodes/population           H5T_STD_I32LE
-/nodes/time                 H5T_IEEE_F64LE
-/nodes/metadata             H5T_STD_I8LE
-/nodes/metadata_offset      H5T_STD_U32LE
-=======================     ==============
+.. Edges group
+.. ===========
 
-Edges group
-===========
+.. The ``/edges`` group stores the :ref:`sec_edge_table_definition`.
 
-The ``/edges`` group stores the :ref:`sec_edge_table_definition`.
+.. ===================       ==============
+.. Path                      Type
+.. ===================       ==============
+.. /edges/left               H5T_IEEE_F64LE
+.. /edges/right              H5T_IEEE_F64LE
+.. /edges/parent             H5T_STD_I32LE
+.. /edges/child              H5T_STD_I32LE
+.. ===================       ==============
 
-===================       ==============
-Path                      Type
-===================       ==============
-/edges/left               H5T_IEEE_F64LE
-/edges/right              H5T_IEEE_F64LE
-/edges/parent             H5T_STD_I32LE
-/edges/child              H5T_STD_I32LE
-===================       ==============
+.. Indexes group
+.. -------------
 
-Indexes group
--------------
+.. The ``/edges/indexes`` group records information required to efficiently
+.. reconstruct the individual trees from the tree sequence. The
+.. ``insertion_order`` dataset contains the order in which records must be applied
+.. and the ``removal_order`` dataset the order in which records must be
+.. removed for a left-to-right traversal of the trees.
 
-The ``/edges/indexes`` group records information required to efficiently
-reconstruct the individual trees from the tree sequence. The
-``insertion_order`` dataset contains the order in which records must be applied
-and the ``removal_order`` dataset the order in which records must be
-removed for a left-to-right traversal of the trees.
+.. ==============================     ==============
+.. Path                               Type
+.. ==============================     ==============
+.. /edges/indexes/insertion_order     H5T_STD_I32LE
+.. /edges/indexes/removal_order       H5T_STD_I32LE
+.. ==============================     ==============
 
-==============================     ==============
-Path                               Type
-==============================     ==============
-/edges/indexes/insertion_order     H5T_STD_I32LE
-/edges/indexes/removal_order       H5T_STD_I32LE
-==============================     ==============
+.. Sites group
+.. ===========
 
-Sites group
-===========
+.. The sites group stores the :ref:`sec_site_table_definition`.
 
-The sites group stores the :ref:`sec_site_table_definition`.
+.. =============================   ==============
+.. Path                            Type
+.. =============================   ==============
+.. /sites/position                 H5T_IEEE_F64LE
+.. /sites/ancestral_state          H5T_STD_I8LE
+.. /sites/ancestral_state_offset   H5T_STD_U32LE
+.. /sites/metadata                 H5T_STD_I8LE
+.. /sites/metadata_offset          H5T_STD_U32LE
+.. =============================   ==============
 
-=============================   ==============
-Path                            Type
-=============================   ==============
-/sites/position                 H5T_IEEE_F64LE
-/sites/ancestral_state          H5T_STD_I8LE
-/sites/ancestral_state_offset   H5T_STD_U32LE
-/sites/metadata                 H5T_STD_I8LE
-/sites/metadata_offset          H5T_STD_U32LE
-=============================   ==============
+.. Mutations group
+.. ===============
 
-Mutations group
-===============
+.. The mutations group stores the :ref:`sec_mutation_table_definition`.
 
-The mutations group stores the :ref:`sec_mutation_table_definition`.
+.. ===============================  ==============
+.. Path                             Type
+.. ===============================  ==============
+.. /mutations/site                  H5T_STD_I32LE
+.. /mutations/node                  H5T_STD_I32LE
+.. /mutations/parent                H5T_STD_I32LE
+.. /mutations/derived_state         H5T_STD_I8LE
+.. /mutations/derived_state_offset  H5T_STD_U32LE
+.. /mutations/metadata              H5T_STD_I8LE
+.. /mutations/metadata_offset       H5T_STD_U32LE
+.. ===============================  ==============
 
-===============================  ==============
-Path                             Type
-===============================  ==============
-/mutations/site                  H5T_STD_I32LE
-/mutations/node                  H5T_STD_I32LE
-/mutations/parent                H5T_STD_I32LE
-/mutations/derived_state         H5T_STD_I8LE
-/mutations/derived_state_offset  H5T_STD_U32LE
-/mutations/metadata              H5T_STD_I8LE
-/mutations/metadata_offset       H5T_STD_U32LE
-===============================  ==============
+.. Migrations group
+.. ================
 
-Migrations group
-================
+.. The ``/migrations`` group stores the :ref:`sec_migration_table_definition`.
 
-The ``/migrations`` group stores the :ref:`sec_migration_table_definition`.
+.. ===================       ==============
+.. Path                      Type
+.. ===================       ==============
+.. /migrations/left          H5T_IEEE_F64LE
+.. /migrations/right         H5T_IEEE_F64LE
+.. /migrations/node          H5T_STD_I32LE
+.. /migrations/source        H5T_STD_I32LE
+.. /migrations/dest          H5T_STD_I32LE
+.. /migrations/time          H5T_IEEE_F64LE
+.. ===================       ==============
 
-===================       ==============
-Path                      Type
-===================       ==============
-/migrations/left          H5T_IEEE_F64LE
-/migrations/right         H5T_IEEE_F64LE
-/migrations/node          H5T_STD_I32LE
-/migrations/source        H5T_STD_I32LE
-/migrations/dest          H5T_STD_I32LE
-/migrations/time          H5T_IEEE_F64LE
-===================       ==============
+.. Provenances group
+.. =================
 
-Provenances group
-=================
+.. The provenances group stores the :ref:`sec_provenance_table_definition`.
 
-The provenances group stores the :ref:`sec_provenance_table_definition`.
-
-===============================  ==============
-Path                             Type
-===============================  ==============
-/provenances/timestamp           H5T_STD_I8LE
-/provenances/timestamp_offset    H5T_STD_U32LE
-/provenances/record              H5T_STD_I8LE
-/provenances/record_offset       H5T_STD_U32LE
-===============================  ==============
+.. ===============================  ==============
+.. Path                             Type
+.. ===============================  ==============
+.. /provenances/timestamp           H5T_STD_I8LE
+.. /provenances/timestamp_offset    H5T_STD_U32LE
+.. /provenances/record              H5T_STD_I8LE
+.. /provenances/record_offset       H5T_STD_U32LE
+.. ===============================  ==============
 
 
 Legacy Versions
@@ -859,9 +951,12 @@ Tree sequence files written by older versions of msprime are not readable by
 newer versions of msprime. For major releases of msprime, :ref:`sec_msp_upgrade`
 will convert older tree sequence files to the latest version.
 
+File formats from version 11 onwards are based on
+`kastore <https://pypi.org/project/kastore/>`_;
+previous to this, the file format was based on HDF5.
+
 However many changes to the tree sequence format are not part of major
-releases. The table below gives these versions (contained in the root group
-attribute, ``format_version`` as a pair ``(major, minor)``).
+releases. The table below gives these versions.
 
 .. to obtain hashes where versions were changed:
         git log --oneline -L40,41:lib/msprime.h
@@ -869,11 +964,15 @@ attribute, ``format_version`` as a pair ``(major, minor)``).
         git log --merges --pretty=format:"%h" fc17dbd | head -n 1
    in some cases this didn't work so required hand manipulation. checks were
    done (after checkign out and rebuilding) with:
-        python msp_dev.py simulate 10 tmp.hdf5 && h5dump tmp.hdf5 | head
+        python msp_dev.py simulate 10 tmp.trees && h5dump tmp.trees | head
+   For versions 11 and onwards, use kastore to get the version:
+        kastore dump format/version tmp.trees
 
 =======    =================
 Version    Commit Short Hash
 =======    =================
+11.0       5646cd3
+10.0       e4396a7
 9.0        e504abd
 8.0        299ddc9
 7.0        ca9c0c5

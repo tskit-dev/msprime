@@ -6189,7 +6189,7 @@ test_save_kas(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
-    int dump_flags[] = {0, MSP_DUMP_ZLIB_COMPRESSION};
+    int dump_flags[] = {0};
 
     CU_ASSERT_FATAL(examples != NULL);
 
@@ -6220,7 +6220,7 @@ test_save_kas_tables(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t *ts1;
     table_collection_t t1, t2;
-    int dump_flags[] = {0, MSP_DUMP_ZLIB_COMPRESSION};
+    int dump_flags[] = {0};
 
     CU_ASSERT_FATAL(examples != NULL);
 

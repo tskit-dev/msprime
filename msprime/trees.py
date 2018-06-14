@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -28,6 +28,7 @@ import itertools
 import json
 import sys
 import base64
+import warnings
 
 import numpy as np
 
@@ -75,7 +76,7 @@ class SimpleContainer(object):
 
 class Individual(SimpleContainer):
     """
-    A :ref:`individual <sec_individual_table_definition>` in a tree sequence.
+    An :ref:`individual <sec_individual_table_definition>` in a tree sequence.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
@@ -1147,10 +1148,10 @@ class SparseTree(object):
 def load(path):
     """
     Loads a tree sequence from the specified file path. This file must be in the
-    :ref:`HDF5 file format <sec_hdf5_file_format>` produced by the
+    :ref:`tree sequence file format <sec_tree_sequence_file_format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
-    :param str path: The file path of the HDF5 file containing the
+    :param str path: The file path of the ``.trees`` file containing the
         tree sequence we wish to load.
     :return: The tree sequence object containing the information
         stored in the specified file path.
@@ -1170,6 +1171,9 @@ def load_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
         provenances=None, individuals=None, populations=None, sequence_length=0):
     """
+    **This method is now deprecated. Please use TableCollection.tree_sequence()
+    instead**
+
     Loads the tree sequence data from the specified table objects, and
     returns the resulting :class:`.TreeSequence` object. These tables
     must fulfil the properties required for an input tree sequence as
@@ -1467,9 +1471,9 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
     and is produced by the :meth:`.TreeSequence.dump_text` method. Further
     properties required for an input tree sequence are described in the
     :ref:`sec_valid_tree_sequence_requirements` section. This method is intended as a
-    convenient interface for importing external data into msprime; the HDF5
-    based file format using by :meth:`msprime.load` is many times more
-    efficient than this text format.
+    convenient interface for importing external data into msprime; the binary
+    file format using by :meth:`msprime.load` is many times more efficient than
+    this text format.
 
     The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
     objects containing text with whitespace delimited columns,  parsable by
@@ -1537,15 +1541,16 @@ class TreeSequence(object):
     """
     A single tree sequence, as defined by the :ref:`data model <sec_data_model>`.
     A TreeSequence instance can be created from a set of
-    :ref:`tables <sec_table_definitions>` using :func:`.load_tables`; or loaded
-    from a set of text files using :func:`.load_text`; or, loaded from a
-    native file using :func:`load`.
+    :ref:`tables <sec_table_definitions>` using
+    :meth:`.TableCollection.tree_sequence`; or loaded from a set of text files
+    using :func:`.load_text`; or, loaded from a native binary file using
+    :func:`load`.
 
     TreeSequences are immutable. To change the data held in a particular
-    tree sequence, first output the informatinn to a set of tables
-    (using :meth:`.dump_tables`), edit those tables using the
+    tree sequence, first get the table information as a :class:`.TableCollection`
+    instance (using :meth:`.dump_tables`), edit those tables using the
     :ref:`tables api <sec_tables_api>`, and create a new tree sequence using
-    :func:`.load_tables`.
+    :meth:`.TableCollection.tree_sequence`.
 
     The :meth:`.trees` method iterates over all trees in a tree sequence, and
     the :meth:`.variants` method iterates over all sites and their genotypes.
@@ -1578,18 +1583,25 @@ class TreeSequence(object):
         Writes the tree sequence to the specified file path.
 
         :param str path: The file path to write the TreeSequence to.
-        :param bool zlib_compression: If True, use HDF5's native
-            compression when storing the data leading to smaller
-            file size. When loading, data will be decompressed
-            transparently, but load times will be significantly slower.
+        :param bool zlib_compression: This parameter is deprecated and ignored.
         """
-        self._ll_tree_sequence.dump(path, zlib_compression)
+        if zlib_compression:
+            warnings.warn(
+                "The zlib_compression option is no longer supported and is ignored",
+                RuntimeWarning)
+        self._ll_tree_sequence.dump(path)
 
     @property
     def tables(self):
         """
         A copy of the tables underlying this tree sequence. See also
         :meth:`.dump_tables`.
+
+        .. warning:: This propery currently returns a copy of the tables
+            underlying a tree sequence but it may return a read-only
+            **view** in the future. Thus, if the tables will subsequently be
+            updated, please use the :meth:`.dump_tables` method instead as
+            this will always return a new copy of the TableCollection.
 
         :return: A :class:`.TableCollection` containing all a copy of the
             tables underlying this tree sequence.
@@ -1598,39 +1610,13 @@ class TreeSequence(object):
         return self.dump_tables()
 
     def dump_tables(self):
-        # Setting this to zero args for now to get it all working.
-        # self, nodes=None, edges=None, migrations=None, sites=None,
-        # mutations=None, provenances=None):
         """
-        Copy the contents of the tables underlying the tree sequence to the
-        specified objects.
+        A copy of the tables defining this tree sequence.
 
-        :param NodeTable nodes: The NodeTable to load the nodes into.
-        :param EdgeTable edges: The EdgeTable to load the edges into.
-        :param MigrationTable migrations: The MigrationTable to load the migrations into.
-        :param SiteTable sites: The SiteTable to load the sites into.
-        :param MutationTable mutations: The MutationTable to load the mutations into.
-        :param ProvenanceTable provenances: The ProvenanceTable to load the provenances
-            into.
         :return: A :class:`.TableCollection` containing all tables underlying
             the tree sequence.
         :rtype: TableCollection
         """
-        # # TODO document this and test the semantics to passing in new tables
-        # # as well as returning the updated tables.
-        # if nodes is None:
-        #     nodes = tables.NodeTable()
-        # if edges is None:
-        #     edges = tables.EdgeTable()
-        # if migrations is None:
-        #     migrations = tables.MigrationTable()
-        # if sites is None:
-        #     sites = tables.SiteTable()
-        # if mutations is None:
-        #     mutations = tables.MutationTable()
-        # if provenances is None:
-        #     provenances = tables.ProvenanceTable()
-
         t = tables.TableCollection(sequence_length=self.sequence_length)
         self._ll_tree_sequence.dump_tables(t.ll_tables)
         return t
@@ -2410,12 +2396,17 @@ class TreeSequence(object):
         tables = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
+        assert tables.sequence_length == self.sequence_length
         node_map = tables.simplify(
             samples=samples,
             filter_zero_mutation_sites=filter_zero_mutation_sites)
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
+        # FIXME we should be using tables.tree_sequence here but it results
+        # in weird behaviour. https://github.com/tskit-dev/msprime/issues/521
+        # new_ts = tables.tree_sequence()
+        # assert new_ts.sequence_length == self.sequence_length
         new_ts = load_tables(
             sequence_length=self.sequence_length,
             **tables.asdict())

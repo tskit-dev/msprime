@@ -44,8 +44,18 @@ def get_environment():
     is currently running.
     """
     env = {
-        "gsl": {
-            "version": _gsl_version
+        "libraries": {
+            "gsl": {
+                "version": _gsl_version
+            },
+            "kastore": {
+                # Hard coding this for now as there is no way to get version
+                # information from the kastore C API. See
+                # https://github.com/tskit-dev/kastore/issues/41
+                # We could import the kastore module here and use its version,
+                # but this is not the same as the C code we have compiler against.
+                "version": (0, 1, 0)
+            }
         },
         "os": {
             "system": platform.system(),

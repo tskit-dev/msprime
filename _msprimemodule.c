@@ -5466,19 +5466,14 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     int err;
     char *path;
     PyObject *ret = NULL;
-    int zlib_compression = 0;
     int flags = 0;
-    static char *kwlist[] = {"path", "zlib_compression", NULL};
+    static char *kwlist[] = {"path", NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
-                &path, &zlib_compression)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
-    }
-    if (zlib_compression) {
-        flags = MSP_DUMP_ZLIB_COMPRESSION;
     }
     err = tree_sequence_dump(self->tree_sequence, path, flags);
     if (err != 0) {
