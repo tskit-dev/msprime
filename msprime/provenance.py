@@ -44,8 +44,13 @@ def get_environment():
     is currently running.
     """
     env = {
-        "gsl": {
-            "version": _gsl_version
+        "libraries": {
+            "gsl": {
+                "version": _gsl_version
+            },
+            "kastore": {
+                "version": "0.1"
+            }
         },
         "os": {
             "system": platform.system(),
