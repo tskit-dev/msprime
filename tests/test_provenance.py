@@ -39,5 +39,7 @@ class TestProvenance(unittest.TestCase):
         d = provenance.get_provenance_dict("test")
         libs = d["environment"]["libraries"]
         self.assertEqual(libs["gsl"], {"version": _msprime.get_gsl_version()})
+        self.assertEqual(libs["kastore"], {"version": (0, 1, 0)})
+        print(libs)
 
     # TODO more tests when we finalise the format of these dictionaries.
