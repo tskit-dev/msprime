@@ -1558,6 +1558,16 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertRaises(NotImplementedError, ts.diffs)
         self.assertRaises(NotImplementedError, ts.newick_trees)
 
+    def test_zlib_compression_warning(self):
+        ts = msprime.simulate(5, random_seed=1)
+        with warnings.catch_warnings(record=True) as w:
+            ts.dump(self.temp_file, zlib_compression=True)
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[0].category, RuntimeWarning))
+        with warnings.catch_warnings(record=True) as w:
+            ts.dump(self.temp_file, zlib_compression=False)
+            self.assertEqual(len(w), 0)
+
 
 class TestTreeSequenceTextIO(HighLevelTestCase):
     """

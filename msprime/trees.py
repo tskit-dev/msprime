@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -28,6 +28,7 @@ import itertools
 import json
 import sys
 import base64
+import warnings
 
 import numpy as np
 
@@ -1578,12 +1579,12 @@ class TreeSequence(object):
         Writes the tree sequence to the specified file path.
 
         :param str path: The file path to write the TreeSequence to.
-        :param bool zlib_compression: If True, use HDF5's native
-            compression when storing the data leading to smaller
-            file size. When loading, data will be decompressed
-            transparently, but load times will be significantly slower.
         """
-        self._ll_tree_sequence.dump(path, zlib_compression)
+        if zlib_compression:
+            warnings.warn(
+                "The zlib_compression option is no longer supported and is ignored",
+                RuntimeWarning)
+        self._ll_tree_sequence.dump(path)
 
     @property
     def tables(self):
