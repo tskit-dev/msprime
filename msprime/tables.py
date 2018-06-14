@@ -1256,7 +1256,36 @@ copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
 
 
 class TableCollection(object):
-    # TODO document.
+    """
+    A collection of mutable tables defining a tree sequence. See the
+    :ref:`sec_data_model` section for definition on the various tables
+    and how they together define a :class:`TreeSequence`. Arbitrary
+    data can be stored in a TableCollection, but there are certain
+    :ref:`requirements <sec_valid_tree_sequence_requirements>` that must be
+    satisfied for these tables to be interpreted as a tree sequence.
+
+    To obtain a :class:`TreeSequence` instance corresponding to the current
+    state of a ``TableCollection``, please use the :meth:`.tree_sequence`
+    method.
+
+    :ivar individuals: The individual table.
+    :vartype individuals: IndividualTable
+    :ivar edges: The edge table.
+    :vartype edges: EdgeTable
+    :ivar migrations: The migration table.
+    :vartype migrations: MigrationTable
+    :ivar sites: The site table.
+    :vartype sites: SiteTable
+    :ivar mutations: The mutation table.
+    :vartype mutations: MutationTable
+    :ivar populations: The population table.
+    :vartype populations: PopulationTable
+    :ivar provenances: The provenance table.
+    :vartype provenances: ProvenanceTable
+    :ivar sequence_length: The sequence length defining the coordinate
+        space.
+    :vartype sequence_length: float
+    """
     def __init__(self, sequence_length=0, ll_tables=None):
         if ll_tables is None:
             ll_tables = _msprime.TableCollection(
@@ -1469,6 +1498,8 @@ def sort_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
         provenances=None, individuals=None, populations=None, edge_start=0):
     """
+    **This function is deprecated. Please use TableCollection.sort() instead**
+
     Sorts the given tables **in place**, ensuring that all tree
     sequence ordering requirements are met. See
     the :ref:`sec_valid_tree_sequence_requirements` section for details on these
@@ -1543,6 +1574,8 @@ def simplify_tables(
         samples, nodes, edges, migrations=None, sites=None, mutations=None,
         sequence_length=0, filter_zero_mutation_sites=True):
     """
+    **This function is deprecated. Please use TableCollection.simplify() instead**
+
     Simplifies the tables, **in place**, to retain only the information necessary
     to reconstruct the tree sequence describing the given ``samples``.  This
     will change the ID of the nodes, so that the individual ``samples[k]]``

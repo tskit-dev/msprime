@@ -549,30 +549,56 @@ for encoding data in these columns.
 Table classes
 +++++++++++++
 
-.. autoclass:: msprime.NodeTable
+.. Overriding the default signatures for the tables here as they will be
+.. confusing to most users.
+
+.. autoclass:: msprime.IndividualTable()
     :members:
 
-.. autoclass:: msprime.EdgeTable
+.. autoclass:: msprime.NodeTable()
     :members:
 
-.. autoclass:: msprime.MigrationTable
+.. autoclass:: msprime.EdgeTable()
     :members:
 
-.. autoclass:: msprime.SiteTable
+.. autoclass:: msprime.MigrationTable()
     :members:
 
-.. autoclass:: msprime.MutationTable
+.. autoclass:: msprime.SiteTable()
     :members:
 
-.. autoclass:: msprime.ProvenanceTable
+.. autoclass:: msprime.MutationTable()
+    :members:
+
+.. autoclass:: msprime.PopulationTable()
+    :members:
+
+.. autoclass:: msprime.ProvenanceTable()
+
+
++++++++++++++++++
+Table Collections
++++++++++++++++++
+
+Each of the table classes defines a different aspect of the structure of
+a tree sequence. It is convenient to be able to refer to a set of these
+tables which together define a tree sequence. We
+refer to this grouping of related tables as a ``TableCollection``.
+The :class:`.TableCollection` and :class:`.TreeSequence` classes are
+deeply related. A ``TreeSequence`` instance is based on the information
+encoded in a ``TableCollection``. Tree sequences are **immutable**, and
+provide methods for obtaining trees from the sequence. A ``TableCollection``
+is **mutable**, and does not have any methods for obtaining trees.
+The ``TableCollection`` class essentially exists to allow the
+dynamic creation of tree sequences.
+
+.. autoclass:: msprime.TableCollection(sequence_length=0)
+    :members:
+
 
 +++++++++++++++
 Table functions
 +++++++++++++++
-
-.. autofunction:: msprime.sort_tables
-
-.. autofunction:: msprime.simplify_tables
 
 .. autofunction:: msprime.parse_nodes
 
