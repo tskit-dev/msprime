@@ -75,9 +75,9 @@ def add_sample_size_argument(parser):
         help="The number of individuals in the sample")
 
 
-def add_ancestry_file_argument(parser):
+def add_tree_sequence_argument(parser):
     parser.add_argument(
-        "ancestry_file", help="The msprime ancestry file")
+        "tree_sequence", help="The msprime tree sequence file")
 
 
 def add_precision_argument(parser):
@@ -780,47 +780,47 @@ def run_upgrade(args):
 
 
 def run_dump_newick(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     for tree in tree_sequence.trees():
         newick = tree.newick(precision=args.precision)
         print(newick)
 
 
 def run_dump_haplotypes(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     for h in tree_sequence.haplotypes():
         print(h)
 
 
 def run_dump_variants(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     for variant in tree_sequence.variants(as_bytes=True):
         print(variant.position, end="\t")
         print("{}".format(variant.genotypes.decode()))
 
 
 def run_dump_nodes(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(nodes=sys.stdout, precision=args.precision)
 
 
 def run_dump_edges(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(edges=sys.stdout, precision=args.precision)
 
 
 def run_dump_sites(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(sites=sys.stdout, precision=args.precision)
 
 
 def run_dump_mutations(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(mutations=sys.stdout, precision=args.precision)
 
 
 def run_dump_provenances(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     if args.human:
         for provenance in tree_sequence.provenances():
             d = json.loads(provenance.record)
@@ -831,7 +831,7 @@ def run_dump_provenances(args):
 
 
 def run_dump_vcf(args):
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.write_vcf(sys.stdout, args.ploidy)
 
 
@@ -839,7 +839,7 @@ def run_dump_macs(args):
     """
     Write a macs formatted file so we can import into pbwt.
     """
-    tree_sequence = msprime.load(args.ancestry_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     n = tree_sequence.get_sample_size()
     m = tree_sequence.get_sequence_length()
     print("COMMAND:\tnot_macs {} {}".format(n, m))
@@ -858,7 +858,7 @@ def run_simulate(args):
         recombination_rate=args.recombination_rate,
         mutation_rate=args.mutation_rate,
         random_seed=args.random_seed)
-    tree_sequence.dump(args.ancestry_file, zlib_compression=args.compress)
+    tree_sequence.dump(args.tree_sequence, zlib_compression=args.compress)
 
 
 def get_msp_parser():
@@ -876,7 +876,7 @@ def get_msp_parser():
         "simulate",
         help="Run the simulation")
     add_sample_size_argument(parser)
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "--length", "-L", type=float, default=1,
         help="The length of the simulated region in base pairs.")
@@ -900,7 +900,7 @@ def get_msp_parser():
     parser = subparsers.add_parser(
         "vcf",
         help="Write the tree sequence out in VCF format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "--ploidy", "-P", type=int, default=1,
         help="The ploidy level of samples")
@@ -909,35 +909,35 @@ def get_msp_parser():
     parser = subparsers.add_parser(
         "nodes",
         help="Dump nodes in tabular format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_nodes)
 
     parser = subparsers.add_parser(
         "edges",
         help="Dump edges in tabular format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_edges)
 
     parser = subparsers.add_parser(
         "sites",
         help="Dump sites in tabular format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_sites)
 
     parser = subparsers.add_parser(
         "mutations",
         help="Dump mutations in tabular format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_mutations)
 
     parser = subparsers.add_parser(
         "provenances",
         help="Dump provenance information in tabular format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "-H", "--human", action="store_true",
         help="Print out the provenances in a human readable format")
@@ -946,25 +946,25 @@ def get_msp_parser():
     parser = subparsers.add_parser(
         "haplotypes",
         help="Dump haplotypes in text format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_haplotypes)
 
     parser = subparsers.add_parser(
         "variants",
         help="Dump variants in text format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_variants)
 
     parser = subparsers.add_parser(
         "macs",
         help="Dump results in MaCS format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_macs)
 
     parser = subparsers.add_parser(
         "newick",
         help="Dump results in newick format.")
-    add_ancestry_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "--precision", "-p", type=int, default=3,
         help="The number of decimal places in branch lengths")
@@ -972,9 +972,9 @@ def get_msp_parser():
 
     parser = subparsers.add_parser(
         "upgrade",
-        help="Upgrade legacy ancestry files to the latest version.")
+        help="Upgrade legacy tree sequence files to the latest version.")
     parser.add_argument(
-        "source", help="The source msprime ancestry file in legacy format")
+        "source", help="The source msprime tree sequence file in legacy format")
     parser.add_argument(
         "destination", help="The filename of the upgraded copy.")
     parser.add_argument(

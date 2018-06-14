@@ -16,7 +16,7 @@ be used as simple interchange mechanism for small amounts of data in the
 `Text file formats`_ section. The `Binary interchange`_ section then describes
 the efficient Python API for table interchange using numpy arrays. Finally,
 we describe the binary format using by msprime to efficiently
-store tree sequences in the `Ancestry file format`_ section.
+store tree sequences in the `Tree sequence file format`_ section.
 
 
 .. _sec_data_model:
@@ -44,11 +44,12 @@ node
     which determines the height of any branching points it is associated with.
 
 individual
-    In certain situations we are interested in how nodes (representing individual
-    homologous chromosomes) are grouped together into polyploid individuals.
-    For example, when we are working with polyploid samples it is useful
-    to associate metadata with a specific individual rather than duplicate
-    this information on the constituent nodes.
+
+    In certain situations we are interested in how nodes (representing
+    individual homologous chromosomes) are grouped together into individuals
+    (e.g., two nodes per diploid individual). For example, when we are working
+    with polyploid samples it is useful to associate metadata with a specific
+    individual rather than duplicate this information on the constituent nodes.
 
 sample
     Those nodes in the tree that we have obtained data from.  These are
@@ -112,6 +113,9 @@ describes how multiple chromosomes are grouped within individuals;
 the Site and Mutation tables describe where mutations fall
 on the trees; the Migration table describes how lineages move across space;
 and the Provenance table contains information on where the data came from.
+Only Node and Edge tables are necessary to encode the genealogical trees;
+Sites and Mutations are optional but necessary to encode polymorphism
+(sequence) data; the remainder are optional.
 In the following sections we define these components of a tree sequence in
 more detail.
 
@@ -125,9 +129,10 @@ Table definitions
 Node Table
 ----------
 
-A **node** defines single chromosome in a specific ancestor
-that was born at some time in
-the past. Every vertex in the marginal trees of a tree sequence corresponds
+A **node** defines the haploid set of chromosomes of a specific
+individual that was born at some time in the past: the set of
+chromosomes inherited from a particular one of the individual's parents.
+Every vertex in the marginal trees of a tree sequence corresponds
 to exactly one node, and a node may be present in many trees. The
 node table contains five columns, of which ``flags`` and ``time`` are
 mandatory:
@@ -146,11 +151,12 @@ The ``time`` column records the birth time of the individual in question,
 and is a floating point value. Similarly,
 the ``population`` column records the ID of the population where this
 individual was born. If not provided, ``population`` defaults to the
-null ID (-1). The population ID must refer to a row in the
+null ID (-1). Otherwise, the population ID must refer to a row in the
 :ref:`sec_population_table_definition`.
-The ``individual`` column records the ID of the polyploid
+The ``individual`` column records the ID of the
 :ref:`Individual <sec_individual_table_definition>`
-individual that this node belongs to. If not provided, ``individual``
+individual that this node belongs to. If specified, the ID must refer
+to a valid individual. If not provided, ``individual``
 defaults to the null ID (-1).
 
 The ``flags`` column stores information about a particular node, and
@@ -188,7 +194,7 @@ Individual Table
 
 An **individual** defines how nodes (which can be seen
 as representing single chromosomes) group together in a polyploid individual.
-The individual table contains three columns of which ``flags`` is mandatory.
+The individual table contains three columns, of which ``flags`` is mandatory.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -473,7 +479,6 @@ Node requirements
 Given a valid set of individuals and populations, the requirements for
 each node are:
 
-- Node times must be non-negative;
 - ``population`` must either be null (-1) or refer to a valid population ID;
 - ``individual`` must either be null (-1) or refer to a valid individual ID.
 
@@ -798,11 +803,11 @@ Note that for a table with ``n`` rows, any offset column must have ``n + 1``
 values. The values in this column must be nondecreasing, and cannot exceed
 the length of the ragged column in question.
 
-.. _sec_ancestry_file_format:
+.. _sec_tree_sequence_file_format:
 
-********************
-Ancestry file format
-********************
+**************************
+Tree sequence file format
+**************************
 
 To make tree sequence data as efficient and easy as possible to use, we store the
 data on file in a columnar, binary format. The format is based on the
@@ -812,7 +817,7 @@ between the tables described above and the arrays stored in these files.
 
 By convention, these files are given the ``.trees`` suffix (although this
 is not enforced in any way), and we will sometimes refer to them as ".trees"
-files. We also refer to them as "ancestry files".
+files. We also refer to them as "tree sequence files".
 
 .. todo::
     Link to the documentation for kastore, and describe the arrays that are

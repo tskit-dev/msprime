@@ -31,7 +31,7 @@ scenarios. The library is a reimplementation of Hudson's seminal
 3. ``msprime`` does not use Newick trees for interchange as they
    are extremely inefficient in terms of storage space and the
    time needed to generate and parse them. Instead, we use an efficient
-   :ref:`columnar binary file format <sec_ancestry_file_format>`
+   :ref:`columnar binary file format <sec_tree_sequence_file_format>`
    using the `kastore <https://pypi.org/project/kastore/>`_ library.
    This format allows us to store genealogical data very concisely,
    particularly for large sample sizes.

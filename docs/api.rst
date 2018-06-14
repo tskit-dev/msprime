@@ -275,7 +275,7 @@ Loading data
 
 There are several methods for loading data into a :class:`.TreeSequence`
 instance. The simplest and most convenient is the use the :func:`msprime.load`
-function to load an :ref:`ancestry file <sec_ancestry_file_format>`. For small
+function to load an :ref:`tree sequence file <sec_tree_sequence_file_format>`. For small
 scale data and debugging, it is often convenient to use the
 :func:`msprime.load_text` to read data in the :ref:`text file format
 <sec_text_file_format>`. The :meth:`.TableCollection.tree_sequence` function
@@ -351,7 +351,7 @@ computations using the :mod:`multiprocessing` module). ::
     1       1.00000000      2.00000000      9       11
 
 However, pickling will not be as efficient as storing tables
-in the native :ref:`format <sec_ancestry_file_format>`.
+in the native :ref:`format <sec_tree_sequence_file_format>`.
 
 Tables support the equality operator ``==`` based on the data
 held in the columns::

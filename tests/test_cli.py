@@ -1072,7 +1072,7 @@ class TestMspArgumentParser(unittest.TestCase):
         cmd = "simulate"
         args = parser.parse_args([cmd, "10", "out.trees"])
         self.assertEqual(args.sample_size, 10)
-        self.assertEqual(args.ancestry_file, "out.trees")
+        self.assertEqual(args.tree_sequence, "out.trees")
         self.assertEqual(args.recombination_rate, 0.0)
         self.assertEqual(args.mutation_rate, 0.0)
         self.assertEqual(args.length, 1)
@@ -1087,7 +1087,7 @@ class TestMspArgumentParser(unittest.TestCase):
             cmd, "100", "out2.trees", "-L", "1e3", "-r", "5", "-u", "2",
             "-s", "1234", "-z", "-N", "11"])
         self.assertEqual(args.sample_size, 100)
-        self.assertEqual(args.ancestry_file, "out2.trees")
+        self.assertEqual(args.tree_sequence, "out2.trees")
         self.assertEqual(args.recombination_rate, 5)
         self.assertEqual(args.length, 1000)
         self.assertEqual(args.random_seed, 1234)
@@ -1106,7 +1106,7 @@ class TestMspArgumentParser(unittest.TestCase):
             "--random-seed", "123",
             "--compress"])
         self.assertEqual(args.sample_size, 1000)
-        self.assertEqual(args.ancestry_file, "out3.trees")
+        self.assertEqual(args.tree_sequence, "out3.trees")
         self.assertEqual(args.recombination_rate, 6)
         self.assertEqual(args.length, 10000)
         self.assertEqual(args.effective_population_size, 10**5)
@@ -1116,197 +1116,197 @@ class TestMspArgumentParser(unittest.TestCase):
     def test_nodes_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "nodes"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 6)
 
     def test_nodes_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "nodes"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "-p", "8"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "-p", "8"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 8)
 
     def test_nodes_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "nodes"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "--precision", "5"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "--precision", "5"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
     def test_edges_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "edges"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 6)
 
     def test_edges_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "edges"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "-p", "8"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "-p", "8"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 8)
 
     def test_edges_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "edges"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "--precision", "5"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "--precision", "5"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
     def test_sites_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "sites"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 6)
 
     def test_sites_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "sites"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "-p", "8"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "-p", "8"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 8)
 
     def test_sites_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "sites"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "--precision", "5"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "--precision", "5"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
     def test_mutations_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "mutations"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 6)
 
     def test_mutations_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "mutations"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "-p", "4"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "-p", "4"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 4)
 
     def test_mutations_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "mutations"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "--precision", "9"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "--precision", "9"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 9)
 
     def test_provenances_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "provenances"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.human, False)
 
     def test_provenances_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "provenances"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "-H"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "-H"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.human, True)
 
     def test_provenances_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "provenances"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file, "--human"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence, "--human"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.human, True)
 
     def test_vcf_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "vcf"
-        ancestry_file = "test.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.ploidy, 1)
 
     def test_vcf_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "vcf"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "-P", "2"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "-P", "2"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.ploidy, 2)
 
     def test_vcf_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "vcf"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "--ploidy", "5"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "--ploidy", "5"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.ploidy, 5)
 
     def test_haplotypes_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "haplotypes"
-        ancestry_file = "test1.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test1.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
 
     def test_variants_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "variants"
-        ancestry_file = "test1.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test1.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
 
     def test_macs_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "macs"
-        ancestry_file = "test2.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test2.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
 
     def test_newick_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "newick"
-        ancestry_file = "test3.trees"
-        args = parser.parse_args([cmd, ancestry_file])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+        tree_sequence = "test3.trees"
+        args = parser.parse_args([cmd, tree_sequence])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 3)
 
     def test_newick_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "newick"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "-p", "10"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "-p", "10"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 10)
 
     def test_newick_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "newick"
-        ancestry_file = "test.trees"
+        tree_sequence = "test.trees"
         args = parser.parse_args([
-            cmd, ancestry_file, "--precision=5"])
-        self.assertEqual(args.ancestry_file, ancestry_file)
+            cmd, tree_sequence, "--precision=5"])
+        self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
     def test_upgrade_default_values(self):
@@ -1325,21 +1325,21 @@ class TestMspSimulateOutput(unittest.TestCase):
     Tests the output of msp to ensure it's correct.
     """
     def setUp(self):
-        fd, self._ancestry_file = tempfile.mkstemp(prefix="msp_cli", suffix=".trees")
+        fd, self._tree_sequence = tempfile.mkstemp(prefix="msp_cli", suffix=".trees")
         os.close(fd)
 
     def tearDown(self):
-        os.unlink(self._ancestry_file)
+        os.unlink(self._tree_sequence)
 
     def test_run_defaults(self):
         cmd = "simulate"
         sample_size = 10
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, str(sample_size), self._ancestry_file])
+            cmd, str(sample_size), self._tree_sequence])
         self.assertEqual(len(stderr), 0)
         self.assertEqual(len(stdout), 0)
 
-        tree_sequence = msprime.load(self._ancestry_file)
+        tree_sequence = msprime.load(self._tree_sequence)
         self.assertEqual(tree_sequence.get_sample_size(), sample_size)
         self.assertEqual(tree_sequence.get_sequence_length(), 1)
         self.assertEqual(tree_sequence.get_num_mutations(), 0)
@@ -1347,8 +1347,8 @@ class TestMspSimulateOutput(unittest.TestCase):
     def test_simulate_short_args(self):
         cmd = "simulate"
         stdout, stdearr = capture_output(cli.msp_main, [
-            cmd, "100", self._ancestry_file, "-L", "1e2", "-r", "5", "-u", "2"])
-        tree_sequence = msprime.load(self._ancestry_file)
+            cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"])
+        tree_sequence = msprime.load(self._tree_sequence)
         self.assertEqual(tree_sequence.get_sample_size(), 100)
         self.assertEqual(tree_sequence.get_sequence_length(), 100)
         self.assertGreater(tree_sequence.get_num_mutations(), 0)
@@ -1363,13 +1363,14 @@ class TestMspConversionOutput(unittest.TestCase):
         cls._tree_sequence = msprime.simulate(
             10, length=10, recombination_rate=10,
             mutation_rate=10, random_seed=1)
-        fd, cls._ancestry_file = tempfile.mkstemp(prefix="msp_cli", suffix=".trees")
+        fd, cls._tree_sequence_file = tempfile.mkstemp(
+            prefix="msp_cli", suffix=".trees")
         os.close(fd)
-        cls._tree_sequence.dump(cls._ancestry_file)
+        cls._tree_sequence.dump(cls._tree_sequence_file)
 
     @classmethod
     def tearDownClass(cls):
-        os.unlink(cls._ancestry_file)
+        os.unlink(cls._tree_sequence_file)
 
     def verify_nodes(self, output_nodes, precision):
         with tempfile.TemporaryFile("w+") as f:
@@ -1382,7 +1383,7 @@ class TestMspConversionOutput(unittest.TestCase):
         cmd = "nodes"
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file, "-p", str(precision)])
+            cmd, self._tree_sequence_file, "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
         output_nodes = stdout.splitlines()
         self.verify_nodes(output_nodes, precision)
@@ -1398,7 +1399,7 @@ class TestMspConversionOutput(unittest.TestCase):
         cmd = "edges"
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file, "-p", str(precision)])
+            cmd, self._tree_sequence_file, "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
         output_edges = stdout.splitlines()
         self.verify_edges(output_edges, precision)
@@ -1414,7 +1415,7 @@ class TestMspConversionOutput(unittest.TestCase):
         cmd = "sites"
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file, "-p", str(precision)])
+            cmd, self._tree_sequence_file, "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
         output_sites = stdout.splitlines()
         self.verify_sites(output_sites, precision)
@@ -1430,7 +1431,7 @@ class TestMspConversionOutput(unittest.TestCase):
         cmd = "mutations"
         precision = 8
         stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file, "-p", str(precision)])
+            cmd, self._tree_sequence_file, "-p", str(precision)])
         self.assertEqual(len(stderr), 0)
         output_mutations = stdout.splitlines()
         self.verify_mutations(output_mutations, precision)
@@ -1444,14 +1445,15 @@ class TestMspConversionOutput(unittest.TestCase):
 
     def test_provenances(self):
         cmd = "provenances"
-        stdout, stderr = capture_output(cli.msp_main, [cmd, self._ancestry_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         output_provenances = stdout.splitlines()
         self.verify_provenances(output_provenances)
 
     def test_provenances_human(self):
         cmd = "provenances"
-        stdout, stderr = capture_output(cli.msp_main, [cmd, "-H", self._ancestry_file])
+        stdout, stderr = capture_output(
+            cli.msp_main, [cmd, "-H", self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         output_provenances = stdout.splitlines()
         # TODO Check the actual output here.
@@ -1466,8 +1468,7 @@ class TestMspConversionOutput(unittest.TestCase):
 
     def test_vcf(self):
         cmd = "vcf"
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         self.verify_vcf(stdout)
 
@@ -1479,8 +1480,7 @@ class TestMspConversionOutput(unittest.TestCase):
 
     def test_haplotypes(self):
         cmd = "haplotypes"
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         output_haplotypes = stdout.splitlines()
         self.verify_haplotypes(output_haplotypes)
@@ -1495,8 +1495,7 @@ class TestMspConversionOutput(unittest.TestCase):
 
     def test_variants(self):
         cmd = "variants"
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._ancestry_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         output_variants = stdout.splitlines()
         self.verify_variants(output_variants)
@@ -1509,14 +1508,14 @@ class TestMspConversionOutput(unittest.TestCase):
 
     def test_newick(self):
         cmd = "newick"
-        stdout, stderr = capture_output(cli.msp_main, [cmd, self._ancestry_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         output_newick = stdout.splitlines()
         self.verify_newick(output_newick)
 
     def test_macs(self):
         cmd = "macs"
-        stdout, stderr = capture_output(cli.msp_main, [cmd, self._ancestry_file])
+        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
         self.assertEqual(len(stderr), 0)
         output = stdout.splitlines()
         self.assertTrue(output[0].startswith("COMMAND:"))

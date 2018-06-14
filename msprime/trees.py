@@ -1148,7 +1148,7 @@ class SparseTree(object):
 def load(path):
     """
     Loads a tree sequence from the specified file path. This file must be in the
-    :ref:`ancestry file format <sec_ancestry_file_format>` produced by the
+    :ref:`tree sequence file format <sec_tree_sequence_file_format>` produced by the
     :meth:`.TreeSequence.dump` method.
 
     :param str path: The file path of the ``.trees`` file containing the
