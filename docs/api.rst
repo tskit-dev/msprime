@@ -176,7 +176,7 @@ These classes are the interfaces used to interact with the trees
 and mutational information stored in a tree sequence returned from a simulation.
 There are also methods for loading data into these objects, either from the native
 format using :func:`msprime.load`, or from another sources
-using :func:`msprime.load_text` or :func:`msprime.load_tables`.
+using :func:`msprime.load_text` or :meth:`.TableCollection.tree_sequence`.
 
 +++++++++++++++++
 Top level-classes
@@ -278,15 +278,14 @@ instance. The simplest and most convenient is the use the :func:`msprime.load`
 function to load an :ref:`ancestry file <sec_ancestry_file_format>`. For small
 scale data and debugging, it is often convenient to use the
 :func:`msprime.load_text` to read data in the :ref:`text file format
-<sec_text_file_format>`. The :func:`msprime.load_tables` function efficiently
-loads large volumes of data using the :ref:`Tables API <sec_tables_api>`.
+<sec_text_file_format>`. The :meth:`.TableCollection.tree_sequence` function
+efficiently creates a :class:`.TreeSequence` object from a set of tables
+using the :ref:`Tables API <sec_tables_api>`.
 
 
 .. autofunction:: msprime.load
 
 .. autofunction:: msprime.load_text
-
-.. autofunction:: msprime.load_tables
 
 
 **********************

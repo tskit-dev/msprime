@@ -762,6 +762,8 @@ tree_sequence_dump_tables(tree_sequence_t *self, table_collection_t *tables, int
         }
     }
     ret = table_collection_copy(self->tables, tables);
+
+    assert(tables->sequence_length == self->sequence_length);
 out:
     return ret;
 }

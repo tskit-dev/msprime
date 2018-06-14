@@ -25,7 +25,6 @@ from __future__ import print_function
 import json
 
 import _msprime
-import msprime.trees as trees
 import msprime.simulations as simulations
 import msprime.provenance as provenance
 
@@ -115,4 +114,4 @@ def mutate(tree_sequence, rate=None, random_seed=None, model=None, keep=False):
     parameters = {"rate": rate, "random_seed": random_seed}
     provenance_dict = provenance.get_provenance_dict("mutate", parameters)
     tables.provenances.add_row(json.dumps(provenance_dict))
-    return trees.load_tables(**tables.asdict())
+    return tables.tree_sequence()

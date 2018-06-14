@@ -1171,6 +1171,9 @@ def load_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
         provenances=None, individuals=None, populations=None, sequence_length=0):
     """
+    **This method is now deprecated. Please use TableCollection.tree_sequence()
+    instead**
+
     Loads the tree sequence data from the specified table objects, and
     returns the resulting :class:`.TreeSequence` object. These tables
     must fulfil the properties required for an input tree sequence as
@@ -2393,12 +2396,17 @@ class TreeSequence(object):
         tables = self.dump_tables()
         if samples is None:
             samples = self.get_samples()
+        assert tables.sequence_length == self.sequence_length
         node_map = tables.simplify(
             samples=samples,
             filter_zero_mutation_sites=filter_zero_mutation_sites)
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
+        # FIXME we should be using tables.tree_sequence here but it results
+        # in weird behaviour. https://github.com/tskit-dev/msprime/issues/521
+        # new_ts = tables.tree_sequence()
+        # assert new_ts.sequence_length == self.sequence_length
         new_ts = load_tables(
             sequence_length=self.sequence_length,
             **tables.asdict())
