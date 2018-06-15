@@ -446,8 +446,8 @@ tree_sequence_init_individuals(tree_sequence_t *self)
     size_t num_inds = self->individuals.num_records;
 
     // First find number of nodes per individual
-    // TODO: if nodes for each individual were contiguous
-    // this would require just one pass, not two
+    // TODO: this doesn't take advantage of the fact that nodes are
+    // contigusous. See https://github.com/tskit-dev/msprime/issues/527
     self->individuals.individual_nodes_length = calloc(
             MSP_MAX(1, num_inds), sizeof(table_size_t));
     num_nodes = calloc(MSP_MAX(1, num_inds), sizeof(size_t));
@@ -460,9 +460,11 @@ tree_sequence_init_individuals(tree_sequence_t *self)
     for (k = 0; k < (node_id_t) self->nodes.num_records; k++) {
         j = self->nodes.individual[k];
         if (j != MSP_NULL_INDIVIDUAL) {
-            if (j >= (individual_id_t) num_inds) {
-                ret = MSP_ERR_BAD_INDIVIDUAL;
-                goto out;
+            if (k > 0 && self->individuals.individual_nodes_length[j] > 0) {
+                if (self->nodes.individual[k - 1] != j) {
+                    ret = MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS;
+                    goto out;
+                }
             }
             self->individuals.individual_nodes_length[j] += 1;
         }

@@ -684,29 +684,39 @@ add_individuals(tree_sequence_t *ts)
     table_collection_t tables;
     char *metadata = "abc";
     size_t metadata_length = 3;
+    node_id_t *samples;
+    table_size_t num_samples = tree_sequence_get_num_samples(ts);
+
+    ret = tree_sequence_get_samples(ts, &samples);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_dump_tables(ts, &tables, MSP_ALLOC_TABLES);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_free(ts);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     individual_table_clear(tables.individuals);
     memset(tables.nodes->individual, 0xff, tables.nodes->num_rows * sizeof(individual_id_t));
 
-    for (j = 0; j < tables.nodes->num_rows; j++) {
-        if (tables.nodes->flags[j] && MSP_NODE_IS_SAMPLE) {
-            if ((k % ploidy) == 0) {
-                individual_table_add_row(tables.individuals, (uint32_t) k,
-                        NULL, 0, metadata, metadata_length);
-                CU_ASSERT_TRUE(ret >= 0)
+    k = 0;
+    for (j = 0; j < num_samples; j++) {
+        if (j > 0) {
+            if (samples[j - 1] + 1 != samples[j]) {
+                /* If the samples aren't contiguous, give up */
+                break;
             }
-            tables.nodes->individual[j] = k / ploidy;
-            k += 1;
         }
+        if ((k % ploidy) == 0) {
+            individual_table_add_row(tables.individuals, (uint32_t) k,
+                    NULL, 0, metadata, metadata_length);
+            CU_ASSERT_TRUE(ret >= 0)
+        }
+        tables.nodes->individual[samples[j]] = k / ploidy;
+        k += 1;
         if (k >= ploidy * max_inds) {
             break;
         }
     }
+    ret = tree_sequence_free(ts);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     table_collection_free(&tables);
@@ -3234,6 +3244,98 @@ test_simplest_final_gap_tree_sequence_mutation_parents(void)
     tree_sequence_free(&ts);
 }
 
+
+static void
+test_simplest_bad_individuals(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "1  0   0\n"
+        "0  1   0\n";
+    const char *edges =
+        "0  1   2   0\n"
+        "0  1   2   1\n"
+        "0  1   4   3\n";
+    tree_sequence_t ts;
+    table_collection_t tables;
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 1.0;
+    parse_nodes(nodes, tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 5);
+    parse_edges(edges, tables.edges);
+    CU_ASSERT_EQUAL_FATAL(tables.edges->num_rows, 3);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Make sure we have a good set of records */
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tree_sequence_free(&ts);
+
+    /* Bad individual ID */
+    tables.nodes->individual[0] = -2;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
+
+    /* Bad individual ID */
+    tables.nodes->individual[0] = 0;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
+
+    /* add two individuals */
+    ret = individual_table_add_row(tables.individuals, 0, NULL, 0, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = individual_table_add_row(tables.individuals, 0, NULL, 0, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 1);
+
+    /* Bad individual ID */
+    tables.nodes->individual[0] = 2;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
+
+    /* Non contiguous individuals */
+    tables.nodes->individual[0] = 0;
+    tables.nodes->individual[2] = 0;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
+    tables.nodes->individual[2] = MSP_NULL_INDIVIDUAL;
+
+    /* Non contiguous individuals */
+    tables.nodes->individual[0] = 1;
+    tables.nodes->individual[4] = 1;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
+    tables.nodes->individual[4] = MSP_NULL_INDIVIDUAL;
+
+    /* Non contiguous individuals */
+    tables.nodes->individual[1] = 1;
+    tables.nodes->individual[3] = 1;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[1] = MSP_NULL_INDIVIDUAL;
+    tables.nodes->individual[3] = MSP_NULL_INDIVIDUAL;
+
+    tree_sequence_free(&ts);
+    table_collection_free(&tables);
+}
+
 static void
 test_simplest_bad_records(void)
 {
@@ -3285,20 +3387,6 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
     tree_sequence_free(&ts);
     tables.nodes->population[0] = 0;
-
-    /* Bad individual ID */
-    tables.nodes->individual[0] = -2;
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
-    tree_sequence_free(&ts);
-    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
-
-    /* Bad individual ID */
-    tables.nodes->individual[0] = 1;
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
-    tree_sequence_free(&ts);
-    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
 
     /* Bad interval */
     tables.edges->right[0] = 0.0;
@@ -8529,6 +8617,7 @@ main(int argc, char **argv)
         {"test_simplest_final_gap_tree_sequence", test_simplest_final_gap_tree_sequence},
         {"test_simplest_final_gap_tree_sequence_mutation_parents",
             test_simplest_final_gap_tree_sequence_mutation_parents},
+        {"test_simplest_bad_individuals", test_simplest_bad_individuals},
         {"test_simplest_bad_records", test_simplest_bad_records},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
         {"test_simplest_contradictory_children", test_simplest_contradictory_children},

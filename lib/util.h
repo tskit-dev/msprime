@@ -120,7 +120,7 @@
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
 #define MSP_ERR_BAD_POPULATION_SIZE                                 -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
-
+#define MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS                     -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_CANNOT_SIMPLIFY                                     -32
@@ -169,7 +169,7 @@
  * individuals in simplify */
 #define MSP_ERR_INDIVIDUALS_NOT_SUPPORTED                           -74
 
-/* REUSE: * -29, -57 */
+/* REUSE: * -57 */
 
 
 /* This bit is 0 for any errors originating from kastore */

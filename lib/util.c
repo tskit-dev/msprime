@@ -120,6 +120,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS:
             ret = "All edges for a given parent must be contiguous";
             break;
+        case MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS:
+            ret = "All nodes for a given individual must be contiguous";
+            break;
         case MSP_ERR_EDGES_NOT_SORTED_CHILD:
             ret = "Edges must be listed in (time[parent], child, left) order;"
                 " child order violated";
