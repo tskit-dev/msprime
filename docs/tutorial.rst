@@ -795,43 +795,42 @@ and so we cannot edit a them in place. The answer is to use the
 a new tree sequence from them. In the following example, we use this approach
 to remove all singleton sites from a given tree sequence.
 
-.. code::
+.. code-block:: python
 
     def strip_singletons(ts):
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
         for tree in ts.trees():
             for site in tree.sites():
                 assert len(site.mutations) == 1  # Only supports infinite sites muts.
                 mut = site.mutations[0]
                 if tree.num_samples(mut.node) > 1:
-                    site_id = sites.add_row(
+                    site_id = tables.sites.add_row(
                         position=site.position,
                         ancestral_state=site.ancestral_state)
-                    mutations.add_row(
+                    tables.mutations.add_row(
                         site=site_id, node=mut.node, derived_state=mut.derived_state)
-        tables = ts.dump_tables()
-        new_ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
-        return new_ts
+        return tables.tree_sequence()
 
 
 This function takes a tree sequence containing some infinite sites mutations as
 input, and returns a copy in which all singleton sites have been removed.
-The approach is very simple: we allocate :class:`.SiteTable` and
-:class:`.MutationTable` instances to hold the new sites and mutations that
-we define, and then consider each site in turn. If the allele frequency of
+The approach is very simple: we get a copy of the underlying
+table data in a :class:`.TableCollection` object, and first clear the
+site and mutation tables. We then consider each site in turn,
+and if the allele frequency of
 the mutation is greater than one, we add the site and mutation to our
 output tables using :meth:`.SiteTable.add_row` and :meth:`.MutationTable.add_row`.
 (In this case we consider only simple infinite sites mutations,
 where we cannot have back or recurrent mutations. These would require a slightly
 more involved approach where we keep a map of mutation IDs so that
-mutation ``parent`` values could be computed.)
+mutation ``parent`` values could be computed. We have also omitted the
+site and mutation metadata in the interest of simplicity.)p
 
 After considering each site, we then create a new tree sequence using
-:func:`.load_tables` using the node and edge tables from the original
-tree sequence and the just-created site and mutation tables. Using
-this function then, we get::
+the :meth:`.TableCollection.tree_sequence` method on our updated tables.
+Using this function then, we get::
 
     >>> ts = msprime.simulate(10, mutation_rate=10)
     >>> ts.num_sites
