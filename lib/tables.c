@@ -3883,7 +3883,15 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
-    /* simplifier_print_state(self, stdout); */
+
+    /* Temporary workaround to make sure that we don't ship code with
+     * incorrect semantics in terms of individuals. Put this check in
+     * last so we catch other errors first, and so we don't need
+     * to change other tests.  */
+    if (tables->individuals->num_rows != 0) {
+        ret = MSP_ERR_INDIVIDUALS_NOT_SUPPORTED;
+        goto out;
+    }
 out:
     return ret;
 }

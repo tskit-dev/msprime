@@ -1398,18 +1398,22 @@ verify_simplify(tree_sequence_t *ts)
         if (num_samples[j] <= n) {
             ret = tree_sequence_simplify(ts, sample, num_samples[j], flags, &subset,
                     node_map);
-            /* printf("ret = %s\n", msp_strerror(ret)); */
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
-            tree_sequence_free(&subset);
+            if (tree_sequence_get_num_individuals(ts) > 0) {
+                CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INDIVIDUALS_NOT_SUPPORTED);
+            } else {
+                /* printf("ret = %s\n", msp_strerror(ret)); */
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
+                tree_sequence_free(&subset);
 
-            /* Keep all sites */
-            ret = tree_sequence_simplify(ts, sample, num_samples[j], 0, &subset,
-                    node_map);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
-            verify_simplify_genotypes(ts, &subset, sample, num_samples[j], node_map);
-            tree_sequence_free(&subset);
+                /* Keep all sites */
+                ret = tree_sequence_simplify(ts, sample, num_samples[j], 0, &subset,
+                        node_map);
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
+                verify_simplify_genotypes(ts, &subset, sample, num_samples[j], node_map);
+                tree_sequence_free(&subset);
+            }
         }
     }
     free(node_map);
