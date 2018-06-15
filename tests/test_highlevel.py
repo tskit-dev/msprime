@@ -1419,17 +1419,24 @@ class TestTreeSequence(HighLevelTestCase):
     def test_simplify(self):
         num_mutations = 0
         for ts in get_example_tree_sequences():
-            self.verify_simplify_provenance(ts)
-            n = ts.get_sample_size()
-            num_mutations += ts.get_num_mutations()
-            sample_sizes = {0, 1}
-            if n > 2:
-                sample_sizes |= set([2, max(2, n // 2), n - 1])
-            for k in sample_sizes:
-                subset = random.sample(list(ts.samples()), k)
-                self.verify_simplify_topology(ts, subset)
-                self.verify_simplify_equality(ts, subset)
-                self.verify_simplify_variants(ts, subset)
+            if ts.num_individuals > 0:
+                # We don't support individuals in simplify for the moment,
+                # so we raise an error. See
+                # https://github.com/tskit-dev/msprime/issues/522
+                self.assertRaises(
+                    _msprime.LibraryError, self.verify_simplify_provenance, ts)
+            else:
+                self.verify_simplify_provenance(ts)
+                n = ts.get_sample_size()
+                num_mutations += ts.get_num_mutations()
+                sample_sizes = {0, 1}
+                if n > 2:
+                    sample_sizes |= set([2, max(2, n // 2), n - 1])
+                for k in sample_sizes:
+                    subset = random.sample(list(ts.samples()), k)
+                    self.verify_simplify_topology(ts, subset)
+                    self.verify_simplify_equality(ts, subset)
+                    self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
     def test_simplify_bugs(self):

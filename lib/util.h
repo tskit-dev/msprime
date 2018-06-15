@@ -165,6 +165,9 @@
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
 #define MSP_ERR_BAD_INDIVIDUAL                                      -72
 #define MSP_ERR_GENERATE_UUID                                       -73
+/* TODO remove this code once we've fixed up support for
+ * individuals in simplify */
+#define MSP_ERR_INDIVIDUALS_NOT_SUPPORTED                           -74
 
 /* REUSE: * -29, -57 */
 

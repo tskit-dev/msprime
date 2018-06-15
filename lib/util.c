@@ -253,6 +253,10 @@ msp_strerror_internal(int err)
         case MSP_ERR_DUPLICATE_SITE_POSITION:
             ret = "Duplicate site positions.";
             break;
+        case MSP_ERR_INDIVIDUALS_NOT_SUPPORTED:
+            /* Temporary error to flag a limitation in current implementation. */
+            ret = "Individuals are currently not supported in simplify.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
