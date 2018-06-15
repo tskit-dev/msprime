@@ -1575,6 +1575,15 @@ class TestTreeSequence(HighLevelTestCase):
             ts.dump(self.temp_file, zlib_compression=False)
             self.assertEqual(len(w), 0)
 
+    def test_tables_sequence_length_round_trip(self):
+        for sequence_length in [0.1, 1, 10, 100]:
+            ts = msprime.simulate(5, length=sequence_length, random_seed=1)
+            self.assertEqual(ts.sequence_length, sequence_length)
+            tables = ts.tables
+            self.assertEqual(tables.sequence_length, sequence_length)
+            new_ts = tables.tree_sequence()
+            self.assertEqual(new_ts.sequence_length, sequence_length)
+
 
 class TestTreeSequenceTextIO(HighLevelTestCase):
     """

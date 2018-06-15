@@ -53,7 +53,7 @@ class WrightFisherSimulator(object):
         return min(1.0, max(0.0, 2 * random.random() - 0.5))
 
     def run(self, ngens):
-        tables = msprime.TableCollection()
+        tables = msprime.TableCollection(sequence_length=1)
         if self.deep_history:
             # initial population
             init_ts = msprime.simulate(self.N, recombination_rate=1.0)

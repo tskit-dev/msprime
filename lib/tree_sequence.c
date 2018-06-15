@@ -622,7 +622,6 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
         int flags)
 {
     int ret = 0;
-    size_t j;
 
     memset(self, 0, sizeof(*self));
     self->tables = malloc(sizeof(*self->tables));
@@ -642,6 +641,8 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     if (ret != 0) {
         goto out;
     }
+    /* TODO Should this raise an error? Perhaps we should see this as a
+     * read-only access to the tables.*/
     if (flags & MSP_BUILD_INDEXES || !table_collection_is_indexed(tables)) {
         ret = table_collection_build_indexes(self->tables, 0);
         if (ret != 0) {
@@ -651,18 +652,11 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     assert(table_collection_is_indexed(self->tables));
 
     self->sequence_length = tables->sequence_length;
-    if (tables->sequence_length == 0) {
-        /* Infer the sequence_length as the maximum right value in the edges */
-        for (j = 0; j < tables->edges->num_rows; j++) {
-            self->sequence_length = MSP_MAX(self->sequence_length,
-                    tables->edges->right[j]);
-        }
-    }
     if (self->sequence_length <= 0) {
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
         goto out;
     }
-    /* TODO It's messy having two copyies of this value. Should be in one place. */
+    /* TODO It's messy having two copies of this value. Should be in one place. */
     self->tables->sequence_length = self->sequence_length;
 
     self->individuals.num_records = self->tables->individuals->num_rows;
