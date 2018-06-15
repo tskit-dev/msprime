@@ -3726,8 +3726,7 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags)
 {
     int ret = 0;
-    size_t j, num_nodes_alloc;
-    double sequence_length;
+    size_t num_nodes_alloc;
 
     memset(self, 0, sizeof(simplifier_t));
     if (samples == NULL || tables == NULL) {
@@ -3743,21 +3742,12 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     self->individuals = tables->individuals;
     self->populations = tables->populations;
     self->provenances = tables->provenances;
+    self->sequence_length = tables->sequence_length;
 
-    /* TODO is this the correct semantics now? */
-    sequence_length = tables->sequence_length;
-    if (sequence_length == 0) {
-        /* infer sequence length from the edges */
-        sequence_length = 0.0;
-        for (j = 0; j < tables->edges->num_rows; j++) {
-            sequence_length = MSP_MAX(sequence_length, tables->edges->right[j]);
-        }
-        if (sequence_length <= 0.0) {
-            ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
-            goto out;
-        }
+    if (self->sequence_length <= 0.0) {
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+        goto out;
     }
-    self->sequence_length = sequence_length;
     /* Take a copy of the input samples */
     self->samples = malloc(num_samples * sizeof(node_id_t));
     if (self->samples == NULL) {
@@ -5042,6 +5032,8 @@ table_collection_simplify(table_collection_t *self,
     if (ret != 0) {
         goto out;
     }
+    /* The indexes are invalidated now so drop them */
+    ret = table_collection_drop_indexes(self);
 out:
     simplifier_free(&simplifier);
     return ret;
@@ -5058,6 +5050,11 @@ table_collection_sort(table_collection_t *self, size_t edge_start, int flags)
         goto out;
     }
     ret = table_sorter_run(&sorter, edge_start);
+    if (ret != 0) {
+        goto out;
+    }
+    /* The indexes are invalidated now so drop them */
+    ret = table_collection_drop_indexes(self);
 out:
     table_sorter_free(&sorter);
     return ret;
@@ -5207,8 +5204,10 @@ table_collection_compute_mutation_parents(table_collection_t *self, int MSP_UNUS
     /* Using unsigned values here avoids potentially undefined behaviour */
     uint32_t j, mutation, first_mutation;
 
-    /* TODO the loops below will break if sequence length is 0. */
-    assert(self->sequence_length > 0 && self->edges->num_rows > 0);
+    if (self->sequence_length <= 0 && self->edges->num_rows > 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     ret = table_collection_build_indexes(self, 0);
     if (ret != 0) {
         goto out;

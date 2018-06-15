@@ -65,9 +65,7 @@ def general_mutation_example():
     tables.sites.add_row(position=1, ancestral_state="C", metadata=b"{'id':1}")
     tables.mutations.add_row(site=0, node=0, derived_state="T")
     tables.mutations.add_row(site=1, node=0, derived_state="G")
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-        mutations=tables.mutations)
+    return tables.tree_sequence()
 
 
 def multichar_mutation_example():
@@ -115,7 +113,8 @@ def historical_sample_example():
 def no_provenance_example():
     ts = msprime.simulate(10, random_seed=1)
     tables = ts.dump_tables()
-    return msprime.load_tables(nodes=tables.nodes, edges=tables.edges)
+    tables.provenances.clear()
+    return tables.tree_sequence()
 
 
 def provenance_timestamp_only_example():
@@ -123,21 +122,19 @@ def provenance_timestamp_only_example():
     tables = ts.dump_tables()
     provenances = msprime.ProvenanceTable()
     provenances.add_row(timestamp="12345", record="")
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, provenances=provenances)
+    return tables.tree_sequence()
 
 
 def node_metadata_example():
     ts = msprime.simulate(
         sample_size=100, recombination_rate=0.1, length=10, random_seed=1)
     tables = ts.dump_tables()
-    new_nodes = msprime.NodeTable()
     metadatas = ["n_{}".format(u) for u in range(ts.num_nodes)]
     packed, offset = msprime.pack_strings(metadatas)
-    new_nodes.set_columns(
+    tables.nodes.set_columns(
         metadata=packed, metadata_offset=offset,
         flags=tables.nodes.flags, time=tables.nodes.time)
-    return msprime.load_tables(nodes=new_nodes, edges=tables.edges)
+    return tables.tree_sequence()
 
 
 def site_metadata_example():
@@ -145,7 +142,7 @@ def site_metadata_example():
     tables = ts.dump_tables()
     for j in range(10):
         tables.sites.add_row(j, ancestral_state="a", metadata=b"1234")
-    return msprime.load_tables(**tables.asdict())
+    return tables.tree_sequence()
 
 
 def mutation_metadata_example():
@@ -155,7 +152,7 @@ def mutation_metadata_example():
     for j in range(10):
         tables.mutations.add_row(
             site=0, node=j, derived_state="t", metadata=b"1234")
-    return msprime.load_tables(**tables.asdict())
+    return tables.tree_sequence()
 
 
 class TestFileFormat(unittest.TestCase):

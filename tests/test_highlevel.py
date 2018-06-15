@@ -52,20 +52,38 @@ import tests
 import tests.tsutil as tsutil
 
 
-def get_uniform_mutations(num_mutations, sequence_length, nodes):
+def insert_uniform_mutations(tables, num_mutations, nodes):
     """
     Returns n evenly mutations over the specified list of nodes.
     """
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
     for j in range(num_mutations):
-        sites.add_row(
-            position=j * (sequence_length / num_mutations), ancestral_state='0',
+        tables.sites.add_row(
+            position=j * (tables.sequence_length / num_mutations), ancestral_state='0',
             metadata=json.dumps({"index": j}).encode())
-        mutations.add_row(
+        tables.mutations.add_row(
             site=j, derived_state='1', node=nodes[j % len(nodes)],
             metadata=json.dumps({"index": j}).encode())
-    return sites, mutations
+
+
+def get_table_collection_copy(tables, sequence_length):
+    """
+    Returns a copy of the specified table collection with the specified
+    sequence length.
+    """
+    ll_tables = _msprime.TableCollection(
+        individuals=tables.individuals.ll_table,
+        nodes=tables.nodes.ll_table,
+        edges=tables.edges.ll_table,
+        migrations=tables.migrations.ll_table,
+        sites=tables.sites.ll_table,
+        mutations=tables.mutations.ll_table,
+        populations=tables.populations.ll_table,
+        provenances=tables.provenances.ll_table,
+        sequence_length=sequence_length)
+    assert ll_tables.sequence_length == sequence_length
+    tables = msprime.TableCollection(ll_tables=ll_tables)
+    assert tables.sequence_length == sequence_length
+    return tables
 
 
 def insert_gap(ts, position, length):
@@ -92,15 +110,17 @@ def insert_gap(ts, position, length):
         if e[1] > position:
             e[1] += length
     tables = ts.dump_tables()
-    edges = msprime.EdgeTable()
-    for left, right, parent, child in new_edges:
-        edges.add_row(left, right, parent, child)
-    msprime.sort_tables(nodes=tables.nodes, edges=edges)
-    # Throw in a bunch of mutations over the whole sequence on the samples.
     L = ts.sequence_length + length
-    sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=edges, sites=sites, mutations=mutations)
+    tables = get_table_collection_copy(tables, L)
+    tables.edges.clear()
+    tables.sites.clear()
+    tables.mutations.clear()
+    for left, right, parent, child in new_edges:
+        tables.edges.add_row(left, right, parent, child)
+    tables.sort()
+    # Throw in a bunch of mutations over the whole sequence on the samples.
+    insert_uniform_mutations(tables, 100, list(ts.samples()))
+    return tables.tree_sequence()
 
 
 def get_gap_examples():
@@ -125,13 +145,11 @@ def get_gap_examples():
         yield ts
     # Give an example with a gap at the end.
     ts = msprime.simulate(10, random_seed=5, recombination_rate=1)
-    t = ts.dump_tables()
-    L = 2
-    sites, mutations = get_uniform_mutations(100, L, list(ts.samples()))
-    ts_new = msprime.load_tables(
-        nodes=t.nodes, edges=t.edges, sites=sites, mutations=mutations,
-        sequence_length=L)
-    yield ts_new
+    tables = get_table_collection_copy(ts.dump_tables(), 2)
+    tables.sites.clear()
+    tables.mutations.clear()
+    insert_uniform_mutations(tables, 100, list(ts.samples()))
+    yield tables.tree_sequence()
 
 
 def get_internal_samples_examples():
@@ -147,26 +165,19 @@ def get_internal_samples_examples():
     # Set all nodes to be samples.
     flags[:] = msprime.NODE_IS_SAMPLE
     nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
-    ts = msprime.load_tables(
-        nodes=nodes, edges=tables.edges,
-        sites=tables.sites, mutations=tables.mutations)
-    yield ts
+    yield tables.tree_sequence()
+
     # Set just internal nodes to be samples.
     flags[:] = 0
     flags[n:] = msprime.NODE_IS_SAMPLE
     nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
-    ts = msprime.load_tables(
-        nodes=nodes, edges=tables.edges,
-        sites=tables.sites, mutations=tables.mutations)
-    yield ts
+    yield tables.tree_sequence()
+
     # Set a mixture of internal and leaf samples.
     flags[:] = 0
     flags[n // 2: n + n // 2] = msprime.NODE_IS_SAMPLE
     nodes.set_columns(flags=flags, time=nodes.time, population=nodes.population)
-    ts = msprime.load_tables(
-        nodes=nodes, edges=tables.edges,
-        sites=tables.sites, mutations=tables.mutations)
-    yield ts
+    yield tables.tree_sequence()
 
 
 def get_decapitated_examples():
@@ -696,19 +707,16 @@ class TestVariantGenerator(HighLevelTestCase):
     def test_many_alleles(self):
         ts = self.get_tree_sequence()
         tables = ts.dump_tables()
-        nodes = tables.nodes
-        edges = tables.edges
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        tables.sites.clear()
+        tables.mutations.clear()
         # This gives us a total of 360 permutations.
         alleles = list(map("".join, itertools.permutations('ABCDEF', 4)))
         self.assertGreater(len(alleles), 255)
-        sites.add_row(0, alleles[0])
+        tables.sites.add_row(0, alleles[0])
         parent = -1
         num_alleles = 1
         for allele in alleles[1:]:
-            ts = msprime.load_tables(
-                nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+            ts = tables.tree_sequence()
             if num_alleles > 255:
                 self.assertRaises(_msprime.LibraryError, next, ts.variants())
             else:
@@ -720,7 +728,7 @@ class TestVariantGenerator(HighLevelTestCase):
                 for u in ts.samples():
                     if u != 0:
                         self.assertEqual(var.alleles[var.genotypes[u]], alleles[0])
-            mutations.add_row(0, 0, allele, parent=parent)
+            tables.mutations.add_row(0, 0, allele, parent=parent)
             parent += 1
             num_alleles += 1
 
@@ -745,18 +753,17 @@ class TestVariantGenerator(HighLevelTestCase):
 
     def test_recurrent_mutations_over_samples(self):
         ts = self.get_tree_sequence()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
         num_sites = 5
         for j in range(num_sites):
-            sites.add_row(
+            tables.sites.add_row(
                 position=j * ts.sequence_length / num_sites,
                 ancestral_state="0")
             for u in range(ts.sample_size):
-                mutations.add_row(site=j, node=u, derived_state="1")
-        tables = ts.dump_tables()
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+                tables.mutations.add_row(site=j, node=u, derived_state="1")
+        ts = tables.tree_sequence()
         variants = list(ts.variants())
         self.assertEqual(len(variants), num_sites)
         for site, variant in zip(ts.sites(), variants):
@@ -773,15 +780,12 @@ class TestVariantGenerator(HighLevelTestCase):
         for u in tree.nodes():
             for sample in tree.samples(u):
                 if sample != u:
-                    sites = msprime.SiteTable()
-                    mutations = msprime.MutationTable()
-                    sites.add_row(position=0, ancestral_state="0")
-                    mutations.add_row(site=len(sites) - 1, node=u, derived_state="1")
-                    mutations.add_row(
-                        site=len(sites) - 1, node=sample, derived_state="1")
-                    ts_new = msprime.load_tables(
-                        nodes=tables.nodes, edges=tables.edges, sites=sites,
-                        mutations=mutations)
+                    tables.sites.clear()
+                    tables.mutations.clear()
+                    site = tables.sites.add_row(position=0, ancestral_state="0")
+                    tables.mutations.add_row(site=site, node=u, derived_state="1")
+                    tables.mutations.add_row(site=site, node=sample, derived_state="1")
+                    ts_new = tables.tree_sequence()
                     self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
 
 
@@ -876,17 +880,14 @@ class TestHaplotypeGenerator(HighLevelTestCase):
     def test_recurrent_mutations_over_samples(self):
         for ts in get_bottleneck_examples():
             num_sites = 5
-            sites = msprime.SiteTable()
-            mutations = msprime.MutationTable()
+            tables = ts.dump_tables()
             for j in range(num_sites):
-                sites.add_row(
+                tables.sites.add_row(
                     position=j * ts.sequence_length / num_sites,
                     ancestral_state="0")
                 for u in range(ts.sample_size):
-                    mutations.add_row(site=j, node=u, derived_state="1")
-            tables = ts.dump_tables()
-            ts_new = msprime.load_tables(
-                nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
+                    tables.mutations.add_row(site=j, node=u, derived_state="1")
+            ts_new = tables.tree_sequence()
             ones = "1" * num_sites
             for h in ts_new.haplotypes():
                 self.assertEqual(ones, h)
@@ -896,14 +897,12 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             tables = ts.dump_tables()
             tree = next(ts.trees())
             for u in tree.children(tree.root):
-                sites = msprime.SiteTable()
-                mutations = msprime.MutationTable()
-                sites.add_row(position=0, ancestral_state="0")
-                mutations.add_row(site=len(sites) - 1, node=u, derived_state="1")
-                mutations.add_row(site=len(sites) - 1, node=tree.root, derived_state="1")
-                ts_new = msprime.load_tables(
-                    nodes=tables.nodes, edges=tables.edges, sites=sites,
-                    mutations=mutations)
+                tables.sites.clear()
+                tables.mutations.clear()
+                site = tables.sites.add_row(position=0, ancestral_state="0")
+                tables.mutations.add_row(site=site, node=u, derived_state="1")
+                tables.mutations.add_row(site=site, node=tree.root, derived_state="1")
+                ts_new = tables.tree_sequence()
                 self.assertRaises(_msprime.LibraryError, list, ts_new.haplotypes())
                 ts_new.haplotypes()
 
@@ -2533,6 +2532,8 @@ class TestNodeOrdering(HighLevelTestCase):
             other_tables.edges.add_row(
                 left=e.left, right=e.right, parent=node_map[e.parent],
                 child=node_map[e.child])
+        for _ in range(ts.num_populations):
+            other_tables.populations.add_row()
         other_tables.sort()
         other_ts = other_tables.tree_sequence()
 

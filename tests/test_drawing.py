@@ -87,7 +87,7 @@ class TestTreeDraw(unittest.TestCase):
         edges.set_columns(
             left=edges.left[:n], right=edges.right[:n],
             parent=edges.parent[:n], child=edges.child[:n])
-        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        ts = tables.tree_sequence()
         for t in ts.trees():
             if t.num_roots > 1:
                 return t
@@ -96,18 +96,14 @@ class TestTreeDraw(unittest.TestCase):
     def get_mutations_over_roots_tree(self):
         ts = msprime.simulate(15, random_seed=1)
         ts = tsutil.decapitate(ts, 20)
-        tables = ts.tables
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        tables = ts.dump_tables()
         delta = 1.0 / (ts.num_nodes + 1)
         x = 0
         for node in range(ts.num_nodes):
-            site_id = sites.add_row(x, ancestral_state="0")
+            site_id = tables.sites.add_row(x, ancestral_state="0")
             x += delta
-            mutations.add_row(site_id, node=node, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges,
-            sites=sites, mutations=mutations)
+            tables.mutations.add_row(site_id, node=node, derived_state="1")
+        ts = tables.tree_sequence()
         tree = ts.first()
         assert any(
             tree.parent(mut.node) == msprime.NULL_NODE
@@ -123,7 +119,7 @@ class TestTreeDraw(unittest.TestCase):
         edges.set_columns(
             left=edges.left[:n], right=edges.right[:n],
             parent=edges.parent[:n], child=edges.child[:n])
-        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        ts = tables.tree_sequence()
         for t in ts.trees():
             for u in t.nodes():
                 if len(t.children(u)) == 1:

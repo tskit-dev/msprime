@@ -1535,6 +1535,12 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
     parse_nodes(
         nodes, strict=strict, encoding=encoding, base64_metadata=base64_metadata,
         table=tc.nodes)
+    # We need to add populations any referenced in the node table.
+    if len(tc.nodes) > 0:
+        max_population = tc.nodes.population.max()
+        if max_population != NULL_POPULATION:
+            for _ in range(max_population + 1):
+                tc.populations.add_row()
     if sites is not None:
         parse_sites(
             sites, strict=strict, encoding=encoding, base64_metadata=base64_metadata,
@@ -2413,13 +2419,8 @@ class TreeSequence(object):
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
-        # FIXME we should be using tables.tree_sequence here but it results
-        # in weird behaviour. https://github.com/tskit-dev/msprime/issues/521
-        # new_ts = tables.tree_sequence()
-        # assert new_ts.sequence_length == self.sequence_length
-        new_ts = load_tables(
-            sequence_length=self.sequence_length,
-            **tables.asdict())
+        new_ts = tables.tree_sequence()
+        assert new_ts.sequence_length == self.sequence_length
         if map_nodes:
             return new_ts, node_map
         else:

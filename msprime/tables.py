@@ -1198,8 +1198,6 @@ class PopulationTable(BaseTable):
         """
         .. todo:: document.
         """
-        if metadata is None:
-            metadata = datetime.datetime.now().isoformat()
         return self.ll_table.add_row(metadata=metadata)
 
     def __str__(self):
@@ -1648,6 +1646,9 @@ def sort_tables(
         sites = SiteTable()
     if mutations is None:
         mutations = MutationTable()
+    sequence_length = 0
+    if len(edges) > 0:
+        sequence_length = edges.right.max()
     try:
         ll_tables = _msprime.TableCollection(
             individuals=_msprime.IndividualTable(),
@@ -1657,7 +1658,8 @@ def sort_tables(
             sites=sites.ll_table,
             mutations=mutations.ll_table,
             populations=_msprime.PopulationTable(),
-            provenances=_msprime.ProvenanceTable())
+            provenances=_msprime.ProvenanceTable(),
+            sequence_length=sequence_length)
     except AttributeError as e:
         raise TypeError(str(e))
     return ll_tables.sort(edge_start)
@@ -1707,6 +1709,8 @@ def simplify_tables(
         sites = SiteTable()
     if mutations is None:
         mutations = MutationTable()
+    if sequence_length == 0 and len(edges) > 0:
+        sequence_length = edges.right.max()
     try:
         ll_tables = _msprime.TableCollection(
             individuals=_msprime.IndividualTable(),

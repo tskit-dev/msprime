@@ -441,7 +441,7 @@ tree_sequence_init_individuals(tree_sequence_t *self)
     node_id_t k;
     table_size_t offset = 0;
     table_size_t total_nodes = 0;
-    table_size_t *num_nodes;
+    table_size_t *num_nodes = NULL;
     node_id_t *node_array;
     size_t num_inds = self->individuals.num_records;
 
@@ -519,6 +519,9 @@ tree_sequence_init_trees(tree_sequence_t *self)
     k = 0;
     assert(I != NULL && O != NULL);
     while (j < self->edges.num_records || tree_left < self->sequence_length) {
+        /* TODO check for invalid indexes in I and O. See
+         * https://github.com/tskit-dev/msprime/issues/525
+         */
         while (k < self->edges.num_records && self->edges.right[O[k]] == tree_left) {
             k++;
         }
@@ -587,6 +590,8 @@ tree_sequence_init_nodes(tree_sequence_t *self)
 {
     size_t j, k;
     int ret = 0;
+    population_id_t num_populations = (population_id_t) self->populations.num_records;
+    individual_id_t num_individuals = (individual_id_t) self->individuals.num_records;
 
     /* Determine the sample size */
     self->num_samples = 0;
@@ -608,6 +613,16 @@ tree_sequence_init_nodes(tree_sequence_t *self)
             self->samples[k] = (node_id_t) j;
             self->nodes.sample_index_map[j] = (node_id_t) k;
             k++;
+        }
+        if (self->nodes.population[j] < -1
+                || self->nodes.population[j] >= num_populations) {
+            ret = MSP_ERR_BAD_POPULATION_ID;
+            goto out;
+        }
+        if (self->nodes.individual[j] < -1
+                || self->nodes.individual[j] >= num_individuals) {
+            ret = MSP_ERR_BAD_INDIVIDUAL;
+            goto out;
         }
     }
     assert(k == self->num_samples);
@@ -641,9 +656,12 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     if (ret != 0) {
         goto out;
     }
-    /* TODO Should this raise an error? Perhaps we should see this as a
-     * read-only access to the tables.*/
-    if (flags & MSP_BUILD_INDEXES || !table_collection_is_indexed(tables)) {
+    /* if (flags & MSP_BUILD_INDEXES || !table_collection_is_indexed(tables)) { */
+    /* FIXME: setting this to always build indexes here as there were a good
+     * few bugs popping up where we were segfaulting because of stale indexes
+     * on a set of table that had been edited. See
+     * https://github.com/tskit-dev/msprime/issues/526 */
+    if (flags >= 0) {
         ret = table_collection_build_indexes(self->tables, 0);
         if (ret != 0) {
             goto out;

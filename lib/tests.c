@@ -52,13 +52,13 @@ typedef struct {
 
 /* Simple single tree example. */
 const char *single_tree_ex_nodes =/*          6          */
-    "1  0   0   -1\n"             /*         / \         */
-    "1  0   0   -1\n"             /*        /   \        */
-    "1  0   0   -1\n"             /*       /     \       */
-    "1  0   0   -1\n"             /*      /       5      */
-    "0  1   0   -1\n"             /*     4       / \     */
-    "0  2   0   -1\n"             /*    / \     /   \    */
-    "0  3   0   -1\n";            /*   0   1   2     3   */
+    "1  0   -1   -1\n"             /*         / \         */
+    "1  0   -1   -1\n"             /*        /   \        */
+    "1  0   -1   -1\n"             /*       /     \       */
+    "1  0   -1   -1\n"             /*      /       5      */
+    "0  1   -1   -1\n"             /*     4       / \     */
+    "0  2   -1   -1\n"             /*    / \     /   \    */
+    "0  3   -1   -1\n";            /*   0   1   2     3   */
 const char *single_tree_ex_edges =
     "0  1   4   0,1\n"
     "0  1   5   2,3\n"
@@ -78,15 +78,15 @@ const char *single_tree_ex_mutations =
 
 /* Example from the PLOS paper */
 const char *paper_ex_nodes =
-    "1  0       0   0\n"
-    "1  0       0   0\n"
-    "1  0       0   1\n"
-    "1  0       0   1\n"
-    "0  0.071   0   -1\n"
-    "0  0.090   0   -1\n"
-    "0  0.170   0   -1\n"
-    "0  0.202   0   -1\n"
-    "0  0.253   0   -1\n";
+    "1  0       -1   0\n"
+    "1  0       -1   0\n"
+    "1  0       -1   1\n"
+    "1  0       -1   1\n"
+    "0  0.071   -1   -1\n"
+    "0  0.090   -1   -1\n"
+    "0  0.170   -1   -1\n"
+    "0  0.202   -1   -1\n"
+    "0  0.253   -1   -1\n";
 const char *paper_ex_edges =
     "2 10 4 2\n"
     "2 10 4 3\n"
@@ -523,6 +523,8 @@ tree_sequence_from_text(tree_sequence_t *ts, double sequence_length,
 {
     int ret;
     table_collection_t tables;
+    population_id_t max_population_id;
+    table_size_t j;
 
     CU_ASSERT_FATAL(ts != NULL);
     CU_ASSERT_FATAL(nodes != NULL);
@@ -544,6 +546,18 @@ tree_sequence_from_text(tree_sequence_t *ts, double sequence_length,
     if (individuals != NULL) {
         parse_individuals(individuals, tables.individuals);
     }
+    /* We need to add in populations if they are referenced */
+    max_population_id = -1;
+    for (j = 0; j < tables.nodes->num_rows; j++) {
+        max_population_id = MSP_MAX(max_population_id, tables.nodes->population[j]);
+    }
+    if (max_population_id >= 0) {
+        for (j = 0; j <= (table_size_t) max_population_id; j++) {
+            ret = population_table_add_row(tables.populations, NULL, 0);
+            CU_ASSERT_EQUAL_FATAL(ret, j);
+        }
+    }
+
     ret = tree_sequence_load_tables(ts, &tables, 0);
     /* tree_sequence_print_state(ts, stdout); */
     /* printf("ret = %s\n", msp_strerror(ret)); */
@@ -3245,16 +3259,46 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 5);
     parse_edges(edges, tables.edges);
     CU_ASSERT_EQUAL_FATAL(tables.edges->num_rows, 3);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Make sure we have a good set of records */
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     tree_sequence_free(&ts);
 
     /* NULL for tables should be an error */
     ret = tree_sequence_load_tables(&ts, NULL, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     tree_sequence_free(&ts);
+
+    /* Bad population ID */
+    tables.nodes->population[0] = -2;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+    tree_sequence_free(&ts);
+    tables.nodes->population[0] = 0;
+
+    /* Bad population ID */
+    tables.nodes->population[0] = 1;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+    tree_sequence_free(&ts);
+    tables.nodes->population[0] = 0;
+
+    /* Bad individual ID */
+    tables.nodes->individual[0] = -2;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
+
+    /* Bad individual ID */
+    tables.nodes->individual[0] = 1;
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    tree_sequence_free(&ts);
+    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
 
     /* Bad interval */
     tables.edges->right[0] = 0.0;
@@ -3370,9 +3414,9 @@ static void
 test_simplest_overlapping_parents(void)
 {
     const char *nodes =
-        "1  0   0\n"
-        "1  0   0\n"
-        "0  1   0\n";
+        "1  0   -1\n"
+        "1  0   -1\n"
+        "0  1   -1\n";
     const char *edges =
         "0  1   2   0\n"
         "0  1   2   1\n";
@@ -3393,7 +3437,7 @@ test_simplest_overlapping_parents(void)
     tables.edges->left[0] = 0;
     tables.edges->parent[0] = 2;
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = sparse_tree_alloc(&tree, &ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = sparse_tree_first(&tree);
@@ -3418,9 +3462,9 @@ static void
 test_simplest_contradictory_children(void)
 {
     const char *nodes =
-        "1  0   0\n"
-        "1  1   0\n"
-        "0  1   0\n";
+        "1  0   -1\n"
+        "1  1   -1\n"
+        "0  1   -1\n";
     const char *edges =
         "0  1   1   0\n"
         "0  1   2   0\n";
@@ -3454,10 +3498,10 @@ static void
 test_simplest_overlapping_edges_simplify(void)
 {
     const char *nodes =
-        "1  0   0\n"
-        "1  0   0\n"
-        "1  0   0\n"
-        "0  1   0";
+        "1  0   -1\n"
+        "1  0   -1\n"
+        "1  0   -1\n"
+        "0  1   -1";
     const char *edges =
         "0  2   3   0\n"
         "1  3   3   1\n"
@@ -3470,6 +3514,7 @@ test_simplest_overlapping_edges_simplify(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    tables.sequence_length = 3;
     parse_nodes(nodes, tables.nodes);
     CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 4);
     parse_edges(edges, tables.edges);
@@ -3512,9 +3557,9 @@ static void
 test_simplest_overlapping_unary_edges_simplify(void)
 {
     const char *nodes =
-        "1  0   0\n"
-        "1  0   0\n"
-        "0  1   0";
+        "1  0   -1\n"
+        "1  0   -1\n"
+        "0  1   -1";
     const char *edges =
         "0  2   2   0\n"
         "1  3   2   1\n";
@@ -3526,6 +3571,7 @@ test_simplest_overlapping_unary_edges_simplify(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    tables.sequence_length = 3;
     parse_nodes(nodes, tables.nodes);
     CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 3);
     parse_edges(edges, tables.edges);
@@ -3563,9 +3609,9 @@ static void
 test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
 {
     const char *nodes =
-        "1  0   0\n"
-        "1  0   0\n"
-        "1  1   0";
+        "1  0   -1\n"
+        "1  0   -1\n"
+        "1  1   -1";
     const char *edges =
         "0  2   2   0\n"
         "1  3   2   1\n";
@@ -3577,6 +3623,7 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    tables.sequence_length = 3;
     parse_nodes(nodes, tables.nodes);
     CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 3);
     parse_edges(edges, tables.edges);
@@ -8353,6 +8400,53 @@ test_generate_uuid(void)
     CU_ASSERT_STRING_NOT_EQUAL(uuid, other_uuid);
 }
 
+void
+test_simplify_tables_drops_indexes(void)
+{
+    int ret;
+    tree_sequence_t ts;
+    table_collection_t tables;
+    node_id_t samples[] = {0, 1};
+
+    tree_sequence_from_text(&ts, 1, single_tree_ex_nodes, single_tree_ex_edges,
+            NULL, NULL, NULL, NULL, NULL);
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    CU_ASSERT_TRUE(table_collection_is_indexed(&tables))
+    ret = table_collection_simplify(&tables, samples, 2, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FALSE(table_collection_is_indexed(&tables))
+
+    table_collection_free(&tables);
+    tree_sequence_free(&ts);
+}
+
+void
+test_sort_tables_drops_indexes(void)
+{
+    int ret;
+    tree_sequence_t ts;
+    table_collection_t tables;
+
+    tree_sequence_from_text(&ts, 1, single_tree_ex_nodes, single_tree_ex_edges,
+            NULL, NULL, NULL, NULL, NULL);
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_dump_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    CU_ASSERT_TRUE(table_collection_is_indexed(&tables))
+    ret = table_collection_sort(&tables, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FALSE(table_collection_is_indexed(&tables))
+
+    table_collection_free(&tables);
+    tree_sequence_free(&ts);
+}
+
 static int
 msprime_suite_init(void)
 {
@@ -8527,6 +8621,8 @@ main(int argc, char **argv)
         {"test_table_collection_simplify_errors", test_table_collection_simplify_errors},
         {"test_load_node_table_errors", test_load_node_table_errors},
         {"test_generate_uuid", test_generate_uuid},
+        {"test_simplify_tables_drops_indexes", test_simplify_tables_drops_indexes},
+        {"test_sort_tables_drops_indexes", test_sort_tables_drops_indexes},
         CU_TEST_INFO_NULL,
     };
 
