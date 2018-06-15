@@ -856,59 +856,42 @@ class TestSortTables(unittest.TestCase):
 
     def verify_randomise_tables(self, ts):
         tables = ts.dump_tables()
-        nodes = tables.nodes
-        edges = tables.edges
-        sites = tables.sites
-        mutations = tables.mutations
-        # TODO deal with migrations.
 
         # Randomise the tables.
         random.seed(self.random_seed)
         randomised_edges = list(ts.edges())
         random.shuffle(randomised_edges)
-        new_edges = msprime.EdgeTable()
+        tables.edges.clear()
         for e in randomised_edges:
-            new_edges.add_row(e.left, e.right, e.parent, e.child)
+            tables.edges.add_row(e.left, e.right, e.parent, e.child)
         # Verify that import fails for randomised edges
-        self.assertRaises(
-            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=new_edges)
+        self.assertRaises(_msprime.LibraryError, tables.tree_sequence)
+        tables.sort()
+        self.assertEqual(tables, ts.dump_tables())
 
+        tables.sites.clear()
+        tables.mutations.clear()
         randomised_sites = list(ts.sites())
         random.shuffle(randomised_sites)
-        new_sites = msprime.SiteTable()
         # Maps original IDs into their indexes in the randomised table.
         site_id_map = {}
         randomised_mutations = []
         for s in randomised_sites:
-            site_id_map[s.id] = len(new_sites)
-            new_sites.add_row(
+            site_id_map[s.id] = tables.sites.add_row(
                 s.position, ancestral_state=s.ancestral_state, metadata=s.metadata)
             randomised_mutations.extend(s.mutations)
-        new_mutations = msprime.MutationTable()
         random.shuffle(randomised_mutations)
         for m in randomised_mutations:
-            new_mutations.add_row(
+            tables.mutations.add_row(
                 site=site_id_map[m.site], node=m.node, derived_state=m.derived_state,
                 parent=m.parent, metadata=m.metadata)
         if ts.num_sites > 1:
             # Verify that import fails for randomised sites
-            self.assertRaises(
-                _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges,
-                sites=new_sites, mutations=new_mutations)
-        msprime.sort_tables(nodes, new_edges, sites=new_sites, mutations=new_mutations)
-        # The nodes table should not be affected by sorting.
-        self.assertEqual(nodes, ts.tables.nodes)
-        # Edges, sites and mutations should be sorted back to their original state.
-        self.assertEqual(edges, new_edges)
-        self.assertEqual(sites, new_sites)
-        self.assertEqual(mutations, new_mutations)
+            self.assertRaises(_msprime.LibraryError, tables.tree_sequence)
+        tables.sort()
+        self.assertEqual(tables, ts.dump_tables())
 
-        # make sure we can import a tree sequence both with and without the sites.
-        ts_new = msprime.load_tables(nodes=nodes, edges=new_edges)
-        self.assertEqual(ts_new.num_edges, ts.num_edges)
-        self.assertEqual(ts_new.num_trees, ts.num_trees)
-        ts_new = msprime.load_tables(
-            nodes=nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
+        ts_new = tables.tree_sequence()
         self.assertEqual(ts_new.num_edges, ts.num_edges)
         self.assertEqual(ts_new.num_trees, ts.num_trees)
         self.assertEqual(ts_new.num_sites, ts.num_sites)
@@ -1384,7 +1367,8 @@ class TestSimplifyTables(unittest.TestCase):
         for good_form in [[], [0, 1], (0, 1), np.array([0, 1], dtype=np.int32)]:
             nodes = tables.nodes.copy()
             edges = tables.edges.copy()
-            msprime.simplify_tables(good_form, nodes, edges)
+            msprime.simplify_tables(
+                good_form, nodes, edges, sequence_length=tables.sequence_length)
         nodes = tables.nodes.copy()
         edges = tables.edges.copy()
         for bad_type in [None, {}]:
@@ -1415,11 +1399,9 @@ class TestSimplifyTables(unittest.TestCase):
             TypeError, msprime.simplify_tables, samples=[0, 1],
             nodes=None, edges=msprime.EdgeTable())
         tables = msprime.simulate(2, random_seed=1).dump_tables()
-        nodes = tables.nodes
-        edges = tables.edges
         samples = [0, 1]
         # Verify that samples, nodes and edges are OK
-        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
+        msprime.simplify_tables(samples=samples, nodes=tables.nodes, edges=tables.edges)
         for bad_type in [None, "", 1]:
             self.assertRaises(
                 TypeError, msprime.simplify_tables, samples=samples, nodes=None,
@@ -1434,13 +1416,13 @@ class TestSimplifyTables(unittest.TestCase):
         mutations = msprime.MutationTable()
         # Verify that tables are OK.
         msprime.simplify_tables(
-            samples=samples, nodes=nodes, edges=edges, sites=sites,
+            samples=samples, nodes=tables.nodes, edges=tables.edges, sites=sites,
             mutations=mutations)
         for bad_type in [None, "", 1]:
             self.assertRaises(
                 TypeError, msprime.simplify_tables,
-                nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-                migrations=bad_type)
+                nodes=tables.nodes, edges=tables.edges, sites=sites,
+                mutations=mutations, migrations=bad_type)
 
     def test_node_table_empty_name_bug(self):
         # Issue #236. Calling simplify on copied tables unexpectedly fails.
@@ -1579,6 +1561,31 @@ class TestTableCollection(unittest.TestCase):
         self.assertNotEqual(t1, t2)
         t2.populations.clear()
         self.assertEqual(t1, t2)
+
+    def test_sequence_length_no_ll_tables(self):
+        for sequence_length in [0, 1, 100.1234]:
+            tables = msprime.TableCollection(sequence_length=sequence_length)
+            self.assertEqual(tables.sequence_length, sequence_length)
+
+    def test_sequence_length_ll_tables(self):
+        for sequence_length in [0, 1, 100.1234]:
+            ll_tables = _msprime.TableCollection(
+                individuals=_msprime.IndividualTable(),
+                nodes=_msprime.NodeTable(),
+                edges=_msprime.EdgeTable(),
+                migrations=_msprime.MigrationTable(),
+                sites=_msprime.SiteTable(),
+                mutations=_msprime.MutationTable(),
+                populations=_msprime.PopulationTable(),
+                provenances=_msprime.ProvenanceTable(),
+                sequence_length=sequence_length)
+            self.assertEqual(ll_tables.sequence_length, sequence_length)
+            tables = msprime.TableCollection(ll_tables=ll_tables)
+            self.assertEqual(tables.sequence_length, sequence_length)
+            ll_tables.edges.add_row(0, sequence_length + 1, 0, 1)
+            tables = msprime.TableCollection(ll_tables=ll_tables)
+            self.assertEqual(ll_tables.sequence_length, sequence_length)
+            self.assertEqual(tables.sequence_length, sequence_length)
 
 
 class TestDeduplicateSites(unittest.TestCase):

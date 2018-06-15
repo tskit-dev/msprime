@@ -83,7 +83,7 @@ class TestNewick(unittest.TestCase):
         edges.set_columns(
             left=edges.left[:n], right=edges.right[:n],
             parent=edges.parent[:n], child=edges.child[:n])
-        return msprime.load_tables(nodes=tables.nodes, edges=edges)
+        return tables.tree_sequence()
 
     def test_nonbinary_tree(self):
         ts = self.get_nonbinary_example()

@@ -53,7 +53,7 @@ class WrightFisherSimulator(object):
         return min(1.0, max(0.0, 2 * random.random() - 0.5))
 
     def run(self, ngens):
-        tables = msprime.TableCollection()
+        tables = msprime.TableCollection(sequence_length=1)
         if self.deep_history:
             # initial population
             init_ts = msprime.simulate(self.N, recombination_rate=1.0)
@@ -400,17 +400,14 @@ class TestSimplify(unittest.TestCase):
     def test_simplify_tables(self):
         seed = 71
         for ts in self.get_wf_sims(seed=seed):
-            tables = ts.dump_tables()
             for nsamples in [2, 5, 10]:
-                nodes = tables.nodes.copy()
-                edges = tables.edges.copy()
-                sites = tables.sites.copy()
-                mutations = tables.mutations.copy()
+                tables = ts.dump_tables()
                 sub_samples = random.sample(
                     list(ts.samples()), min(nsamples, ts.num_samples))
-                node_map = msprime.simplify_tables(
-                    samples=sub_samples, nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations)
-                small_ts = msprime.load_tables(
-                    nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+                node_map = tables.simplify(samples=sub_samples)
+                small_ts = tables.tree_sequence()
+                other_tables = small_ts.dump_tables()
+                tables.provenances.clear()
+                other_tables.provenances.clear()
+                self.assertEqual(tables, other_tables)
                 self.verify_simplify(ts, small_ts, sub_samples, node_map)

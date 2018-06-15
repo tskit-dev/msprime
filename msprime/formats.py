@@ -97,6 +97,18 @@ def _convert_hdf5_mutations(
         derived_state_offset=np.arange(num_mutations + 1, dtype=np.uint32))
 
 
+def _get_populations(nodes):
+    """
+    Returns a PopulationTable suitable to represent the populations referred to
+    in the specified node table.
+    """
+    populations = msprime.PopulationTable()
+    if len(nodes) > 0:
+        for _ in range(np.max(nodes.population) + 1):
+            populations.add_row()
+    return populations
+
+
 def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
@@ -137,8 +149,9 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
         if "time" in samples_group:
             time[:sample_size] = samples_group["time"]
     nodes = msprime.NodeTable()
-    nodes.set_columns(
-        flags=flags, population=population, time=time)
+    nodes.set_columns(flags=flags, population=population, time=time)
+
+    populations = _get_populations(nodes)
 
     sites = msprime.SiteTable()
     mutations = msprime.MutationTable()
@@ -153,7 +166,7 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=provenances)
+        provenances=provenances, populations=populations)
 
 
 def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
@@ -191,6 +204,9 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
         flags=flags,
         time=nodes_group["time"],
         population=nodes_group["population"])
+
+    populations = _get_populations(nodes)
+
     edges = msprime.EdgeTable()
     edges.set_columns(
         left=left, right=right, parent=parent, child=records_group["children"])
@@ -208,7 +224,7 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
     return msprime.load_tables(
         nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=provenances)
+        provenances=provenances, populations=populations)
 
 
 def load_legacy(filename, remove_duplicate_positions=False):
@@ -544,10 +560,12 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
             record_offset=record_offset)
     provenances.add_row(_get_upgrade_provenance(root))
 
+    populations = _get_populations(nodes)
+
     return msprime.load_tables(
         nodes=nodes, edges=edges, migrations=migrations, sites=sites,
         mutations=mutations, provenances=provenances,
-        sequence_length=sequence_length)
+        populations=populations, sequence_length=sequence_length)
 
 
 def dump_legacy(tree_sequence, filename, version=3):

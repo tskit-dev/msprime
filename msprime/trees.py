@@ -1209,6 +1209,8 @@ def load_tables(
     """
     if sequence_length is None:
         sequence_length = 0
+    if sequence_length == 0 and len(edges) > 0:
+        sequence_length = edges.right.max()
     kwargs = {
         "nodes": nodes.ll_table, "edges": edges.ll_table,
         "sequence_length": sequence_length}
@@ -1520,11 +1522,25 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
         stored in the specified file paths.
     :rtype: :class:`msprime.TreeSequence`
     """
+    # We need to parse the edges so we can figure out the sequence length, and
+    # TableCollection.sequence_length is immutable so we need to create a temporary
+    # edge table.
+    edge_table = parse_edges(edges, strict=strict)
+    if sequence_length == 0 and len(edge_table) > 0:
+        sequence_length = edge_table.right.max()
     tc = tables.TableCollection(sequence_length)
+    tc.edges.set_columns(
+        left=edge_table.left, right=edge_table.right, parent=edge_table.parent,
+        child=edge_table.child)
     parse_nodes(
         nodes, strict=strict, encoding=encoding, base64_metadata=base64_metadata,
         table=tc.nodes)
-    parse_edges(edges, strict=strict, table=tc.edges)
+    # We need to add populations any referenced in the node table.
+    if len(tc.nodes) > 0:
+        max_population = tc.nodes.population.max()
+        if max_population != NULL_POPULATION:
+            for _ in range(max_population + 1):
+                tc.populations.add_row()
     if sites is not None:
         parse_sites(
             sites, strict=strict, encoding=encoding, base64_metadata=base64_metadata,
@@ -2403,13 +2419,8 @@ class TreeSequence(object):
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
-        # FIXME we should be using tables.tree_sequence here but it results
-        # in weird behaviour. https://github.com/tskit-dev/msprime/issues/521
-        # new_ts = tables.tree_sequence()
-        # assert new_ts.sequence_length == self.sequence_length
-        new_ts = load_tables(
-            sequence_length=self.sequence_length,
-            **tables.asdict())
+        new_ts = tables.tree_sequence()
+        assert new_ts.sequence_length == self.sequence_length
         if map_nodes:
             return new_ts, node_map
         else:

@@ -240,21 +240,11 @@ class TestTables(unittest.TestCase):
         self.assertGreaterEqual(failures, 0)
         self.assertGreater(successes, 0)
 
-    def test_many_simplify_nodes_edges(self):
-        tables = self.get_tables()
-
-        def writer(thread_index, results):
-            msprime.simplify_tables([0, 1], nodes=tables.nodes, edges=tables.edges)
-
-        self.run_multiple_writers(writer)
-
     def test_many_simplify_all_tables(self):
         tables = self.get_tables()
 
         def writer(thread_index, results):
-            msprime.simplify_tables(
-                [0, 1], nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-                mutations=tables.mutations)
+            tables.simplify([0, 1])
 
         self.run_multiple_writers(writer)
 
@@ -262,7 +252,7 @@ class TestTables(unittest.TestCase):
         tables = self.get_tables()
 
         def writer(thread_index, results):
-            msprime.sort_tables(**tables.asdict())
+            tables.sort()
 
         self.run_multiple_writers(writer)
 
@@ -270,9 +260,7 @@ class TestTables(unittest.TestCase):
         tables = self.get_tables()
 
         def writer():
-            msprime.simplify_tables(
-                [0, 1], nodes=tables.nodes, edges=tables.edges,
-                sites=tables.sites, mutations=tables.mutations)
+            tables.simplify([0, 1])
 
         table = getattr(tables, table_name)
 
@@ -287,7 +275,7 @@ class TestTables(unittest.TestCase):
         tables = self.get_tables()
 
         def writer():
-            msprime.sort_tables(**tables.asdict())
+            tables.sort()
 
         table = getattr(tables, table_name)
 

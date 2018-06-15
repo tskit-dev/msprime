@@ -984,6 +984,7 @@ class TestGeneralSamples(TopologyTestCase):
         samples = sorted(node_map[:ts.sample_size])
         node_map = samples + node_map[ts.sample_size:]
         permuted = tsutil.permute_nodes(ts, node_map)
+        self.assertEqual(ts.sequence_length, permuted.sequence_length)
         self.assertEqual(list(permuted.samples()), samples)
         self.assertEqual(list(permuted.haplotypes()), list(ts.haplotypes()))
         self.assertEqual(
@@ -1006,6 +1007,26 @@ class TestGeneralSamples(TopologyTestCase):
         # The simplified version of the permuted tree sequence should be in canonical
         # form, and identical to the original.
         simplified, s_node_map = permuted.simplify(map_nodes=True)
+
+        original_tables = ts.dump_tables()
+        simplified_tables = simplified.dump_tables()
+        original_tables.provenances.clear()
+        simplified_tables.provenances.clear()
+
+        self.assertEqual(
+            original_tables.sequence_length, simplified_tables.sequence_length)
+        self.assertEqual(original_tables.nodes, simplified_tables.nodes)
+        self.assertEqual(original_tables.edges, simplified_tables.edges)
+        self.assertEqual(original_tables.sites, simplified_tables.sites)
+        self.assertEqual(original_tables.mutations, simplified_tables.mutations)
+        self.assertEqual(original_tables.individuals, simplified_tables.individuals)
+        self.assertEqual(original_tables.populations, simplified_tables.populations)
+
+        self.assertEqual(original_tables, simplified_tables)
+        self.assertEqual(ts.sequence_length, simplified.sequence_length)
+        for tree in simplified.trees():
+            pass
+
         for u, v in enumerate(node_map):
             self.assertEqual(s_node_map[v], u)
         self.assertTrue(np.array_equal(simplified.samples(), ts.samples()))
@@ -1053,50 +1074,40 @@ class TestSimplifyExamples(TopologyTestCase):
         Verifies that if we run simplify on the specified input we get the
         required output.
         """
-        b_nodes = msprime.parse_nodes(six.StringIO(nodes_before), strict=False)
-        b_edges = msprime.parse_edges(six.StringIO(edges_before), strict=False)
-        if sites_before is not None:
-            b_sites = msprime.parse_sites(six.StringIO(sites_before), strict=False)
-        else:
-            b_sites = msprime.SiteTable()
-        if mutations_before is not None:
-            b_mutations = msprime.parse_mutations(
-                six.StringIO(mutations_before), strict=False)
-        else:
-            b_mutations = msprime.MutationTable()
-        ts = msprime.load_tables(
-            nodes=b_nodes, edges=b_edges, sites=b_sites, mutations=b_mutations)
+        ts = msprime.load_text(
+            nodes=six.StringIO(nodes_before),
+            edges=six.StringIO(edges_before),
+            sites=six.StringIO(sites_before) if sites_before is not None else None,
+            mutations=(
+                six.StringIO(mutations_before)
+                if mutations_before is not None else None),
+            strict=False)
+        before = ts.dump_tables()
+
+        ts = msprime.load_text(
+            nodes=six.StringIO(nodes_after),
+            edges=six.StringIO(edges_after),
+            sites=six.StringIO(sites_after) if sites_after is not None else None,
+            mutations=(
+                six.StringIO(mutations_after)
+                if mutations_after is not None else None),
+            strict=False,
+            sequence_length=before.sequence_length)
+        after = ts.dump_tables()
+
+        ts = before.tree_sequence()
         # Make sure it's a valid topology. We want to be sure we evaluate the
         # whole iterator
         for t in ts.trees():
             self.assertTrue(t is not None)
-        msprime.simplify_tables(
-            samples=samples, nodes=b_nodes, edges=b_edges, sites=b_sites,
-            mutations=b_mutations, filter_zero_mutation_sites=filter_zero_mutation_sites)
-        a_nodes = msprime.parse_nodes(six.StringIO(nodes_after), strict=False)
-        a_edges = msprime.parse_edges(six.StringIO(edges_after), strict=False)
-        if sites_after is not None:
-            a_sites = msprime.parse_sites(six.StringIO(sites_after), strict=False)
-        else:
-            a_sites = msprime.SiteTable()
-        if mutations_after is not None:
-            a_mutations = msprime.parse_mutations(
-                six.StringIO(mutations_after), strict=False)
-        else:
-            a_mutations = msprime.MutationTable()
+        before.simplify(
+            samples=samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
         if debug:
-            print("nodes required:")
-            print(a_nodes)
-            print("nodes computed:")
-            print(b_nodes)
-            print("edges required:")
-            print(a_edges)
-            print("edges computed:")
-            print(b_edges)
-        self.assertEqual(b_nodes, a_nodes)
-        self.assertEqual(b_edges, a_edges)
-        self.assertEqual(b_sites, a_sites)
-        self.assertEqual(b_mutations, a_mutations)
+            print("before")
+            print(before)
+            print("after")
+            print(after)
+        self.assertEqual(before, after)
 
     def test_unsorted_edges(self):
         # We have two nodes at the same time and interleave edges for
@@ -1458,12 +1469,8 @@ class TestNonSampleExternalNodes(TopologyTestCase):
             tables.edges.add_row(e.left, e.right, e.parent, next_node)
             tables.nodes.add_row(time=0)
             next_node += 1
-        msprime.sort_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
-        ts_new = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
+        tables.sort()
+        ts_new = tables.tree_sequence()
         self.assertEqual(ts_new.num_nodes, next_node)
         self.assertEqual(ts_new.sample_size, ts.sample_size)
         self.assert_haplotypes_equal(ts, ts_new)
@@ -2759,9 +2766,7 @@ class TestSimplify(unittest.TestCase):
         tables.mutations.add_row(site=1, node=2, derived_state="1")
         tables.mutations.add_row(site=2, node=7, derived_state="1")
         tables.mutations.add_row(site=3, node=0, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.num_sites, 4)
         self.assertEqual(ts.num_mutations, 4)
         tss = self.do_simplify(ts, [0, 2])[0]
@@ -2795,9 +2800,7 @@ class TestSimplify(unittest.TestCase):
         tables.mutations.add_row(site=0, node=2, derived_state="1")
         tables.mutations.add_row(site=1, node=3, derived_state="1")
         tables.mutations.add_row(site=2, node=6, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.num_sites, 3)
         self.assertEqual(ts.num_mutations, 3)
         tss, _ = self.do_simplify(ts, [4, 1])
@@ -2812,9 +2815,7 @@ class TestSimplify(unittest.TestCase):
         tables = ts.dump_tables()
         tables.sites.add_row(position=0.25, ancestral_state="0")
         tables.mutations.add_row(site=0, node=8, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 1)
         for filt in [True, False]:
@@ -2831,9 +2832,7 @@ class TestSimplify(unittest.TestCase):
         tables.sites.add_row(position=0.25, ancestral_state="0")
         tables.mutations.add_row(site=0, node=6, derived_state="1")
         tables.mutations.add_row(site=0, node=7, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 2)
         tss = self.do_simplify(ts, [4, 3])[0]
@@ -2852,9 +2851,7 @@ class TestSimplify(unittest.TestCase):
         tables.mutations.add_row(site=0, node=7, derived_state="1")
         tables.mutations.add_row(site=0, node=5, derived_state="0")
         tables.mutations.add_row(site=0, node=1, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-            mutations=tables.mutations)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 3)
         self.assertEqual(list(ts.haplotypes()), ["0", "1", "0", "0", "1"])

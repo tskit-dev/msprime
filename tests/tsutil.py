@@ -69,9 +69,7 @@ def decapitate(ts, num_edges):
         left=t.edges.left[:num_edges], right=t.edges.right[:num_edges],
         parent=t.edges.parent[:num_edges], child=t.edges.child[:num_edges])
     add_provenance(t.provenances, "decapitate")
-    return msprime.load_tables(
-        nodes=t.nodes, edges=t.edges, sites=t.sites, mutations=t.mutations,
-        provenances=t.provenances, sequence_length=ts.sequence_length)
+    return t.tree_sequence()
 
 
 def insert_branch_mutations(ts, mutations_per_branch=1):
@@ -79,11 +77,11 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
     Returns a copy of the specified tree sequence with a mutation on every branch
     in every tree.
     """
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
+    tables = ts.dump_tables()
+    tables.sites.clear()
+    tables.mutations.clear()
     for tree in ts.trees():
-        site = len(sites)
-        sites.add_row(position=tree.interval[0], ancestral_state='0')
+        site = tables.sites.add_row(position=tree.interval[0], ancestral_state='0')
         for root in tree.roots:
             state = {root: 0}
             mutation = {root: -1}
@@ -97,16 +95,12 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                     parent = mutation[v]
                     for j in range(mutations_per_branch):
                         state[u] = (state[u] + 1) % 2
-                        mutation[u] = len(mutations)
-                        mutations.add_row(
+                        mutation[u] = tables.mutations.add_row(
                             site=site, node=u, derived_state=str(state[u]),
                             parent=parent)
                         parent = mutation[u]
-    tables = ts.tables
     add_provenance(tables.provenances, "insert_branch_mutations")
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances)
+    return tables.tree_sequence()
 
 
 def insert_branch_sites(ts):
@@ -114,22 +108,20 @@ def insert_branch_sites(ts):
     Returns a copy of the specified tree sequence with a site on every branch
     of every tree.
     """
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
+    tables = ts.dump_tables()
+    tables.sites.clear()
+    tables.mutations.clear()
     for tree in ts.trees():
         left, right = tree.interval
         delta = (right - left) / len(list(tree.nodes()))
         x = left
         for u in tree.nodes():
             if tree.parent(u) != msprime.NULL_NODE:
-                site = sites.add_row(position=x, ancestral_state='0')
-                mutations.add_row(site=site, node=u, derived_state='1')
+                site = tables.sites.add_row(position=x, ancestral_state='0')
+                tables.mutations.add_row(site=site, node=u, derived_state='1')
                 x += delta
-    tables = ts.tables
     add_provenance(tables.provenances, "insert_branch_sites")
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances)
+    return tables.tree_sequence()
 
 
 def insert_multichar_mutations(ts, seed=1, max_len=10):
@@ -139,24 +131,22 @@ def insert_multichar_mutations(ts, seed=1, max_len=10):
     """
     rng = random.Random(seed)
     letters = ["A", "C", "T", "G"]
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
+    tables = ts.dump_tables()
+    tables.sites.clear()
+    tables.mutations.clear()
     for tree in ts.trees():
-        site = len(sites)
         ancestral_state = rng.choice(letters) * rng.randint(0, max_len)
-        sites.add_row(position=tree.interval[0], ancestral_state=ancestral_state)
+        site = tables.sites.add_row(
+            position=tree.interval[0], ancestral_state=ancestral_state)
         nodes = list(tree.nodes())
         nodes.remove(tree.root)
         u = rng.choice(nodes)
         derived_state = ancestral_state
         while ancestral_state == derived_state:
             derived_state = rng.choice(letters) * rng.randint(0, max_len)
-        mutations.add_row(site=site, node=u, derived_state=derived_state)
-    tables = ts.tables
+        tables.mutations.add_row(site=site, node=u, derived_state=derived_state)
     add_provenance(tables.provenances, "insert_multichar_mutations")
-    return msprime.load_tables(
-        nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances)
+    return tables.tree_sequence()
 
 
 def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
@@ -188,38 +178,32 @@ def permute_nodes(ts, node_map):
     Returns a copy of the specified tree sequence such that the nodes are
     permuted according to the specified map.
     """
+    tables = ts.dump_tables()
+    tables.nodes.clear()
+    tables.edges.clear()
+    tables.mutations.clear()
     # Mapping from nodes in the new tree sequence back to nodes in the original
     reverse_map = [0 for _ in node_map]
     for j in range(ts.num_nodes):
         reverse_map[node_map[j]] = j
     old_nodes = list(ts.nodes())
-    new_nodes = msprime.NodeTable()
     for j in range(ts.num_nodes):
         old_node = old_nodes[reverse_map[j]]
-        new_nodes.add_row(
+        tables.nodes.add_row(
             flags=old_node.flags, metadata=old_node.metadata,
             population=old_node.population, time=old_node.time)
-    new_edges = msprime.EdgeTable()
     for edge in ts.edges():
-        new_edges.add_row(
+        tables.edges.add_row(
             left=edge.left, right=edge.right, parent=node_map[edge.parent],
             child=node_map[edge.child])
-    new_sites = msprime.SiteTable()
-    new_mutations = msprime.MutationTable()
     for site in ts.sites():
-        new_sites.add_row(
-            position=site.position, ancestral_state=site.ancestral_state)
         for mutation in site.mutations:
-            new_mutations.add_row(
+            tables.mutations.add_row(
                 site=site.id, derived_state=mutation.derived_state,
-                node=node_map[mutation.node])
-    msprime.sort_tables(
-        nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations)
-    provenances = ts.dump_tables().provenances
-    add_provenance(provenances, "permute_nodes")
-    return msprime.load_tables(
-        nodes=new_nodes, edges=new_edges, sites=new_sites, mutations=new_mutations,
-        provenances=provenances)
+                node=node_map[mutation.node], metadata=mutation.metadata)
+    tables.sort()
+    add_provenance(tables.provenances, "permute_nodes")
+    return tables.tree_sequence()
 
 
 def insert_redundant_breakpoints(ts):
@@ -244,29 +228,20 @@ def single_childify(ts):
     middle of all exising branches.
     """
     tables = ts.dump_tables()
-    edges = tables.edges
-    nodes = tables.nodes
-    sites = tables.sites
-    mutations = tables.mutations
 
-    time = nodes.time[:]
-    edges.reset()
+    time = tables.nodes.time[:]
+    tables.edges.reset()
     for edge in ts.edges():
         # Insert a new node in between the parent and child.
-        u = len(nodes)
         t = time[edge.child] + (time[edge.parent] - time[edge.child]) / 2
-        nodes.add_row(time=t)
-        edges.add_row(
+        u = tables.nodes.add_row(time=t)
+        tables.edges.add_row(
             left=edge.left, right=edge.right, parent=u, child=edge.child)
-        edges.add_row(
+        tables.edges.add_row(
             left=edge.left, right=edge.right, parent=edge.parent, child=u)
-    msprime.sort_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+    tables.sort()
     add_provenance(tables.provenances, "insert_redundant_breakpoints")
-    new_ts = msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=tables.provenances)
-    return new_ts
+    return tables.tree_sequence()
 
 
 def add_random_metadata(ts, seed=1, max_length=10):
