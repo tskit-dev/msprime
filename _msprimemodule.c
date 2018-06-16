@@ -6279,7 +6279,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     num_nodes = tree_sequence_get_num_nodes(tree_sequence->tree_sequence);
     num_tracked_samples = 0;
     if (py_tracked_samples != NULL) {
-        if (!flags & MSP_SAMPLE_COUNTS) {
+        if (!(flags & MSP_SAMPLE_COUNTS)) {
             PyErr_SetString(PyExc_ValueError,
                 "Cannot specified tracked_samples without count_samples flag");
             goto out;

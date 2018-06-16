@@ -19,39 +19,15 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#if defined(_WIN32)
-#include <windows.h>
-#include <wincrypt.h>
-#endif
-
 #include "util.h"
 #include "uuid.h"
 
 #define NUM_BYTES 16
 
-#ifdef  __unix__
-/* Assuming the existance of /dev/urandom on Unix platforms */
-static int WARN_UNUSED
-get_random_bytes(uint8_t *buf)
-{
-    int ret = MSP_ERR_GENERATE_UUID;
-    FILE *f = fopen("/dev/urandom", "r");
+#if defined(_WIN32)
 
-    if (f == NULL) {
-        goto out;
-    }
-    if (fread(buf, NUM_BYTES, 1, f) != 1) {
-        goto out;
-    }
-    if (fclose(f) != 0) {
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-#elif defined(_WIN32)
+#include <windows.h>
+#include <wincrypt.h>
 
 static int WARN_UNUSED
 get_random_bytes(uint8_t *buf)
@@ -80,7 +56,28 @@ out:
 }
 
 #else
-    #error "unsupported platform"
+
+/* Assuming the existance of /dev/urandom on Unix platforms */
+static int WARN_UNUSED
+get_random_bytes(uint8_t *buf)
+{
+    int ret = MSP_ERR_GENERATE_UUID;
+    FILE *f = fopen("/dev/urandom", "r");
+
+    if (f == NULL) {
+        goto out;
+    }
+    if (fread(buf, NUM_BYTES, 1, f) != 1) {
+        goto out;
+    }
+    if (fclose(f) != 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 #endif
 
 /* Generate a new UUID4 using a system-generated source of randomness.
