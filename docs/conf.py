@@ -24,20 +24,11 @@ import pkg_resources
 
 from unittest.mock import MagicMock
 
-_table_classes = [
-    "NodeTable", "EdgeTable", "MigrationTable", "SiteTable", "MutationTable",
-    "ProvenanceTable"]
-
 
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
-        # To get the documentation to build correctly for the table classes
-        # we need to jump through this hoop.
-        if name in _table_classes:
-            return MagicMock
-        else:
-            return MagicMock()
+        return MagicMock()
 
 MOCK_MODULES = ["_msprime"]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
