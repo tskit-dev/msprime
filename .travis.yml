@@ -18,9 +18,8 @@ matrix:
       python: 3.5
     - os: linux
       python: 3.6
-    # Disabling OSX on Travis 2016/09/16 as the build times are too long.
-    # - os: osx
-    #   language: generic
+    - os: osx
+      language: generic
 
 install:
   # We do this conditionally because it saves us some downloading if the

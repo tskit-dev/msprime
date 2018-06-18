@@ -137,7 +137,7 @@ class TestMutate(unittest.TestCase):
             msprime.mutate(ts, rate=1, random_seed=2) for _ in range(1, 10)]
         self.assertGreater(mutated[0].num_sites, 0)
         self.assertGreater(mutated[0].num_mutations, 0)
-        tables = [ts.dump_tables() for ts in mutated]
+        tables = [other_ts.dump_tables() for other_ts in mutated]
         self.assertTrue(all(tables[0].sites == t.sites for t in tables[1:]))
         self.assertTrue(all(tables[0].mutations == t.mutations for t in tables[1:]))
 
