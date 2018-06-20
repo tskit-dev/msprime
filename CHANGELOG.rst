@@ -1,4 +1,69 @@
 ********************
+[0.6.0] - 2018-06-20
+********************
+
+This release is focused on ensuring interoperability with the forthcoming SLiM
+3.0 release, which has support for outputting tree sequences in msprime's
+.trees format. The release represents a substantial step towards the goal of
+separating the ``tskit`` code from ``msprime``. It removes the troublesome HDF5
+dependency in favour of the much simpler ``kastore`` library.
+
+The principle new features are the mutate() function which allows us to easily
+add mutations to any tree sequence, preliminary support for Individuals and
+Populations within the data model, and the addition of the new TableCollection
+object as the central structure in the Tables API.
+
+**Breaking changes**:
+
+- Files stored in the HDF5 format will need to upgraded using the
+  ``msp upgrade`` command.
+
+**New features**:
+
+- The mutate function (#507).
+
+- Removed HDF5 library dependency. Now use the embedded kastore library
+  for storing data.
+
+- Numpy and h5py are now install time dependencies, solving some installation
+  headaches.
+
+- The new TableCollection type  gives much tighter integration with the
+  low-level library. Functions like sort_tables and simplify_tables are
+  now methods of this class. The load_tables function has been replaced
+  by TableCollection.tree_sequence. These functions still work, but are
+  deprecated.
+
+- Preliminary support for Individual and Population types in the Tables
+  API and for TreeSequences.
+
+- Add 'root' argument to SparseTree.newick and support for arbitrary
+  node labels (#510).
+
+- Larger numbers of alleles now supported via 16-bit genotypes (#466).
+
+- Substantially improved simplify performance when there is a large
+  number of sites (#453).
+
+
+**Bug fixes**:
+
+- Fix bug in tree drawing with many roots (#486)
+
+- Fix segfault in accessing trees with zero roots (#515)
+
+- Fix bug where DemographyDebugger was modifying the input sample sizes (#407)
+
+
+**Deprecated**:
+
+- sort_tables is deprecated in favour of TableCollection.sort().
+
+- simplify_tables is deprecated in favour of TableCollection.simplify().
+
+- load_tables is deprecated in favour of TableCollection.tree_sequence().
+
+********************
 [0.5.0] - 2018-02-26
 ********************
 
