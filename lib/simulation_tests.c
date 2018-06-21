@@ -176,7 +176,7 @@ test_single_locus_two_populations(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
     edge_t *edges;
-    node_t *nodes;
+    node_table_t *nodes;
     migration_t *migrations;
     size_t num_edges, num_migrations;
     uint32_t n = 3;
@@ -207,19 +207,18 @@ test_single_locus_two_populations(void)
     msp_verify(&msp);
     msp_print_state(&msp, _devnull);
 
-    CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 5);
-    ret = msp_get_nodes(&msp, &nodes);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(nodes[0].time, 0);
-    CU_ASSERT_EQUAL(nodes[0].population, 0);
-    CU_ASSERT_EQUAL(nodes[1].time, 0);
-    CU_ASSERT_EQUAL(nodes[1].population, 0);
-    CU_ASSERT_EQUAL(nodes[2].time, 40.0);
-    CU_ASSERT_EQUAL(nodes[2].population, 1);
-    CU_ASSERT_TRUE(nodes[3].time < 40);
-    CU_ASSERT_TRUE(nodes[3].population == 0);
-    CU_ASSERT_TRUE(nodes[4].time > 40.5);
-    CU_ASSERT_TRUE(nodes[4].population == 0);
+    nodes = msp.tables.nodes;
+    CU_ASSERT_EQUAL_FATAL(nodes->num_rows, 5);
+    CU_ASSERT_EQUAL(nodes->time[0], 0);
+    CU_ASSERT_EQUAL(nodes->population[0], 0);
+    CU_ASSERT_EQUAL(nodes->time[1], 0);
+    CU_ASSERT_EQUAL(nodes->population[1], 0);
+    CU_ASSERT_EQUAL(nodes->time[2], 40.0);
+    CU_ASSERT_EQUAL(nodes->population[2], 1);
+    CU_ASSERT_TRUE(nodes->time[3] < 40);
+    CU_ASSERT_TRUE(nodes->population[3] == 0);
+    CU_ASSERT_TRUE(nodes->time[4] > 40.5);
+    CU_ASSERT_TRUE(nodes->population[4] == 0);
 
     num_edges = msp_get_num_edges(&msp);
     CU_ASSERT_EQUAL_FATAL(num_edges, 4);
@@ -257,7 +256,6 @@ test_single_locus_many_populations(void)
     uint32_t num_populations = 500;
     sample_t samples[] = {{0, 0.0}, {num_populations - 1, 0.0}};
     edge_t *edges;
-    node_t *nodes;
     uint32_t n = 2;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -282,10 +280,9 @@ test_single_locus_many_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(edges[0].parent, 2);
     CU_ASSERT_EQUAL(edges[1].parent, 2);
-    ret = msp_get_nodes(&msp, &nodes);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_TRUE(nodes[2].time > 30.0);
-    CU_ASSERT_EQUAL(nodes[2].population, num_populations - 1);
+
+    CU_ASSERT_TRUE(msp.tables.nodes->time[2] > 30.0);
+    CU_ASSERT_EQUAL(msp.tables.nodes->population[2], num_populations - 1);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -300,7 +297,7 @@ test_single_locus_historical_sample(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 10.0}};
     edge_t *edges;
-    node_t *nodes;
+    node_table_t *nodes;
     uint32_t n = 2;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -317,11 +314,11 @@ test_single_locus_historical_sample(void)
     msp_print_state(&msp, _devnull);
 
     CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
-    ret = msp_get_nodes(&msp, &nodes);
+    nodes = msp.tables.nodes;
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(nodes[0].time, 0);
-    CU_ASSERT_EQUAL(nodes[1].time, 10);
-    CU_ASSERT_TRUE(nodes[2].time > 10);
+    CU_ASSERT_EQUAL(nodes->time[0], 0);
+    CU_ASSERT_EQUAL(nodes->time[1], 10);
+    CU_ASSERT_TRUE(nodes->time[2] > 10);
 
     CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
     ret = msp_get_edges(&msp, &edges);
@@ -449,7 +446,6 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_edge_blocks(&msp), 1);
-    CU_ASSERT_EQUAL(msp_get_num_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_migration_blocks(&msp), 1);
     CU_ASSERT(msp_get_used_memory(&msp) > 0);
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
@@ -903,7 +899,7 @@ test_dtwf_single_locus_simulation(void)
 
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
-    for (i = 0; i < msp->num_nodes; i++) {
+    for (i = 0; i < msp->tables.nodes->num_rows; i++) {
         num_children = get_num_children(i, msp->num_edges, msp->edges);
         if (num_children > 0) {
             num_coalescent_events += num_children - 1;
@@ -1331,8 +1327,6 @@ test_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_segment_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_node_block_size(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_edge_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
@@ -1698,53 +1692,52 @@ test_recomb_map_examples(void)
 static void
 test_simulate_from_single_locus(void)
 {
-    int ret;
-    uint32_t n = 10;
-    table_collection_t tables;
-    tree_sequence_t from;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    msp_t msp;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    /* int ret; */
+    /* uint32_t n = 10; */
+    /* table_collection_t tables; */
+    /* tree_sequence_t from; */
+    /* sample_t *samples = malloc(n * sizeof(sample_t)); */
+    /* msp_t msp; */
+    /* gsl_rng *rng = gsl_rng_alloc(gsl_rng_default); */
 
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
+    /* CU_ASSERT_FATAL(samples != NULL); */
+    /* CU_ASSERT_FATAL(rng != NULL); */
 
-    memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, NULL, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    /* memset(samples, 0, n * sizeof(sample_t)); */
+    /* ret = msp_alloc(&msp, n, samples, NULL, rng); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
+    /* ret = msp_initialise(&msp); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
 
-    /* Partially run the simulation */
-    ret = msp_run(&msp, DBL_MAX, n / 2);
-    CU_ASSERT_EQUAL(ret, 1);
-    CU_ASSERT_FALSE(msp_is_completed(&msp));
-    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* Make sure we can build a tree sequence from the tables. */
-    ret = msp_populate_tables(&msp, NULL, tables.nodes, tables.edges,
-            tables.migrations, tables.populations);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* /1* Partially run the simulation *1/ */
+    /* ret = msp_run(&msp, DBL_MAX, n / 2); */
+    /* CU_ASSERT_EQUAL(ret, 1); */
+    /* CU_ASSERT_FALSE(msp_is_completed(&msp)); */
+    /* ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* /1* Make sure we can build a tree sequence from the tables. *1/ */
+    /* ret = msp_populate_tables(&msp, NULL, &tables); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-    /* TODO remove this when populate tables takes table_collection as arg */
-    tables.sequence_length = msp.num_loci;
-    ret = tree_sequence_load_tables(&from, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    table_collection_free(&tables);
+    /* /1* TODO remove this when populate tables takes table_collection as arg *1/ */
+    /* tables.sequence_length = msp.num_loci; */
+    /* ret = tree_sequence_load_tables(&from, &tables, 0); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* table_collection_free(&tables); */
 
-    ret = msp_alloc(&msp, 0, NULL, &from, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    /* ret = msp_alloc(&msp, 0, NULL, &from, rng); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
+    /* ret = msp_initialise(&msp); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
 
-    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    /* ret = msp_run(&msp, DBL_MAX, ULONG_MAX); */
+    /* CU_ASSERT_EQUAL(ret, 0); */
 
 
-    tree_sequence_free(&from);
-    free(samples);
-    msp_free(&msp);
-    gsl_rng_free(rng);
+    /* tree_sequence_free(&from); */
+    /* free(samples); */
+    /* msp_free(&msp); */
+    /* gsl_rng_free(rng); */
 }
 
 static int

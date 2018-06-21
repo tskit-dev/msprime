@@ -154,12 +154,8 @@ typedef struct _msp_t {
     object_heap_t avl_node_heap;
     object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
-    /* nodes are stored in a flat array */
-    node_t *nodes;
-    size_t num_nodes;
-    size_t max_nodes;
-    size_t node_block_size;
-    size_t num_node_blocks;
+    /* The tables used to store the simulation state */
+    table_collection_t tables;
     /* edges are stored in a flat array */
     edge_t *edges;
     size_t num_edges;
@@ -299,7 +295,6 @@ int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
-int msp_get_nodes(msp_t *self, node_t **nodes);
 int msp_get_edges(msp_t *self, edge_t **edges);
 int msp_get_migrations(msp_t *self, migration_t **migrations);
 int msp_get_samples(msp_t *self, sample_t **samples);
