@@ -23,12 +23,16 @@
 #include <Python.h>
 #include <structmember.h>
 #include <numpy/arrayobject.h>
-
 #include <float.h>
 
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_errno.h>
+
+/* Allow C code to use kastore's dynamic API. This MUST be compiled with
+ * -DKASTORE_DYNAMIC_API */
+#include <kastore.h>
+kas_funcptr *kas_dynamic_api;
 
 #include "msprime.h"
 #include "tskit.h"
@@ -10117,6 +10121,7 @@ void
 init_msprime(void)
 #endif
 {
+    kas_version_t kastore_version;
 #if PY_MAJOR_VERSION >= 3
     PyObject *module = PyModule_Create(&msprimemodule);
 #else
@@ -10126,6 +10131,25 @@ init_msprime(void)
         INITERROR;
     }
     import_array();
+
+    /* Set up the dynamic API for kastore. */
+    kas_dynamic_api = (kas_funcptr *) PyCapsule_Import("_kastore._C_API", 0);
+    if (kas_dynamic_api == NULL) {
+        INITERROR;
+    }
+    kastore_version = kas_version();
+    if (kastore_version.major != KAS_VERSION_MAJOR) {
+        PyErr_SetString(PyExc_RuntimeError, "kastore C API major version mismatch");
+        INITERROR;
+    }
+    /* If the minor version of kastore we compiled against is older than
+     * the one we've just loaded it's OK. But it's not safe to run when we've
+     * compiled against a newer version.
+     */
+    if (kastore_version.minor > KAS_VERSION_MINOR) {
+        PyErr_SetString(PyExc_RuntimeError, "kastore C API minor version mismatch");
+        INITERROR;
+    }
 
     /* RandomGenerator type */
     RandomGeneratorType.tp_new = PyType_GenericNew;

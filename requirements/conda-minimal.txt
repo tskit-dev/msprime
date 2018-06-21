@@ -4,3 +4,5 @@ h5py
 gsl
 six
 jsonschema
+kastore>=0.2.2
+svgwrite
