@@ -148,7 +148,7 @@ test_single_locus_two_populations(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
-    edge_t *edges;
+    edge_table_t *edges;
     node_table_t *nodes;
     migration_table_t *migrations;
     size_t num_edges, num_migrations;
@@ -195,12 +195,11 @@ test_single_locus_two_populations(void)
 
     num_edges = msp_get_num_edges(&msp);
     CU_ASSERT_EQUAL_FATAL(num_edges, 4);
-    ret = msp_get_edges(&msp, &edges);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(edges[0].parent, 3);
-    CU_ASSERT_EQUAL(edges[1].parent, 3);
-    CU_ASSERT_EQUAL(edges[2].parent, 4);
-    CU_ASSERT_EQUAL(edges[3].parent, 4);
+    edges = msp.tables.edges;
+    CU_ASSERT_EQUAL(edges->parent[0], 3);
+    CU_ASSERT_EQUAL(edges->parent[1], 3);
+    CU_ASSERT_EQUAL(edges->parent[2], 4);
+    CU_ASSERT_EQUAL(edges->parent[3], 4);
 
     num_migrations = msp_get_num_migrations(&msp);
     CU_ASSERT_EQUAL_FATAL(num_migrations, 3);
@@ -229,7 +228,6 @@ test_single_locus_many_populations(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     uint32_t num_populations = 500;
     sample_t samples[] = {{0, 0.0}, {num_populations - 1, 0.0}};
-    edge_t *edges;
     uint32_t n = 2;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -250,10 +248,8 @@ test_single_locus_many_populations(void)
     msp_print_state(&msp, _devnull);
     CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
     CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
-    ret = msp_get_edges(&msp, &edges);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(edges[0].parent, 2);
-    CU_ASSERT_EQUAL(edges[1].parent, 2);
+    CU_ASSERT_EQUAL(msp.tables.edges->parent[0], 2);
+    CU_ASSERT_EQUAL(msp.tables.edges->parent[1], 2);
 
     CU_ASSERT_TRUE(msp.tables.nodes->time[2] > 30.0);
     CU_ASSERT_EQUAL(msp.tables.nodes->population[2], num_populations - 1);
@@ -270,7 +266,7 @@ test_single_locus_historical_sample(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 10.0}};
-    edge_t *edges;
+    edge_table_t *edges;
     node_table_t *nodes;
     uint32_t n = 2;
 
@@ -295,14 +291,13 @@ test_single_locus_historical_sample(void)
     CU_ASSERT_TRUE(nodes->time[2] > 10);
 
     CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
-    ret = msp_get_edges(&msp, &edges);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(edges[0].left, 0);
-    CU_ASSERT_EQUAL(edges[0].right, 1);
-    CU_ASSERT_EQUAL(edges[0].parent, 2);
-    CU_ASSERT_EQUAL(edges[1].left, 0);
-    CU_ASSERT_EQUAL(edges[1].right, 1);
-    CU_ASSERT_EQUAL(edges[1].parent, 2);
+    edges = msp.tables.edges;
+    CU_ASSERT_EQUAL(edges->left[0], 0);
+    CU_ASSERT_EQUAL(edges->right[0], 1);
+    CU_ASSERT_EQUAL(edges->parent[0], 2);
+    CU_ASSERT_EQUAL(edges->left[1], 0);
+    CU_ASSERT_EQUAL(edges->right[1], 1);
+    CU_ASSERT_EQUAL(edges->parent[1], 2);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -350,8 +345,6 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_avl_node_block_size(&msp, 0),
-            MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_edge_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_loci(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
@@ -417,7 +410,6 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
-    CU_ASSERT_EQUAL(msp_get_num_edge_blocks(&msp), 1);
     CU_ASSERT(msp_get_used_memory(&msp) > 0);
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
 
@@ -668,13 +660,13 @@ test_demographic_events(void)
 }
 
 static int
-get_num_children(size_t node, size_t num_edges, edge_t *edges)
+get_num_children(size_t node, edge_table_t *edges)
 {
     int num_children = 0;
     size_t i;
 
-    for (i = 0; i < num_edges; i++) {
-        if (edges[i].parent == node) {
+    for (i = 0; i < edges->num_rows; i++) {
+        if (edges->parent[i] == node) {
             num_children++;
         }
     }
@@ -871,7 +863,7 @@ test_dtwf_single_locus_simulation(void)
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
     for (i = 0; i < msp->tables.nodes->num_rows; i++) {
-        num_children = get_num_children(i, msp->num_edges, msp->edges);
+        num_children = get_num_children(i, msp->tables.edges);
         if (num_children > 0) {
             num_coalescent_events += num_children - 1;
         }
@@ -1092,8 +1084,6 @@ test_multi_locus_simulation(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_segment_block_size(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_edge_block_size(msp, 1);
-        CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_num_loci(msp, m);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_recombination_rate(msp, 1.0);
@@ -1224,8 +1214,6 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_segment_block_size(&msp, 3);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_edge_block_size(&msp, 3);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(&msp, m);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 0.5);
@@ -1293,8 +1281,6 @@ test_bottleneck_simulation(void)
     ret = msp_set_node_mapping_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_segment_block_size(msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_edge_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_loci(msp, m);
     CU_ASSERT_EQUAL(ret, 0);

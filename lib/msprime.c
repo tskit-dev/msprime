@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2016 University of Oxford
+** Copyright (C) 2015-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -118,12 +118,6 @@ size_t
 msp_get_num_segment_blocks(msp_t *self)
 {
     return self->segment_heap.num_blocks;
-}
-
-size_t
-msp_get_num_edge_blocks(msp_t *self)
-{
-    return self->num_edge_blocks;
 }
 
 size_t
@@ -356,20 +350,6 @@ out:
     return ret;
 }
 
-int
-msp_set_edge_block_size(msp_t *self, size_t block_size)
-{
-    int ret = 0;
-
-    if (block_size < 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->edge_block_size = block_size;
-out:
-    return ret;
-}
-
 static int
 msp_set_initial_state_from_ts(msp_t *self, tree_sequence_t *ts)
 {
@@ -497,7 +477,6 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
     self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
-    self->edge_block_size = 1024;
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
@@ -544,10 +523,10 @@ msp_alloc_memory_blocks(msp_t *self)
         goto out;
     }
     /* Allocate the edge records */
-    self->edges = malloc(self->edge_block_size * sizeof(edge_t));
-    self->max_edges = self->edge_block_size;
-    self->num_edge_blocks = 1;
-    if (self->edges == NULL) {
+    self->num_buffered_edges = 0;
+    self->max_buffered_edges = 128;
+    self->buffered_edges = malloc(self->max_buffered_edges * sizeof(edge_t));
+    if (self->buffered_edges == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -586,7 +565,7 @@ msp_free(msp_t *self)
     msp_safe_free(self->populations);
     msp_safe_free(self->samples);
     msp_safe_free(self->sampling_events);
-    msp_safe_free(self->edges);
+    msp_safe_free(self->buffered_edges);
     table_collection_free(&self->tables);
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
@@ -956,12 +935,9 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Tables = \n");
     table_collection_print_state(&self->tables, out);
 
-    fprintf(out, "Edges = %ld\n", (long) self->num_edges);
-    for (j = 0; j < self->num_edges; j++) {
-        if (j == self->edge_buffer_start) {
-            fprintf(out, "*");
-        }
-        edge = &self->edges[j];
+    fprintf(out, "Buffered Edges = %ld\n", (long) self->num_buffered_edges);
+    for (j = 0; j < self->num_buffered_edges; j++) {
+        edge = &self->buffered_edges[j];
         fprintf(out, "\t%f\t%f\t%d\t%d\n", edge->left, edge->right, edge->parent,
                 edge->child);
     }
@@ -1126,23 +1102,22 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
     edge_t *edge;
 
     assert(parent > child);
-    if (self->num_edges == self->max_edges - 1) {
+    if (self->num_buffered_edges == self->max_buffered_edges - 1) {
         /* Grow the array */
-        self->max_edges += self->edge_block_size;
-        edge = realloc(self->edges, self->max_edges * sizeof(edge_t));
+        self->max_buffered_edges *= 2;
+        edge = realloc(self->buffered_edges, self->max_buffered_edges * sizeof(edge_t));
         if (edge == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        self->edges = edge;
-        self->num_edge_blocks++;
+        self->buffered_edges = edge;
     }
-    edge = self->edges + self->num_edges;
+    edge = self->buffered_edges + self->num_buffered_edges;
     edge->left = left;
     edge->right = right;
     edge->parent = parent;
     edge->child = child;
-    self->num_edges++;
+    self->num_buffered_edges++;
 out:
     return ret;
 }
@@ -1151,17 +1126,37 @@ static int WARN_UNUSED
 msp_flush_edges(msp_t *self)
 {
     int ret = 0;
-    size_t num_output_edges;
+    size_t j, num_edges;
+    edge_t edge;
 
-    if (self->edge_buffer_start < self->num_edges) {
-        ret = squash_edges(self->edges + self->edge_buffer_start,
-                self->num_edges - self->edge_buffer_start, &num_output_edges);
+    if (self->num_buffered_edges > 0) {
+        ret = squash_edges(self->buffered_edges, self->num_buffered_edges, &num_edges);
         if (ret != 0) {
             goto out;
         }
-        self->num_edges = self->edge_buffer_start + num_output_edges;
+        for (j = 0; j < num_edges; j++) {
+            edge = self->buffered_edges[j];
+            ret = edge_table_add_row(self->tables.edges, edge.left, edge.right,
+                    edge.parent, edge.child);
+            if (ret < 0) {
+                goto out;
+            }
+
+        }
+        self->num_buffered_edges = 0;
+
     }
-    self->edge_buffer_start = self->num_edges;
+
+/*     if (self->edge_buffer_start < self->num_edges) { */
+/*         ret = squash_edges(self->edges + self->edge_buffer_start, */
+/*                 self->num_edges - self->edge_buffer_start, &num_output_edges); */
+/*         if (ret != 0) { */
+/*             goto out; */
+/*         } */
+/*         self->num_edges = self->edge_buffer_start + num_output_edges; */
+/*     } */
+/*     self->edge_buffer_start = self->num_edges; */
+    ret = 0;
 out:
     return ret;
 }
@@ -1908,8 +1903,7 @@ msp_reset(msp_t *self)
     }
     /* Set up the sample */
     self->time = 0.0;
-    self->num_edges = 0;
-    self->edge_buffer_start = 0;
+    self->num_buffered_edges = 0;
     for (j = 0; j < (node_id_t) self->num_samples; j++) {
         if (self->samples[j].time == 0.0) {
             ret = msp_insert_sample(self, j, self->samples[j].population_id);
@@ -2446,8 +2440,6 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *t
 {
     int ret = 0;
     size_t j;
-    double left, right;
-    edge_t *edge;
 
     tables->sequence_length = self->num_loci;
     if (recomb_map != NULL) {
@@ -2465,23 +2457,29 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *t
     }
 
     /* Add the edges */
-    ret = edge_table_clear(tables->edges);
+    edge_table_copy(self->tables.edges, tables->edges);
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < self->num_edges; j++) {
-        edge = self->edges + j;
-        left = edge->left;
-        right = edge->right;
-        if (recomb_map != NULL) {
-            left = recomb_map_genetic_to_phys(recomb_map, left);
-            right = recomb_map_genetic_to_phys(recomb_map, right);
-        }
-        ret = edge_table_add_row(tables->edges, left, right, edge->parent, edge->child);
-        if (ret < 0) {
-            goto out;
-        }
-    }
+
+
+    /* ret = edge_table_clear(tables->edges); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+    /* for (j = 0; j < self->num_edges; j++) { */
+    /*     edge = self->edges + j; */
+    /*     left = edge->left; */
+    /*     right = edge->right; */
+    /*     if (recomb_map != NULL) { */
+    /*         left = recomb_map_genetic_to_phys(recomb_map, left); */
+    /*         right = recomb_map_genetic_to_phys(recomb_map, right); */
+    /*     } */
+    /*     ret = edge_table_add_row(tables->edges, left, right, edge->parent, edge->child); */
+    /*     if (ret < 0) { */
+    /*         goto out; */
+    /*     } */
+    /* } */
 
     /* Add in the migrations */
     ret = migration_table_copy(self->tables.migrations, tables->migrations);
@@ -2669,7 +2667,7 @@ msp_get_num_nodes(msp_t *self)
 size_t
 msp_get_num_edges(msp_t *self)
 {
-    return self->num_edges;
+    return (size_t) self->tables.edges->num_rows;
 }
 
 size_t
@@ -2736,13 +2734,6 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
     size_t N = self->num_populations;
 
     memcpy(num_migration_events, self->num_migration_events, N * N * sizeof(size_t));
-    return 0;
-}
-
-int WARN_UNUSED
-msp_get_edges(msp_t *self, edge_t **edges)
-{
-    *edges = self->edges;
     return 0;
 }
 

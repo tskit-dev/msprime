@@ -156,13 +156,10 @@ typedef struct _msp_t {
     object_heap_t node_mapping_heap;
     /* The tables used to store the simulation state */
     table_collection_t tables;
-    /* edges are stored in a flat array */
-    edge_t *edges;
-    size_t num_edges;
-    size_t max_edges;
-    size_t edge_block_size;
-    size_t num_edge_blocks;
-    size_t edge_buffer_start;
+    /* edges are buffered in a flat array until they are squashed and flushed */
+    edge_t *buffered_edges;
+    size_t num_buffered_edges;
+    size_t max_buffered_edges;
     /* Methods for getting the waiting time until the next common ancestor
      * event and the event are defined by the simulation model */
     double (*get_common_ancestor_waiting_time)(struct _msp_t *self, population_id_t pop);
@@ -289,8 +286,6 @@ int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
-int msp_get_edges(msp_t *self, edge_t **edges);
-int msp_get_migrations(msp_t *self, migration_t **migrations);
 int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(msp_t *self, size_t population_id,
         double *initial_size, double *growth_rate);
@@ -314,9 +309,6 @@ size_t msp_get_num_migrations(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
-size_t msp_get_num_node_blocks(msp_t *self);
-size_t msp_get_num_edge_blocks(msp_t *self);
-size_t msp_get_num_migration_blocks(msp_t *self);
 size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
