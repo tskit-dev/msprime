@@ -560,9 +560,6 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-        self.assertGreater(sim.get_num_node_blocks(), 0)
-        self.assertGreater(sim.get_num_edge_blocks(), 0)
-        self.assertGreater(sim.get_num_migration_blocks(), 0)
         n = sim.get_num_samples()
         m = sim.get_num_loci()
         N = sim.get_num_populations()
@@ -740,9 +737,6 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-        self.assertGreater(sim.get_num_node_blocks(), 0)
-        self.assertGreater(sim.get_num_edge_blocks(), 0)
-        self.assertGreater(sim.get_num_migration_blocks(), 0)
         self.assertGreater(sim.get_used_memory(), 0)
 
         edges = sim.get_edges()
@@ -793,9 +787,6 @@ class TestSimulationState(LowLevelTestCase):
         segment_block_size = random.randint(1, 100)
         node_mapping_block_size = random.randint(1, 100)
         avl_node_block_size = random.randint(1, 100)
-        node_block_size = random.randint(1, 100)
-        edge_block_size = random.randint(1, 100)
-        migration_block_size = random.randint(1, 100)
         sim = _msprime.Simulator(
             samples=get_population_samples(*num_sampless),
             random_generator=_msprime.RandomGenerator(random_seed),
@@ -808,10 +799,7 @@ class TestSimulationState(LowLevelTestCase):
             max_memory=max_memory,
             segment_block_size=segment_block_size,
             avl_node_block_size=avl_node_block_size,
-            node_mapping_block_size=node_mapping_block_size,
-            node_block_size=node_block_size,
-            edge_block_size=edge_block_size,
-            migration_block_size=migration_block_size)
+            node_mapping_block_size=node_mapping_block_size)
         for _ in range(3):
             # Check initial state
             self.assertEqual(0, sim.get_num_breakpoints())
@@ -824,9 +812,6 @@ class TestSimulationState(LowLevelTestCase):
             self.assertGreater(sim.get_num_avl_node_blocks(), 0)
             self.assertGreater(sim.get_num_segment_blocks(), 0)
             self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
-            self.assertGreater(sim.get_num_node_blocks(), 0)
-            self.assertGreater(sim.get_num_edge_blocks(), 0)
-            self.assertGreater(sim.get_num_migration_blocks(), 0)
             self.assertEqual(sim.get_num_samples(), n)
             self.assertEqual(sim.get_num_loci(), m)
             self.assertEqual(n, len(sim.get_ancestors()))
@@ -862,9 +847,6 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
                 self.assertEqual(
                     node_mapping_block_size, sim.get_node_mapping_block_size())
-                self.assertEqual(node_block_size, sim.get_node_block_size())
-                self.assertEqual(edge_block_size, sim.get_edge_block_size())
-                self.assertEqual(migration_block_size, sim.get_migration_block_size())
                 # Run this for a tiny amount of time and check the state
                 self.assertFalse(sim.run(1e-8))
                 self.verify_running_simulation(sim)
@@ -940,7 +922,7 @@ class TestSimulationState(LowLevelTestCase):
             demographic_events=demographic_events,
             max_memory=10 * mb, segment_block_size=1000,
             avl_node_block_size=1000, node_mapping_block_size=1000,
-            node_block_size=1000, edge_block_size=1000, model=model)
+            model=model)
         for _ in range(3):
             # Run the sim for a tiny amount of time and check.
             self.assertFalse(sim.run(1e-8))
@@ -1128,8 +1110,6 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, avl_node_block_size=bad_type)
             self.assertRaises(TypeError, f, segment_block_size=bad_type)
             self.assertRaises(TypeError, f, node_mapping_block_size=bad_type)
-            self.assertRaises(TypeError, f, node_block_size=bad_type)
-            self.assertRaises(TypeError, f, edge_block_size=bad_type)
         # Check for bad values.
         self.assertRaises(_msprime.InputError, f, num_loci=0)
         self.assertRaises(_msprime.InputError, f, recombination_rate=-1)
@@ -1137,8 +1117,6 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
         self.assertRaises(_msprime.InputError, f, segment_block_size=0)
         self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
-        self.assertRaises(_msprime.InputError, f, node_block_size=0)
-        self.assertRaises(_msprime.InputError, f, edge_block_size=0)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, max_memory=2**65)
 
