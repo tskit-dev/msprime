@@ -9625,7 +9625,7 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    err = msp_populate_tables(self->sim, NULL, tables->tables);
+    err = msp_populate_tables(self->sim, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;

@@ -373,23 +373,74 @@ msp_genetic_to_phys(msp_t *self, double x)
     return ret;
 }
 
+static uint32_t
+msp_phys_to_genetic(msp_t *self, double x)
+{
+    double y = x;
+
+    if (self->recomb_map != NULL) {
+        y = recomb_map_phys_to_genetic(self->recomb_map, x);
+    }
+    return (uint32_t) round(y);
+}
+
+static segment_t * WARN_UNUSED
+msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
+        population_id_t population_id, segment_t *prev, segment_t *next)
+{
+    segment_t *seg = NULL;
+
+    if (object_heap_empty(&self->segment_heap)) {
+        self->used_memory += msp_get_segment_mem_increment(self);
+        if (self->used_memory > self->max_memory) {
+            goto out;
+        }
+        if (object_heap_expand(&self->segment_heap) != 0) {
+            goto out;
+        }
+        if (fenwick_expand(&self->links, self->segment_block_size) != 0) {
+            goto out;
+        }
+    }
+    seg = (segment_t *) object_heap_alloc_object(&self->segment_heap);
+    if (seg == NULL) {
+        goto out;
+    }
+    seg->prev = prev;
+    seg->next = next;
+    seg->left = left;
+    seg->right = right;
+    seg->value = value;
+    seg->population_id = population_id;
+out:
+    return seg;
+}
+
 static int
 msp_set_initial_state_from_ts(msp_t *self, tree_sequence_t *ts)
 {
     int ret = 0;
     sparse_tree_t t;
     node_id_t root;
+    segment_t *seg;
 
-    assert(self != NULL);
-
-    ret = sparse_tree_alloc(&t, ts, MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
+    ret = sparse_tree_alloc(&t, ts, 0);
     if (ret != 0) {
         goto out;
     }
     for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
         for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
             printf("Seg = (%f, %f, %d)\n", t.left, t.right, root);
-            /* seg = msp_alloc_segment( */
+            seg = msp_alloc_segment(self,
+                msp_phys_to_genetic(self, t.left),
+                msp_phys_to_genetic(self, t.right),
+                0, 0,
+                NULL, NULL);
+            printf("seg = %p\n", (void *) seg);
+            /* This fails because we haven't set up the memory for segments yet. */
+            /* assert(seg != NULL); */
+
+            /* printf("%d %d\n", seg->left, seg->right); */
 
         }
     }
@@ -647,38 +698,6 @@ static void
 msp_free_node_mapping(msp_t *self, node_mapping_t *nm)
 {
     object_heap_free_object(&self->node_mapping_heap, nm);
-}
-
-static segment_t * WARN_UNUSED
-msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
-        population_id_t population_id, segment_t *prev, segment_t *next)
-{
-    segment_t *seg = NULL;
-
-    if (object_heap_empty(&self->segment_heap)) {
-        self->used_memory += msp_get_segment_mem_increment(self);
-        if (self->used_memory > self->max_memory) {
-            goto out;
-        }
-        if (object_heap_expand(&self->segment_heap) != 0) {
-            goto out;
-        }
-        if (fenwick_expand(&self->links, self->segment_block_size) != 0) {
-            goto out;
-        }
-    }
-    seg = (segment_t *) object_heap_alloc_object(&self->segment_heap);
-    if (seg == NULL) {
-        goto out;
-    }
-    seg->prev = prev;
-    seg->next = next;
-    seg->left = left;
-    seg->right = right;
-    seg->value = value;
-    seg->population_id = population_id;
-out:
-    return seg;
 }
 
 /*

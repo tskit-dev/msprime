@@ -1669,11 +1669,9 @@ test_simulate_from_single_locus(void)
     /* ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES); */
     /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
     /* /1* Make sure we can build a tree sequence from the tables. *1/ */
-    /* ret = msp_populate_tables(&msp, NULL, &tables); */
+    /* ret = msp_populate_tables(&msp, &tables); */
     /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
 
-    /* /1* TODO remove this when populate tables takes table_collection as arg *1/ */
-    /* tables.sequence_length = msp.num_loci; */
     /* ret = tree_sequence_load_tables(&from, &tables, 0); */
     /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
     /* table_collection_free(&tables); */
