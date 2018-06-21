@@ -566,6 +566,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
+    ret = msp_set_recombination_map(msp, recomb_map);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     config_destroy(config);
     free(config);
     free(samples);
@@ -872,7 +876,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             goto out;
         }
         /* Create the tree_sequence from the state of the simulator. */
-        ret = msp_populate_tables(msp, recomb_map, &tables);
+        ret = msp_populate_tables(msp, &tables);
         if (ret != 0) {
             goto out;
         }

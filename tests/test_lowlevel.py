@@ -1110,6 +1110,7 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, avl_node_block_size=bad_type)
             self.assertRaises(TypeError, f, segment_block_size=bad_type)
             self.assertRaises(TypeError, f, node_mapping_block_size=bad_type)
+            self.assertRaises(TypeError, f, recombination_map=bad_type)
         # Check for bad values.
         self.assertRaises(_msprime.InputError, f, num_loci=0)
         self.assertRaises(_msprime.InputError, f, recombination_rate=-1)
@@ -1799,8 +1800,6 @@ class TestSimulator(LowLevelTestCase):
         tables = new_table_collection()
         sim = _msprime.Simulator(get_samples(10), _msprime.RandomGenerator(1))
         sim.run()
-
-        recomb_map = uniform_recombination_map(sim)
         # tables is mandatory.
         self.assertRaises(TypeError, sim.populate_tables)
 
@@ -1811,8 +1810,6 @@ class TestSimulator(LowLevelTestCase):
                 recombination_map=bad_type)
 
         sim.populate_tables(tables)
-        self.assertEqual(tables.edges.num_rows, sim.get_num_edges())
-        sim.populate_tables(tables, recomb_map)
         self.assertEqual(tables.edges.num_rows, sim.get_num_edges())
 
 

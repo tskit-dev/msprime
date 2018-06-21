@@ -336,9 +336,6 @@ class Simulator(object):
         self.segment_block_size = max(block_size, self.sample_size)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
-        self.node_block_size = block_size
-        self.edge_block_size = block_size
-        self.migration_block_size = block_size
         # TODO is it useful to bring back the API to set this? Mostly
         # the amount of memory required is tiny.
         self.max_memory = sys.maxsize
@@ -377,14 +374,6 @@ class Simulator(object):
     @property
     def num_avl_node_blocks(self):
         return self.ll_sim.get_num_avl_node_blocks()
-
-    @property
-    def num_node_blocks(self):
-        return self.ll_sim.get_num_node_blocks()
-
-    @property
-    def num_edge_blocks(self):
-        return self.ll_sim.get_num_edge_blocks()
 
     @property
     def num_node_mapping_blocks(self):
@@ -529,12 +518,18 @@ class Simulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
         ll_recomb_rate = self.recombination_map.get_per_locus_recombination_rate()
+        ll_recomb_map = self.recombination_map.get_ll_recombination_map()
+        # TODO it really doesn't make sense to provide the recombination map,
+        # AND the number of loci and per-locus recombination rate. This is left
+        # over from earlier parameterisations when mapping from genetic to
+        # physical coordinates was done after the simulation completed.
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             random_generator=self.random_generator,
             model=ll_simulation_model,
             num_loci=self.recombination_map.get_num_loci(),
             recombination_rate=ll_recomb_rate,
+            recombination_map=ll_recomb_map,
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
@@ -542,10 +537,7 @@ class Simulator(object):
             max_memory=self.max_memory,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
-            node_mapping_block_size=self.node_mapping_block_size,
-            node_block_size=self.node_block_size,
-            edge_block_size=self.edge_block_size,
-            migration_block_size=self.migration_block_size)
+            node_mapping_block_size=self.node_mapping_block_size)
         return ll_sim
 
     def run(self):
@@ -564,9 +556,11 @@ class Simulator(object):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        self.ll_sim.populate_tables(
-            self.tables.ll_tables, recombination_map=ll_recomb_map)
+        # TODO it's a waste of time copying the tables from the simulation
+        # into the local table here. We should just work directly with the
+        # tables held in the simulator. To do this we need an interface
+        # to the simulators tables.
+        self.ll_sim.populate_tables(self.tables.ll_tables)
         if mutation_generator is not None:
             mutation_generator.generate(self.tables.ll_tables)
         self.tables.provenances.clear()

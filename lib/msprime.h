@@ -108,6 +108,17 @@ typedef struct _simulation_model_t {
     double (*model_rate_to_generation_rate)(struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
+/* Recombination map */
+
+typedef struct {
+    uint32_t num_loci;      /* size of the genetic coordinate space  */
+    double sequence_length; /* size of the physical coordinate space */
+    double total_recombination_rate;
+    size_t size;            /* the total number of values in the map */
+    double *positions;
+    double *rates;
+} recomb_map_t;
+
 typedef struct _msp_t {
     gsl_rng *rng;
     /* input parameters */
@@ -116,6 +127,7 @@ typedef struct _msp_t {
     uint32_t num_samples;
     uint32_t num_loci;
     double recombination_rate;
+    recomb_map_t *recomb_map;
     uint32_t num_populations;
     sample_t *samples;
     simulation_model_t initial_model;
@@ -208,17 +220,6 @@ typedef struct demographic_event_t_t {
     struct demographic_event_t_t *next;
 } demographic_event_t;
 
-/* Recombination map */
-
-typedef struct {
-    uint32_t num_loci;      /* size of the genetic coordinate space  */
-    double sequence_length; /* size of the physical coordinate space */
-    double total_recombination_rate;
-    size_t size;            /* the total number of values in the map */
-    double *positions;
-    double *rates;
-} recomb_map_t;
-
 typedef struct {
     double position;
     node_id_t node;
@@ -245,6 +246,7 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
 int msp_set_num_loci(msp_t *self, size_t num_loci);
+int msp_set_recombination_map(msp_t *self, recomb_map_t *recomb_map);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_recombination_rate(msp_t *self, double recombination_rate);
@@ -273,7 +275,7 @@ int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
-int msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *tables);
+int msp_populate_tables(msp_t *self, table_collection_t *tables);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);

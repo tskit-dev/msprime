@@ -8662,7 +8662,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "num_loci", "recombination_rate",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "max_memory", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "store_migrations", NULL};
+        "node_mapping_block_size", "store_migrations",
+        "recombination_map", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -8679,10 +8680,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
     int store_migrations = 0;
+    RecombinationMap *recombination_map = NULL;
+    recomb_map_t *recomb_map = NULL;
+
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnniO!", kwlist,
             &PyList_Type, &py_samples,
             &RandomGeneratorType, &random_generator,
             &num_loci, &recombination_rate,
@@ -8691,7 +8695,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
             &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &store_migrations)) {
+            &node_mapping_block_size, &store_migrations,
+            &RecombinationMapType, &recombination_map)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -8701,6 +8706,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     if (parse_samples(py_samples, &num_samples, &samples) != 0) {
         goto out;
+    }
+    if (recombination_map != NULL) {
+        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
+            goto out;
+        }
+        recomb_map = recombination_map->recomb_map;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
@@ -8729,6 +8740,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     sim_ret = msp_set_recombination_rate(self->sim, recombination_rate);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_recombination_map(self->sim, recomb_map);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -9600,25 +9616,16 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
     int err;
     PyObject *ret = NULL;
     TableCollection *tables = NULL;
-    RecombinationMap *recombination_map = NULL;
-    recomb_map_t *recomb_map = NULL;
-    static char *kwlist[] = {"tables", "recombination_map", NULL};
+    static char *kwlist[] = {"tables", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
-            &TableCollectionType, &tables,
-            &RecombinationMapType, &recombination_map)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (recombination_map != NULL) {
-        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
-            goto out;
-        }
-        recomb_map = recombination_map->recomb_map;
-    }
-    err = msp_populate_tables(self->sim, recomb_map, tables->tables);
+    err = msp_populate_tables(self->sim, NULL, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;

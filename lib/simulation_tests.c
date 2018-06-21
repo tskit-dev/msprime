@@ -710,7 +710,7 @@ test_dtwf_deterministic(void)
         ret = msp_run(msp, DBL_MAX, UINT32_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
-        ret = msp_populate_tables(msp, NULL, &tables[j]);
+        ret = msp_populate_tables(msp, &tables[j]);
         CU_ASSERT_EQUAL(ret, 0);
         msp_free(msp);
         CU_ASSERT_EQUAL(tables[j].migrations->num_rows, 0);
@@ -810,7 +810,7 @@ test_mixed_model_simulation(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* Make sure we can build a tree sequence from the tables. */
-    ret = msp_populate_tables(msp, NULL, &tables);
+    ret = msp_populate_tables(msp, &tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* TODO remove this when populate tables takes table_collection as arg */
@@ -1228,7 +1228,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_populate_tables(&msp, NULL, &tables);
+        ret = msp_populate_tables(&msp, &tables);
         ret = mutgen_generate(&mutgen, &tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         /* TODO remove this when populate tables takes table_collection as arg */

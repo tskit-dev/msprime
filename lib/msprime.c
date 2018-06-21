@@ -166,6 +166,34 @@ out:
 }
 
 int
+msp_set_recombination_rate(msp_t *self, double recombination_rate)
+{
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+
+    if (recombination_rate < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->recombination_rate = model->generation_rate_to_model_rate(
+            model, recombination_rate);
+out:
+    return ret;
+}
+
+/* TODO it really doesn't make sense to provide the recombination map
+ * AND the number of loci and the per locus recombination rate. We should
+ * remove the set_num_loci and set_recombination map. We can add a
+ * convenience function set_flat_recombination_map(num_loci, rate) if
+ * we want. */
+int
+msp_set_recombination_map(msp_t *self, recomb_map_t *recomb_map)
+{
+    self->recomb_map = recomb_map;
+    return 0;
+}
+
+int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     int ret = 0;
@@ -216,22 +244,6 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
         self->initial_populations[j].initial_size = 1.0;
         self->initial_populations[j].start_time = 0.0;
     }
-out:
-    return ret;
-}
-
-int
-msp_set_recombination_rate(msp_t *self, double recombination_rate)
-{
-    int ret = 0;
-    simulation_model_t *model = &self->model;
-
-    if (recombination_rate < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->recombination_rate = model->generation_rate_to_model_rate(
-            model, recombination_rate);
 out:
     return ret;
 }
@@ -347,6 +359,17 @@ msp_set_avl_node_block_size(msp_t *self, size_t block_size)
     }
     self->avl_node_block_size = block_size;
 out:
+    return ret;
+}
+
+static double
+msp_genetic_to_phys(msp_t *self, double x)
+{
+    double ret = x;
+
+    if (self->recomb_map != NULL) {
+        ret = recomb_map_genetic_to_phys(self->recomb_map, x);
+    }
     return ret;
 }
 
@@ -956,7 +979,6 @@ out:
     return ret;
 }
 
-
 static int WARN_UNUSED
 msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
         node_id_t node, population_id_t source_pop, population_id_t dest_pop)
@@ -964,32 +986,13 @@ msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
     int ret = 0;
     double scaled_time = self->model.model_time_to_generations(&self->model, self->time);
 
-    ret = migration_table_add_row(self->tables.migrations, left, right,
+    ret = migration_table_add_row(self->tables.migrations,
+            msp_genetic_to_phys(self, left),
+            msp_genetic_to_phys(self, right),
             node, source_pop, dest_pop, scaled_time);
     if (ret < 0) {
         goto out;
     }
-
-/*     if (self->num_migrations == self->max_migrations - 1) { */
-/*         /1* Grow the array *1/ */
-/*         self->max_migrations += self->migration_block_size;; */
-/*         mr = realloc(self->migrations, */
-/*                 self->max_migrations * sizeof(migration_t)); */
-/*         if (mr == NULL) { */
-/*             ret = MSP_ERR_NO_MEMORY; */
-/*             goto out; */
-/*         } */
-/*         self->migrations = mr; */
-/*         self->num_migration_blocks++; */
-/*     } */
-/*     mr = &self->migrations[self->num_migrations]; */
-/*     mr->left = (double) left; */
-/*     mr->right = (double) right; */
-/*     mr->node = node; */
-/*     mr->time = scaled_time; */
-/*     mr->source = source_pop; */
-/*     mr->dest = dest_pop; */
-    /* self->num_migrations++; */
     ret = 0;
 out:
     return ret;
@@ -1136,7 +1139,9 @@ msp_flush_edges(msp_t *self)
         }
         for (j = 0; j < num_edges; j++) {
             edge = self->buffered_edges[j];
-            ret = edge_table_add_row(self->tables.edges, edge.left, edge.right,
+            ret = edge_table_add_row(self->tables.edges,
+                    msp_genetic_to_phys(self, edge.left),
+                    msp_genetic_to_phys(self, edge.right),
                     edge.parent, edge.child);
             if (ret < 0) {
                 goto out;
@@ -1144,18 +1149,7 @@ msp_flush_edges(msp_t *self)
 
         }
         self->num_buffered_edges = 0;
-
     }
-
-/*     if (self->edge_buffer_start < self->num_edges) { */
-/*         ret = squash_edges(self->edges + self->edge_buffer_start, */
-/*                 self->num_edges - self->edge_buffer_start, &num_output_edges); */
-/*         if (ret != 0) { */
-/*             goto out; */
-/*         } */
-/*         self->num_edges = self->edge_buffer_start + num_output_edges; */
-/*     } */
-/*     self->edge_buffer_start = self->num_edges; */
     ret = 0;
 out:
     return ret;
@@ -1955,6 +1949,11 @@ msp_initialise(msp_t *self)
     assert(self->num_loci >= 1);
     assert(self->num_populations >= 1);
 
+    self->tables.sequence_length = self->num_loci;
+    if (self->recomb_map != NULL) {
+        self->tables.sequence_length = self->recomb_map->sequence_length;
+    }
+
     ret = msp_alloc_memory_blocks(self);
     if (ret != 0) {
         goto out;
@@ -1969,6 +1968,14 @@ msp_initialise(msp_t *self)
     /* Copy the state of the simulation model into the initial model */
     memcpy(&self->initial_model, &self->model, sizeof(self->model));
 
+    /* Add the populations to the output tables. We don't modify these in
+     * any way, so we can keep them around between replicates */
+    for (j = 0; j < self->num_populations; j++) {
+        ret = population_table_add_row(self->tables.populations, NULL, 0);
+        if (ret < 0) {
+            goto out;
+        }
+    }
     ret = msp_reset(self);
     if (ret != 0) {
         goto out;
@@ -2436,89 +2443,25 @@ out:
 }
 
 int WARN_UNUSED
-msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *tables)
+msp_populate_tables(msp_t *self, table_collection_t *tables)
 {
     int ret = 0;
-    size_t j;
 
-    tables->sequence_length = self->num_loci;
-    if (recomb_map != NULL) {
-        tables->sequence_length = recomb_map->sequence_length;
-    }
+    tables->sequence_length = self->tables.sequence_length;
 
-    /* Add the nodes */
-    /* ret = node_table_clear(tables->nodes); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
     ret = node_table_copy(self->tables.nodes, tables->nodes);
     if (ret != 0) {
         goto out;
     }
-
-    /* Add the edges */
     edge_table_copy(self->tables.edges, tables->edges);
     if (ret != 0) {
         goto out;
     }
-
-
-    /* ret = edge_table_clear(tables->edges); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
-    /* for (j = 0; j < self->num_edges; j++) { */
-    /*     edge = self->edges + j; */
-    /*     left = edge->left; */
-    /*     right = edge->right; */
-    /*     if (recomb_map != NULL) { */
-    /*         left = recomb_map_genetic_to_phys(recomb_map, left); */
-    /*         right = recomb_map_genetic_to_phys(recomb_map, right); */
-    /*     } */
-    /*     ret = edge_table_add_row(tables->edges, left, right, edge->parent, edge->child); */
-    /*     if (ret < 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
-
-    /* Add in the migrations */
     ret = migration_table_copy(self->tables.migrations, tables->migrations);
     if (ret != 0) {
         goto out;
     }
-
-
-    /* ret = migration_table_clear(tables->migrations); */
-    /* if (ret != 0) { */
-    /*     goto out; */
-    /* } */
-    /* for (j = 0; j < self->num_migrations; j++) { */
-    /*     migration = &self->migrations[j]; */
-    /*     left = migration->left; */
-    /*     right = migration->right; */
-    /*     if (recomb_map != NULL) { */
-    /*         left = recomb_map_genetic_to_phys(recomb_map, left); */
-    /*         right = recomb_map_genetic_to_phys(recomb_map, right); */
-    /*     } */
-    /*     ret = migration_table_add_row(tables->migrations, left, right, migration->node, */
-    /*             migration->source, migration->dest, migration->time); */
-    /*     if (ret < 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
-    /* Add the populations. We don't have any metadata here. Users can add
-     * metadata to the table if they wish. */
-    ret = population_table_clear(tables->populations);
-    if (ret != 0) {
-        goto out;
-    }
-    for (j = 0; j < self->num_populations; j++) {
-        ret = population_table_add_row(tables->populations, NULL, 0);
-        if (ret < 0) {
-            goto out;
-        }
-    }
-    ret = 0;
+    ret = population_table_copy(self->tables.populations, tables->populations);
 out:
     return ret;
 }

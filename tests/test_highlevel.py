@@ -599,8 +599,6 @@ class TestSimulator(HighLevelTestCase):
         self.assertGreater(sim.num_avl_node_blocks, 0)
         self.assertGreater(sim.num_segment_blocks, 0)
         self.assertGreater(sim.num_node_mapping_blocks, 0)
-        self.assertGreater(sim.num_node_blocks, 0)
-        self.assertGreater(sim.num_edge_blocks, 0)
         self.assertGreater(sim.max_memory, 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
@@ -629,19 +627,13 @@ class TestSimulator(HighLevelTestCase):
         self.assertGreater(sim.avl_node_block_size, 0)
         self.assertGreater(sim.segment_block_size, 0)
         self.assertGreater(sim.node_mapping_block_size, 0)
-        self.assertGreater(sim.node_block_size, 0)
-        self.assertGreater(sim.edge_block_size, 0)
         sim.reset()
         sim.avl_node_block_size = 1
         sim.segment_block_size = 1
         sim.node_mapping_block_size = 1
-        sim.node_block_size = 1
-        sim.edge_block_size = 1
         self.assertEqual(sim.avl_node_block_size, 1)
         self.assertEqual(sim.segment_block_size, 1)
         self.assertEqual(sim.node_mapping_block_size, 1)
-        self.assertEqual(sim.node_block_size, 1)
-        self.assertEqual(sim.edge_block_size, 1)
 
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
