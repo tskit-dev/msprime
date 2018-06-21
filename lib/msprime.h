@@ -163,12 +163,6 @@ typedef struct _msp_t {
     size_t edge_block_size;
     size_t num_edge_blocks;
     size_t edge_buffer_start;
-    /* migration records are stored in a flat array */
-    migration_t *migrations;
-    size_t num_migrations;
-    size_t max_migrations;
-    size_t migration_block_size;
-    size_t num_migration_blocks;
     /* Methods for getting the waiting time until the next common ancestor
      * event and the event are defined by the simulation model */
     double (*get_common_ancestor_waiting_time)(struct _msp_t *self, population_id_t pop);

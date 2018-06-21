@@ -127,12 +127,6 @@ msp_get_num_edge_blocks(msp_t *self)
 }
 
 size_t
-msp_get_num_migration_blocks(msp_t *self)
-{
-    return self->num_migration_blocks;
-}
-
-size_t
 msp_get_used_memory(msp_t *self)
 {
     return self->used_memory;
@@ -363,20 +357,6 @@ out:
 }
 
 int
-msp_set_migration_block_size(msp_t *self, size_t block_size)
-{
-    int ret = 0;
-
-    if (block_size < 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->migration_block_size = block_size;
-out:
-    return ret;
-}
-
-int
 msp_set_edge_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
@@ -517,7 +497,6 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
     self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
-    self->migration_block_size = 1024;
     self->edge_block_size = 1024;
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
@@ -572,14 +551,6 @@ msp_alloc_memory_blocks(msp_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* Allocate the migration records */
-    self->migrations = malloc(self->migration_block_size * sizeof(migration_t));
-    self->max_migrations = self->migration_block_size;
-    self->num_migration_blocks = 1;
-    if (self->migrations == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     ret = 0;
 out:
     return ret;
@@ -616,7 +587,6 @@ msp_free(msp_t *self)
     msp_safe_free(self->samples);
     msp_safe_free(self->sampling_events);
     msp_safe_free(self->edges);
-    msp_safe_free(self->migrations);
     table_collection_free(&self->tables);
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
@@ -886,7 +856,6 @@ msp_print_state(msp_t *self, FILE *out)
     avl_node_t *a;
     node_mapping_t *nm;
     segment_t *u;
-    migration_t *mr;
     edge_t *edge;
     demographic_event_t *de;
     sampling_event_t *se;
@@ -984,6 +953,9 @@ msp_print_state(msp_t *self, FILE *out)
         nm = (node_mapping_t *) a->item;
         fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
+    fprintf(out, "Tables = \n");
+    table_collection_print_state(&self->tables, out);
+
     fprintf(out, "Edges = %ld\n", (long) self->num_edges);
     for (j = 0; j < self->num_edges; j++) {
         if (j == self->edge_buffer_start) {
@@ -992,13 +964,6 @@ msp_print_state(msp_t *self, FILE *out)
         edge = &self->edges[j];
         fprintf(out, "\t%f\t%f\t%d\t%d\n", edge->left, edge->right, edge->parent,
                 edge->child);
-    }
-    fprintf(out, "Migration records = %ld\n",
-            (long) self->num_migrations);
-    for (j = 0; j < self->num_migrations; j++) {
-        mr = &self->migrations[j];
-        fprintf(out, "\t%f\t%f\t%d\t%f\t%d\t%d\n", mr->left, mr->right,
-                (int) mr->node, mr->time, (int) mr->source, (int) mr->dest);
     }
     fprintf(out, "Memory heaps\n");
     fprintf(out, "avl_node_heap:");
@@ -1021,29 +986,35 @@ msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
         node_id_t node, population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
-    migration_t *mr;
     double scaled_time = self->model.model_time_to_generations(&self->model, self->time);
 
-    if (self->num_migrations == self->max_migrations - 1) {
-        /* Grow the array */
-        self->max_migrations += self->migration_block_size;;
-        mr = realloc(self->migrations,
-                self->max_migrations * sizeof(migration_t));
-        if (mr == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        self->migrations = mr;
-        self->num_migration_blocks++;
+    ret = migration_table_add_row(self->tables.migrations, left, right,
+            node, source_pop, dest_pop, scaled_time);
+    if (ret < 0) {
+        goto out;
     }
-    mr = &self->migrations[self->num_migrations];
-    mr->left = (double) left;
-    mr->right = (double) right;
-    mr->node = node;
-    mr->time = scaled_time;
-    mr->source = source_pop;
-    mr->dest = dest_pop;
-    self->num_migrations++;
+
+/*     if (self->num_migrations == self->max_migrations - 1) { */
+/*         /1* Grow the array *1/ */
+/*         self->max_migrations += self->migration_block_size;; */
+/*         mr = realloc(self->migrations, */
+/*                 self->max_migrations * sizeof(migration_t)); */
+/*         if (mr == NULL) { */
+/*             ret = MSP_ERR_NO_MEMORY; */
+/*             goto out; */
+/*         } */
+/*         self->migrations = mr; */
+/*         self->num_migration_blocks++; */
+/*     } */
+/*     mr = &self->migrations[self->num_migrations]; */
+/*     mr->left = (double) left; */
+/*     mr->right = (double) right; */
+/*     mr->node = node; */
+/*     mr->time = scaled_time; */
+/*     mr->source = source_pop; */
+/*     mr->dest = dest_pop; */
+    /* self->num_migrations++; */
+    ret = 0;
 out:
     return ret;
 }
@@ -1920,7 +1891,10 @@ msp_reset(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+
+    edge_table_clear(self->tables.edges);
     node_table_clear(self->tables.nodes);
+    migration_table_clear(self->tables.migrations);
 
     /* Set up the initial segments and algorithm state */
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
@@ -1962,7 +1936,6 @@ msp_reset(msp_t *self)
         goto out;
     }
     self->next_sampling_event = 0;
-    self->num_migrations = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
     self->num_rejected_ca_events = 0;
@@ -2475,8 +2448,6 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *t
     size_t j;
     double left, right;
     edge_t *edge;
-    /* node_t *node; */
-    migration_t *migration;
 
     tables->sequence_length = self->num_loci;
     if (recomb_map != NULL) {
@@ -2513,24 +2484,30 @@ msp_populate_tables(msp_t *self, recomb_map_t *recomb_map, table_collection_t *t
     }
 
     /* Add in the migrations */
-    ret = migration_table_clear(tables->migrations);
+    ret = migration_table_copy(self->tables.migrations, tables->migrations);
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < self->num_migrations; j++) {
-        migration = &self->migrations[j];
-        left = migration->left;
-        right = migration->right;
-        if (recomb_map != NULL) {
-            left = recomb_map_genetic_to_phys(recomb_map, left);
-            right = recomb_map_genetic_to_phys(recomb_map, right);
-        }
-        ret = migration_table_add_row(tables->migrations, left, right, migration->node,
-                migration->source, migration->dest, migration->time);
-        if (ret < 0) {
-            goto out;
-        }
-    }
+
+
+    /* ret = migration_table_clear(tables->migrations); */
+    /* if (ret != 0) { */
+    /*     goto out; */
+    /* } */
+    /* for (j = 0; j < self->num_migrations; j++) { */
+    /*     migration = &self->migrations[j]; */
+    /*     left = migration->left; */
+    /*     right = migration->right; */
+    /*     if (recomb_map != NULL) { */
+    /*         left = recomb_map_genetic_to_phys(recomb_map, left); */
+    /*         right = recomb_map_genetic_to_phys(recomb_map, right); */
+    /*     } */
+    /*     ret = migration_table_add_row(tables->migrations, left, right, migration->node, */
+    /*             migration->source, migration->dest, migration->time); */
+    /*     if (ret < 0) { */
+    /*         goto out; */
+    /*     } */
+    /* } */
     /* Add the populations. We don't have any metadata here. Users can add
      * metadata to the table if they wish. */
     ret = population_table_clear(tables->populations);
@@ -2698,7 +2675,7 @@ msp_get_num_edges(msp_t *self)
 size_t
 msp_get_num_migrations(msp_t *self)
 {
-    return self->num_migrations;
+    return (size_t) self->tables.migrations->num_rows;
 }
 
 
@@ -2766,13 +2743,6 @@ int WARN_UNUSED
 msp_get_edges(msp_t *self, edge_t **edges)
 {
     *edges = self->edges;
-    return 0;
-}
-
-int WARN_UNUSED
-msp_get_migrations(msp_t *self, migration_t **migrations)
-{
-    *migrations = self->migrations;
     return 0;
 }
 
