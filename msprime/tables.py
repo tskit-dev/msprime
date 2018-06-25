@@ -196,7 +196,7 @@ class IndividualTable(BaseTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tflags\tlocation\tmetadata\n"
         for j in range(self.num_rows):
-            md = base64.b64encode(metadata[j]).decode('utf8')
+            md = base64.b64encode(metadata[j]).decode('utf8', errors='surrogateescape')
             location_str = ",".join(map(
                 str, location[location_offset[j]: location_offset[j + 1]]))
             ret += "{}\t{}\t{}\t{}\n".format(j, flags[j], location_str, md)
@@ -385,7 +385,7 @@ class NodeTable(BaseTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tflags\tpopulation\tindividual\ttime\tmetadata\n"
         for j in range(self.num_rows):
-            md = base64.b64encode(metadata[j]).decode('utf8')
+            md = base64.b64encode(metadata[j]).decode('utf8', errors='surrogateescape')
             ret += "{}\t{}\t{}\t{}\t{:.14f}\t{}\n".format(
                 j, flags[j], population[j], individual[j], time[j], md)
         return ret[:-1]
@@ -849,7 +849,7 @@ class SiteTable(BaseTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tposition\tancestral_state\tmetadata\n"
         for j in range(self.num_rows):
-            md = base64.b64encode(metadata[j]).decode('utf8')
+            md = base64.b64encode(metadata[j]).decode('utf8', errors='surrogateescape')
             ret += "{}\t{:.8f}\t{}\t{}\n".format(
                 j, position[j], ancestral_state[j], md)
         return ret[:-1]
@@ -1044,7 +1044,7 @@ class MutationTable(BaseTable):
         metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tsite\tnode\tderived_state\tparent\tmetadata\n"
         for j in range(self.num_rows):
-            md = base64.b64encode(metadata[j]).decode('utf8')
+            md = base64.b64encode(metadata[j]).decode('utf8', errors='surrogateescape')
             ret += "{}\t{}\t{}\t{}\t{}\t{}\n".format(
                 j, site[j], node[j], derived_state[j], parent[j], md)
         return ret[:-1]
@@ -1768,7 +1768,7 @@ def unpack_bytes(packed, offset):
     return ret
 
 
-def pack_strings(strings, encoding="utf8"):
+def pack_strings(strings, encoding="utf8", errors='surrogateescape'):
     """
     Packs the specified list of strings into a flattened numpy array of 8 bit integers
     and corresponding offsets using the specified text encoding.
@@ -1783,10 +1783,10 @@ def pack_strings(strings, encoding="utf8"):
         input data and offsets.
     :rtype: numpy.array (dtype=np.int8), numpy.array (dtype=np.uint32).
     """
-    return pack_bytes([bytearray(s.encode(encoding)) for s in strings])
+    return pack_bytes([bytearray(s.encode(encoding, errors)) for s in strings])
 
 
-def unpack_strings(packed, offset, encoding="utf8"):
+def unpack_strings(packed, offset, encoding="utf8", errors='surrogateescape'):
     """
     Unpacks a list of strings from the specified numpy arrays of packed byte
     data and corresponding offsets using the specified text encoding.
@@ -1801,4 +1801,4 @@ def unpack_strings(packed, offset, encoding="utf8"):
     :return: The list of strings unpacked from the parameter arrays.
     :rtype: list[str]
     """
-    return [b.decode(encoding) for b in unpack_bytes(packed, offset)]
+    return [b.decode(encoding, errors) for b in unpack_bytes(packed, offset)]
