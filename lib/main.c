@@ -746,6 +746,168 @@ print_vcf(tree_sequence_t *ts, unsigned int ploidy, const char *chrom, int verbo
 }
 
 static void
+add_edge(edge_t *edge_map, edge_table_t *edge_table, double left, double right,
+        node_id_t parent, node_id_t child)
+{
+    int ret;
+    edge_t *edge = edge_map + child;
+
+    if (edge->child == MSP_NULL_NODE) {
+        edge->left = left;
+        edge->right = right;
+        edge->parent = parent;
+        edge->child = child;
+    } else {
+        assert(edge->child == child);
+        if (edge->right == left && edge->parent == parent) {
+            /* Squash */
+            edge->right = right;
+        } else {
+            assert(edge->left < edge->right);
+            ret = edge_table_add_row(edge_table, edge->left, edge->right,
+                    edge->parent, edge->child);
+            if (ret < 0) {
+                fatal_library_error(ret, "edge_table_add_row");
+            }
+            edge->left = left;
+            edge->right = right;
+            edge->parent = parent;
+        }
+    }
+}
+
+static void
+minimise_tree_sequence(tree_sequence_t *ts, const char *output_filename, int verbose)
+{
+    int ret = 0;
+    table_collection_t tables;
+    sparse_tree_t tree;
+    node_id_t root, u, v;
+    node_id_t *stack;
+    size_t num_nodes = tree_sequence_get_num_nodes(ts);
+    int stack_top = 0;
+    size_t max_buffered_edges = num_nodes;
+    edge_t *edge_buffer = malloc(max_buffered_edges * sizeof(*edge_buffer));
+    edge_t *edge_map = malloc(num_nodes * sizeof(*edge_map));
+    edge_t *edge;
+    size_t j, num_buffered_edges;
+    bool first_site = true;
+    double x = 0;
+
+    if (edge_buffer == NULL || edge_map == NULL) {
+        fatal_library_error(ret, "malloc");
+    }
+    /* Initialise the edge map */
+    for (j = 0; j < num_nodes; j++) {
+        edge_map[j].child = MSP_NULL_NODE;
+    }
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    if (ret != 0) {
+        fatal_library_error(ret, "table_collection_alloc");
+    }
+    ret = tree_sequence_dump_tables(ts, &tables, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "dump_tables");
+    }
+    edge_table_clear(tables.edges);
+
+    if (verbose > 0) {
+        printf("START tree iter: %d\n", (int) ts->num_trees);
+    }
+    ret = sparse_tree_alloc(&tree, ts, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "stalloc");
+    }
+    num_buffered_edges = 0;
+    stack = tree.stack1;
+    for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
+        if (verbose > 0) {
+            if (tree.index % 1000 == 0) {
+                printf("tree %d\n", (int) tree.index);
+            }
+        }
+        if (tree.sites_length > 0) {
+            if (first_site) {
+                x = 0;
+                first_site = false;
+            } else {
+                x = tree.sites[0].position;
+            }
+            /*Flush the edge buffer */
+            for (j = 0; j < num_buffered_edges; j++) {
+                add_edge(edge_map, tables.edges, edge_buffer[j].left, x,
+                        edge_buffer[j].parent, edge_buffer[j].child);
+            }
+            num_buffered_edges = 0;
+            for (root = tree.left_root; root != MSP_NULL_NODE; root = tree.right_sib[root]) {
+                /* Traverse down the tree and put a mutation on every branch. */
+                stack_top = 0;
+                stack[0] = root;
+                while (stack_top >= 0) {
+                    u = stack[stack_top];
+                    if (u != root) {
+                        assert(num_buffered_edges < max_buffered_edges);
+                        edge = edge_buffer + num_buffered_edges;
+                        num_buffered_edges++;
+                        edge->left = x;
+                        edge->right = 0;
+                        edge->parent = tree.parent[u];
+                        edge->child = u;
+                    }
+                    stack_top--;
+                    for (v = tree.left_child[u]; v != MSP_NULL_NODE; v = tree.right_sib[v]) {
+                        stack_top++;
+                        stack[stack_top] = v;
+                    }
+                }
+            }
+        }
+    }
+    if (ret != 0) {
+        fatal_library_error(ret, "stiter");
+    }
+
+    /*Flush the edge buffer */
+    for (j = 0; j < num_buffered_edges; j++) {
+        add_edge(edge_map, tables.edges, edge_buffer[j].left, tables.sequence_length,
+                edge_buffer[j].parent, edge_buffer[j].child);
+    }
+    /* Write out the remaining edges in the map. */
+    for (j = 0; j < num_nodes; j++) {
+        if (edge_map[j].child != MSP_NULL_NODE) {
+            assert(edge_map[j].child == (node_id_t) j);
+            assert(edge_map[j].left < edge_map[j].right);
+            ret = edge_table_add_row(tables.edges,
+                    edge_map[j].left, edge_map[j].right, edge_map[j].parent,
+                    edge_map[j].child);
+            if (ret < 0) {
+                fatal_library_error(ret, "edge_table_add_row");
+            }
+
+        }
+    }
+
+    ret = table_collection_sort(&tables, 0, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "sort");
+    }
+    ret = table_collection_build_indexes(&tables, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "build_indexes");
+    }
+    table_collection_dump(&tables, output_filename, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "dump");
+    }
+
+    sparse_tree_free(&tree);
+    table_collection_free(&tables);
+    free(edge_map);
+    free(edge_buffer);
+}
+
+static void
 print_newick_trees(tree_sequence_t *ts)
 {
     int ret = 0;
@@ -1059,6 +1221,16 @@ run_simplify(const char *input_filename, const char *output_filename, size_t num
     tree_sequence_free(&subset);
 }
 
+static void
+run_minimise(const char *input_filename, const char *output_filename, int verbose)
+{
+    tree_sequence_t ts;
+
+    load_tree_sequence(&ts, input_filename);
+    minimise_tree_sequence(&ts, output_filename, verbose);
+    tree_sequence_free(&ts);
+}
+
 int
 main(int argc, char** argv)
 {
@@ -1148,6 +1320,15 @@ main(int argc, char** argv)
         infiles9, outfiles9, end9};
     int nerrors9;
 
+    /* SYNTAX 10: minimise [-v] <input-file> <output-file> */
+    struct arg_rex *cmd10 = arg_rex1(NULL, NULL, "minimise", NULL, REG_ICASE, NULL);
+    struct arg_lit *verbose10 = arg_lit0("v", "verbose", NULL);
+    struct arg_file *infiles10 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_file *outfiles10 = arg_file1(NULL, NULL, NULL, NULL);
+    struct arg_end *end10 = arg_end(20);
+    void* argtable10[] = {cmd10, verbose10, infiles10, outfiles10, end10};
+    int nerrors10;
+
     int exitcode = EXIT_SUCCESS;
     const char *progname = "main";
 
@@ -1167,6 +1348,7 @@ main(int argc, char** argv)
     nerrors7 = arg_parse(argc, argv, argtable7);
     nerrors8 = arg_parse(argc, argv, argtable8);
     nerrors9 = arg_parse(argc, argv, argtable9);
+    nerrors10 = arg_parse(argc, argv, argtable10);
 
     if (nerrors1 == 0) {
         run_simulate(infiles1->filename[0], output1->filename[0], verbose1->count,
@@ -1189,6 +1371,8 @@ main(int argc, char** argv)
         run_simplify(infiles9->filename[0], outfiles9->filename[0],
                 (size_t) num_samples9->ival[0], (bool) filter_zero_mutation_sites9->count,
                 verbose9->count);
+    } else if (nerrors10 == 0) {
+        run_minimise(infiles10->filename[0], outfiles10->filename[0], verbose10->count);
     } else {
         /* We get here if the command line matched none of the possible syntaxes */
         if (cmd1->count > 0) {
@@ -1227,6 +1411,10 @@ main(int argc, char** argv)
             arg_print_errors(stdout, end9, progname);
             printf("usage: %s ", progname);
             arg_print_syntax(stdout, argtable9, "\n");
+        } else if (cmd10->count > 0) {
+            arg_print_errors(stdout, end10, progname);
+            printf("usage: %s ", progname);
+            arg_print_syntax(stdout, argtable10, "\n");
         } else {
             /* no correct cmd literals were given, so we cant presume which syntax was intended */
             printf("%s: missing command.\n",progname);
@@ -1239,6 +1427,7 @@ main(int argc, char** argv)
             printf("usage 7: %s ", progname);  arg_print_syntax(stdout, argtable7, "\n");
             printf("usage 8: %s ", progname);  arg_print_syntax(stdout, argtable8, "\n");
             printf("usage 9: %s ", progname);  arg_print_syntax(stdout, argtable9, "\n");
+            printf("usage 10: %s ", progname);  arg_print_syntax(stdout, argtable10, "\n");
         }
     }
 
@@ -1251,6 +1440,7 @@ main(int argc, char** argv)
     arg_freetable(argtable7, sizeof(argtable7) / sizeof(argtable7[0]));
     arg_freetable(argtable8, sizeof(argtable8) / sizeof(argtable8[0]));
     arg_freetable(argtable9, sizeof(argtable9) / sizeof(argtable9[0]));
+    arg_freetable(argtable10, sizeof(argtable10) / sizeof(argtable10[0]));
 
     return exitcode;
 }
