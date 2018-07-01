@@ -23,17 +23,17 @@ Running simulations is very straightforward in ``msprime``::
     >>> tree = tree_sequence.first()
     >>> print(tree.draw(format="unicode"))
 
-        10       
-     ┏━━┻━┓      
-     ┃    9      
-     ┃  ┏━┻━┓    
-     8  ┃   ┃    
-    ┏┻┓ ┃   ┃    
-    ┃ ┃ ┃   7    
-    ┃ ┃ ┃ ┏━┻┓   
-    ┃ ┃ ┃ ┃  6   
-    ┃ ┃ ┃ ┃ ┏┻┓  
-    3 5 0 4 1 2  
+        10
+     ┏━━┻━┓
+     ┃    9
+     ┃  ┏━┻━┓
+     8  ┃   ┃
+    ┏┻┓ ┃   ┃
+    ┃ ┃ ┃   7
+    ┃ ┃ ┃ ┏━┻┓
+    ┃ ┃ ┃ ┃  6
+    ┃ ┃ ┃ ┃ ┏┻┓
+    3 5 0 4 1 2
 
 
 Here, we simulate the coalescent for a sample of size six
@@ -47,7 +47,7 @@ there can only be one tree because we have not provided
 a value for ``recombination_rate``, and it
 defaults to zero.
 Therefore, we access the only tree in the
-sequence using the call ``tree_sequence.first()``. 
+sequence using the call ``tree_sequence.first()``.
 Finally, we draw a simple depiction of the tree to the terminal
 using the :meth:`~.SparseTree.draw` method.
 
@@ -95,7 +95,7 @@ method::
     >>> print(tree.branch_length(6))
     117.98558842923524
 
-The branch length for node 6 is about 118 generations, since 
+The branch length for node 6 is about 118 generations, since
 the birth times of node 6 was 11 generations ago, and the birth time of its
 parent, node 7, was around 129 generations ago.
 It is also
@@ -135,31 +135,31 @@ effective population size of 1000::
     ...     print(tree.draw(format="unicode"))
     --------------------
     tree 0: interval = (0.0,  6016.224463474058)
-       11        
-    ┏━━┻━━┓      
-    ┃     10     
-    ┃  ┏━━┻━┓    
-    ┃  ┃    9    
-    ┃  ┃  ┏━┻┓   
-    ┃  7  ┃  ┃   
-    ┃ ┏┻┓ ┃  ┃   
-    ┃ ┃ ┃ ┃  6   
-    ┃ ┃ ┃ ┃ ┏┻┓  
-    3 0 1 2 4 5  
+       11
+    ┏━━┻━━┓
+    ┃     10
+    ┃  ┏━━┻━┓
+    ┃  ┃    9
+    ┃  ┃  ┏━┻┓
+    ┃  7  ┃  ┃
+    ┃ ┏┻┓ ┃  ┃
+    ┃ ┃ ┃ ┃  6
+    ┃ ┃ ┃ ┃ ┏┻┓
+    3 0 1 2 4 5
 
     --------------------
     tree 1: interval = (6016.224463474058, 10000.0)
-         10      
-      ┏━━┻━━┓    
-      9     ┃    
-    ┏━┻┓    ┃    
-    ┃  ┃    8    
-    ┃  ┃  ┏━┻┓   
-    ┃  ┃  ┃  7   
-    ┃  ┃  ┃ ┏┻┓  
-    ┃  6  ┃ ┃ ┃  
-    ┃ ┏┻┓ ┃ ┃ ┃  
-    2 4 5 3 0 1  
+         10
+      ┏━━┻━━┓
+      9     ┃
+    ┏━┻┓    ┃
+    ┃  ┃    8
+    ┃  ┃  ┏━┻┓
+    ┃  ┃  ┃  7
+    ┃  ┃  ┃ ┏┻┓
+    ┃  6  ┃ ┃ ┃
+    ┃ ┏┻┓ ┃ ┃ ┃
+    2 4 5 3 0 1
 
 In this example, we use the :meth:`~.TreeSequence.trees`
 method to iterate over the trees in the sequence. For each tree
@@ -214,17 +214,17 @@ per base per generation::
     Mutation @ position 49709.68 over node 6
 
     >>> print(tree.draw(format="unicode"))
-        10       
-     ┏━━┻━━┓     
-     ┃     9     
-     ┃   ┏━┻━┓   
-     ┃   ┃   8   
-     ┃   ┃  ┏┻┓  
-     ┃   7  ┃ ┃  
-     ┃  ┏┻┓ ┃ ┃  
-     6  ┃ ┃ ┃ ┃  
-    ┏┻┓ ┃ ┃ ┃ ┃  
-    0 4 2 5 1 3  
+        10
+     ┏━━┻━━┓
+     ┃     9
+     ┃   ┏━┻━┓
+     ┃   ┃   8
+     ┃   ┃  ┏┻┓
+     ┃   7  ┃ ┃
+     ┃  ┏┻┓ ┃ ┃
+     6  ┃ ┃ ┃ ┃
+    ┏┻┓ ┃ ┃ ┃ ┃
+    0 4 2 5 1 3
 
 
 ********
@@ -309,22 +309,22 @@ if more convenient). Running this example, we get::
 
 
     >>> historical_samples_example()
-    6	-1	2.8240255501413247
-    4	6	0.0864109319103291
-    0	4	0.0
-    1	4	0.0
-    5	6	1.9249243960710336
-    2	5	1.0
-    3	5	1.0
-       6     
-     ┏━┻━┓   
-     ┃   5   
-     ┃  ┏┻┓  
-     ┃  2 3  
-     ┃       
-     4       
-    ┏┻┓      
-    0 1     
+    6    -1    2.8240255501413247
+    4    6    0.0864109319103291
+    0    4    0.0
+    1    4    0.0
+    5    6    1.9249243960710336
+    2    5    1.0
+    3    5    1.0
+       6
+     ┏━┻━┓
+     ┃   5
+     ┃  ┏┻┓
+     ┃  2 3
+     ┃
+     4
+    ┏┻┓
+    0 1
 
 
 Because nodes ``0`` and ``1`` were sampled at time 0, their times in the tree
@@ -351,7 +351,7 @@ analytical results for the number of segregating sites with simulations:
     def segregating_sites_example(n, theta, num_replicates):
         S = np.zeros(num_replicates)
         replicates = msprime.simulate(
-			Ne=0.5,
+            Ne=0.5,
             sample_size=n,
             mutation_rate=theta / 2,
             num_replicates=num_replicates)
@@ -368,16 +368,21 @@ analytical results for the number of segregating sites with simulations:
 
 Running this code, we get::
 
-	>>> segregating_sites_example(10, 5, 100000)
-		      mean              variance
-	Observed      14.17893          53.0746740551
-	Analytical    14.14484          52.63903
+    >>> segregating_sites_example(10, 5, 100000)
+              mean              variance
+    Observed      14.17893          53.0746740551
+    Analytical    14.14484          52.63903
 
 
 Note that in this example we set :math:`N_e = 0.5` and
 the mutation rate to :math:`\theta / 2` when calling :func:`.simulate`.
-This is essential to convert the diploid per-generation time units
-of msprime into the the haploid coalescent units required for many
+This works because ``msprime`` simulates Kingman's coalescent,
+for which :math:`N_e` is only a time scaling;
+since :math:`N_e` is the diploid effective population size,
+setting :math:`N_e = 0.5` means that the mean time for two samples to coalesce
+is equal to one time unit in the resulting trees.
+This is helpful for converting the diploid per-generation time units
+of msprime into the the haploid coalescent units used in many
 theoretical results. However, it is important to note that conventions
 vary widely, and great care is needed with such factor-of-two
 rescalings.
@@ -827,7 +832,7 @@ Sometimes we wish to make some minor modifications to a tree sequence that has
 been generated by a simulation. However, tree sequence objects are **immutable**
 and so we cannot edit a them in place. To modify a tree sequence, we need to
 extract the underlying :ref:`tables <sec_table_definitions>` of information, edit these tables,
-and then create a new tree sequence from them. 
+and then create a new tree sequence from them.
 These tables succinctly store everything we need to know
 about a tree sequence, and can be manipulated using the :ref:`sec_tables_api`.
 In the following example, we use this approach
@@ -893,7 +898,7 @@ Working with Tables
 
 Tables provide a convenient method for viewing, importing and exporting tree
 sequences, and are closely tied to the underlying data structures.
-There are eight tables that together define a tree sequence, 
+There are eight tables that together define a tree sequence,
 although some may be empty,
 and together they form a :class:`TableCollection`.
 The tables are defined in :ref:`Table Definitions <sec_table_definitions>`,
@@ -925,14 +930,14 @@ follows::
 obtaining::
 
     >>> print(n)
-    id	flags	population	individual	time	metadata
-    0	1	0	-1	0.0
-    1	1	0	-1	0.0
-    2	1	0	-1	0.0
-    3	0	0	-1	0.4
-    4	0	0	-1	0.5
-    5	0	0	-1	0.7
-    6	0	0	-1	1.0
+    id    flags    population    individual    time    metadata
+    0    1    0    -1    0.0
+    1    1    0    -1    0.0
+    2    1    0    -1    0.0
+    3    0    0    -1    0.4
+    4    0    0    -1    0.5
+    5    0    0    -1    0.7
+    6    0    0    -1    1.0
 
 
 The ``.add_row()`` method is natural (and should be reasonably efficient) if
@@ -954,14 +959,14 @@ in the NodeTable constructed above (using ``numpy`` indexing)::
 The result is::
 
     >>> print(n)
-    id	flags	population	individual	time	metadata
-    0	1	0	-1	0.0
-    1	1	0	-1	1.4
-    2	1	0	-1	1.4
-    3	0	0	-1	1.8
-    4	0	0	-1	1.9
-    5	0	0	-1	2.1
-    6	0	0	-1	2.4
+    id    flags    population    individual    time    metadata
+    0    1    0    -1    0.0
+    1    1    0    -1    1.4
+    2    1    0    -1    1.4
+    3    0    0    -1    1.8
+    4    0    0    -1    1.9
+    5    0    0    -1    2.1
+    6    0    0    -1    2.4
 
 
 *****************************
@@ -977,9 +982,9 @@ Here we give an overview. Consider the following sequence of trees::
        1.0         6
                  ┏━┻━━┓
                  ┃    ┃
-       0.7       ┃    ╋                     5    
-                 ┃    ┃                   ┏━┻━┓  
-       0.5       ┃    4         4         ┃   4  
+       0.7       ┃    ╋                     5
+                 ┃    ┃                   ┏━┻━┓
+       0.5       ┃    4         4         ┃   4
                  ┃  ┏━┻━┓     ┏━┻━┓       ┃ ┏━┻━┓
                  ┃  ┃   ┃     ┃   ╋       ┃ ┃   ┃
        0.4       ┃  ┃   ┃     ┃   3       ┃ ┃   ┃
@@ -1009,7 +1014,7 @@ We record when each of nodes lived in a :class:`NodeTable`::
     6       0        0            1.0
 
 Importantly, the first column, ``id``, is not actually recorded, and is
-only shown when printing out node tables (as here) for convenience. 
+only shown when printing out node tables (as here) for convenience.
 The second column, ``flags`` records a ``1`` for the individuals that are *samples*,
 i.e., whose entire genealogical history is recorded by these trees.
 (Note that the trees above record that node 3 inherited from node 4
@@ -1057,9 +1062,9 @@ The positions are recorded in the :class:`SiteTable`::
 
     SiteTable:
 
-    id	position	ancestral_state
-    0	0.1     	0
-    1	0.5     	0
+    id    position    ancestral_state
+    0    0.1         0
+    1    0.5         0
 
 As with node tables, the ``id`` column is **not** actually recorded, but is
 implied by the position in the table.  The results of the
@@ -1067,10 +1072,10 @@ acutal mutations are then recorded::
 
     MutationTable:
 
-    site	node	derived_state
-    0	    4	    1
-    1	    3	    1
-    1	    2	    0
+    site    node    derived_state
+    0        4        1
+    1        3        1
+    1        2        0
 
 This would then result in the following (two-locus) haplotypes for the three
 samples::
@@ -1145,8 +1150,8 @@ We can then finally obtain the tree sequence::
 .. occurred along with the ancestral state (i.e., the state at the root of the
 .. tree at that position)::
 
-..     id	position	ancestral_state
-..     0	0.1	        0
+..     id    position    ancestral_state
+..     0    0.1            0
 
 .. As with nodes, the ``id`` is not stored directly, but is implied by its
 .. index in the site table.
@@ -1158,8 +1163,8 @@ We can then finally obtain the tree sequence::
 .. from that node will also inherit that mutation, unless another mutation
 .. intervenes.  The type records::
 
-..     site	node	derived_state
-..     0	    14	    1
+..     site    node    derived_state
+..     0        14        1
 
 .. Here ``site`` is the index of the ``site`` at which the mutation occurred,
 .. ``node`` records the ID of the ancestral node associated with the mutation,

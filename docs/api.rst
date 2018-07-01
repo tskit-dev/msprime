@@ -14,22 +14,25 @@ Simulation model
 
 The simulation model in ``msprime`` closely follows the classical ``ms``
 program. Unlike ``ms``, however, time is measured in generations rather than
-"coalescent units". Internally the same simulation algorithm is used, but
-``msprime`` provides a translation layer to allow the user input times and
-rates in generations. Similarly, the times associated with the trees produced
-by ``msprime`` are in measured generations. To enable this translation from
-generations into coalescent units and vice-versa, a reference effective
-population size must be provided, which is given by the ``Ne`` parameter in the
-:func:`.simulate` function. (Note that we assume diploid population sizes
-thoughout, since we scale by :math:`4 N_e`.) Population sizes for individual
-demes and for past demographic events are defined as absolute values, **not**
+in units of :math:`4 N_e` generations, i.e., "coalescent units".
+This means that when simulating a population with diploid effective size :math:`N_e`,
+the mean time to coalescence between two samples
+in an ``msprime`` simulation will be around :math:`2 N_e`,
+while in an ``ms`` simulation, the mean time will be around :math:`0.5`.
+Internally, ``msprime`` uses the same algorithm as ``ms``,
+and so the ``Ne`` parameter to the :func:`.simulate` function
+still acts as a time scaling, and can be set to ``0.5`` to match many theoretical results,
+or to ``0.25`` to match ``ms``. Population sizes for individual
+demes and for past demographic events are also defined as absolute values, **not**
 scaled by ``Ne``. All migration rates and growth rates are also per generation.
 
 When running simulations we define the length in bases :math:`L` of the
 sequence in question using the ``length`` parameter. This defines the
 coordinate space within which trees and mutations are defined. :math:`L` is a
 continuous value, and coordinates can take any value from :math:`0` to
-:math:`L`. Mutations occur in an infinite sites process along this sequence,
+:math:`L`. (So, although we often refer to the units of length as "bases",
+events can occur at fractional positions.)
+Mutations occur in an infinite sites process along this sequence,
 and mutation rates are specified per generation, per unit of sequence length.
 Thus, given the per-generation mutation rate :math:`\mu`, the rate of mutation
 over the entire sequence in coalescent time units is :math:`\theta = 4 N_e \mu
@@ -39,9 +42,8 @@ analytical results!
 Similarly, recombination rates are per base, per generation in ``msprime``.
 Thus, given the per generation crossover rate :math:`r`, the overall rate
 of recombination between the ends of the sequence in coalescent time units
-is :math:`\rho = 4 N_e r L`. Recombination events occur in a continuous
-coordinate space, so that breakpoints do not necessarily occur at integer
-locations. However, the underlying recombination model is finite, and the
+is :math:`\rho = 4 N_e r L`. Although breakpoints do not necessarily occur
+at integer locations, the underlying recombination model is finite, and the
 behaviour of a small number of loci can be modelled using the
 :class:`RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
