@@ -77,6 +77,8 @@ class SimpleContainer(object):
 class Individual(SimpleContainer):
     """
     An :ref:`individual <sec_individual_table_definition>` in a tree sequence.
+    Since nodes correspond to genomes, individuals are associated with a collection
+    of nodes (e.g., two nodes per diploid).
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
@@ -114,7 +116,9 @@ class Individual(SimpleContainer):
 
 class Node(SimpleContainer):
     """
-    A :ref:`node <sec_node_table_definition>` in a tree sequence.
+    A :ref:`node <sec_node_table_definition>` in a tree sequence, corresponding
+    to a single genome. The ``time`` and ``population`` are attributes of the
+    ``Node``, rather than the ``Individual``, for historical reasons.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
@@ -124,7 +128,7 @@ class Node(SimpleContainer):
     :vartype id: int
     :ivar flags: The bitwise flags for this node.
     :vartype flags: int
-    :ivar time: The birth time of the individual represented by this node.
+    :ivar time: The birth time of this node.
     :vartype time: float
     :ivar population: The integer ID of the population that this node was born in.
     :vartype population: int
@@ -1483,6 +1487,10 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
     ``mutations`` are optional, and must be parsable by :func:`parse_sites` and
     :func:`parse_mutations`, respectively.
 
+    TODO: there is no method to parse the remaining tables at present, so
+    only tree sequences not requiring Population and Individual tables can
+    be loaded. This will be fixed: https://github.com/tskit-dev/msprime/issues/498
+
     The ``sequence_length`` parameter determines the
     :attr:`.TreeSequence.sequence_length` of the returned tree sequence. If it
     is 0 or not specified, the value is taken to be the maximum right
@@ -1770,7 +1778,7 @@ class TreeSequence(object):
         genomic scale over which tree coordinates are defined. Given a
         tree sequence with a sequence length :math:`L`, the constituent
         trees will be defined over the half-closed interval
-        :math:`(0, L]`. Each tree then covers some subset of this
+        :math:`[0, L)`. Each tree then covers some subset of this
         interval --- see :meth:`msprime.SparseTree.get_interval` for details.
 
         :return: The length of the sequence in this tree sequence in bases.
@@ -1938,7 +1946,7 @@ class TreeSequence(object):
         for a :ref:`valid tree sequence <sec_valid_tree_sequence_requirements>`. So,
         edges are guaranteed to be ordered such that (a) all parents with a
         given ID are contiguous; (b) edges are returned in non-descreasing
-        order of parent time; (c) within the edges for a given parent, edges
+        order of parent time ago; (c) within the edges for a given parent, edges
         are sorted first by child ID and then by left coordinate.
 
         :return: An iterator over all edges.
@@ -2209,7 +2217,7 @@ class TreeSequence(object):
     def genotype_matrix(self):
         """
         Returns an :math:`m \\times n` numpy array of the genotypes in this
-        tree sequence, where :math:`m` is the number of site and :math:`n`
+        tree sequence, where :math:`m` is the number of sites and :math:`n`
         the number of samples. The genotypes are the indexes into the array
         of ``alleles``, as described for the :class:`Variant` class. The value
         0 always corresponds to the ancestal state, and values > 0 represent
@@ -2231,10 +2239,10 @@ class TreeSequence(object):
 
     def pairwise_diversity(self, samples=None):
         """
-        Returns the value of :math:`\pi`, the pairwise nucleotide site diversity,
-        which is the average number of mutations that differ between a randomly
-        chosen pair of samples.  If `samples` is specified, calculate the
-        diversity within this set.
+        Returns the value of :math:`\pi`, the pairwise nucleotide site
+        diversity, the average number of mutations per unit of genome length
+        that differ between a randomly chosen pair of samples.  If `samples` is
+        specified, calculate the diversity within this set.
 
         .. note:: This method does not currently support sites that have more
             than one mutation. Using it on such a tree sequence will raise
@@ -2360,9 +2368,15 @@ class TreeSequence(object):
         >>> with open("output.vcf", "w") as vcf_file:
         >>>     tree_sequence.write_vcf(vcf_file, 2)
 
+        .. warning::
+            This output function does not currently use information in the
+            :class:`IndividualTable`, and so will only correctly produce
+            non-haploid output if the nodes corresponding to each individual
+            are contiguous as described above.
+
         :param File output: The file-like object to write the VCF output.
-        :param int ploidy: The ploidy of the individual samples in the
-            VCF. This sample size must be divisible by ploidy.
+        :param int ploidy: The ploidy of the individuals to be written to
+            VCF. This sample size must be evenly divisible by ploidy.
         :param str contig_id: The value of the CHROM column in the output VCF.
         """
         if ploidy < 1:
@@ -2385,13 +2399,11 @@ class TreeSequence(object):
         NULL_NODE (-1).
 
         In the returned tree sequence, the node with ID ``0`` corresponds to
-        ``samples[0]``, node ``1`` corresponds to ``samples[1]``, and so on. Node
-        IDs in the returned tree sequence are then allocated sequentially
-        in time order. Note that this does **not** necessarily mean that nodes
-        in the returned tree sequence will be in strict time order (as we
-        may have internal or ancient samples).
+        ``samples[0]``, node ``1`` corresponds to ``samples[1]``, and so on.
+        Besides the samples, node IDs in the returned tree sequence are then
+        allocated sequentially in time order.
 
-        If you wish to convert a set of tables that do not satisfy all
+        If you wish to simplify a set of tables that do not satisfy all
         requirements for building a TreeSequence, then use
         :meth:`TableCollection.simplify`.
 
@@ -2404,7 +2416,7 @@ class TreeSequence(object):
             sequence to their corresponding node IDs in the returned tree sequence.
             If False (the default), return only the tree sequence object itself.
         :return: The simplified tree sequence, or (if ``map_nodes`` is True)
-            a tuple containing the simplified tree sequence and a numpy array
+            a tuple consisting of the simplified tree sequence and a numpy array
             mapping source node IDs to their corresponding IDs in the new tree
             sequence.
         :rtype: .TreeSequence or a (.TreeSequence, numpy.array) tuple

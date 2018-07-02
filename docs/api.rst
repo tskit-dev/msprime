@@ -230,12 +230,12 @@ instances to define special values of various variables.
 .. data:: msprime.FORWARD == 1
 
     Constant representing the forward direction of travel (i.e.,
-    increasing coordinate values).
+    increasing genomic coordinate values).
 
 .. data:: msprime.REVERSE == -1
 
     Constant representing the reverse direction of travel (i.e.,
-    decreasing coordinate values).
+    decreasing genomic coordinate values).
 
 
 ++++++++++++++++++++++++
@@ -277,7 +277,7 @@ Loading data
 
 There are several methods for loading data into a :class:`.TreeSequence`
 instance. The simplest and most convenient is the use the :func:`msprime.load`
-function to load an :ref:`tree sequence file <sec_tree_sequence_file_format>`. For small
+function to load a :ref:`tree sequence file <sec_tree_sequence_file_format>`. For small
 scale data and debugging, it is often convenient to use the
 :func:`msprime.load_text` to read data in the :ref:`text file format
 <sec_text_file_format>`. The :meth:`.TableCollection.tree_sequence` function
@@ -465,14 +465,15 @@ use UTF8 (which corresponds to ASCII for simple printable characters).::
 
 Here we create 10 sites at regular positions, each with ancestral state equal to
 "0". Note that we use ``ord("0")`` to get the ASCII code for "0" (48), and create
-10 copies of this by adding it to an array of zeros.
+10 copies of this by adding it to an array of zeros. We have done this for
+illustration purposes: it equivalent to do
+``a, off = msprime.pack_strings(["0"] * m)``.
 
 Mutations can be handled similarly::
 
     >>> t_m = msprime.MutationTable()
     >>> site = np.arange(m, dtype=np.int32)
-    >>> d = ord("1") + np.zeros(m, dtype=np.int8)
-    >>> off = np.arange(m + 1, dtype=np.uint32)
+    >>> d, off = msprime.pack_strings(["1"] * m)
     >>> node = np.zeros(m, dtype=np.int32)
     >>> t_m.set_columns(site=site, node=node, derived_state=d, derived_state_offset=off)
     >>> print(t_m)
@@ -547,7 +548,7 @@ use of base64 encoding.).
 Finally, when we print the ``metadata`` column, we see the raw byte values
 encoded as signed integers. As for :ref:`sec_tables_api_text_columns`,
 the ``metadata_offset`` column encodes the offsets into this array. So, we
-see that the metadata value is 9 bytes long and the second is 24.
+see that the first metadata value is 9 bytes long and the second is 24.
 
 The :func:`pack_bytes` and :func:`unpack_bytes` functions are also useful
 for encoding data in these columns.
@@ -555,6 +556,10 @@ for encoding data in these columns.
 +++++++++++++
 Table classes
 +++++++++++++
+
+This section describes the methods and variables available for each
+table class. For description and definition of each table's meaning
+and use, see :ref:`the table definitions <sec_table_definitions>`.
 
 .. Overriding the default signatures for the tables here as they will be
 .. confusing to most users.

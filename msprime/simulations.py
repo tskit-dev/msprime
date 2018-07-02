@@ -606,13 +606,14 @@ class RecombinationMap(object):
     position must be zero, and by convention the last rate value
     is also required to be zero (although it does not used).
 
-    Warning: the chromosome is divided into ``num_loci`` regions of
-    equal *recombination* distance, between which recombinations occur.
-    This means that if recombination is constant and the genome is
-    length ``n``, then ``num_loci=n`` will produce breakpoints only at
-    integer values. If recombination rate is *not* constant,
-    breakpoints will still only occur at ``n`` distinct positions,
-    but these will probably not coincide with the ``positions`` provided.
+    .. warning::
+        The chromosome is divided into ``num_loci`` regions of equal
+        *recombination* distance, between which recombinations occur.  This
+        means that if recombination is constant and the genome is length ``n``,
+        then ``num_loci=n`` will produce breakpoints only at integer values. If
+        recombination rate is *not* constant, breakpoints will still only occur
+        at ``n`` distinct positions, but these will probably not coincide with
+        the ``positions`` provided.
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can

@@ -149,7 +149,9 @@ class IndividualTable(BaseTable):
     in this table and the
     :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
     for the properties needed for an individual table to be a part of a valid tree
-    sequence.
+    sequence. Note that although each Individual has associated nodes, reference to
+    these is not stored in the individual table, but rather reference to the
+    individual is stored for ech node in the :class:`NodeTable`.
 
     :warning: The numpy arrays returned by table attribute accesses are **copies**
         of the underlying data. In particular, this means that you cannot edit
@@ -253,17 +255,17 @@ class IndividualTable(BaseTable):
         together, and meet the requirements for :ref:`sec_encoding_ragged_columns`.
         See :ref:`sec_tables_api_binary_columns` for more information.
 
-        :param flags: The bitwise flags for each node. Required.
+        :param flags: The bitwise flags for each individual. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
         :param location: The flattened location array. Must be specified along
             with ``location_offset``. If not specified or None, an empty location
-            value is stored for each node.
+            value is stored for each individual.
         :type location: numpy.ndarray, dtype=np.float64
         :param location_offset: The offsets into the ``location`` array.
         :type location_offset: numpy.ndarray, dtype=np.uint32.
         :param metadata: The flattened metadata array. Must be specified along
             with ``metadata_offset``. If not specified or None, an empty metadata
-            value is stored for each node.
+            value is stored for each individual.
         :type metadata: numpy.ndarray, dtype=np.int8
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
@@ -287,17 +289,17 @@ class IndividualTable(BaseTable):
         together, and meet the requirements for :ref:`sec_encoding_ragged_columns`.
         See :ref:`sec_tables_api_binary_columns` for more information.
 
-        :param flags: The bitwise flags for each node. Required.
+        :param flags: The bitwise flags for each individual. Required.
         :type flags: numpy.ndarray, dtype=np.uint32
         :param location: The flattened location array. Must be specified along
             with ``location_offset``. If not specified or None, an empty location
-            value is stored for each node.
+            value is stored for each individual.
         :type location: numpy.ndarray, dtype=np.float64
         :param location_offset: The offsets into the ``location`` array.
         :type location_offset: numpy.ndarray, dtype=np.uint32.
         :param metadata: The flattened metadata array. Must be specified along
             with ``metadata_offset``. If not specified or None, an empty metadata
-            value is stored for each node.
+            value is stored for each individual.
         :type metadata: numpy.ndarray, dtype=np.int8
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
@@ -339,6 +341,7 @@ class NodeTable(BaseTable):
     :vartype flags: numpy.ndarray, dtype=np.uint32
     :ivar population: The array of population IDs.
     :vartype population: numpy.ndarray, dtype=np.int32
+    :ivar individual: The array of individual IDs that each node belongs to.
     :vartype individual: numpy.ndarray, dtype=np.int32
     :ivar metadata: The flattened array of binary metadata values. See
         :ref:`sec_tables_api_binary_columns` for more details.
@@ -1188,7 +1191,27 @@ def _mutation_table_pickle(table):
 
 
 class PopulationTable(BaseTable):
-    # FIXME
+    """
+    A table definiing the populations referred to in a tree sequence.
+    See the :ref:`definitions <sec_individual_table_definition>`
+    for details on the columns in this table. Note that although nodes
+    may be associated with populations, this association is stored in
+    the :class:`NodeTable`: only metadata on each population is stored
+    in the population table.
+
+    :warning: The numpy arrays returned by table attribute accesses are **copies**
+        of the underlying data. In particular, this means that you cannot edit
+        the values in the columns by updating the attribute arrays.
+
+        **NOTE:** this behaviour may change in future.
+
+    :ivar metadata: The flattened array of binary metadata values. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata: numpy.ndarray, dtype=np.int8
+    :ivar metadata_offset: The array of offsets into the metadata column. See
+        :ref:`sec_tables_api_binary_columns` for more details.
+    :vartype metadata_offset: numpy.ndarray, dtype=np.uint32
+    """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
             ll_table = _msprime.PopulationTable(max_rows_increment=max_rows_increment)
@@ -1204,7 +1227,13 @@ class PopulationTable(BaseTable):
 
     def add_row(self, metadata=None):
         """
-        .. todo:: document.
+        Adds a new row to this :class:`PopulationTable` and returns the ID of the
+        corresponding population.
+
+        :param bytes metadata: The binary-encoded metadata for the new population.
+            If not specified or None, a zero-length byte string is stored.
+        :return: The ID of the newly added population.
+        :rtype: int
         """
         return self.ll_table.add_row(metadata=metadata)
 
@@ -1244,8 +1273,27 @@ def _population_table_pickle(table):
 
 class ProvenanceTable(BaseTable):
     """
+    A table recording the provenance (i.e., history) of this table, so that the
+    origin of the underlying data and sequence of subsequent operations can be
+    traced. Each row contains a "record" string (recommended format: json) and
+    a timestamp.
+
     .. todo::
         This class is provisional, and the API may change in the future.
+
+    :ivar record: The flattened array containing the record strings.
+        :ref:`sec_tables_api_text_columns` for more details.
+    :vartype record: numpy.ndarray, dtype=np.int8
+    :ivar record_offset: The array of offsets into the record column. See
+        :ref:`sec_tables_api_test_columns` for more details.
+    :vartype record_offset: numpy.ndarray, dtype=np.uint32
+    :ivar timestamp: The flattened array containing the timestamp strings.
+        :ref:`sec_tables_api_text_columns` for more details.
+    :vartype timestamp: numpy.ndarray, dtype=np.int8
+    :ivar timestamp_offset: The array of offsets into the timestamp column. See
+        :ref:`sec_tables_api_test_columns` for more details.
+    :vartype timestamp_offset: numpy.ndarray, dtype=np.uint32
+
     """
     # FIXME
     def __init__(self, max_rows_increment=0, ll_table=None):
@@ -1370,6 +1418,8 @@ class TableCollection(object):
 
     :ivar individuals: The individual table.
     :vartype individuals: IndividualTable
+    :ivar nodes: The node table.
+    :vartype nodes: NodeTable
     :ivar edges: The edge table.
     :vartype edges: EdgeTable
     :ivar migrations: The migration table.
@@ -1515,25 +1565,24 @@ class TableCollection(object):
         """
         Simplifies the tables in place to retain only the information necessary
         to reconstruct the tree sequence describing the given ``samples``.
-        This will change the ID of the nodes, so that the individual
-        ``samples[k]]`` will have ID ``k`` in the result. The resulting
+        This will change the ID of the nodes, so that the node
+        ``samples[k]`` will have ID ``k`` in the result. The resulting
         NodeTable will have only the first ``len(samples)`` individuals marked
         as samples. The mapping from node IDs in the current set of tables to
-        their equivalent values in the simplified tables is returned as a numpy
-        array. If an array ``a`` is returned by this function and ``u`` is the
-        ID of a node in the input table, then ``a[u]`` is the ID of this node
-        in the output table. For any node ``u`` that is not mapped into the
-        output tables, this mapping will equal ``-1``.
+        their equivalent values in the simplified tables is also returned as a
+        numpy array. If an array ``a`` is returned by this function and ``u``
+        is the ID of a node in the input table, then ``a[u]`` is the ID of this
+        node in the output table. For any node ``u`` that is not mapped into
+        the output tables, this mapping will equal ``-1``.
 
         Tables operated on by this function must: be sorted (see
         :meth:`TableCollection.sort`)), have children be born strictly after their
         parents, and the intervals on which any individual is a child must be
-        disjoint; but other than this the tables need not satisfy remaining
+        disjoint. Other than this the tables need not satisfy remaining
         requirements to specify a valid tree sequence (but the resulting tables
         will).
 
-        :param list[int] samples: A list of Node IDs of individuals to retain
-            as samples.
+        :param list[int] samples: A list of node IDs to retain as samples.
         :param bool filter_zero_mutation_sites: Whether to remove sites that have no
             mutations from the output (default: True).
         :return: A numpy array mapping node IDs in the input tables to their
