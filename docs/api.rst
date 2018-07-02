@@ -85,20 +85,20 @@ Population structure
 
 Population structure is modelled in ``msprime`` by specifying a fixed number of
 demes, with the migration rates between those demes defined by a migration
-matrix. Each deme has an ``initial_size`` that defines its absolute size at
+matrix. Each deme has an ``initial_size`` that defines its absolute diploid size at
 time zero and a per-generation ``growth_rate`` which specifies the exponential
-growth rate of the sub-population. We must also define the size of the sample
-to draw from each deme. The number of populations and their initial
+growth rate of the sub-population. We must also define the number of genomes to
+sample from each deme. The number of populations and their initial
 configuration is defined using the ``population_configurations`` parameter to
 :func:`.simulate`, which takes a list of :class:`.PopulationConfiguration`
 instances. Population IDs are zero indexed, and correspond to their position in
 the list.
 
 Samples are drawn sequentially from populations in increasing order of
-population ID. For example, if we specified an overall sample size of 5, and
-specify that 2 samples are drawn from population 0 and 3 from population 1,
-then individuals 0 and 1 will be initially located in population 0, and
-individuals 2, 3 and 4 will be drawn from population 2.
+population ID. For example, if we specified an overall sample size of 6, and
+specify that 2 samples are drawn from population 0 and 4 from population 1,
+then samples 0 and 1 will be initially located in population 0, and
+samples 2, 3, 4, and 5 will be drawn from population 2.
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
 \times N` matrix of deme-to-deme migration rates. See the documentation for
@@ -152,6 +152,8 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
+.. autoclass:: msprime.InfiniteSites
+
 .. data:: msprime.BINARY == 0
 
     The binary mutation alphabet where ancestral states are always "0" and
@@ -161,8 +163,6 @@ overlay neutral mutations on this tree sequence.
 
     The nucleotides mutation alphabet in which ancestral and derived states are
     chosen from the characters "A", "C", "G" and "T".
-
-.. autoclass:: msprime.InfiniteSites
 
 .. autofunction:: msprime.mutate
 

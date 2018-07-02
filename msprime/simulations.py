@@ -63,7 +63,12 @@ def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
 
 def harmonic_number(n):
     """
-    Returns the nth Harmonic number.
+    The nth Harmonic number is
+       H_n = 1 + 1/2 + 1/3 + ... + 1/n.
+    This returns the approximation to it,
+       log(n) + gamma,
+    where gamma is the Euler-Mascheroni constant,
+       lim_n (H_n - log(n)) = gamma.
     """
     EulerGamma = 0.5772156649
     return math.log(n) + EulerGamma
@@ -202,16 +207,17 @@ def simulate(
         num_replicates=None):
     """
     Simulates the coalescent with recombination under the specified model
-    parameters and returns the resulting :class:`.TreeSequence`.
+    parameters and returns the resulting :class:`.TreeSequence`. Note that
+    Ne is the effective diploid population size (so the effective number
+    of genomes in the population is 2*Ne), but ``sample_size`` is the
+    number of (haploid) genomes sampled.
 
-    :param int sample_size: The number of individuals in our sample.
-        If not specified or None, this defaults to the sum of the
-        subpopulation sample sizes. Either ``sample_size``,
-        ``population_configurations`` or ``samples`` must be specified.
+    :param int sample_size: The number of sampled genomes.  If not
+        specified or None, this defaults to the sum of the subpopulation sample
+        sizes. Either ``sample_size``, ``population_configurations`` or
+        ``samples`` must be specified.
     :param float Ne: The effective (diploid) population size for the reference
-        population. This determines the factor by which the per-generation
-        recombination and mutation rates are scaled in the simulation.
-        This defaults to 1 if not specified.
+        population. This defaults to 1 if not specified.
     :param float length: The length of the simulated region in bases.
         This parameter cannot be used along with ``recombination_map``.
         Defaults to 1 if not specified.
@@ -225,7 +231,7 @@ def simulate(
         values are encoded within the map. Defaults to a uniform rate as
         described in the ``recombination_rate`` parameter if not specified.
     :type recombination_map: :class:`.RecombinationMap`
-    :param float mutation_rate: The rate of mutation infinite sites
+    :param float mutation_rate: The rate of infinite sites
         mutations per unit of sequence length per generation.
         If not specified, no mutations are generated. This option only
         allows for infinite sites mutations with a binary (i.e., 0/1)
@@ -239,16 +245,17 @@ def simulate(
         is assumed.
     :type population_configurations: list or None.
     :param list migration_matrix: The matrix describing the rates
-        of migration between all pairs of populations. If :math:`N`
+        of migration between all pairs of populations, If :math:`N`
         populations are defined in the ``population_configurations``
         parameter, then the migration matrix must be an
-        :math:`N\\times N` matrix consisting of :math:`N` lists of
-        length :math:`N` or an :math`N\\times N` numpy array.
+        :math:`N\\times N` matrix with 0 on the diagonal, consisting of
+        :math:`N` lists of length :math:`N` or an :math`N\\times N` numpy
+        array.
     :param list demographic_events: The list of demographic events to
         simulate. Demographic events describe changes to the populations
         in the past. Events should be supplied in non-decreasing
-        order of time. Events with the same time value will be applied
-        sequentially in the order that they were supplied before the
+        order of time in the past. Events with the same time value will be
+        applied sequentially in the order that they were supplied before the
         simulation algorithm continues with the next time step.
     :param list samples: The list specifying the location and time of
         all samples. This parameter may be used to specify historical
@@ -256,7 +263,7 @@ def simulate(
         parameter. Each sample is a (``population``, ``time``) pair
         such that the sample in position ``j`` in the list of samples
         is drawn in the specified population at the specfied time. Time
-        is measured in generations, as elsewhere.
+        is measured in generations ago, as elsewhere.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
@@ -599,6 +606,14 @@ class RecombinationMap(object):
     position must be zero, and by convention the last rate value
     is also required to be zero (although it does not used).
 
+    Warning: the chromosome is divided into ``num_loci`` regions of
+    equal *recombination* distance, between which recombinations occur.
+    This means that if recombination is constant and the genome is
+    length ``n``, then ``num_loci=n`` will produce breakpoints only at
+    integer values. If recombination rate is *not* constant,
+    breakpoints will still only occur at ``n`` distinct positions,
+    but these will probably not coincide with the ``positions`` provided.
+
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can
         be floating point values.
@@ -774,14 +789,15 @@ class PopulationParametersChange(DemographicEvent):
     options from ``ms``. Note that unlike ``ms`` we do not automatically
     set growth rates to zero when the population size is changed.
 
-    :param float time: The time at which this event occurs in generations.
-    :param float initial_size: The absolute size of the population
+    :param float time: The number of generations ago at which this event
+        occured.
+    :param float initial_size: The absolute diploid size of the population
         at the beginning of the time slice starting at ``time``. If None,
         this is calculated according to the initial population size and
         growth rate over the preceding time slice.
     :param float growth_rate: The new per-generation growth rate. If None,
         the growth rate is not changed. Defaults to None.
-    :param int populationd: The ID of the population affected. If
+    :param int population: The ID of the population affected. If
         ``population`` is None, the changes affect all populations
         simultaneously.
     """
@@ -866,8 +882,8 @@ class MassMigration(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in
     one deme simultaneously move to another deme, viewed backwards in
-    time. For each lineage currently present in the source population,
-    they move to the destination population with probability equal to
+    time. Each lineage currently present in the source population
+    moves to the destination population with probability equal to
     ``proportion``.
 
     This event class generalises the population split (``-ej``) and
