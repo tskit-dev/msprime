@@ -245,7 +245,7 @@ def simulate(
         is assumed.
     :type population_configurations: list or None.
     :param list migration_matrix: The matrix describing the rates
-        of migration between all pairs of populations, If :math:`N`
+        of migration between all pairs of populations. If :math:`N`
         populations are defined in the ``population_configurations``
         parameter, then the migration matrix must be an
         :math:`N\\times N` matrix with 0 on the diagonal, consisting of

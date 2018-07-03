@@ -72,7 +72,7 @@ def positive_int(value):
 def add_sample_size_argument(parser):
     parser.add_argument(
         "sample_size", type=positive_int,
-        help="The number of individuals in the sample")
+        help="The number of genomes in the sample")
 
 
 def add_tree_sequence_argument(parser):
@@ -888,7 +888,7 @@ def get_msp_parser():
         help="The mutation rate per base per generation")
     parser.add_argument(
         "--effective-population-size", "-N", type=float, default=1,
-        help="The effective population size Ne")
+        help="The diploid effective population size Ne")
     parser.add_argument(
         "--random-seed", "-s", type=int, default=None,
         help="The random seed. If not specified one is chosen randomly")
