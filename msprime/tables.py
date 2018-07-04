@@ -1285,13 +1285,13 @@ class ProvenanceTable(BaseTable):
         :ref:`sec_tables_api_text_columns` for more details.
     :vartype record: numpy.ndarray, dtype=np.int8
     :ivar record_offset: The array of offsets into the record column. See
-        :ref:`sec_tables_api_test_columns` for more details.
+        :ref:`sec_tables_api_text_columns` for more details.
     :vartype record_offset: numpy.ndarray, dtype=np.uint32
     :ivar timestamp: The flattened array containing the timestamp strings.
         :ref:`sec_tables_api_text_columns` for more details.
     :vartype timestamp: numpy.ndarray, dtype=np.int8
     :ivar timestamp_offset: The array of offsets into the timestamp column. See
-        :ref:`sec_tables_api_test_columns` for more details.
+        :ref:`sec_tables_api_text_columns` for more details.
     :vartype timestamp_offset: numpy.ndarray, dtype=np.uint32
 
     """
@@ -1620,9 +1620,11 @@ class TableCollection(object):
         given parent ID are adjacent, but we do not require that they be listed in
         sorted order.
 
-        Sites are sorted by position.
+        Sites are sorted by position, and sites with the same position retain
+        their relative ordering.
 
-        Mutations are sorted by site ID.
+        Mutations are sorted by site ID, and mutations with the same site retain
+        their relative ordering.
 
         :param int edge_start: The index in the edge table where sorting starts
             (default=0; must be <= len(edges)).
@@ -1630,11 +1632,28 @@ class TableCollection(object):
         self.ll_tables.sort(edge_start)
 
     def compute_mutation_parents(self):
-        # TODO document
+        """
+        Modifies the tabls in place, computing the ``parent`` column of the
+        mutation table. For this to work, the node and edge tables must be
+        valid, and the site and mutation tables must be sorted (see
+        :meth:`TableCollection.sort`).  This will produce an error if mutations
+        are not sorted (i.e., if a mutation appears before its mutation parent)
+        *unless* the two mutations occur on the same branch, in which case
+        there is no way to detect the error.
+
+        The ``parent`` of a given mutation is the ID of the next mutation
+        encountered traversing the tree upwards from that mutation, or
+        ``NULL_MUTATION`` if there is no such mutation.
+        """
         self.ll_tables.compute_mutation_parents()
 
     def deduplicate_sites(self):
-        # TODO document
+        """
+        Modifies the tables in place, removing entries in the site table with
+        duplicate ``position`` (and keeping only the *first* entry for each
+        site), and renumbering the ``site`` column of the mutation table
+        appropriately.  This requires the site table to be sorted by position.
+        """
         self.ll_tables.deduplicate_sites()
 
 

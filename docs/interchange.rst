@@ -15,8 +15,8 @@ the basic concepts that we need and the structure of the tables in the
 be used as simple interchange mechanism for small amounts of data in the
 `Text file formats`_ section. The `Binary interchange`_ section then describes
 the efficient Python API for table interchange using numpy arrays. Finally,
-we describe the binary format using by msprime to efficiently
-store tree sequences in the `Tree sequence file format`_ section.
+we describe the binary format used by msprime to efficiently
+store tree sequences on disk in the `Tree sequence file format`_ section.
 
 
 .. _sec_data_model:
@@ -28,25 +28,26 @@ Data model
 To begin, here are definitions of some key ideas encountered later.
 
 tree
-    A "gene tree", i.e., the genealogical tree describing how each of the
-    individuals at the tips of the tree are related to each other.
+    A "gene tree", i.e., the genealogical tree describing how a collection of
+    genomes (usually at the tips of the tree) are related to each other.
 
 tree sequence
     A "succinct tree sequence" (or tree sequence, for brevity) is an efficient
-    encoding of a sequence of correlated trees. A tree sequence efficiently
-    captures the structure shared by adjacent trees, (essentially) storing only
-    what differs between them.
+    encoding of a sequence of correlated trees, such as one encounters looking
+    at the gene trees along a genome. A tree sequence efficiently captures the
+    structure shared by adjacent trees, (essentially) storing only what differs
+    between them.
 
 node
-    Each branching point in each tree is associated with a particular chromosome
+    Each branching point in each tree is associated with a particular genome
     in a particular ancestor, called "nodes".  Since each node represents a
-    specific gamete it has a unique ``time``, thought of as its birth time,
+    specific genome it has a unique ``time``, thought of as its birth time,
     which determines the height of any branching points it is associated with.
 
 individual
 
     In certain situations we are interested in how nodes (representing
-    individual homologous chromosomes) are grouped together into individuals
+    individual homologous genomes) are grouped together into individuals
     (e.g., two nodes per diploid individual). For example, when we are working
     with polyploid samples it is useful to associate metadata with a specific
     individual rather than duplicate this information on the constituent nodes.
@@ -55,7 +56,9 @@ sample
     Those nodes in the tree that we have obtained data from.  These are
     distinguished from other nodes by the fact that a tree sequence *must*
     describe the genealogical history of all samples at every point on the
-    genome. (See the :ref:`node table definitions <sec_node_table_definition>`
+    genome. Certain methods depend on these: for instance,
+    :meth:`SparseTree.roots` only return roots ancestral to at least one sample.
+    (See the :ref:`node table definitions <sec_node_table_definition>`
     for information on how the sample
     status a node is encoded in the ``flags`` column.)
 
@@ -82,6 +85,15 @@ mutation
     back or recurrent mutations, a mutation must also specify it's 'parent'
     mutation.
 
+migration
+    An event at which a parent and child node were born in different populations.
+
+population
+    A grouping of nodes, e.g., by sampling location.
+
+provenance
+    An entry recording the origin and history of the data encoded in a tree sequence.
+
 ID
     In the set of interconnected tables that we define here, we refer
     throughout to the IDs of particular entities. The ID of an
@@ -96,7 +108,6 @@ Sequence length
     ``right`` coordinate in the edge table, but there are situations in which
     we might wish to specify the sequence length explicitly.
 
-.. todo:: Define migration and provenance types.
 
 A tree sequence can be stored in a collection of eight tables:
 :ref:`Node <sec_node_table_definition>`,
@@ -119,6 +130,33 @@ Sites and Mutations are optional but necessary to encode polymorphism
 In the following sections we define these components of a tree sequence in
 more detail.
 
+*******************************
+Nodes, Genomes, or Individuals?
+*******************************
+
+The natural unit of biological analysis is (usually) the *individual*. However,
+many organisms we study are diploid, and so each individual contains *two*
+homologous copies of the entire genome, separately inherited from the two
+parental individuals. Since each monoploid copy of the genome is inherited separately,
+each diploid individual lies at the end of two distinct lineages, and so will
+be represented by *two* places in any genealogical tree. This makes it
+difficult to precisely discuss tree sequences for diploids, as we have no
+simple way to refer to the bundle of chromosomes that make up the "copy of the
+genome inherited from one particular parent". For this reason, in this
+documentation we use the non-descriptive term "node" to refer to this concept
+-- and so, a diploid individual is composed of two nodes -- although we use the
+term "genome" at times, for concreteness.
+
+Several properties naturally associated with individuals are in fact assigned
+to nodes in what follows: birth time and population. This is for two reasons: 
+First, since coalescent simulations naturally lack a notion of polyploidy, earlier
+versions of ``msprime`` lacked the notion of an individual. Second, ancestral
+nodes are not naturally grouped together into individuals -- we know they must have
+existed, but have no way of inferring this grouping, so in fact many nodes in
+an empirically-derived tree sequence will not be associated with individuals,
+even though their birth times might be inferred.
+
+
 .. _sec_table_definitions:
 
 Table definitions
@@ -129,7 +167,7 @@ Table definitions
 Node Table
 ----------
 
-A **node** defines the haploid set of chromosomes of a specific
+A **node** defines a monoploid set of chromosomes of a specific
 individual that was born at some time in the past: the set of
 chromosomes inherited from a particular one of the individual's parents.
 Every vertex in the marginal trees of a tree sequence corresponds
@@ -161,8 +199,8 @@ defaults to the null ID (-1).
 
 The ``flags`` column stores information about a particular node, and
 is composed of 32 bitwise boolean values. Currently, the only flag defined
-is ``IS_SAMPLE = 1``, which defines the sample status of nodes. Marking
-a particular node as a sample means, for example, that the mutational state
+is ``IS_SAMPLE = 1``, which defines the *sample* status of nodes. Marking
+a particular node as a "sample" means, for example, that the mutational state
 of the node will be included in the genotypes produced by
 :meth:`.TreeSequence.variants`.
 
@@ -194,7 +232,7 @@ Individual Table
 
 An **individual** defines how nodes (which can be seen
 as representing single chromosomes) group together in a polyploid individual.
-The individual table contains three columns, of which ``flags`` is mandatory.
+The individual table contains three columns, of which only ``flags`` is mandatory.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -214,7 +252,8 @@ defined.
 The ``location`` column stores the location of an individual in arbitrary
 dimensions. This column is :ref:`ragged <sec_encoding_ragged_columns>`, and
 so different individuals can have locations with different dimensions (i.e.,
-one individual may have location ``[]`` and another ``[0, 1, 0]``.
+one individual may have location ``[]`` and another ``[0, 1, 0]``. This could
+therefore be used to store other quantities (e.g., phenotype).
 
 The ``metadata`` column provides a location for client code to store
 information about each individual. See the :ref:`sec_metadata_definition` section for
@@ -246,10 +285,10 @@ parent              int32               Parent node ID.
 child               int32               Child node ID.
 ================    ==============      ===========
 
-Each row in an edge table describes the half-open genomic interval
-affected ``[left, right)``, and the ``parent`` and ``child`` on that interval.
+Each row in an edge table describes a half-open genomic interval ``[left, right)``
+over which the ``child`` inherited from the given ``parent``.
 The ``left`` and ``right`` columns are defined using double precision
-floating point values for flexibility. The ``parent`` and ``child``
+floating point values. The ``parent`` and ``child``
 columns specify integer IDs in the associated :ref:`sec_node_table_definition`.
 
 See the :ref:`sec_edge_requirements` section for details on the properties
@@ -261,7 +300,7 @@ Site Table
 ----------
 
 A **site** defines a particular location along the genome in which
-we are interested in observing the mutational state. The site table
+we are interested in observing the allelic state. The site table
 contains three columns, of which ``position`` and ``ancestral_state``
 are mandatory.
 
@@ -276,9 +315,9 @@ metadata            binary              Site :ref:`sec_metadata_definition`.
 The ``position`` column is a floating point value defining the location
 of the site in question along the genome.
 
-The ``ancestral_state`` column specifies the mutational state at the root
-of the tree, thus defining the state that nodes inherit (unless mutations
-occur). The column stores text character data of arbitrary length.
+The ``ancestral_state`` column specifies the allelic state at the root
+of the tree, thus defining the state that nodes inherit if no mutations
+intervene. The column stores text character data of arbitrary length.
 
 The ``metadata`` column provides a location for client code to store
 information about each site. See the :ref:`sec_metadata_definition` section for
@@ -292,7 +331,7 @@ required for a valid set of sites.
 Mutation Table
 --------------
 
-A **mutation** defines a change of mutational state on a tree at a particular site.
+A **mutation** defines a change of allelic state on a tree at a particular site.
 The mutation table contains five columns, of which ``site``, ``node`` and
 ``derived_state`` are mandatory.
 
@@ -302,7 +341,7 @@ Column              Type                Description
 site                int32               The ID of the site the mutation occurs at.
 node                int32               The node this mutation occurs at.
 parent              int32               The ID of the parent mutation.
-derived_state       char                The mutational state at the defined node.
+derived_state       char                The allelic state resulting from the mutation.
 metadata            binary              Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
@@ -310,18 +349,19 @@ The ``site`` column is an integer value defining the ID of the
 :ref:`site <sec_site_table_definition>` at which this mutation occured.
 
 The ``node`` column is an integer value defining the ID of the
-first :ref:`node <sec_node_table_definition>` in the tree to inherit this mutation.
+first :ref:`node <sec_node_table_definition>` in the tree below this mutation.
 
-The ``derived_state`` column specifies the mutational state at the specified node,
-thus defining the state that nodes in the subtree inherit (unless further mutations
-occur). The column stores text character data of arbitrary length.
+The ``derived_state`` column specifies the allelic state resulting from the mutation,
+thus defining the state that the ``node`` and any descendant nodes in the
+subtree inherit unless further mutations occur. The column stores text
+character data of arbitrary length.
 
-The ``parent`` column is an integer value defining the ID of the
-mutation from which this mutation inherits. If there is no mutation at the
+The ``parent`` column is an integer value defining the ID of the mutation whose
+allelic state this mutation replaced. If there is no mutation at the
 site in question on the path back to root, then this field is set to the
 null ID (-1). (The ``parent`` column is only required in situations
 where there are multiple mutations at a given site. For
-simple infinite sites mutations, it can be ignored.)
+"infinite sites" mutations, it can be ignored.)
 
 The ``metadata`` column provides a location for client code to store
 information about each site. See the :ref:`sec_metadata_definition` section for
@@ -338,10 +378,11 @@ Migration Table
 In simulations, trees can be thought of as spread across space, and it is
 helpful for inferring demographic history to record this history.
 Migrations are performed by individual ancestors, but most likely not by an
-individual tracked as a ``node`` (as in a discrete-deme model they are
+individual whose genome is tracked as a ``node`` (as in a discrete-deme model they are
 unlikely to be both a migrant and a most recent common ancestor).  So,
 ``msprime`` records when a segment of ancestry has moved between
-populations.
+populations. This table is not required, even if different nodes come from
+different populations.
 
 ================    ==============      ===========
 Column              Type                Description
@@ -457,6 +498,9 @@ user attempts to load a tree sequence via :func:`.load` or
 error message. Some more complex requirements may not be detectable at load-time,
 and errors may not occur until certain operations are attempted.
 These are documented below.
+We also provide tools that can transform a collection of tables into a valid
+collection of tables, so long as they are logically consistent,
+as described in :ref:`sec_table_transformations`.
 
 .. _sec_individual_requirements:
 
@@ -481,6 +525,9 @@ each node are:
 
 - ``population`` must either be null (-1) or refer to a valid population ID;
 - ``individual`` must either be null (-1) or refer to a valid individual ID.
+
+An ID refers to a zero-indexed row number in the relevant table,
+and so is "valid" if is between 0 and one less than the number of rows in the relevant table.
 
 There are no requirements regarding the ordering of nodes with respect to time.
 
@@ -507,7 +554,7 @@ The first requirement simply ensures that the interval makes sense. The
 third requirement ensures that we cannot have loops, since time is
 always increasing as we ascend the tree.
 
-Semantically, to ensure a valid tree sequence there is one further requirement:
+To ensure a valid tree sequence there is one further requirement:
 
 - The set of intervals on which each node is a child must be disjoint.
 
@@ -562,6 +609,11 @@ requirements for a valid set of mutations are:
 - ``parent`` must either be the null ID (-1) or a valid mutation ID within the
   current table
 
+Furthermore,
+
+- If another mutation occurs on the tree above the mutation in
+  question, its ID must be listed as the ``parent``.
+
 For simplicity and algorithmic efficiency, mutations must also:
 
 - be sorted by site ID;
@@ -614,6 +666,138 @@ Population requirements
 
 There are no requirements on a population table.
 
+.. _sec_provenance_requirements:
+
+Provenance requirements
+-----------------------
+
+There are no requirements on a provenance table.
+
+
+.. _sec_table_transformations:
+
+Table transformation methods
+============================
+
+The following methods operate *in place* on a :class:`TableCollection`,
+transforming them while preserving information.
+In some applications, tables may most naturally be produced in a way that is
+logically consistent, but not meeting all the requirements for validity that
+are established for algorithmic and efficiency reasons.
+These methods (while having other uses), can be used to make such a set of
+tables valid, and thus ready to be loaded into a tree sequence.
+
+This section is best skipped unless you are writing a program that records
+tables directly.
+
+Simplification
+--------------
+
+Simplification of a tree sequence is in fact a transformation method applied
+to the underlying tables: the method :meth:`TreeSequence.simplify` calls
+:meth:`TableCollection.simplify` on the tables, and loads a new tree sequence.
+The main purpose of this method is to remove redundant information,
+only retaining the minimal tree sequence necessary to describe the genealogical
+history of the ``samples`` provided. However, the :meth:`TableCollection.simplify`
+method can be applied to a collection of tables that does not have the
+``mutations.parent`` entries filled in, as long as all other validity requirements
+are satisified.
+
+Furthermore, ``simplify`` is guaranteed to:
+
+- preserve relative ordering of any rows in the Site and Mutation tables
+  that are not discarded.
+
+Sorting
+-------
+
+The :meth:`TableCollection.sort` method can be used to transform a set of tables
+that is valid other than the sortedness requirements listed above to a completely
+valid set of tables. 
+
+This method can also be used on slightly more general collections of tables:
+it is not required that ``site`` positions be unique in the table collection to
+be sorted. The method has two additional properties:
+
+- it preserves relative ordering between sites at the same position, and
+- it preserves relative ordering between mutations at the same site.
+
+
+Removing duplicate sites
+------------------------
+
+The :meth:`TableCollection.deduplicate_sites` method can be used to save a tree
+sequence recording method the bother of checking to see if a given site already
+exists in the site table. If there is more than one site with the same
+position, all but the first is removed, and all mutations referring to the
+removed sites are edited to refer to the first (and remaining) site. Order is
+preserved.
+
+
+Computing mutation parents
+--------------------------
+
+If each edge had at most only a single mutation, then the ``parent`` property
+of the mutation table would be easily inferred from the tree at that mutation's
+site. If mutations are entered into the mutation table ordered by time of
+appearance, then this sortedness allows us to infer the parent of each mutation
+even for mutations occurring on the same branch. The 
+:meth:`TableCollection.compute_mutation_parents` method will take advantage
+of this fact to compute the ``parent`` column of a mutation table, if all
+other information is valid.
+
+
+Recording tables in forwards time
+---------------------------------
+
+The above methods enable the following scheme for recording site and mutation
+tables during a forwards-time simulation. Whenever a new mutation is
+encountered:
+
+1. Add a new ``site`` to the site table at this position.
+2. Add a new ``mutation`` to the mutation table at the newly created site.
+
+This is lazy and wrong, because:
+
+a. There might have already been sites in the site table with the same position,
+b. and/or a mutation (at the same position) that this mutation should record as it's ``parent``.
+
+But, it's all OK because here's what we do:
+
+1. Add rows to the mutation and site tables as described above.
+2. Periodically, ``sort``, ``deduplicate_sites``,  and ``simplify``, then
+   return to (1.), except that
+3. Sometimes, to output the tables, ``sort``, ``compute_mutation_parents``,
+    (optionally ``simplify``), and dump these out to a file.
+
+*Note:* as things are going along we do *not* have to
+``compute_mutation_parents``, which is nice, because this is a nontrivial step
+that requires constructin all the trees along the genome. Computing mutation
+parents only has to happen before the final (output) step.
+
+This is OK as long as the forwards-time simulation outputs things in order by when
+they occur, because these operations have the following properties:
+
+1. Mutations appear in the mutation table ordered by time of appearance, so
+   that a mutation will always appear after the one that it replaced (i.e.,
+   it's parent).
+2. Furthermore, if mutation B appears after mutation A, but at the same site,
+   then mutation B's site will appear after mutatation A's site in the site
+   table.
+3. ``sort`` sorts sites by position, and then by ID, so that the relative
+   ordering of sites at the same position is maintained, thus preserving
+   property (2).
+4. ``sort`` sorts mutations by site, and then by ID, thus preserving property
+   (1); if the mutations are at separate sites (but the same position), this
+   fact is thanks to property (2).
+5. ``simplify`` also preserves ordering of any rows in the site and mutation
+   tables that do not get discarded.
+6. ``deduplicate_sites`` goes through and collapses all sites at the same
+   position to only one site, maintaining order otherwise.
+7. ``compute_mutation_parents`` fills in the ``parent`` information by using
+    property (1).
+
+
 .. _sec_text_file_format:
 
 *****************
@@ -631,10 +815,25 @@ can be included in the file. Note, in particular, that this means that
 an ``id`` column may be present in any of these files, but it will be
 ignored (IDs are always determined by the position of the row in a table).
 
-.. todo::
-    Update the examples in this section to be a very simple tree sequence
-    with (say) 4 nodes and two trees, and include a picture. This
-    example can also be used in the binary interchange section also.
+We present the text format below using the following very simple tree
+sequence, with four nodes, two trees, and three mutations at two sites,
+both on the first tree::
+
+    time ago
+    --------
+      3            3
+                ┏━━┻━━┓
+                ╋     ╋         2
+                ┃     ╋      ┏━━┻━━┓
+      0         0     1      0     1
+
+    position  0           7          10
+
+A deletion from AT to A has occurred at position 2 on the branch leading to
+node 0, and two mutations have occurred at position 4 on the branch leading to
+node 1, first from A to T, then a back mutation to A. The haplotypes of our two
+samples, nodes 0 and 1, are therefore AA and ATA.
+
 
 .. _sec_node_text_format:
 
@@ -642,7 +841,7 @@ Node text format
 ================
 
 The node text format must contain the columns ``is_sample`` and
-``time``. Optionally, there may also be a ``population`` and
+``time``. Optionally, there may also be ``population``, ``individual``, and
 ``metadata`` columns. See the :ref:`node table definitions
 <sec_node_table_definition>` for details on these columns.
 
@@ -653,17 +852,11 @@ allow for extra columns in the text format.
 
 An example node table::
 
-    is_sample   time    population
-    1           0.0     0
-    1           0.0     0
-    1           0.0     0
-    1           0.0     0
-    0           0.071   0
-    0           0.090   0
-    0           0.170   0
-    0           0.202   0
-    0           0.253   0
-
+    is_sample   individual   time
+    1           0            0.0
+    1           0            0.0
+    0           -1           1.0
+    0           -1           3.0
 
 .. _sec_edge_text_format:
 
@@ -677,12 +870,11 @@ for details on these columns.
 
 An example edge table::
 
-    left    right   parent  child
-    2       10      4       2
-    0       10      5       1
-    0       7       6       0
-    7       10      7       0
-    0       2       8       2
+    left   right   parent  child
+    0.0    7.0     2       0
+    0.0    7.0     2       1
+    7.0    10.0    3       0
+    7.0    10.0    3       1
 
 
 .. _sec_site_text_format:
@@ -698,9 +890,9 @@ for details on these columns.
 
 sites::
 
-    position    ancestral_state
-    0.1         A
-    8.5         AT
+    position      ancestral_state
+    2.0           AT
+    4.0           A
 
 .. _sec_mutation_text_format:
 
@@ -709,16 +901,19 @@ Mutation text format
 
 The mutation text format must contain the columns ``site``,
 ``node`` and ``derived_state``. The ``parent`` and ``metadata`` columns
-may also be optionally present. See the
+may also be optionally present (but ``parent`` must be specified if
+more than one mutation occurs at the same site). See the
 :ref:`mutation table definitions <sec_site_table_definition>`
 for details on these columns.
 
 mutations::
 
-    site    node    derived_state
-    0       3       G
-    1       6       T
-    1       0       A
+    site   node    derived_state    parent
+    0      0       A                -1
+    1      0       T                -1
+    1      1       A                1
+
+
 
 
 .. _sec_binary_interchange:
@@ -799,9 +994,9 @@ individual rows. For a row ``j``::
 
 gives us the array of bytes for the ancestral state in that row.
 
-Note that for a table with ``n`` rows, any offset column must have ``n + 1``
-values. The values in this column must be nondecreasing, and cannot exceed
-the length of the ragged column in question.
+For a table with ``n`` rows, any offset column must have ``n + 1``
+values, the first of which is always ``0``. The values in this column must be
+nondecreasing, and cannot exceed the length of the ragged column in question.
 
 .. _sec_tree_sequence_file_format:
 
