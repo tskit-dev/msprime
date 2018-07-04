@@ -2090,7 +2090,7 @@ class TreeSequence(object):
         The ``sample_counts`` and ``sample_lists`` parameters control the
         features that are enabled for the resulting trees. If ``sample_counts``
         is True, then it is possible to count the number of samples underneath
-        a particular node in constant time using the :meth:`.get_num_samples`
+        a particular node in constant time using the :meth:`.num_samples`
         method. If ``sample_lists`` is True a more efficient algorithm is
         used in the :meth:`.SparseTree.samples` method.
 
@@ -2109,7 +2109,7 @@ class TreeSequence(object):
             counted using the :meth:`.SparseTree.get_num_tracked_samples`
             method.
         :param bool sample_counts: If True, support constant time sample counts
-            via the :meth:`.SparseTree.get_num_samples` and
+            via the :meth:`.SparseTree.num_samples` and
             :meth:`.SparseTree.get_num_tracked_samples` methods.
         :param bool sample_lists: If True, provide more efficient access
             to the samples beneath a give node using the

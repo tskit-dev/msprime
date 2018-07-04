@@ -792,7 +792,7 @@ progress bar on this computation.
             for site in tree.sites():
                 assert len(site.mutations) == 1
                 mutation = site.mutations[0]
-                counts[site.id] = tree.get_num_samples(mutation.node)
+                counts[site.id] = tree.num_samples(mutation.node)
         doubletons = np.nonzero(counts == 2)[0]
         results = find_ld_sites(ts, doubletons, num_threads=8)
         print(
