@@ -5479,6 +5479,10 @@ table_collection_reset_position(table_collection_t *tables,
     int ret = 0;
 
     /* "Reset" a table collection to the previously recorded position. */
+    ret = table_collection_drop_indexes(tables);
+    if (ret != 0) {
+        goto out;
+    }
     ret = individual_table_reset_position(tables->individuals,
                                           position->individual_position);
     if (ret != 0) {
