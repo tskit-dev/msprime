@@ -5327,3 +5327,199 @@ out:
     msp_safe_free(bottom_mutation);
     return ret;
 }
+
+/*****************************
+ * Table collection position *
+ *****************************/
+
+void
+table_collection_record_position(table_collection_t *tables,
+        table_collection_position_t *position)
+{
+    /* Record the current "end" position of a table collection,
+     * which is the current number of rows in the table.
+     * */
+
+    position->individual_position = tables->individuals->num_rows;
+    position->node_position = tables->nodes->num_rows;
+    position->edge_position = tables->edges->num_rows;
+    position->migration_position = tables->migrations->num_rows;
+    position->site_position = tables->sites->num_rows;
+    position->mutation_position = tables->mutations->num_rows;
+    position->population_position = tables->populations->num_rows;
+    position->provenance_position = tables->provenances->num_rows;
+}
+
+static int WARN_UNUSED
+individual_table_reset_position(individual_table_t *individuals, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > individuals->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    individuals->num_rows = n;
+    individuals->location_length = individuals->location_offset[n];
+    individuals->metadata_length = individuals->metadata_offset[n];
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+node_table_reset_position(node_table_t *nodes, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > nodes->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    nodes->num_rows = n;
+    nodes->metadata_length = nodes->metadata_offset[n];
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+edge_table_reset_position(edge_table_t *edges, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > edges->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    edges->num_rows = n;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+migration_table_reset_position(migration_table_t *migrations, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > migrations->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    migrations->num_rows = n;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+site_table_reset_position(site_table_t *sites, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > sites->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    sites->num_rows = n;
+    sites->ancestral_state_length = sites->ancestral_state_offset[n];
+    sites->metadata_length = sites->metadata_offset[n];
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+mutation_table_reset_position(mutation_table_t *mutations, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > mutations->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    mutations->num_rows = n;
+    mutations->derived_state_length = mutations->derived_state_offset[n];
+    mutations->metadata_length = mutations->metadata_offset[n];
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+population_table_reset_position(population_table_t *populations, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > populations->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    populations->num_rows = n;
+    populations->metadata_length = populations->metadata_offset[n];
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+provenance_table_reset_position(provenance_table_t *provenances, table_size_t n)
+{
+    /* Remove rows, so that the new number of rows is n */
+    int ret = 0;
+    if (n > provenances->num_rows) {
+        ret = MSP_ERR_BAD_TABLE_POSITION;
+        goto out;
+    }
+    provenances->num_rows = n;
+    provenances->timestamp_length = provenances->timestamp_offset[n];
+    provenances->record_length = provenances->record_offset[n];
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+table_collection_reset_position(table_collection_t *tables,
+        table_collection_position_t *position)
+{
+    int ret = 0;
+
+    /* "Reset" a table collection to the previously recorded position. */
+    ret = individual_table_reset_position(tables->individuals,
+                                          position->individual_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = node_table_reset_position(tables->nodes,
+                                    position->node_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = edge_table_reset_position(tables->edges,
+                                    position->edge_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = migration_table_reset_position(tables->migrations,
+                                         position->migration_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_reset_position(tables->sites,
+                                    position->site_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_reset_position(tables->mutations,
+                                    position->mutation_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = population_table_reset_position(tables->populations,
+                                          position->population_position);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_reset_position(tables->provenances,
+                                          position->provenance_position);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+

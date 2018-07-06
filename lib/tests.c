@@ -8535,6 +8535,176 @@ test_sort_tables_drops_indexes(void)
     tree_sequence_free(&ts);
 }
 
+void
+test_table_collection_position_errors(void)
+{
+    int ret;
+    int j;
+    table_collection_t t1, t2;
+    table_collection_position_t pos1, pos2;
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        // set-up
+        ret = table_collection_alloc(&t1, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_alloc(&t2, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_dump_tables(examples[j], &t1, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_copy(&t1, &t2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        table_collection_record_position(&t1, &pos1);
+
+        // for each table, add a new row to t2, bookmark that location,
+        // then try to reset t1 to this illegal location
+
+        // individuals
+        individual_table_add_row(t2.individuals, 0, NULL, 0, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // nodes
+        node_table_add_row(t2.nodes, 0, 1.2, 0, -1, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // edges
+        edge_table_add_row(t2.edges, 0.1, 0.4, 0, 3);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // migrations
+        migration_table_add_row(t2.migrations, 0.1, 0.2, 2, 1, 2, 1.2);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // sites
+        site_table_add_row(t2.sites, 0.3, "A", 1, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // mutations
+        mutation_table_add_row(t2.mutations, 0, 1, -1, "X", 1, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // populations
+        population_table_add_row(t2.populations, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // provenance
+        provenance_table_add_row(t2.provenances, "abc", 3, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        table_collection_free(&t1);
+        table_collection_free(&t2);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+void
+test_table_collection_position(void)
+{
+    int ret;
+    int j, k;
+    tree_sequence_t **examples;
+    table_collection_t t1, t2, t3;
+    table_collection_position_t pos1, pos2;
+
+    examples = get_example_tree_sequences(1);
+    CU_ASSERT_FATAL(examples != NULL);
+
+    for (j = 0; examples[j] != NULL; j++) {
+        ret = table_collection_alloc(&t1, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_alloc(&t2, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_alloc(&t3, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = tree_sequence_dump_tables(examples[j], &t1, 0);
+
+        // bookmark at pos1
+        table_collection_record_position(&t1, &pos1);
+        // copy to t2
+        ret = table_collection_copy(&t1, &t2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        // resetting position should do nothing
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(table_collection_equals(&t1, &t2));
+        // add more rows to t2
+        // (they don't have to make sense for this test)
+        for (k = 0; k < 3; k++) {
+            node_table_add_row(t2.nodes, 0, 1.2, 0, -1, NULL, 0);
+            node_table_add_row(t2.nodes, 0, 1.2, k, -1, NULL, 0);
+            edge_table_add_row(t2.edges, 0.1, 0.5, k, k+1);
+            edge_table_add_row(t2.edges, 0.3, 0.8, k, k+2);
+        }
+        // bookmark at pos2
+        table_collection_record_position(&t2, &pos2);
+        // copy to t3
+        ret = table_collection_copy(&t2, &t3);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        // add more rows to t3
+        for (k = 0; k < 3; k++) {
+            node_table_add_row(t3.nodes, 0, 1.2, k+5, -1, NULL, 0);
+            site_table_add_row(t3.sites, 0.2, "A", 1, NULL, 0);
+            site_table_add_row(t3.sites, 0.2, "C", 1, NULL, 0);
+            mutation_table_add_row(t3.mutations, 0, k, -1, "T", 1, NULL, 0);
+            migration_table_add_row(t3.migrations, 0.0, 0.5, 1, 0, 1, 1.2);
+            individual_table_add_row(t3.individuals, k, NULL, 0, NULL, 0);
+            population_table_add_row(t3.populations, "X", 1);
+            provenance_table_add_row(t3.provenances, "abc", 3, NULL, 0);
+        }
+        // now resetting t3 to pos2 should equal t2
+        ret = table_collection_reset_position(&t3, &pos2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(table_collection_equals(&t2, &t3));
+        // and resetting to pos1 should equal t1
+        ret = table_collection_reset_position(&t3, &pos1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(table_collection_equals(&t1, &t3));
+
+        table_collection_free(&t1);
+        table_collection_free(&t2);
+        table_collection_free(&t3);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
 static int
 msprime_suite_init(void)
 {
@@ -8712,6 +8882,8 @@ main(int argc, char **argv)
         {"test_generate_uuid", test_generate_uuid},
         {"test_simplify_tables_drops_indexes", test_simplify_tables_drops_indexes},
         {"test_sort_tables_drops_indexes", test_sort_tables_drops_indexes},
+        {"test_table_collection_position", test_table_collection_position},
+        {"test_table_collection_position_errors", test_table_collection_position_errors},
         CU_TEST_INFO_NULL,
     };
 

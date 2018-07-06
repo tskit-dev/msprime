@@ -159,6 +159,18 @@ typedef struct {
     /* TODO Add in reserved space for future tables. */
 } table_collection_t;
 
+typedef struct {
+    table_collection_t *tables;
+    table_size_t individual_position;
+    table_size_t node_position;
+    table_size_t edge_position;
+    table_size_t migration_position;
+    table_size_t site_position;
+    table_size_t mutation_position;
+    table_size_t population_position;
+    table_size_t provenance_position;
+} table_collection_position_t;
+
 /* Definitions for the basic objects */
 
 typedef struct {
@@ -492,6 +504,11 @@ int simplifier_run(simplifier_t *self, node_id_t *node_map);
 void simplifier_print_state(simplifier_t *self, FILE *out);
 
 int squash_edges(edge_t *edges, size_t num_edges, size_t *num_output_edges);
+
+void table_collection_record_position(table_collection_t *tables,
+        table_collection_position_t *position);
+int table_collection_reset_position(table_collection_t *tables,
+        table_collection_position_t *position);
 
 #ifdef __cplusplus
 }
