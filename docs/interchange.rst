@@ -623,7 +623,8 @@ For simplicity and algorithmic efficiency, mutations must also:
 
 Violations of these sorting requirements are detected at load time.
 The :meth:`.TableCollection.sort` method ensures that mutations are sorted
-according to these criteria.
+according site ID, but does not at present enforce that mutations occur
+after their parent mutations.
 
 Mutations also have the requirement that they must result in a
 change of state. For example, if we have a site with ancestral state
@@ -721,6 +722,13 @@ be sorted. The method has two additional properties:
 
 - it preserves relative ordering between sites at the same position, and
 - it preserves relative ordering between mutations at the same site.
+
+:meth:`TableCollection.sort` does not check the validity of the `parent`
+property of the mutation table. However, because the method preserves mutation
+order among mutations at the same site, if mutations are already sorted so that
+each mutation comes after its parent (e.g., if they are ordered by time of
+appearance), then this property is preserved, even if the `parent` properties
+are not specified.
 
 
 Removing duplicate sites

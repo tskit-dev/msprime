@@ -1593,10 +1593,10 @@ class TableCollection(object):
 
     def sort(self, edge_start=0):
         """
-        Sorts the tables in place, ensuring that all tree sequence ordering
-        requirements are met. See the
-        :ref:`sec_valid_tree_sequence_requirements` section for details on
-        these requirements.
+        Sorts the tables in place. This ensures that all tree sequence ordering
+        requirements listed in the
+        :ref:`sec_valid_tree_sequence_requirements` section are met, as long
+        as each site has at most one mutation (see below).
 
         If the ``edge_start`` parameter is provided, this specifies the index
         in the edge table where sorting should start. Only rows with index
@@ -1624,7 +1624,9 @@ class TableCollection(object):
         their relative ordering.
 
         Mutations are sorted by site ID, and mutations with the same site retain
-        their relative ordering.
+        their relative ordering. This does not currently rearrange tables so that
+        mutations occur after their mutation parents, which is a requirement for
+        valid tree sequences.
 
         :param int edge_start: The index in the edge table where sorting starts
             (default=0; must be <= len(edges)).
@@ -1633,7 +1635,7 @@ class TableCollection(object):
 
     def compute_mutation_parents(self):
         """
-        Modifies the tabls in place, computing the ``parent`` column of the
+        Modifies the tables in place, computing the ``parent`` column of the
         mutation table. For this to work, the node and edge tables must be
         valid, and the site and mutation tables must be sorted (see
         :meth:`TableCollection.sort`).  This will produce an error if mutations
