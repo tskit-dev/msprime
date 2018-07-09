@@ -260,6 +260,9 @@ msp_strerror_internal(int err)
             /* Temporary error to flag a limitation in current implementation. */
             ret = "Individuals are currently not supported in simplify.";
             break;
+        case MSP_ERR_BAD_TABLE_POSITION:
+            ret = "Bad table position provided to truncate/reset.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
