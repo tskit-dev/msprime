@@ -171,6 +171,7 @@
 
 /* REUSE: * -57 */
 
+#define MSP_ERR_BAD_TABLE_POSITION                                  -75
 
 /* This bit is 0 for any errors originating from kastore */
 #define MSP_KAS_ERR_BIT 14

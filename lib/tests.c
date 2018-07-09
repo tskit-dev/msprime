@@ -6884,6 +6884,22 @@ test_node_table(void)
     node_table_print_state(&table, _devnull);
     node_table_dump_text(&table, _devnull);
 
+    /* Truncate back to the original number of rows. */
+    ret = node_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.population, population, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.individual, individual, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+
+    ret = node_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+
     /* If population is NULL it should be set to -1. If metadata is NULL all metadatas
      * should be set to the empty string. If individual is NULL it should be set to -1. */
     num_rows = 10;
@@ -7009,6 +7025,18 @@ test_edge_table(void)
     CU_ASSERT_EQUAL(memcmp(table.child, child, num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(memcmp(table.child + num_rows, child, num_rows * sizeof(node_id_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+
+    /* Truncate back to num_rows */
+    ret = edge_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.child, child, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+
+    ret = edge_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
 
     /* Inputs cannot be NULL */
     ret = edge_table_set_columns(&table, num_rows, NULL, right, parent, child);
@@ -7138,6 +7166,21 @@ test_site_table(void)
                 num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
     CU_ASSERT_EQUAL(table.ancestral_state_length, 2 * num_rows);
+
+    /* truncate back to num_rows */
+    ret = site_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.position, position,
+                num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.ancestral_state, ancestral_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.ancestral_state_length, num_rows);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+
+    ret = site_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
 
     /* Inputs cannot be NULL */
     ret = site_table_set_columns(&table, num_rows, NULL, ancestral_state,
@@ -7319,6 +7362,22 @@ test_mutation_table(void)
                 num_rows * sizeof(char)), 0);
     CU_ASSERT_EQUAL(table.metadata_length, 2 * num_rows);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
+
+    /* Truncate back to num_rows */
+    ret = mutation_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.site, site, num_rows * sizeof(site_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.parent, parent, num_rows * sizeof(mutation_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.derived_state, derived_state,
+                num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.derived_state_length, num_rows);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+
+    ret = mutation_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
 
     /* Check all this again, except with parent == NULL and metadata == NULL. */
     memset(parent, 0xff, num_rows * sizeof(mutation_id_t));
@@ -7505,6 +7564,20 @@ test_migration_table(void)
                 num_rows * sizeof(population_id_t)), 0);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
 
+    /* Truncate back to num_rows */
+    ret = migration_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.left, left, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.right, right, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.time, time, num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.node, node, num_rows * sizeof(node_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.source, source, num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.dest, dest, num_rows * sizeof(population_id_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+
+    ret = migration_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+
     /* inputs cannot be NULL */
     ret = migration_table_set_columns(&table, num_rows, NULL, right, node, source,
             dest, time);
@@ -7639,6 +7712,25 @@ test_individual_table(void)
     CU_ASSERT_EQUAL(table.metadata_length, 2 * num_rows);
     individual_table_print_state(&table, _devnull);
     individual_table_dump_text(&table, _devnull);
+
+    /* Truncate back to num_rows */
+    ret = individual_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.flags, flags, num_rows * sizeof(uint32_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.location, location,
+                spatial_dimension * num_rows * sizeof(double)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.location_offset, location_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata_offset, metadata_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.location_length, spatial_dimension * num_rows);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+    individual_table_print_state(&table, _devnull);
+
+    ret = individual_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
 
     /* flags can't be NULL */
     ret = individual_table_set_columns(&table, num_rows, NULL,
@@ -7834,6 +7926,16 @@ test_population_table(void)
     CU_ASSERT_EQUAL(table.metadata_length, 2 * num_rows);
     CU_ASSERT_EQUAL(table.num_rows, 2 * num_rows);
 
+    /* Truncate back to num_rows */
+    ret = population_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.metadata, metadata, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.metadata_length, num_rows);
+
+    ret = population_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+
     /* Metadata = NULL gives an error */
     ret = population_table_set_columns(&table, num_rows, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
@@ -7950,6 +8052,23 @@ test_provenance_table(void)
     CU_ASSERT_EQUAL(table.timestamp_length, 2 * num_rows);
     CU_ASSERT_EQUAL(table.record_length, 2 * num_rows);
     provenance_table_print_state(&table, _devnull);
+
+    /* Truncate back to num_rows */
+    ret = provenance_table_truncate(&table, num_rows);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(memcmp(table.timestamp, timestamp, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.timestamp_offset, timestamp_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.record, record, num_rows * sizeof(char)), 0);
+    CU_ASSERT_EQUAL(memcmp(table.record_offset, record_offset,
+                (num_rows + 1) * sizeof(table_size_t)), 0);
+    CU_ASSERT_EQUAL(table.num_rows, num_rows);
+    CU_ASSERT_EQUAL(table.timestamp_length, num_rows);
+    CU_ASSERT_EQUAL(table.record_length, num_rows);
+    provenance_table_print_state(&table, _devnull);
+
+    ret = provenance_table_truncate(&table, num_rows + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TABLE_POSITION);
 
     /* No arguments can be null */
     ret = provenance_table_set_columns(&table, num_rows, NULL, timestamp_offset,
@@ -8535,6 +8654,176 @@ test_sort_tables_drops_indexes(void)
     tree_sequence_free(&ts);
 }
 
+void
+test_table_collection_position_errors(void)
+{
+    int ret;
+    int j;
+    table_collection_t t1, t2;
+    table_collection_position_t pos1, pos2;
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        // set-up
+        ret = table_collection_alloc(&t1, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_alloc(&t2, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = tree_sequence_dump_tables(examples[j], &t1, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_copy(&t1, &t2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        table_collection_record_position(&t1, &pos1);
+
+        // for each table, add a new row to t2, bookmark that location,
+        // then try to reset t1 to this illegal location
+
+        // individuals
+        individual_table_add_row(t2.individuals, 0, NULL, 0, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // nodes
+        node_table_add_row(t2.nodes, 0, 1.2, 0, -1, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // edges
+        edge_table_add_row(t2.edges, 0.1, 0.4, 0, 3);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // migrations
+        migration_table_add_row(t2.migrations, 0.1, 0.2, 2, 1, 2, 1.2);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // sites
+        site_table_add_row(t2.sites, 0.3, "A", 1, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // mutations
+        mutation_table_add_row(t2.mutations, 0, 1, -1, "X", 1, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // populations
+        population_table_add_row(t2.populations, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        // provenance
+        provenance_table_add_row(t2.provenances, "abc", 3, NULL, 0);
+        table_collection_record_position(&t2, &pos2);
+        ret = table_collection_reset_position(&t1, &pos2);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TABLE_POSITION);
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        table_collection_free(&t1);
+        table_collection_free(&t2);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+void
+test_table_collection_position(void)
+{
+    int ret;
+    int j, k;
+    tree_sequence_t **examples;
+    table_collection_t t1, t2, t3;
+    table_collection_position_t pos1, pos2;
+
+    examples = get_example_tree_sequences(1);
+    CU_ASSERT_FATAL(examples != NULL);
+
+    for (j = 0; examples[j] != NULL; j++) {
+        ret = table_collection_alloc(&t1, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_alloc(&t2, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = table_collection_alloc(&t3, MSP_ALLOC_TABLES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = tree_sequence_dump_tables(examples[j], &t1, 0);
+
+        // bookmark at pos1
+        table_collection_record_position(&t1, &pos1);
+        // copy to t2
+        ret = table_collection_copy(&t1, &t2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        // resetting position should do nothing
+        ret = table_collection_reset_position(&t2, &pos1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(table_collection_equals(&t1, &t2));
+        // add more rows to t2
+        // (they don't have to make sense for this test)
+        for (k = 0; k < 3; k++) {
+            node_table_add_row(t2.nodes, 0, 1.2, 0, -1, NULL, 0);
+            node_table_add_row(t2.nodes, 0, 1.2, k, -1, NULL, 0);
+            edge_table_add_row(t2.edges, 0.1, 0.5, k, k+1);
+            edge_table_add_row(t2.edges, 0.3, 0.8, k, k+2);
+        }
+        // bookmark at pos2
+        table_collection_record_position(&t2, &pos2);
+        // copy to t3
+        ret = table_collection_copy(&t2, &t3);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        // add more rows to t3
+        for (k = 0; k < 3; k++) {
+            node_table_add_row(t3.nodes, 0, 1.2, k+5, -1, NULL, 0);
+            site_table_add_row(t3.sites, 0.2, "A", 1, NULL, 0);
+            site_table_add_row(t3.sites, 0.2, "C", 1, NULL, 0);
+            mutation_table_add_row(t3.mutations, 0, k, -1, "T", 1, NULL, 0);
+            migration_table_add_row(t3.migrations, 0.0, 0.5, 1, 0, 1, 1.2);
+            individual_table_add_row(t3.individuals, k, NULL, 0, NULL, 0);
+            population_table_add_row(t3.populations, "X", 1);
+            provenance_table_add_row(t3.provenances, "abc", 3, NULL, 0);
+        }
+        // now resetting t3 to pos2 should equal t2
+        ret = table_collection_reset_position(&t3, &pos2);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(table_collection_equals(&t2, &t3));
+        // and resetting to pos1 should equal t1
+        ret = table_collection_reset_position(&t3, &pos1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_TRUE(table_collection_equals(&t1, &t3));
+
+        table_collection_free(&t1);
+        table_collection_free(&t2);
+        table_collection_free(&t3);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
 static int
 msprime_suite_init(void)
 {
@@ -8712,6 +9001,8 @@ main(int argc, char **argv)
         {"test_generate_uuid", test_generate_uuid},
         {"test_simplify_tables_drops_indexes", test_simplify_tables_drops_indexes},
         {"test_sort_tables_drops_indexes", test_sort_tables_drops_indexes},
+        {"test_table_collection_position", test_table_collection_position},
+        {"test_table_collection_position_errors", test_table_collection_position_errors},
         CU_TEST_INFO_NULL,
     };
 

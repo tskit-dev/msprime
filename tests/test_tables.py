@@ -292,6 +292,54 @@ class CommonTestsMixin(object):
                     else:
                         self.assertEqual(list(getattr(table, colname)), [])
 
+    def test_truncate(self):
+        num_rows = 100
+        input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+        for list_col, offset_col in self.ragged_list_columns:
+            value = list_col.get_input(2 * num_rows)
+            input_data[list_col.name] = value
+            input_data[offset_col.name] = 2 * np.arange(num_rows + 1, dtype=np.uint32)
+        table = self.table_class()
+        table.set_columns(**input_data)
+
+        copy = table.copy()
+        table.truncate(num_rows)
+        self.assertEqual(copy, table)
+
+        for num_rows in [100, 10, 1]:
+            table.truncate(num_rows)
+            self.assertEqual(table.num_rows, num_rows)
+            self.assertEqual(len(table), num_rows)
+            used = set()
+            for list_col, offset_col in self.ragged_list_columns:
+                offset = getattr(table, offset_col.name)
+                self.assertEqual(offset.shape, (num_rows + 1,))
+                self.assertTrue(np.array_equal(
+                    input_data[offset_col.name][:num_rows + 1], offset))
+                list_data = getattr(table, list_col.name)
+                self.assertTrue(np.array_equal(
+                    list_data, input_data[list_col.name][:offset[-1]]))
+                used.add(offset_col.name)
+                used.add(list_col.name)
+            for name, data in input_data.items():
+                if name not in used:
+                    self.assertTrue(np.array_equal(
+                        data[:num_rows], getattr(table, name)))
+
+    def test_truncate_errors(self):
+        num_rows = 10
+        input_data = {col.name: col.get_input(num_rows) for col in self.columns}
+        for list_col, offset_col in self.ragged_list_columns:
+            value = list_col.get_input(2 * num_rows)
+            input_data[list_col.name] = value
+            input_data[offset_col.name] = 2 * np.arange(num_rows + 1, dtype=np.uint32)
+        table = self.table_class()
+        table.set_columns(**input_data)
+        for bad_type in [None, 0.001, {}]:
+            self.assertRaises(TypeError, table.truncate, bad_type)
+        for bad_num_rows in [-1, num_rows + 1, 10**6]:
+            self.assertRaises(ValueError, table.truncate, bad_num_rows)
+
     def test_append_columns_data(self):
         for num_rows in [0, 10, 100, 1000]:
             input_data = {col.name: col.get_input(num_rows) for col in self.columns}
