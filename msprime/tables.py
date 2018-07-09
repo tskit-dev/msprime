@@ -129,6 +129,14 @@ class BaseTable(object):
         # Deprecated alias for clear
         self.clear()
 
+    def truncate(self, num_rows):
+        """
+        Truncates this table so that the only the first ``num_rows`` are retained.
+
+        :param int num_rows: The number of rows to retain in this table.
+        """
+        return self.ll_table.truncate(num_rows)
+
     # Unpickle support
     def __setstate__(self, state):
         self.set_columns(**state)
