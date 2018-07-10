@@ -1209,10 +1209,11 @@ class PopulationTable(BaseTable):
         return self.ll_table.add_row(metadata=metadata)
 
     def __str__(self):
-        metadata = unpack_strings(self.metadata, self.metadata_offset)
+        metadata = unpack_bytes(self.metadata, self.metadata_offset)
         ret = "id\tmetadata\n"
         for j in range(self.num_rows):
-            ret += "{}\t{}\n".format(j, metadata[j])
+            md = base64.b64encode(metadata[j]).decode('utf8')
+            ret += "{}\t{}\n".format(j, md)
         return ret[:-1]
 
     def copy(self):
