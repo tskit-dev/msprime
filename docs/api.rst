@@ -26,12 +26,12 @@ or to ``0.25`` to match ``ms``. Population sizes for individual
 demes and for past demographic events are also defined as absolute values, **not**
 scaled by ``Ne``. All migration rates and growth rates are also per generation.
 
-When running simulations we define the length in bases :math:`L` of the
-sequence in question using the ``length`` parameter. This defines the
-coordinate space within which trees and mutations are defined. :math:`L` is a
-continuous value, and coordinates can take any value from :math:`0` to
-:math:`L`. (So, although we often refer to the units of length as "bases",
-events can occur at fractional positions.)
+When running simulations we define the length :math:`L` of the sequence in
+question using the ``length`` parameter. This defines the coordinate space
+within which trees and mutations are defined. :math:`L` is a continuous value,
+so units are arbitrary, and coordinates can take any value from :math:`0` to
+:math:`L`. (So, although we recommend setting the units of length to be
+analogous to "bases", events can occur at fractional positions.)
 Mutations occur in an infinite sites process along this sequence,
 and mutation rates are specified per generation, per unit of sequence length.
 Thus, given the per-generation mutation rate :math:`\mu`, the rate of mutation
@@ -39,13 +39,13 @@ over the entire sequence in coalescent time units is :math:`\theta = 4 N_e \mu
 L`. It is important to remember these scaling factors when comparing with
 analytical results!
 
-Similarly, recombination rates are per base, per generation in ``msprime``.
-Thus, given the per generation crossover rate :math:`r`, the overall rate
-of recombination between the ends of the sequence in coalescent time units
-is :math:`\rho = 4 N_e r L`. Although breakpoints do not necessarily occur
-at integer locations, the underlying recombination model is finite, and the
-behaviour of a small number of loci can be modelled using the
-:class:`RecombinationMap` class. However, this is considered an advanced
+Similarly, recombination rates are per unit of sequence length and per
+generation in ``msprime``. Thus, given the per generation crossover rate
+:math:`r`, the overall rate of recombination between the ends of the sequence
+in coalescent time units is :math:`\rho = 4 N_e r L`. Although breakpoints do
+not necessarily occur at integer locations, the underlying recombination model
+is finite, and the behaviour of a small number of loci can be modelled using
+the :class:`RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
@@ -466,7 +466,7 @@ use UTF8 (which corresponds to ASCII for simple printable characters).::
 Here we create 10 sites at regular positions, each with ancestral state equal to
 "0". Note that we use ``ord("0")`` to get the ASCII code for "0" (48), and create
 10 copies of this by adding it to an array of zeros. We have done this for
-illustration purposes: it equivalent to do
+illustration purposes: it is equivalent (though slower for large examples) to do
 ``a, off = msprime.pack_strings(["0"] * m)``.
 
 Mutations can be handled similarly::

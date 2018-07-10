@@ -78,7 +78,8 @@ class Individual(SimpleContainer):
     """
     An :ref:`individual <sec_individual_table_definition>` in a tree sequence.
     Since nodes correspond to genomes, individuals are associated with a collection
-    of nodes (e.g., two nodes per diploid).
+    of nodes (e.g., two nodes per diploid). See :ref:`sec_nodes_or_individuals`
+    for more discussion of this distinction.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.
@@ -118,7 +119,8 @@ class Node(SimpleContainer):
     """
     A :ref:`node <sec_node_table_definition>` in a tree sequence, corresponding
     to a single genome. The ``time`` and ``population`` are attributes of the
-    ``Node``, rather than the ``Individual``, for historical reasons.
+    ``Node``, rather than the ``Individual``, as discussed in
+    :ref:`sec_nodes_or_individuals`.
 
     Modifying the attributes in this class will have **no effect** on the
     underlying tree sequence data.

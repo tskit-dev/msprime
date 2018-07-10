@@ -302,18 +302,6 @@ def simplify_tree_sequence(ts, samples, filter_zero_mutation_sites=True):
     return s.simplify()
 
 
-class TestHarmonicNumber(unittest.TestCase):
-    """
-    Tests for the harmonic number calculation.
-    """
-
-    def test_harmonic_number(self):
-        def H(n):
-            return sum(1 / k for k in range(1, n + 1))
-        for n in range(10, 1000, 100):
-            self.assertAlmostEqual(msprime.harmonic_number(n), H(n), 1)
-
-
 class TestAlmostEqual(unittest.TestCase):
     """
     Simple tests to ensure that the almost_equal() method is sensible.

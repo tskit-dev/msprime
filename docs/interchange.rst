@@ -30,6 +30,7 @@ To begin, here are definitions of some key ideas encountered later.
 tree
     A "gene tree", i.e., the genealogical tree describing how a collection of
     genomes (usually at the tips of the tree) are related to each other.
+    See :ref:`sec_nodes_or_individuals` for discussion of what a "genome" is.
 
 tree sequence
     A "succinct tree sequence" (or tree sequence, for brevity) is an efficient
@@ -43,6 +44,7 @@ node
     in a particular ancestor, called "nodes".  Since each node represents a
     specific genome it has a unique ``time``, thought of as its birth time,
     which determines the height of any branching points it is associated with.
+    See :ref:`sec_nodes_or_individuals` for discussion of what a "node" is.
 
 individual
 
@@ -51,14 +53,15 @@ individual
     (e.g., two nodes per diploid individual). For example, when we are working
     with polyploid samples it is useful to associate metadata with a specific
     individual rather than duplicate this information on the constituent nodes.
+    See :ref:`sec_nodes_or_individuals` for more discussion on this point.
 
 sample
-    Those nodes in the tree that we have obtained data from.  These are
-    distinguished from other nodes by the fact that a tree sequence *must*
-    describe the genealogical history of all samples at every point on the
-    genome. Certain methods depend on these: for instance,
-    :meth:`SparseTree.roots` only return roots ancestral to at least one sample.
-    (See the :ref:`node table definitions <sec_node_table_definition>`
+    The focal nodes of a tree sequence, usually thought of as those that we
+    have obtained data from. The specification of these affects various
+    methods: (1) :meth:`TreeSequence.variants` and
+    :meth:`TreeSequence.haplotypes` will output the genotypes of the samples,
+    and :meth:`SparseTree.roots` only return roots ancestral to at least one
+    sample. (See the :ref:`node table definitions <sec_node_table_definition>`
     for information on how the sample
     status a node is encoded in the ``flags`` column.)
 
@@ -130,6 +133,9 @@ Sites and Mutations are optional but necessary to encode polymorphism
 In the following sections we define these components of a tree sequence in
 more detail.
 
+
+.. _sec_nodes_or_individuals:
+
 *******************************
 Nodes, Genomes, or Individuals?
 *******************************
@@ -167,9 +173,10 @@ Table definitions
 Node Table
 ----------
 
-A **node** defines a monoploid set of chromosomes of a specific
+A **node** defines a monoploid set of chromosomes (a "genome") of a specific
 individual that was born at some time in the past: the set of
 chromosomes inherited from a particular one of the individual's parents.
+(See :ref:`sec_nodes_or_individuals` for more discussion.)
 Every vertex in the marginal trees of a tree sequence corresponds
 to exactly one node, and a node may be present in many trees. The
 node table contains five columns, of which ``flags`` and ``time`` are
@@ -346,7 +353,7 @@ metadata            binary              Mutation :ref:`sec_metadata_definition`.
 ================    ==============      ===========
 
 The ``site`` column is an integer value defining the ID of the
-:ref:`site <sec_site_table_definition>` at which this mutation occured.
+:ref:`site <sec_site_table_definition>` at which this mutation occurred.
 
 The ``node`` column is an integer value defining the ID of the
 first :ref:`node <sec_node_table_definition>` in the tree below this mutation.
@@ -672,7 +679,11 @@ There are no requirements on a population table.
 Provenance requirements
 -----------------------
 
-There are no requirements on a provenance table.
+The `timestamp` column of a provenance table should be in 
+`ISO-8601 <https://en.wikipedia.org/wiki/ISO_8601>`_ format.
+
+The `record` should be valid JSON with structure defined in the Provenance
+Schema section (TODO).
 
 
 .. _sec_table_transformations:
@@ -699,22 +710,25 @@ to the underlying tables: the method :meth:`TreeSequence.simplify` calls
 :meth:`TableCollection.simplify` on the tables, and loads a new tree sequence.
 The main purpose of this method is to remove redundant information,
 only retaining the minimal tree sequence necessary to describe the genealogical
-history of the ``samples`` provided. However, the :meth:`TableCollection.simplify`
-method can be applied to a collection of tables that does not have the
-``mutations.parent`` entries filled in, as long as all other validity requirements
-are satisified.
+history of the ``samples`` provided.
 
 Furthermore, ``simplify`` is guaranteed to:
 
 - preserve relative ordering of any rows in the Site and Mutation tables
   that are not discarded.
 
+The :meth:`TableCollection.simplify` method can be applied to a collection of
+tables that does not have the ``mutations.parent`` entries filled in, as long
+as all other validity requirements are satisfied.
+
 Sorting
 -------
 
-The :meth:`TableCollection.sort` method can be used to transform a set of tables
-that is valid other than the sortedness requirements listed above to a completely
-valid set of tables. 
+The validity requirements for a set of tables to be loaded into a tree sequence
+listed in :ref:`sec_table_definitions` are of two sorts: logical consistency,
+and sortedness. The :meth:`TableCollection.sort` method can be used to make
+completely valid a set of tables that satisfies all requirements other than
+sortedness.
 
 This method can also be used on slightly more general collections of tables:
 it is not required that ``site`` positions be unique in the table collection to
@@ -768,7 +782,8 @@ encountered:
 This is lazy and wrong, because:
 
 a. There might have already been sites in the site table with the same position,
-b. and/or a mutation (at the same position) that this mutation should record as it's ``parent``.
+b. and/or a mutation (at the same position) that this mutation should record as
+   its ``parent``.
 
 But, it's all OK because here's what we do:
 
@@ -780,7 +795,7 @@ But, it's all OK because here's what we do:
 
 *Note:* as things are going along we do *not* have to
 ``compute_mutation_parents``, which is nice, because this is a nontrivial step
-that requires constructin all the trees along the genome. Computing mutation
+that requires construction all the trees along the sequence. Computing mutation
 parents only has to happen before the final (output) step.
 
 This is OK as long as the forwards-time simulation outputs things in order by when
@@ -788,9 +803,9 @@ they occur, because these operations have the following properties:
 
 1. Mutations appear in the mutation table ordered by time of appearance, so
    that a mutation will always appear after the one that it replaced (i.e.,
-   it's parent).
+   its parent).
 2. Furthermore, if mutation B appears after mutation A, but at the same site,
-   then mutation B's site will appear after mutatation A's site in the site
+   then mutation B's site will appear after mutation A's site in the site
    table.
 3. ``sort`` sorts sites by position, and then by ID, so that the relative
    ordering of sites at the same position is maintained, thus preserving
@@ -839,7 +854,7 @@ both on the first tree::
 
 A deletion from AT to A has occurred at position 2 on the branch leading to
 node 0, and two mutations have occurred at position 4 on the branch leading to
-node 1, first from A to T, then a back mutation to A. The haplotypes of our two
+node 1, first from A to T, then a back mutation to A. The genotypes of our two
 samples, nodes 0 and 1, are therefore AA and ATA.
 
 
@@ -941,7 +956,7 @@ property for us is that allows for very efficient transfer of data
 in and out of tables. Rather than inserting data into tables row-by-row
 (which can be done using the ``add_row`` methods), it is much more
 efficient to add many rows at the same time by providing pointers to blocks of
-contigous memory. By taking
+contiguous memory. By taking
 this approach, we can work with tables containing gigabytes of data very
 efficiently.
 

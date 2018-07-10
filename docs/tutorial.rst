@@ -115,11 +115,11 @@ regions under the influence of recombination. The ``msprime`` API is
 specifically designed to make this common requirement both easy and efficient.
 To model genomic sequences under the influence of recombination we have
 two parameters to the :func:`.simulate()` function.
-The ``length`` parameter specifies the length of the simulated sequence
-in bases, but is a floating point number, so recombination (and mutation) can
-occur at any location along the sequence.
+The ``length`` parameter specifies the length of the simulated sequence,
+and is a floating point number, so recombination (and mutation) can
+occur at any location along the sequence (the units are arbitrary).
 If ``length`` is not supplied, it is assumed to be 1.0. The ``recombination_rate``
-parameter specifies the rate of crossing over per base per generation,
+parameter specifies the rate of crossing over per unit of length per generation,
 and is zero by default. See the :ref:`sec_api` for a discussion of the precise
 recombination model used.
 
@@ -382,7 +382,7 @@ since :math:`N_e` is the diploid effective population size,
 setting :math:`N_e = 0.5` means that the mean time for two samples to coalesce
 is equal to one time unit in the resulting trees.
 This is helpful for converting the diploid per-generation time units
-of msprime into the the haploid coalescent units used in many
+of msprime into the haploid coalescent units used in many
 theoretical results. However, it is important to note that conventions
 vary widely, and great care is needed with such factor-of-two
 rescalings.
@@ -906,7 +906,7 @@ and the :ref:`Tables API <sec_tables_api>` section describes how to work with th
 Here we make some general remarks about what you can, and cannot do with them.
 
 
-``msprime`` provides direct access to the the columns of each table as
+``msprime`` provides direct access to the columns of each table as
 ``numpy`` arrays: for instance, if ``n`` is a ``NodeTable``, then ``n.time``
 will return an array containing the birth times of the individuals whose genomes
 are represented by the nodes in the table.
@@ -950,7 +950,7 @@ natural to use ``.set_columns()`` - equivalently::
 Since columns cannot be modified directly as properties of the tables,
 they must be extracted, modified, then replaced.
 For example, here we add 1.4 to every ``time`` except the first
-in the NodeTable constructed above (using ``numpy`` indexing)::
+in the node table constructed above (using ``numpy`` indexing)::
 
     tn = n.time
     tn[1:] = tn[1:] + 1.4
@@ -1056,7 +1056,7 @@ and the other two above nodes ``2`` and ``3`` on the second tree.
 Suppose that the first mutation occurs at position 0.1 and the mutations in the
 second tree both occurred at the same position, at 0.5 (with a back mutation).
 To record the inheritance patterns of these, we need only record
-the positions on the genome at which they occured,
+the positions on the genome at which they occurred,
 and on which edge (equivalently, above which node) they occurred.
 The positions are recorded in the :class:`SiteTable`::
 
@@ -1068,7 +1068,7 @@ The positions are recorded in the :class:`SiteTable`::
 
 As with node tables, the ``id`` column is **not** actually recorded, but is
 implied by the position in the table.  The results of the
-acutal mutations are then recorded::
+actual mutations are then recorded::
 
     MutationTable:
 
@@ -1095,11 +1095,11 @@ create a :class:`TableCollection`, and then use its
 
     # Nodes
     sv = [True, True, True, False, False, False, False]
-    pv = [0, 0, 0, 0, 0, 0, 0]
     tv = [0.0, 0.0, 0.0, 0.4, 0.5, 0.7, 1.0]
 
-    for s, t, p in zip(sv, tv, pv):
-        tables.nodes.add_row(flags=s, population=p, time=t)
+    for is_sample, t in zip(sv, tv):
+     flags = msprime.NODE_IS_SAMPLE if is_sample else 0
+     tables.nodes.add_row(flags=flags, time=t)
 
     # Edges
     lv = [0.2, 0.2, 0.0, 0.2, 0.8, 0.0, 0.8, 0.2, 0.8, 0.8, 0.0, 0.0]
@@ -1117,13 +1117,6 @@ create a :class:`TableCollection`, and then use its
     # Mutations
     for s, n, d in zip([0, 1, 1], [4, 3, 2], ['1', '1', '0']):
         tables.mutations.add_row(site=s, node=n, derived_state=d)
-
-We need one more thing to have a valid TableCollection: a :class:`PopulationTable`.
-This must have one entry for each ``population`` referred to in the node table,
-although it does not have to have any information in it::
-
-    # there is only one population
-    tables.populations.add_row()
 
 We can then finally obtain the tree sequence::
 

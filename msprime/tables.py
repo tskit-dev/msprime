@@ -144,14 +144,11 @@ class BaseTable(object):
 
 class IndividualTable(BaseTable):
     """
-    A table defining the individuals in a tree sequence. See the
-    :ref:`definitions <sec_individual_table_definition>` for details on the columns
-    in this table and the
-    :ref:`tree sequence requirements <sec_valid_tree_sequence_requirements>` section
-    for the properties needed for an individual table to be a part of a valid tree
-    sequence. Note that although each Individual has associated nodes, reference to
-    these is not stored in the individual table, but rather reference to the
-    individual is stored for ech node in the :class:`NodeTable`.
+    A table defining the individuals in a tree sequence. Note that although
+    each Individual has associated nodes, reference to these is not stored in
+    the individual table, but rather reference to the individual is stored for
+    each node in the :class:`NodeTable`.  This is similar to the way in which
+    the relationship between sites and mutations is modelled.
 
     :warning: The numpy arrays returned by table attribute accesses are **copies**
         of the underlying data. In particular, this means that you cannot edit
@@ -1192,9 +1189,9 @@ def _mutation_table_pickle(table):
 
 class PopulationTable(BaseTable):
     """
-    A table definiing the populations referred to in a tree sequence.
-    See the :ref:`definitions <sec_individual_table_definition>`
-    for details on the columns in this table. Note that although nodes
+    A table defining the populations referred to in a tree sequence.
+    The PopulationTable stores metadata for populations that may be referred to
+    in the NodeTable and MigrationTable".  Note that although nodes
     may be associated with populations, this association is stored in
     the :class:`NodeTable`: only metadata on each population is stored
     in the population table.
@@ -1275,11 +1272,12 @@ class ProvenanceTable(BaseTable):
     """
     A table recording the provenance (i.e., history) of this table, so that the
     origin of the underlying data and sequence of subsequent operations can be
-    traced. Each row contains a "record" string (recommended format: json) and
+    traced. Each row contains a "record" string (recommended format: JSON) and
     a timestamp.
 
     .. todo::
-        This class is provisional, and the API may change in the future.
+        The format of the `record` field will be more precisely specified in
+        the future.
 
     :ivar record: The flattened array containing the record strings.
         :ref:`sec_tables_api_text_columns` for more details.
@@ -1295,7 +1293,6 @@ class ProvenanceTable(BaseTable):
     :vartype timestamp_offset: numpy.ndarray, dtype=np.uint32
 
     """
-    # FIXME
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
             ll_table = _msprime.ProvenanceTable(max_rows_increment=max_rows_increment)

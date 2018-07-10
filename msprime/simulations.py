@@ -61,19 +61,6 @@ def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
-def harmonic_number(n):
-    """
-    The nth Harmonic number is
-       H_n = 1 + 1/2 + 1/3 + ... + 1/n.
-    This returns the approximation to it,
-       log(n) + gamma,
-    where gamma is the Euler-Mascheroni constant,
-       lim_n (H_n - log(n)) = gamma.
-    """
-    EulerGamma = 0.5772156649
-    return math.log(n) + EulerGamma
-
-
 def _check_population_configurations(population_configurations):
     err = (
         "Population configurations must be a list of PopulationConfiguration instances")
@@ -210,9 +197,9 @@ def simulate(
     parameters and returns the resulting :class:`.TreeSequence`. Note that
     Ne is the effective diploid population size (so the effective number
     of genomes in the population is 2*Ne), but ``sample_size`` is the
-    number of (haploid) genomes sampled.
+    number of (monoploid) genomes sampled.
 
-    :param int sample_size: The number of sampled genomes.  If not
+    :param int sample_size: The number of sampled monoploid genomes.  If not
         specified or None, this defaults to the sum of the subpopulation sample
         sizes. Either ``sample_size``, ``population_configurations`` or
         ``samples`` must be specified.
@@ -790,8 +777,8 @@ class PopulationParametersChange(DemographicEvent):
     options from ``ms``. Note that unlike ``ms`` we do not automatically
     set growth rates to zero when the population size is changed.
 
-    :param float time: The number of generations ago at which this event
-        occured.
+    :param float time: The length of time ago at which this event
+        occurred.
     :param float initial_size: The absolute diploid size of the population
         at the beginning of the time slice starting at ``time``. If None,
         this is calculated according to the initial population size and
