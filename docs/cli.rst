@@ -48,9 +48,9 @@ to the file provided as an argument.
 .. note:: The way in which recombination and mutation rates are specified
     is different to :command:`ms`. In :command:`ms` these rates are scaled by the
     length of the simulated region, whereas we use rates per unit distance.
-    The rationale for this change is simplify running simulations on a
-    variety of sequence lengths, so that we need to change only parameter
-    and not three simultaneously.
+    The rationale for this change is to simplify running simulations on a
+    variety of sequence lengths, so that we need to change only one parameter
+    and not three simultaneously. See :ref:`sec_api` for more on this point.
 
 
 
@@ -102,8 +102,45 @@ sequence in newick format.
     :path: newick
     :nodefault:
 
+++++++++++++++++++++++++++++++++++++++++++++++++++++
+msp (nodes, edges, sites, mutations, or provenances)
+++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The commands
+:command:`msp nodes`,
+:command:`msp edges`,
+:command:`msp sites`,
+:command:`msp mutations`, and
+:command:`msp provenances`
+each print out the respective table in tabular format from the tree sequence.
+See :ref:`sec_interchange` for a description of these tables.
+
+.. argparse::
+    :module: msprime.cli
+    :func: get_msp_parser
+    :prog: msp
+    :path: nodes
+    :nodefault:
+
+
+++++++++++++++
+msp haplotypes
+++++++++++++++
+
+:command:`msp haplotypes` prints out the haplotypes of each sampled genome
+described in the tree sequence.
+This only works with single-character allelic states.
+
+.. argparse::
+    :module: msprime.cli
+    :func: get_msp_parser
+    :prog: msp
+    :path: haplotypes
+    :nodefault:
+
+
 .. todo::
-    Document the nodes, edges, sites and mutations commands.
+    Provide individuals and populations commands.
 
 .. _sec_mspms:
 

@@ -14,36 +14,38 @@ Simulation model
 
 The simulation model in ``msprime`` closely follows the classical ``ms``
 program. Unlike ``ms``, however, time is measured in generations rather than
-"coalescent units". Internally the same simulation algorithm is used, but
-``msprime`` provides a translation layer to allow the user input times and
-rates in generations. Similarly, the times associated with the trees produced
-by ``msprime`` are in measured generations. To enable this translation from
-generations into coalescent units and vice-versa, a reference effective
-population size must be provided, which is given by the ``Ne`` parameter in the
-:func:`.simulate` function. (Note that we assume diploid population sizes
-thoughout, since we scale by :math:`4 N_e`.) Population sizes for individual
-demes and for past demographic events are defined as absolute values, **not**
+in units of :math:`4 N_e` generations, i.e., "coalescent units".
+This means that when simulating a population with diploid effective size :math:`N_e`,
+the mean time to coalescence between two samples
+in an ``msprime`` simulation will be around :math:`2 N_e`,
+while in an ``ms`` simulation, the mean time will be around :math:`0.5`.
+Internally, ``msprime`` uses the same algorithm as ``ms``,
+and so the ``Ne`` parameter to the :func:`.simulate` function
+still acts as a time scaling, and can be set to ``0.5`` to match many theoretical results,
+or to ``0.25`` to match ``ms``. Population sizes for individual
+demes and for past demographic events are also defined as absolute values, **not**
 scaled by ``Ne``. All migration rates and growth rates are also per generation.
 
-When running simulations we define the length in bases :math:`L` of the
-sequence in question using the ``length`` parameter. This defines the
-coordinate space within which trees and mutations are defined. :math:`L` is a
-continuous value, and coordinates can take any value from :math:`0` to
-:math:`L`. Mutations occur in an infinite sites process along this sequence,
+When running simulations we define the length :math:`L` of the sequence in
+question using the ``length`` parameter. This defines the coordinate space
+within which trees and mutations are defined. :math:`L` is a continuous value,
+so units are arbitrary, and coordinates can take any value from :math:`0` to
+:math:`L`. (So, although we recommend setting the units of length to be
+analogous to "bases", events can occur at fractional positions.)
+Mutations occur in an infinite sites process along this sequence,
 and mutation rates are specified per generation, per unit of sequence length.
 Thus, given the per-generation mutation rate :math:`\mu`, the rate of mutation
 over the entire sequence in coalescent time units is :math:`\theta = 4 N_e \mu
 L`. It is important to remember these scaling factors when comparing with
 analytical results!
 
-Similarly, recombination rates are per base, per generation in ``msprime``.
-Thus, given the per generation crossover rate :math:`r`, the overall rate
-of recombination between the ends of the sequence in coalescent time units
-is :math:`\rho = 4 N_e r L`. Recombination events occur in a continuous
-coordinate space, so that breakpoints do not necessarily occur at integer
-locations. However, the underlying recombination model is finite, and the
-behaviour of a small number of loci can be modelled using the
-:class:`RecombinationMap` class. However, this is considered an advanced
+Similarly, recombination rates are per unit of sequence length and per
+generation in ``msprime``. Thus, given the per generation crossover rate
+:math:`r`, the overall rate of recombination between the ends of the sequence
+in coalescent time units is :math:`\rho = 4 N_e r L`. Although breakpoints do
+not necessarily occur at integer locations, the underlying recombination model
+is finite, and the behaviour of a small number of loci can be modelled using
+the :class:`RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
@@ -83,20 +85,20 @@ Population structure
 
 Population structure is modelled in ``msprime`` by specifying a fixed number of
 demes, with the migration rates between those demes defined by a migration
-matrix. Each deme has an ``initial_size`` that defines its absolute size at
+matrix. Each deme has an ``initial_size`` that defines its absolute diploid size at
 time zero and a per-generation ``growth_rate`` which specifies the exponential
-growth rate of the sub-population. We must also define the size of the sample
-to draw from each deme. The number of populations and their initial
+growth rate of the sub-population. We must also define the number of genomes to
+sample from each deme. The number of populations and their initial
 configuration is defined using the ``population_configurations`` parameter to
 :func:`.simulate`, which takes a list of :class:`.PopulationConfiguration`
 instances. Population IDs are zero indexed, and correspond to their position in
 the list.
 
 Samples are drawn sequentially from populations in increasing order of
-population ID. For example, if we specified an overall sample size of 5, and
-specify that 2 samples are drawn from population 0 and 3 from population 1,
-then individuals 0 and 1 will be initially located in population 0, and
-individuals 2, 3 and 4 will be drawn from population 2.
+population ID. For example, if we specified an overall sample size of 6, and
+specify that 2 samples are drawn from population 0 and 4 from population 1,
+then samples 0 and 1 will be initially located in population 0, and
+samples 2, 3, 4, and 5 will be drawn from population 2.
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
 \times N` matrix of deme-to-deme migration rates. See the documentation for
@@ -150,6 +152,8 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
+.. autoclass:: msprime.InfiniteSites
+
 .. data:: msprime.BINARY == 0
 
     The binary mutation alphabet where ancestral states are always "0" and
@@ -159,8 +163,6 @@ overlay neutral mutations on this tree sequence.
 
     The nucleotides mutation alphabet in which ancestral and derived states are
     chosen from the characters "A", "C", "G" and "T".
-
-.. autoclass:: msprime.InfiniteSites
 
 .. autofunction:: msprime.mutate
 
@@ -228,12 +230,12 @@ instances to define special values of various variables.
 .. data:: msprime.FORWARD == 1
 
     Constant representing the forward direction of travel (i.e.,
-    increasing coordinate values).
+    increasing genomic coordinate values).
 
 .. data:: msprime.REVERSE == -1
 
     Constant representing the reverse direction of travel (i.e.,
-    decreasing coordinate values).
+    decreasing genomic coordinate values).
 
 
 ++++++++++++++++++++++++
@@ -275,7 +277,7 @@ Loading data
 
 There are several methods for loading data into a :class:`.TreeSequence`
 instance. The simplest and most convenient is the use the :func:`msprime.load`
-function to load an :ref:`tree sequence file <sec_tree_sequence_file_format>`. For small
+function to load a :ref:`tree sequence file <sec_tree_sequence_file_format>`. For small
 scale data and debugging, it is often convenient to use the
 :func:`msprime.load_text` to read data in the :ref:`text file format
 <sec_text_file_format>`. The :meth:`.TableCollection.tree_sequence` function
@@ -463,14 +465,15 @@ use UTF8 (which corresponds to ASCII for simple printable characters).::
 
 Here we create 10 sites at regular positions, each with ancestral state equal to
 "0". Note that we use ``ord("0")`` to get the ASCII code for "0" (48), and create
-10 copies of this by adding it to an array of zeros.
+10 copies of this by adding it to an array of zeros. We have done this for
+illustration purposes: it is equivalent (though slower for large examples) to do
+``a, off = msprime.pack_strings(["0"] * m)``.
 
 Mutations can be handled similarly::
 
     >>> t_m = msprime.MutationTable()
     >>> site = np.arange(m, dtype=np.int32)
-    >>> d = ord("1") + np.zeros(m, dtype=np.int8)
-    >>> off = np.arange(m + 1, dtype=np.uint32)
+    >>> d, off = msprime.pack_strings(["1"] * m)
     >>> node = np.zeros(m, dtype=np.int32)
     >>> t_m.set_columns(site=site, node=node, derived_state=d, derived_state_offset=off)
     >>> print(t_m)
@@ -545,7 +548,7 @@ use of base64 encoding.).
 Finally, when we print the ``metadata`` column, we see the raw byte values
 encoded as signed integers. As for :ref:`sec_tables_api_text_columns`,
 the ``metadata_offset`` column encodes the offsets into this array. So, we
-see that the metadata value is 9 bytes long and the second is 24.
+see that the first metadata value is 9 bytes long and the second is 24.
 
 The :func:`pack_bytes` and :func:`unpack_bytes` functions are also useful
 for encoding data in these columns.
@@ -553,6 +556,10 @@ for encoding data in these columns.
 +++++++++++++
 Table classes
 +++++++++++++
+
+This section describes the methods and variables available for each
+table class. For description and definition of each table's meaning
+and use, see :ref:`the table definitions <sec_table_definitions>`.
 
 .. Overriding the default signatures for the tables here as they will be
 .. confusing to most users.
