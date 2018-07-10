@@ -265,8 +265,9 @@ class Simulator(object):
         self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
         # The output tree sequence.
-        self.nodes = msprime.NodeTable()
-        self.edges = msprime.EdgeTable()
+        self.tables = msprime.TableCollection(sequence_length=num_loci)
+        for _ in range(N):
+            self.tables.populations.add_row()
         self.edge_buffer = []
         for pop_index in range(N):
             sample_size = sample_configuration[pop_index]
@@ -274,11 +275,11 @@ class Simulator(object):
             self.P[pop_index].set_growth_rate(
                 population_growth_rates[pop_index], 0)
             for k in range(sample_size):
-                j = len(self.nodes)
+                j = len(self.tables.nodes)
                 x = self.alloc_segment(0, self.m, j, pop_index)
                 self.L.set_value(x.index, self.m - 1)
                 self.P[pop_index].add(x)
-                self.nodes.add_row(
+                self.tables.nodes.add_row(
                     flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index)
                 j += 1
         self.S[0] = self.n
@@ -339,14 +340,14 @@ class Simulator(object):
 
     def store_node(self, population):
         self.flush_edges()
-        self.nodes.add_row(time=self.t, population=population)
+        self.tables.nodes.add_row(time=self.t, population=population)
 
     def flush_edges(self):
         """
         Flushes the edges in the edge buffer to the table, squashing any adjacent edges.
         """
         if len(self.edge_buffer) > 0:
-            parent = len(self.nodes) - 1
+            parent = len(self.tables.nodes) - 1
             self.edge_buffer.sort(key=lambda e: (e.child, e.left))
             left = self.edge_buffer[0].left
             right = self.edge_buffer[0].right
@@ -355,11 +356,11 @@ class Simulator(object):
             for e in self.edge_buffer[1:]:
                 assert e.parent == parent
                 if e.left != right or e.child != child:
-                    self.edges.add_row(left, right, parent, child)
+                    self.tables.edges.add_row(left, right, parent, child)
                     left = e.left
                     child = e.child
                 right = e.right
-            self.edges.add_row(left, right, parent, child)
+            self.tables.edges.add_row(left, right, parent, child)
             self.edge_buffer = []
 
     def store_edge(self, left, right, parent, child):
@@ -374,7 +375,7 @@ class Simulator(object):
         Finalises the simulation returns an msprime tree sequence object.
         """
         self.flush_edges()
-        return msprime.load_tables(nodes=self.nodes, edges=self.edges)
+        return self.tables.tree_sequence()
 
     def simulate(self, model='hudson'):
         if self.model == 'hudson':
@@ -456,7 +457,7 @@ class Simulator(object):
             offspring = bintrees.AVLTree()
             for i in range(pop.get_num_ancestors()-1, -1, -1):
                 ## Popping every ancestor every generation is inefficient.
-                ## In the C implementation we store a pointer to the 
+                ## In the C implementation we store a pointer to the
                 ## ancestor so we can pop only if we need to merge
                 anc = pop.remove(i)
                 parent = np.random.choice(cur_inds)
@@ -671,7 +672,7 @@ class Simulator(object):
                 if not coalescence:
                     coalescence = True
                     self.store_node(pop_id)
-                u = len(self.nodes) - 1
+                u = len(self.tables.nodes) - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if l not in self.S:
@@ -784,7 +785,7 @@ class Simulator(object):
                     if not coalescence:
                         coalescence = True
                         self.store_node(population_index)
-                    u = len(self.nodes) - 1
+                    u = len(self.tables.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
                     l = x.left
@@ -859,9 +860,9 @@ class Simulator(object):
                 print(
                     "\t", j, "->", s, self.L.get_cumulative_frequency(j))
         print("nodes")
-        print(self.nodes)
+        print(self.tables.nodes)
         print("edges")
-        print(self.edges)
+        print(self.tables.edges)
         self.verify()
 
     def verify(self):
