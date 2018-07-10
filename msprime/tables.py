@@ -1529,6 +1529,8 @@ class TableCollection(object):
         s += str(self.mutations) + "\n"
         s += self.__banner("Migrations")
         s += str(self.migrations) + "\n"
+        s += self.__banner("Populations")
+        s += str(self.populations) + "\n"
         s += self.__banner("Provenances")
         s += str(self.provenances)
         return s

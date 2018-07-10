@@ -1249,6 +1249,69 @@ def load_tables(
     return TreeSequence.load_tables(tables.TableCollection(ll_tables=ll_tables))
 
 
+def parse_individuals(
+        source, strict=True, encoding='utf8', base64_metadata=True, table=None):
+    """
+    Parse the specified file-like object containing a whitespace delimited
+    description of an individual table and returns the corresponding
+    :class:`IndividualTable` instance. See the :ref:`individual text format
+    <sec_individual_text_format>` section for the details of the required
+    format and the :ref:`individual table definition
+    <sec_individual_table_definition>` section for the required properties of
+    the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict``
+    parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
+    :param string encoding: Encoding used for text representation.
+    :param bool base64_metadata: If True, metadata is encoded using Base64
+        encoding; otherwise, as plain text.
+    :param IndividualTable table: If specified write into this table. If not,
+        create a new :class:`.IndividualTable` instance.
+    """
+    sep = None
+    if strict:
+        sep = "\t"
+    if table is None:
+        table = tables.IndividualTable()
+    # Read the header and find the indexes of the required fields.
+    header = source.readline().strip("\n").split(sep)
+    flags_index = header.index("flags")
+    location_index = None
+    metadata_index = None
+    try:
+        location_index = header.index("location")
+    except ValueError:
+        pass
+    try:
+        metadata_index = header.index("metadata")
+    except ValueError:
+        pass
+    for line in source:
+        tokens = line.split(sep)
+        if len(tokens) >= 1:
+            flags = int(tokens[flags_index])
+            print("--------")
+            print(line)
+            location = ()
+            if location_index is not None:
+                location_string = tokens[location_index]
+                if len(location_string) > 0:
+                    location = tuple(map(float, location_string.split(",")))
+            metadata = b''
+            if metadata_index is not None and metadata_index < len(tokens):
+                metadata = tokens[metadata_index].encode(encoding)
+                if base64_metadata:
+                    metadata = base64.b64decode(metadata)
+            print(flags, location, metadata)
+            table.add_row(
+                flags=flags, location=location, metadata=metadata)
+    return table
+
+
 def parse_nodes(
         source, strict=True, encoding='utf8', base64_metadata=True, table=None):
     """
@@ -1470,7 +1533,49 @@ def parse_mutations(
     return table
 
 
-def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, strict=True,
+def parse_populations(
+        source, strict=True, encoding='utf8', base64_metadata=True, table=None):
+    """
+    Parse the specified file-like object containing a whitespace delimited
+    description of a population table and returns the corresponding
+    :class:`PopulationTable` instance. See the :ref:`population text format
+    <sec_population_text_format>` section for the details of the required
+    format and the :ref:`population table definition
+    <sec_population_table_definition>` section for the required properties of
+    the contents.
+
+    See :func:`.load_text` for a detailed explanation of the ``strict``
+    parameter.
+
+    :param stream source: The file-like object containing the text.
+    :param bool strict: If True, require strict tab delimiting (default). If
+        False, a relaxed whitespace splitting algorithm is used.
+    :param string encoding: Encoding used for text representation.
+    :param bool base64_metadata: If True, metadata is encoded using Base64
+        encoding; otherwise, as plain text.
+    :param PopulationTable table: If specified write into this table. If not,
+        create a new :class:`.PopulationTable` instance.
+    """
+    sep = None
+    if strict:
+        sep = "\t"
+    if table is None:
+        table = tables.PopulationTable()
+    # Read the header and find the indexes of the required fields.
+    header = source.readline().strip("\n").split(sep)
+    metadata_index = header.index("metadata")
+    for line in source:
+        tokens = line.split(sep)
+        if len(tokens) >= 1:
+            metadata = tokens[metadata_index].encode(encoding)
+            if base64_metadata:
+                metadata = base64.b64decode(metadata)
+            table.add_row(metadata=metadata)
+    return table
+
+
+def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
+              populations=None, sequence_length=0, strict=True,
               encoding='utf8', base64_metadata=True):
     """
     Parses the tree sequence data from the specified file-like objects, and
@@ -1485,9 +1590,10 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
 
     The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
     objects containing text with whitespace delimited columns,  parsable by
-    :func:`parse_nodes` and :func:`parse_edges`, respectively. ``sites`` and
-    ``mutations`` are optional, and must be parsable by :func:`parse_sites` and
-    :func:`parse_mutations`, respectively.
+    :func:`parse_nodes` and :func:`parse_edges`, respectively. ``sites``,
+    ``mutations``, ``individuals`` and ``populations`` are optional, and must
+    be parsable by :func:`parse_sites`, :func:`parse_individuals`,
+    :func:`parse_populations`, and :func:`parse_mutations`, respectively.
 
     TODO: there is no method to parse the remaining tables at present, so
     only tree sequences not requiring Population and Individual tables can
@@ -1521,6 +1627,10 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
         :class:`.SiteTable`.
     :param stream mutations: The file-like object containing text
         describing a :class:`MutationTable`.
+    :param stream individuals: The file-like object containing text
+        describing a :class:`IndividualTable`.
+    :param stream populations: The file-like object containing text
+        describing a :class:`PopulationTable`.
     :param float sequence_length: The sequence length of the returned tree sequence. If
         not supplied or zero this will be inferred from the set of edges.
     :param bool strict: If True, require strict tab delimiting (default). If
@@ -1559,6 +1669,14 @@ def load_text(nodes, edges, sites=None, mutations=None, sequence_length=0, stric
         parse_mutations(
             mutations, strict=strict, encoding=encoding,
             base64_metadata=base64_metadata, table=tc.mutations)
+    if individuals is not None:
+        parse_individuals(
+            individuals, strict=strict, encoding=encoding,
+            base64_metadata=base64_metadata, table=tc.individuals)
+    if populations is not None:
+        parse_populations(
+            populations, strict=strict, encoding=encoding,
+            base64_metadata=base64_metadata, table=tc.populations)
     tc.sort()
     return tc.tree_sequence()
 
@@ -1648,8 +1766,9 @@ class TreeSequence(object):
         return t
 
     def dump_text(
-            self, nodes=None, edges=None, sites=None, mutations=None, provenances=None,
-            precision=6, encoding='utf8', base64_metadata=True):
+            self, nodes=None, edges=None, sites=None, mutations=None, individuals=None,
+            populations=None, provenances=None, precision=6, encoding='utf8',
+            base64_metadata=True):
         """
         Writes a text representation of the tables underlying the tree sequence
         to the specified connections.
@@ -1662,6 +1781,8 @@ class TreeSequence(object):
         :param stream edges: The file-like object to write the EdgeTable to.
         :param stream sites: The file-like object to write the SiteTable to.
         :param stream mutations: The file-like object to write the MutationTable to.
+        :param stream individuals: The file-like object to write the IndividualTable to.
+        :param stream populations: The file-like object to write the PopulationTable to.
         :param stream provenances: The file-like object to write the ProvenanceTable to.
         :param int precision: The number of digits of precision.
         :param string encoding: Encoding used for text representation.
@@ -1738,6 +1859,37 @@ class TreeSequence(object):
                             parent=mutation.parent,
                             metadata=metadata)
                     print(row, file=mutations)
+
+        if individuals is not None:
+            print(
+                "id", "flags", "location", "metadata",
+                sep="\t", file=individuals)
+            for individual in self.individuals():
+                metadata = individual.metadata
+                if base64_metadata:
+                    metadata = base64.b64encode(metadata).decode(encoding)
+                location = ",".join(map(str, individual.location))
+                row = (
+                    "{id}\t"
+                    "{flags}\t"
+                    "{location}\t"
+                    "{metadata}").format(
+                        id=individual.id, flags=individual.flags,
+                        location=location, metadata=metadata)
+                print(row, file=individuals)
+
+        if populations is not None:
+            print(
+                "id", "metadata",
+                sep="\t", file=populations)
+            for population in self.populations():
+                metadata = population.metadata
+                if base64_metadata:
+                    metadata = base64.b64encode(metadata).decode(encoding)
+                row = (
+                    "{id}\t"
+                    "{metadata}").format(id=population.id, metadata=metadata)
+                print(row, file=populations)
 
         if provenances is not None:
             print("id", "timestamp", "record", sep="\t", file=provenances)

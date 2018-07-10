@@ -1770,23 +1770,27 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             edges_file = six.StringIO()
             sites_file = six.StringIO()
             mutations_file = six.StringIO()
-            # FIXME Dropping the individuals references because we don't have
-            # text APIs for them yet.
+            individuals_file = six.StringIO()
+            populations_file = six.StringIO()
             tables = ts1.dump_tables()
-            tables.nodes.individual = np.full_like(
-                tables.nodes.individual, msprime.NULL_INDIVIDUAL)
             ts1 = msprime.load_tables(
                 sequence_length=ts1.sequence_length, **tables.asdict())
             ts1.dump_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, precision=16)
+                mutations=mutations_file, individuals=individuals_file,
+                populations=populations_file, precision=16)
             nodes_file.seek(0)
             edges_file.seek(0)
             sites_file.seek(0)
             mutations_file.seek(0)
+            individuals_file.seek(0)
+            populations_file.seek(0)
             ts2 = msprime.load_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
-                mutations=mutations_file, sequence_length=ts1.sequence_length)
+                mutations=mutations_file, individuals=individuals_file,
+                populations=populations_file,
+                sequence_length=ts1.sequence_length,
+                strict=True)
             self.verify_approximate_equality(ts1, ts2)
 
     def test_empty_files(self):
