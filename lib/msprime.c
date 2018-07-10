@@ -1299,6 +1299,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 
     mu = 1.0 / self->recombination_rate;
     k = 1 + x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
+    assert(k > 0 && "Negative distance: Overflow in gsl_ran_exponential!");
 
     s1.next = NULL;
     s2.next = NULL;
@@ -2230,6 +2231,7 @@ static int WARN_UNUSED
 msp_dtwf_generation(msp_t *self)
 {
     int ret = 0;
+    int ix;
     uint32_t N, i, j, k, p;
     int64_t num_links;
     size_t segment_mem_offset;
@@ -2310,8 +2312,10 @@ msp_dtwf_generation(msp_t *self)
                         goto out;
                     }
                 } else {
-                    u[0] = x;
+                    ix = (int) gsl_rng_uniform_int(self->rng, 2);
+                    u[0] = NULL;
                     u[1] = NULL;
+                    u[ix] = x;
                 }
                 // Add to AVLTree for each parental chromosome
                 for (i = 0; i < 2; i++) {

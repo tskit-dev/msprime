@@ -265,7 +265,8 @@ class TestMixedModels(unittest.TestCase):
             sample_size=10,
             model=msprime.DiscreteTimeWrightFisher(Ne),
             demographic_events=[
-                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))])
+                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))],
+            random_seed=2)
         tree = ts.first()
         self.assertEqual(tree.num_roots, 1)
         times = ts.tables.nodes.time
