@@ -1084,7 +1084,7 @@ samples::
     ------  ---------
     0       01
     1       10
-    2       11
+    2       10
 
 
 To create these tables, and the corresponding tree sequence, we would
