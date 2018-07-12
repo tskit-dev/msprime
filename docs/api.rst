@@ -22,8 +22,8 @@ while in an ``ms`` simulation, the mean time will be around :math:`0.5`.
 Internally, ``msprime`` uses the same algorithm as ``ms``,
 and so the ``Ne`` parameter to the :func:`.simulate` function
 still acts as a time scaling, and can be set to ``0.5`` to match many theoretical results,
-or to ``0.25`` to match ``ms``. Population sizes for individual
-demes and for past demographic events are also defined as absolute values, **not**
+or to ``0.25`` to match ``ms``. Population sizes for each
+subpopulation and for past demographic events are also defined as absolute values, **not**
 scaled by ``Ne``. All migration rates and growth rates are also per generation.
 
 When running simulations we define the length :math:`L` of the sequence in
@@ -49,12 +49,12 @@ the :class:`RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
-Population structure is modelled by specifying a fixed number of demes
+Population structure is modelled by specifying a fixed number of subpopulations
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
 migration rates. Each element of the matrix :math:`M_{j,k}` defines
 the fraction of population :math:`j` that consists of migrants from
 population :math:`k` in each generation.
-Each deme has an initial absolute population size :math:`s`
+Each subpopulation has an initial absolute population size :math:`s`
 and a per generation exponential growth rate :math:`\alpha`. The size of a
 given population at time :math:`t` in the past (measured in generations) is
 therefore given by :math:`s e^{-\alpha t}`. Demographic events that occur in
@@ -84,11 +84,11 @@ Population structure
 ++++++++++++++++++++
 
 Population structure is modelled in ``msprime`` by specifying a fixed number of
-demes, with the migration rates between those demes defined by a migration
-matrix. Each deme has an ``initial_size`` that defines its absolute diploid size at
+subpopulations, with the migration rates between those subpopulations defined by a migration
+matrix. Each subpopulation has an ``initial_size`` that defines its absolute diploid size at
 time zero and a per-generation ``growth_rate`` which specifies the exponential
 growth rate of the sub-population. We must also define the number of genomes to
-sample from each deme. The number of populations and their initial
+sample from each subpopulation. The number of populations and their initial
 configuration is defined using the ``population_configurations`` parameter to
 :func:`.simulate`, which takes a list of :class:`.PopulationConfiguration`
 instances. Population IDs are zero indexed, and correspond to their position in
@@ -101,9 +101,9 @@ then samples 0 and 1 will be initially located in population 0, and
 samples 2, 3, 4, and 5 will be drawn from population 2.
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
-\times N` matrix of deme-to-deme migration rates. See the documentation for
-:func:`.simulate` and the `Simulation model`_ section for more details on the
-migration rates.
+\times N` matrix of between-subpopulation migration rates. See the
+documentation for :func:`.simulate` and the `Simulation model`_ section for
+more details on the migration rates.
 
 .. autoclass:: msprime.PopulationConfiguration
 

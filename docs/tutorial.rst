@@ -393,16 +393,16 @@ Population structure
 
 
 Population structure in ``msprime`` closely follows the model used in the
-``ms`` simulator: we have :math:`N` demes with an :math:`N\times N`
+``ms`` simulator: we have :math:`N` subpopulations with an :math:`N\times N`
 matrix describing the migration rates between these subpopulations. The
-sample sizes, population sizes and growth rates of all demes
+sample sizes, population sizes and growth rates of all subpopulations
 can be specified independently. Migration rates are specified using
 a migration matrix. Unlike ``ms`` however, all times and rates are specified
 in generations and all populations sizes are absolute (that is, not
 multiples of :math:`N_e`).
 
 In the following example, we calculate the mean coalescence time for
-a pair of lineages sampled in different demes in a symmetric island
+a pair of lineages sampled in different subpopulations in a symmetric island
 model, and compare this with the analytical expectation.
 
 .. code-block:: python
@@ -412,20 +412,20 @@ model, and compare this with the analytical expectation.
 
     def migration_example(num_replicates=10**4):
         # M is the overall symmetric migration rate, and d is the number
-        # of demes.
+        # of subpopulations.
         M = 0.2
         d = 3
         m = M / (2 * (d - 1))
         # Allocate the initial sample. Because we are interested in the
-        # between-deme coalescence times, we choose one sample each
-        # from the first two demes.
+        # between-subpopulation coalescence times, we choose one sample each
+        # from the first two subpopulations.
         population_configurations = [
             msprime.PopulationConfiguration(sample_size=1),
             msprime.PopulationConfiguration(sample_size=1),
             msprime.PopulationConfiguration(sample_size=0)]
         # Now we set up the migration matrix. Since this is a symmetric
         # island model, we have the same rate of migration between all
-        # pairs of demes. Diagonal elements must be zero.
+        # pairs of subpopulations. Diagonal elements must be zero.
         migration_matrix = [
             [0, m, m],
             [m, 0, m],
@@ -1031,9 +1031,7 @@ and the genomic region for which it appears in the trees::
     left    right   parent  children
     0.2     0.8     3       0
     0.2     0.8     3       2
-    0.0     0.2     4       1
-    0.2     0.8     4       1
-    0.8     1.0     4       1
+    0.0     1.0     4       1
     0.0     0.2     4       2
     0.8     1.0     4       2
     0.2     0.8     4       3

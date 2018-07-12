@@ -1829,7 +1829,8 @@ class TreeSequence(object):
     @property
     def num_sites(self):
         """
-        Returns the number of sites in this tree sequence.
+        Returns the number of :ref:`sites <sec_site_table_definition>` in
+        this tree sequence.
 
         :return: The number of sites in this tree sequence.
         :rtype: int

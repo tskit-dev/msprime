@@ -686,7 +686,7 @@ class RecombinationMap(object):
     per base per generation is ``rates[j]`` over the interval
     ``positions[j]`` to ``positions[j + 1]``. Consequently, the first
     position must be zero, and by convention the last rate value
-    is also required to be zero (although it does not used).
+    is also required to be zero (although it is not used).
 
     .. warning::
         The chromosome is divided into ``num_loci`` regions of equal
@@ -831,9 +831,10 @@ class PopulationConfiguration(object):
         from this population.
     :param float initial_size: The absolute size of the population at time
         zero. Defaults to the reference population size :math:`N_e`.
-    :param float growth_rate: The exponential growth rate of the population
-        per generation. Growth rates can be negative. This is zero for a
-        constant population size. Defaults to 0.
+    :param float growth_rate: The forwards-time exponential growth rate of the
+        population per generation. Growth rates can be negative. This is zero for a
+        constant population size, and positive for a population that has been
+        growing. Defaults to 0.
     """
     def __init__(self, sample_size=None, initial_size=None, growth_rate=0.0):
         if initial_size is not None and initial_size <= 0:
