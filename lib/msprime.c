@@ -270,6 +270,7 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
         goto out;
     }
     self->initial_populations[population_id].initial_size =
+        // Should this be only initial_size?
         initial_size / model->population_size;
     self->initial_populations[population_id].growth_rate =
         model->generation_rate_to_model_rate(model, growth_rate);
