@@ -42,6 +42,16 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
 }
 
 int WARN_UNUSED
+recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci, double sequence_length,
+        double rate)
+{
+    double positions[] = {0.0, sequence_length};
+    double rates[] = {rate, 0.0};
+
+    return recomb_map_alloc(self, num_loci, sequence_length, positions, rates, 2);
+}
+
+int WARN_UNUSED
 recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
         double *positions, double *rates, size_t size)
 {

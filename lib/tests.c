@@ -1544,13 +1544,7 @@ get_example_tree_sequence(uint32_t num_samples,
     for (j = 0; j < num_historical_samples; j++) {
         samples[j].time = 0.1 * (j + 1);
     }
-    ret = msp_alloc(msp, num_samples, samples, NULL, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, num_loci);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_recombination_rate(msp, recombination_rate);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_recombination_map(msp, recomb_map);
+    ret = msp_alloc(msp, num_samples, samples, recomb_map, NULL, rng);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
         if (bottlenecks[j].type == SIMPLE_BOTTLENECK) {

@@ -269,7 +269,10 @@ msp_strerror_internal(int err)
             ret = "Migrations currently not supported in simplify. Please open an "
                 "issue on GitHub if this operation is important to you.";
             break;
-
+        case MSP_ERR_INCOMPATIBLE_FROM_TS:
+            ret = "The specified tree sequence is not a compatible starting point "
+                "for the current simulation";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

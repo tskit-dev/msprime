@@ -64,6 +64,15 @@ fatal_library_error(int err, const char *msg, ...)
     exit(EXIT_FAILURE);
 }
 
+static void
+load_tree_sequence(tree_sequence_t *ts, const char *filename)
+{
+    int ret = tree_sequence_load(ts, filename, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "Load error");
+    }
+}
+
 static int
 read_samples(config_t *config, size_t *num_samples, sample_t **samples)
 {
@@ -455,8 +464,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int ret = 0;
     int err;
     int int_tmp;
-    double rho;
+    uint32_t num_loci;
     size_t num_samples;
+    const char *from_ts_path;
+    tree_sequence_t *from_ts = NULL;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -479,11 +490,25 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = msp_alloc(msp, num_samples, samples, NULL, rng);
+    if (config_lookup_string(config, "from", &from_ts_path) == CONFIG_TRUE) {
+        printf("reading from %s\n", from_ts_path);
+        from_ts = malloc(sizeof(*from_ts));
+        if (from_ts == NULL) {
+            fatal_error("alloc error");
+        }
+        load_tree_sequence(from_ts, from_ts_path);
+    }
+
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    ret = msp_set_num_loci(msp, (size_t) int_tmp);
+    num_loci = (uint32_t) int_tmp;
+    ret = read_recomb_map(num_loci, recomb_map, config);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
+
+    ret = msp_alloc(msp, num_samples, samples, recomb_map, from_ts, rng);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -556,23 +581,13 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = read_recomb_map((uint32_t) msp_get_num_loci(msp),
-            recomb_map, config);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
-    rho = recomb_map_get_per_locus_recombination_rate(recomb_map);
-    ret = msp_set_recombination_rate(msp, rho);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
-    ret = msp_set_recombination_map(msp, recomb_map);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
     config_destroy(config);
     free(config);
     free(samples);
+    if (from_ts != NULL) {
+        tree_sequence_free(from_ts);
+        free(from_ts);
+    }
     return ret;
 }
 
@@ -925,14 +940,6 @@ out:
     }
 }
 
-static void
-load_tree_sequence(tree_sequence_t *ts, const char *filename)
-{
-    int ret = tree_sequence_load(ts, filename, 0);
-    if (ret != 0) {
-        fatal_library_error(ret, "Load error");
-    }
-}
 
 static void
 run_ld(const char *filename, int MSP_UNUSED(verbose))
@@ -1057,7 +1064,7 @@ main(int argc, char** argv)
             "number of replicates to run");
     struct arg_file *infiles1 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *output1 = arg_file0("o", "output", "output-file",
-            "Output HDF5 file");
+            "Output trees file");
     struct arg_end *end1 = arg_end(20);
     void* argtable1[] = {cmd1, verbose1, infiles1, output1, replicates1, end1};
     int nerrors1;

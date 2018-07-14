@@ -152,48 +152,6 @@ msp_set_store_migrations(msp_t *self, bool store_migrations)
 }
 
 int
-msp_set_num_loci(msp_t *self, size_t num_loci)
-{
-    int ret = 0;
-
-    if (num_loci < 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->num_loci = (uint32_t) num_loci;
-out:
-    return ret;
-}
-
-int
-msp_set_recombination_rate(msp_t *self, double recombination_rate)
-{
-    int ret = 0;
-    simulation_model_t *model = &self->model;
-
-    if (recombination_rate < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->recombination_rate = model->generation_rate_to_model_rate(
-            model, recombination_rate);
-out:
-    return ret;
-}
-
-/* TODO it really doesn't make sense to provide the recombination map
- * AND the number of loci and the per locus recombination rate. We should
- * remove the set_num_loci and set_recombination map. We can add a
- * convenience function set_flat_recombination_map(num_loci, rate) if
- * we want. */
-int
-msp_set_recombination_map(msp_t *self, recomb_map_t *recomb_map)
-{
-    self->recomb_map = recomb_map;
-    return 0;
-}
-
-int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     int ret = 0;
@@ -365,22 +323,13 @@ out:
 static double
 msp_genetic_to_phys(msp_t *self, double x)
 {
-    double ret = x;
-
-    if (self->recomb_map != NULL) {
-        ret = recomb_map_genetic_to_phys(self->recomb_map, x);
-    }
-    return ret;
+    return recomb_map_genetic_to_phys(self->recomb_map, x);
 }
 
 static uint32_t
 msp_phys_to_genetic(msp_t *self, double x)
 {
-    double y = x;
-
-    if (self->recomb_map != NULL) {
-        y = recomb_map_phys_to_genetic(self->recomb_map, x);
-    }
+    double y = recomb_map_phys_to_genetic(self->recomb_map, x);
     return (uint32_t) round(y);
 }
 
@@ -428,6 +377,18 @@ msp_set_initial_state_from_ts(msp_t *self, tree_sequence_t *ts)
     if (ret != 0) {
         goto out;
     }
+    if (self->recomb_map == NULL) {
+        /* TODO We should make the recomb_map a requirement; we always have one
+         * when using the Python interface. See also comments for set_num_loci,
+         * set_recombination_rate, etc. */
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (self->recomb_map->sequence_length != tree_sequence_get_sequence_length(ts)) {
+        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
+        goto out;
+    }
+
     for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
         for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
             printf("Seg = (%f, %f, %d)\n", t.left, t.right, root);
@@ -450,19 +411,19 @@ msp_set_initial_state_from_ts(msp_t *self, tree_sequence_t *ts)
 out:
     sparse_tree_free(&t);
     return ret;
-
 }
 
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
-        tree_sequence_t *from, gsl_rng *rng) {
+msp_alloc(msp_t *self,
+        size_t num_samples, sample_t *samples,
+        recomb_map_t *recomb_map, tree_sequence_t *from, gsl_rng *rng) {
     int ret = -1;
     size_t j, k, initial_samples;
 
     memset(self, 0, sizeof(msp_t));
-    if (rng == NULL) {
+    if (rng == NULL || recomb_map == NULL) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -473,9 +434,19 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    /* Use the standard coalescent with coalescent time units by default. */
+    self->model.type = -1;
+    ret = msp_set_simulation_model_hudson(self, 0.25);
+    assert(ret == 0);
     self->rng = rng;
-    self->num_loci = 1;
-    self->recombination_rate = 0.0;
+    self->recomb_map = recomb_map;
+    self->num_loci = recomb_map_get_num_loci(self->recomb_map);
+
+    self->recombination_rate = recomb_map_get_per_locus_recombination_rate(
+            self->recomb_map);
+    /* And rescale the recombination rate */
+    self->recombination_rate = self->model.generation_rate_to_model_rate(
+            &self->model, self->recombination_rate);
     self->num_samples = (uint32_t) num_samples;
     if (from != NULL) {
         ret = msp_set_initial_state_from_ts(self, from);
@@ -539,10 +510,6 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
         goto out;
     }
 
-    /* Use the standard coalescent with coalescent time units by default. */
-    self->model.type = -1;
-    ret = msp_set_simulation_model_hudson(self, 0.25);
-    assert(ret == 0);
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
@@ -1968,11 +1935,7 @@ msp_initialise(msp_t *self)
     assert(self->num_loci >= 1);
     assert(self->num_populations >= 1);
 
-    self->tables.sequence_length = self->num_loci;
-    if (self->recomb_map != NULL) {
-        self->tables.sequence_length = self->recomb_map->sequence_length;
-    }
-
+    self->tables.sequence_length = self->recomb_map->sequence_length;
     ret = msp_alloc_memory_blocks(self);
     if (ret != 0) {
         goto out;
