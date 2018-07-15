@@ -130,14 +130,15 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    msp_t *sim;
-    RandomGenerator *random_generator;
-} Simulator;
+    recomb_map_t *recomb_map;
+} RecombinationMap;
 
 typedef struct {
     PyObject_HEAD
-    recomb_map_t *recomb_map;
-} RecombinationMap;
+    msp_t *sim;
+    RecombinationMap *recombination_map;
+    RandomGenerator *random_generator;
+} Simulator;
 
 typedef struct {
     PyObject_HEAD
@@ -8650,6 +8651,7 @@ Simulator_dealloc(Simulator* self)
         self->sim = NULL;
     }
     Py_XDECREF(self->random_generator);
+    Py_XDECREF(self->recombination_map);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -8658,60 +8660,53 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {"samples", "random_generator",
-        "num_loci", "recombination_rate",
+    static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "max_memory", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "store_migrations",
-        "recombination_map", NULL};
+        "node_mapping_block_size", "store_migrations", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
     PyObject *py_model = NULL;
     RandomGenerator *random_generator = NULL;
+    RecombinationMap *recombination_map = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t num_samples = 2;
-    unsigned long num_loci = 1;
-    double recombination_rate = 0.0;
     Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
     int store_migrations = 0;
-    RecombinationMap *recombination_map = NULL;
-    recomb_map_t *recomb_map = NULL;
-
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnniO!", kwlist,
+    self->recombination_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!nnnni", kwlist,
             &PyList_Type, &py_samples,
+            &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
-            &num_loci, &recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
             &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &store_migrations,
-            &RecombinationMapType, &recombination_map)) {
+            &node_mapping_block_size, &store_migrations)) {
         goto out;
     }
     self->random_generator = random_generator;
+    self->recombination_map = recombination_map;
     Py_INCREF(self->random_generator);
+    Py_INCREF(self->recombination_map);
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
     if (parse_samples(py_samples, &num_samples, &samples) != 0) {
         goto out;
     }
-    if (recombination_map != NULL) {
-        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
-            goto out;
-        }
-        recomb_map = recombination_map->recomb_map;
+    if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
+        goto out;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
@@ -8719,7 +8714,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
-            NULL, self->random_generator->rng);
+            recombination_map->recomb_map, NULL,
+            self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -8730,21 +8726,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         }
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_num_loci(self->sim, (size_t) num_loci);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_recombination_rate(self->sim, recombination_rate);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_recombination_map(self->sim, recomb_map);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;

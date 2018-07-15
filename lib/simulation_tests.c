@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2017 University of Oxford
+** Copyright (C) 2016-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -158,7 +158,7 @@ test_single_locus_two_populations(void)
     double t2 = 40.5;
     recomb_map_t recomb_map;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(rng != NULL);
 
@@ -236,7 +236,7 @@ test_single_locus_many_populations(void)
     recomb_map_t recomb_map;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
@@ -280,7 +280,7 @@ test_single_locus_historical_sample(void)
     recomb_map_t recomb_map;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
@@ -336,7 +336,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m - 1);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < n; j++) {
         samples[j].time = j;
@@ -415,8 +415,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(initial_size, 2 * Ne);
     CU_ASSERT_EQUAL(growth_rate, 0.5);
-    printf("recomb_rate = %f\n", msp_get_recombination_rate(&msp));
-    /* CU_ASSERT_EQUAL(msp_get_recombination_rate(&msp), 1.0); */
+    CU_ASSERT_EQUAL(msp_get_recombination_rate(&msp), 1.0);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);

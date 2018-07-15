@@ -30,7 +30,7 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
 {
     size_t j;
 
-    fprintf(out, "recombination_map:: size = %d\n", (int) self->size);
+    fprintf(out, "recombination_map (%p):: size = %d\n", (void *) self, (int) self->size);
     fprintf(out, "\tnum_loci = %d\n", recomb_map_get_num_loci(self));
     fprintf(out, "\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
     fprintf(out, "\tper_locus_rate = %f\n",
@@ -189,19 +189,22 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
     double x, s, excess;
     double *p = self->positions;
     double *r = self->rates;
+    double num_loci = self->num_loci;
 
-    assert(genetic_x >= 0 && genetic_x <= self->num_loci);
+    assert(num_loci >= 1);
+    assert(genetic_x >= 0);
+    assert(genetic_x <= num_loci);
     if (self->total_recombination_rate == 0 || self->size == 2) {
         /* Avoid roundoff when num_loci == self->sequence_length */
         ret = genetic_x;
-        if (self->sequence_length != self->num_loci) {
-            ret = (genetic_x / self->num_loci) * self->sequence_length;
+        if (self->sequence_length != num_loci) {
+            ret = (genetic_x / num_loci) * self->sequence_length;
         }
     } else {
         /* genetic_x is in the range [0,num_loci], and so we rescale
          * this into [0,total_recombination_rate] so that we can
          * map back into physical coordinates. */
-        x = (genetic_x / self->num_loci) * self->total_recombination_rate;
+        x = (genetic_x / num_loci) * self->total_recombination_rate;
         if (x > 0) {
             s = 0;
             k = 0;

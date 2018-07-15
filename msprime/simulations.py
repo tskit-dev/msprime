@@ -517,19 +517,12 @@ class Simulator(object):
             conf.get_ll_representation() for conf in self.population_configurations]
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
-        ll_recomb_rate = self.recombination_map.get_per_locus_recombination_rate()
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        # TODO it really doesn't make sense to provide the recombination map,
-        # AND the number of loci and per-locus recombination rate. This is left
-        # over from earlier parameterisations when mapping from genetic to
-        # physical coordinates was done after the simulation completed.
         ll_sim = _msprime.Simulator(
             samples=self.samples,
+            recombination_map=ll_recomb_map,
             random_generator=self.random_generator,
             model=ll_simulation_model,
-            num_loci=self.recombination_map.get_num_loci(),
-            recombination_rate=ll_recomb_rate,
-            recombination_map=ll_recomb_map,
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
@@ -613,11 +606,10 @@ class RecombinationMap(object):
     The default number of non-recombining loci in a RecombinationMap.
     """
     def __init__(self, positions, rates, num_loci=None):
-        m = self.DEFAULT_NUM_LOCI
-        if num_loci is not None:
-            m = num_loci
+        if num_loci is None:
+            num_loci = self.DEFAULT_NUM_LOCI
         self._ll_recombination_map = _msprime.RecombinationMap(
-            m, positions, rates)
+            num_loci, positions, rates)
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None):
