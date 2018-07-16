@@ -1638,50 +1638,71 @@ test_recomb_map_examples(void)
 static void
 test_simulate_from_single_locus(void)
 {
-    /* int ret; */
-    /* uint32_t n = 10; */
-    /* table_collection_t tables; */
-    /* tree_sequence_t from; */
-    /* sample_t *samples = malloc(n * sizeof(sample_t)); */
-    /* msp_t msp; */
-    /* gsl_rng *rng = gsl_rng_alloc(gsl_rng_default); */
+    int ret;
+    uint32_t n = 10;
+    table_collection_position_t pos;
+    table_collection_t from_tables, final_tables;
+    tree_sequence_t from, final;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    recomb_map_t recomb_map;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-    /* CU_ASSERT_FATAL(samples != NULL); */
-    /* CU_ASSERT_FATAL(rng != NULL); */
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    /* memset(samples, 0, n * sizeof(sample_t)); */
-    /* ret = msp_alloc(&msp, n, samples, NULL, rng); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
-    /* ret = msp_initialise(&msp); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
 
-    /* /1* Partially run the simulation *1/ */
-    /* ret = msp_run(&msp, DBL_MAX, n / 2); */
-    /* CU_ASSERT_EQUAL(ret, 1); */
-    /* CU_ASSERT_FALSE(msp_is_completed(&msp)); */
-    /* ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* /1* Make sure we can build a tree sequence from the tables. *1/ */
-    /* ret = msp_populate_tables(&msp, &tables); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* Partially run the simulation */
+    ret = msp_run(&msp, DBL_MAX, n / 2);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_FALSE(msp_is_completed(&msp));
+    ret = table_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_populate_tables(&msp, &from_tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_free(&msp);
 
-    /* ret = tree_sequence_load_tables(&from, &tables, 0); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* table_collection_free(&tables); */
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(&msp));
+    ret = table_collection_alloc(&final_tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_populate_tables(&msp, &final_tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tree_sequence_load_tables(&final, &final_tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    /* ret = msp_alloc(&msp, 0, NULL, &from, rng); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
-    /* ret = msp_initialise(&msp); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
+    /* TODO check that we've really fully coalesced by iterating over the trees
+     * and looking at the roots. */
 
-    /* ret = msp_run(&msp, DBL_MAX, ULONG_MAX); */
-    /* CU_ASSERT_EQUAL(ret, 0); */
+    CU_ASSERT_FALSE(table_collection_equals(&from_tables, &final_tables));
+    ret = table_collection_record_position(&from_tables, &pos);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_reset_position(&final_tables, &pos);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(table_collection_equals(&from_tables, &final_tables));
 
-
-    /* tree_sequence_free(&from); */
-    /* free(samples); */
-    /* msp_free(&msp); */
-    /* gsl_rng_free(rng); */
+    table_collection_free(&from_tables);
+    table_collection_free(&final_tables);
+    tree_sequence_free(&from);
+    tree_sequence_free(&final);
+    free(samples);
+    msp_free(&msp);
+    gsl_rng_free(rng);
+    recomb_map_free(&recomb_map);
 }
 
 static int

@@ -130,6 +130,7 @@ typedef struct _msp_t {
     recomb_map_t *recomb_map;
     uint32_t num_populations;
     sample_t *samples;
+    tree_sequence_t *from_ts;
     simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;

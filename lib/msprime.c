@@ -319,60 +319,12 @@ out:
     return seg;
 }
 
-static int
-msp_set_initial_state_from_ts(msp_t *self, tree_sequence_t *ts)
-{
-    int ret = 0;
-    sparse_tree_t t;
-    node_id_t root;
-    segment_t *seg;
-
-    ret = sparse_tree_alloc(&t, ts, 0);
-    if (ret != 0) {
-        goto out;
-    }
-    if (self->recomb_map == NULL) {
-        /* TODO We should make the recomb_map a requirement; we always have one
-         * when using the Python interface. See also comments for set_num_loci,
-         * set_recombination_rate, etc. */
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (self->recomb_map->sequence_length != tree_sequence_get_sequence_length(ts)) {
-        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
-        goto out;
-    }
-
-    for (ret = sparse_tree_first(&t); ret == 1; ret = sparse_tree_next(&t)) {
-        for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
-            printf("Seg = (%f, %f, %d)\n", t.left, t.right, root);
-            seg = msp_alloc_segment(self,
-                msp_phys_to_genetic(self, t.left),
-                msp_phys_to_genetic(self, t.right),
-                0, 0,
-                NULL, NULL);
-            printf("seg = %p\n", (void *) seg);
-            /* This fails because we haven't set up the memory for segments yet. */
-            /* assert(seg != NULL); */
-
-            /* printf("%d %d\n", seg->left, seg->right); */
-
-        }
-    }
-    if (ret != 0) {
-        goto out;
-    }
-out:
-    sparse_tree_free(&t);
-    return ret;
-}
-
 /* Top level allocators and initialisation */
 
 int
 msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
-        recomb_map_t *recomb_map, tree_sequence_t *from, gsl_rng *rng) {
+        recomb_map_t *recomb_map, tree_sequence_t *from_ts, gsl_rng *rng) {
     int ret = -1;
     size_t j, k, initial_samples;
 
@@ -381,13 +333,23 @@ msp_alloc(msp_t *self,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (samples == NULL && from == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    } else if (samples != NULL && num_samples < 2) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
+    if (from_ts == NULL) {
+        if (samples == NULL) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        if (num_samples < 2) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+    } else {
+        /* All samples must be specified in the tree sequence itself. */
+        if (num_samples != 0) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
     }
+
     /* Use the standard coalescent with coalescent time units by default. */
     self->model.type = -1;
     ret = msp_set_simulation_model_hudson(self, 0.25);
@@ -401,69 +363,83 @@ msp_alloc(msp_t *self,
     /* And rescale the recombination rate */
     self->recombination_rate = self->model.generation_rate_to_model_rate(
             &self->model, self->recombination_rate);
-    self->num_samples = (uint32_t) num_samples;
-    if (from != NULL) {
-        ret = msp_set_initial_state_from_ts(self, from);
+
+    ret = table_collection_alloc(&self->tables, MSP_ALLOC_TABLES);
+    if (ret != 0) {
+        goto out;
+    }
+    if (from_ts == NULL) {
+        assert(samples != NULL);
+        assert(num_samples > 1);
+        self->num_samples = (uint32_t) num_samples;
+        self->samples = malloc(num_samples * sizeof(sample_t));
+        if (self->samples == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        initial_samples = 0;
+        for (j = 0; j < num_samples; j++) {
+            self->samples[j].population_id = samples[j].population_id;
+            self->samples[j].time = samples[j].time;
+            if (self->samples[j].time < 0) {
+                ret = MSP_ERR_BAD_PARAM_VALUE;
+                goto out;
+            }
+            if (self->samples[j].time == 0) {
+                initial_samples++;
+            }
+        }
+        if (initial_samples == 0) {
+            ret = MSP_ERR_BAD_SAMPLES;
+            goto out;
+        }
+        /* Set up the historical sampling events */
+        self->num_sampling_events = self->num_samples - initial_samples;
+        self->sampling_events = NULL;
+        if (self->num_sampling_events > 0) {
+            self->sampling_events = malloc(self->num_sampling_events *
+                    sizeof(sampling_event_t));
+            if (self->sampling_events == NULL) {
+                goto out;
+            }
+            k = 0;
+            for (j = 0; j < self->num_samples; j++) {
+                if (self->samples[j].time > 0) {
+                    self->sampling_events[k].sample = (node_id_t) j;
+                    self->sampling_events[k].time = self->samples[j].time;
+                    self->sampling_events[k].population_id =
+                        self->samples[j].population_id;
+                    k++;
+                }
+            }
+            assert(k == self->num_sampling_events);
+            /* Now we must sort the sampling events by time. */
+            qsort(self->sampling_events, self->num_sampling_events,
+                    sizeof(sampling_event_t), cmp_sampling_event);
+        }
+    } else {
+        assert(from_ts != NULL);
+        /* Make a copy of the from_ts */
+        ret = tree_sequence_dump_tables(from_ts, &self->tables, 0);
+        if (ret != 0) {
+            goto out;
+        }
+        self->from_ts = malloc(sizeof(*self->from_ts));
+        if (self->from_ts == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        ret = tree_sequence_load_tables(self->from_ts, &self->tables, 0);
         if (ret != 0) {
             goto out;
         }
     }
 
-    self->samples = malloc(num_samples * sizeof(sample_t));
-    if (self->samples == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    initial_samples = 0;
-    for (j = 0; j < num_samples; j++) {
-        self->samples[j].population_id = samples[j].population_id;
-        self->samples[j].time = samples[j].time;
-        if (self->samples[j].time < 0) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        if (self->samples[j].time == 0) {
-            initial_samples++;
-        }
-    }
-    if (initial_samples == 0) {
-        ret = MSP_ERR_BAD_SAMPLES;
-        goto out;
-    }
-    /* Set up the historical sampling events */
-    self->num_sampling_events = self->num_samples - initial_samples;
-    self->sampling_events = NULL;
-    if (self->num_sampling_events > 0) {
-        self->sampling_events = malloc(self->num_sampling_events *
-                sizeof(sampling_event_t));
-        if (self->sampling_events == NULL) {
-            goto out;
-        }
-        k = 0;
-        for (j = 0; j < self->num_samples; j++) {
-            if (self->samples[j].time > 0) {
-                self->sampling_events[k].sample = (node_id_t) j;
-                self->sampling_events[k].time = self->samples[j].time;
-                self->sampling_events[k].population_id =
-                    self->samples[j].population_id;
-                k++;
-            }
-        }
-        assert(k == self->num_sampling_events);
-        /* Now we must sort the sampling events by time. */
-        qsort(self->sampling_events, self->num_sampling_events,
-                sizeof(sampling_event_t), cmp_sampling_event);
-    }
     /* We have one population by default */
     ret = msp_set_num_populations(self, 1);
     if (ret != 0) {
         goto out;
     }
-    ret = table_collection_alloc(&self->tables, MSP_ALLOC_TABLES);
-    if (ret != 0) {
-        goto out;
-    }
-
     /* Set sensible defaults for the sample_config and migration matrix */
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
@@ -559,6 +535,10 @@ msp_free(msp_t *self)
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->node_mapping_heap);
     fenwick_free(&self->links);
+    if (self->from_ts != NULL) {
+        tree_sequence_free(self->from_ts);
+        free(self->from_ts);
+    }
     ret = 0;
     return ret;
 }
@@ -811,6 +791,7 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "m = %d\n", self->num_loci);
+    fprintf(out, "from_ts = %p\n", (void *) self->from_ts);
     fprintf(out, "Samples = \n");
     for (j = 0; j < self->num_samples; j++) {
         fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, (int) self->samples[j].population_id,
@@ -1143,6 +1124,8 @@ out:
     return ret;
 }
 
+/* Defragment the segment chain ending in z by squashing any redundant
+ * segments together */
 static int WARN_UNUSED
 msp_defrag_segment_chain(msp_t *self, segment_t *z)
 {
@@ -1787,25 +1770,187 @@ out:
     return ret;
 }
 
+static int
+msp_init_from_ts(msp_t *self)
+{
+    int ret = 0;
+    int t_iter;
+    sparse_tree_t t;
+    node_id_t root;
+    segment_t *seg, *prev;
+    population_id_t pop;
+    uint32_t left, right, num_roots;
+    segment_t **prev_map = NULL;
+    table_size_t num_nodes = self->tables.nodes->num_rows;
+    table_size_t j;
+
+    ret = sparse_tree_alloc(&t, self->from_ts, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    if (self->recomb_map->sequence_length != self->tables.sequence_length) {
+        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
+        goto out;
+    }
+    if (self->num_populations != self->tables.populations->num_rows) {
+        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
+        goto out;
+    }
+    prev_map = calloc(num_nodes, sizeof(*prev_map));
+    if (prev_map == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* Find the maximum time among the existing nodes */
+    self->time = -1;
+    for (j = 0; j < num_nodes; j++) {
+        self->time = GSL_MAX(self->tables.nodes->time[j], self->time);
+    }
+    /* Insist that all samples are before this time */
+    for (j = 0; j < num_nodes; j++) {
+        if (self->tables.nodes->flags[j] & MSP_NODE_IS_SAMPLE) {
+            if (self->tables.nodes->time[j] >= self->time) {
+                ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
+                goto out;
+            }
+        }
+    }
+    /* TODO Reset the tables to their original position, or we won't
+     * do replicates properly. */
+
+    for (t_iter = sparse_tree_first(&t); t_iter == 1; t_iter = sparse_tree_next(&t)) {
+        left = msp_phys_to_genetic(self, t.left);
+        right = msp_phys_to_genetic(self, t.right);
+        assert(left < right);
+        num_roots = (uint32_t) sparse_tree_get_num_roots(&t);
+        if (num_roots == 1) {
+            ret = msp_insert_overlap_count(self, left, 0);
+            if (ret != 0) {
+                goto out;
+            }
+        } else {
+            for (root = t.left_root; root != MSP_NULL_NODE; root = t.right_sib[root]) {
+                pop = self->tables.nodes->population[root];
+                prev = prev_map[root];
+
+                seg = msp_alloc_segment(self, left, right, root, pop, prev, NULL);
+                if (seg == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                if (prev == NULL) {
+                    ret = msp_insert_individual(self, seg);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                    fenwick_set_value(&self->links, seg->id, right - left - 1);
+                } else {
+                    fenwick_set_value(&self->links, seg->id, right - prev->right);
+                    prev->next = seg;
+                }
+                prev_map[root] = seg;
+            }
+            ret = msp_insert_overlap_count(self, left, num_roots);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    if (t_iter != 0) {
+        ret = t_iter;
+        goto out;
+    }
+
+    ret = msp_insert_overlap_count(self, self->num_loci, UINT32_MAX);
+    if (ret != 0) {
+        goto out;
+    }
+    /* We've been lazy and not worried about squashing down adjacent
+     * segments and overlap counts. Do this all here. */
+    for (j = 0; j < num_nodes; j++) {
+        seg = prev_map[j];
+        if (seg != NULL) {
+            if (seg->next != NULL) {
+                seg = seg->next;
+            }
+            ret = msp_defrag_segment_chain(self, seg);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    ret = msp_compress_overlap_counts(self, 0, self->num_loci);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    sparse_tree_free(&t);
+    msp_safe_free(prev_map);
+    return ret;
+}
+
+static int
+msp_init_from_samples(msp_t *self)
+{
+    int ret = 0;
+    size_t j;
+    node_id_t u;
+
+    population_table_clear(self->tables.populations);
+    edge_table_clear(self->tables.edges);
+    node_table_clear(self->tables.nodes);
+    migration_table_clear(self->tables.migrations);
+
+    self->tables.sequence_length = self->recomb_map->sequence_length;
+    for (j = 0; j < self->num_populations; j++) {
+        ret = population_table_add_row(self->tables.populations, NULL, 0);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+
+    /* Set up the sample */
+    self->time = 0.0;
+    self->num_buffered_edges = 0;
+    for (u = 0; u < (node_id_t) self->num_samples; u++) {
+        if (self->samples[u].time == 0.0) {
+            ret = msp_insert_sample(self, u, self->samples[u].population_id);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        ret = msp_store_node(self, MSP_NODE_IS_SAMPLE,
+                self->model.generations_to_model_time(&self->model, self->samples[u].time),
+                self->samples[u].population_id);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = msp_insert_overlap_count(self, 0, self->num_samples);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_insert_overlap_count(self, self->num_loci, self->num_samples + 1);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int
 msp_reset(msp_t *self)
 {
     int ret = 0;
-    population_id_t population_id;
-    node_id_t j;
-    population_t *pop, *initial_pop;
     size_t N = self->num_populations;
+    population_id_t population_id;
+    population_t *pop, *initial_pop;
 
     memcpy(&self->model, &self->initial_model, sizeof(self->model));
     ret = msp_reset_memory_state(self);
     if (ret != 0) {
         goto out;
     }
-
-    edge_table_clear(self->tables.edges);
-    node_table_clear(self->tables.nodes);
-    migration_table_clear(self->tables.migrations);
-
     /* Set up the initial segments and algorithm state */
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = &self->populations[population_id];
@@ -1816,34 +1961,17 @@ msp_reset(msp_t *self)
         pop->initial_size = initial_pop->initial_size;
         pop->start_time = 0.0;
     }
-    /* Set up the sample */
-    self->time = 0.0;
-    self->num_buffered_edges = 0;
-    for (j = 0; j < (node_id_t) self->num_samples; j++) {
-        if (self->samples[j].time == 0.0) {
-            ret = msp_insert_sample(self, j, self->samples[j].population_id);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-        ret = msp_store_node(self, MSP_NODE_IS_SAMPLE,
-                self->model.generations_to_model_time(&self->model, self->samples[j].time),
-                self->samples[j].population_id);
-        if (ret != 0) {
-            goto out;
-        }
+    if (self->from_ts == NULL) {
+        ret = msp_init_from_samples(self);
+    } else {
+        ret = msp_init_from_ts(self);
+    }
+    if (ret != 0) {
+        goto out;
     }
     self->next_demographic_event = self->demographic_events_head;
     memcpy(self->migration_matrix, self->initial_migration_matrix,
             N * N * sizeof(double));
-    ret = msp_insert_overlap_count(self, 0, self->num_samples);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_insert_overlap_count(self, self->num_loci, self->num_samples + 1);
-    if (ret != 0) {
-        goto out;
-    }
     self->next_sampling_event = 0;
     self->num_re_events = 0;
     self->num_ca_events = 0;
@@ -1852,6 +1980,7 @@ msp_reset(msp_t *self)
     self->num_multiple_re_events = 0;
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
     self->state = MSP_STATE_INITIALISED;
+    /* msp_print_state(self, stdout); */
 out:
     return ret;
 }
@@ -1866,11 +1995,9 @@ msp_initialise(msp_t *self)
     uint32_t j;
 
     /* These should really be proper checks with a return value */
-    assert(self->num_samples > 1);
     assert(self->num_loci >= 1);
     assert(self->num_populations >= 1);
 
-    self->tables.sequence_length = self->recomb_map->sequence_length;
     ret = msp_alloc_memory_blocks(self);
     if (ret != 0) {
         goto out;
@@ -1885,14 +2012,6 @@ msp_initialise(msp_t *self)
     /* Copy the state of the simulation model into the initial model */
     memcpy(&self->initial_model, &self->model, sizeof(self->model));
 
-    /* Add the populations to the output tables. We don't modify these in
-     * any way, so we can keep them around between replicates */
-    for (j = 0; j < self->num_populations; j++) {
-        ret = population_table_add_row(self->tables.populations, NULL, 0);
-        if (ret < 0) {
-            goto out;
-        }
-    }
     ret = msp_reset(self);
     if (ret != 0) {
         goto out;
