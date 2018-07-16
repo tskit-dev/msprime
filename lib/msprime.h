@@ -137,7 +137,6 @@ typedef struct _msp_t {
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
     size_t segment_block_size;
-    size_t max_memory;
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
@@ -155,7 +154,6 @@ typedef struct _msp_t {
     struct demographic_event_t_t *next_demographic_event;
     /* algorithm state */
     int state;
-    size_t used_memory;
     double time;
     double *migration_matrix;
     population_t *populations;
@@ -248,7 +246,6 @@ int msp_set_simulation_model_beta(msp_t *self, double population_size, double al
         double truncation_point);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
-int msp_set_max_memory(msp_t *self, size_t max_memory);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
@@ -304,7 +301,6 @@ size_t msp_get_num_migrations(msp_t *self);
 size_t msp_get_num_avl_node_blocks(msp_t *self);
 size_t msp_get_num_node_mapping_blocks(msp_t *self);
 size_t msp_get_num_segment_blocks(msp_t *self);
-size_t msp_get_used_memory(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);

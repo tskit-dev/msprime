@@ -358,7 +358,6 @@ test_simulator_getters_setters(void)
 
     ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(msp_set_max_memory(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0),
@@ -421,7 +420,6 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_node_mapping_blocks(&msp), 1);
     CU_ASSERT_EQUAL(msp_get_num_segment_blocks(&msp), 1);
-    CU_ASSERT(msp_get_used_memory(&msp) > 0);
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
@@ -945,12 +943,6 @@ test_single_locus_simulation(void)
     free(msp);
     free(samples);
     recomb_map_free(&recomb_map);
-}
-
-static void
-test_simulation_memory_limit(void)
-{
-    printf("TODO REMOVE\n");
 }
 
 static void
@@ -1758,7 +1750,6 @@ main(int argc, char **argv)
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
-        {"test_simulation_memory_limit", test_simulation_memory_limit},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
         {"test_simulation_replicates", test_simulation_replicates},

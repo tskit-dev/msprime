@@ -336,9 +336,6 @@ class Simulator(object):
         self.segment_block_size = max(block_size, self.sample_size)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
-        # TODO is it useful to bring back the API to set this? Mostly
-        # the amount of memory required is tiny.
-        self.max_memory = sys.maxsize
         self.tables = _tables.TableCollection()
 
     @property
@@ -362,10 +359,6 @@ class Simulator(object):
         return [
             self.recombination_map.genetic_to_physical(x)
             for x in self.ll_sim.get_breakpoints()]
-
-    @property
-    def used_memory(self):
-        return self.ll_sim.get_used_memory()
 
     @property
     def time(self):
@@ -527,7 +520,6 @@ class Simulator(object):
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             store_migrations=self.store_migrations,
-            max_memory=self.max_memory,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
             node_mapping_block_size=self.node_mapping_block_size)

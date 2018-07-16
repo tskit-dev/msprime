@@ -8662,7 +8662,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int sim_ret;
     static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
-        "model", "max_memory", "avl_node_block_size", "segment_block_size",
+        "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
@@ -8674,7 +8674,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t num_samples = 2;
-    Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
@@ -8683,7 +8682,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!nnnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!nnni", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -8691,7 +8690,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
-            &max_memory, &avl_node_block_size, &segment_block_size,
+            &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations)) {
         goto out;
     }
@@ -8726,11 +8725,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         }
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_max_memory(self->sim, (size_t) max_memory);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -8941,18 +8935,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_max_memory(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", self->sim->max_memory);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_segment_block_size(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -9130,19 +9112,6 @@ Simulator_get_num_segment_blocks(Simulator  *self)
 out:
     return ret;
 }
-
-static PyObject *
-Simulator_get_used_memory(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_used_memory(self->sim));
-out:
-    return ret;
-}
-
 
 static PyObject *
 Simulator_get_num_breakpoints(Simulator  *self)
@@ -9697,8 +9666,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the recombination rate." },
-    {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
-            "Returns the maximum memory used by the simulator" },
     {"get_segment_block_size",
             (PyCFunction) Simulator_get_segment_block_size, METH_NOARGS,
             "Returns segment block size." },
@@ -9749,8 +9716,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_migrations",
             (PyCFunction) Simulator_get_num_migrations,
             METH_NOARGS, "Returns the number of migration records" },
-    {"get_used_memory", (PyCFunction) Simulator_get_used_memory,
-            METH_NOARGS, "Returns the approximate amount of memory used." },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_breakpoints", (PyCFunction) Simulator_get_breakpoints,

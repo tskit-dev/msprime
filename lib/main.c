@@ -550,10 +550,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
             == CONFIG_FALSE) {
         fatal_error("max_memory is a required parameter");
     }
-    ret = msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
     if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
         fatal_error("store_migrations is a required parameter");
     }

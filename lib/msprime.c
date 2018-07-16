@@ -80,28 +80,6 @@ segment_init(void **obj, size_t id)
     seg->id = id + 1;
 }
 
-static size_t
-msp_get_avl_node_mem_increment(msp_t *self)
-{
-    return sizeof(void *) + self->avl_node_block_size
-            * (sizeof(avl_node_t) + sizeof(void *));
-}
-
-static size_t
-msp_get_segment_mem_increment(msp_t *self)
-{
-    /* we have a segment, a pointer to it and an entry in the Fenwick tree */
-    size_t s = sizeof(segment_t) + sizeof(void *) + 2 * sizeof(int64_t);
-    return sizeof(void *) + self->segment_block_size * s;
-}
-
-static size_t
-msp_get_node_mapping_mem_increment(msp_t *self)
-{
-    return sizeof(void *) + self->node_mapping_block_size
-            * sizeof(node_mapping_t);
-}
-
 size_t
 msp_get_num_avl_node_blocks(msp_t *self)
 {
@@ -118,12 +96,6 @@ size_t
 msp_get_num_segment_blocks(msp_t *self)
 {
     return self->segment_heap.num_blocks;
-}
-
-size_t
-msp_get_used_memory(msp_t *self)
-{
-    return self->used_memory;
 }
 
 size_t
@@ -265,20 +237,6 @@ out:
 }
 
 int
-msp_set_max_memory(msp_t *self, size_t max_memory)
-{
-    int ret = 0;
-
-    if (max_memory < 1) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    self->max_memory = max_memory;
-out:
-    return ret;
-}
-
-int
 msp_set_node_mapping_block_size(msp_t *self, size_t block_size)
 {
     int ret = 0;
@@ -340,10 +298,6 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
     segment_t *seg = NULL;
 
     if (object_heap_empty(&self->segment_heap)) {
-        self->used_memory += msp_get_segment_mem_increment(self);
-        if (self->used_memory > self->max_memory) {
-            goto out;
-        }
         if (object_heap_expand(&self->segment_heap) != 0) {
             goto out;
         }
@@ -517,7 +471,6 @@ msp_alloc(msp_t *self,
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
-    self->max_memory = 1024 * 1024 * 1024; /* 1MiB */
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
@@ -535,13 +488,6 @@ msp_alloc_memory_blocks(msp_t *self)
 {
     int ret = 0;
 
-    self->used_memory = msp_get_avl_node_mem_increment(self)
-        + msp_get_segment_mem_increment(self)
-        + msp_get_node_mapping_mem_increment(self);
-    if (self->used_memory > self->max_memory) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
     /* Allocate the memory heaps */
     ret = object_heap_init(&self->avl_node_heap, sizeof(avl_node_t),
            self->avl_node_block_size, NULL);
@@ -623,10 +569,6 @@ msp_alloc_avl_node(msp_t *self)
     avl_node_t *ret = NULL;
 
     if (object_heap_empty(&self->avl_node_heap)) {
-        self->used_memory += msp_get_avl_node_mem_increment(self);
-        if (self->used_memory > self->max_memory) {
-            goto out;
-        }
         if (object_heap_expand(&self->avl_node_heap) != 0) {
             goto out;
         }
@@ -648,10 +590,6 @@ msp_alloc_node_mapping(msp_t *self)
     node_mapping_t *ret = NULL;
 
     if (object_heap_empty(&self->node_mapping_heap)) {
-        self->used_memory += msp_get_node_mapping_mem_increment(self);
-        if (self->used_memory > self->max_memory) {
-            goto out;
-        }
         if (object_heap_expand(&self->node_mapping_heap) != 0) {
             goto out;
         }
@@ -849,7 +787,6 @@ msp_print_state(msp_t *self, FILE *out)
     sampling_event_t *se;
     int64_t v;
     uint32_t j, k;
-    double gig = 1024.0 * 1024;
     segment_t **ancestors = malloc(msp_get_num_ancestors(self)
             * sizeof(segment_t *));
 
@@ -872,8 +809,6 @@ msp_print_state(msp_t *self, FILE *out)
                 self->model.params.dirac_coalescent.psi,
                 self->model.params.dirac_coalescent.c);
     }
-    fprintf(out, "used_memory = %f MiB\n", (double) self->used_memory / gig);
-    fprintf(out, "max_memory  = %f MiB\n", (double) self->max_memory / gig);
     fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "m = %d\n", self->num_loci);
     fprintf(out, "Samples = \n");

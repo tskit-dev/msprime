@@ -594,12 +594,10 @@ class TestSimulator(HighLevelTestCase):
         self.assertEqual(sim.random_generator, rng)
         sim.run()
         self.assertEqual(sim.num_breakpoints, len(sim.breakpoints))
-        self.assertGreater(sim.used_memory, 0)
         self.assertGreater(sim.time, 0)
         self.assertGreater(sim.num_avl_node_blocks, 0)
         self.assertGreater(sim.num_segment_blocks, 0)
         self.assertGreater(sim.num_node_mapping_blocks, 0)
-        self.assertGreater(sim.max_memory, 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
         for record in tree_sequence.nodes():
