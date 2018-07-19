@@ -433,6 +433,10 @@ msp_alloc(msp_t *self,
         if (ret != 0) {
             goto out;
         }
+        ret = table_collection_record_position(&self->tables, &self->from_position);
+        if (ret != 0) {
+            goto out;
+        }
     }
 
     /* We have one population by default */
@@ -1779,7 +1783,8 @@ msp_init_from_ts(msp_t *self)
     node_id_t root;
     segment_t *seg, *prev;
     population_id_t pop;
-    uint32_t left, right, num_roots;
+    uint32_t num_samples, left, right, num_roots;
+    double model_time;
     segment_t **prev_map = NULL;
     table_size_t num_nodes = self->tables.nodes->num_rows;
     table_size_t j;
@@ -1803,21 +1808,24 @@ msp_init_from_ts(msp_t *self)
     }
     /* Find the maximum time among the existing nodes */
     self->time = -1;
+    num_samples = 0;
     for (j = 0; j < num_nodes; j++) {
-        self->time = GSL_MAX(self->tables.nodes->time[j], self->time);
-    }
-    /* Insist that all samples are before this time */
-    for (j = 0; j < num_nodes; j++) {
+        model_time  = self->model.generations_to_model_time(
+                &self->model,self->tables.nodes->time[j]);
+        self->time = GSL_MAX(model_time, self->time);
         if (self->tables.nodes->flags[j] & MSP_NODE_IS_SAMPLE) {
-            if (self->tables.nodes->time[j] >= self->time) {
-                ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
-                goto out;
-            }
+            num_samples++;
         }
     }
-    /* TODO Reset the tables to their original position, or we won't
-     * do replicates properly. */
-
+    if (num_samples < 2) {
+        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
+        goto out;
+    }
+    /* Reset the tables to their correct position for replication */
+    ret = table_collection_reset_position(&self->tables, &self->from_position);
+    if (ret != 0) {
+        goto out;
+    }
     for (t_iter = sparse_tree_first(&t); t_iter == 1; t_iter = sparse_tree_next(&t)) {
         left = msp_phys_to_genetic(self, t.left);
         right = msp_phys_to_genetic(self, t.right);

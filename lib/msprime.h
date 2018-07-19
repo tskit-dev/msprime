@@ -167,6 +167,7 @@ typedef struct _msp_t {
     object_heap_t node_mapping_heap;
     /* The tables used to store the simulation state */
     table_collection_t tables;
+    table_collection_position_t from_position;
     /* edges are buffered in a flat array until they are squashed and flushed */
     edge_t *buffered_edges;
     size_t num_buffered_edges;

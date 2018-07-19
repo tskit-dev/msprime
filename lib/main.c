@@ -491,7 +491,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error(msp_strerror(ret));
     }
     if (config_lookup_string(config, "from", &from_ts_path) == CONFIG_TRUE) {
-        printf("reading from %s\n", from_ts_path);
         from_ts = malloc(sizeof(*from_ts));
         if (from_ts == NULL) {
             fatal_error("alloc error");
