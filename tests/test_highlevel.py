@@ -2129,7 +2129,7 @@ class TestSimulatorFactory(unittest.TestCase):
             ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
-            self.assertEqual(sim.sample_size, n)
+            self.assertEqual(len(sim.samples), n)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_num_samples(), n)
             samples = ll_sim.get_samples()
@@ -2162,7 +2162,7 @@ class TestSimulatorFactory(unittest.TestCase):
             sample_size = 5 * N
             sim = msprime.simulator_factory(population_configurations=pop_configs)
             self.assertEqual(sim.population_configurations, pop_configs)
-            self.assertEqual(sim.sample_size, sample_size)
+            self.assertEqual(len(sim.samples), sample_size)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(len(ll_sim.get_population_configuration()), N)
         # The default is a single population
@@ -2178,7 +2178,7 @@ class TestSimulatorFactory(unittest.TestCase):
                 ValueError, msprime.simulator_factory, population_configurations=configs)
             configs = [msprime.PopulationConfiguration(2) for _ in range(d)]
             sim = msprime.simulator_factory(population_configurations=configs)
-            self.assertEqual(sim.sample_size, 2 * d)
+            self.assertEqual(len(sim.samples), 2 * d)
             samples = []
             for j in range(d):
                 samples += [msprime.Sample(population=j, time=0) for _ in range(2)]

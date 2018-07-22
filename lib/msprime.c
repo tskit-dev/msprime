@@ -2506,6 +2506,10 @@ msp_populate_tables(msp_t *self, table_collection_t *tables)
         goto out;
     }
     ret = population_table_copy(self->tables.populations, tables->populations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_copy(self->tables.provenances, tables->provenances);
 out:
     return ret;
 }

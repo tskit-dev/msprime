@@ -1730,6 +1730,9 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_populate_tables(&msp, &from_tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* Add some provenances */
+    ret = provenance_table_add_row(from_tables.provenances, "time", 4, "record", 6);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&from, &from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 

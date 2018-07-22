@@ -517,16 +517,17 @@ class LowLevelTestCase(tests.MsprimeTestCase):
             n, num_populations=num_populations, store_migrations=True)
         sim.run()
         tables = new_table_collection()
-        for j in range(4):
-            tables.provenances.add_row(timestamp="y" * (j + 1), record="x" * j)
-        for j in range(n):
-            tables.individuals.add_row(flags=1, location=[j, j], metadata=b'x' * j)
         ts = _msprime.TreeSequence()
         sim.populate_tables(tables)
         # Add in our own pops so we can have metadata
         tables.populations.clear()
         for j in range(num_populations):
             tables.populations.add_row(metadata=b'x' * j)
+        # Add in some provenances
+        for j in range(4):
+            tables.provenances.add_row(timestamp="y" * (j + 1), record="x" * j)
+        for j in range(n):
+            tables.individuals.add_row(flags=1, location=[j, j], metadata=b'x' * j)
         mutation_rate = 10
         mutgen = _msprime.MutationGenerator(_msprime.RandomGenerator(1), mutation_rate)
         mutgen.generate(tables)
@@ -1123,6 +1124,13 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
+
+        # Having from_ts=None is fine.
+        f(from_ts=None)
+        for bad_type in ["1", {}, int]:
+            self.assertRaises(TypeError, from_ts=bad_type)
+        # The tree sequence can be uninitialised
+        self.assertRaises(ValueError, f, from_ts=_msprime.TreeSequence())
 
     def test_non_parametric_simulation_models(self):
 

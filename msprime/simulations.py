@@ -33,6 +33,7 @@ import warnings
 import _msprime
 import msprime.tables as _tables
 import msprime.provenance as provenance
+import msprime.trees as trees
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
@@ -104,7 +105,8 @@ def simulator_factory(
         samples=None,
         demographic_events=[],
         model=None,
-        record_migrations=False):
+        record_migrations=False,
+        from_ts=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -112,11 +114,13 @@ def simulator_factory(
     condition = (
         sample_size is None and
         population_configurations is None and
-        samples is None)
+        samples is None and
+        from_ts is None)
     if condition:
         raise ValueError(
-            "Either sample_size, population_configurations or samples "
+            "Either sample_size, population_configurations, samples or from_ts must "
             "be specified")
+    the_samples = None
     if sample_size is not None:
         if samples is not None:
             raise ValueError(
@@ -161,7 +165,7 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
-    sim = Simulator(the_samples, recomb_map, model, Ne)
+    sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
     rng = random_generator
     if rng is None:
@@ -191,7 +195,8 @@ def simulate(
         record_migrations=False,
         random_seed=None,
         mutation_generator=None,
-        num_replicates=None):
+        num_replicates=None,
+        from_ts=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`. Note that
@@ -277,14 +282,19 @@ def simulate(
     # To support numpy integer inputs here too we convert to integer.
     rng = RandomGenerator(int(seed))
     sim = simulator_factory(
-        sample_size=sample_size, random_generator=rng,
-        Ne=Ne, length=length,
+        sample_size=sample_size,
+        random_generator=rng,
+        Ne=Ne,
+        length=length,
         recombination_rate=recombination_rate,
         recombination_map=recombination_map,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
-        samples=samples, model=model, record_migrations=record_migrations)
+        samples=samples,
+        model=model,
+        record_migrations=record_migrations,
+        from_ts=from_ts)
     # The provenance API is very tentative, and only included now as a
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
@@ -311,18 +321,26 @@ class Simulator(object):
     """
     Class to simulate trees under a variety of population models.
     """
-    def __init__(self, samples, recombination_map, model="hudson", Ne=0.25):
-        if len(samples) < 2:
-            raise ValueError("Sample size must be >= 2")
-        if len(samples) >= 2**32:
-            raise ValueError("sample_size must be < 2**32")
-        self.sample_size = len(samples)
-        self.samples = samples
+    def __init__(
+            self, samples, recombination_map, model="hudson", Ne=0.25, from_ts=None):
+        if from_ts is None:
+            if len(samples) < 2:
+                raise ValueError("Sample size must be >= 2")
+            if len(samples) >= 2**32:
+                raise ValueError("sample_size must be < 2**32")
+            self.samples = samples
+        else:
+            if samples is not None:
+                raise ValueError("Cannot specify samples with from_ts")
+            self.samples = []
+            if not isinstance(from_ts, trees.TreeSequence):
+                raise TypeError("from_ts must be a TreeSequence instance.")
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self.ll_sim = None
         self.set_model(model, Ne)
         self.recombination_map = recombination_map
+        self.from_ts = from_ts
         self.random_generator = None
         self.population_configurations = [
             PopulationConfiguration(initial_size=self.model.population_size)]
@@ -332,11 +350,16 @@ class Simulator(object):
         self.store_migrations = False
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
+        num_samples = (
+            len(self.samples) if self.samples is not None else from_ts.num_samples)
         block_size = 64 * 1024
-        self.segment_block_size = max(block_size, self.sample_size)
+        self.segment_block_size = max(block_size, num_samples)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
         self.tables = _tables.TableCollection()
+        self.num_input_provenances = 0
+        if self.from_ts is not None:
+            self.num_input_provenances = self.from_ts.num_provenances
 
     @property
     def num_loci(self):
@@ -511,9 +534,13 @@ class Simulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
+        ll_from_ts = None
+        if self.from_ts is not None:
+            ll_from_ts = self.from_ts.get_ll_tree_sequence()
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             recombination_map=ll_recomb_map,
+            from_ts=ll_from_ts,
             random_generator=self.random_generator,
             model=ll_simulation_model,
             migration_matrix=ll_migration_matrix,
@@ -548,7 +575,7 @@ class Simulator(object):
         self.ll_sim.populate_tables(self.tables.ll_tables)
         if mutation_generator is not None:
             mutation_generator.generate(self.tables.ll_tables)
-        self.tables.provenances.clear()
+        self.tables.provenances.truncate(self.num_input_provenances)
         if provenance_record is not None:
             self.tables.provenances.add_row(provenance_record)
         return self.tables.tree_sequence()

@@ -8662,13 +8662,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int sim_ret;
     static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
-        "model", "avl_node_block_size", "segment_block_size",
+        "model", "from_ts", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
     PyObject *py_model = NULL;
+    PyObject *py_from_ts = Py_None;
     RandomGenerator *random_generator = NULL;
     RecombinationMap *recombination_map = NULL;
     sample_t *samples = NULL;
@@ -8677,12 +8678,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
+    tree_sequence_t *from_ts = NULL;
     int store_migrations = 0;
 
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!nnni", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!Onnni", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -8690,7 +8692,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
-            &avl_node_block_size, &segment_block_size,
+            &py_from_ts, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations)) {
         goto out;
     }
@@ -8707,13 +8709,25 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
         goto out;
     }
+    if (py_from_ts != Py_None) {
+        if (!PyObject_TypeCheck(py_from_ts, &TreeSequenceType)) {
+            goto out;
+        }
+        if (TreeSequence_check_tree_sequence((TreeSequence *) py_from_ts) != 0) {
+            goto out;
+        }
+        /* Note that we take a copy of the from_ts in simulate at the moment,
+         * so we don't need to worry about INCREF'ing the Python object. */
+        from_ts = ((TreeSequence *) py_from_ts)->tree_sequence;
+    }
+
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
-            recombination_map->recomb_map, NULL,
+            recombination_map->recomb_map, from_ts,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
