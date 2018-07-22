@@ -72,7 +72,8 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(sim, mutation_generator, num_replicates, provenance_dict):
+def _replicate_generator(
+        sim, mutation_generator, num_replicates, provenance_dict, max_time):
     """
     Generator function for the many-replicates case of the simulate
     function.
@@ -87,7 +88,7 @@ def _replicate_generator(sim, mutation_generator, num_replicates, provenance_dic
     j = 0
     while j < num_replicates:
         j += 1
-        sim.run()
+        sim.run(max_time)
         tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
         yield tree_sequence
         sim.reset()
@@ -106,7 +107,8 @@ def simulator_factory(
         demographic_events=[],
         model=None,
         record_migrations=False,
-        from_ts=None):
+        from_ts=None,
+        max_time=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -196,7 +198,8 @@ def simulate(
         random_seed=None,
         mutation_generator=None,
         num_replicates=None,
-        from_ts=None):
+        from_ts=None,
+        max_time=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`. Note that
@@ -265,6 +268,11 @@ def simulate(
         returned. If :obj:`num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`.TreeSequence` objects returned.
+    :param .TreeSequence from_ts: TODO document.
+    :param float max_time: The maximum time for which the simulation is
+        run. If this parameter is provided the returned tree sequence
+        may not have completely coalesced and trees may have more than
+        1 root.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -311,10 +319,11 @@ def simulate(
             raise ValueError(
                 "Cannot specify both mutation_rate and mutation_generator")
     if num_replicates is None:
-        return next(_replicate_generator(sim, mutation_generator, 1, provenance_dict))
+        return next(_replicate_generator(
+            sim, mutation_generator, 1, provenance_dict, max_time))
     else:
         return _replicate_generator(
-            sim, mutation_generator, num_replicates, provenance_dict)
+            sim, mutation_generator, num_replicates, provenance_dict, max_time)
 
 
 class Simulator(object):
@@ -360,6 +369,7 @@ class Simulator(object):
         self.num_input_provenances = 0
         if self.from_ts is not None:
             self.num_input_provenances = self.from_ts.num_provenances
+        self.max_time = None
 
     @property
     def num_loci(self):
@@ -552,7 +562,7 @@ class Simulator(object):
             node_mapping_block_size=self.node_mapping_block_size)
         return ll_sim
 
-    def run(self):
+    def run(self, max_time=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -562,7 +572,8 @@ class Simulator(object):
         for event in self.model_change_events:
             self.ll_sim.run(event.time)
             self.ll_sim.set_model(event.model.get_ll_representation())
-        self.ll_sim.run()
+        max_time = sys.float_info.max if max_time is None else max_time
+        self.ll_sim.run(max_time)
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """

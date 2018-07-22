@@ -54,17 +54,31 @@ class TestBasicFunctionality(unittest.TestCase):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
-    def test_single_locus(self):
+    def test_from_single_locus_decapitated(self):
         ts = msprime.simulate(10, random_seed=5)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
 
-    def test_multi_locus(self):
+    def test_single_locus_max_time(self):
+        from_ts = msprime.simulate(20, max_time=1, random_seed=5)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts)
+        self.verify_simulation_completed(final_ts)
+
+    def test_from_multi_locus_decapitated(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
-        self.assertGreater(ts.num_trees, 2)
+        self.assertGreater(ts.num_trees, 1)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
+        final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts)
+        self.verify_simulation_completed(final_ts)
+
+    def test_from_multi_locus_max_time(self):
+        from_ts = msprime.simulate(10, recombination_rate=2, random_seed=5, max_time=1)
+        self.assertGreater(from_ts.num_trees, 1)
         final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
