@@ -97,10 +97,11 @@ class Simplifier(object):
     of the leaves.
     """
     def __init__(
-            self, ts, sample, filter_zero_mutation_sites=True, minimise_topology=False):
+            self, ts, sample, filter_zero_mutation_sites=True,
+            reduce_to_site_topology=False):
         self.ts = ts
         self.n = len(sample)
-        self.minimise_topology = minimise_topology
+        self.reduce_to_site_topology = reduce_to_site_topology
         self.sequence_length = ts.sequence_length
         self.filter_zero_mutation_sites = filter_zero_mutation_sites
         self.num_mutations = ts.num_mutations
@@ -137,7 +138,7 @@ class Simplifier(object):
             site_position = position[site[mutation_id]]
             self.mutation_map[node[mutation_id]].append((site_position, mutation_id))
         self.edge_position_table = None
-        if self.minimise_topology:
+        if self.reduce_to_site_topology:
             self.edge_position_table = np.hstack([[0], position, [self.sequence_length]])
 
     def record_node(self, input_id, is_sample=False):
@@ -157,7 +158,7 @@ class Simplifier(object):
         self.node_id_map[input_id] = output_id
         return output_id
 
-    def unrecord_node(self, input_id, output_id):
+    def rewind_node(self, input_id, output_id):
         """
         Remove the mapping for the specified input and output node pair. This is
         done because there are no edges referring to the node.
@@ -184,13 +185,18 @@ class Simplifier(object):
         """
         Adds an edge to the output list.
         """
-        if self.minimise_topology:
-            # print("edge = ", left, right, parent, child)
+        if self.reduce_to_site_topology:
             X = self.edge_position_table
             left_index = np.searchsorted(X, left)
             right_index = np.searchsorted(X, right)
+            # Find the smallest site position index greater than or equal to left
+            # and right, i.e., slide each endpoint of an interval to the right
+            # until they hit a site position. If both left and right map to the
+            # the same position then we discard this edge. We also discard an
+            # edge if left = 0 and right is less than the first site position.
             if left_index == right_index or (left_index == 0 and right_index == 1):
                 return
+            # Remap back to zero if the left end maps to the first site.
             if left_index == 1:
                 left_index = 0
             left = X[left_index]
@@ -283,7 +289,7 @@ class Simplifier(object):
         if output_id != -1:
             num_edges = self.flush_edges()
             if num_edges == 0 and not is_sample:
-                self.unrecord_node(input_id, output_id)
+                self.rewind_node(input_id, output_id)
 
     def process_parent_edges(self, edges):
         """

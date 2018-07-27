@@ -17,7 +17,8 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Python implementation of the minimise algorithm.
+Tests for the minimise algorithm which reduces a tree sequence down to
+the topology visible at its sites.
 """
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -174,7 +175,8 @@ class TestMinimise(unittest.TestCase):
 
         # Verify against simplify implementations.
         s = Simplifier(
-            ts, ts.samples(), minimise_topology=True, filter_zero_mutation_sites=False)
+            ts, ts.samples(), reduce_to_site_topology=True,
+            filter_zero_mutation_sites=False)
         sts, _ = s.simplify()
 
         t1 = mts.tables
