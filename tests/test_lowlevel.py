@@ -786,8 +786,8 @@ class TestSimulationState(LowLevelTestCase):
         population_configuration = [
             get_population_configuration(rng.random(), rng.random())
             for j in range(N)]
-        demographic_events = get_random_demographic_events(
-            N, rng.randint(1, 5))
+        demographic_events = get_random_demographic_events(N, rng.randint(1, 5))
+        start_time = rng.uniform(0, demographic_events[0]["time"])
         num_sampless = [0 for j in range(N)]
         num_sampless[0] = n
         random_seed = rng.randint(0, 2**31)
@@ -799,6 +799,7 @@ class TestSimulationState(LowLevelTestCase):
             recombination_map=uniform_recombination_map(num_loci=m, rate=rho, L=m - 1),
             random_generator=_msprime.RandomGenerator(random_seed),
             store_migrations=store_migrations,
+            start_time=start_time,
             population_configuration=population_configuration,
             demographic_events=demographic_events,
             migration_matrix=migration_matrix,
@@ -808,7 +809,7 @@ class TestSimulationState(LowLevelTestCase):
         for _ in range(3):
             # Check initial state
             self.assertEqual(0, sim.get_num_breakpoints())
-            self.assertEqual(0.0, sim.get_time())
+            self.assertEqual(start_time, sim.get_time())
             self.assertEqual(n, sim.get_num_ancestors())
             self.assertEqual(0, sim.get_num_common_ancestor_events())
             self.assertEqual(0, sim.get_num_rejected_common_ancestor_events())
@@ -852,7 +853,7 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(
                     node_mapping_block_size, sim.get_node_mapping_block_size())
                 # Run this for a tiny amount of time and check the state
-                self.assertFalse(sim.run(1e-8))
+                self.assertFalse(sim.run(start_time + 1e-8))
                 self.verify_running_simulation(sim)
             sim.reset()
 

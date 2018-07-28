@@ -30,6 +30,7 @@ import unittest
 import numpy as np
 
 import msprime
+import _msprime
 
 
 class TestBadDemographicParameters(unittest.TestCase):
@@ -498,6 +499,51 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertEqual(e.populations[0].end_size, n0)
         self.assertEqual(e.populations[1].start_size, n1)
         self.assertEqual(e.populations[1].end_size, n1)
+
+
+class TestEventTimes(unittest.TestCase):
+    """
+    Tests that demographic events occur when they should.
+    """
+    def test_event_at_start_time(self):
+        for start_time in [0, 10, 20]:
+            ts = msprime.simulate(
+                population_configurations=[
+                    msprime.PopulationConfiguration(2),
+                    msprime.PopulationConfiguration(0)
+                ],
+                demographic_events=[
+                    msprime.MassMigration(time=start_time, source=0, dest=1),
+                ],
+                random_seed=1,
+                start_time=start_time,
+                record_migrations=True)
+            migrations = list(ts.migrations())
+            self.assertEqual(len(migrations), 2)
+            self.assertEqual(migrations[0].time, start_time)
+            self.assertEqual(migrations[1].time, start_time)
+            nodes = list(ts.nodes())
+            self.assertEqual(nodes[0].population, 0)
+            self.assertEqual(nodes[1].population, 0)
+            self.assertEqual(nodes[2].population, 1)
+
+    def test_negative_times(self):
+        with self.assertRaises(ValueError):
+            msprime.simulate(
+                sample_size=10,
+                demographic_events=[
+                    msprime.PopulationParametersChange(time=-1, initial_size=2)])
+
+    def test_event_before_start_time(self):
+        for start_time in [10, 20]:
+            for time in [start_time - 1, start_time - 1e-6]:
+                with self.assertRaises(_msprime.InputError):
+                    msprime.simulate(
+                        sample_size=10,
+                        start_time=start_time,
+                        demographic_events=[
+                            msprime.PopulationParametersChange(
+                                time=time, initial_size=2)])
 
 
 class TestCoalescenceLocations(unittest.TestCase):

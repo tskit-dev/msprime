@@ -280,6 +280,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_START_TIME:
             ret = "start_time must be >= 0.";
             break;
+        case MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME:
+            ret = "demographic event time must be >= start_time.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

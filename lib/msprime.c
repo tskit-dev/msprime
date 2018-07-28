@@ -2072,6 +2072,15 @@ msp_initialise(msp_t *self)
     /* Copy the state of the simulation model into the initial model */
     memcpy(&self->initial_model, &self->model, sizeof(self->model));
 
+    /* If any demographic events have time < than the start_time then
+     * raise an error */
+    if (self->demographic_events_head != NULL) {
+        if (self->demographic_events_head->time < self->start_time) {
+            ret = MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME;
+            goto out;
+        }
+    }
+
     ret = msp_reset(self);
     if (ret != 0) {
         goto out;
