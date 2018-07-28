@@ -28,7 +28,6 @@ import json
 import math
 import random
 import sys
-import warnings
 
 import _msprime
 import msprime.tables as _tables
@@ -317,17 +316,18 @@ def simulate(
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
     provenance_dict = provenance.get_provenance_dict("simulate", parameters)
-    if mutation_generator is None:
-        mu = 0 if mutation_rate is None else mutation_rate
-        mutation_generator = MutationGenerator(rng, mu)
-    else:
-        warnings.warn(
-            "Specifying a MutationGenerator instance is deprecated and will be "
-            "removed in future versions. Use msprime.mutate() instead",
-            DeprecationWarning)
-        if mutation_rate is not None:
+    if mutation_generator is not None:
+        # This error was added in version 0.6.1.
+        raise ValueError(
+            "mutation_generator is not longer supported. Please use "
+            "msprime.mutate instead")
+
+    if mutation_rate is not None:
+        if from_ts is not None:
             raise ValueError(
-                "Cannot specify both mutation_rate and mutation_generator")
+                "Cannot specify mutation rate combined with from_ts. Please use "
+                "msprime.mutate on the final tree sequence instead")
+        mutation_generator = MutationGenerator(rng, mutation_rate)
     if num_replicates is None:
         return next(_replicate_generator(
             sim, mutation_generator, 1, provenance_dict, __tmp_max_time))

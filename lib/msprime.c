@@ -2509,29 +2509,7 @@ out:
 int WARN_UNUSED
 msp_populate_tables(msp_t *self, table_collection_t *tables)
 {
-    int ret = 0;
-
-    tables->sequence_length = self->tables.sequence_length;
-
-    ret = node_table_copy(self->tables.nodes, tables->nodes);
-    if (ret != 0) {
-        goto out;
-    }
-    edge_table_copy(self->tables.edges, tables->edges);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = migration_table_copy(self->tables.migrations, tables->migrations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = population_table_copy(self->tables.populations, tables->populations);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = provenance_table_copy(self->tables.provenances, tables->provenances);
-out:
-    return ret;
+    return table_collection_copy(&self->tables, tables);
 }
 
 int

@@ -23,6 +23,7 @@ from __future__ import print_function
 from __future__ import division
 
 import unittest
+import itertools
 
 import numpy as np
 
@@ -49,9 +50,9 @@ class TestBasicFunctionality(unittest.TestCase):
         self.assertEqual(final_tables.nodes, from_tables.nodes)
         final_tables.edges.truncate(len(from_tables.edges))
         self.assertEqual(final_tables.edges, from_tables.edges)
-        final_tables.sites.truncate(len(from_tables.sites))
+        # The mutation_rate parameter in simulate is not permitted, so we
+        # should always have the same set of mutations before and after.
         self.assertEqual(final_tables.sites, from_tables.sites)
-        final_tables.mutations.truncate(len(from_tables.mutations))
         self.assertEqual(final_tables.mutations, from_tables.mutations)
         final_tables.provenances.truncate(len(from_tables.provenances))
         self.assertEqual(final_tables.provenances, from_tables.provenances)
@@ -78,6 +79,27 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
+    def test_single_locus_mutations(self):
+        from_ts = msprime.simulate(
+            20, __tmp_max_time=1, random_seed=5, mutation_rate=5)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        self.assertGreater(from_ts.num_sites, 0)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+    def test_decapitated_mutations(self):
+        ts = msprime.simulate(10, random_seed=5, mutation_rate=10)
+        from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
+        self.assertGreater(from_ts.num_mutations, 0)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
     def test_from_multi_locus_decapitated(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
         self.assertGreater(ts.num_trees, 1)
@@ -91,12 +113,57 @@ class TestBasicFunctionality(unittest.TestCase):
     def test_from_multi_locus_max_time(self):
         from_ts = msprime.simulate(
             10, recombination_rate=2, random_seed=5, __tmp_max_time=1)
+        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
         self.assertGreater(from_ts.num_trees, 1)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2)
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
+
+    def test_random_seeds_equal_outcome(self):
+        from_ts = msprime.simulate(
+            8, recombination_rate=2, random_seed=5, __tmp_max_time=1)
+        self.assertGreater(from_ts.num_trees, 1)
+        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+        start_time = from_ts.tables.nodes.time.max()
+        seed = 234
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=seed)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+        final_tables = final_ts.dump_tables()
+        final_tables.provenances.clear()
+        for _ in range(10):
+            other_ts = msprime.simulate(
+                from_ts=from_ts, start_time=start_time, random_seed=seed)
+            other_tables = other_ts.dump_tables()
+            other_tables.provenances.clear()
+            self.assertEqual(final_tables, other_tables)
+
+    def test_replicates(self):
+        from_ts = msprime.simulate(
+            15, recombination_rate=2, random_seed=5, __tmp_max_time=2)
+        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+        self.assertGreater(from_ts.num_trees, 1)
+        start_time = from_ts.tables.nodes.time.max()
+        replicates = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2, num_replicates=10)
+        tables = []
+        for final_ts in replicates:
+            self.verify_from_tables(from_ts, final_ts, start_time)
+            self.verify_simulation_completed(final_ts)
+            tables.append(final_ts.dump_tables())
+            tables[-1].provenances.clear()
+        for a, b in itertools.combinations(tables, 2):
+            self.assertNotEqual(a, b)
+
+    def test_mutations_not_allowed(self):
+        from_ts = msprime.simulate(15, random_seed=5, __tmp_max_time=2)
+        start_time = from_ts.tables.nodes.time.max()
+        with self.assertRaises(ValueError):
+            msprime.simulate(
+                from_ts=from_ts, start_time=start_time, mutation_rate=10)
 
 
 class TestErrors(unittest.TestCase):

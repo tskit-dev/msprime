@@ -2420,37 +2420,16 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 0)
 
-    def test_mutation_generator(self):
+    def test_mutation_generator_unsupported(self):
         n = 10
-        rng = msprime.RandomGenerator(1)
-        mutgen = msprime.MutationGenerator(rng, 10)
-        ts = msprime.simulate(n, mutation_generator=mutgen)
-        self.assertIsInstance(ts, msprime.TreeSequence)
-        self.assertEqual(ts.get_sample_size(), n)
-        self.assertEqual(ts.get_num_trees(), 1)
-        self.assertGreater(ts.get_num_mutations(), 0)
-
-    @unittest.skipIf(
-        sys.version_info[:2] < (3, 4), "Warnings work differently in Py <= 3.3")
-    def test_mutation_generator_deprecated(self):
-        n = 10
-        rng = msprime.RandomGenerator(1)
-        mutgen = msprime.MutationGenerator(rng, 10)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
+        with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[-1].category, DeprecationWarning))
-            self.assertIn("deprecated", str(w[-1].message))
 
     def test_mutation_interface(self):
         for bad_type in ["x", [], {}]:
             self.assertRaises(
                 TypeError, msprime.simulate, 10, mutation_rate=bad_type)
-        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
-        self.assertRaises(
-            ValueError, msprime.simulate, 10, mutation_generator=mutgen,
-            mutation_rate=1)
 
     def test_recombination(self):
         n = 10
