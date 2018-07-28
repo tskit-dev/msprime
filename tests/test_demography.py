@@ -1220,6 +1220,23 @@ class HistoricalSamplingMixin(object):
                 self.assertEqual(t.get_parent(1), t.get_parent(0))
                 self.assertGreater(t.get_time(t.get_parent(0)), sampling_time)
 
+    def test_two_samples_start_time(self):
+        N = 10
+        sampling_time = 10.01 * N
+        for start_time in [0, sampling_time / 2, sampling_time, 10000 * sampling_time]:
+            ts = msprime.simulate(
+                Ne=N,
+                start_time=start_time,
+                model=self.model,
+                random_seed=3,
+                samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)])
+            nodes = list(ts.nodes())
+            self.assertEqual(ts.num_nodes, 3)
+            self.assertEqual(nodes[0].time, 0)
+            self.assertEqual(nodes[1].time, sampling_time)
+            self.assertGreater(nodes[2].time, sampling_time)
+            self.assertGreater(nodes[2].time, start_time)
+
     def test_different_times(self):
         N = 50
         st1 = 1.01 * N
@@ -1246,19 +1263,53 @@ class HistoricalSamplingMixin(object):
     def test_old_sampling_time(self):
         # This is an enormously long time in coalescent time, so we should
         # coalesce quickly after the samples are introduced.
-        N = 1000
-        sampling_time = N * 1000.01
+        N = 100
+        sampling_time = N * 100.01
         n = 5
         samples = [
             msprime.Sample(0, sampling_time) for j in range(n - 1)] + [
             msprime.Sample(0, 0)]
         ts = msprime.simulate(Ne=N, samples=samples, model=self.model)
-        t = next(ts.trees())
+        time = [node.time for node in ts.nodes()]
         for j in range(n - 1):
-            self.assertEqual(t.get_time(j), sampling_time)
-        self.assertEqual(t.get_time(n - 1), 0)
+            self.assertEqual(time[j], sampling_time)
+        self.assertEqual(time[n - 1], 0)
         # Allow it to be within 10 coalescent time units.
-        self.assertLess(t.get_time(t.get_root()), sampling_time + 10 * N)
+        self.assertLess(time[-1], sampling_time + 10 * N)
+
+    def test_sampling_time_invariance(self):
+        for N in [10, 100, 128]:
+            offset = None
+            # The difference between the sampling time and the coalescence
+            # should be invariant.
+            for sampling_time in [0, 10, 20, 50]:
+                samples = [msprime.Sample(0, sampling_time), msprime.Sample(0, 0)]
+                ts = msprime.simulate(
+                    Ne=N, samples=samples, model=self.model, random_seed=2)
+                time = [node.time for node in ts.nodes()]
+                self.assertEqual(time[0], sampling_time)
+                self.assertEqual(time[1], 0)
+                if offset is None:
+                    offset = time[2] - sampling_time
+                else:
+                    self.assertAlmostEqual(offset, time[2] - sampling_time)
+
+    def test_start_time_invariance(self):
+        for N in [10, 100, 128]:
+            offset = None
+            # The difference between the start time and the coalescence
+            # should be invariant.
+            for start_time in [0, 10, 20, 50]:
+                ts = msprime.simulate(
+                    2, Ne=N, start_time=start_time, model=self.model, random_seed=2)
+                time = [node.time for node in ts.nodes()]
+                self.assertEqual(time[0], 0)
+                self.assertEqual(time[1], 0)
+                self.assertGreater(time[2], start_time)
+                if offset is None:
+                    offset = time[2] - start_time
+                else:
+                    self.assertAlmostEqual(offset, time[2] - start_time)
 
     def test_two_samples_mass_migration(self):
         N = 200

@@ -317,6 +317,68 @@ test_single_locus_historical_sample(void)
 }
 
 static void
+test_single_locus_historical_sample_start_time(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 10.0}};
+    edge_table_t *edges;
+    node_table_t *nodes;
+    uint32_t n = 2;
+    size_t j;
+    recomb_map_t recomb_map;
+    double start_times[] = {0, 2, 10, 10.0001, 1000};
+    /* double start_times[] = {0, 2, 9.99}; //10, 1000}; */
+    /* double start_times[] = {10.00}; //10, 1000}; */
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < sizeof(start_times) / sizeof(double); j++) {
+
+        ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_start_time(&msp, start_times[j]);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(msp.time, start_times[j]);
+
+        msp_print_state(&msp, _devnull);
+        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        /* msp_print_state(&msp, stdout); */
+        msp_verify(&msp);
+        /* msp_print_state(&msp, _devnull); */
+
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
+        nodes = msp.tables.nodes;
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(nodes->time[0], 0);
+        CU_ASSERT_EQUAL(nodes->time[1], 10);
+        CU_ASSERT_TRUE(nodes->time[2] > 10);
+        CU_ASSERT_TRUE(nodes->time[2] > start_times[j]);
+
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
+        edges = msp.tables.edges;
+        CU_ASSERT_EQUAL(edges->left[0], 0);
+        CU_ASSERT_EQUAL(edges->right[0], 1);
+        CU_ASSERT_EQUAL(edges->parent[0], 2);
+        CU_ASSERT_EQUAL(edges->left[1], 0);
+        CU_ASSERT_EQUAL(edges->right[1], 1);
+        CU_ASSERT_EQUAL(edges->parent[1], 2);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    gsl_rng_free(rng);
+    recomb_map_free(&recomb_map);
+}
+
+
+static void
 test_simulator_getters_setters(void)
 {
     int ret;
@@ -347,8 +409,10 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
     samples[0].time = 1.0;
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, &recomb_map, NULL, rng),
-            MSP_ERR_BAD_SAMPLES);
+    ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SAMPLES);
     msp_free(&msp);
     samples[0].time = -1.0;
     CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, &recomb_map, NULL, rng),
@@ -2044,6 +2108,8 @@ main(int argc, char **argv)
         {"test_single_locus_two_populations", test_single_locus_two_populations},
         {"test_single_locus_many_populations", test_single_locus_many_populations},
         {"test_single_locus_historical_sample", test_single_locus_historical_sample},
+        {"test_single_locus_historical_sample_start_time",
+            test_single_locus_historical_sample_start_time},
         {"test_simulator_getters_setters", test_simulator_getters_setters},
         {"test_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_demographic_events},

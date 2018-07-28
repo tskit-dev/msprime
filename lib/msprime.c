@@ -340,7 +340,7 @@ msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
         recomb_map_t *recomb_map, tree_sequence_t *from_ts, gsl_rng *rng) {
     int ret = -1;
-    size_t j, k, initial_samples;
+    size_t j;
 
     memset(self, 0, sizeof(msp_t));
     if (rng == NULL || recomb_map == NULL) {
@@ -391,7 +391,6 @@ msp_alloc(msp_t *self,
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        initial_samples = 0;
         for (j = 0; j < num_samples; j++) {
             self->samples[j].population_id = samples[j].population_id;
             self->samples[j].time = samples[j].time;
@@ -399,37 +398,6 @@ msp_alloc(msp_t *self,
                 ret = MSP_ERR_BAD_PARAM_VALUE;
                 goto out;
             }
-            if (self->samples[j].time == 0) {
-                initial_samples++;
-            }
-        }
-        if (initial_samples == 0) {
-            ret = MSP_ERR_BAD_SAMPLES;
-            goto out;
-        }
-        /* Set up the historical sampling events */
-        self->num_sampling_events = self->num_samples - initial_samples;
-        self->sampling_events = NULL;
-        if (self->num_sampling_events > 0) {
-            self->sampling_events = malloc(self->num_sampling_events *
-                    sizeof(sampling_event_t));
-            if (self->sampling_events == NULL) {
-                goto out;
-            }
-            k = 0;
-            for (j = 0; j < self->num_samples; j++) {
-                if (self->samples[j].time > 0) {
-                    self->sampling_events[k].sample = (node_id_t) j;
-                    self->sampling_events[k].time = self->samples[j].time;
-                    self->sampling_events[k].population_id =
-                        self->samples[j].population_id;
-                    k++;
-                }
-            }
-            assert(k == self->num_sampling_events);
-            /* Now we must sort the sampling events by time. */
-            qsort(self->sampling_events, self->num_sampling_events,
-                    sizeof(sampling_event_t), cmp_sampling_event);
         }
     } else {
         assert(from_ts != NULL);
@@ -1941,9 +1909,7 @@ msp_init_from_samples(msp_t *self)
             goto out;
         }
     }
-
     /* Set up the sample */
-    self->num_buffered_edges = 0;
     for (u = 0; u < (node_id_t) self->num_samples; u++) {
         if (self->samples[u].time <= self->start_time) {
             ret = msp_insert_sample(self, u, self->samples[u].population_id);
@@ -1952,7 +1918,7 @@ msp_init_from_samples(msp_t *self)
             }
         }
         ret = msp_store_node(self, MSP_NODE_IS_SAMPLE,
-                self->model.generations_to_model_time(&self->model, self->samples[u].time),
+                self->samples[u].time,
                 self->samples[u].population_id);
         if (ret != 0) {
             goto out;
@@ -1965,6 +1931,33 @@ msp_init_from_samples(msp_t *self)
     ret = msp_insert_overlap_count(self, self->num_loci, self->num_samples + 1);
     if (ret != 0) {
         goto out;
+    }
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+msp_apply_demographic_events(msp_t *self)
+{
+    int ret = 0;
+    demographic_event_t *event;
+
+    assert(self->next_demographic_event != NULL);
+    /* Process all events with equal time in one block. */
+    self->time = self->next_demographic_event->time;
+    while (self->next_demographic_event != NULL
+            && self->next_demographic_event->time == self->time) {
+        /* We skip ahead to the start time for the next demographic
+         * event, and use its change_state method to update the
+         * state of the simulation.
+         */
+        event = self->next_demographic_event;
+        assert(event->change_state != NULL);
+        ret = event->change_state(self, event);
+        if (ret != 0) {
+            goto out;
+        }
+        self->next_demographic_event = event->next;
     }
 out:
     return ret;
@@ -2013,7 +2006,9 @@ msp_reset(msp_t *self)
     self->num_multiple_re_events = 0;
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
     self->state = MSP_STATE_INITIALISED;
+
     /* msp_print_state(self, stdout); */
+    /* ret = msp_apply_events_before_start_time(self); */
 out:
     return ret;
 }
@@ -2025,7 +2020,7 @@ int WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
-    uint32_t j;
+    size_t j, k, initial_samples;
 
     /* These should really be proper checks with a return value */
     assert(self->num_loci >= 1);
@@ -2035,13 +2030,45 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < self->num_samples; j++) {
-        /* Check that the sample configuration makes sense */
-        if (self->samples[j].population_id >= (population_id_t) self->num_populations) {
-            ret = MSP_ERR_BAD_SAMPLES;
-            goto out;
+    if (self->from_ts == NULL) {
+        initial_samples = 0;
+        for (j = 0; j < self->num_samples; j++) {
+            /* Check that the sample configuration makes sense */
+            if (self->samples[j].population_id >= (population_id_t) self->num_populations) {
+                ret = MSP_ERR_BAD_SAMPLES;
+                goto out;
+            }
+            if (self->samples[j].time <= self->start_time) {
+                initial_samples++;
+            }
+        }
+        /* Set up the historical sampling events */
+        self->num_sampling_events = self->num_samples - initial_samples;
+        self->sampling_events = NULL;
+        if (self->num_sampling_events > 0) {
+            self->sampling_events = malloc(self->num_sampling_events *
+                    sizeof(sampling_event_t));
+            if (self->sampling_events == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            k = 0;
+            for (j = 0; j < self->num_samples; j++) {
+                if (self->samples[j].time > self->start_time) {
+                    self->sampling_events[k].sample = (node_id_t) j;
+                    self->sampling_events[k].time = self->samples[j].time;
+                    self->sampling_events[k].population_id =
+                        self->samples[j].population_id;
+                    k++;
+                }
+            }
+            assert(k == self->num_sampling_events);
+            /* Now we must sort the sampling events by time. */
+            qsort(self->sampling_events, self->num_sampling_events,
+                    sizeof(sampling_event_t), cmp_sampling_event);
         }
     }
+
     /* Copy the state of the simulation model into the initial model */
     memcpy(&self->initial_model, &self->model, sizeof(self->model));
 
@@ -2121,33 +2148,6 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
-msp_apply_demographic_events(msp_t *self)
-{
-    int ret = 0;
-    demographic_event_t *event;
-
-    assert(self->next_demographic_event != NULL);
-    /* Process all events with equal time in one block. */
-    self->time = self->next_demographic_event->time;
-    while (self->next_demographic_event != NULL
-            && self->next_demographic_event->time == self->time) {
-        /* We skip ahead to the start time for the next demographic
-         * event, and use its change_state method to update the
-         * state of the simulation.
-         */
-        event = self->next_demographic_event;
-        assert(event->change_state != NULL);
-        ret = event->change_state(self, event);
-        if (ret != 0) {
-            goto out;
-        }
-        self->next_demographic_event = event->next;
-    }
-out:
-    return ret;
-}
-
 /* The main event loop for continuous time coalescent models. */
 static int WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
@@ -2216,6 +2216,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
         t_temp = self->time + t_wait;
+        /* printf("t = %f wait = %f\n", self->time, t_wait); */
         sampling_event_time = DBL_MAX;
         if (self->next_sampling_event < self->num_sampling_events) {
             sampling_event_time = self->sampling_events[
@@ -3756,10 +3757,15 @@ msp_unscale_model_times(msp_t *self)
     simulation_model_t *model = &self->model;
     demographic_event_t *de;
 
+    self->start_time = self->model.model_time_to_generations(model, self->start_time);
     self->time = self->model.model_time_to_generations(model, self->time);
     self->recombination_rate = self->model.model_rate_to_generation_rate(
             model, self->recombination_rate);
-
+    /* Samples */
+    for (j = 0; j < self->num_samples; j++) {
+        self->samples[j].time = model->model_time_to_generations(
+                model, self->samples[j].time);
+    }
     /* Sampling events */
     for (j = 0; j < self->num_sampling_events; j++) {
         self->sampling_events[j].time = model->model_time_to_generations(
@@ -3793,8 +3799,14 @@ msp_rescale_model_times(msp_t *self)
     demographic_event_t *de;
 
     self->time = model->generations_to_model_time(model, self->time);
+    self->start_time = model->generations_to_model_time(model, self->start_time);
     self->recombination_rate = model->generation_rate_to_model_rate(
             model, self->recombination_rate);
+    /* Samples */
+    for (j = 0; j < self->num_samples; j++) {
+        self->samples[j].time = model->generations_to_model_time(
+                model, self->samples[j].time);
+    }
     /* Sampling events */
     for (j = 0; j < self->num_sampling_events; j++) {
         self->sampling_events[j].time = model->generations_to_model_time(
