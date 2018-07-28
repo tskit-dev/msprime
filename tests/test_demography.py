@@ -1336,6 +1336,10 @@ class SimulateUntilMixin(object):
     """
     Tests for the max_time parameter.
     """
+    # NOTE This feature is only partially implemented and does not currently
+    # have the semantics that we would like. We use the parameter __tmp_max_time
+    # to ensure that it's not used accidentally.
+
     def verify_empty_tree_sequence(self, n, ts):
         self.assertEqual(ts.num_edges, 0)
         self.assertEqual(ts.num_trees, 1)
@@ -1348,32 +1352,30 @@ class SimulateUntilMixin(object):
         self.assertEqual(ts.num_samples, n)
         # internal_time = ts.tables.nodes.time[n:]
         # TODO this isn't true currently because we don't guarantee that the
-        # times are always less than max_time. We should change this in the
-        # C code.
+        # times are always less than max_time. This should be resolved when
+        # we implement this feature properly.
         # self.assertTrue(np.all(internal_time < max_time))
-
         max_roots = max(tree.num_roots for tree in ts.trees())
         self.assertGreater(max_roots, 1)
 
     def test_zero_time(self):
         n = 10
         for n in [2, 10, 100]:
-            ts = msprime.simulate(n, max_time=0, model=self.model)
+            ts = msprime.simulate(n, __tmp_max_time=0, model=self.model)
             self.verify_empty_tree_sequence(n, ts)
 
     def test_negative(self):
         n = 3
-        ts = msprime.simulate(n, max_time=-1, model=self.model)
+        ts = msprime.simulate(n, __tmp_max_time=-1, model=self.model)
         self.verify_empty_tree_sequence(n, ts)
 
     def test_large_time(self):
         seed = 1
         ts1 = msprime.simulate(
-            10, Ne=100, max_time=1e10, model=self.model, random_seed=seed)
+            10, Ne=100, __tmp_max_time=1e10, model=self.model, random_seed=seed)
         ts2 = msprime.simulate(10, Ne=100, model=self.model, random_seed=seed)
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
-        self.assertNotEqual(tables1, tables2)
         tables1.provenances.clear()
         tables2.provenances.clear()
         self.assertEqual(tables1, tables2)
@@ -1382,7 +1384,7 @@ class SimulateUntilMixin(object):
         n = 100
         max_time = 100
         ts = msprime.simulate(
-            n, Ne=1000, max_time=max_time, model=self.model, random_seed=10)
+            n, Ne=1000, __tmp_max_time=max_time, model=self.model, random_seed=10)
         self.verify_incomplete_tree_sequence(n, max_time, ts)
 
     # TODO test with demographic events, ancient samples, etc.

@@ -62,7 +62,7 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_simulation_completed(final_ts)
 
     def test_single_locus_max_time(self):
-        from_ts = msprime.simulate(20, max_time=1, random_seed=5)
+        from_ts = msprime.simulate(20, __tmp_max_time=1, random_seed=5)
         self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
         final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
         self.verify_from_tables(from_ts, final_ts)
@@ -77,7 +77,8 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_simulation_completed(final_ts)
 
     def test_from_multi_locus_max_time(self):
-        from_ts = msprime.simulate(10, recombination_rate=2, random_seed=5, max_time=1)
+        from_ts = msprime.simulate(
+            10, recombination_rate=2, random_seed=5, __tmp_max_time=1)
         self.assertGreater(from_ts.num_trees, 1)
         final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
         self.verify_from_tables(from_ts, final_ts)

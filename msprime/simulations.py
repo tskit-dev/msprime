@@ -199,7 +199,12 @@ def simulate(
         mutation_generator=None,
         num_replicates=None,
         from_ts=None,
-        max_time=None):
+        # Note max_time is not documented here because it does not currently have
+        # exactly the semantics that we want as it doesn't guarantee that the
+        # times of nodes returned are < max_time. However, it's useful for
+        # testing, so we keep it. We call it __tmp_max_time just to make sure
+        # it's not used accidentially though.
+        __tmp_max_time=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`. Note that
@@ -269,10 +274,6 @@ def simulate(
         number of replicates is performed, and an iterator over the
         resulting :class:`.TreeSequence` objects returned.
     :param .TreeSequence from_ts: TODO document.
-    :param float max_time: The maximum time for which the simulation is
-        run. If this parameter is provided the returned tree sequence
-        may not have completely coalesced and trees may have more than
-        1 root.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -320,10 +321,10 @@ def simulate(
                 "Cannot specify both mutation_rate and mutation_generator")
     if num_replicates is None:
         return next(_replicate_generator(
-            sim, mutation_generator, 1, provenance_dict, max_time))
+            sim, mutation_generator, 1, provenance_dict, __tmp_max_time))
     else:
         return _replicate_generator(
-            sim, mutation_generator, num_replicates, provenance_dict, max_time)
+            sim, mutation_generator, num_replicates, provenance_dict, __tmp_max_time)
 
 
 class Simulator(object):
