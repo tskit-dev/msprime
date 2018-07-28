@@ -1841,6 +1841,11 @@ msp_init_from_ts(msp_t *self)
         if (self->tables.nodes->flags[j] & MSP_NODE_IS_SAMPLE) {
             num_samples++;
         }
+        pop = self->tables.nodes->population[j];
+        if (pop < 0 || pop >= (population_id_t) self->num_populations) {
+            ret = MSP_ERR_BAD_POPULATION_ID;
+            goto out;
+        }
     }
     if (num_samples < 2) {
         ret = MSP_ERR_INSUFFICIENT_SAMPLES;

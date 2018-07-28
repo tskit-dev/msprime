@@ -1906,7 +1906,21 @@ test_simulate_from_incompatible(void)
     tree_sequence_free(&from);
     msp_free(&msp);
 
+    /* Must have legitimate population references */
+    from_tables.nodes->population[0] = -1;
+    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 2.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+    tree_sequence_free(&from);
+    msp_free(&msp);
+
     /* Check to make sure we can run this correctly */
+    from_tables.nodes->population[0] = 0;
     ret = tree_sequence_load_tables(&from, &from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);

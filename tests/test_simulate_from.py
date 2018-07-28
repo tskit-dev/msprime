@@ -141,6 +141,16 @@ class TestBasicFunctionality(unittest.TestCase):
             other_tables.provenances.clear()
             self.assertEqual(final_tables, other_tables)
 
+    def test_individuals(self):
+        from_ts = msprime.simulate(5, random_seed=5, __tmp_max_time=0.5)
+        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+        from_ts = tsutil.insert_random_ploidy_individuals(from_ts, seed=2)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
     def test_replicates(self):
         from_ts = msprime.simulate(
             15, recombination_rate=2, random_seed=5, __tmp_max_time=2)
@@ -207,3 +217,37 @@ class TestErrors(unittest.TestCase):
         for x in [0, max_time - 1, max_time - 1e-6]:
             with self.assertRaises(_msprime.InputError):
                 msprime.simulate(from_ts=base_ts, start_time=x)
+
+    def test_all_population_ids_null(self):
+        base_ts = self.get_example_base()
+        tables = base_ts.dump_tables()
+        nodes = tables.nodes
+        nodes.set_columns(
+            flags=nodes.flags,
+            time=nodes.time)
+        with self.assertRaises(_msprime.InputError):
+            msprime.simulate(from_ts=tables.tree_sequence(), start_time=nodes.time.max())
+        nodes.set_columns(
+            flags=nodes.flags,
+            population=np.zeros_like(nodes.population),
+            time=nodes.time)
+        final_ts = msprime.simulate(
+            from_ts=tables.tree_sequence(), start_time=nodes.time.max())
+        self.assertEqual(
+            sum(tree.num_roots for tree in final_ts.trees()), final_ts.num_trees)
+
+    def test_single_population_id_null(self):
+        base_ts = self.get_example_base()
+        tables = base_ts.dump_tables()
+        nodes = tables.nodes
+
+        for j in range(base_ts.num_nodes):
+            population = np.zeros_like(nodes.population)
+            population[j] = -1
+            nodes.set_columns(
+                flags=nodes.flags,
+                population=population,
+                time=nodes.time)
+            with self.assertRaises(_msprime.InputError):
+                msprime.simulate(
+                    from_ts=tables.tree_sequence(), start_time=nodes.time.max())

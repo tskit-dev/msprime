@@ -375,8 +375,9 @@ class NodeTable(BaseTable):
     @individual.setter
     def individual(self, individual):
         self.set_columns(
-            flags=self.flags, time=self.time, metadata=self.metadata,
-            metadata_offset=self.metadata_offset, individual=individual)
+            flags=self.flags, time=self.time, population=self.population,
+            metadata=self.metadata, metadata_offset=self.metadata_offset,
+            individual=individual)
 
     @property
     def metadata(self):
@@ -1521,7 +1522,7 @@ class TableCollection(object):
     def __str__(self):
         s = self.__banner("Individuals")
         s += str(self.individuals) + "\n"
-        s = self.__banner("Nodes")
+        s += self.__banner("Nodes")
         s += str(self.nodes) + "\n"
         s += self.__banner("Edges")
         s += str(self.edges) + "\n"
