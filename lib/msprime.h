@@ -130,6 +130,7 @@ typedef struct _msp_t {
     recomb_map_t *recomb_map;
     uint32_t num_populations;
     sample_t *samples;
+    double start_time;
     tree_sequence_t *from_ts;
     simulation_model_t initial_model;
     double *initial_migration_matrix;
@@ -238,6 +239,7 @@ typedef struct {
 int msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
         recomb_map_t *recomb_map, tree_sequence_t *from, gsl_rng *rng);
+int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);
 int msp_set_simulation_model_smc_prime(msp_t *self, double population_size);

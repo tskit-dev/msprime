@@ -24,7 +24,10 @@ from __future__ import division
 
 import unittest
 
+import numpy as np
+
 import msprime
+import _msprime
 import tests.tsutil as tsutil
 
 
@@ -32,12 +35,15 @@ class TestBasicFunctionality(unittest.TestCase):
     """
     Basic tests for the from_ts argument for msprime.simulate.
     """
-    def verify_from_tables(self, from_ts, final_ts):
+    def verify_from_tables(self, from_ts, final_ts, start_time):
         from_tables = from_ts.dump_tables()
         final_tables = final_ts.dump_tables()
         # Populations and individuals should be equal.
         self.assertEqual(from_tables.populations, final_tables.populations)
         self.assertEqual(from_tables.individuals, final_tables.individuals)
+        # Time for new nodes > start_time
+        new_time = final_tables.nodes.time[from_ts.num_nodes:]
+        self.assertTrue(np.all(new_time > start_time))
         # Other tables should be equal up to the from_tables.
         final_tables.nodes.truncate(len(from_tables.nodes))
         self.assertEqual(final_tables.nodes, from_tables.nodes)
@@ -57,31 +63,39 @@ class TestBasicFunctionality(unittest.TestCase):
     def test_from_single_locus_decapitated(self):
         ts = msprime.simulate(10, random_seed=5)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
-        final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
-        self.verify_from_tables(from_ts, final_ts)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_single_locus_max_time(self):
         from_ts = msprime.simulate(20, __tmp_max_time=1, random_seed=5)
         self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
-        final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
-        self.verify_from_tables(from_ts, final_ts)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_from_multi_locus_decapitated(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
         self.assertGreater(ts.num_trees, 1)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
-        final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
-        self.verify_from_tables(from_ts, final_ts)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_from_multi_locus_max_time(self):
         from_ts = msprime.simulate(
             10, recombination_rate=2, random_seed=5, __tmp_max_time=1)
         self.assertGreater(from_ts.num_trees, 1)
-        final_ts = msprime.simulate(from_ts=from_ts, random_seed=2)
-        self.verify_from_tables(from_ts, final_ts)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
 
@@ -108,4 +122,21 @@ class TestErrors(unittest.TestCase):
 
     def test_bad_type(self):
         for bad_type in [{}, 1, "asd"]:
-            self.assertRaises(TypeError, msprime.simulate, from_ts=bad_type)
+            self.assertRaises(
+                TypeError, msprime.simulate, from_ts=bad_type, start_time=1)
+
+    def test_no_start_time(self):
+        base_ts = self.get_example_base()
+        self.assertRaises(ValueError, msprime.simulate, from_ts=base_ts)
+
+    def test_start_time_less_than_zero(self):
+        base_ts = self.get_example_base()
+        with self.assertRaises(_msprime.InputError):
+            msprime.simulate(from_ts=base_ts, start_time=-1)
+
+    def test_start_time_less_than_base_nodes(self):
+        base_ts = self.get_example_base()
+        max_time = max(node.time for node in base_ts.nodes())
+        for x in [0, max_time - 1, max_time - 1e-6]:
+            with self.assertRaises(_msprime.InputError):
+                msprime.simulate(from_ts=base_ts, start_time=x)

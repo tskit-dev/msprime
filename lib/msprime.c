@@ -117,6 +117,20 @@ msp_get_num_recombination_events(msp_t *self)
 }
 
 int
+msp_set_start_time(msp_t *self, double start_time)
+{
+    int ret = 0;
+
+    if (start_time < 0.0) {
+        ret = MSP_ERR_BAD_START_TIME;
+        goto out;
+    }
+    self->start_time = self->model.generations_to_model_time(&self->model, start_time);
+out:
+    return ret;
+}
+
+int
 msp_set_store_migrations(msp_t *self, bool store_migrations)
 {
     self->store_migrations = store_migrations;
@@ -439,6 +453,7 @@ msp_alloc(msp_t *self,
         }
     }
 
+    self->start_time = 0;
     /* We have one population by default */
     ret = msp_set_num_populations(self, 1);
     if (ret != 0) {
@@ -795,8 +810,9 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "m = %d\n", self->num_loci);
-    fprintf(out, "from_ts = %p\n", (void *) self->from_ts);
-    fprintf(out, "Samples = \n");
+    fprintf(out, "from_ts    = %p\n", (void *) self->from_ts);
+    fprintf(out, "start_time = %f\n", self->start_time);
+    fprintf(out, "Samples    = \n");
     for (j = 0; j < self->num_samples; j++) {
         fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j, (int) self->samples[j].population_id,
                 self->samples[j].time);
@@ -1786,8 +1802,7 @@ msp_init_from_ts(msp_t *self)
     uint32_t num_samples, left, right, num_roots;
     double model_time;
     segment_t **prev_map = NULL;
-    table_size_t num_nodes = self->tables.nodes->num_rows;
-    table_size_t j;
+    table_size_t num_nodes, j;
 
     ret = sparse_tree_alloc(&t, self->from_ts, 0);
     if (ret != 0) {
@@ -1801,29 +1816,34 @@ msp_init_from_ts(msp_t *self)
         ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
         goto out;
     }
+    /* Reset the tables to their correct position for replication */
+    ret = table_collection_reset_position(&self->tables, &self->from_position);
+    if (ret != 0) {
+        goto out;
+    }
+    num_nodes = self->tables.nodes->num_rows;
     prev_map = calloc(num_nodes, sizeof(*prev_map));
     if (prev_map == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     /* Find the maximum time among the existing nodes */
-    self->time = -1;
     num_samples = 0;
     for (j = 0; j < num_nodes; j++) {
-        model_time  = self->model.generations_to_model_time(
-                &self->model,self->tables.nodes->time[j]);
-        self->time = GSL_MAX(model_time, self->time);
+        model_time = self->model.generations_to_model_time(
+                &self->model, self->tables.nodes->time[j]);
+        /* TODO we can catch ancient samples here and insert them as sampling
+         * events, if we wish to support this. */
+        if (model_time > self->start_time) {
+            ret = MSP_ERR_BAD_START_TIME_FROM_TS;
+            goto out;
+        }
         if (self->tables.nodes->flags[j] & MSP_NODE_IS_SAMPLE) {
             num_samples++;
         }
     }
     if (num_samples < 2) {
         ret = MSP_ERR_INSUFFICIENT_SAMPLES;
-        goto out;
-    }
-    /* Reset the tables to their correct position for replication */
-    ret = table_collection_reset_position(&self->tables, &self->from_position);
-    if (ret != 0) {
         goto out;
     }
     for (t_iter = sparse_tree_first(&t); t_iter == 1; t_iter = sparse_tree_next(&t)) {
@@ -1918,10 +1938,9 @@ msp_init_from_samples(msp_t *self)
     }
 
     /* Set up the sample */
-    self->time = 0.0;
     self->num_buffered_edges = 0;
     for (u = 0; u < (node_id_t) self->num_samples; u++) {
-        if (self->samples[u].time == 0.0) {
+        if (self->samples[u].time <= self->start_time) {
             ret = msp_insert_sample(self, u, self->samples[u].population_id);
             if (ret != 0) {
                 goto out;
@@ -1959,6 +1978,7 @@ msp_reset(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+    self->time = self->start_time;
     /* Set up the initial segments and algorithm state */
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = &self->populations[population_id];
@@ -1967,7 +1987,7 @@ msp_reset(msp_t *self)
         initial_pop = &self->initial_populations[population_id];
         pop->growth_rate = initial_pop->growth_rate;
         pop->initial_size = initial_pop->initial_size;
-        pop->start_time = 0.0;
+        pop->start_time = self->start_time;
     }
     if (self->from_ts == NULL) {
         ret = msp_init_from_samples(self);

@@ -1659,8 +1659,10 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
         CU_ASSERT_EQUAL(ret, 0);
     }
     /* TODO add dirac and other models */
+    ret = msp_set_start_time(&msp, 1000);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < num_replicates; j++) {
         msp_verify(&msp);
@@ -1877,16 +1879,39 @@ test_simulate_from_incompatible(void)
     tree_sequence_free(&from);
     msp_free(&msp);
 
-    /* Check to make sure we can run this correctly */
-    ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 0.0, 0,
+    /* older nodes */
+    from_tables.sequence_length = 10.0;
+    ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 1.0, 0,
             MSP_NULL_INDIVIDUAL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 0.0, 0,
+    ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 2.0, 0,
             MSP_NULL_INDIVIDUAL, NULL, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 1);
     ret = tree_sequence_load_tables(&from, &from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME_FROM_TS);
+    tree_sequence_free(&from);
+    msp_free(&msp);
+
+    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 1.999);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME_FROM_TS);
+    tree_sequence_free(&from);
+    msp_free(&msp);
+
+    /* Check to make sure we can run this correctly */
+    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1933,6 +1958,8 @@ test_simulate_init_errors(void)
     ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
+    ret = msp_set_start_time(&msp, -1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 

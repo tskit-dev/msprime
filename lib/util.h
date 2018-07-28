@@ -181,6 +181,8 @@
 #define MSP_ERR_TABLES_NOT_INDEXED                                  -76
 #define MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED                   -77
 #define MSP_ERR_INCOMPATIBLE_FROM_TS                                -78
+#define MSP_ERR_BAD_START_TIME_FROM_TS                              -79
+#define MSP_ERR_BAD_START_TIME                                      -80
 
 
 /* This bit is 0 for any errors originating from kastore */

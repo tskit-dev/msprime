@@ -273,6 +273,13 @@ msp_strerror_internal(int err)
             ret = "The specified tree sequence is not a compatible starting point "
                 "for the current simulation";
             break;
+        case MSP_ERR_BAD_START_TIME_FROM_TS:
+            ret = "The specified start_time and from_ts are not compatible. All "
+                "node times in the tree sequence must be <= start_time.";
+            break;
+        case MSP_ERR_BAD_START_TIME:
+            ret = "start_time must be >= 0.";
+            break;
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

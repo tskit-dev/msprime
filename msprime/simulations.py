@@ -108,7 +108,7 @@ def simulator_factory(
         model=None,
         record_migrations=False,
         from_ts=None,
-        max_time=None):
+        start_time=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -167,8 +167,12 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
+    if from_ts is not None and start_time is None:
+        raise ValueError("Must specify start_time when using from_ts argument")
+
     sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
+    sim.start_time = start_time
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -199,11 +203,14 @@ def simulate(
         mutation_generator=None,
         num_replicates=None,
         from_ts=None,
+        start_time=None,
         # Note max_time is not documented here because it does not currently have
         # exactly the semantics that we want as it doesn't guarantee that the
         # times of nodes returned are < max_time. However, it's useful for
         # testing, so we keep it. We call it __tmp_max_time just to make sure
         # it's not used accidentially though.
+        # TODO also, when implementing rename to end_time. See
+        # https://github.com/tskit-dev/msprime/issues/564
         __tmp_max_time=None):
     """
     Simulates the coalescent with recombination under the specified model
@@ -274,6 +281,7 @@ def simulate(
         number of replicates is performed, and an iterator over the
         resulting :class:`.TreeSequence` objects returned.
     :param .TreeSequence from_ts: TODO document.
+    :param float start_time: TODO document.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -303,7 +311,8 @@ def simulate(
         samples=samples,
         model=model,
         record_migrations=record_migrations,
-        from_ts=from_ts)
+        from_ts=from_ts,
+        start_time=start_time)
     # The provenance API is very tentative, and only included now as a
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
@@ -351,6 +360,7 @@ class Simulator(object):
         self.set_model(model, Ne)
         self.recombination_map = recombination_map
         self.from_ts = from_ts
+        self.start_time = None
         self.random_generator = None
         self.population_configurations = [
             PopulationConfiguration(initial_size=self.model.population_size)]
@@ -548,10 +558,12 @@ class Simulator(object):
         ll_from_ts = None
         if self.from_ts is not None:
             ll_from_ts = self.from_ts.get_ll_tree_sequence()
+        start_time = 0 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             recombination_map=ll_recomb_map,
             from_ts=ll_from_ts,
+            start_time=start_time,
             random_generator=self.random_generator,
             model=ll_simulation_model,
             migration_matrix=ll_migration_matrix,
