@@ -347,10 +347,25 @@ def simulate(
             "msprime.mutate instead")
 
     if mutation_rate is not None:
+        # There is ambiguity in how we should throw mutations onto partially
+        # built tree sequences: on the whole thing, or must the newly added
+        # topology? Before or after start_time? We avoid this complexity by
+        # asking the user to use mutate(), which should have the required
+        # flexibility.
         if from_ts is not None:
             raise ValueError(
                 "Cannot specify mutation rate combined with from_ts. Please use "
                 "msprime.mutate on the final tree sequence instead")
+        # There is ambiguity in how the start_time argument should interact with
+        # the mutation generator: should we throw mutations down on the whole
+        # tree or just the (partial) edges after start_time? To avoid complicating
+        # things here, make the user use mutate() which should have the flexibility
+        # to do whatever is needed.
+        if start_time is not None and start_time > 0:
+            raise ValueError(
+                "Cannot specify mutation rate combined with a non-zero "
+                "start_time. Please use msprime.mutate on the returned "
+                "tree sequence instead")
         mutation_generator = MutationGenerator(rng, mutation_rate)
     if num_replicates is None:
         return next(_replicate_generator(

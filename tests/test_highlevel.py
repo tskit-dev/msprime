@@ -2420,6 +2420,13 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 0)
 
+    def test_no_mutations_with_start_time(self):
+        with self.assertRaises(ValueError):
+            msprime.simulate(10, mutation_rate=10, start_time=3)
+        # But fine if we set start_time = None
+        ts = msprime.simulate(10, mutation_rate=10, start_time=None, random_seed=1)
+        self.assertGreater(ts.num_sites, 0)
+
     def test_mutation_generator_unsupported(self):
         n = 10
         mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
