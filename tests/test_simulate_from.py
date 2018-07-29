@@ -549,3 +549,46 @@ class TestErrors(unittest.TestCase):
             start_time = max(node.time for node in base_ts.nodes())
             with self.assertRaises(ValueError):
                 msprime.simulate(from_ts=base_ts, start_time=start_time)
+
+
+class TestSlimOutput(unittest.TestCase):
+    """
+    Verify that we can successfully simulate from SLiM output.
+    """
+    def finish_simulation(self, from_ts, recombination_rate=0, seed=1):
+        population_configurations = [
+            msprime.PopulationConfiguration() for _ in range(from_ts.num_populations)]
+        return msprime.simulate(
+            from_ts=from_ts, start_time=1,
+            population_configurations=population_configurations,
+            recombination_rate=recombination_rate,
+            random_seed=seed)
+
+    def verify_completed(self, from_ts, final_ts):
+        from_tables = from_ts.dump_tables()
+        final_tables = final_ts.dump_tables()
+        # Other tables should be equal up to the from_tables.
+        final_tables.nodes.truncate(len(from_tables.nodes))
+        self.assertEqual(final_tables.nodes, from_tables.nodes)
+        final_tables.edges.truncate(len(from_tables.edges))
+        self.assertEqual(final_tables.edges, from_tables.edges)
+        # The mutation_rate parameter in simulate is not permitted, so we
+        # should always have the same set of mutations before and after.
+        self.assertEqual(final_tables.sites, from_tables.sites)
+        self.assertEqual(final_tables.mutations, from_tables.mutations)
+        final_tables.provenances.truncate(len(from_tables.provenances))
+        self.assertEqual(final_tables.provenances, from_tables.provenances)
+        print(from_ts.tables)
+        print(final_ts.tables)
+        self.assertEqual(max(tree.num_roots for tree in final_ts.trees()), 1)
+
+    @unittest.skip("Single locus recomb map issue")
+    def test_minimal_example_no_recombination(self):
+        from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
+        ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
+        self.verify_completed(from_ts, ts)
+
+    def test_minimal_example_recombination(self):
+        from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
+        ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
+        self.verify_completed(from_ts, ts)
