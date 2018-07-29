@@ -79,6 +79,16 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
+    def test_single_locus_old_recombination(self):
+        from_ts = msprime.simulate(20, __tmp_max_time=1, random_seed=5)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2,
+            recombination_rate=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
     def test_single_locus_mutations(self):
         from_ts = msprime.simulate(
             20, __tmp_max_time=1, random_seed=5, mutation_rate=5)
@@ -110,16 +120,80 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
-    def test_from_multi_locus_max_time(self):
+    def test_from_multi_locus_old_recombination(self):
+        ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
+        self.assertGreater(ts.num_trees, 1)
+        from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2,
+            recombination_rate=2)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+    def test_from_two_populations_max_time(self):
         from_ts = msprime.simulate(
-            10, recombination_rate=2, random_seed=5, __tmp_max_time=1)
+            recombination_rate=2, random_seed=5, __tmp_max_time=1,
+            population_configurations=[
+                msprime.PopulationConfiguration(5),
+                msprime.PopulationConfiguration(5)],
+            migration_matrix=[[0, 1], [1, 0]])
         self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
         self.assertGreater(from_ts.num_trees, 1)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2)
+            from_ts=from_ts, start_time=start_time,
+            random_seed=2, recombination_rate=2,
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            migration_matrix=[[0, 1], [1, 0]])
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
+
+    def test_from_two_populations_decapitated(self):
+        from_ts = msprime.simulate(
+            recombination_rate=2, random_seed=5,
+            population_configurations=[
+                msprime.PopulationConfiguration(5),
+                msprime.PopulationConfiguration(5)],
+            migration_matrix=[[0, 1], [1, 0]])
+        from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 3)
+        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+        self.assertGreater(from_ts.num_trees, 1)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time,
+            random_seed=2, recombination_rate=2,
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            migration_matrix=[[0, 1], [1, 0]])
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+    def test_many_populations(self):
+        for N in range(1, 6):
+            population_configurations = [
+                msprime.PopulationConfiguration() for _ in range(N)]
+            migration_matrix = np.ones((N, N))
+            np.fill_diagonal(migration_matrix, 0)
+            from_ts = msprime.simulate(
+                samples=[msprime.Sample(0, 0) for _ in range(10)],
+                recombination_rate=2, random_seed=15,
+                population_configurations=population_configurations,
+                migration_matrix=migration_matrix)
+            from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 3)
+            self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+            self.assertGreater(from_ts.num_trees, 1)
+            start_time = from_ts.tables.nodes.time.max()
+            final_ts = msprime.simulate(
+                from_ts=from_ts, start_time=start_time,
+                random_seed=8, recombination_rate=2,
+                population_configurations=population_configurations,
+                migration_matrix=migration_matrix)
+            self.verify_from_tables(from_ts, final_ts, start_time)
+            self.verify_simulation_completed(final_ts)
 
     def test_random_seeds_equal_outcome(self):
         from_ts = msprime.simulate(
@@ -142,7 +216,7 @@ class TestBasicFunctionality(unittest.TestCase):
             self.assertEqual(final_tables, other_tables)
 
     def test_individuals(self):
-        from_ts = msprime.simulate(5, random_seed=5, __tmp_max_time=0.5)
+        from_ts = msprime.simulate(25, random_seed=5, __tmp_max_time=0.5)
         self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
         from_ts = tsutil.insert_random_ploidy_individuals(from_ts, seed=2)
         start_time = from_ts.tables.nodes.time.max()
@@ -175,13 +249,38 @@ class TestBasicFunctionality(unittest.TestCase):
             msprime.simulate(
                 from_ts=from_ts, start_time=start_time, mutation_rate=10)
 
+    def test_from_subclass(self):
+        from_ts = msprime.simulate(20, __tmp_max_time=1, random_seed=5)
+
+        class MockTreeSequence(msprime.TreeSequence):
+            pass
+
+        subclass_instance = MockTreeSequence(from_ts.ll_tree_sequence)
+        self.assertTrue(type(subclass_instance), MockTreeSequence)
+        self.assertIsInstance(subclass_instance, msprime.TreeSequence)
+        self.assertGreater(max(tree.num_roots for tree in subclass_instance.trees()), 1)
+        start_time = subclass_instance.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=subclass_instance, start_time=start_time, random_seed=2)
+        self.verify_from_tables(subclass_instance, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
 
 class TestErrors(unittest.TestCase):
     """
     Basic tests for the from_ts argument for msprime.simulate.
     """
-    def get_example_base(self):
-        ts = msprime.simulate(10, random_seed=5)
+    def get_example_base(self, num_populations=1):
+        N = num_populations
+        population_configurations = [
+            msprime.PopulationConfiguration() for _ in range(N)]
+        migration_matrix = np.ones((N, N))
+        np.fill_diagonal(migration_matrix, 0)
+        ts = msprime.simulate(
+            samples=[msprime.Sample(0, 0) for _ in range(10)],
+            random_seed=155,
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix)
         return tsutil.decapitate(ts, ts.num_edges // 2)
 
     def test_samples(self):
@@ -251,3 +350,22 @@ class TestErrors(unittest.TestCase):
             with self.assertRaises(_msprime.InputError):
                 msprime.simulate(
                     from_ts=tables.tree_sequence(), start_time=nodes.time.max())
+
+    def test_population_mismatch(self):
+        for N in range(1, 5):
+            base_ts = self.get_example_base(num_populations=N)
+            start_time = max(node.time for node in base_ts.nodes())
+            for k in range(1, N):
+                if k != N:
+                    with self.assertRaises(ValueError):
+                        msprime.simulate(
+                            from_ts=base_ts, start_time=start_time,
+                            population_configurations=[
+                                msprime.PopulationConfiguration() for _ in range(k)])
+
+    def test_population_mismatch_no_population_configs(self):
+        for N in range(2, 5):
+            base_ts = self.get_example_base(num_populations=N)
+            start_time = max(node.time for node in base_ts.nodes())
+            with self.assertRaises(ValueError):
+                msprime.simulate(from_ts=base_ts, start_time=start_time)

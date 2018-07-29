@@ -166,8 +166,21 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
-    if from_ts is not None and start_time is None:
-        raise ValueError("Must specify start_time when using from_ts argument")
+    if from_ts is not None:
+        if start_time is None:
+            raise ValueError("Must specify start_time when using from_ts argument")
+        if not isinstance(from_ts, trees.TreeSequence):
+            raise TypeError("from_ts must be a TreeSequence instance.")
+        population_mismatch_message = (
+            "Mismatch in the number of populations in from_ts and simulation "
+            "parameters. The number of populations in the simulation must be "
+            "equal to the number of populations in from_ts")
+        if population_configurations is None:
+            if from_ts.num_populations != 1:
+                raise ValueError(population_mismatch_message)
+        else:
+            if from_ts.num_populations != len(population_configurations):
+                raise ValueError(population_mismatch_message)
 
     sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
@@ -349,11 +362,9 @@ class Simulator(object):
                 raise ValueError("sample_size must be < 2**32")
             self.samples = samples
         else:
-            if samples is not None:
+            if samples is not None and len(samples) > 0:
                 raise ValueError("Cannot specify samples with from_ts")
             self.samples = []
-            if not isinstance(from_ts, trees.TreeSequence):
-                raise TypeError("from_ts must be a TreeSequence instance.")
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self.ll_sim = None
