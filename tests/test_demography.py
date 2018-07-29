@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 University of Oxford
+# Copyright (C) 2016-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -772,6 +772,40 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(list(ts.samples(0)), [0])
         self.assertEqual(list(ts.samples(1)), [1])
 
+    def test_migration_rate_directionality_from_ts(self):
+        tables = msprime.TableCollection(1)
+        for _ in range(3):
+            tables.populations.add_row()
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+
+        population_configurations = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(),
+        ]
+        t = 5
+        demographic_events = [
+            msprime.MigrationRateChange(time=t, rate=1, matrix_index=(0, 2)),
+            msprime.MigrationRateChange(time=t, rate=1, matrix_index=(1, 2)),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            from_ts=tables.tree_sequence(), start_time=0,
+            random_seed=1)
+        tree = next(ts.trees())
+        self.assertEqual(tree.root, 2)
+        self.assertGreater(tree.time(2), t / 4)
+        self.assertEqual(tree.population(0), 0)
+        self.assertEqual(tree.population(1), 1)
+        self.assertEqual(tree.population(2), 2)
+        self.assertEqual(ts.node(0).population, 0)
+        self.assertEqual(ts.node(1).population, 1)
+        self.assertEqual(list(ts.samples()), [0, 1])
+        self.assertEqual(list(ts.samples(0)), [0])
+        self.assertEqual(list(ts.samples(1)), [1])
+
     def test_many_demes(self):
         num_demes = 300
         population_configurations = [
@@ -785,6 +819,36 @@ class TestCoalescenceLocations(unittest.TestCase):
         ts = msprime.simulate(
             population_configurations=population_configurations,
             demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        self.assertEqual(tree.root, 2)
+        self.assertGreater(tree.time(2), t)
+        self.assertEqual(tree.population(0), 0)
+        self.assertEqual(tree.population(1), num_demes - 1)
+        self.assertEqual(tree.population(2), num_demes - 1)
+        self.assertEqual(ts.node(0).population, 0)
+        self.assertEqual(ts.node(1).population, num_demes - 1)
+
+    def test_many_demes_from_ts(self):
+        num_demes = 300
+        tables = msprime.TableCollection(1)
+        for _ in range(num_demes):
+            tables.populations.add_row()
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_SAMPLE, time=0, population=num_demes - 1)
+        population_configurations = [
+            msprime.PopulationConfiguration()] + [
+            msprime.PopulationConfiguration() for _ in range(num_demes - 2)
+            ] + [msprime.PopulationConfiguration()]
+        t = 5
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, dest=num_demes - 1),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            from_ts=tables.tree_sequence(), start_time=0,
             random_seed=1)
         tree = next(ts.trees())
         self.assertEqual(tree.root, 2)
@@ -851,21 +915,7 @@ class TestMigrationRecords(unittest.TestCase):
         for j in range(1, len(migrations)):
             self.assertTrue(migrations[j - 1].time <= migrations[j].time)
 
-    def test_two_pops_single_sample(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(1),
-            msprime.PopulationConfiguration(1),
-            msprime.PopulationConfiguration(0),
-        ]
-        t = 5
-        demographic_events = [
-            msprime.MassMigration(time=t, source=0, dest=2),
-            msprime.MassMigration(time=t, source=1, dest=2),
-        ]
-        ts = msprime.simulate(
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            random_seed=1, record_migrations=True)
+    def verify_two_pops_single_sample(self, ts, t):
         self.verify_migrations(ts)
         migrations = list(ts.migrations())
         self.assertEqual(len(migrations), 2)
@@ -882,6 +932,58 @@ class TestMigrationRecords(unittest.TestCase):
         self.assertEqual(m1.dest, 2)
         self.assertEqual(m1.time, t)
 
+    def test_two_pops_single_sample(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(0),
+        ]
+        t = 5
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, dest=2),
+            msprime.MassMigration(time=t, source=1, dest=2),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, record_migrations=True)
+        self.verify_two_pops_single_sample(ts, t)
+
+    def test_two_pops_single_sample_from_ts(self):
+        tables = msprime.TableCollection(1)
+        tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+        for _ in range(3):
+            tables.populations.add_row()
+        population_configurations = [
+            msprime.PopulationConfiguration() for _ in range(3)]
+        t = 5
+        demographic_events = [
+            msprime.MassMigration(time=t, source=0, dest=2),
+            msprime.MassMigration(time=t, source=1, dest=2),
+        ]
+        ts = msprime.simulate(
+            from_ts=tables.tree_sequence(), start_time=0,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            record_migrations=True,
+            random_seed=1)
+        self.verify_two_pops_single_sample(ts, t)
+
+    def verify_two_pops_asymmetric_migrations(self, ts):
+        self.verify_migrations(ts)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(ts.node(mig.node).population, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertEqual(mig.left, 0)
+            self.assertEqual(mig.right, 1)
+
     def test_two_pops_asymmetric_migrations(self):
         population_configurations = [
             msprime.PopulationConfiguration(10),
@@ -894,16 +996,32 @@ class TestMigrationRecords(unittest.TestCase):
                 [1, 0]],
             # Can migrate from 1 to 0 but not vice-versa
             random_seed=1, record_migrations=True)
-        self.verify_migrations(ts)
-        migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
-        for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(ts.node(mig.node).population, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertEqual(mig.left, 0)
-            self.assertEqual(mig.right, 1)
+        self.verify_two_pops_asymmetric_migrations(ts)
+
+    def test_two_pops_asymmetric_migrations_from_ts(self):
+        tables = msprime.TableCollection(1)
+        for _ in range(10):
+            tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        for _ in range(10):
+            tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+        tables.populations.add_row()
+        tables.populations.add_row()
+
+        population_configurations = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(),
+        ]
+        ts = msprime.simulate(
+            population_configurations=population_configurations,
+            migration_matrix=[
+                [0, 0],
+                [1, 0]],
+            # Can migrate from 1 to 0 but not vice-versa
+            random_seed=1, record_migrations=True,
+            from_ts=tables.tree_sequence(), start_time=0)
+        self.verify_two_pops_asymmetric_migrations(ts)
 
     def test_two_pops_asymmetric_migrations_recombination(self):
         population_configurations = [

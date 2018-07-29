@@ -151,21 +151,6 @@ def simulator_factory(
     elif samples is not None:
         the_samples = samples
 
-    if recombination_map is None:
-        the_length = 1 if length is None else length
-        the_rate = 0 if recombination_rate is None else recombination_rate
-        if the_length <= 0:
-            raise ValueError("Cannot provide non-positive sequence length")
-        if the_rate < 0:
-            raise ValueError("Cannot provide negative recombination rate")
-        recomb_map = RecombinationMap.uniform_map(the_length, the_rate)
-    else:
-        if length is not None or recombination_rate is not None:
-            raise ValueError(
-                "Cannot specify length/recombination_rate along with "
-                "a recombination map")
-        recomb_map = recombination_map
-
     if from_ts is not None:
         if start_time is None:
             raise ValueError("Must specify start_time when using from_ts argument")
@@ -181,6 +166,32 @@ def simulator_factory(
         else:
             if from_ts.num_populations != len(population_configurations):
                 raise ValueError(population_mismatch_message)
+
+    if recombination_map is None:
+        # Default to 1 if no from_ts; otherwise default to the sequence length
+        # of from_ts
+        if from_ts is None:
+            the_length = 1 if length is None else length
+        else:
+            the_length = from_ts.sequence_length if length is None else length
+        the_rate = 0 if recombination_rate is None else recombination_rate
+        if the_length <= 0:
+            raise ValueError("Cannot provide non-positive sequence length")
+        if the_rate < 0:
+            raise ValueError("Cannot provide negative recombination rate")
+        recomb_map = RecombinationMap.uniform_map(the_length, the_rate)
+    else:
+        if length is not None or recombination_rate is not None:
+            raise ValueError(
+                "Cannot specify length/recombination_rate along with "
+                "a recombination map")
+        recomb_map = recombination_map
+
+    if from_ts is not None:
+        if from_ts.sequence_length != recomb_map.get_length():
+            raise ValueError(
+                "The simulated sequence length must be the same as "
+                "from_ts.sequence_length")
 
     sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations

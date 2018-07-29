@@ -265,12 +265,181 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(subclass_instance, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
+    @unittest.skip("Loss of precision with sequence length, single locus.")
+    def test_sequence_length(self):
+        from_ts = msprime.simulate(
+            5, __tmp_max_time=0.1, random_seed=5, length=5)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2, length=5)
+        print("FROM")
+        print(from_ts.tables.edges)
+        for tree in from_ts.trees():
+            print(tree.draw(format="unicode"))
+        print("FINAL")
+        for tree in final_ts.trees():
+            print(tree.interval)
+            print(tree.draw(format="unicode"))
+        print(final_ts.tables.edges)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+    def test_sequence_length_recombination(self):
+        from_ts = msprime.simulate(
+            5, __tmp_max_time=0.1, random_seed=5, length=5, recombination_rate=5)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2, length=5,
+            recombination_rate=5)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+    @unittest.skip("Assertion fail")
+    def test_tricky_recombination_map(self):
+        # Zero rates within the map cause tricky mapping issues
+        positions = [0, 0.25, 0.5, 0.75, 1]
+        rates = [1, 0, 1, 0, 0]
+        num_loci = 100
+        recomb_map = msprime.RecombinationMap(positions, rates, num_loci)
+        from_ts = msprime.simulate(
+            5, __tmp_max_time=0.1, random_seed=5, recombination_map=recomb_map)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2,
+            recombination_map=recomb_map)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+    def test_random_recombination_map(self):
+        np.random.seed(10)
+        k = 10
+        position = np.random.random(k) * 10
+        position[0] = 0
+        position.sort()
+        rate = np.random.random(k)
+        rate[-1] = 0
+        recomb_map = msprime.RecombinationMap(list(position), list(rate))
+        from_ts = msprime.simulate(
+            10, __tmp_max_time=0.1, random_seed=50, recombination_map=recomb_map)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=20,
+            recombination_map=recomb_map)
+        self.verify_from_tables(from_ts, final_ts, start_time)
+        self.verify_simulation_completed(final_ts)
+
+
+class TestBaseEquivalance(unittest.TestCase):
+    """
+    Check that it's equivalent to send a from_ts with no topology to running
+    a straight simulation.
+    """
+    def verify_simple_model(
+            self, n, seed=1, recombination_rate=None, length=None,
+            recombination_map=None):
+        ts1 = msprime.simulate(
+            n, random_seed=seed, recombination_rate=recombination_rate,
+            length=length, recombination_map=recombination_map)
+        tables = msprime.TableCollection(ts1.sequence_length)
+        tables.populations.add_row()
+        for _ in range(n):
+            tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        ts2 = msprime.simulate(
+            from_ts=tables.tree_sequence(), start_time=0, random_seed=seed,
+            recombination_rate=recombination_rate,
+            recombination_map=recombination_map)
+        tables1 = ts1.dump_tables()
+        tables2 = ts2.dump_tables()
+        # print(tables1.edges)
+        # print(tables2.edges)
+        tables1.provenances.clear()
+        tables2.provenances.clear()
+        self.assertEqual(tables1, tables2)
+
+    def test_single_locus_two_samples(self):
+        for seed in range(1, 10):
+            self.verify_simple_model(2, seed)
+
+    def test_single_locus_five_samples(self):
+        for seed in range(1, 10):
+            self.verify_simple_model(5, seed)
+
+    @unittest.skip("Major loss of precision in single locus case")
+    def test_single_locus_sequence_length(self):
+        for length in [0.1, 0.99, 5, 10, 33.333, 1000, 1e9]:
+            self.verify_simple_model(5, 43, length=length)
+
+    def test_multi_locus_two_samples(self):
+        for seed in range(1, 10):
+            self.verify_simple_model(2, seed, recombination_rate=1)
+
+    def test_multi_locus_five_samples(self):
+        for seed in range(1, 10):
+            self.verify_simple_model(5, seed, recombination_rate=1)
+
+    def test_multi_locus_sequence_length(self):
+        for length in [0.1, 2.5, 4, 8, 33.33333]:
+            self.verify_simple_model(5, 45, length=length, recombination_rate=1)
+
+    def test_random_recombination_map(self):
+        np.random.seed(100)
+        k = 15
+        position = np.random.random(k) * 100
+        position[0] = 0
+        position.sort()
+        rate = np.random.random(k)
+        rate[-1] = 0
+        recomb_map = msprime.RecombinationMap(list(position), list(rate))
+        self.verify_simple_model(10, 23, recombination_map=recomb_map)
+
+    def test_random_recombination_map_small_num_loci(self):
+        np.random.seed(100)
+        k = 15
+        position = np.random.random(k) * 100
+        position[0] = 0
+        position.sort()
+        rate = np.random.random(k)
+        rate[-1] = 0
+        recomb_map = msprime.RecombinationMap(list(position), list(rate), num_loci=5)
+        self.verify_simple_model(10, 23, recombination_map=recomb_map)
+
+    def test_two_populations_migration(self):
+        n = 10
+        seed = 1234
+        ts1 = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(n),
+                msprime.PopulationConfiguration(0)],
+            migration_matrix=[[0, 1], [1, 0]],
+            record_migrations=True,
+            random_seed=seed)
+        tables = msprime.TableCollection(1)
+        tables.populations.add_row()
+        tables.populations.add_row()
+        for _ in range(n):
+            tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        ts2 = msprime.simulate(
+            from_ts=tables.tree_sequence(), start_time=0,
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            migration_matrix=[[0, 1], [1, 0]],
+            record_migrations=True,
+            random_seed=seed)
+        tables1 = ts1.dump_tables()
+        tables2 = ts2.dump_tables()
+        tables1.provenances.clear()
+        tables2.provenances.clear()
+        self.assertEqual(tables1, tables2)
+
 
 class TestErrors(unittest.TestCase):
     """
     Basic tests for the from_ts argument for msprime.simulate.
     """
-    def get_example_base(self, num_populations=1):
+    def get_example_base(self, num_populations=1, length=1):
         N = num_populations
         population_configurations = [
             msprime.PopulationConfiguration() for _ in range(N)]
@@ -278,6 +447,7 @@ class TestErrors(unittest.TestCase):
         np.fill_diagonal(migration_matrix, 0)
         ts = msprime.simulate(
             samples=[msprime.Sample(0, 0) for _ in range(10)],
+            length=length,
             random_seed=155,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix)
@@ -304,6 +474,16 @@ class TestErrors(unittest.TestCase):
     def test_no_start_time(self):
         base_ts = self.get_example_base()
         self.assertRaises(ValueError, msprime.simulate, from_ts=base_ts)
+
+    def test_sequence_length_mismatch(self):
+        base_ts = self.get_example_base(length=5)
+        for bad_length in [1, 4.99, 5.01, 100]:
+            with self.assertRaises(ValueError):
+                msprime.simulate(from_ts=base_ts, start_time=100, length=bad_length)
+            recomb_map = msprime.RecombinationMap.uniform_map(bad_length, 1)
+            with self.assertRaises(ValueError):
+                msprime.simulate(
+                    from_ts=base_ts, start_time=100, recombination_map=recomb_map)
 
     def test_start_time_less_than_zero(self):
         base_ts = self.get_example_base()
