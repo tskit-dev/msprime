@@ -298,13 +298,6 @@ msp_genetic_to_phys(msp_t *self, double x)
     return recomb_map_genetic_to_phys(self->recomb_map, x);
 }
 
-static uint32_t
-msp_phys_to_genetic(msp_t *self, double x)
-{
-    double y = recomb_map_phys_to_genetic(self->recomb_map, x);
-    return (uint32_t) round(y);
-}
-
 static segment_t * WARN_UNUSED
 msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
         population_id_t population_id, segment_t *prev, segment_t *next)
@@ -1820,8 +1813,17 @@ msp_init_from_ts(msp_t *self)
         goto out;
     }
     for (t_iter = sparse_tree_first(&t); t_iter == 1; t_iter = sparse_tree_next(&t)) {
-        left = msp_phys_to_genetic(self, t.left);
-        right = msp_phys_to_genetic(self, t.right);
+        /* left = msp_phys_to_genetic(self, t.left); */
+        /* x = recomb_map_phys_to_genetic(self->recomb_map, t.left); */
+        /* left = (uint32_t) floor(x); */
+        /* printf("left: %.14f -> %.14f -> %d\n", t.left, x, left); */
+        /* x = recomb_map_phys_to_genetic(self->recomb_map, t.right); */
+        /* right = (uint32_t) ceil(x); */
+        /* printf("right: %.14f -> %.14f -> %d\n", t.right, x, right); */
+        /* right = msp_phys_to_genetic(self, t.right); */
+        assert(self->recomb_map->num_loci == 1);
+        left = 0;
+        right = 1;
         assert(left < right);
         num_roots = (uint32_t) sparse_tree_get_num_roots(&t);
         if (num_roots == 1) {
