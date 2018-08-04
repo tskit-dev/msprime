@@ -1599,9 +1599,9 @@ test_recomb_map_errors(void)
 {
     int ret;
     recomb_map_t recomb_map;
+    uint32_t locus;
     double positions[] = {0.0, 1.0, 2.0};
     double rates[] = {1.0, 2.0, 0.0};
-    double values[] = {0.0, 1.0};
 
     ret = recomb_map_alloc(&recomb_map, 10, 1.0, positions, rates, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
@@ -1634,18 +1634,12 @@ test_recomb_map_errors(void)
     ret = recomb_map_alloc(&recomb_map, 10, 2.0, positions, rates, 3);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, values, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* Physical coordinates must be 0 <= x <= L */
+    ret = recomb_map_phys_to_discrete_genetic(&recomb_map, -1, &locus);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-    /* values must be increasing */
-    values[0] = 2.0;
-    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, values, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_GENERIC);
-
-    /* values must be <= num_loci */
-    values[0] = 1000;
-    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, values, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_GENERIC);
+    ret = recomb_map_phys_to_discrete_genetic(&recomb_map, 2.1, &locus);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     recomb_map_free(&recomb_map);
 }
@@ -1658,14 +1652,14 @@ verify_recomb_map(uint32_t num_loci, double length, double *positions,
     int ret;
     recomb_map_t recomb_map;
     double total_rate, x, y, z;
+    uint32_t locus;
     size_t j;
     size_t num_checks = 1000;
     double eps = 1e-6;
-    double *ret_rates, *ret_positions, *bulk_x;
+    double *ret_rates, *ret_positions;
 
     ret_rates = malloc(size * sizeof(double));
     ret_positions = malloc(size * sizeof(double));
-    bulk_x = malloc(num_checks * sizeof(double));
 
     CU_ASSERT_FATAL(ret_rates != NULL);
     CU_ASSERT_FATAL(ret_positions != NULL);
@@ -1687,18 +1681,13 @@ verify_recomb_map(uint32_t num_loci, double length, double *positions,
 
     for (j = 0; j < num_checks; j++) {
         x = j * (num_loci / num_checks);
-        bulk_x[j] = x;
         y = recomb_map_genetic_to_phys(&recomb_map, x);
         CU_ASSERT_TRUE(0 <= y && y <= length);
         z = recomb_map_phys_to_genetic(&recomb_map, y);
         CU_ASSERT_DOUBLE_EQUAL(x, z, eps);
-    }
-    ret = recomb_map_genetic_to_phys_bulk(&recomb_map, bulk_x, num_checks);
-    CU_ASSERT_EQUAL(ret, 0);
-    for (j = 0; j < num_checks; j++) {
-        x = j * (num_loci / num_checks);
-        y = recomb_map_genetic_to_phys(&recomb_map, x);
-        CU_ASSERT_DOUBLE_EQUAL(bulk_x[j], y, 1e-12);
+        ret = recomb_map_phys_to_discrete_genetic(&recomb_map, y, &locus);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(locus, (uint32_t) round(x));
     }
     ret = recomb_map_get_positions(&recomb_map, ret_positions);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1712,7 +1701,6 @@ verify_recomb_map(uint32_t num_loci, double length, double *positions,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     free(ret_rates);
     free(ret_positions);
-    free(bulk_x);
 }
 
 static void

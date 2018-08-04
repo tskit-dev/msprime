@@ -3269,6 +3269,15 @@ class TestRecombinationMap(LowLevelTestCase):
                 # this isn't really used.
                 self.assertAlmostEqual(v, rm.physical_to_genetic(v))
 
+    def test_range_errors(self):
+        rm = _msprime.RecombinationMap(100, [0, 10], [0.1, 0])
+        self.assertRaises(ValueError, rm.physical_to_discrete_genetic, -1)
+        self.assertRaises(ValueError, rm.physical_to_discrete_genetic, 10.1)
+        self.assertRaises(ValueError, rm.physical_to_genetic, -1)
+        self.assertRaises(ValueError, rm.physical_to_genetic, 10.1)
+        self.assertRaises(ValueError, rm.genetic_to_physical, -1)
+        self.assertRaises(ValueError, rm.genetic_to_physical, 100.1)
+
 
 class TestRandomGenerator(unittest.TestCase):
     """

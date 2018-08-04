@@ -5419,6 +5419,37 @@ out:
 }
 
 static PyObject *
+RecombinationMap_physical_to_discrete_genetic(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double physical_x, sequence_length;
+    int err;
+    uint32_t locus;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
+        goto out;
+    }
+    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
+    if (physical_x < 0 || physical_x > sequence_length) {
+        PyErr_SetString(PyExc_ValueError,
+            "coordinates must be 0 <= x <= sequence_length");
+        goto out;
+    }
+    err = recomb_map_phys_to_discrete_genetic(self->recomb_map, physical_x, &locus);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("k", (unsigned long) locus);
+out:
+    return ret;
+}
+
+
+static PyObject *
 RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -5544,6 +5575,9 @@ static PyMethodDef RecombinationMap_methods[] = {
         METH_VARARGS, "Converts the specified value into physical coordinates."},
     {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
         METH_VARARGS, "Converts the specified value into genetic coordinates."},
+    {"physical_to_discrete_genetic",
+        (PyCFunction) RecombinationMap_physical_to_discrete_genetic,
+        METH_VARARGS, "Converts the specified value into discete genetic coordinates."},
     {"get_total_recombination_rate",
         (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},

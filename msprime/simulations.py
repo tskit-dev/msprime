@@ -765,6 +765,9 @@ class RecombinationMap(object):
     def physical_to_genetic(self, physical_x):
         return self._ll_recombination_map.physical_to_genetic(physical_x)
 
+    def physical_to_discrete_genetic(self, physical_x):
+        return self._ll_recombination_map.physical_to_discrete_genetic(physical_x)
+
     def genetic_to_physical(self, genetic_x):
         return self._ll_recombination_map.genetic_to_physical(genetic_x)
 
