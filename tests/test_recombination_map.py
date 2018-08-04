@@ -44,6 +44,7 @@ class PythonRecombinationMap(object):
         assert positions[0] == 0
         # assert positions[-1] == 1
         self._positions = positions
+        self._sequence_length = positions[-1]
         self._rates = rates
         self._num_loci = num_loci
 
@@ -61,26 +62,42 @@ class PythonRecombinationMap(object):
 
     def physical_to_genetic(self, x):
         if self.get_total_recombination_rate() == 0:
-            ret = x
-        else:
-            s = 0
-            last_phys_x = 0
-            j = 1
-            while j < len(self._positions) - 1 and x > self._positions[j]:
-                phys_x = self._positions[j]
-                rate = self._rates[j - 1]
-                s += (phys_x - last_phys_x) * rate
-                j += 1
-                last_phys_x = phys_x
+            return x * self._num_loci
+        s = 0
+        last_phys_x = 0
+        j = 1
+        while j < len(self._positions) - 1 and x > self._positions[j]:
+            phys_x = self._positions[j]
             rate = self._rates[j - 1]
-            s += (x - last_phys_x) * rate
-            ret = 0
-            if self.get_total_recombination_rate() > 0:
-                ret = s / self.get_total_recombination_rate()
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        rate = self._rates[j - 1]
+        s += (x - last_phys_x) * rate
+        # This is probably the problem here --- we should be scaling this
+        # as we're going along or something.
+        ret = s / self.get_total_recombination_rate()
         return ret * self._num_loci
 
     def physical_to_discrete_genetic(self, x):
         return int(round(self.physical_to_genetic(x)))
+        # if self.get_total_recombination_rate() == 0:
+        #     return int(round(x))
+        # s = 0
+        # last_phys_x = 0
+        # j = 1
+        # while j < len(self._positions) - 1 and x > self._positions[j]:
+        #     phys_x = self._positions[j]
+        #     rate = self._rates[j - 1]
+        #     s += (phys_x - last_phys_x) * rate
+        #     j += 1
+        #     last_phys_x = phys_x
+        # rate = self._rates[j - 1]
+        # s += (x - last_phys_x) * rate
+        # ret = 0
+        # if self.get_total_recombination_rate() > 0:
+        #     ret = s / self.get_total_recombination_rate()
+        # return int(round(ret))
 
     def genetic_to_physical(self, v):
         if self.get_total_recombination_rate() == 0:
@@ -252,10 +269,46 @@ class TestCoordinateConversion(unittest.TestCase):
         # a flat recombination map with the right number of loci.
         for L in [1, 10, 100]:
             for rate in [0.1, 1, 100]:
-                rm = msprime.RecombinationMap.uniform_map(L, rate, num_loci=L)
-                for x in range(L + 1):
-                    self.assertEqual(x, rm.physical_to_discrete_genetic(x))
-                    self.assertEqual(x, rm.genetic_to_physical(x))
+                maps = [
+                    msprime.RecombinationMap.uniform_map(L, rate, num_loci=L),
+                    PythonRecombinationMap([0, L], [rate, 0], L)]
+                for rm in maps:
+                    for x in range(L + 1):
+                        self.assertEqual(x, rm.physical_to_discrete_genetic(x))
+                        self.assertAlmostEqual(x, rm.genetic_to_physical(x))
+
+    def test_single_locus(self):
+        eps = 1e-14
+        for L in [0.1, 0.99, 1.0, 2, 3.3333, 1e6]:
+            for rate in [0.1, 1, 100]:
+                maps = [
+                    msprime.RecombinationMap.uniform_map(L, rate, num_loci=1),
+                    PythonRecombinationMap([0, L], [rate, 0], 1)]
+                for rm in maps:
+                    self.assertEqual(0, rm.physical_to_discrete_genetic(0))
+                    self.assertEqual(0, rm.physical_to_discrete_genetic(eps))
+                    self.assertEqual(0, rm.physical_to_discrete_genetic(L / 4))
+                    self.assertEqual(1, rm.physical_to_discrete_genetic(L))
+                    self.assertEqual(1, rm.physical_to_discrete_genetic(L - eps))
+                    self.assertEqual(1, rm.physical_to_discrete_genetic(L - L / 4))
+
+    @unittest.skip("Problems with zero recombination rate")
+    def test_zero_recombination_rate(self):
+        eps = 1e-14
+        for L in [0.1, 0.99, 1.0, 2, 3.3333, 1e6]:
+            maps = [
+                msprime.RecombinationMap.uniform_map(L, 0, num_loci=1),
+                PythonRecombinationMap([0, L], [0, 0], 1)]
+            for rm in maps:
+                self.assertEqual(0, rm.physical_to_discrete_genetic(0))
+                self.assertEqual(0, rm.physical_to_discrete_genetic(eps))
+                self.assertEqual(0, rm.physical_to_discrete_genetic(L / 4))
+                self.assertEqual(1, rm.physical_to_discrete_genetic(L))
+                self.assertEqual(1, rm.physical_to_discrete_genetic(L - eps))
+                self.assertEqual(1, rm.physical_to_discrete_genetic(L - L / 4))
+
+    # TODO add tests in which we have multiple loci with 0 recombination rate
+    # and also maps with embedded zero rates.
 
 
 class TestReadHapmap(unittest.TestCase):

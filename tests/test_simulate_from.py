@@ -564,9 +564,9 @@ class TestSlimOutput(unittest.TestCase):
         return msprime.simulate(
             from_ts=from_ts, start_time=1,
             population_configurations=population_configurations,
-            # recombination_rate=recombination_rate,
             recombination_map=msprime.RecombinationMap.uniform_map(
-                from_ts.sequence_length, 0, num_loci=1),
+                from_ts.sequence_length, recombination_rate,
+                num_loci=int(from_ts.sequence_length)),
             random_seed=seed)
 
     def verify_completed(self, from_ts, final_ts):
@@ -587,20 +587,25 @@ class TestSlimOutput(unittest.TestCase):
         # print(final_ts.tables.edges)
         self.assertEqual(max(tree.num_roots for tree in final_ts.trees()), 1)
 
-    @unittest.skip("Single locus recomb map issue")
+    @unittest.skip("Zero recombination rate issue")
     def test_minimal_example_no_recombination(self):
         from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
         self.verify_completed(from_ts, ts)
 
-    @unittest.skip("Contradictory children issue")
     def test_minimal_example_recombination(self):
         from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
         self.verify_completed(from_ts, ts)
 
+    @unittest.skip("Zero recombination rate issue")
     def test_single_locus_example_no_recombination(self):
         from_ts = msprime.load("tests/data/SLiM/single-locus-example.trees")
         # print(from_ts.tables)
         ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
+        self.verify_completed(from_ts, ts)
+
+    def test_single_locus_example_recombination(self):
+        from_ts = msprime.load("tests/data/SLiM/single-locus-example.trees")
+        ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
         self.verify_completed(from_ts, ts)

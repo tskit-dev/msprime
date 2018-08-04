@@ -184,6 +184,7 @@
 #define MSP_ERR_BAD_START_TIME_FROM_TS                              -79
 #define MSP_ERR_BAD_START_TIME                                      -80
 #define MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME                          -81
+#define MSP_ERR_RECOMB_MAP_TOO_COARSE                               -82
 
 /* This bit is 0 for any errors originating from kastore */
 #define MSP_KAS_ERR_BIT 14

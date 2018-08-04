@@ -326,6 +326,73 @@ out:
     return seg;
 }
 
+/* Round-trip the specified physical coordinate through the recombination
+ * map.
+ */
+static int
+msp_round_trip_coordinate(msp_t *self, double *coordinate)
+{
+    int ret = 0;
+    uint32_t locus;
+
+    ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, *coordinate, &locus);
+    if (ret != 0) {
+        goto out;
+    }
+    *coordinate = recomb_map_genetic_to_phys(self->recomb_map, (double) locus);
+out:
+    return ret;
+}
+
+/* Round-trip the coordinates in the from_ts through the recombination map
+ * to ensure that the final tree sequence is well formed. This does incur
+ * a loss of precision if we have a non-flat map, and coordinates may change
+ * arbitrarily if we have regions of zero recombination.
+ */
+static int
+msp_remap_from_ts_coordinates(msp_t *self)
+{
+    int ret = 0;
+    table_size_t j;
+    edge_table_t *edges = self->tables.edges;
+    site_table_t *sites = self->tables.sites;
+    migration_table_t *migrations = self->tables.migrations;
+
+    if (self->recomb_map->sequence_length != self->tables.sequence_length) {
+        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
+        goto out;
+    }
+
+    for (j = 0; j < edges->num_rows; j++) {
+        ret = msp_round_trip_coordinate(self, edges->left + j);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_round_trip_coordinate(self, edges->right + j);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 0; j < sites->num_rows; j++) {
+        ret = msp_round_trip_coordinate(self, sites->position + j);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    for (j = 0; j < migrations->num_rows; j++) {
+        ret = msp_round_trip_coordinate(self, migrations->left + j);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_round_trip_coordinate(self, migrations->right + j);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
 /* Top level allocators and initialisation */
 
 int
@@ -409,6 +476,10 @@ msp_alloc(msp_t *self,
             goto out;
         }
         ret = table_collection_record_position(&self->tables, &self->from_position);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_remap_from_ts_coordinates(self);
         if (ret != 0) {
             goto out;
         }
@@ -1769,10 +1840,6 @@ msp_init_from_ts(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    if (self->recomb_map->sequence_length != self->tables.sequence_length) {
-        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
-        goto out;
-    }
     if (self->num_populations != self->tables.populations->num_rows) {
         ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
         goto out;
@@ -1813,17 +1880,15 @@ msp_init_from_ts(msp_t *self)
         goto out;
     }
     for (t_iter = sparse_tree_first(&t); t_iter == 1; t_iter = sparse_tree_next(&t)) {
-        /* left = msp_phys_to_genetic(self, t.left); */
-        /* x = recomb_map_phys_to_genetic(self->recomb_map, t.left); */
-        /* left = (uint32_t) floor(x); */
-        /* printf("left: %.14f -> %.14f -> %d\n", t.left, x, left); */
-        /* x = recomb_map_phys_to_genetic(self->recomb_map, t.right); */
-        /* right = (uint32_t) ceil(x); */
-        /* printf("right: %.14f -> %.14f -> %d\n", t.right, x, right); */
-        /* right = msp_phys_to_genetic(self, t.right); */
-        assert(self->recomb_map->num_loci == 1);
-        left = 0;
-        right = 1;
+        /* Ignoring the return value because all values have already been checked */
+        recomb_map_phys_to_discrete_genetic(self->recomb_map, t.left, &left);
+        recomb_map_phys_to_discrete_genetic(self->recomb_map, t.right, &right);
+        /* printf("left: %.14f -> %d\n", t.left, left); */
+        /* printf("right: %.14f -> %d\n", t.right, left); */
+        if (left == right) {
+            ret = MSP_ERR_RECOMB_MAP_TOO_COARSE;
+            goto out;
+        }
         assert(left < right);
         num_roots = (uint32_t) sparse_tree_get_num_roots(&t);
         if (num_roots == 1) {

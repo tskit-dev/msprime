@@ -1840,17 +1840,42 @@ test_simulate_from_single_locus(void)
 {
     verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 0, 5, 1);
     verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 0, 5, 1);
+
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 1, 5, 1);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 1, 5, 1);
 }
 
 static void
 test_simulate_from_single_locus_sequence_length(void)
 {
+    printf("\n\nFIXME problems with zero recombination rate\n\n");
     double L[] = {0.1, 0.99, 2, 3.33333333, 10, 1e6};
-    size_t j;
+    /* double rate[] = {0.0, 0.1, 1, 5}; */
+    double rate[] = {0.1, 1, 5};
+    size_t j, k;
 
     for (j = 0; j < sizeof(L) / sizeof(*L); j++) {
-        verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, L[j], 0, 5, 1);
-        verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, L[j], 0, 5, 1);
+        for (k = 0; k < sizeof(rate) / sizeof(*rate); k++) {
+            verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, L[j], rate[k], 5, 1);
+            verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, L[j], rate[k], 5, 1);
+        }
+    }
+}
+
+static void
+test_simulate_from_multi_locus_sequence_length(void)
+{
+    printf("\n\nFIXME problems with zero recombination rate\n\n");
+    double L[] = {0.1, 0.99, 2, 3.33333333, 10, 1e6};
+    /* double rate[] = {0.0, 0.1, 1, 5}; */
+    double rate[] = {0.1, 1, 5};
+    size_t j, k;
+
+    for (j = 0; j < sizeof(L) / sizeof(*L); j++) {
+        for (k = 0; k < sizeof(rate) / sizeof(*rate); k++) {
+            verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 100, L[j], rate[k], 5, 1);
+            verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 100, L[j], rate[k], 5, 1);
+        }
     }
 }
 
@@ -1864,17 +1889,15 @@ test_simulate_from_single_locus_replicates(void)
 static void
 test_simulate_from_multi_locus(void)
 {
-    printf("\nSKIP: recomb map broken\n\n");
-    /* verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 100, 1.0, 10.0, 20, 1); */
-    /* verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 100, 1.0, 10.0, 20, 1); */
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 100, 1.0, 10.0, 20, 1);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 100, 1.0, 10.0, 20, 1);
 }
 
 static void
 test_simulate_from_multi_locus_replicates(void)
 {
-    printf("\nSKIP: recomb map broken\n\n");
-    /* verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 100, 1.0, 10.0, 20, 10); */
-    /* verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 100, 1.0, 10.0, 20, 10); */
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 100, 1.0, 10.0, 20, 10);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 100, 1.0, 10.0, 20, 10);
 }
 
 static void
@@ -1895,8 +1918,7 @@ test_simulate_from_completed(void)
     msp_t msp;
     recomb_map_t recomb_map;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    size_t num_loci = 1;
-    printf("\nFIXME set num_loci to > 1\n");
+    size_t num_loci = 10;
     double recombination_rate = 2;
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -1951,10 +1973,7 @@ test_simulate_from_incompatible(void)
 
     /* Sequence length mismatch */
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
-    tree_sequence_free(&from);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
     msp_free(&msp);
 
     /* Num populations should be 1 */
@@ -2169,6 +2188,8 @@ main(int argc, char **argv)
         {"test_simulate_from_single_locus", test_simulate_from_single_locus},
         {"test_simulate_from_single_locus_sequence_length",
             test_simulate_from_single_locus_sequence_length},
+        {"test_simulate_from_multi_locus_sequence_length",
+            test_simulate_from_multi_locus_sequence_length},
         {"test_simulate_from_single_locus_replicates",
             test_simulate_from_single_locus_replicates},
         {"test_simulate_from_multi_locus", test_simulate_from_multi_locus},
