@@ -1887,6 +1887,7 @@ msp_init_from_ts(msp_t *self)
         /* printf("right: %.14f -> %d\n", t.right, left); */
         if (left == right) {
             ret = MSP_ERR_RECOMB_MAP_TOO_COARSE;
+
             goto out;
         }
         assert(left < right);

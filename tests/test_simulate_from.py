@@ -330,7 +330,6 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_simulation_completed(final_ts)
 
 
-@unittest.skip("Recomb map broken")
 class TestBaseEquivalance(unittest.TestCase):
     """
     Check that it's equivalent to send a from_ts with no topology to running
@@ -353,8 +352,8 @@ class TestBaseEquivalance(unittest.TestCase):
             recombination_map=recombination_map)
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
-        print(tables1.edges)
-        print(tables2.edges)
+        # print(tables1.edges)
+        # print(tables2.edges)
         tables1.provenances.clear()
         tables2.provenances.clear()
         self.assertEqual(tables1, tables2)
@@ -437,7 +436,6 @@ class TestBaseEquivalance(unittest.TestCase):
         self.assertEqual(tables1, tables2)
 
 
-@unittest.skip("Recomb map broken")
 class TestErrors(unittest.TestCase):
     """
     Basic tests for the from_ts argument for msprime.simulate.

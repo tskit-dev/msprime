@@ -3248,16 +3248,6 @@ class TestRecombinationMap(LowLevelTestCase):
         rm = _msprime.RecombinationMap(m, [0, 10, 20], [0.25, 0.5, 0])
         self.assertEqual(rm.get_total_recombination_rate(), 7.5)
 
-    def test_zero_rate(self):
-        for m in [1, 10, 1000]:
-            rm = _msprime.RecombinationMap(m, [0, m], [0, 0])
-            self.assertEqual(rm.get_total_recombination_rate(), 0)
-            self.assertEqual(rm.genetic_to_physical(0), 0)
-            self.assertEqual(rm.get_per_locus_recombination_rate(), 0)
-            self.assertEqual(rm.get_size(), 2)
-            for j in range(m + 1):
-                self.assertEqual(rm.genetic_to_physical(j), j)
-
     def test_uniform_rate(self):
         for m in [1, 10, 100]:
             rm = _msprime.RecombinationMap(m, [0, m], [0.001, 0])
