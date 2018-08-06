@@ -32,7 +32,6 @@ import _msprime
 import tests.tsutil as tsutil
 
 
-@unittest.skip("Recomb map broken")
 class TestBasicFunctionality(unittest.TestCase):
     """
     Basic tests for the from_ts argument for msprime.simulate.
@@ -117,7 +116,8 @@ class TestBasicFunctionality(unittest.TestCase):
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2)
+            from_ts=from_ts, start_time=start_time, random_seed=2,
+            recombination_rate=0.0001)
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
@@ -131,6 +131,20 @@ class TestBasicFunctionality(unittest.TestCase):
             recombination_rate=2)
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
+
+    def test_small_num_loci(self):
+        for m in [1, 10, 16, 100]:
+            recombination_map = msprime.RecombinationMap.uniform_map(10, 1, num_loci=m)
+            from_ts = msprime.simulate(
+                sample_size=4, __tmp_max_time=1, random_seed=5,
+                recombination_map=recombination_map)
+            self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+            start_time = from_ts.tables.nodes.time.max()
+            final_ts = msprime.simulate(
+                from_ts=from_ts, start_time=start_time, random_seed=2,
+                recombination_map=recombination_map)
+            self.verify_from_tables(from_ts, final_ts, start_time)
+            self.verify_simulation_completed(final_ts)
 
     def test_from_two_populations_max_time(self):
         from_ts = msprime.simulate(
@@ -203,15 +217,18 @@ class TestBasicFunctionality(unittest.TestCase):
         self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
         start_time = from_ts.tables.nodes.time.max()
         seed = 234
+        recombination_rate = 1
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=seed)
+            from_ts=from_ts, start_time=start_time, random_seed=seed,
+            recombination_rate=recombination_rate)
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
         final_tables = final_ts.dump_tables()
         final_tables.provenances.clear()
         for _ in range(10):
             other_ts = msprime.simulate(
-                from_ts=from_ts, start_time=start_time, random_seed=seed)
+                from_ts=from_ts, start_time=start_time, random_seed=seed,
+                recombination_rate=recombination_rate)
             other_tables = other_ts.dump_tables()
             other_tables.provenances.clear()
             self.assertEqual(final_tables, other_tables)
@@ -233,7 +250,8 @@ class TestBasicFunctionality(unittest.TestCase):
         self.assertGreater(from_ts.num_trees, 1)
         start_time = from_ts.tables.nodes.time.max()
         replicates = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2, num_replicates=10)
+            from_ts=from_ts, start_time=start_time, random_seed=2, num_replicates=10,
+            recombination_rate=1)
         tables = []
         for final_ts in replicates:
             self.verify_from_tables(from_ts, final_ts, start_time)
@@ -266,22 +284,12 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(subclass_instance, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
-    @unittest.skip("Loss of precision with sequence length, single locus.")
     def test_sequence_length(self):
         from_ts = msprime.simulate(
             5, __tmp_max_time=0.1, random_seed=5, length=5)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2, length=5)
-        print("FROM")
-        print(from_ts.tables.edges)
-        for tree in from_ts.trees():
-            print(tree.draw(format="unicode"))
-        print("FINAL")
-        for tree in final_ts.trees():
-            print(tree.interval)
-            print(tree.draw(format="unicode"))
-        print(final_ts.tables.edges)
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
@@ -295,11 +303,9 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
-    @unittest.skip("Assertion fail")
-    def test_tricky_recombination_map(self):
-        # Zero rates within the map cause tricky mapping issues
+    def test_nonuniform_recombination_map(self):
         positions = [0, 0.25, 0.5, 0.75, 1]
-        rates = [1, 0, 1, 0, 0]
+        rates = [1, 2, 1, 3, 0]
         num_loci = 100
         recomb_map = msprime.RecombinationMap(positions, rates, num_loci)
         from_ts = msprime.simulate(
@@ -352,8 +358,6 @@ class TestBaseEquivalance(unittest.TestCase):
             recombination_map=recombination_map)
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
-        # print(tables1.edges)
-        # print(tables2.edges)
         tables1.provenances.clear()
         tables2.provenances.clear()
         self.assertEqual(tables1, tables2)
@@ -366,7 +370,6 @@ class TestBaseEquivalance(unittest.TestCase):
         for seed in range(1, 10):
             self.verify_simple_model(5, seed)
 
-    # @unittest.skip("Major loss of precision in single locus case")
     def test_single_locus_sequence_length(self):
         for length in [0.1, 0.99, 5, 10, 33.333, 1000, 1e9]:
             self.verify_simple_model(5, 43, length=length)
@@ -434,6 +437,86 @@ class TestBaseEquivalance(unittest.TestCase):
         tables1.provenances.clear()
         tables2.provenances.clear()
         self.assertEqual(tables1, tables2)
+
+
+class TestMappingFailures(unittest.TestCase):
+    """
+    Examples in which the coordinate mapping fails and we return a malformed
+    tree sequence.
+    """
+    def test_coarse_to_fine_map(self):
+        from_ts = msprime.simulate(
+            sample_size=4, __tmp_max_time=1, random_seed=5,
+            recombination_map=msprime.RecombinationMap.uniform_map(10, 1, num_loci=10))
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2,
+            recombination_rate=2)
+        with self.assertRaises(_msprime.LibraryError):
+            # Raises:
+            # Bad edges: contradictory children for a given parent over an interval.
+            for tree in final_ts.trees():
+                pass
+
+    def test_fine_to_coarse_map(self):
+        from_ts = msprime.simulate(
+            sample_size=4, __tmp_max_time=1, random_seed=5, recombination_rate=1)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        self.assertGreater(from_ts.num_edges, 2)
+        start_time = from_ts.tables.nodes.time.max()
+        final_ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2,
+            recombination_map=msprime.RecombinationMap.uniform_map(1, 1, num_loci=10))
+        with self.assertRaises(_msprime.LibraryError):
+            # Raises:
+            # Bad edges: contradictory children for a given parent over an interval.
+            for tree in final_ts.trees():
+                pass
+
+    def test_zero_recombination_rate(self):
+        from_ts = msprime.simulate(
+            sample_size=4, __tmp_max_time=1, random_seed=5, recombination_rate=1)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        start_time = from_ts.tables.nodes.time.max()
+        with self.assertRaises(_msprime.InputError):
+            # Raises:
+            # The specified recombination map is too coarse to translate...
+            msprime.simulate(
+                from_ts=from_ts, start_time=start_time, random_seed=2,
+                recombination_rate=0)
+
+    def test_zero_recombination_rate_interval(self):
+        from_ts = msprime.simulate(
+            sample_size=4, __tmp_max_time=1, random_seed=16, recombination_rate=1,
+            length=10)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        start_time = from_ts.tables.nodes.time.max()
+
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, 3, 7, 10], rates=[1, 0, 1, 0])
+        with self.assertRaises(_msprime.InputError):
+            # Raises:
+            # The specified recombination map is too coarse to translate...
+            msprime.simulate(
+                from_ts=from_ts, start_time=start_time, random_seed=2,
+                recombination_map=recombination_map)
+
+    def test_low_recombination_rate_interval(self):
+        from_ts = msprime.simulate(
+            sample_size=4, __tmp_max_time=1, random_seed=16, recombination_rate=1,
+            length=10)
+        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        start_time = from_ts.tables.nodes.time.max()
+
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, 3, 7, 10], rates=[1, 1e-6, 1, 0], num_loci=100)
+        with self.assertRaises(_msprime.InputError):
+            # Raises:
+            # The specified recombination map is too coarse to translate...
+            msprime.simulate(
+                from_ts=from_ts, start_time=start_time, random_seed=2,
+                recombination_map=recombination_map)
 
 
 class TestErrors(unittest.TestCase):
@@ -581,25 +664,22 @@ class TestSlimOutput(unittest.TestCase):
         self.assertEqual(final_tables.mutations, from_tables.mutations)
         final_tables.provenances.truncate(len(from_tables.provenances))
         self.assertEqual(final_tables.provenances, from_tables.provenances)
-        # print(from_ts.tables.edges)
-        # print(final_ts.tables.edges)
         self.assertEqual(max(tree.num_roots for tree in final_ts.trees()), 1)
 
-    @unittest.skip("Zero recombination rate issue")
     def test_minimal_example_no_recombination(self):
         from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
-        ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
-        self.verify_completed(from_ts, ts)
+        with self.assertRaises(_msprime.InputError):
+            # Zero recombination rates result in an error as we can't
+            # remap coordinates into the genetic map.
+            self.finish_simulation(from_ts, recombination_rate=0, seed=1)
 
     def test_minimal_example_recombination(self):
         from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
         self.verify_completed(from_ts, ts)
 
-    @unittest.skip("Zero recombination rate issue")
     def test_single_locus_example_no_recombination(self):
         from_ts = msprime.load("tests/data/SLiM/single-locus-example.trees")
-        # print(from_ts.tables)
         ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
         self.verify_completed(from_ts, ts)
 

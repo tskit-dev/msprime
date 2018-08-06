@@ -1738,7 +1738,7 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
     ret = tree_sequence_dump_tables(from, &from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, recomb_map, from, rng);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     if (model == MSP_MODEL_DTWF) {
         ret = msp_set_simulation_model_dtwf(&msp, 10);
@@ -1848,10 +1848,8 @@ test_simulate_from_single_locus(void)
 static void
 test_simulate_from_single_locus_sequence_length(void)
 {
-    printf("\n\nFIXME problems with zero recombination rate\n\n");
     double L[] = {0.1, 0.99, 2, 3.33333333, 10, 1e6};
-    /* double rate[] = {0.0, 0.1, 1, 5}; */
-    double rate[] = {0.1, 1, 5};
+    double rate[] = {1e-7, 0.1, 1, 5};
     size_t j, k;
 
     for (j = 0; j < sizeof(L) / sizeof(*L); j++) {
@@ -1865,10 +1863,8 @@ test_simulate_from_single_locus_sequence_length(void)
 static void
 test_simulate_from_multi_locus_sequence_length(void)
 {
-    printf("\n\nFIXME problems with zero recombination rate\n\n");
     double L[] = {0.1, 0.99, 2, 3.33333333, 10, 1e6};
-    /* double rate[] = {0.0, 0.1, 1, 5}; */
-    double rate[] = {0.1, 1, 5};
+    double rate[] = {1e-8, 0.1, 1, 5};
     size_t j, k;
 
     for (j = 0; j < sizeof(L) / sizeof(*L); j++) {

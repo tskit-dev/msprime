@@ -326,72 +326,6 @@ out:
     return seg;
 }
 
-/* Round-trip the specified physical coordinate through the recombination
- * map.
- */
-static int
-msp_round_trip_coordinate(msp_t *self, double *coordinate)
-{
-    int ret = 0;
-    uint32_t locus;
-
-    ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, *coordinate, &locus);
-    if (ret != 0) {
-        goto out;
-    }
-    *coordinate = recomb_map_genetic_to_phys(self->recomb_map, (double) locus);
-out:
-    return ret;
-}
-
-/* Round-trip the coordinates in the from_ts through the recombination map
- * to ensure that the final tree sequence is well formed. This does incur
- * a loss of precision if we have a non-flat map, and coordinates may change
- * arbitrarily if we have regions of zero recombination.
- */
-static int
-msp_remap_from_ts_coordinates(msp_t *self)
-{
-    int ret = 0;
-    table_size_t j;
-    edge_table_t *edges = self->tables.edges;
-    site_table_t *sites = self->tables.sites;
-    migration_table_t *migrations = self->tables.migrations;
-
-    if (self->recomb_map->sequence_length != self->tables.sequence_length) {
-        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
-        goto out;
-    }
-
-    for (j = 0; j < edges->num_rows; j++) {
-        ret = msp_round_trip_coordinate(self, edges->left + j);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_round_trip_coordinate(self, edges->right + j);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    for (j = 0; j < sites->num_rows; j++) {
-        ret = msp_round_trip_coordinate(self, sites->position + j);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    for (j = 0; j < migrations->num_rows; j++) {
-        ret = msp_round_trip_coordinate(self, migrations->left + j);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_round_trip_coordinate(self, migrations->right + j);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
 
 /* Top level allocators and initialisation */
 
@@ -461,6 +395,7 @@ msp_alloc(msp_t *self,
         }
     } else {
         assert(from_ts != NULL);
+
         /* Make a copy of the from_ts */
         ret = tree_sequence_dump_tables(from_ts, &self->tables, 0);
         if (ret != 0) {
@@ -479,8 +414,8 @@ msp_alloc(msp_t *self,
         if (ret != 0) {
             goto out;
         }
-        ret = msp_remap_from_ts_coordinates(self);
-        if (ret != 0) {
+        if (self->recomb_map->sequence_length != self->tables.sequence_length) {
+            ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
             goto out;
         }
     }

@@ -284,9 +284,10 @@ msp_strerror_internal(int err)
             ret = "demographic event time must be >= start_time.";
             break;
         case MSP_ERR_RECOMB_MAP_TOO_COARSE:
-            ret = "The specified recombination map is too coarse to translate "
-                "the coordinates in the specified tree sequence. Please set "
-                "num_loci to a larger value.";
+            ret = "The specified recombination map is cannot translate the coordinates"
+                "for the specified tree sequence. It is either too coarse (num_loci "
+                "is too small) or contains zero recombination rates. Please either "
+                "increase the number of loci or recombination rate";
             break;
 
         case MSP_ERR_IO:
