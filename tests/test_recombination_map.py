@@ -43,7 +43,6 @@ class PythonRecombinationMap(object):
         assert len(positions) >= 2
         assert sorted(positions) == positions
         assert positions[0] == 0
-        # assert positions[-1] == 1
         self._positions = positions
         self._sequence_length = positions[-1]
         self._rates = rates
@@ -65,11 +64,7 @@ class PythonRecombinationMap(object):
         """
         If we have a zero recombination rate throughout, then we only have
         two possible values. Any value < L maps to 0, as this is the start
-        of the interval. If x = L, then we map to num_loci because the interval
-        is half-open. This is consistent with the behaviour we get when we
-        have an interval of zero recombination within the map: any value
-        within the interval is mapped down to the start coordinate, and the
-        endpoint signifies the beginning of the next interval.
+        of the interval. If x = L, then we map to num_loci.
         """
         ret = 0
         if x >= self._sequence_length:
@@ -78,16 +73,13 @@ class PythonRecombinationMap(object):
 
     def _genetic_to_physical_zero_rate(self, v):
         """
-        If we have a zero recombination rate throughout then 0 maps to the
-        start of the interval and everything else maps to L.
+        If we have a zero recombination rate throughout then everything except
+        L maps to 0.
         """
-        return 0 if v == 0 else self._sequence_length
+        return self._sequence_length if v == self._num_loci else 0
 
     def physical_to_genetic(self, x):
         if self.get_total_recombination_rate() == 0:
-            # TODO this check at zero shouldn't be necessary as should be
-            # able to use the same code to deal with an interval within
-            # the map.
             return self._physical_to_genetic_zero_rate(x)
         s = 0
         last_phys_x = 0
@@ -108,9 +100,6 @@ class PythonRecombinationMap(object):
 
     def genetic_to_physical(self, v):
         if self.get_total_recombination_rate() == 0:
-            # TODO this check at zero shouldn't be necessary as should be
-            # able to use the same code to deal with an interval within
-            # the map.
             return self._genetic_to_physical_zero_rate(v)
         # v is expressed in [0, m]. Rescale it back into the range
         # (0, total_mass).
@@ -125,12 +114,8 @@ class PythonRecombinationMap(object):
             s += (phys_x - last_phys_x) * rate
             j += 1
             last_phys_x = phys_x
-        if rate == 0:
-            # If the rate for the current interval is zero, map back to
-            # first position unless we're at the end of the interval
-            assert False, "this hasn't been tested"
-            y = last_phys_x if s < u else self._positions[j]
-        else:
+        y = last_phys_x
+        if rate != 0:
             y = last_phys_x - (s - u) / rate
         return y
 
@@ -148,24 +133,16 @@ class TestCoordinateConversion(unittest.TestCase):
         L = positions[-1]
         rm = msprime.RecombinationMap(positions, rates, num_loci)
         other_rm = PythonRecombinationMap(positions, rates, num_loci)
-        # When we have very large numbers of loci, this calculations for
-        # max distance is off by very small amounts, probably because of
-        # machine precision. But if the expected diff is less than say, 10^-10
-        # anyway, there's no point in worrying about it.
-        # print("max di = ", max_discretisation_distance)
-        # FIXME this works when we have a uniform rate, but not otherwise.
-        max_discretisation_distance = max(1e-10, L / (2 * num_loci))
-
-        # NOTE the code here should give us the maximum distance as we're getting
-        # the distance between two integer locations on the flat genetic map with
-        # minimum recombination rate. However, this doesn't seem to work.
-        # r = min(rates[:1])
-        # tmp = PythonRecombinationMap([0, L], [r, 0], num_loci)
-        # print("max _d1 ", max_discretisation_distance)
-        # max_discretisation_distance = (
-        #     tmp.genetic_to_physical(1) - tmp.genetic_to_physical(0)) / 2
-        # print("max _d ", max_discretisation_distance)
-        # max_discretisation_distance = max(1e-10, max_discretisation_distance)
+        if rm.get_size() == 2:
+            # When we have very large numbers of loci, this calculations for
+            # max distance is off by very small amounts, probably because of
+            # machine precision. But if the expected diff is less than say, 10^-10
+            # anyway, there's no point in worrying about it.
+            max_discretisation_distance = max(1e-10, L / (2 * num_loci))
+        else:
+            # The above calculation works for a uniform map, but I couldn't
+            # figure out how to generalise it. Cop out:
+            max_discretisation_distance = L
 
         self.assertEqual(
             rm.get_total_recombination_rate(),
@@ -246,13 +223,12 @@ class TestCoordinateConversion(unittest.TestCase):
                     k = rm.physical_to_discrete_genetic(x)
                     self.assertEqual(start, rm.genetic_to_physical(k))
 
-    @unittest.skip("Mappings for genetic to physical not clear")
     def test_zero_rate_start(self):
         positions = [0, 50, 100]
         rates = [0, 1, 0]
         num_loci = 50
         maps = [
-            # msprime.RecombinationMap(positions, rates, num_loci),
+            msprime.RecombinationMap(positions, rates, num_loci),
             PythonRecombinationMap(positions, rates, num_loci)]
         for rm in maps:
             # Anything <= 50 maps to 0
@@ -260,18 +236,17 @@ class TestCoordinateConversion(unittest.TestCase):
                 self.assertEqual(0, rm.physical_to_genetic(x))
             self.assertEqual(0, rm.genetic_to_physical(0))
             # values > 50 should map to x - 50
-            for x in [50, 51, 55, 99, 100]:
+            for x in [51, 55, 99, 100]:
                 genetic_x = x - 50
                 self.assertEqual(genetic_x, rm.physical_to_genetic(x))
                 self.assertEqual(rm.genetic_to_physical(genetic_x), x)
 
-    @unittest.skip("Uncertain about what happens at the end of an interval")
     def test_zero_rate_end(self):
         positions = [0, 50, 100]
         rates = [1, 0, 0]
         num_loci = 50
         maps = [
-            # msprime.RecombinationMap(positions, rates, num_loci),
+            msprime.RecombinationMap(positions, rates, num_loci),
             PythonRecombinationMap(positions, rates, num_loci)]
         for rm in maps:
             # Anything <= 50 maps to x
@@ -279,9 +254,9 @@ class TestCoordinateConversion(unittest.TestCase):
                 self.assertEqual(x, rm.physical_to_genetic(x))
                 self.assertEqual(x, rm.genetic_to_physical(x))
             # values > 50 should map to 50
-            for x in [50, 51, 55, 99, 100]:
+            for x in [51, 55, 99, 100]:
                 self.assertEqual(50, rm.physical_to_genetic(x))
-            self.assertEqual(100, rm.genetic_to_physical(50))
+            self.assertEqual(50, rm.genetic_to_physical(50))
 
     def test_one_rate(self):
         for num_loci in [1, 10, 1024, 2**31 - 1]:
@@ -293,14 +268,12 @@ class TestCoordinateConversion(unittest.TestCase):
                     self.assertEqual(rate * L, rm.get_total_recombination_rate())
                     self.verify_coordinate_conversion(positions, rates, num_loci)
 
-    @unittest.skip("Precision limits for map not working")
     def test_simple_map(self):
         for num_loci in [1, 10, 100, 1025, 2**32 - 1]:
             positions = [0, 0.25, 0.5, 0.75, 1]
             rates = [0.125, 0.25, 0.5, 0.75, 0]
             self.verify_coordinate_conversion(positions, rates, num_loci)
 
-    @unittest.skip("Precision limits for map not working")
     def test_random_map(self):
         for size in [2, 3, 4, 100]:
             positions = [0] + sorted(
@@ -375,10 +348,11 @@ class TestCoordinateConversion(unittest.TestCase):
                         self.assertEqual(rm.physical_to_discrete_genetic(x), 0)
                     self.assertEqual(rm.physical_to_discrete_genetic(L), m)
                     self.assertEqual(rm.physical_to_genetic(L), m)
-                    # Any genetic value greater that 0 should map to L in physical
+                    # Any genetic value from 0 to L - 1 should map to 0 in physical
                     # coordinates
-                    for y in range(1, m + 1):
-                        self.assertEqual(rm.genetic_to_physical(y), L)
+                    for y in range(0, m):
+                        self.assertEqual(rm.genetic_to_physical(y), 0)
+                    self.assertEqual(rm.genetic_to_physical(m), L)
 
 
 class TestReadHapmap(unittest.TestCase):

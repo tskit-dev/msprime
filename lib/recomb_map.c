@@ -213,9 +213,8 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
     assert(genetic_x >= 0);
     assert(genetic_x <= num_loci);
     if (self->total_recombination_rate == 0) {
-        /* When we have a 0 total rate, 0 maps to 0 and any other
-         * genetic coordinate maps to L */
-        ret = genetic_x == 0.0? 0 : self->sequence_length;
+        /* When we have a 0 total rate, anything other than m maps to 0. */
+        ret = genetic_x >= self->num_loci? self->sequence_length: 0;
     } else if (self->size == 2) {
         /* Avoid roundoff when num_loci == self->sequence_length */
         ret = genetic_x;
@@ -234,7 +233,11 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }
-            excess = (s - x) / r[k - 1];
+            assert(k > 0);
+            excess = 0;
+            if (r[k - 1] > 0) {
+                excess = (s - x) / r[k - 1];
+            }
             ret = p[k] - excess;
         }
     }
