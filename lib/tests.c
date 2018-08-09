@@ -485,6 +485,9 @@ parse_individuals(const char *text, individual_table_t *individual_table)
         p = strtok(line, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         flags = atoi(p);
+
+        p = strtok(NULL, whitespace);
+        CU_ASSERT_FATAL(p != NULL);
         // the locations are comma-separated
         location_len = 1;
         q = p;
@@ -499,7 +502,7 @@ parse_individuals(const char *text, individual_table_t *individual_table)
         q = strtok(sub_line, ",");
         for (k = 0; k < location_len; k++) {
             CU_ASSERT_FATAL(q != NULL);
-            location[k] = atoi(q);
+            location[k] = atof(q);
             q = strtok(NULL, ",");
         }
         CU_ASSERT_FATAL(q == NULL);
@@ -698,12 +701,6 @@ add_individuals(tree_sequence_t *ts)
 
     k = 0;
     for (j = 0; j < num_samples; j++) {
-        if (j > 0) {
-            if (samples[j - 1] + 1 != samples[j]) {
-                /* If the samples aren't contiguous, give up */
-                break;
-            }
-        }
         if ((k % ploidy) == 0) {
             individual_table_add_row(tables.individuals, (uint32_t) k,
                     NULL, 0, metadata, metadata_length);
@@ -1422,22 +1419,18 @@ verify_simplify(tree_sequence_t *ts)
         if (num_samples[j] <= n) {
             ret = tree_sequence_simplify(ts, sample, num_samples[j], flags, &subset,
                     node_map);
-            if (tree_sequence_get_num_individuals(ts) > 0) {
-                CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INDIVIDUALS_NOT_SUPPORTED);
-            } else {
-                /* printf("ret = %s\n", msp_strerror(ret)); */
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
-                verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
-                tree_sequence_free(&subset);
+            /* printf("ret = %s\n", msp_strerror(ret)); */
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
+            tree_sequence_free(&subset);
 
-                /* Keep all sites */
-                ret = tree_sequence_simplify(ts, sample, num_samples[j], 0, &subset,
-                        node_map);
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
-                verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
-                verify_simplify_genotypes(ts, &subset, sample, num_samples[j], node_map);
-                tree_sequence_free(&subset);
-            }
+            /* Keep all sites */
+            ret = tree_sequence_simplify(ts, sample, num_samples[j], 0, &subset,
+                    node_map);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            verify_simplify_properties(ts, &subset, sample, num_samples[j], node_map);
+            verify_simplify_genotypes(ts, &subset, sample, num_samples[j], node_map);
+            tree_sequence_free(&subset);
         }
     }
     free(node_map);
@@ -1460,29 +1453,25 @@ verify_reduce_topology(tree_sequence_t *ts)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tree_sequence_simplify(ts, sample, n, flags, &reduced, NULL);
-    if (tree_sequence_get_num_individuals(ts) > 0) {
-        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INDIVIDUALS_NOT_SUPPORTED);
-    } else {
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        X = reduced.tables->sites->position;
-        num_sites = reduced.tables->sites->num_rows;
-        if (num_sites == 0) {
-            CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_edges(&reduced), 0);
-        }
-        for (j = 0; j < tree_sequence_get_num_edges(&reduced); j++) {
-            ret = tree_sequence_get_edge(&reduced, j, &edge);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            if (edge.left != 0) {
-                CU_ASSERT_EQUAL_FATAL(edge.left,
-                    X[msp_search_sorted(X, num_sites, edge.left)]);
-            }
-            if (edge.right != tree_sequence_get_sequence_length(&reduced)) {
-                CU_ASSERT_EQUAL_FATAL(edge.right,
-                    X[msp_search_sorted(X, num_sites, edge.right)]);
-            }
-        }
-        tree_sequence_free(&reduced);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    X = reduced.tables->sites->position;
+    num_sites = reduced.tables->sites->num_rows;
+    if (num_sites == 0) {
+        CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_edges(&reduced), 0);
     }
+    for (j = 0; j < tree_sequence_get_num_edges(&reduced); j++) {
+        ret = tree_sequence_get_edge(&reduced, j, &edge);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        if (edge.left != 0) {
+            CU_ASSERT_EQUAL_FATAL(edge.left,
+                X[msp_search_sorted(X, num_sites, edge.left)]);
+        }
+        if (edge.right != tree_sequence_get_sequence_length(&reduced)) {
+            CU_ASSERT_EQUAL_FATAL(edge.right,
+                X[msp_search_sorted(X, num_sites, edge.right)]);
+        }
+    }
+    tree_sequence_free(&reduced);
 }
 
 /* Utility function to return a tree sequence for testing. It is the
@@ -3286,6 +3275,70 @@ test_simplest_final_gap_tree_sequence_mutation_parents(void)
     tree_sequence_free(&ts);
 }
 
+static void
+test_simplest_individuals(void)
+{
+    const char *individuals =
+        "1      0.2\n"
+        "2      0.5,0.6\n";
+    const char *nodes =
+        "1  0   -1  -1\n"
+        "1  0   -1  1\n"
+        "0  0   -1  -1\n"
+        "1  0   -1  0\n"
+        "0  0   -1  1\n";
+    table_collection_t tables;
+    tree_sequence_t ts;
+    node_t node;
+    individual_t individual;
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 1.0;
+    parse_individuals(individuals, tables.individuals);
+    CU_ASSERT_EQUAL_FATAL(tables.individuals->num_rows, 2);
+    parse_nodes(nodes, tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 5);
+
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tree_sequence_get_node(&ts, 0, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(node.individual, MSP_NULL_INDIVIDUAL);
+
+    ret = tree_sequence_get_node(&ts, 1, &node);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(node.individual, 1);
+
+    ret = tree_sequence_get_individual(&ts, 0, &individual);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(individual.id, 0);
+    CU_ASSERT_EQUAL_FATAL(individual.flags, 1);
+    CU_ASSERT_EQUAL_FATAL(individual.location_length, 1);
+    CU_ASSERT_EQUAL_FATAL(individual.location[0], 0.2);
+    CU_ASSERT_EQUAL_FATAL(individual.nodes_length, 1);
+    CU_ASSERT_EQUAL_FATAL(individual.nodes[0], 3);
+
+    ret = tree_sequence_get_individual(&ts, 1, &individual);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(individual.id, 1);
+    CU_ASSERT_EQUAL_FATAL(individual.flags, 2);
+    CU_ASSERT_EQUAL_FATAL(individual.location_length, 2);
+    CU_ASSERT_EQUAL_FATAL(individual.location[0], 0.5);
+    CU_ASSERT_EQUAL_FATAL(individual.location[1], 0.6);
+    CU_ASSERT_EQUAL_FATAL(individual.nodes_length, 2);
+    CU_ASSERT_EQUAL_FATAL(individual.nodes[0], 1);
+    CU_ASSERT_EQUAL_FATAL(individual.nodes[1], 4);
+
+    ret = tree_sequence_get_individual(&ts, 3, &individual);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+
+    table_collection_free(&tables);
+    tree_sequence_free(&ts);
+}
 
 static void
 test_simplest_bad_individuals(void)
@@ -3346,33 +3399,6 @@ test_simplest_bad_individuals(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
     tree_sequence_free(&ts);
     tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
-
-    /* Non contiguous individuals */
-    tables.nodes->individual[0] = 0;
-    tables.nodes->individual[2] = 0;
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS);
-    tree_sequence_free(&ts);
-    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
-    tables.nodes->individual[2] = MSP_NULL_INDIVIDUAL;
-
-    /* Non contiguous individuals */
-    tables.nodes->individual[0] = 1;
-    tables.nodes->individual[4] = 1;
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS);
-    tree_sequence_free(&ts);
-    tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
-    tables.nodes->individual[4] = MSP_NULL_INDIVIDUAL;
-
-    /* Non contiguous individuals */
-    tables.nodes->individual[1] = 1;
-    tables.nodes->individual[3] = 1;
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS);
-    tree_sequence_free(&ts);
-    tables.nodes->individual[1] = MSP_NULL_INDIVIDUAL;
-    tables.nodes->individual[3] = MSP_NULL_INDIVIDUAL;
 
     tree_sequence_free(&ts);
     table_collection_free(&tables);
@@ -9019,6 +9045,7 @@ main(int argc, char **argv)
         {"test_simplest_final_gap_tree_sequence", test_simplest_final_gap_tree_sequence},
         {"test_simplest_final_gap_tree_sequence_mutation_parents",
             test_simplest_final_gap_tree_sequence_mutation_parents},
+        {"test_simplest_individuals", test_simplest_individuals},
         {"test_simplest_bad_individuals", test_simplest_bad_individuals},
         {"test_simplest_bad_records", test_simplest_bad_records},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
