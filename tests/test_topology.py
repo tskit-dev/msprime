@@ -3523,6 +3523,13 @@ class TestReduceTopology(unittest.TestCase):
         ts = msprime.simulate(5, random_seed=1)
         self.verify(ts)
 
+    def test_zero_sites(self):
+        ts = msprime.simulate(5, random_seed=2)
+        self.assertEqual(ts.num_sites, 0)
+        mts = ts.simplify(reduce_to_site_topology=True)
+        self.assertEqual(mts.num_trees, 1)
+        self.assertEqual(mts.num_edges, 0)
+
     def test_many_roots(self):
         ts = msprime.simulate(25, random_seed=12, recombination_rate=2, length=10)
         tables = tsutil.decapitate(ts, ts.num_edges // 2).dump_tables()
