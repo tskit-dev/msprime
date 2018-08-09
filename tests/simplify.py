@@ -25,14 +25,7 @@ from __future__ import division
 
 import sys
 
-try:
-    # We run some tests on the CLI to make sure that we can work in a minimal
-    # sense without numpy. We should extract the PythonSimplifier (and other
-    # algorithms) out into their own module so we don't pull in numpy for
-    # all tests.
-    import numpy as np
-except ImportError:
-    pass
+import numpy as np
 
 import msprime
 
@@ -103,9 +96,12 @@ class Simplifier(object):
     Simplifies a tree sequence to its minimal representation given a subset
     of the leaves.
     """
-    def __init__(self, ts, sample, filter_zero_mutation_sites=True):
+    def __init__(
+            self, ts, sample, filter_zero_mutation_sites=True,
+            reduce_to_site_topology=False):
         self.ts = ts
         self.n = len(sample)
+        self.reduce_to_site_topology = reduce_to_site_topology
         self.sequence_length = ts.sequence_length
         self.filter_zero_mutation_sites = filter_zero_mutation_sites
         self.num_mutations = ts.num_mutations
@@ -141,6 +137,9 @@ class Simplifier(object):
         for mutation_id in range(ts.num_mutations):
             site_position = position[site[mutation_id]]
             self.mutation_map[node[mutation_id]].append((site_position, mutation_id))
+        self.position_lookup = None
+        if self.reduce_to_site_topology:
+            self.position_lookup = np.hstack([[0], position, [self.sequence_length]])
 
     def record_node(self, input_id, is_sample=False):
         """
@@ -159,20 +158,49 @@ class Simplifier(object):
         self.node_id_map[input_id] = output_id
         return output_id
 
+    def rewind_node(self, input_id, output_id):
+        """
+        Remove the mapping for the specified input and output node pair. This is
+        done because there are no edges referring to the node.
+        """
+        assert output_id == len(self.tables.nodes) - 1
+        assert output_id == self.node_id_map[input_id]
+        self.tables.nodes.truncate(output_id)
+        self.node_id_map[input_id] = -1
+
     def flush_edges(self):
         """
         Flush the edges to the output table after sorting and squashing
         any redundant records.
         """
+        num_edges = 0
         for child in sorted(self.edge_buffer.keys()):
             for edge in self.edge_buffer[child]:
                 self.tables.edges.add_row(edge.left, edge.right, edge.parent, edge.child)
+                num_edges += 1
         self.edge_buffer.clear()
+        return num_edges
 
     def record_edge(self, left, right, parent, child):
         """
         Adds an edge to the output list.
         """
+        if self.reduce_to_site_topology:
+            X = self.position_lookup
+            left_index = np.searchsorted(X, left)
+            right_index = np.searchsorted(X, right)
+            # Find the smallest site position index greater than or equal to left
+            # and right, i.e., slide each endpoint of an interval to the right
+            # until they hit a site position. If both left and right map to the
+            # the same position then we discard this edge. We also discard an
+            # edge if left = 0 and right is less than the first site position.
+            if left_index == right_index or (left_index == 0 and right_index == 1):
+                return
+            # Remap back to zero if the left end maps to the first site.
+            if left_index == 1:
+                left_index = 0
+            left = X[left_index]
+            right = X[right_index]
         if child not in self.edge_buffer:
             self.edge_buffer[child] = [msprime.Edge(left, right, parent, child)]
         else:
@@ -258,7 +286,10 @@ class Simplifier(object):
         if is_sample and prev_right != self.sequence_length:
             # If a trailing gap exists in the sample ancestry, fill it in.
             self.add_ancestry(input_id, prev_right, self.sequence_length, output_id)
-        self.flush_edges()
+        if output_id != -1:
+            num_edges = self.flush_edges()
+            if num_edges == 0 and not is_sample:
+                self.rewind_node(input_id, output_id)
 
     def process_parent_edges(self, edges):
         """
@@ -345,9 +376,8 @@ class Simplifier(object):
         # self.print_state()
         self.map_mutation_nodes()
         self.finalise_sites()
-        ts = msprime.load_tables(
-            sequence_length=self.sequence_length,
-            **self.tables.asdict())
+
+        ts = self.tables.tree_sequence()
         return ts, self.node_id_map
 
     def check_state(self):

@@ -2391,7 +2391,9 @@ class TreeSequence(object):
         for record in converter:
             output.write(record)
 
-    def simplify(self, samples=None, filter_zero_mutation_sites=True, map_nodes=False):
+    def simplify(
+            self, samples=None, filter_zero_mutation_sites=True, map_nodes=False,
+            reduce_to_site_topology=False):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -2409,6 +2411,16 @@ class TreeSequence(object):
         requirements for building a TreeSequence, then use
         :meth:`TableCollection.simplify`.
 
+        If the ``reduce_to_site_topology`` parameter is True, the returned tree
+        sequence will contain only topological information that is necessary to
+        represent the trees that contain sites. If there are zero sites in this
+        tree sequence, this will result in an output tree sequence with zero edges.
+        When the number of sites is greater than zero, every tree in the output
+        tree sequence will contain at least one site. For a given site, the
+        topology of the tree containing that site will be identical
+        (up to node ID remapping) to the topology of the corresponding tree
+        in the input tree sequence.
+
         :param list samples: The list of nodes for which to retain information. This
             may be a numpy array (or array-like) object (dtype=np.int32).
         :param bool filter_zero_mutation_sites: If True, remove any sites that have
@@ -2417,6 +2429,8 @@ class TreeSequence(object):
             tree sequence and a numpy array mapping node IDs in the current tree
             sequence to their corresponding node IDs in the returned tree sequence.
             If False (the default), return only the tree sequence object itself.
+        :param bool reduce_to_site_topology: Whether to reduce the topology down
+            to the trees that are present at sites. (default: False).
         :return: The simplified tree sequence, or (if ``map_nodes`` is True)
             a tuple consisting of the simplified tree sequence and a numpy array
             mapping source node IDs to their corresponding IDs in the new tree
@@ -2429,7 +2443,8 @@ class TreeSequence(object):
         assert tables.sequence_length == self.sequence_length
         node_map = tables.simplify(
             samples=samples,
-            filter_zero_mutation_sites=filter_zero_mutation_sites)
+            filter_zero_mutation_sites=filter_zero_mutation_sites,
+            reduce_to_site_topology=reduce_to_site_topology)
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))

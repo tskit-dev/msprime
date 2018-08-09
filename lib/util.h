@@ -75,7 +75,8 @@
 #define MSP_INDIVIDUAL_MALE 2
 
 /* Flags for simplify() */
-#define MSP_FILTER_ZERO_MUTATION_SITES 1
+#define MSP_FILTER_ZERO_MUTATION_SITES   1
+#define MSP_REDUCE_TO_SITE_TOPOLOGY      (1 << 1)
 
 /* Flags for dump tables */
 #define MSP_ALLOC_TABLES 1
@@ -209,5 +210,7 @@ extern int block_allocator_reset(block_allocator_t *self);
 extern int block_allocator_alloc(block_allocator_t *self, size_t chunk_size);
 extern void * block_allocator_get(block_allocator_t *self, size_t size);
 extern void block_allocator_free(block_allocator_t *self);
+
+size_t msp_search_sorted(const double *array, size_t size, double value);
 
 #endif /*__UTIL_H__*/
