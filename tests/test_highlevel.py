@@ -293,12 +293,12 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     return pi
 
 
-def simplify_tree_sequence(ts, samples, filter_zero_mutation_sites=True):
+def simplify_tree_sequence(ts, samples, filter_sites=True):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
     """
     s = tests.Simplifier(
-        ts, samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+        ts, samples, filter_sites=filter_sites)
     return s.simplify()
 
 
@@ -1368,13 +1368,11 @@ class TestTreeSequence(HighLevelTestCase):
                         old_tree.get_population(mrca1), new_tree.get_population(mrca2))
 
     def verify_simplify_equality(self, ts, sample):
-        for filter_zero_mutation_sites in [False, True]:
+        for filter_sites in [False, True]:
             s1, node_map1 = ts.simplify(
-                sample, map_nodes=True,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
+                sample, map_nodes=True, filter_sites=filter_sites)
             t1 = s1.dump_tables()
-            s2, node_map2 = simplify_tree_sequence(
-                ts, sample, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            s2, node_map2 = simplify_tree_sequence(ts, sample, filter_sites=filter_sites)
             t2 = s2.dump_tables()
             self.assertEqual(s1.num_samples,  len(sample))
             self.assertEqual(s2.num_samples,  len(sample))

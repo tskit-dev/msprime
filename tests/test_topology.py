@@ -427,7 +427,7 @@ class TestEmptyTreeSequences(TopologyTestCase):
             self.assertEqual(method(0), msprime.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
-        tsp = ts.simplify(filter_zero_mutation_sites=False)
+        tsp = ts.simplify(filter_sites=False)
         self.assertEqual(tsp.num_nodes, 1)
         self.assertEqual(tsp.num_edges, 0)
         self.assertEqual(tsp.num_sites, 1)
@@ -1066,7 +1066,7 @@ class TestSimplifyExamples(TopologyTestCase):
     or we detect expected errors.
     """
     def verify_simplify(
-            self, samples, filter_zero_mutation_sites=True,
+            self, samples, filter_sites=True,
             nodes_before=None, edges_before=None, sites_before=None,
             mutations_before=None, nodes_after=None, edges_after=None,
             sites_after=None, mutations_after=None, debug=False):
@@ -1101,7 +1101,7 @@ class TestSimplifyExamples(TopologyTestCase):
         for t in ts.trees():
             self.assertTrue(t is not None)
         before.simplify(
-            samples=samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            samples=samples, filter_sites=filter_sites)
         if debug:
             print("before")
             print(before)
@@ -1312,7 +1312,7 @@ class TestSimplifyExamples(TopologyTestCase):
         # If we don't filter the fixed sites, we should get the same
         # mutations and the original sites table back.
         self.verify_simplify(
-            samples=[0, 1, 6], filter_zero_mutation_sites=False,
+            samples=[0, 1, 6], filter_sites=False,
             nodes_before=nodes_before, edges_before=edges_before,
             sites_before=sites_before, mutations_before=mutations_before,
             nodes_after=nodes_after, edges_after=edges_after,
@@ -1744,7 +1744,7 @@ class TestMultipleRoots(TopologyTestCase):
         variants = [b"100", b"010", b"110", b"110", b"001", b"001"]
         self.assertEqual(list(ts.haplotypes()), haplotypes)
         self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], variants)
-        ts_simplified = ts.simplify(filter_zero_mutation_sites=False)
+        ts_simplified = ts.simplify(filter_sites=False)
         self.assertEqual(list(ts_simplified.haplotypes()), haplotypes)
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
@@ -2585,23 +2585,18 @@ class TestSimplify(unittest.TestCase):
     """
 
     def do_simplify(
-            self, ts, samples=None, compare_lib=True, filter_zero_mutation_sites=True):
+            self, ts, samples=None, compare_lib=True, filter_sites=True):
         """
         Runs the Python test implementation of simplify.
         """
         if samples is None:
             samples = ts.samples()
         s = tests.Simplifier(
-            ts, samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            ts, samples, filter_sites=filter_sites)
         new_ts, node_map = s.simplify()
         if compare_lib:
             lib_tables = ts.dump_tables()
-            lib_node_map = np.empty(ts.num_nodes, dtype=np.int32)
-            lib_node_map = msprime.simplify_tables(
-                samples=samples, nodes=lib_tables.nodes, edges=lib_tables.edges,
-                sites=lib_tables.sites, mutations=lib_tables.mutations,
-                filter_zero_mutation_sites=filter_zero_mutation_sites,
-                sequence_length=ts.sequence_length)
+            lib_node_map = lib_tables.simplify(samples, filter_sites=filter_sites)
             py_tables = new_ts.dump_tables()
             # print("lib = ")
             # print(lib_tables.nodes)
@@ -2781,10 +2776,10 @@ class TestSimplify(unittest.TestCase):
         ts = tsutil.insert_branch_sites(ts)
         self.assertEqual(ts.num_sites, 8)
         self.assertEqual(ts.num_mutations, 8)
-        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_zero_mutation_sites=True)
+        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_sites=True)
         self.assertEqual(tss.num_sites, 5)
         self.assertEqual(tss.num_mutations, 5)
-        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_zero_mutation_sites=False)
+        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_sites=False)
         self.assertEqual(tss.num_sites, 8)
         self.assertEqual(tss.num_mutations, 5)
 
@@ -2819,7 +2814,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 1)
         for filt in [True, False]:
-            tss, _ = self.do_simplify(ts, [0, 1], filter_zero_mutation_sites=filt)
+            tss, _ = self.do_simplify(ts, [0, 1], filter_sites=filt)
             self.assertEqual(tss.num_sites, 1)
             self.assertEqual(tss.num_mutations, 1)
 
@@ -3038,9 +3033,9 @@ class TestSimplify(unittest.TestCase):
         ts = tsutil.insert_branch_sites(ts)
         self.assertEqual(ts.num_sites, ts.num_mutations)
         self.assertGreater(ts.num_sites, ts.num_trees)
-        for filter_zero_mutation_sites in [True, False]:
+        for filter_sites in [True, False]:
             tss, _ = self.do_simplify(
-                ts, samples=None, filter_zero_mutation_sites=filter_zero_mutation_sites)
+                ts, samples=None, filter_sites=filter_sites)
             self.assertEqual(ts.num_sites, tss.num_sites)
             self.assertEqual(ts.num_mutations, tss.num_mutations)
 
@@ -3050,15 +3045,15 @@ class TestSimplify(unittest.TestCase):
         ts = tsutil.insert_multichar_mutations(ts)
         self.assertEqual(ts.num_sites, ts.num_trees)
         self.assertEqual(ts.num_mutations, ts.num_trees)
-        for filter_zero_mutation_sites in [True, False]:
+        for filter_sites in [True, False]:
             tss, _ = self.do_simplify(
-                ts, samples=None, filter_zero_mutation_sites=filter_zero_mutation_sites)
+                ts, samples=None, filter_sites=filter_sites)
             self.assertEqual(ts.num_sites, tss.num_sites)
             self.assertEqual(ts.num_mutations, tss.num_mutations)
 
     def verify_simplify_haplotypes(self, ts, samples):
         sub_ts, node_map = self.do_simplify(
-            ts, samples, filter_zero_mutation_sites=False)
+            ts, samples, filter_sites=False)
         self.assertEqual(ts.num_sites, sub_ts.num_sites)
         sub_haplotypes = list(sub_ts.haplotypes())
         all_samples = list(ts.samples())
@@ -3375,7 +3370,7 @@ def reduce_topology(ts):
     tables.sort()
     ts = tables.tree_sequence()
     # Now simplify to remove redundant nodes.
-    return ts.simplify(map_nodes=True, filter_zero_mutation_sites=False)
+    return ts.simplify(map_nodes=True, filter_sites=False)
 
 
 class TestReduceTopology(unittest.TestCase):
@@ -3439,11 +3434,9 @@ class TestReduceTopology(unittest.TestCase):
 
         # Verify against simplify implementations.
         s = tests.Simplifier(
-            ts, ts.samples(), reduce_to_site_topology=True,
-            filter_zero_mutation_sites=False)
+            ts, ts.samples(), reduce_to_site_topology=True, filter_sites=False)
         sts1, _ = s.simplify()
-        sts2 = ts.simplify(
-            reduce_to_site_topology=True, filter_zero_mutation_sites=False)
+        sts2 = ts.simplify(reduce_to_site_topology=True, filter_sites=False)
         t1 = mts.tables
         for sts in [sts2, sts2]:
             t2 = sts.tables

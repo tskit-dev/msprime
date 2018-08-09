@@ -1559,8 +1559,9 @@ class TableCollection(object):
         return msprime.TreeSequence.load_tables(self)
 
     def simplify(
-            self, samples, filter_zero_mutation_sites=True,
-            reduce_to_site_topology=False):
+            self, samples, filter_zero_mutation_sites=None,
+            reduce_to_site_topology=False,
+            filter_sites=True):
         """
         Simplifies the tables in place to retain only the information necessary
         to reconstruct the tree sequence describing the given ``samples``.
@@ -1593,8 +1594,10 @@ class TableCollection(object):
             corresponding node IDs in the output tables.
         :rtype: numpy array (dtype=np.int32).
         """
+        if filter_zero_mutation_sites is not None:
+            filter_sites = filter_zero_mutation_sites
         return self.ll_tables.simplify(
-            samples, filter_zero_mutation_sites,
+            samples, filter_sites,
             reduce_to_site_topology=reduce_to_site_topology)
 
     def sort(self, edge_start=0):

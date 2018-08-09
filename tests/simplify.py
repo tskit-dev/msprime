@@ -97,13 +97,13 @@ class Simplifier(object):
     of the leaves.
     """
     def __init__(
-            self, ts, sample, filter_zero_mutation_sites=True,
+            self, ts, sample, filter_sites=True,
             reduce_to_site_topology=False):
         self.ts = ts
         self.n = len(sample)
         self.reduce_to_site_topology = reduce_to_site_topology
         self.sequence_length = ts.sequence_length
-        self.filter_zero_mutation_sites = filter_zero_mutation_sites
+        self.filter_sites = filter_sites
         self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
         self.A_head = [None for _ in range(ts.num_nodes)]
@@ -327,7 +327,7 @@ class Simplifier(object):
                     num_output_mutations += 1
                     num_output_site_mutations += 1
             output_site = True
-            if self.filter_zero_mutation_sites and num_output_site_mutations == 0:
+            if self.filter_sites and num_output_site_mutations == 0:
                 output_site = False
 
             if output_site:

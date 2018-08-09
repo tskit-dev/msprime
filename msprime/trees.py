@@ -2392,8 +2392,8 @@ class TreeSequence(object):
             output.write(record)
 
     def simplify(
-            self, samples=None, filter_zero_mutation_sites=True, map_nodes=False,
-            reduce_to_site_topology=False):
+            self, samples=None, filter_zero_mutation_sites=None, map_nodes=False,
+            reduce_to_site_topology=False, filter_sites=True):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -2444,7 +2444,8 @@ class TreeSequence(object):
         node_map = tables.simplify(
             samples=samples,
             filter_zero_mutation_sites=filter_zero_mutation_sites,
-            reduce_to_site_topology=reduce_to_site_topology)
+            reduce_to_site_topology=reduce_to_site_topology,
+            filter_sites=filter_sites)
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(
             provenance.get_provenance_dict("simplify", [])))
