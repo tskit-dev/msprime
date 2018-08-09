@@ -330,6 +330,10 @@ typedef struct {
     mutation_id_list_t **node_mutation_list_map_head;
     mutation_id_list_t **node_mutation_list_map_tail;
     mutation_id_list_t *node_mutation_list_mem;
+    /* When reducing topology, we need a map positions to their corresponding
+     * sites.*/
+    double *position_lookup;
+
 } simplifier_t;
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,

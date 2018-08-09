@@ -3438,6 +3438,12 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     node_id_t child;
 
     fprintf(out, "--simplifier state--\n");
+    fprintf(out, "flags:\n");
+    fprintf(out, "\tfilter_unreferenced_sites: %d\n",
+            !!(self->flags & MSP_FILTER_ZERO_MUTATION_SITES));
+    fprintf(out, "\treduce_to_site_topology  : %d\n",
+            !!(self->flags & MSP_REDUCE_TO_SITE_TOPOLOGY));
+
     fprintf(out, "===\nInput nodes\n==\n");
     node_table_print_state(&self->input_nodes, out);
     fprintf(out, "===\nInput edges\n==\n");
@@ -3499,6 +3505,12 @@ simplifier_print_state(simplifier_t *self, FILE *out)
             fprintf(out, "]\n");
         }
     }
+    if (!!(self->flags & MSP_REDUCE_TO_SITE_TOPOLOGY)) {
+        fprintf(out, "===\nposition_lookup\n==\n");
+        for (j = 0; j < self->input_sites.num_rows + 2; j++) {
+            fprintf(out, "%d\t-> %f\n", (int) j, self->position_lookup[j]);
+        }
+    }
     simplifier_check_state(self);
 }
 
@@ -3558,14 +3570,22 @@ simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
     return ret;
 }
 
+/* Remove the mapping for the last recorded node. */
+static int
+simplifier_rewind_node(simplifier_t *self, node_id_t input_id, node_id_t output_id)
+{
+    self->node_id_map[input_id] = MSP_NULL_NODE;
+    return node_table_truncate(self->nodes, (size_t) output_id);
+}
 
 static int
-simplifier_flush_edges(simplifier_t *self, node_id_t parent)
+simplifier_flush_edges(simplifier_t *self, node_id_t parent, size_t *ret_num_edges)
 {
     int ret = 0;
     size_t j;
     node_id_t child;
     interval_list_t *x;
+    size_t num_edges = 0;
 
     qsort(self->buffered_children, self->num_buffered_children,
             sizeof(node_id_t), cmp_node_id);
@@ -3576,14 +3596,66 @@ simplifier_flush_edges(simplifier_t *self, node_id_t parent)
             if (ret < 0) {
                 goto out;
             }
+            num_edges++;
         }
         self->child_edge_map_head[child] = NULL;
         self->child_edge_map_tail[child] = NULL;
     }
     self->num_buffered_children = 0;
+    *ret_num_edges = num_edges;
     ret = block_allocator_reset(&self->interval_list_heap);
 out:
     return ret;
+}
+
+/* When we are reducing topology down to what is visible at the sites we need a
+ * lookup table to find the closest site position for each edge. We do this with
+ * a sorted array and binary search */
+static int
+simplifier_init_position_lookup(simplifier_t *self)
+{
+    int ret = 0;
+    size_t num_sites = self->input_sites.num_rows;
+
+    self->position_lookup = malloc((num_sites + 2) * sizeof(*self->position_lookup));
+    if (self->position_lookup == NULL) {
+        goto out;
+    }
+    self->position_lookup[0] = 0;
+    self->position_lookup[num_sites + 1] = self->sequence_length;
+    memcpy(self->position_lookup + 1, self->input_sites.position,
+            num_sites * sizeof(double));
+out:
+    return ret;
+}
+/*
+ * Find the smallest site position index greater than or equal to left
+ * and right, i.e., slide each endpoint of an interval to the right
+ * until they hit a site position. If both left and right map to the
+ * the same position then we discard this edge. We also discard an
+ * edge if left = 0 and right is less than the first site position.
+ */
+static bool
+simplifier_map_reduced_coordinates(simplifier_t *self, double *left, double *right)
+{
+    double *X = self->position_lookup;
+    size_t N = self->input_sites.num_rows + 2;
+    size_t left_index, right_index;
+    bool skip = false;
+
+    left_index = msp_search_sorted(X, N, *left);
+    right_index = msp_search_sorted(X, N, *right);
+    if (left_index == right_index || (left_index == 0 && right_index == 1)) {
+        skip = true;
+    } else {
+        /* Remap back to zero if the left end maps to the first site. */
+        if (left_index == 1) {
+            left_index = 0;
+        }
+        *left = X[left_index];
+        *right = X[right_index];
+    }
+    return skip;
 }
 
 /* Records the specified edge for the current parent by buffering it */
@@ -3592,6 +3664,16 @@ simplifier_record_edge(simplifier_t *self, double left, double right, node_id_t 
 {
     int ret = 0;
     interval_list_t *tail, *x;
+    bool skip;
+
+    if (!!(self->flags & MSP_REDUCE_TO_SITE_TOPOLOGY)) {
+        skip = simplifier_map_reduced_coordinates(self, &left, &right);
+        /* NOTE: we exit early here when reduce_coordindates has told us to
+         * skip this edge, as it is not visible in the reduced tree sequence */
+        if (skip) {
+            goto out;
+        }
+    }
 
     tail = self->child_edge_map_tail[child];
     if (tail == NULL) {
@@ -3979,6 +4061,12 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
+    if (!!(self->flags & MSP_REDUCE_TO_SITE_TOPOLOGY)) {
+        ret = simplifier_init_position_lookup(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 
     /* Temporary workaround to make sure that we don't ship code with
      * incorrect semantics in terms of individuals. Put this check in
@@ -4016,6 +4104,7 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->node_mutation_list_map_head);
     msp_safe_free(self->node_mutation_list_map_tail);
     msp_safe_free(self->buffered_children);
+    msp_safe_free(self->position_lookup);
     return 0;
 }
 
@@ -4143,7 +4232,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
 {
     int ret = 0;
     simplify_segment_t **X, *x;
-    size_t j, num_overlapping;
+    size_t j, num_overlapping, num_flushed_edges;
     double left, right, prev_right;
     node_id_t ancestry_node;
     node_id_t output_id = self->node_id_map[input_id];
@@ -4217,7 +4306,15 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
             goto out;
         }
     }
-    ret = simplifier_flush_edges(self, output_id);
+    if (output_id != MSP_NULL_NODE) {
+        ret = simplifier_flush_edges(self, output_id, &num_flushed_edges);
+        if (ret != 0) {
+            goto out;
+        }
+        if (num_flushed_edges == 0 && !is_sample) {
+            ret = simplifier_rewind_node(self, input_id, output_id);
+        }
+    }
 out:
     return ret;
 }
@@ -4304,7 +4401,7 @@ simplifier_output_sites(simplifier_t *self)
     mutation_id_t input_parent, num_output_mutations, num_output_site_mutations;
     node_id_t mapped_node;
     bool keep_site;
-    bool filter_zero_mutation_sites = (self->flags & MSP_FILTER_ZERO_MUTATION_SITES);
+    bool filter_zero_mutation_sites = !!(self->flags & MSP_FILTER_ZERO_MUTATION_SITES);
 
     input_mutation = 0;
     num_output_mutations = 0;

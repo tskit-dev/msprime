@@ -3441,16 +3441,18 @@ class TestReduceTopology(unittest.TestCase):
         s = tests.Simplifier(
             ts, ts.samples(), reduce_to_site_topology=True,
             filter_zero_mutation_sites=False)
-        sts, _ = s.simplify()
-
+        sts1, _ = s.simplify()
+        sts2 = ts.simplify(
+            reduce_to_site_topology=True, filter_zero_mutation_sites=False)
         t1 = mts.tables
-        t2 = sts.tables
-        self.assertEqual(t1.nodes,  t2.nodes)
-        self.assertEqual(t1.edges, t2.edges)
-        self.assertEqual(t1.sites, t2.sites)
-        self.assertEqual(t1.mutations, t2.mutations)
-        self.assertEqual(t1.populations, t2.populations)
-        self.assertEqual(t1.individuals, t2.individuals)
+        for sts in [sts2, sts2]:
+            t2 = sts.tables
+            self.assertEqual(t1.nodes,  t2.nodes)
+            self.assertEqual(t1.edges, t2.edges)
+            self.assertEqual(t1.sites, t2.sites)
+            self.assertEqual(t1.mutations, t2.mutations)
+            self.assertEqual(t1.populations, t2.populations)
+            self.assertEqual(t1.individuals, t2.individuals)
         return mts
 
     def test_no_recombination_one_site(self):
@@ -3537,3 +3539,82 @@ class TestReduceTopology(unittest.TestCase):
         ts = msprime.simulate(8, random_seed=13, recombination_rate=2, length=10)
         ts = tsutil.jiggle_samples(ts)
         self.verify(ts)
+
+
+def search_sorted(a, v):
+    """
+    Implementation of searchsorted based on binary search with the same
+    semantics as numpy's searchsorted. Used as the basis of the C
+    implementation which we use in the simplify algorithm.
+    """
+    upper = len(a)
+    if upper == 0:
+        return 0
+    lower = 0
+    while upper - lower > 1:
+        mid = (upper + lower) // 2
+        if (v >= a[mid]):
+            lower = mid
+        else:
+            upper = mid
+    offset = 0
+    if a[lower] < v:
+        offset = 1
+    return lower + offset
+
+
+class TestSearchSorted(unittest.TestCase):
+    """
+    Tests for the basic implementation of search_sorted.
+    """
+    def verify(self, a):
+        a = np.array(a)
+        start, end = a[0], a[-1]
+        # Check random values.
+        np.random.seed(43)
+        for v in np.random.uniform(start, end, 10):
+            self.assertEqual(search_sorted(a, v), np.searchsorted(a, v))
+        # Check equal values.
+        for v in a:
+            self.assertEqual(search_sorted(a, v), np.searchsorted(a, v))
+        # Check values outside bounds.
+        for v in [start - 2, start - 1, end, end + 1, end + 2]:
+            self.assertEqual(search_sorted(a, v), np.searchsorted(a, v))
+
+    def test_range(self):
+        for j in range(1, 20):
+            self.verify(range(j))
+
+    def test_negative_range(self):
+        for j in range(1, 20):
+            self.verify(-1 * np.arange(j)[::-1])
+
+    def test_random_unit_interval(self):
+        np.random.seed(143)
+        for size in range(1, 100):
+            a = np.random.random(size=size)
+            a.sort()
+            self.verify(a)
+
+    def test_random_interval(self):
+        np.random.seed(143)
+        for _ in range(10):
+            interval = np.random.random(2) * 10
+            interval.sort()
+            a = np.random.uniform(*interval, size=100)
+            a.sort()
+            self.verify(a)
+
+    def test_random_negative(self):
+        np.random.seed(143)
+        for _ in range(10):
+            interval = np.random.random(2) * 5
+            interval.sort()
+            a = -1 * np.random.uniform(*interval, size=100)
+            a.sort()
+            self.verify(a)
+
+    def test_edge_cases(self):
+        for v in [0, 1]:
+            self.assertEqual(search_sorted([], v), np.searchsorted([], v))
+            self.assertEqual(search_sorted([1], v), np.searchsorted([1], v))

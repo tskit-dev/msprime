@@ -1443,6 +1443,48 @@ verify_simplify(tree_sequence_t *ts)
     free(node_map);
 }
 
+static void
+verify_reduce_topology(tree_sequence_t *ts)
+{
+    int ret;
+    size_t j;
+    node_id_t *sample;
+    tree_sequence_t reduced;
+    edge_t edge;
+    double *X;
+    size_t num_sites;
+    size_t n = tree_sequence_get_num_samples(ts);
+    int flags = MSP_REDUCE_TO_SITE_TOPOLOGY;
+
+    ret = tree_sequence_get_samples(ts, &sample);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tree_sequence_simplify(ts, sample, n, flags, &reduced, NULL);
+    if (tree_sequence_get_num_individuals(ts) > 0) {
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INDIVIDUALS_NOT_SUPPORTED);
+    } else {
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        X = reduced.tables->sites->position;
+        num_sites = reduced.tables->sites->num_rows;
+        if (num_sites == 0) {
+            CU_ASSERT_EQUAL_FATAL(tree_sequence_get_num_edges(&reduced), 0);
+        }
+        for (j = 0; j < tree_sequence_get_num_edges(&reduced); j++) {
+            ret = tree_sequence_get_edge(&reduced, j, &edge);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            if (edge.left != 0) {
+                CU_ASSERT_EQUAL_FATAL(edge.left,
+                    X[msp_search_sorted(X, num_sites, edge.left)]);
+            }
+            if (edge.right != tree_sequence_get_sequence_length(&reduced)) {
+                CU_ASSERT_EQUAL_FATAL(edge.right,
+                    X[msp_search_sorted(X, num_sites, edge.right)]);
+            }
+        }
+        tree_sequence_free(&reduced);
+    }
+}
+
 /* Utility function to return a tree sequence for testing. It is the
  * callers responsilibility to free all memory.
  */
@@ -3745,6 +3787,62 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     table_collection_free(&tables);
 }
 
+static void
+test_simplest_reduce_site_topology(void)
+{
+    /* Two trees side by side, with a site on the second one. The first
+     * tree should disappear. */
+    const char *nodes =
+        "1  0   -1\n"
+        "1  0   -1\n"
+        "0  1   -1\n"
+        "0  2   -1\n";
+    const char *edges =
+        "0  1   2   0\n"
+        "0  1   2   1\n"
+        "1  2   3   0\n"
+        "1  2   3   1\n";
+    const char *sites =
+        "1.0  0\n";
+    node_id_t samples[] = {0, 1};
+    table_collection_t tables;
+    simplifier_t simplifier;
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 2;
+    parse_nodes(nodes, tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 4);
+    parse_edges(edges, tables.edges);
+    CU_ASSERT_EQUAL_FATAL(tables.edges->num_rows, 4);
+    parse_sites(sites, tables.sites);
+    CU_ASSERT_EQUAL_FATAL(tables.sites->num_rows, 1);
+
+    ret = simplifier_alloc(&simplifier, samples, 2, &tables,
+            MSP_REDUCE_TO_SITE_TOPOLOGY);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_run(&simplifier, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    simplifier_print_state(&simplifier, _devnull);
+    ret = simplifier_free(&simplifier);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    CU_ASSERT_EQUAL(tables.nodes->num_rows, 3);
+    CU_ASSERT_EQUAL(tables.edges->num_rows, 2);
+    CU_ASSERT_EQUAL(tables.edges->left[0], 0);
+    CU_ASSERT_EQUAL(tables.edges->left[1], 0);
+    CU_ASSERT_EQUAL(tables.edges->right[0], 2);
+    CU_ASSERT_EQUAL(tables.edges->right[1], 2);
+    CU_ASSERT_EQUAL(tables.edges->parent[0], 2);
+    CU_ASSERT_EQUAL(tables.edges->parent[1], 2);
+    CU_ASSERT_EQUAL(tables.edges->child[0], 0);
+    CU_ASSERT_EQUAL(tables.edges->child[1], 1);
+
+    table_collection_free(&tables);
+}
 
 static void
 test_single_tree_good_records(void)
@@ -6070,6 +6168,21 @@ test_simplify_from_examples(void)
     for (j = 0; examples[j] != NULL; j++) {
         verify_simplify(examples[j]);
         verify_simplify_errors(examples[j]);
+        tree_sequence_free(examples[j]);
+        free(examples[j]);
+    }
+    free(examples);
+}
+
+static void
+test_reduce_topology_from_examples(void)
+{
+    tree_sequence_t **examples = get_example_tree_sequences(1);
+    uint32_t j;
+
+    CU_ASSERT_FATAL(examples != NULL);
+    for (j = 0; examples[j] != NULL; j++) {
+        verify_reduce_topology(examples[j]);
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -8916,6 +9029,7 @@ main(int argc, char **argv)
             test_simplest_overlapping_unary_edges_simplify},
         {"test_simplest_overlapping_unary_edges_internal_samples_simplify",
             test_simplest_overlapping_unary_edges_internal_samples_simplify},
+        {"test_simplest_reduce_site_topology", test_simplest_reduce_site_topology},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",
             test_single_nonbinary_tree_good_records},
@@ -8973,6 +9087,7 @@ main(int argc, char **argv)
             test_individual_nodes_from_examples},
         {"test_ld_from_examples", test_ld_from_examples},
         {"test_simplify_from_examples", test_simplify_from_examples},
+        {"test_reduce_topology_from_examples", test_reduce_topology_from_examples},
         {"test_save_empty_kas", test_save_empty_kas},
         {"test_save_kas", test_save_kas},
         {"test_save_kas_tables", test_save_kas_tables},

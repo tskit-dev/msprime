@@ -137,9 +137,9 @@ class Simplifier(object):
         for mutation_id in range(ts.num_mutations):
             site_position = position[site[mutation_id]]
             self.mutation_map[node[mutation_id]].append((site_position, mutation_id))
-        self.edge_position_table = None
+        self.position_lookup = None
         if self.reduce_to_site_topology:
-            self.edge_position_table = np.hstack([[0], position, [self.sequence_length]])
+            self.position_lookup = np.hstack([[0], position, [self.sequence_length]])
 
     def record_node(self, input_id, is_sample=False):
         """
@@ -186,7 +186,7 @@ class Simplifier(object):
         Adds an edge to the output list.
         """
         if self.reduce_to_site_topology:
-            X = self.edge_position_table
+            X = self.position_lookup
             left_index = np.searchsorted(X, left)
             right_index = np.searchsorted(X, right)
             # Find the smallest site position index greater than or equal to left

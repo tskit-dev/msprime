@@ -415,3 +415,29 @@ block_allocator_free(block_allocator_t *self)
         free(self->mem_chunks);
     }
 }
+
+/* Mirrors the semantics of numpy's searchsorted function. Uses binary
+ * search to find the index of the closest value in the array. */
+size_t
+msp_search_sorted(const double *restrict array, size_t size, double value)
+{
+    int64_t upper = (int64_t) size;
+    int64_t lower = 0;
+    int64_t offset = 0;
+    int64_t mid;
+
+    if (upper == 0) {
+        return 0;
+    }
+
+    while (upper - lower > 1) {
+        mid = (upper + lower) / 2;
+        if (value >= array[mid]) {
+            lower = mid;
+        } else {
+            upper = mid;
+        }
+    }
+    offset = (int64_t) (array[lower] < value);
+    return (size_t) (lower + offset);
+}
