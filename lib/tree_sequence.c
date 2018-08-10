@@ -224,155 +224,6 @@ tree_sequence_free(tree_sequence_t *self)
     return 0;
 }
 
-#if 0
-static int
-tree_sequence_check(tree_sequence_t *self)
-{
-    int ret = MSP_ERR_GENERIC;
-    node_id_t child, parent, last_parent, last_child;
-    mutation_id_t parent_mut;
-    size_t j;
-    double left, last_left;
-    double *time = self->nodes.time;
-    bool *parent_seen = calloc(self->nodes.num_records, sizeof(bool));
-
-    if (parent_seen == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-
-    for (j = 0; j < self->edges.num_records; j++) {
-        parent = self->edges.parent[j];
-        child = self->edges.child[j];
-        left = self->edges.left[j];
-        if (parent == MSP_NULL_NODE) {
-            ret = MSP_ERR_NULL_PARENT;
-            goto out;
-        }
-        if (parent < 0 || parent >= (node_id_t) self->nodes.num_records) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (parent_seen[parent]) {
-            ret = MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS;
-            goto out;
-        }
-        if (j > 0) {
-            last_parent = self->edges.parent[j - 1];
-            last_child = self->edges.child[j - 1];
-            last_left = self->edges.left[j - 1];
-            /* Input data must sorted by (time[parent], parent, child, left). */
-            if (time[parent] < time[last_parent]) {
-                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
-                goto out;
-            }
-            if (time[parent] == time[last_parent]) {
-                /* if (parent < last_parent) { */
-                /*     ret = MSP_ERR_EDGES_NOT_SORTED_PARENT; */
-                /*     goto out; */
-                /* } */
-                if (parent == last_parent) {
-                    if (child < last_child) {
-                        ret = MSP_ERR_EDGES_NOT_SORTED_CHILD;
-                        goto out;
-                    }
-                    if (child == last_child) {
-                        if (left == last_left) {
-                            ret = MSP_ERR_DUPLICATE_EDGES;
-                            goto out;
-                        } else if (left < last_left) {
-                            ret = MSP_ERR_EDGES_NOT_SORTED_LEFT;
-                            goto out;
-                        }
-                    }
-                } else {
-                    parent_seen[last_parent] = true;
-                }
-            }
-        }
-        if (child == MSP_NULL_NODE) {
-            ret = MSP_ERR_NULL_CHILD;
-            goto out;
-        }
-        if (child < 0 || child >= (node_id_t) self->nodes.num_records) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        /* time[child] must be < time[parent] */
-        if (time[child] >= time[parent]) {
-            ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
-            goto out;
-        }
-        if (self->edges.left[j] >= self->edges.right[j]) {
-            ret = MSP_ERR_BAD_EDGE_INTERVAL;
-            goto out;
-        }
-        if (self->edges.right[j] > self->sequence_length) {
-            ret = MSP_ERR_RIGHT_GREATER_SEQ_LENGTH;
-            goto out;
-        }
-    }
-
-    /* Check the sites */
-    for (j = 0; j < self->sites.num_records; j++) {
-        if (self->sites.position[j] < 0
-                || self->sites.position[j] >= self->sequence_length) {
-            ret = MSP_ERR_BAD_SITE_POSITION;
-            goto out;
-        }
-        if (j > 0) {
-            if (self->sites.position[j - 1] >= self->sites.position[j]) {
-                ret = MSP_ERR_UNSORTED_SITES;
-                goto out;
-            }
-        }
-    }
-    for (j = 0; j < self->mutations.num_records; j++) {
-        if (self->mutations.site[j] < 0
-                || self->mutations.site[j] >= (mutation_id_t) self->sites.num_records) {
-            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (self->mutations.node[j] < 0
-                || self->mutations.node[j] >= (node_id_t) self->nodes.num_records) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        parent_mut = self->mutations.parent[j];
-        if (parent_mut < MSP_NULL_MUTATION
-                || parent_mut >= (mutation_id_t) self->mutations.num_records) {
-            ret = MSP_ERR_MUTATION_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (parent_mut == (mutation_id_t) j) {
-            ret = MSP_ERR_MUTATION_PARENT_EQUAL;
-            goto out;
-        }
-        if (parent_mut != MSP_NULL_MUTATION) {
-            /* Parents must be listed before their children */
-            if (parent_mut > (mutation_id_t) j) {
-                ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
-                goto out;
-            }
-            if (self->mutations.site[parent_mut] != self->mutations.site[j]) {
-                ret = MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE;
-                goto out;
-            }
-        }
-        if (j > 0) {
-            if (self->mutations.site[j - 1] > self->mutations.site[j]) {
-                ret = MSP_ERR_UNSORTED_MUTATIONS;
-                goto out;
-            }
-        }
-    }
-    ret = 0;
-out:
-    msp_safe_free(parent_seen);
-    return ret;
-}
-#endif
-
 static int
 tree_sequence_init_sites(tree_sequence_t *self)
 {
@@ -406,17 +257,6 @@ tree_sequence_init_sites(tree_sequence_t *self)
     }
     k = 0;
     for (j = 0; j < (site_id_t) self->sites.num_records; j++) {
-        if (self->sites.position[j] < 0
-                || self->sites.position[j] >= self->sequence_length) {
-            ret = MSP_ERR_BAD_SITE_POSITION;
-            goto out;
-        }
-        if (j > 1) {
-            if (self->sites.position[j - 1] >= self->sites.position[j]) {
-                ret = MSP_ERR_UNSORTED_SITES;
-                goto out;
-            }
-        }
         self->sites.site_mutations[j] = self->sites.site_mutations_mem + offset;
         self->sites.site_mutations_length[j] = 0;
         /* Go through all mutations for this site */
@@ -515,9 +355,6 @@ tree_sequence_init_trees(tree_sequence_t *self)
     k = 0;
     assert(I != NULL && O != NULL);
     while (j < self->edges.num_records || tree_left < self->sequence_length) {
-        /* TODO check for invalid indexes in I and O. See
-         * https://github.com/tskit-dev/msprime/issues/525
-         */
         while (k < self->edges.num_records && self->edges.right[O[k]] == tree_left) {
             k++;
         }
@@ -586,8 +423,6 @@ tree_sequence_init_nodes(tree_sequence_t *self)
 {
     size_t j, k;
     int ret = 0;
-    population_id_t num_populations = (population_id_t) self->populations.num_records;
-    individual_id_t num_individuals = (individual_id_t) self->individuals.num_records;
 
     /* Determine the sample size */
     self->num_samples = 0;
@@ -609,16 +444,6 @@ tree_sequence_init_nodes(tree_sequence_t *self)
             self->samples[k] = (node_id_t) j;
             self->nodes.sample_index_map[j] = (node_id_t) k;
             k++;
-        }
-        if (self->nodes.population[j] < -1
-                || self->nodes.population[j] >= num_populations) {
-            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (self->nodes.individual[j] < -1
-                || self->nodes.individual[j] >= num_individuals) {
-            ret = MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS;
-            goto out;
         }
     }
     assert(k == self->num_samples);
@@ -665,10 +490,7 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     assert(table_collection_is_indexed(self->tables));
 
     self->sequence_length = tables->sequence_length;
-    if (self->sequence_length <= 0) {
-        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
-        goto out;
-    }
+
     /* TODO It's messy having two copies of this value. Should be in one place. */
     self->tables->sequence_length = self->sequence_length;
 

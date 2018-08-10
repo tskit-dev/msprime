@@ -1799,6 +1799,14 @@ def simplify_tables(
         mutations = MutationTable()
     if sequence_length == 0 and len(edges) > 0:
         sequence_length = edges.right.max()
+    # To make this work with the old semantics we need to create a populations
+    max_pop = np.max(nodes.population)
+    populations = _msprime.PopulationTable()
+    for _ in range(max_pop + 1):
+        populations.add_row()
+    max_ind = np.max(nodes.individual)
+    if max_ind != msprime.NULL_INDIVIDUAL:
+        raise ValueError("Individuals not supported in this deprecated function")
     try:
         ll_tables = _msprime.TableCollection(
             individuals=_msprime.IndividualTable(),
@@ -1807,7 +1815,7 @@ def simplify_tables(
             migrations=migrations.ll_table,
             sites=sites.ll_table,
             mutations=mutations.ll_table,
-            populations=_msprime.PopulationTable(),
+            populations=populations,
             provenances=_msprime.ProvenanceTable(),
             sequence_length=sequence_length)
     except AttributeError as e:

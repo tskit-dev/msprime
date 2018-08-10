@@ -4822,7 +4822,7 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     unsort_edges(tables.edges, 0);
     ret = simplifier_alloc(&simplifier, samples, 2, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_EDGES_NOT_SORTED_CHILD);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -4831,7 +4831,7 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.edges->parent[0] = -1;
     ret = simplifier_alloc(&simplifier, samples, 2, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NULL_PARENT);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -4840,7 +4840,7 @@ test_single_tree_simplify(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.edges->child[0] = -1;
     ret = simplifier_alloc(&simplifier, samples, 2, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NULL_CHILD);
     ret = simplifier_free(&simplifier);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 

@@ -3743,53 +3743,12 @@ out:
 }
 
 static int
-simplifier_check_input(simplifier_t *self)
+simplifier_check_samples(simplifier_t *self)
 {
-    int ret = MSP_ERR_GENERIC;
+    int ret = 0;
     node_id_t num_nodes = (node_id_t) self->tables->nodes->num_rows;
-    site_id_t num_sites;
-    double *time = self->tables->nodes->time;
-    char *node_seen = NULL;
-    node_id_t last_parent, parent, child;
     size_t j;
 
-    node_seen = calloc((size_t) num_nodes, sizeof(char));
-    /* Check the edges */
-    last_parent = self->tables->edges->parent[0];
-    for (j = 0; j < self->tables->edges->num_rows; j++) {
-        if (self->tables->edges->left[j] >= self->tables->edges->right[j]) {
-            ret = MSP_ERR_BAD_EDGE_INTERVAL;
-            goto out;
-        }
-        parent = self->tables->edges->parent[j];
-        if (parent < 0 || parent >= num_nodes) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (parent != last_parent) {
-            node_seen[last_parent] = 1;
-            if (node_seen[parent] != 0) {
-                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
-                goto out;
-            }
-            if (time[last_parent] > time[parent]) {
-                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
-                goto out;
-            }
-            last_parent = parent;
-        }
-        /* Check the children */
-        child = self->tables->edges->child[j];
-        if (child < 0 || child >= num_nodes) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        /* time[child] must be < time[parent] */
-        if (time[child] >= time[parent]) {
-            ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
-            goto out;
-        }
-    }
     /* Check the samples */
     for (j = 0; j < self->num_samples; j++) {
         if (self->samples[j] < 0 || self->samples[j] >= num_nodes) {
@@ -3802,40 +3761,7 @@ simplifier_check_input(simplifier_t *self)
         }
 
     }
-    /* Check the sites */
-    for (j = 0; j < self->tables->sites->num_rows; j++) {
-        if (self->tables->sites->position[j] < 0
-                || self->tables->sites->position[j] >= self->tables->sequence_length) {
-            ret = MSP_ERR_BAD_SITE_POSITION;
-            goto out;
-        }
-        if (j > 0) {
-            if (self->tables->sites->position[j - 1] > self->tables->sites->position[j]) {
-                ret = MSP_ERR_UNSORTED_SITES;
-                goto out;
-            } else if (self->tables->sites->position[j - 1] == self->tables->sites->position[j]) {
-                ret = MSP_ERR_DUPLICATE_SITE_POSITION;
-                goto out;
-            }
-        }
-    }
-    /* Check the mutations */
-    num_sites = (site_id_t) self->tables->sites->num_rows;
-    for (j = 0; j < self->tables->mutations->num_rows; j++) {
-        if (self->tables->mutations->site[j] < 0
-                || self->tables->mutations->site[j] >= num_sites) {
-            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (self->tables->mutations->node[j] < 0
-                || self->tables->mutations->node[j] >= num_nodes) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-    }
-    ret = 0;
 out:
-    msp_safe_free(node_seen);
     return ret;
 }
 
@@ -3920,6 +3846,18 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     self->flags = flags;
     self->tables = tables;
 
+    /* TODO we can add a flag to skip these checks for when we know they are
+     * unnecessary */
+    /* TODO Current unit tests require MSP_CHECK_SITE_ORDERING, but it's
+     * debateable whether we need it. If we remove, we definitely need explicit
+     * tests to ensure we're doing sensible things with duplicate sites.
+     * (Particularly, re MSP_REDUCE_TO_SITE_TOPOLOGY.) */
+    ret = table_collection_check_integrity(tables,
+            MSP_CHECK_OFFSETS|MSP_CHECK_EDGE_ORDERING|MSP_CHECK_SITE_ORDERING);
+    if (ret != 0) {
+        goto out;
+    }
+
     ret = table_collection_alloc(&self->input_tables, MSP_ALLOC_TABLES);
     if (ret != 0) {
         goto out;
@@ -3929,10 +3867,6 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
 
-    if (self->tables->sequence_length <= 0.0) {
-        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
-        goto out;
-    }
     /* Take a copy of the input samples */
     self->samples = malloc(num_samples * sizeof(node_id_t));
     if (self->samples == NULL) {
@@ -3940,16 +3874,10 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
     memcpy(self->samples, samples, num_samples * sizeof(node_id_t));
-    /* If we have more then 256K blocks or edges just allocate this much */
-    /* Need to avoid malloc(0) so make sure we have at least 1. */
-    num_nodes_alloc = 1 + tables->nodes->num_rows;
-    /* TODO we can add a flag to skip these checks for when we know they are
-     * unnecessary */
-    ret = simplifier_check_input(self);
+    ret = simplifier_check_samples(self);
     if (ret != 0) {
         goto out;
     }
-
 
     /* Allocate the heaps used for small objects-> Assuming 8K is a good chunk size */
     ret = block_allocator_alloc(&self->segment_heap, 8192);
@@ -3960,6 +3888,8 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
+    /* Need to avoid malloc(0) so make sure we have at least 1. */
+    num_nodes_alloc = 1 + tables->nodes->num_rows;
     /* Make the maps and set the intial state */
     self->ancestor_map_head = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
     self->ancestor_map_tail = calloc(num_nodes_alloc, sizeof(simplify_segment_t *));
@@ -4644,6 +4574,11 @@ table_collection_check_integrity(table_collection_t *self, int flags)
     mutation_id_t num_mutations = (mutation_id_t) self->mutations->num_rows;
     population_id_t num_populations = (population_id_t) self->populations->num_rows;
     individual_id_t num_individuals = (individual_id_t) self->individuals->num_rows;
+
+    if (self->sequence_length <= 0) {
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+        goto out;
+    }
 
     /* Nodes */
     for (j = 0; j < self->nodes->num_rows; j++) {

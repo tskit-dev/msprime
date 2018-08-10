@@ -1453,22 +1453,19 @@ class TestSimplifyTables(unittest.TestCase):
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=[0, 1],
             nodes=msprime.NodeTable(), edges=None)
-        self.assertRaises(
-            TypeError, msprime.simplify_tables, samples=[0, 1],
-            nodes=None, edges=msprime.EdgeTable())
         tables = msprime.simulate(2, random_seed=1).dump_tables()
         samples = [0, 1]
         # Verify that samples, nodes and edges are OK
         msprime.simplify_tables(samples=samples, nodes=tables.nodes, edges=tables.edges)
-        for bad_type in [None, "", 1]:
+        for bad_type in [{}, "", 1]:
             self.assertRaises(
-                TypeError, msprime.simplify_tables, samples=samples, nodes=None,
+                TypeError, msprime.simplify_tables, samples=samples, nodes=tables.nodes,
                 edges=msprime.EdgeTable(), sites=bad_type)
             self.assertRaises(
-                TypeError, msprime.simplify_tables, samples=samples, nodes=None,
+                TypeError, msprime.simplify_tables, samples=samples, nodes=tables.nodes,
                 edges=msprime.EdgeTable(), mutations=bad_type)
             self.assertRaises(
-                TypeError, msprime.simplify_tables, samples=samples, nodes=None,
+                TypeError, msprime.simplify_tables, samples=samples, nodes=tables.nodes,
                 edges=msprime.EdgeTable(), migrations=bad_type)
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
@@ -1481,6 +1478,12 @@ class TestSimplifyTables(unittest.TestCase):
                 TypeError, msprime.simplify_tables,
                 nodes=tables.nodes, edges=tables.edges, sites=sites,
                 mutations=mutations, migrations=bad_type)
+        # Cannot have a node table with individuals in it.
+        nodes = msprime.NodeTable()
+        nodes.add_row(flags=0, individual=1)
+        self.assertRaises(
+            ValueError, msprime.simplify_tables, samples=[0], nodes=nodes,
+            edges=msprime.EdgeTable())
 
     def test_node_table_empty_name_bug(self):
         # Issue #236. Calling simplify on copied tables unexpectedly fails.
