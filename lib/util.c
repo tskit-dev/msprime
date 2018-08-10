@@ -223,6 +223,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_SEQUENCE_LENGTH:
             ret = "Sequence length must be > 0.";
             break;
+        case MSP_ERR_LEFT_LESS_ZERO:
+            ret = "Left coordinate must be >= 0";
+            break;
         case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
             ret = "Right coordinate > sequence length.";
             break;
@@ -258,6 +261,9 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_BAD_EDGE_INDEX:
             ret = "Invalid edge index value.";
+            break;
+        case MSP_ERR_TABLES_NOT_INDEXED:
+            ret = "Table collection must be indexed.";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {

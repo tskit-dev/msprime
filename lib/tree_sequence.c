@@ -224,6 +224,7 @@ tree_sequence_free(tree_sequence_t *self)
     return 0;
 }
 
+#if 0
 static int
 tree_sequence_check(tree_sequence_t *self)
 {
@@ -370,6 +371,7 @@ out:
     msp_safe_free(parent_seen);
     return ret;
 }
+#endif
 
 static int
 tree_sequence_init_sites(tree_sequence_t *self)
@@ -633,6 +635,10 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     int ret = 0;
 
     memset(self, 0, sizeof(*self));
+    if (tables == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->tables = malloc(sizeof(*self->tables));
     if (self->tables == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -642,24 +648,19 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     if (ret != 0) {
         goto out;
     }
-    if (tables == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
     ret = table_collection_copy(tables, self->tables);
     if (ret != 0) {
         goto out;
     }
-    /* if (flags & MSP_BUILD_INDEXES || !table_collection_is_indexed(tables)) { */
-    /* FIXME: setting this to always build indexes here as there were a good
-     * few bugs popping up where we were segfaulting because of stale indexes
-     * on a set of table that had been edited. See
-     * https://github.com/tskit-dev/msprime/issues/526 */
-    if (flags >= 0) {
+    if (!!(flags & MSP_BUILD_INDEXES)) {
         ret = table_collection_build_indexes(self->tables, 0);
         if (ret != 0) {
             goto out;
         }
+    }
+    ret = table_collection_check_integrity(self->tables, MSP_CHECK_ALL);
+    if (ret != 0) {
+        goto out;
     }
     assert(table_collection_is_indexed(self->tables));
 
@@ -737,10 +738,6 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
         goto out;
     }
     ret = tree_sequence_init_individuals(self);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = tree_sequence_check(self);
     if (ret != 0) {
         goto out;
     }

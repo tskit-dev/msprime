@@ -3949,6 +3949,8 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
+
+
     /* Allocate the heaps used for small objects-> Assuming 8K is a good chunk size */
     ret = block_allocator_alloc(&self->segment_heap, 8192);
     if (ret != 0) {
@@ -4557,17 +4559,81 @@ out:
     return ret;
 }
 
-/* Checks the integrity of the table collection. What gets check depends
+static int
+table_collection_check_edge_ordering(table_collection_t *self)
+{
+    int ret = 0;
+    table_size_t j;
+    node_id_t parent, last_parent, child, last_child;
+    double left, last_left;
+    const double *time = self->nodes->time;
+    bool *parent_seen = calloc(self->nodes->num_rows, sizeof(bool));
+
+    if (parent_seen == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    for (j = 0; j < self->edges->num_rows; j++) {
+        left = self->edges->left[j];
+        parent = self->edges->parent[j];
+        child = self->edges->child[j];
+        if (parent_seen[parent]) {
+            ret = MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS;
+            goto out;
+        }
+        if (j > 0) {
+            /* Input data must sorted by (time[parent], parent, child, left). */
+            if (time[parent] < time[last_parent]) {
+                ret = MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME;
+                goto out;
+            }
+            if (time[parent] == time[last_parent]) {
+                if (parent == last_parent) {
+                    if (child < last_child) {
+                        ret = MSP_ERR_EDGES_NOT_SORTED_CHILD;
+                        goto out;
+                    }
+                    if (child == last_child) {
+                        if (left == last_left) {
+                            ret = MSP_ERR_DUPLICATE_EDGES;
+                            goto out;
+                        } else if (left < last_left) {
+                            ret = MSP_ERR_EDGES_NOT_SORTED_LEFT;
+                            goto out;
+                        }
+                    }
+                } else {
+                    parent_seen[last_parent] = true;
+                }
+            }
+        }
+        last_parent = parent;
+        last_child = child;
+        last_left = left;
+    }
+out:
+    msp_safe_free(parent_seen);
+    return ret;
+}
+
+
+/* Checks the integrity of the table collection. What gets checked depends
  * on the flags values:
- * 0                    Check the integrity of ID references.
- * MSP_CHECK_OFFSETS    Check offsets for ragged columns.
- * MSP_CHECK_ORDERING   Check ordering contraints for a tree sequence.
- * checks offsets for ragged columns. */
+ * 0                             Check the integrity of ID & spatial references.
+ * MSP_CHECK_OFFSETS             Check offsets for ragged columns.
+ * MSP_CHECK_EDGE_ORDERING       Check edge ordering contraints for a tree sequence.
+ * MSP_CHECK_SITE_ORDERING       Check site ordering contraints for a tree sequence.
+ * MSP_CHECK_MUTATION_ORDERING   Check mutation ordering contraints for a tree sequence.
+ */
 int WARN_UNUSED
 table_collection_check_integrity(table_collection_t *self, int flags)
 {
     int ret = MSP_ERR_GENERIC;
     table_size_t j;
+    double left, right, position;
+    double L = self->sequence_length;
+    double *time = self->nodes->time;
     node_id_t parent, child;
     mutation_id_t parent_mut;
     population_id_t population;
@@ -4597,6 +4663,9 @@ table_collection_check_integrity(table_collection_t *self, int flags)
     for (j = 0; j < self->edges->num_rows; j++) {
         parent = self->edges->parent[j];
         child = self->edges->child[j];
+        left = self->edges->left[j];
+        right = self->edges->right[j];
+        /* Node ID integrity */
         if (parent == MSP_NULL_NODE) {
             ret = MSP_ERR_NULL_PARENT;
             goto out;
@@ -4612,6 +4681,42 @@ table_collection_check_integrity(table_collection_t *self, int flags)
         if (child < 0 || child >= num_nodes) {
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
+        }
+        /* Spatial requirements for edges */
+        if (left < 0) {
+            ret = MSP_ERR_LEFT_LESS_ZERO;
+            goto out;
+        }
+        if (right > L) {
+            ret = MSP_ERR_RIGHT_GREATER_SEQ_LENGTH;
+            goto out;
+        }
+        if (left >= right) {
+            ret = MSP_ERR_BAD_EDGE_INTERVAL;
+            goto out;
+        }
+        /* time[child] must be < time[parent] */
+        if (time[child] >= time[parent]) {
+            ret = MSP_ERR_BAD_NODE_TIME_ORDERING;
+            goto out;
+        }
+    }
+    for (j = 0; j < self->sites->num_rows; j++) {
+        position = self->sites->position[j];
+        /* Spatial requirements */
+        if (position < 0 || position >= L) {
+            ret = MSP_ERR_BAD_SITE_POSITION;
+            goto out;
+        }
+        if (j > 0 && !!(flags & MSP_CHECK_SITE_ORDERING)) {
+            if (self->sites->position[j - 1] == position) {
+                ret = MSP_ERR_DUPLICATE_SITE_POSITION;
+                goto out;
+            }
+            if (self->sites->position[j - 1] > position) {
+                ret = MSP_ERR_UNSORTED_SITES;
+                goto out;
+            }
         }
     }
 
@@ -4634,6 +4739,25 @@ table_collection_check_integrity(table_collection_t *self, int flags)
             ret = MSP_ERR_MUTATION_PARENT_EQUAL;
             goto out;
         }
+        if (!!(flags & MSP_CHECK_MUTATION_ORDERING)) {
+            if (parent_mut != MSP_NULL_MUTATION) {
+                /* Parents must be listed before their children */
+                if (parent_mut > (mutation_id_t) j) {
+                    ret = MSP_ERR_MUTATION_PARENT_AFTER_CHILD;
+                    goto out;
+                }
+                if (self->mutations->site[parent_mut] != self->mutations->site[j]) {
+                    ret = MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE;
+                    goto out;
+                }
+            }
+            if (j > 0) {
+                if (self->mutations->site[j - 1] > self->mutations->site[j]) {
+                    ret = MSP_ERR_UNSORTED_MUTATIONS;
+                    goto out;
+                }
+            }
+        }
     }
 
     /* Migrations */
@@ -4652,10 +4776,28 @@ table_collection_check_integrity(table_collection_t *self, int flags)
             ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
+        left = self->migrations->left[j];
+        right = self->migrations->right[j];
+        /* Spatial requirements */
+        /* TODO it's a bit misleading to use the edge-specific errors here. */
+        if (left < 0) {
+            ret = MSP_ERR_LEFT_LESS_ZERO;
+            goto out;
+        }
+        if (right > L) {
+            ret = MSP_ERR_RIGHT_GREATER_SEQ_LENGTH;
+            goto out;
+        }
+        if (left >= right) {
+            ret = MSP_ERR_BAD_EDGE_INTERVAL;
+            goto out;
+        }
     }
-
-    /* Indexes */
-    if (table_collection_is_indexed(self)) {
+    if (!!(flags & MSP_CHECK_INDEXES)) {
+        if (!table_collection_is_indexed(self)) {
+            ret = MSP_ERR_TABLES_NOT_INDEXED;
+            goto out;
+        }
         for (j = 0; j < self->edges->num_rows; j++) {
             if (self->indexes.edge_insertion_order[j] < 0 ||
                     self->indexes.edge_insertion_order[j] >= num_edges) {
@@ -4673,6 +4815,15 @@ table_collection_check_integrity(table_collection_t *self, int flags)
     ret = 0;
     if (!!(flags & MSP_CHECK_OFFSETS)) {
         ret = table_collection_check_offsets(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (!!(flags & MSP_CHECK_EDGE_ORDERING)) {
+        ret = table_collection_check_edge_ordering(self);
+        if (ret != 0) {
+            goto out;
+        }
     }
 out:
     return ret;

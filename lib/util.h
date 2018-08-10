@@ -79,8 +79,13 @@
 
 /* Flags for check_integrity */
 #define MSP_CHECK_OFFSETS                (1 << 0)
-#define MSP_CHECK_ORDERING               (1 << 1)
-#define MSP_CHECK_ALL                    (MSP_CHECK_OFFSETS | MSP_CHECK_ORDERING)
+#define MSP_CHECK_EDGE_ORDERING          (1 << 1)
+#define MSP_CHECK_SITE_ORDERING          (1 << 2)
+#define MSP_CHECK_MUTATION_ORDERING      (1 << 3)
+#define MSP_CHECK_INDEXES                (1 << 4)
+#define MSP_CHECK_ALL                    \
+    (MSP_CHECK_OFFSETS | MSP_CHECK_EDGE_ORDERING | MSP_CHECK_SITE_ORDERING | \
+     MSP_CHECK_MUTATION_ORDERING | MSP_CHECK_INDEXES)
 
 /* Flags for dump tables */
 #define MSP_ALLOC_TABLES 1
@@ -171,7 +176,8 @@
 #define MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS                            -72
 #define MSP_ERR_GENERATE_UUID                                       -73
 #define MSP_ERR_BAD_EDGE_INDEX                                      -74
-
+#define MSP_ERR_LEFT_LESS_ZERO                                      -75
+#define MSP_ERR_TABLES_NOT_INDEXED                                  -76
 
 /* This bit is 0 for any errors originating from kastore */
 #define MSP_KAS_ERR_BIT 14

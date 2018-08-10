@@ -596,8 +596,8 @@ make_edge(edge_t *edge)
 static PyObject *
 make_migration(migration_t *r)
 {
-    int source = r->source == MSP_NULL_POPULATION_ID ? -1: r->source;
-    int dest = r->dest == MSP_NULL_POPULATION_ID ? -1: r->dest;
+    int source = r->source == MSP_NULL_POPULATION ? -1: r->source;
+    int dest = r->dest == MSP_NULL_POPULATION ? -1: r->dest;
     PyObject *ret = NULL;
 
     ret = Py_BuildValue("ddiiid",
@@ -5727,6 +5727,8 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     TableCollection *tables = NULL;
     static char *kwlist[] = {"tables", NULL};
+    /* TODO add an interface to turn this on and off. */
+    int flags = MSP_BUILD_INDEXES;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
             &TableCollectionType, &tables)) {
@@ -5736,7 +5738,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (err != 0) {
         goto out;
     }
-    err = tree_sequence_load_tables(self->tree_sequence, tables->tables, 0);
+    err = tree_sequence_load_tables(self->tree_sequence, tables->tables, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -9646,7 +9648,7 @@ Simulator_get_samples(Simulator *self)
         goto out;
     }
     for (j = 0; j < num_samples; j++) {
-        population = samples[j].population_id == MSP_NULL_POPULATION_ID? -1:
+        population = samples[j].population_id == MSP_NULL_POPULATION? -1:
             samples[j].population_id;
         t = Py_BuildValue("id", population, samples[j].time);
         if (t == NULL) {
