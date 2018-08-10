@@ -83,8 +83,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_POPULATION_SIZE:
             ret = "Bad population size provided. Must be > 0.";
             break;
-        case MSP_ERR_BAD_POPULATION_ID:
-            ret = "Bad population id provided.";
+        case MSP_ERR_POPULATION_OUT_OF_BOUNDS:
+            ret = "Population ID out of bounds.";
             break;
         case MSP_ERR_BAD_MIGRATION_MATRIX:
             ret = "Bad migration matrix provided.";
@@ -244,8 +244,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_TOO_MANY_ALLELES:
             ret = "Cannot have more than 255 alleles.";
             break;
-        case MSP_ERR_BAD_INDIVIDUAL:
-            ret = "Individual ID not in individual table.";
+        case MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
+            ret = "Individual ID out of bounds";
             break;
         case MSP_ERR_GENERATE_UUID:
             ret = "Error generating UUID";
@@ -255,6 +255,9 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_BAD_TABLE_POSITION:
             ret = "Bad table position provided to truncate/reset.";
+            break;
+        case MSP_ERR_BAD_EDGE_INDEX:
+            ret = "Invalid edge index value.";
             break;
         case MSP_ERR_IO:
             if (errno != 0) {

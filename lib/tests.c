@@ -3377,14 +3377,14 @@ test_simplest_bad_individuals(void)
     /* Bad individual ID */
     tables.nodes->individual[0] = -2;
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
 
     /* Bad individual ID */
     tables.nodes->individual[0] = 0;
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
 
@@ -3397,7 +3397,7 @@ test_simplest_bad_individuals(void)
     /* Bad individual ID */
     tables.nodes->individual[0] = 2;
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_INDIVIDUAL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     tables.nodes->individual[0] = MSP_NULL_INDIVIDUAL;
 
@@ -3446,14 +3446,14 @@ test_simplest_bad_records(void)
     /* Bad population ID */
     tables.nodes->population[0] = -2;
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     tables.nodes->population[0] = 0;
 
     /* Bad population ID */
     tables.nodes->population[0] = 1;
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     tree_sequence_free(&ts);
     tables.nodes->population[0] = 0;
 

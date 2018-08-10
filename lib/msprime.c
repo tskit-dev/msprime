@@ -262,7 +262,7 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
     simulation_model_t *model = &self->model;
 
     if (population_id < 0 || population_id > (int) self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (initial_size <= 0) {
@@ -2593,7 +2593,7 @@ msp_compute_population_size(msp_t *self, size_t population_id, double time,
     double dt;
 
     if (population_id > self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     pop = &self->populations[population_id];
@@ -2803,7 +2803,7 @@ msp_get_population_configuration(msp_t *self, size_t population_id, double *init
     simulation_model_t *model = &self->model;
 
     if (population_id > self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     pop = &self->populations[population_id];
@@ -2875,7 +2875,7 @@ msp_change_single_population_parameters(msp_t *self, size_t population_id,
     simulation_model_t *model = &self->model;
 
     if (population_id >= self->num_populations) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     pop = &self->populations[population_id];
@@ -2950,7 +2950,7 @@ msp_add_population_parameters_change(msp_t *self, double time, int population_id
     int N = (int) self->num_populations;
 
     if (population_id < -1 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (initial_size <= 0) {
@@ -3132,7 +3132,7 @@ msp_add_mass_migration(msp_t *self, double time, int source, int destination,
     int N = (int) self->num_populations;
 
     if (source < 0 || source >= N || destination < 0 || destination >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (source == destination) {
@@ -3223,7 +3223,7 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double pr
     int N = (int) self->num_populations;
 
     if (population_id < 0 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (proportion < 0.0 || proportion > 1.0) {
@@ -3401,7 +3401,7 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     simulation_model_t *model = &self->model;
 
     if (population_id < 0 || population_id >= N) {
-        ret = MSP_ERR_BAD_POPULATION_ID;
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (strength < 0.0) {

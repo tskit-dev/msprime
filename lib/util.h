@@ -65,7 +65,7 @@
 /* The root node indicator */
 #define MSP_NULL_NODE (-1)
 /* Indicates the that the population ID has not been set. */
-#define MSP_NULL_POPULATION_ID (-1)
+#define MSP_NULL_POPULATION (-1)
 /* There is no parent for a given mutation */
 #define MSP_NULL_MUTATION (-1)
 /* Indicates that no individual has been set */
@@ -76,6 +76,11 @@
 #define MSP_REDUCE_TO_SITE_TOPOLOGY      (1 << 1)
 #define MSP_FILTER_POPULATIONS           (1 << 2)
 #define MSP_FILTER_INDIVIDUALS           (1 << 3)
+
+/* Flags for check_integrity */
+#define MSP_CHECK_OFFSETS                (1 << 0)
+#define MSP_CHECK_ORDERING               (1 << 1)
+#define MSP_CHECK_ALL                    (MSP_CHECK_OFFSETS | MSP_CHECK_ORDERING)
 
 /* Flags for dump tables */
 #define MSP_ALLOC_TABLES 1
@@ -105,7 +110,7 @@
 #define MSP_ERR_POPULATION_OVERFLOW                                 -11
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
 #define MSP_ERR_HDF5                                                -13
-#define MSP_ERR_BAD_POPULATION_ID                                   -14
+#define MSP_ERR_POPULATION_OUT_OF_BOUNDS                            -14
 #define MSP_ERR_DUPLICATE_SAMPLE                                    -15
 #define MSP_ERR_BAD_ORDERING                                        -16
 #define MSP_ERR_BAD_MUTATION                                        -17
@@ -163,8 +168,9 @@
 #define MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -69
 #define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
 #define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
-#define MSP_ERR_BAD_INDIVIDUAL                                      -72
+#define MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS                            -72
 #define MSP_ERR_GENERATE_UUID                                       -73
+#define MSP_ERR_BAD_EDGE_INDEX                                      -74
 
 
 /* This bit is 0 for any errors originating from kastore */

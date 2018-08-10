@@ -1812,8 +1812,7 @@ def simplify_tables(
             sequence_length=sequence_length)
     except AttributeError as e:
         raise TypeError(str(e))
-    return ll_tables.simplify(
-        samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+    return ll_tables.simplify(samples, filter_sites=filter_zero_mutation_sites)
 
 
 def pack_bytes(data):

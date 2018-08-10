@@ -4557,6 +4557,127 @@ out:
     return ret;
 }
 
+/* Checks the integrity of the table collection. What gets check depends
+ * on the flags values:
+ * 0                    Check the integrity of ID references.
+ * MSP_CHECK_OFFSETS    Check offsets for ragged columns.
+ * MSP_CHECK_ORDERING   Check ordering contraints for a tree sequence.
+ * checks offsets for ragged columns. */
+int WARN_UNUSED
+table_collection_check_integrity(table_collection_t *self, int flags)
+{
+    int ret = MSP_ERR_GENERIC;
+    table_size_t j;
+    node_id_t parent, child;
+    mutation_id_t parent_mut;
+    population_id_t population;
+    individual_id_t individual;
+    node_id_t num_nodes = (node_id_t) self->nodes->num_rows;
+    edge_id_t num_edges = (edge_id_t) self->edges->num_rows;
+    site_id_t num_sites = (site_id_t) self->sites->num_rows;
+    mutation_id_t num_mutations = (mutation_id_t) self->mutations->num_rows;
+    population_id_t num_populations = (population_id_t) self->populations->num_rows;
+    individual_id_t num_individuals = (individual_id_t) self->individuals->num_rows;
+
+    /* Nodes */
+    for (j = 0; j < self->nodes->num_rows; j++) {
+        population = self->nodes->population[j];
+        if (population < MSP_NULL_POPULATION || population >= num_populations) {
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        individual = self->nodes->individual[j];
+        if (individual < MSP_NULL_POPULATION || individual >= num_individuals) {
+            ret = MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+
+    /* Edges */
+    for (j = 0; j < self->edges->num_rows; j++) {
+        parent = self->edges->parent[j];
+        child = self->edges->child[j];
+        if (parent == MSP_NULL_NODE) {
+            ret = MSP_ERR_NULL_PARENT;
+            goto out;
+        }
+        if (parent < 0 || parent >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (child == MSP_NULL_NODE) {
+            ret = MSP_ERR_NULL_CHILD;
+            goto out;
+        }
+        if (child < 0 || child >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+
+    /* Mutations */
+    for (j = 0; j < self->mutations->num_rows; j++) {
+        if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
+            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        parent_mut = self->mutations->parent[j];
+        if (parent_mut < MSP_NULL_MUTATION || parent_mut >= num_mutations) {
+            ret = MSP_ERR_MUTATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (parent_mut == (mutation_id_t) j) {
+            ret = MSP_ERR_MUTATION_PARENT_EQUAL;
+            goto out;
+        }
+    }
+
+    /* Migrations */
+    for (j = 0; j < self->migrations->num_rows; j++) {
+        if (self->migrations->node[j] < 0 || self->migrations->node[j] >= num_nodes) {
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (self->migrations->source[j] < 0
+                || self->migrations->source[j] >= num_populations) {
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (self->migrations->dest[j] < 0
+                || self->migrations->dest[j] >= num_populations) {
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+
+    /* Indexes */
+    if (table_collection_is_indexed(self)) {
+        for (j = 0; j < self->edges->num_rows; j++) {
+            if (self->indexes.edge_insertion_order[j] < 0 ||
+                    self->indexes.edge_insertion_order[j] >= num_edges) {
+                ret = MSP_ERR_BAD_EDGE_INDEX;
+                goto out;
+            }
+            if (self->indexes.edge_removal_order[j] < 0 ||
+                    self->indexes.edge_removal_order[j] >= num_edges) {
+                ret = MSP_ERR_BAD_EDGE_INDEX;
+                goto out;
+            }
+        }
+    }
+
+    ret = 0;
+    if (!!(flags & MSP_CHECK_OFFSETS)) {
+        ret = table_collection_check_offsets(self);
+    }
+out:
+    return ret;
+}
+
 int
 table_collection_print_state(table_collection_t *self, FILE *out)
 {
@@ -5552,3 +5673,4 @@ table_collection_clear(table_collection_t *self)
     memset(&start, 0, sizeof(start));
     return table_collection_reset_position(self, &start);
 }
+

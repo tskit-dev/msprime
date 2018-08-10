@@ -610,12 +610,12 @@ tree_sequence_init_nodes(tree_sequence_t *self)
         }
         if (self->nodes.population[j] < -1
                 || self->nodes.population[j] >= num_populations) {
-            ret = MSP_ERR_BAD_POPULATION_ID;
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
         if (self->nodes.individual[j] < -1
                 || self->nodes.individual[j] >= num_individuals) {
-            ret = MSP_ERR_BAD_INDIVIDUAL;
+            ret = MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS;
             goto out;
         }
     }

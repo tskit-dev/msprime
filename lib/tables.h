@@ -498,6 +498,7 @@ int table_collection_record_position(table_collection_t *self,
 int table_collection_reset_position(table_collection_t *self,
         table_collection_position_t *position);
 int table_collection_clear(table_collection_t *self);
+int table_collection_check_integrity(table_collection_t *self, int flags);
 
 int simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags);
