@@ -1117,22 +1117,13 @@ class TestSortTables(unittest.TestCase):
             sites=tables2.sites, mutations=tables2.mutations)
 
     def test_empty_tables(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        msprime.sort_tables(nodes, edges)
-        self.assertEqual(nodes.num_rows, 0)
-        self.assertEqual(edges.num_rows, 0)
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
-        msprime.sort_tables(nodes, edges, sites=sites, mutations=mutations)
-        self.assertEqual(sites.num_rows, 0)
-        self.assertEqual(mutations.num_rows, 0)
-        migrations = msprime.MigrationTable()
-        msprime.sort_tables(
-            nodes, edges, sites=sites, mutations=mutations, migrations=migrations)
-        self.assertEqual(migrations.num_rows, 0)
-        msprime.sort_tables(nodes, edges, migrations=migrations)
-        self.assertEqual(migrations.num_rows, 0)
+        tables = msprime.TableCollection(1)
+        tables.sort()
+        self.assertEqual(tables.nodes.num_rows, 0)
+        self.assertEqual(tables.edges.num_rows, 0)
+        self.assertEqual(tables.sites.num_rows, 0)
+        self.assertEqual(tables.mutations.num_rows, 0)
+        self.assertEqual(tables.migrations.num_rows, 0)
 
     def test_sort_interface(self):
         self.assertRaises(TypeError, msprime.sort_tables)
@@ -1141,8 +1132,6 @@ class TestSortTables(unittest.TestCase):
             TypeError, msprime.sort_tables, edges=msprime.EdgeTable())
         self.assertRaises(
             TypeError, msprime.sort_tables, nodes=msprime.NodeTable(), edges=None)
-        self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=None, edges=msprime.EdgeTable())
         nodes = msprime.NodeTable()
         edges = msprime.EdgeTable()
         # Verify that nodes and edges are OK
@@ -1167,6 +1156,11 @@ class TestSortTables(unittest.TestCase):
                 TypeError, msprime.sort_tables,
                 nodes=nodes, edges=edges, sites=sites, mutations=mutations,
                 migrations=bad_type)
+        # Cannot have a node table with individuals in it.
+        nodes = msprime.NodeTable()
+        nodes.add_row(flags=0, individual=1)
+        self.assertRaises(
+            ValueError, msprime.sort_tables, nodes=nodes, edges=msprime.EdgeTable())
 
 
 class TestSortMutations(unittest.TestCase):

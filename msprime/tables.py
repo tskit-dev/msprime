@@ -1734,9 +1734,18 @@ def sort_tables(
         sites = SiteTable()
     if mutations is None:
         mutations = MutationTable()
-    sequence_length = 0
+    sequence_length = 1
     if len(edges) > 0:
         sequence_length = edges.right.max()
+    # To make this work with the old semantics we need to create a populations
+    populations = _msprime.PopulationTable()
+    if len(nodes) > 0:
+        max_pop = np.max(nodes.population)
+        for _ in range(max_pop + 1):
+            populations.add_row()
+        max_ind = np.max(nodes.individual)
+        if max_ind != msprime.NULL_INDIVIDUAL:
+            raise ValueError("Individuals not supported in this deprecated function")
     try:
         ll_tables = _msprime.TableCollection(
             individuals=_msprime.IndividualTable(),
@@ -1745,7 +1754,7 @@ def sort_tables(
             migrations=migrations.ll_table,
             sites=sites.ll_table,
             mutations=mutations.ll_table,
-            populations=_msprime.PopulationTable(),
+            populations=populations,
             provenances=_msprime.ProvenanceTable(),
             sequence_length=sequence_length)
     except AttributeError as e:
@@ -1802,11 +1811,12 @@ def simplify_tables(
     # To make this work with the old semantics we need to create a populations
     max_pop = np.max(nodes.population)
     populations = _msprime.PopulationTable()
-    for _ in range(max_pop + 1):
-        populations.add_row()
-    max_ind = np.max(nodes.individual)
-    if max_ind != msprime.NULL_INDIVIDUAL:
-        raise ValueError("Individuals not supported in this deprecated function")
+    if len(nodes) > 0:
+        for _ in range(max_pop + 1):
+            populations.add_row()
+        max_ind = np.max(nodes.individual)
+        if max_ind != msprime.NULL_INDIVIDUAL:
+            raise ValueError("Individuals not supported in this deprecated function")
     try:
         ll_tables = _msprime.TableCollection(
             individuals=_msprime.IndividualTable(),
