@@ -97,31 +97,20 @@ class Simplifier(object):
     of the leaves.
     """
     def __init__(
-            self, ts, sample, filter_sites=True,
-            reduce_to_site_topology=False):
+            self, ts, sample, reduce_to_site_topology=False, filter_sites=True,
+            filter_populations=False, filter_individuals=False):
         self.ts = ts
         self.n = len(sample)
         self.reduce_to_site_topology = reduce_to_site_topology
         self.sequence_length = ts.sequence_length
         self.filter_sites = filter_sites
+        self.filter_populations = filter_populations
+        self.filter_individuals = filter_individuals
         self.num_mutations = ts.num_mutations
         self.input_sites = list(ts.sites())
         self.A_head = [None for _ in range(ts.num_nodes)]
         self.A_tail = [None for _ in range(ts.num_nodes)]
         self.tables = msprime.TableCollection(sequence_length=ts.sequence_length)
-        # We don't touch populations, so add them straigtht in.
-        t = ts.tables
-        self.tables.populations.set_columns(
-            metadata=t.populations.metadata,
-            metadata_offset=t.populations.metadata_offset)
-        # For now we don't remove individuals that have no nodes referring to
-        # them, so we can just copy the table.
-        self.tables.individuals.set_columns(
-            flags=t.individuals.flags,
-            location=t.individuals.location,
-            location_offset=t.individuals.location_offset,
-            metadata=t.individuals.metadata,
-            metadata_offset=t.individuals.metadata_offset)
         self.edge_buffer = {}
         self.node_id_map = np.zeros(ts.num_nodes, dtype=np.int32) - 1
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
@@ -362,6 +351,56 @@ class Simplifier(object):
                     assert x < seg.left
                     m_index += 1
 
+    def finalise_references(self):
+        input_populations = self.ts.tables.populations
+        population_id_map = np.arange(len(input_populations) + 1, dtype=np.int32)
+        # Trick to ensure the null population gets mapped to itself.
+        population_id_map[-1] = -1
+        input_individuals = self.ts.tables.individuals
+        individual_id_map = np.arange(len(input_individuals) + 1, dtype=np.int32)
+        # Trick to ensure the null individual gets mapped to itself.
+        individual_id_map[-1] = -1
+
+        population_ref_count = np.ones(len(input_populations), dtype=int)
+        if self.filter_populations:
+            population_ref_count[:] = 0
+            population_id_map[:] = -1
+        individual_ref_count = np.ones(len(input_individuals), dtype=int)
+        if self.filter_individuals:
+            individual_ref_count[:] = 0
+            individual_id_map[:] = -1
+
+        for node in self.tables.nodes:
+            if self.filter_populations and node.population != msprime.NULL_POPULATION:
+                population_ref_count[node.population] += 1
+            if self.filter_individuals and node.individual != msprime.NULL_POPULATION:
+                individual_ref_count[node.individual] += 1
+
+        for input_id, count in enumerate(population_ref_count):
+            if count > 0:
+                row = input_populations[input_id]
+                output_id = self.tables.populations.add_row(metadata=row.metadata)
+                population_id_map[input_id] = output_id
+        for input_id, count in enumerate(individual_ref_count):
+            if count > 0:
+                row = input_individuals[input_id]
+                output_id = self.tables.individuals.add_row(
+                    flags=row.flags, location=row.location, metadata=row.metadata)
+                individual_id_map[input_id] = output_id
+
+        # Remap the population ID references for nodes.
+        nodes = self.tables.nodes
+        nodes.set_columns(
+            flags=nodes.flags,
+            time=nodes.time,
+            metadata=nodes.metadata,
+            metadata_offset=nodes.metadata_offset,
+            individual=individual_id_map[nodes.individual],
+            population=population_id_map[nodes.population])
+
+        # We don't support migrations for now. We'll need to remap these as well.
+        assert self.ts.num_migrations == 0
+
     def simplify(self):
         # self.print_state()
         if self.ts.num_edges > 0:
@@ -376,7 +415,7 @@ class Simplifier(object):
         # self.print_state()
         self.map_mutation_nodes()
         self.finalise_sites()
-
+        self.finalise_references()
         ts = self.tables.tree_sequence()
         return ts, self.node_id_map
 

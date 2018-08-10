@@ -1561,7 +1561,7 @@ class TableCollection(object):
     def simplify(
             self, samples, filter_zero_mutation_sites=None,
             reduce_to_site_topology=False,
-            filter_sites=True):
+            filter_populations=True, filter_individuals=True, filter_sites=True):
         """
         Simplifies the tables in place to retain only the information necessary
         to reconstruct the tree sequence describing the given ``samples``.

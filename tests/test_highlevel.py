@@ -50,6 +50,7 @@ import msprime
 import _msprime
 import tests
 import tests.tsutil as tsutil
+import tests.simplify as simplify
 
 
 def insert_uniform_mutations(tables, num_mutations, nodes):
@@ -297,7 +298,7 @@ def simplify_tree_sequence(ts, samples, filter_sites=True):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
     """
-    s = tests.Simplifier(
+    s = simplify.Simplifier(
         ts, samples, filter_sites=filter_sites)
     return s.simplify()
 
@@ -1378,7 +1379,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(s2.num_samples,  len(sample))
             self.assertTrue(all(node_map1 == node_map2))
             self.assertEqual(t1.individuals, t2.individuals)
-            # self.assertEqual(t1.nodes, t2.nodes)
+            self.assertEqual(t1.nodes, t2.nodes)
             self.assertEqual(t1.edges, t2.edges)
             self.assertEqual(t1.migrations, t2.migrations)
             self.assertEqual(t1.sites, t2.sites)

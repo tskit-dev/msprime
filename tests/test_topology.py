@@ -2551,7 +2551,7 @@ class TestBadTrees(unittest.TestCase):
 
 class TestSimplify(unittest.TestCase):
     """
-    Tests that the implementations of simplify() does what they are supposed to.
+    Tests that the implementations of simplify() do what they are supposed to.
     """
     random_seed = 23
     #
@@ -2585,14 +2585,16 @@ class TestSimplify(unittest.TestCase):
     """
 
     def do_simplify(
-            self, ts, samples=None, compare_lib=True, filter_sites=True):
+            self, ts, samples=None, compare_lib=True, filter_sites=True,
+            filter_populations=False, filter_individuals=False):  # False for now
         """
         Runs the Python test implementation of simplify.
         """
         if samples is None:
             samples = ts.samples()
         s = tests.Simplifier(
-            ts, samples, filter_sites=filter_sites)
+            ts, samples, filter_sites=filter_sites,
+            filter_populations=filter_populations, filter_individuals=filter_individuals)
         new_ts, node_map = s.simplify()
         if compare_lib:
             lib_tables = ts.dump_tables()
@@ -3046,14 +3048,137 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(ts.num_sites, ts.num_trees)
         self.assertEqual(ts.num_mutations, ts.num_trees)
         for filter_sites in [True, False]:
-            tss, _ = self.do_simplify(
-                ts, samples=None, filter_sites=filter_sites)
+            tss, _ = self.do_simplify(ts, samples=None, filter_sites=filter_sites)
             self.assertEqual(ts.num_sites, tss.num_sites)
             self.assertEqual(ts.num_mutations, tss.num_mutations)
 
+    def test_simple_population_filter(self):
+        ts = msprime.simulate(10, random_seed=2)
+        tables = ts.dump_tables()
+        tables.populations.add_row(metadata=b"unreferenced")
+        self.assertEqual(len(tables.populations), 2)
+        print("\n\nFIXME: comparelib false\n")
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_populations=True,
+            compare_lib=False)
+        self.assertEqual(tss.num_populations, 1)
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_populations=False,
+            compare_lib=False)
+        self.assertEqual(tss.num_populations, 2)
+
+    def test_interleaved_populations_filter(self):
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            random_seed=2)
+        self.assertEqual(ts.num_populations, 4)
+        tables = ts.dump_tables()
+        # Edit the populations so we can identify the rows.
+        tables.populations.clear()
+        for j in range(4):
+            tables.populations.add_row(metadata=bytes([j]))
+        ts = tables.tree_sequence()
+        id_map = np.array([-1, 0, -1, -1], dtype=np.int32)
+        print("\n\nFIXME: comparelib false\n")
+        tss, _ = self.do_simplify(ts, filter_populations=True, compare_lib=False)
+        self.assertEqual(tss.num_populations, 1)
+        population = tss.population(0)
+        self.assertEqual(population.metadata, bytes([1]))
+        self.assertTrue(np.array_equal(
+            id_map[ts.tables.nodes.population], tss.tables.nodes.population))
+        tss, _ = self.do_simplify(ts, filter_populations=False, compare_lib=False)
+        self.assertEqual(tss.num_populations, 4)
+
+    def test_removed_node_population_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.populations.add_row(metadata=bytes(0))
+        tables.populations.add_row(metadata=bytes(1))
+        tables.populations.add_row(metadata=bytes(2))
+        tables.nodes.add_row(flags=1, population=0)
+        # Because flags=0 here, this node will be simplified out and the node
+        # will disappear.
+        tables.nodes.add_row(flags=0, population=1)
+        tables.nodes.add_row(flags=1, population=2)
+        print("\n\nFIXME: comparelib false\n")
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_populations=True, compare_lib=False)
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_populations, 2)
+        self.assertEqual(tss.population(0).metadata, bytes(0))
+        self.assertEqual(tss.population(1).metadata, bytes(2))
+        self.assertEqual(tss.node(0).population, 0)
+        self.assertEqual(tss.node(1).population, 1)
+
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_populations=False, compare_lib=False)
+        self.assertEqual(tss.tables.populations, tables.populations)
+
+    def test_simple_individual_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.individuals.add_row(flags=0)
+        tables.individuals.add_row(flags=1)
+        tables.nodes.add_row(flags=1, individual=0)
+        tables.nodes.add_row(flags=1, individual=0)
+        print("\n\nFIXME: comparelib false\n")
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_individuals=True, compare_lib=False)
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_individuals, 1)
+        self.assertEqual(tss.individual(0).flags, 0)
+
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_individuals=False, compare_lib=False)
+        self.assertEqual(tss.tables.individuals, tables.individuals)
+
+    def test_interleaved_individual_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.individuals.add_row(flags=0)
+        tables.individuals.add_row(flags=1)
+        tables.individuals.add_row(flags=2)
+        tables.nodes.add_row(flags=1, individual=1)
+        tables.nodes.add_row(flags=1, individual=-1)
+        tables.nodes.add_row(flags=1, individual=1)
+        print("\n\nFIXME: comparelib false\n")
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_individuals=True, compare_lib=False)
+        self.assertEqual(tss.num_nodes, 3)
+        self.assertEqual(tss.num_individuals, 1)
+        self.assertEqual(tss.individual(0).flags, 1)
+
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_individuals=False, compare_lib=False)
+        self.assertEqual(tss.tables.individuals, tables.individuals)
+
+    def test_removed_node_individual_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.individuals.add_row(flags=0)
+        tables.individuals.add_row(flags=1)
+        tables.individuals.add_row(flags=2)
+        tables.nodes.add_row(flags=1, individual=0)
+        # Because flags=0 here, this node will be simplified out and the node
+        # will disappear.
+        tables.nodes.add_row(flags=0, individual=1)
+        tables.nodes.add_row(flags=1, individual=2)
+        print("\n\nFIXME: comparelib false\n")
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_individuals=True, compare_lib=False)
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_individuals, 2)
+        self.assertEqual(tss.individual(0).flags, 0)
+        self.assertEqual(tss.individual(1).flags, 2)
+        self.assertEqual(tss.node(0).individual, 0)
+        self.assertEqual(tss.node(1).individual, 1)
+
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_individuals=False, compare_lib=False)
+        self.assertEqual(tss.tables.individuals, tables.individuals)
+
     def verify_simplify_haplotypes(self, ts, samples):
-        sub_ts, node_map = self.do_simplify(
-            ts, samples, filter_sites=False)
+        sub_ts, node_map = self.do_simplify(ts, samples, filter_sites=False)
         self.assertEqual(ts.num_sites, sub_ts.num_sites)
         sub_haplotypes = list(sub_ts.haplotypes())
         all_samples = list(ts.samples())
