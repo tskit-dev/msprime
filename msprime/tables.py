@@ -1597,7 +1597,7 @@ class TableCollection(object):
         if filter_zero_mutation_sites is not None:
             filter_sites = filter_zero_mutation_sites
         return self.ll_tables.simplify(
-            samples, filter_sites,
+            samples, filter_sites=filter_sites,
             reduce_to_site_topology=reduce_to_site_topology)
 
     def sort(self, edge_start=0):

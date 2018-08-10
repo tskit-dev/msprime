@@ -4943,13 +4943,13 @@ TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
     npy_intp *shape, dims;
     size_t num_samples;
     int flags = 0;
-    int filter_zero_mutation_sites = true;
+    int filter_sites = true;
     int reduce_to_site_topology = false;
     static char *kwlist[] = {
-        "samples", "filter_zero_mutation_sites", "reduce_to_site_topology", NULL};
+        "samples", "filter_sites", "reduce_to_site_topology", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|ii", kwlist,
-            &samples, &filter_zero_mutation_sites, &reduce_to_site_topology)) {
+            &samples, &filter_sites, &reduce_to_site_topology)) {
         goto out;
     }
     samples_array = (PyArrayObject *) PyArray_FROMANY(samples, NPY_INT32, 1, 1,
@@ -4959,8 +4959,8 @@ TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
     }
     shape = PyArray_DIMS(samples_array);
     num_samples = shape[0];
-    if (filter_zero_mutation_sites) {
-        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
+    if (filter_sites) {
+        flags |= MSP_FILTER_SITES;
     }
     if (reduce_to_site_topology) {
         flags |= MSP_REDUCE_TO_SITE_TOPOLOGY;
