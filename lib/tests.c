@@ -1410,7 +1410,7 @@ verify_simplify(tree_sequence_t *ts)
     node_id_t *sample;
     node_id_t *node_map = malloc(tree_sequence_get_num_nodes(ts) * sizeof(node_id_t));
     tree_sequence_t subset;
-    int flags = MSP_FILTER_ZERO_MUTATION_SITES;
+    int flags = MSP_FILTER_SITES;
 
     CU_ASSERT_FATAL(node_map != NULL);
     ret = tree_sequence_get_samples(ts, &sample);
@@ -2465,6 +2465,7 @@ test_simplest_unary_records(void)
     CU_ASSERT_EQUAL(tree_sequence_get_num_nodes(&ts), 5);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_trees(&ts), 1);
+    CU_ASSERT_EQUAL(tree_sequence_get_num_populations(&ts), 1);
 
     ret = tree_sequence_simplify(&ts, sample_ids, 2, 0, &simplified, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3866,6 +3867,43 @@ test_simplest_reduce_site_topology(void)
     CU_ASSERT_EQUAL(tables.edges->parent[1], 2);
     CU_ASSERT_EQUAL(tables.edges->child[0], 0);
     CU_ASSERT_EQUAL(tables.edges->child[1], 1);
+
+    table_collection_free(&tables);
+}
+
+static void
+test_simplest_population_filter(void)
+{
+    table_collection_t tables;
+    node_id_t samples[] = {0, 1};
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 1;
+    population_table_add_row(tables.populations, "0", 1);
+    population_table_add_row(tables.populations, "1", 1);
+    population_table_add_row(tables.populations, "2", 1);
+    /* Two nodes referring to population 1 */
+    node_table_add_row(tables.nodes, MSP_NODE_IS_SAMPLE, 0.0, 1, MSP_NULL_INDIVIDUAL,
+            NULL, 0);
+    node_table_add_row(tables.nodes, MSP_NODE_IS_SAMPLE, 0.0, 1, MSP_NULL_INDIVIDUAL,
+            NULL, 0);
+
+    ret = table_collection_simplify(&tables, samples, 2, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.nodes->num_rows, 2);
+    CU_ASSERT_EQUAL(tables.populations->num_rows, 3);
+    CU_ASSERT_EQUAL(tables.populations->metadata[0], '0');
+    CU_ASSERT_EQUAL(tables.populations->metadata[1], '1');
+    CU_ASSERT_EQUAL(tables.populations->metadata[2], '2');
+
+    /* ret = table_collection_simplify(&tables, samples, 2, MSP_FILTER_POPULATIONS, NULL); */
+    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
+    /* CU_ASSERT_EQUAL(tables.nodes->num_rows, 2); */
+    /* CU_ASSERT_EQUAL(tables.populations->num_rows, 1); */
+    /* CU_ASSERT_EQUAL(tables.populations->metadata[0], '1'); */
 
     table_collection_free(&tables);
 }
@@ -8954,6 +8992,17 @@ test_table_collection_position(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_TRUE(table_collection_equals(&t1, &t3));
 
+        ret = table_collection_clear(&t1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(t1.individuals->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.populations->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.nodes->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.edges->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.migrations->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.sites->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.mutations->num_rows, 0);
+        CU_ASSERT_EQUAL(t1.provenances->num_rows, 0);
+
         table_collection_free(&t1);
         table_collection_free(&t2);
         table_collection_free(&t3);
@@ -9057,6 +9106,7 @@ main(int argc, char **argv)
         {"test_simplest_overlapping_unary_edges_internal_samples_simplify",
             test_simplest_overlapping_unary_edges_internal_samples_simplify},
         {"test_simplest_reduce_site_topology", test_simplest_reduce_site_topology},
+        {"test_simplest_population_filter", test_simplest_population_filter},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",
             test_single_nonbinary_tree_good_records},

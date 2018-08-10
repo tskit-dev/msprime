@@ -288,22 +288,9 @@ typedef struct {
     node_id_t *samples;
     size_t num_samples;
     int flags;
-    double sequence_length;
-    /* Keep a copy of the input nodes simplify mapping */
-    node_table_t input_nodes;
-    /* Also keep a copy of the input edges and a buffer to store unsorted edges */
-    edge_table_t input_edges;
-    /* Input copy of the sites and mutations */
-    site_table_t input_sites;
-    mutation_table_t input_mutations;
-    /* Input/output tables. */
-    node_table_t *nodes;
-    edge_table_t *edges;
-    site_table_t *sites;
-    mutation_table_t *mutations;
-    individual_table_t *individuals;
-    population_table_t *populations;
-    provenance_table_t *provenances;
+    table_collection_t *tables;
+    /* Keep a copy of the input tables */
+    table_collection_t input_tables;
     /* State for topology */
     simplify_segment_t **ancestor_map_head;
     simplify_segment_t **ancestor_map_tail;
@@ -333,7 +320,6 @@ typedef struct {
     /* When reducing topology, we need a map positions to their corresponding
      * sites.*/
     double *position_lookup;
-
 } simplifier_t;
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
@@ -511,6 +497,7 @@ int table_collection_record_position(table_collection_t *self,
         table_collection_position_t *position);
 int table_collection_reset_position(table_collection_t *self,
         table_collection_position_t *position);
+int table_collection_clear(table_collection_t *self);
 
 int simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags);

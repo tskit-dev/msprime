@@ -3353,7 +3353,7 @@ simplifier_check_state(simplifier_t *self)
     bool found;
     size_t num_intervals;
 
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
+    for (j = 0; j < self->input_tables.nodes->num_rows; j++) {
         assert((self->ancestor_map_head[j] == NULL) ==
                 (self->ancestor_map_tail[j] == NULL));
         for (u = self->ancestor_map_head[j]; u != NULL; u = u->next) {
@@ -3373,20 +3373,20 @@ simplifier_check_state(simplifier_t *self)
         assert(self->segment_queue[j].left < self->segment_queue[j].right);
     }
 
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
+    for (j = 0; j < self->input_tables.nodes->num_rows; j++) {
         last_position = -1;
         for (list_node = self->node_mutation_list_map_head[j]; list_node != NULL;
                 list_node = list_node->next) {
-            assert(self->input_mutations.node[list_node->mutation] == (node_id_t) j);
-            site = self->input_mutations.site[list_node->mutation];
-            position = self->input_sites.position[site];
+            assert(self->input_tables.mutations->node[list_node->mutation] == (node_id_t) j);
+            site = self->input_tables.mutations->site[list_node->mutation];
+            position = self->input_tables.sites->position[site];
             assert(last_position <= position);
             last_position = position;
         }
     }
 
     /* check the buffered edges */
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
+    for (j = 0; j < self->input_tables.nodes->num_rows; j++) {
         assert((self->child_edge_map_head[j] == NULL) ==
             (self->child_edge_map_tail[j] == NULL));
         if (self->child_edge_map_head[j] != NULL) {
@@ -3440,36 +3440,27 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     fprintf(out, "--simplifier state--\n");
     fprintf(out, "flags:\n");
     fprintf(out, "\tfilter_unreferenced_sites: %d\n",
-            !!(self->flags & MSP_FILTER_ZERO_MUTATION_SITES));
+            !!(self->flags & MSP_FILTER_SITES));
     fprintf(out, "\treduce_to_site_topology  : %d\n",
             !!(self->flags & MSP_REDUCE_TO_SITE_TOPOLOGY));
 
-    fprintf(out, "===\nInput nodes\n==\n");
-    node_table_print_state(&self->input_nodes, out);
-    fprintf(out, "===\nInput edges\n==\n");
-    edge_table_print_state(&self->input_edges, out);
-    fprintf(out, "===\nInput sites\n==\n");
-    site_table_print_state(&self->input_sites, out);
-    fprintf(out, "===\nInput mutations\n==\n");
-    mutation_table_print_state(&self->input_mutations, out);
+    fprintf(out, "===\nInput tables\n==\n");
+    table_collection_print_state(&self->input_tables, out);
     fprintf(out, "===\nOutput tables\n==\n");
-    node_table_print_state(self->nodes, out);
-    edge_table_print_state(self->edges, out);
-    site_table_print_state(self->sites, out);
-    mutation_table_print_state(self->mutations, out);
+    table_collection_print_state(self->tables, out);
     fprintf(out, "===\nmemory heaps\n==\n");
     fprintf(out, "segment_heap:\n");
     block_allocator_print_state(&self->segment_heap, out);
     fprintf(out, "interval_list_heap:\n");
     block_allocator_print_state(&self->interval_list_heap, out);
     fprintf(out, "===\nancestors\n==\n");
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
+    for (j = 0; j < self->input_tables.nodes->num_rows; j++) {
         fprintf(out, "%d:\t", (int) j);
         print_segment_chain(self->ancestor_map_head[j], out);
         fprintf(out, "\n");
     }
     fprintf(out, "===\nnode_id map (input->output)\n==\n");
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
+    for (j = 0; j < self->input_tables.nodes->num_rows; j++) {
         if (self->node_id_map[j] != MSP_NULL_NODE) {
             fprintf(out, "%d->%d\n", (int) j, self->node_id_map[j]);
         }
@@ -3491,11 +3482,11 @@ simplifier_print_state(simplifier_t *self, FILE *out)
         fprintf(out, "\n");
     }
     fprintf(out, "===\nmutation node map\n==\n");
-    for (j = 0; j < self->input_mutations.num_rows; j++) {
+    for (j = 0; j < self->input_tables.mutations->num_rows; j++) {
         fprintf(out, "%d\t-> %d\n", (int) j, self->mutation_node_map[j]);
     }
     fprintf(out, "===\nnode mutation id list map\n==\n");
-    for (j = 0; j < self->input_nodes.num_rows; j++) {
+    for (j = 0; j < self->input_tables.nodes->num_rows; j++) {
         if (self->node_mutation_list_map_head[j] != NULL) {
             fprintf(out, "%d\t-> [", (int) j);
             for (list_node = self->node_mutation_list_map_head[j]; list_node != NULL;
@@ -3507,7 +3498,7 @@ simplifier_print_state(simplifier_t *self, FILE *out)
     }
     if (!!(self->flags & MSP_REDUCE_TO_SITE_TOPOLOGY)) {
         fprintf(out, "===\nposition_lookup\n==\n");
-        for (j = 0; j < self->input_sites.num_rows + 2; j++) {
+        for (j = 0; j < self->input_tables.sites->num_rows + 2; j++) {
             fprintf(out, "%d\t-> %f\n", (int) j, self->position_lookup[j]);
         }
     }
@@ -3553,20 +3544,20 @@ static int WARN_UNUSED
 simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
 {
     int ret = 0;
-    table_size_t offset = self->input_nodes.metadata_offset[input_id];
-    table_size_t length = self->input_nodes.metadata_offset[input_id + 1] - offset;
-    uint32_t flags = self->input_nodes.flags[input_id];
+    table_size_t offset = self->input_tables.nodes->metadata_offset[input_id];
+    table_size_t length = self->input_tables.nodes->metadata_offset[input_id + 1] - offset;
+    uint32_t flags = self->input_tables.nodes->flags[input_id];
 
     /* Zero out the sample bit */
     flags &= (uint32_t) ~MSP_NODE_IS_SAMPLE;
     if (is_sample) {
         flags |= MSP_NODE_IS_SAMPLE;
     }
-    self->node_id_map[input_id] = (node_id_t) self->nodes->num_rows;
-    ret = node_table_add_row_internal(self->nodes, flags,
-            self->input_nodes.time[input_id], self->input_nodes.population[input_id],
-            self->input_nodes.individual[input_id],
-            self->input_nodes.metadata + offset, length);
+    self->node_id_map[input_id] = (node_id_t) self->tables->nodes->num_rows;
+    ret = node_table_add_row_internal(self->tables->nodes, flags,
+            self->input_tables.nodes->time[input_id], self->input_tables.nodes->population[input_id],
+            self->input_tables.nodes->individual[input_id],
+            self->input_tables.nodes->metadata + offset, length);
     return ret;
 }
 
@@ -3575,7 +3566,7 @@ static int
 simplifier_rewind_node(simplifier_t *self, node_id_t input_id, node_id_t output_id)
 {
     self->node_id_map[input_id] = MSP_NULL_NODE;
-    return node_table_truncate(self->nodes, (size_t) output_id);
+    return node_table_truncate(self->tables->nodes, (size_t) output_id);
 }
 
 static int
@@ -3592,7 +3583,7 @@ simplifier_flush_edges(simplifier_t *self, node_id_t parent, size_t *ret_num_edg
     for (j = 0; j < self->num_buffered_children; j++) {
         child = self->buffered_children[j];
         for (x = self->child_edge_map_head[child]; x != NULL; x = x->next) {
-            ret = edge_table_add_row(self->edges, x->left, x->right, parent, child);
+            ret = edge_table_add_row(self->tables->edges, x->left, x->right, parent, child);
             if (ret < 0) {
                 goto out;
             }
@@ -3615,15 +3606,15 @@ static int
 simplifier_init_position_lookup(simplifier_t *self)
 {
     int ret = 0;
-    size_t num_sites = self->input_sites.num_rows;
+    size_t num_sites = self->input_tables.sites->num_rows;
 
     self->position_lookup = malloc((num_sites + 2) * sizeof(*self->position_lookup));
     if (self->position_lookup == NULL) {
         goto out;
     }
     self->position_lookup[0] = 0;
-    self->position_lookup[num_sites + 1] = self->sequence_length;
-    memcpy(self->position_lookup + 1, self->input_sites.position,
+    self->position_lookup[num_sites + 1] = self->tables->sequence_length;
+    memcpy(self->position_lookup + 1, self->input_tables.sites->position,
             num_sites * sizeof(double));
 out:
     return ret;
@@ -3639,7 +3630,7 @@ static bool
 simplifier_map_reduced_coordinates(simplifier_t *self, double *left, double *right)
 {
     double *X = self->position_lookup;
-    size_t N = self->input_sites.num_rows + 2;
+    size_t N = self->input_tables.sites->num_rows + 2;
     size_t left_index, right_index;
     bool skip = false;
 
@@ -3677,7 +3668,7 @@ simplifier_record_edge(simplifier_t *self, double left, double right, node_id_t 
 
     tail = self->child_edge_map_tail[child];
     if (tail == NULL) {
-        assert(self->num_buffered_children < self->input_nodes.num_rows);
+        assert(self->num_buffered_children < self->input_tables.nodes->num_rows);
         self->buffered_children[self->num_buffered_children] = child;
         self->num_buffered_children++;
         x = simplifier_alloc_interval_list(self, left, right);
@@ -3712,13 +3703,15 @@ simplifier_init_sites(simplifier_t *self)
     mutation_id_list_t *list_node;
     size_t j;
 
-    self->mutation_id_map = calloc(self->input_mutations.num_rows, sizeof(mutation_id_t));
-    self->mutation_node_map = calloc(self->input_mutations.num_rows, sizeof(node_id_t));
-    self->node_mutation_list_mem = malloc(self->input_mutations.num_rows *
+    self->mutation_id_map = calloc(self->input_tables.mutations->num_rows,
+            sizeof(mutation_id_t));
+    self->mutation_node_map = calloc(self->input_tables.mutations->num_rows,
+            sizeof(node_id_t));
+    self->node_mutation_list_mem = malloc(self->input_tables.mutations->num_rows *
             sizeof(mutation_id_list_t));
-    self->node_mutation_list_map_head = calloc(self->input_nodes.num_rows,
+    self->node_mutation_list_map_head = calloc(self->input_tables.nodes->num_rows,
             sizeof(mutation_id_list_t *));
-    self->node_mutation_list_map_tail = calloc(self->input_nodes.num_rows,
+    self->node_mutation_list_map_tail = calloc(self->input_tables.nodes->num_rows,
             sizeof(mutation_id_list_t *));
     if (self->mutation_id_map == NULL || self->mutation_node_map == NULL
             || self->node_mutation_list_mem == NULL
@@ -3728,12 +3721,12 @@ simplifier_init_sites(simplifier_t *self)
         goto out;
     }
     memset(self->mutation_id_map, 0xff,
-            self->input_mutations.num_rows * sizeof(mutation_id_t));
+            self->input_tables.mutations->num_rows * sizeof(mutation_id_t));
     memset(self->mutation_node_map, 0xff,
-            self->input_mutations.num_rows * sizeof(node_id_t));
+            self->input_tables.mutations->num_rows * sizeof(node_id_t));
 
-    for (j = 0; j < self->input_mutations.num_rows; j++) {
-        node = self->input_mutations.node[j];
+    for (j = 0; j < self->input_tables.mutations->num_rows; j++) {
+        node = self->input_tables.mutations->node[j];
         list_node = self->node_mutation_list_mem + j;
         list_node->mutation = (mutation_id_t) j;
         list_node->next = NULL;
@@ -3753,22 +3746,22 @@ static int
 simplifier_check_input(simplifier_t *self)
 {
     int ret = MSP_ERR_GENERIC;
-    node_id_t num_nodes = (node_id_t) self->nodes->num_rows;
+    node_id_t num_nodes = (node_id_t) self->tables->nodes->num_rows;
     site_id_t num_sites;
-    double *time = self->nodes->time;
+    double *time = self->tables->nodes->time;
     char *node_seen = NULL;
     node_id_t last_parent, parent, child;
     size_t j;
 
     node_seen = calloc((size_t) num_nodes, sizeof(char));
     /* Check the edges */
-    last_parent = self->edges->parent[0];
-    for (j = 0; j < self->edges->num_rows; j++) {
-        if (self->edges->left[j] >= self->edges->right[j]) {
+    last_parent = self->tables->edges->parent[0];
+    for (j = 0; j < self->tables->edges->num_rows; j++) {
+        if (self->tables->edges->left[j] >= self->tables->edges->right[j]) {
             ret = MSP_ERR_BAD_EDGE_INTERVAL;
             goto out;
         }
-        parent = self->edges->parent[j];
+        parent = self->tables->edges->parent[j];
         if (parent < 0 || parent >= num_nodes) {
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
@@ -3786,7 +3779,7 @@ simplifier_check_input(simplifier_t *self)
             last_parent = parent;
         }
         /* Check the children */
-        child = self->edges->child[j];
+        child = self->tables->edges->child[j];
         if (child < 0 || child >= num_nodes) {
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
@@ -3803,37 +3796,39 @@ simplifier_check_input(simplifier_t *self)
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
-        if (!(self->nodes->flags[self->samples[j]] & MSP_NODE_IS_SAMPLE)) {
+        if (!(self->tables->nodes->flags[self->samples[j]] & MSP_NODE_IS_SAMPLE)) {
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
 
     }
     /* Check the sites */
-    for (j = 0; j < self->sites->num_rows; j++) {
-        if (self->sites->position[j] < 0
-                || self->sites->position[j] >= self->sequence_length) {
+    for (j = 0; j < self->tables->sites->num_rows; j++) {
+        if (self->tables->sites->position[j] < 0
+                || self->tables->sites->position[j] >= self->tables->sequence_length) {
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }
         if (j > 0) {
-            if (self->sites->position[j - 1] > self->sites->position[j]) {
+            if (self->tables->sites->position[j - 1] > self->tables->sites->position[j]) {
                 ret = MSP_ERR_UNSORTED_SITES;
                 goto out;
-            } else if (self->sites->position[j - 1] == self->sites->position[j]) {
+            } else if (self->tables->sites->position[j - 1] == self->tables->sites->position[j]) {
                 ret = MSP_ERR_DUPLICATE_SITE_POSITION;
                 goto out;
             }
         }
     }
     /* Check the mutations */
-    num_sites = (site_id_t) self->sites->num_rows;
-    for (j = 0; j < self->mutations->num_rows; j++) {
-        if (self->mutations->site[j] < 0 || self->mutations->site[j] >= num_sites) {
+    num_sites = (site_id_t) self->tables->sites->num_rows;
+    for (j = 0; j < self->tables->mutations->num_rows; j++) {
+        if (self->tables->mutations->site[j] < 0
+                || self->tables->mutations->site[j] >= num_sites) {
             ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
             goto out;
         }
-        if (self->mutations->node[j] < 0 || self->mutations->node[j] >= num_nodes) {
+        if (self->tables->mutations->node[j] < 0
+                || self->tables->mutations->node[j] >= num_nodes) {
             ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
@@ -3886,7 +3881,7 @@ simplifier_init_samples(simplifier_t *self, node_id_t *samples)
 
     /* Go through the samples to check for errors. */
     for (j = 0; j < self->num_samples; j++) {
-        if (samples[j] < 0 || samples[j] > (node_id_t) self->input_nodes.num_rows) {
+        if (samples[j] < 0 || samples[j] > (node_id_t) self->input_tables.nodes->num_rows) {
             ret = MSP_ERR_OUT_OF_BOUNDS;
             goto out;
         }
@@ -3899,7 +3894,7 @@ simplifier_init_samples(simplifier_t *self, node_id_t *samples)
         if (ret < 0) {
             goto out;
         }
-        ret = simplifier_add_ancestry(self, samples[j], 0, self->sequence_length,
+        ret = simplifier_add_ancestry(self, samples[j], 0, self->tables->sequence_length,
             (node_id_t) ret);
         if (ret != 0) {
             goto out;
@@ -3923,16 +3918,18 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     }
     self->num_samples = num_samples;
     self->flags = flags;
-    self->nodes = tables->nodes;
-    self->edges = tables->edges;
-    self->sites = tables->sites;
-    self->mutations = tables->mutations;
-    self->individuals = tables->individuals;
-    self->populations = tables->populations;
-    self->provenances = tables->provenances;
-    self->sequence_length = tables->sequence_length;
+    self->tables = tables;
 
-    if (self->sequence_length <= 0.0) {
+    ret = table_collection_alloc(&self->input_tables, MSP_ALLOC_TABLES);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = table_collection_copy(self->tables, &self->input_tables);
+    if (ret != 0) {
+        goto out;
+    }
+
+    if (self->tables->sequence_length <= 0.0) {
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
         goto out;
     }
@@ -3943,82 +3940,12 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
     memcpy(self->samples, samples, num_samples * sizeof(node_id_t));
-
     /* If we have more then 256K blocks or edges just allocate this much */
     /* Need to avoid malloc(0) so make sure we have at least 1. */
     num_nodes_alloc = 1 + tables->nodes->num_rows;
-
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
     ret = simplifier_check_input(self);
-    if (ret != 0) {
-        goto out;
-    }
-
-    /* Make a copy of the input nodes and clear the table ready for output */
-    ret = node_table_alloc(&self->input_nodes, tables->nodes->num_rows,
-            tables->nodes->metadata_length);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = node_table_set_columns(&self->input_nodes, tables->nodes->num_rows,
-            tables->nodes->flags, tables->nodes->time, tables->nodes->population,
-            tables->nodes->individual, tables->nodes->metadata,
-            tables->nodes->metadata_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = node_table_clear(self->nodes);
-    if (ret != 0) {
-        goto out;
-    }
-    /* Make a copy of the input edges and clear the input table, ready for output. */
-    ret = edge_table_alloc(&self->input_edges, tables->edges->num_rows);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = edge_table_set_columns(&self->input_edges, tables->edges->num_rows,
-            tables->edges->left, tables->edges->right, tables->edges->parent,
-            tables->edges->child);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = edge_table_clear(self->edges);
-    if (ret != 0) {
-        goto out;
-    }
-
-    /* Make a copy of the input sites and clear the input table, ready for output. */
-    ret = site_table_alloc(&self->input_sites, tables->sites->num_rows,
-            tables->sites->ancestral_state_length, tables->sites->metadata_length);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = site_table_set_columns(&self->input_sites, tables->sites->num_rows,
-            tables->sites->position, tables->sites->ancestral_state,
-            tables->sites->ancestral_state_offset, tables->sites->metadata,
-            tables->sites->metadata_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = site_table_clear(self->sites);
-    if (ret != 0) {
-        goto out;
-    }
-    /* Make a copy of the input mutations and clear the input table, ready for output-> */
-    ret = mutation_table_alloc(&self->input_mutations, tables->mutations->num_rows,
-            tables->mutations->derived_state_length, tables->mutations->metadata_length);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_set_columns(&self->input_mutations, tables->mutations->num_rows,
-            tables->mutations->site, tables->mutations->node, tables->mutations->parent,
-            tables->mutations->derived_state, tables->mutations->derived_state_offset,
-            tables->mutations->metadata, tables->mutations->metadata_offset);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = mutation_table_clear(self->mutations);
     if (ret != 0) {
         goto out;
     }
@@ -4051,8 +3978,11 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    memset(self->node_id_map, 0xff, self->input_nodes.num_rows * sizeof(node_id_t));
-    self->nodes->num_rows = 0;
+    ret = table_collection_clear(self->tables);
+    if (ret != 0) {
+        goto out;
+    }
+    memset(self->node_id_map, 0xff, self->input_tables.nodes->num_rows * sizeof(node_id_t));
     ret = simplifier_init_samples(self, samples);
     if (ret != 0) {
         goto out;
@@ -4074,10 +4004,7 @@ out:
 int
 simplifier_free(simplifier_t *self)
 {
-    node_table_free(&self->input_nodes);
-    edge_table_free(&self->input_edges);
-    site_table_free(&self->input_sites);
-    mutation_table_free(&self->input_mutations);
+    table_collection_free(&self->input_tables);
     block_allocator_free(&self->segment_heap);
     block_allocator_free(&self->interval_list_heap);
     msp_safe_free(self->samples);
@@ -4232,7 +4159,7 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
     if (is_sample) {
         /* Free up the existing ancestry mapping. */
         x = self->ancestor_map_tail[input_id];
-        assert(x->left == 0 && x->right == self->sequence_length);
+        assert(x->left == 0 && x->right == self->tables->sequence_length);
         self->ancestor_map_head[input_id] = NULL;
         self->ancestor_map_tail[input_id] = NULL;
     }
@@ -4289,10 +4216,10 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
     if (ret != 0) {
         goto out;
     }
-    if (is_sample && prev_right != self->sequence_length) {
+    if (is_sample && prev_right != self->tables->sequence_length) {
         /* If a trailing gap exists in the sample ancestry, fill it in. */
         ret = simplifier_add_ancestry(self, input_id, prev_right,
-                self->sequence_length, output_id);
+                self->tables->sequence_length, output_id);
         if (ret != 0) {
             goto out;
         }
@@ -4317,16 +4244,17 @@ simplifier_process_parent_edges(simplifier_t *self, node_id_t parent, size_t sta
     int ret = 0;
     size_t j;
     simplify_segment_t *x;
+    const edge_table_t *input_edges = self->input_tables.edges;
     node_id_t child;
     double left, right;
 
     /* Go through the edges and queue up ancestry segments for processing. */
     self->segment_queue_size = 0;
     for (j = start; j < end; j++) {
-        assert(parent == self->input_edges.parent[j]);
-        child = self->input_edges.child[j];
-        left = self->input_edges.left[j];
-        right = self->input_edges.right[j];
+        assert(parent == input_edges->parent[j]);
+        child = input_edges->child[j];
+        left = input_edges->left[j];
+        right = input_edges->right[j];
         for (x = self->ancestor_map_head[child]; x != NULL; x = x->next) {
             if (x->right > left && right > x->left) {
                 ret = simplifier_enqueue_segment(self,
@@ -4356,14 +4284,14 @@ simplifier_map_mutation_nodes(simplifier_t *self)
     site_id_t site;
     double position;
 
-    for (input_node = 0; input_node < self->input_nodes.num_rows; input_node++) {
+    for (input_node = 0; input_node < self->input_tables.nodes->num_rows; input_node++) {
         seg = self->ancestor_map_head[input_node];
         m_node = self->node_mutation_list_map_head[input_node];
         /* Co-iterate over the segments and mutations; mutations must be listed
          * in increasing order of site position */
         while (seg != NULL && m_node != NULL) {
-            site = self->input_mutations.site[m_node->mutation];
-            position = self->input_sites.position[site];
+            site = self->input_tables.mutations->site[m_node->mutation];
+            position = self->input_tables.sites->position[site];
             if (seg->left <= position && position < seg->right) {
                 self->mutation_node_map[m_node->mutation] = seg->node;
                 m_node = m_node->next;
@@ -4387,12 +4315,12 @@ simplifier_output_sites(simplifier_t *self)
     table_size_t derived_state_offset, derived_state_length;
     table_size_t metadata_offset, metadata_length;
     mutation_id_t input_mutation, mapped_parent ,site_start, site_end;
-    site_id_t num_input_sites = (site_id_t) self->input_sites.num_rows;
-    mutation_id_t num_input_mutations = (mutation_id_t) self->input_mutations.num_rows;
+    site_id_t num_input_sites = (site_id_t) self->input_tables.sites->num_rows;
+    mutation_id_t num_input_mutations = (mutation_id_t) self->input_tables.mutations->num_rows;
     mutation_id_t input_parent, num_output_mutations, num_output_site_mutations;
     node_id_t mapped_node;
     bool keep_site;
-    bool filter_zero_mutation_sites = !!(self->flags & MSP_FILTER_ZERO_MUTATION_SITES);
+    bool filter_sites = !!(self->flags & MSP_FILTER_SITES);
 
     input_mutation = 0;
     num_output_mutations = 0;
@@ -4400,10 +4328,10 @@ simplifier_output_sites(simplifier_t *self)
         site_start = input_mutation;
         num_output_site_mutations = 0;
         while (input_mutation < num_input_mutations
-                && self->input_mutations.site[input_mutation] == input_site) {
+                && self->input_tables.mutations->site[input_mutation] == input_site) {
             mapped_node = self->mutation_node_map[input_mutation];
             if (mapped_node != MSP_NULL_NODE) {
-                input_parent = self->input_mutations.parent[input_mutation];
+                input_parent = self->input_tables.mutations->parent[input_mutation];
                 mapped_parent = MSP_NULL_MUTATION;
                 if (input_parent != MSP_NULL_MUTATION) {
                     mapped_parent = self->mutation_id_map[input_parent];
@@ -4417,62 +4345,85 @@ simplifier_output_sites(simplifier_t *self)
         site_end = input_mutation;
 
         keep_site = true;
-        if (filter_zero_mutation_sites && num_output_site_mutations == 0) {
+        if (filter_sites && num_output_site_mutations == 0) {
             keep_site = false;
         }
         if (keep_site) {
             for (input_mutation = site_start; input_mutation < site_end; input_mutation++) {
                 if (self->mutation_id_map[input_mutation] != MSP_NULL_MUTATION) {
-                    assert(self->mutations->num_rows
+                    assert(self->tables->mutations->num_rows
                             == (size_t) self->mutation_id_map[input_mutation]);
                     mapped_node = self->mutation_node_map[input_mutation];
                     assert(mapped_node != MSP_NULL_NODE);
-                    mapped_parent = self->input_mutations.parent[input_mutation];
+                    mapped_parent = self->input_tables.mutations->parent[input_mutation];
                     if (mapped_parent != MSP_NULL_MUTATION) {
                         mapped_parent = self->mutation_id_map[mapped_parent];
                     }
-                    derived_state_offset = self->input_mutations.derived_state_offset[
+                    derived_state_offset = self->input_tables.mutations->derived_state_offset[
                         input_mutation];
-                    derived_state_length = self->input_mutations.derived_state_offset[
+                    derived_state_length = self->input_tables.mutations->derived_state_offset[
                         input_mutation + 1] - derived_state_offset;
-                    metadata_offset = self->input_mutations.metadata_offset[
+                    metadata_offset = self->input_tables.mutations->metadata_offset[
                         input_mutation];
-                    metadata_length = self->input_mutations.metadata_offset[
+                    metadata_length = self->input_tables.mutations->metadata_offset[
                         input_mutation + 1] - metadata_offset;
-                    ret = mutation_table_add_row(self->mutations,
-                            (site_id_t) self->sites->num_rows,
+                    ret = mutation_table_add_row(self->tables->mutations,
+                            (site_id_t) self->tables->sites->num_rows,
                             mapped_node, mapped_parent,
-                            self->input_mutations.derived_state + derived_state_offset,
+                            self->input_tables.mutations->derived_state + derived_state_offset,
                             derived_state_length,
-                            self->input_mutations.metadata + metadata_offset,
+                            self->input_tables.mutations->metadata + metadata_offset,
                             metadata_length);
                     if (ret < 0) {
                         goto out;
                     }
                 }
             }
-            ancestral_state_offset = self->input_sites.ancestral_state_offset[input_site];
-            ancestral_state_length = self->input_sites.ancestral_state_offset[
+            ancestral_state_offset = self->input_tables.sites->ancestral_state_offset[input_site];
+            ancestral_state_length = self->input_tables.sites->ancestral_state_offset[
                 input_site + 1] - ancestral_state_offset;
-            metadata_offset = self->input_sites.metadata_offset[input_site];
-            metadata_length = self->input_sites.metadata_offset[input_site + 1]
+            metadata_offset = self->input_tables.sites->metadata_offset[input_site];
+            metadata_length = self->input_tables.sites->metadata_offset[input_site + 1]
                 - metadata_offset;
-            ret = site_table_add_row(self->sites,
-                    self->input_sites.position[input_site],
-                    self->input_sites.ancestral_state + ancestral_state_offset,
+            ret = site_table_add_row(self->tables->sites,
+                    self->input_tables.sites->position[input_site],
+                    self->input_tables.sites->ancestral_state + ancestral_state_offset,
                     ancestral_state_length,
-                    self->input_sites.metadata + metadata_offset,
+                    self->input_tables.sites->metadata + metadata_offset,
                     metadata_length);
             if (ret < 0) {
                 goto out;
             }
 
         }
-        assert(num_output_mutations == (mutation_id_t) self->mutations->num_rows);
+        assert(num_output_mutations == (mutation_id_t) self->tables->mutations->num_rows);
         input_mutation = site_end;
     }
     assert(input_mutation == num_input_mutations);
     ret = 0;
+out:
+    return ret;
+}
+
+static int WARN_UNUSED
+simplifier_finalise_references(simplifier_t *self)
+{
+    int ret = 0;
+
+    assert(self != NULL);
+
+    ret = population_table_copy(self->input_tables.populations, self->tables->populations);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = individual_table_copy(self->input_tables.individuals, self->tables->individuals);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = provenance_table_copy(self->input_tables.provenances, self->tables->provenances);
+    if (ret != 0) {
+        goto out;
+    }
 out:
     return ret;
 }
@@ -4483,13 +4434,14 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
     int ret = 0;
     size_t j, start;
     node_id_t parent, current_parent;
-    size_t num_edges = self->input_edges.num_rows;
+    const edge_table_t *input_edges = self->input_tables.edges;
+    size_t num_edges = input_edges->num_rows;
 
     if (num_edges > 0) {
         start = 0;
-        current_parent = self->input_edges.parent[0];
+        current_parent = input_edges->parent[0];
         for (j = 0; j < num_edges; j++) {
-            parent = self->input_edges.parent[j];
+            parent = input_edges->parent[j];
             if (parent != current_parent) {
                 ret = simplifier_process_parent_edges(self, current_parent, start, j);
                 if (ret != 0) {
@@ -4512,9 +4464,14 @@ simplifier_run(simplifier_t *self, node_id_t *node_map)
     if (ret != 0) {
         goto out;
     }
+    ret = simplifier_finalise_references(self);
+    if (ret != 0) {
+        goto out;
+    }
     if (node_map != NULL) {
         /* Finally, output the new IDs for the nodes, if required. */
-        memcpy(node_map, self->node_id_map, self->input_nodes.num_rows * sizeof(node_id_t));
+        memcpy(node_map, self->node_id_map,
+                self->input_tables.nodes->num_rows * sizeof(node_id_t));
     }
 out:
     return ret;
@@ -5585,4 +5542,13 @@ table_collection_reset_position(table_collection_t *tables,
     }
 out:
     return ret;
+}
+
+int WARN_UNUSED
+table_collection_clear(table_collection_t *self)
+{
+    table_collection_position_t start;
+
+    memset(&start, 0, sizeof(start));
+    return table_collection_reset_position(self, &start);
 }

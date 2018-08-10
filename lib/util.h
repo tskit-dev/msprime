@@ -59,6 +59,7 @@
 #define MSP_DBL_DECIMAL_DIG (DBL_DIG + 3)
 #endif
 
+/* Node flags */
 #define MSP_NODE_IS_SAMPLE 1
 
 /* The root node indicator */
@@ -70,13 +71,11 @@
 /* Indicates that no individual has been set */
 #define MSP_NULL_INDIVIDUAL (-1)
 
-/* Flags for individuals */
-#define MSP_INDIVIDUAL_FEMALE 1
-#define MSP_INDIVIDUAL_MALE 2
-
 /* Flags for simplify() */
-#define MSP_FILTER_ZERO_MUTATION_SITES   1
+#define MSP_FILTER_SITES                 (1 << 0)
 #define MSP_REDUCE_TO_SITE_TOPOLOGY      (1 << 1)
+#define MSP_FILTER_POPULATIONS           (1 << 2)
+#define MSP_FILTER_INDIVIDUALS           (1 << 3)
 
 /* Flags for dump tables */
 #define MSP_ALLOC_TABLES 1
