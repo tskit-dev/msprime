@@ -5536,11 +5536,11 @@ table_collection_compute_mutation_parents(table_collection_t *self, int MSP_UNUS
     /* Using unsigned values here avoids potentially undefined behaviour */
     uint32_t j, mutation, first_mutation;
 
-    if (self->sequence_length <= 0 && self->edges->num_rows > 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    ret = table_collection_build_indexes(self, 0);
+    /* Note that because we check everything here, any non-null mutation parents
+     * will also be checked, even though they are about to be overwritten. To
+     * ensure that his function always succeeds we must ensure that the
+     * parent field is set to -1 first. */
+    ret = table_collection_check_integrity(self, MSP_CHECK_ALL);
     if (ret != 0) {
         goto out;
     }
@@ -5553,34 +5553,6 @@ table_collection_compute_mutation_parents(table_collection_t *self, int MSP_UNUS
     memset(parent, 0xff, nodes.num_rows * sizeof(*parent));
     memset(bottom_mutation, 0xff, nodes.num_rows * sizeof(*bottom_mutation));
     memset(mutations.parent, 0xff, self->mutations->num_rows * sizeof(mutation_id_t));
-
-    /* Building the indexes ensures that the nodes in the edge table are
-     * valid. We need to check the mutations. */
-    /* TODO replace this with calls to check_integrity */
-    for (j = 0; j < sites.num_rows; j++) {
-        if (j > 0) {
-            if (sites.position[j] < sites.position[j - 1]) {
-                ret = MSP_ERR_UNSORTED_SITES;
-                goto out;
-            }
-        }
-    }
-    for (j = 0; j < mutations.num_rows; j++) {
-        if (mutations.node[j] < 0 || mutations.node[j] >= (node_id_t) nodes.num_rows) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (mutations.site[j] < 0 || mutations.site[j] >= (site_id_t) sites.num_rows) {
-            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (j > 0) {
-            if (mutations.site[j] < mutations.site[j - 1]) {
-                ret = MSP_ERR_UNSORTED_MUTATIONS;
-                goto out;
-            }
-        }
-    }
 
     I = self->indexes.edge_insertion_order;
     O = self->indexes.edge_removal_order;

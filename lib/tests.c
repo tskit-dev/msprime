@@ -1141,7 +1141,7 @@ verify_compute_mutation_parents(tree_sequence_t *ts)
     memcpy(parent, tables.mutations->parent, size);
     /* table_collection_print_state(&tables, stdout); */
     /* Make sure the tables are actually updated */
-    memset(tables.mutations->parent, 0, size);
+    memset(tables.mutations->parent, 0xff, size);
 
     ret = table_collection_compute_mutation_parents(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4904,7 +4904,6 @@ test_single_tree_compute_mutation_parents(void)
         "2   2  1  -1\n";
     tree_sequence_t ts;
     table_collection_t tables;
-    int load_flags = MSP_BUILD_INDEXES;
 
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4920,8 +4919,11 @@ test_single_tree_compute_mutation_parents(void)
     CU_ASSERT_EQUAL_FATAL(tables.mutations->num_rows, 6);
     tables.sequence_length = 1.0;
 
+    ret = table_collection_build_indexes(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     /* Check to make sure we have legal mutations */
-    ret = tree_sequence_load_tables(&ts, &tables, load_flags);
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
@@ -4932,6 +4934,7 @@ test_single_tree_compute_mutation_parents(void)
 
     /* Verify consistency of individuals */
     verify_individual_nodes(&ts);
+    tree_sequence_free(&ts);
 
     /* Bad site reference */
     tables.mutations->site[0] = -1;
@@ -4976,16 +4979,21 @@ test_single_tree_compute_mutation_parents(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_MUTATION_PARENT_AFTER_CHILD);
     tables.mutations->node[2] = 4;
     tables.mutations->node[3] = 1;
-    tree_sequence_free(&ts);
 
+    /* Need to reset the parent field here */
+    memset(tables.mutations->parent, 0xff,
+            tables.mutations->num_rows * sizeof(mutation_id_t));
     /* Mutations not ordered by site */
     tables.mutations->site[3] = 1;
     ret = table_collection_compute_mutation_parents(&tables, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSORTED_MUTATIONS);
     tables.mutations->site[3] = 2;
 
     /* Check to make sure we still have legal mutations */
-    ret = tree_sequence_load_tables(&ts, &tables, load_flags);
+    ret = table_collection_compute_mutation_parents(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tree_sequence_load_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
