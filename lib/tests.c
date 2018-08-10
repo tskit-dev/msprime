@@ -6596,6 +6596,7 @@ test_sort_tables(void)
     size_t j, k, start, starts[3];
     table_collection_t tables;
     int load_flags = MSP_BUILD_INDEXES;
+    node_id_t tmp_node;
 
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6662,22 +6663,27 @@ test_sort_tables(void)
             /* Check for site bounds error */
             tables.mutations->site[0] = tables.sites->num_rows;
             ret = table_collection_sort(&tables, 0, 0);
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_SITE_OUT_OF_BOUNDS);
             tables.mutations->site[0] = 0;
             ret = table_collection_sort(&tables, 0, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
+
             /* Check for edge node bounds error */
+            tmp_node = tables.edges->parent[0];
             tables.edges->parent[0] = tables.nodes->num_rows;
             ret = table_collection_sort(&tables, 0, 0);
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-            tables.edges->parent[0] = 0;
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+            tables.edges->parent[0] = tmp_node;
             ret = table_collection_sort(&tables, 0, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
+
             /* Check for mutation node bounds error */
+            tmp_node = tables.mutations->node[0];
             tables.mutations->node[0] = tables.nodes->num_rows;
             ret = table_collection_sort(&tables, 0, 0);
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-            tables.mutations->node[0] = 0;
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+            tables.mutations->node[0] = tmp_node;
+
             /* Check for mutation parent bounds error */
             tables.mutations->parent[0] = tables.mutations->num_rows;
             ret = table_collection_sort(&tables, 0, 0);

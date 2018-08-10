@@ -3059,24 +3059,20 @@ table_sorter_alloc(table_sorter_t *self, table_collection_t *tables,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    ret = table_collection_check_integrity(tables, MSP_CHECK_OFFSETS);
+    if (ret != 0) {
+        goto out;
+    }
     self->nodes = tables->nodes;
     self->edges = tables->edges;
     self->mutations = tables->mutations;
     self->sites = tables->sites;
     self->migrations = tables->migrations;
 
-    if (self->sites != NULL) {
-        /* If you provide a site table, you must provide a mutation table (even if it is
-         * empty */
-        if (self->mutations == NULL) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        self->site_id_map = malloc(self->sites->num_rows * sizeof(site_id_t));
-        if (self->site_id_map == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
+    self->site_id_map = malloc(self->sites->num_rows * sizeof(site_id_t));
+    if (self->site_id_map == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
 out:
     return ret;
@@ -3102,10 +3098,6 @@ table_sorter_sort_edges(table_sorter_t *self, size_t start)
         e->right = self->edges->right[k];
         e->parent = self->edges->parent[k];
         e->child = self->edges->child[k];
-        if (e->parent >= (node_id_t) self->nodes->num_rows) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
         e->time = self->nodes->time[e->parent];
     }
     qsort(sorted_edges, n, sizeof(edge_sort_t), cmp_edge);
@@ -3213,22 +3205,8 @@ table_sorter_sort_mutations(table_sorter_t *self)
             self->mutations->metadata_length * sizeof(*metadata_mem));
     for (j = 0; j < self->mutations->num_rows; j++) {
         site = self->mutations->site[j];
-        if (site >= (site_id_t) self->sites->num_rows) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
         node = self->mutations->node[j];
-        if (node >= (node_id_t) self->nodes->num_rows) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
-            goto out;
-        }
         parent = self->mutations->parent[j];
-        if (parent != MSP_NULL_MUTATION) {
-            if (parent < 0 || parent >= (mutation_id_t) self->mutations->num_rows) {
-                ret = MSP_ERR_MUTATION_OUT_OF_BOUNDS;
-                goto out;
-            }
-        }
         sorted_mutations[j].id = (mutation_id_t) j;
         sorted_mutations[j].site = self->site_id_map[site];
         sorted_mutations[j].node = node;
@@ -3288,10 +3266,6 @@ table_sorter_run(table_sorter_t *self, size_t edge_start)
 {
     int ret = 0;
 
-    if (edge_start > self->edges->num_rows) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
     ret = table_sorter_sort_edges(self, edge_start);
     if (ret != 0) {
         goto out;
