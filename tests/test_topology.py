@@ -2598,7 +2598,10 @@ class TestSimplify(unittest.TestCase):
         new_ts, node_map = s.simplify()
         if compare_lib:
             lib_tables = ts.dump_tables()
-            lib_node_map = lib_tables.simplify(samples, filter_sites=filter_sites)
+            lib_node_map = lib_tables.simplify(
+                samples, filter_sites=filter_sites,
+                filter_individuals=filter_individuals,
+                filter_populations=filter_populations)
             py_tables = new_ts.dump_tables()
             # print("lib = ")
             # print(lib_tables.nodes)
@@ -3057,14 +3060,9 @@ class TestSimplify(unittest.TestCase):
         tables = ts.dump_tables()
         tables.populations.add_row(metadata=b"unreferenced")
         self.assertEqual(len(tables.populations), 2)
-        print("\n\nFIXME: comparelib false\n")
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_populations=True,
-            compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_populations=True)
         self.assertEqual(tss.num_populations, 1)
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_populations=False,
-            compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_populations=False)
         self.assertEqual(tss.num_populations, 2)
 
     def test_interleaved_populations_filter(self):
@@ -3083,14 +3081,13 @@ class TestSimplify(unittest.TestCase):
             tables.populations.add_row(metadata=bytes([j]))
         ts = tables.tree_sequence()
         id_map = np.array([-1, 0, -1, -1], dtype=np.int32)
-        print("\n\nFIXME: comparelib false\n")
-        tss, _ = self.do_simplify(ts, filter_populations=True, compare_lib=False)
+        tss, _ = self.do_simplify(ts, filter_populations=True)
         self.assertEqual(tss.num_populations, 1)
         population = tss.population(0)
         self.assertEqual(population.metadata, bytes([1]))
         self.assertTrue(np.array_equal(
             id_map[ts.tables.nodes.population], tss.tables.nodes.population))
-        tss, _ = self.do_simplify(ts, filter_populations=False, compare_lib=False)
+        tss, _ = self.do_simplify(ts, filter_populations=False)
         self.assertEqual(tss.num_populations, 4)
 
     def test_removed_node_population_filter(self):
@@ -3103,9 +3100,7 @@ class TestSimplify(unittest.TestCase):
         # will disappear.
         tables.nodes.add_row(flags=0, population=1)
         tables.nodes.add_row(flags=1, population=2)
-        print("\n\nFIXME: comparelib false\n")
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_populations=True, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_populations=True)
         self.assertEqual(tss.num_nodes, 2)
         self.assertEqual(tss.num_populations, 2)
         self.assertEqual(tss.population(0).metadata, bytes(0))
@@ -3114,7 +3109,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.node(1).population, 1)
 
         tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_populations=False, compare_lib=False)
+            tables.tree_sequence(), filter_populations=False)
         self.assertEqual(tss.tables.populations, tables.populations)
 
     def test_simple_individual_filter(self):
@@ -3123,15 +3118,12 @@ class TestSimplify(unittest.TestCase):
         tables.individuals.add_row(flags=1)
         tables.nodes.add_row(flags=1, individual=0)
         tables.nodes.add_row(flags=1, individual=0)
-        print("\n\nFIXME: comparelib false\n")
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_individuals=True, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=True)
         self.assertEqual(tss.num_nodes, 2)
         self.assertEqual(tss.num_individuals, 1)
         self.assertEqual(tss.individual(0).flags, 0)
 
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_individuals=False, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=False)
         self.assertEqual(tss.tables.individuals, tables.individuals)
 
     def test_interleaved_individual_filter(self):
@@ -3142,15 +3134,12 @@ class TestSimplify(unittest.TestCase):
         tables.nodes.add_row(flags=1, individual=1)
         tables.nodes.add_row(flags=1, individual=-1)
         tables.nodes.add_row(flags=1, individual=1)
-        print("\n\nFIXME: comparelib false\n")
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_individuals=True, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=True)
         self.assertEqual(tss.num_nodes, 3)
         self.assertEqual(tss.num_individuals, 1)
         self.assertEqual(tss.individual(0).flags, 1)
 
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_individuals=False, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=False)
         self.assertEqual(tss.tables.individuals, tables.individuals)
 
     def test_removed_node_individual_filter(self):
@@ -3163,9 +3152,7 @@ class TestSimplify(unittest.TestCase):
         # will disappear.
         tables.nodes.add_row(flags=0, individual=1)
         tables.nodes.add_row(flags=1, individual=2)
-        print("\n\nFIXME: comparelib false\n")
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_individuals=True, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=True)
         self.assertEqual(tss.num_nodes, 2)
         self.assertEqual(tss.num_individuals, 2)
         self.assertEqual(tss.individual(0).flags, 0)
@@ -3173,8 +3160,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.node(0).individual, 0)
         self.assertEqual(tss.node(1).individual, 1)
 
-        tss, _ = self.do_simplify(
-            tables.tree_sequence(), filter_individuals=False, compare_lib=False)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=False)
         self.assertEqual(tss.tables.individuals, tables.individuals)
 
     def verify_simplify_haplotypes(self, ts, samples):

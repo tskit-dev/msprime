@@ -4895,12 +4895,16 @@ TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
     size_t num_samples;
     int flags = 0;
     int filter_sites = true;
+    int filter_individuals = false;
+    int filter_populations = false;
     int reduce_to_site_topology = false;
     static char *kwlist[] = {
-        "samples", "filter_sites", "reduce_to_site_topology", NULL};
+        "samples", "filter_sites", "filter_populations", "filter_individuals",
+        "reduce_to_site_topology", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|ii", kwlist,
-            &samples, &filter_sites, &reduce_to_site_topology)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|iiii", kwlist,
+            &samples, &filter_sites, &filter_populations, &filter_individuals,
+            &reduce_to_site_topology)) {
         goto out;
     }
     samples_array = (PyArrayObject *) PyArray_FROMANY(samples, NPY_INT32, 1, 1,
@@ -4912,6 +4916,12 @@ TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
     num_samples = shape[0];
     if (filter_sites) {
         flags |= MSP_FILTER_SITES;
+    }
+    if (filter_individuals) {
+        flags |= MSP_FILTER_INDIVIDUALS;
+    }
+    if (filter_populations) {
+        flags |= MSP_FILTER_POPULATIONS;
     }
     if (reduce_to_site_topology) {
         flags |= MSP_REDUCE_TO_SITE_TOPOLOGY;

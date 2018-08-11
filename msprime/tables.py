@@ -1561,7 +1561,7 @@ class TableCollection(object):
     def simplify(
             self, samples, filter_zero_mutation_sites=None,
             reduce_to_site_topology=False,
-            filter_populations=True, filter_individuals=True, filter_sites=True):
+            filter_populations=False, filter_individuals=False, filter_sites=True):
         """
         Simplifies the tables in place to retain only the information necessary
         to reconstruct the tree sequence describing the given ``samples``.
@@ -1598,6 +1598,8 @@ class TableCollection(object):
             filter_sites = filter_zero_mutation_sites
         return self.ll_tables.simplify(
             samples, filter_sites=filter_sites,
+            filter_individuals=filter_individuals,
+            filter_populations=filter_populations,
             reduce_to_site_topology=reduce_to_site_topology)
 
     def sort(self, edge_start=0):

@@ -3903,11 +3903,52 @@ test_simplest_population_filter(void)
     CU_ASSERT_EQUAL(tables.populations->metadata[1], '1');
     CU_ASSERT_EQUAL(tables.populations->metadata[2], '2');
 
-    /* ret = table_collection_simplify(&tables, samples, 2, MSP_FILTER_POPULATIONS, NULL); */
-    /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
-    /* CU_ASSERT_EQUAL(tables.nodes->num_rows, 2); */
-    /* CU_ASSERT_EQUAL(tables.populations->num_rows, 1); */
-    /* CU_ASSERT_EQUAL(tables.populations->metadata[0], '1'); */
+    ret = table_collection_simplify(&tables, samples, 2, MSP_FILTER_POPULATIONS, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.nodes->num_rows, 2);
+    CU_ASSERT_EQUAL(tables.nodes->population[0], 0);
+    CU_ASSERT_EQUAL(tables.nodes->population[1], 0);
+    CU_ASSERT_EQUAL(tables.populations->num_rows, 1);
+    CU_ASSERT_EQUAL(tables.populations->metadata[0], '1');
+
+    table_collection_free(&tables);
+}
+
+static void
+test_simplest_individual_filter(void)
+{
+    table_collection_t tables;
+    node_id_t samples[] = {0, 1};
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 1;
+    individual_table_add_row(tables.individuals, 0, NULL, 0, "0", 1);
+    individual_table_add_row(tables.individuals, 0, NULL, 0, "1", 1);
+    individual_table_add_row(tables.individuals, 0, NULL, 0, "2", 1);
+    /* Two nodes referring to individual 1 */
+    node_table_add_row(tables.nodes, MSP_NODE_IS_SAMPLE, 0.0, MSP_NULL_POPULATION, 1,
+            NULL, 0);
+    node_table_add_row(tables.nodes, MSP_NODE_IS_SAMPLE, 0.0, MSP_NULL_POPULATION, 1,
+            NULL, 0);
+
+    ret = table_collection_simplify(&tables, samples, 2, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.nodes->num_rows, 2);
+    CU_ASSERT_EQUAL(tables.individuals->num_rows, 3);
+    CU_ASSERT_EQUAL(tables.individuals->metadata[0], '0');
+    CU_ASSERT_EQUAL(tables.individuals->metadata[1], '1');
+    CU_ASSERT_EQUAL(tables.individuals->metadata[2], '2');
+
+    ret = table_collection_simplify(&tables, samples, 2, MSP_FILTER_INDIVIDUALS, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.nodes->num_rows, 2);
+    CU_ASSERT_EQUAL(tables.nodes->individual[0], 0);
+    CU_ASSERT_EQUAL(tables.nodes->individual[1], 0);
+    CU_ASSERT_EQUAL(tables.individuals->num_rows, 1);
+    CU_ASSERT_EQUAL(tables.individuals->metadata[0], '1');
 
     table_collection_free(&tables);
 }
@@ -9250,6 +9291,7 @@ main(int argc, char **argv)
             test_simplest_overlapping_unary_edges_internal_samples_simplify},
         {"test_simplest_reduce_site_topology", test_simplest_reduce_site_topology},
         {"test_simplest_population_filter", test_simplest_population_filter},
+        {"test_simplest_individual_filter", test_simplest_individual_filter},
         {"test_single_tree_good_records", test_single_tree_good_records},
         {"test_single_nonbinary_tree_good_records",
             test_single_nonbinary_tree_good_records},

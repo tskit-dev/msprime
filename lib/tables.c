@@ -4420,22 +4420,105 @@ static int WARN_UNUSED
 simplifier_finalise_references(simplifier_t *self)
 {
     int ret = 0;
+    table_size_t j;
+    bool keep;
+    table_size_t num_nodes = self->tables->nodes->num_rows;
 
-    assert(self != NULL);
+    tmp_population_t pop;
+    population_id_t pop_id;
+    table_size_t num_populations = self->input_tables.populations->num_rows;
+    population_id_t *node_population = self->tables->nodes->population;
+    bool *population_referenced = calloc(num_populations, sizeof(*population_referenced));
+    population_id_t *population_id_map = malloc(
+            num_populations * sizeof(*population_id_map));
+    bool filter_populations = !!(self->flags & MSP_FILTER_POPULATIONS);
 
-    ret = population_table_copy(self->input_tables.populations, self->tables->populations);
-    if (ret != 0) {
+    individual_t ind;
+    individual_id_t ind_id;
+    table_size_t num_individuals = self->input_tables.individuals->num_rows;
+    individual_id_t *node_individual = self->tables->nodes->individual;
+    bool *individual_referenced = calloc(num_individuals, sizeof(*individual_referenced));
+    individual_id_t *individual_id_map = malloc(
+            num_individuals * sizeof(*individual_id_map));
+    bool filter_individuals = !!(self->flags & MSP_FILTER_INDIVIDUALS);
+
+    if (population_referenced == NULL || population_id_map == NULL
+            || individual_referenced == NULL || individual_id_map == NULL) {
         goto out;
     }
-    ret = individual_table_copy(self->input_tables.individuals, self->tables->individuals);
-    if (ret != 0) {
-        goto out;
+
+    for (j = 0; j < num_nodes; j++) {
+        pop_id = node_population[j];
+        if (pop_id != MSP_NULL_POPULATION) {
+            population_referenced[pop_id] = true;
+        }
+        ind_id = node_individual[j];
+        if (ind_id != MSP_NULL_POPULATION) {
+            individual_referenced[ind_id] = true;
+        }
     }
+    for (j = 0; j < num_populations; j++) {
+        ret = population_table_get_row(self->input_tables.populations, j, &pop);
+        if (ret != 0) {
+            goto out;
+        }
+        keep = true;
+        if (filter_populations && !population_referenced[j]) {
+            keep = false;
+        }
+        population_id_map[j] = MSP_NULL_POPULATION;
+        if (keep) {
+            ret = population_table_add_row(self->tables->populations,
+                pop.metadata, pop.metadata_length);
+            if (ret < 0) {
+                goto out;
+            }
+            population_id_map[j] = (population_id_t) ret;
+        }
+    }
+
+    for (j = 0; j < num_individuals; j++) {
+        ret = individual_table_get_row(self->input_tables.individuals, j, &ind);
+        if (ret != 0) {
+            goto out;
+        }
+        keep = true;
+        if (filter_individuals && !individual_referenced[j]) {
+            keep = false;
+        }
+        individual_id_map[j] = MSP_NULL_POPULATION;
+        if (keep) {
+            ret = individual_table_add_row(self->tables->individuals,
+                ind.flags, ind.location, ind.location_length,
+                ind.metadata, ind.metadata_length);
+            if (ret < 0) {
+                goto out;
+            }
+            individual_id_map[j] = (individual_id_t) ret;
+        }
+    }
+
+    /* Remap node IDs referencing the above */
+    for (j = 0; j < num_nodes; j++) {
+        pop_id = node_population[j];
+        if (pop_id != MSP_NULL_POPULATION) {
+            node_population[j] = population_id_map[pop_id];
+        }
+        ind_id = node_individual[j];
+        if (ind_id != MSP_NULL_POPULATION) {
+            node_individual[j] = individual_id_map[ind_id];
+        }
+    }
+
     ret = provenance_table_copy(self->input_tables.provenances, self->tables->provenances);
     if (ret != 0) {
         goto out;
     }
 out:
+    msp_safe_free(population_referenced);
+    msp_safe_free(individual_referenced);
+    msp_safe_free(population_id_map);
+    msp_safe_free(individual_id_map);
     return ret;
 }
 
