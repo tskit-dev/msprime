@@ -4357,9 +4357,6 @@ simplifier_output_sites(simplifier_t *self)
 {
     int ret = 0;
     site_id_t input_site;
-    table_size_t ancestral_state_offset, ancestral_state_length;
-    table_size_t derived_state_offset, derived_state_length;
-    table_size_t metadata_offset, metadata_length;
     mutation_id_t input_mutation, mapped_parent ,site_start, site_end;
     site_id_t num_input_sites = (site_id_t) self->input_tables.sites->num_rows;
     mutation_id_t num_input_mutations = (mutation_id_t) self->input_tables.mutations->num_rows;
@@ -4367,14 +4364,20 @@ simplifier_output_sites(simplifier_t *self)
     node_id_t mapped_node;
     bool keep_site;
     bool filter_sites = !!(self->flags & MSP_FILTER_SITES);
+    site_t site;
+    mutation_t mutation;
 
     input_mutation = 0;
     num_output_mutations = 0;
     for (input_site = 0; input_site < num_input_sites; input_site++) {
+        ret = site_table_get_row(self->input_tables.sites, (size_t) input_site, &site);
+        if (ret != 0) {
+            goto out;
+        }
         site_start = input_mutation;
         num_output_site_mutations = 0;
         while (input_mutation < num_input_mutations
-                && self->input_tables.mutations->site[input_mutation] == input_site) {
+                && self->input_tables.mutations->site[input_mutation] == site.id) {
             mapped_node = self->mutation_node_map[input_mutation];
             if (mapped_node != MSP_NULL_NODE) {
                 input_parent = self->input_tables.mutations->parent[input_mutation];
@@ -4405,38 +4408,24 @@ simplifier_output_sites(simplifier_t *self)
                     if (mapped_parent != MSP_NULL_MUTATION) {
                         mapped_parent = self->mutation_id_map[mapped_parent];
                     }
-                    derived_state_offset = self->input_tables.mutations->derived_state_offset[
-                        input_mutation];
-                    derived_state_length = self->input_tables.mutations->derived_state_offset[
-                        input_mutation + 1] - derived_state_offset;
-                    metadata_offset = self->input_tables.mutations->metadata_offset[
-                        input_mutation];
-                    metadata_length = self->input_tables.mutations->metadata_offset[
-                        input_mutation + 1] - metadata_offset;
+                    ret = mutation_table_get_row(self->input_tables.mutations,
+                            (size_t) input_mutation, &mutation);
+                    if (ret != 0) {
+                        goto out;
+                    }
                     ret = mutation_table_add_row(self->tables->mutations,
                             (site_id_t) self->tables->sites->num_rows,
                             mapped_node, mapped_parent,
-                            self->input_tables.mutations->derived_state + derived_state_offset,
-                            derived_state_length,
-                            self->input_tables.mutations->metadata + metadata_offset,
-                            metadata_length);
+                            mutation.derived_state, mutation.derived_state_length,
+                            mutation.metadata, mutation.metadata_length);
                     if (ret < 0) {
                         goto out;
                     }
                 }
             }
-            ancestral_state_offset = self->input_tables.sites->ancestral_state_offset[input_site];
-            ancestral_state_length = self->input_tables.sites->ancestral_state_offset[
-                input_site + 1] - ancestral_state_offset;
-            metadata_offset = self->input_tables.sites->metadata_offset[input_site];
-            metadata_length = self->input_tables.sites->metadata_offset[input_site + 1]
-                - metadata_offset;
-            ret = site_table_add_row(self->tables->sites,
-                    self->input_tables.sites->position[input_site],
-                    self->input_tables.sites->ancestral_state + ancestral_state_offset,
-                    ancestral_state_length,
-                    self->input_tables.sites->metadata + metadata_offset,
-                    metadata_length);
+            ret = site_table_add_row(self->tables->sites, site.position,
+                    site.ancestral_state, site.ancestral_state_length,
+                    site.metadata, site.metadata_length);
             if (ret < 0) {
                 goto out;
             }
