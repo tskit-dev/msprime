@@ -3822,12 +3822,13 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
 
     /* TODO we can add a flag to skip these checks for when we know they are
      * unnecessary */
-    /* TODO Current unit tests require MSP_CHECK_SITE_ORDERING, but it's
+    /* TODO Current unit tests require MSP_CHECK_SITE_DUPLICATES but it's
      * debateable whether we need it. If we remove, we definitely need explicit
      * tests to ensure we're doing sensible things with duplicate sites.
      * (Particularly, re MSP_REDUCE_TO_SITE_TOPOLOGY.) */
     ret = table_collection_check_integrity(tables,
-            MSP_CHECK_OFFSETS|MSP_CHECK_EDGE_ORDERING|MSP_CHECK_SITE_ORDERING);
+            MSP_CHECK_OFFSETS|MSP_CHECK_EDGE_ORDERING|MSP_CHECK_SITE_ORDERING|
+            MSP_CHECK_SITE_DUPLICATES);
     if (ret != 0) {
         goto out;
     }
@@ -4548,6 +4549,9 @@ table_collection_check_integrity(table_collection_t *self, int flags)
     mutation_id_t num_mutations = (mutation_id_t) self->mutations->num_rows;
     population_id_t num_populations = (population_id_t) self->populations->num_rows;
     individual_id_t num_individuals = (individual_id_t) self->individuals->num_rows;
+    bool check_site_ordering = !!(flags & MSP_CHECK_SITE_ORDERING);
+    bool check_site_duplicates = !!(flags & MSP_CHECK_SITE_DUPLICATES);
+    bool check_mutation_ordering = !!(flags & MSP_CHECK_MUTATION_ORDERING);
 
     if (self->sequence_length <= 0) {
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
@@ -4617,12 +4621,12 @@ table_collection_check_integrity(table_collection_t *self, int flags)
             ret = MSP_ERR_BAD_SITE_POSITION;
             goto out;
         }
-        if (j > 0 && !!(flags & MSP_CHECK_SITE_ORDERING)) {
-            if (self->sites->position[j - 1] == position) {
+        if (j > 0) {
+            if (check_site_duplicates && self->sites->position[j - 1] == position) {
                 ret = MSP_ERR_DUPLICATE_SITE_POSITION;
                 goto out;
             }
-            if (self->sites->position[j - 1] > position) {
+            if (check_site_ordering && self->sites->position[j - 1] > position) {
                 ret = MSP_ERR_UNSORTED_SITES;
                 goto out;
             }
@@ -4648,7 +4652,7 @@ table_collection_check_integrity(table_collection_t *self, int flags)
             ret = MSP_ERR_MUTATION_PARENT_EQUAL;
             goto out;
         }
-        if (!!(flags & MSP_CHECK_MUTATION_ORDERING)) {
+        if (check_mutation_ordering) {
             if (parent_mut != MSP_NULL_MUTATION) {
                 /* Parents must be listed before their children */
                 if (parent_mut > (mutation_id_t) j) {
@@ -4702,6 +4706,7 @@ table_collection_check_integrity(table_collection_t *self, int flags)
             goto out;
         }
     }
+
     if (!!(flags & MSP_CHECK_INDEXES)) {
         if (!table_collection_is_indexed(self)) {
             ret = MSP_ERR_TABLES_NOT_INDEXED;
@@ -5401,8 +5406,6 @@ table_collection_deduplicate_sites(table_collection_t *self, int MSP_UNUSED(flag
 {
     int ret = 0;
     table_size_t j;
-    double last_position, position;
-    site_id_t mutation_site;
     /* Map of old site IDs to new site IDs. */
     site_id_t *site_id_map = NULL;
     site_table_t copy;
@@ -5418,53 +5421,12 @@ table_collection_deduplicate_sites(table_collection_t *self, int MSP_UNUSED(flag
         return ret;
     }
 
-    /* Check the input first. This avoids leaving the table in an indeterminate
-     * state after an error occurs, which could lead to nasty downstream bugs.
-     * The cost of the extra iterations is minimal. If the user is super-sure
-     * that their input is correct, then we could add a flag to skip these
-     * checks. */
-    last_position = -1;
-    for (j = 0; j < self->sites->num_rows; j++) {
-        position = self->sites->position[j];
-        if (position < 0) {
-            ret = MSP_ERR_BAD_SITE_POSITION;
-            goto out;
-        }
-        if (position < last_position) {
-            ret = MSP_ERR_UNSORTED_SITES;
-            goto out;
-        }
-        /* Checking the offsets is arguably unnecessary, since these should
-         * be validated when calling add_row/or append_rows. However,
-         * we can't be sure that users won't edit tables directly and
-         * we'll end up with hard-to-debug memory access violations when
-         * doing the memcpy'ing below. */
-        if (self->sites->metadata_offset[j + 1] > self->sites->metadata_length) {
-            ret = MSP_ERR_BAD_OFFSET;
-            goto out;
-        }
-        if (self->sites->metadata_offset[j] > self->sites->metadata_offset[j + 1]) {
-            ret = MSP_ERR_BAD_OFFSET;
-            goto out;
-        }
-        if (self->sites->ancestral_state_offset[j + 1]
-                > self->sites->ancestral_state_length) {
-            ret = MSP_ERR_BAD_OFFSET;
-            goto out;
-        }
-        if (self->sites->ancestral_state_offset[j]
-                > self->sites->ancestral_state_offset[j + 1]) {
-            ret = MSP_ERR_BAD_OFFSET;
-            goto out;
-        }
-        last_position = position;
-    }
-    for (j = 0; j < self->mutations->num_rows; j++) {
-        mutation_site = self->mutations->site[j];
-        if (mutation_site < 0 || mutation_site >= (site_id_t) self->sites->num_rows) {
-            ret = MSP_ERR_SITE_OUT_OF_BOUNDS;
-            goto out;
-        }
+    /* Check everything except site duplicates (which we expect) and
+     * edge indexes (which we don't use) */
+    ret = table_collection_check_integrity(self,
+            MSP_CHECK_ALL & ~MSP_CHECK_SITE_DUPLICATES & ~MSP_CHECK_INDEXES);
+    if (ret != 0) {
+        goto out;
     }
 
     ret = site_table_copy(self->sites, &copy);
@@ -5506,7 +5468,6 @@ table_collection_deduplicate_sites(table_collection_t *self, int MSP_UNUSED(flag
         // Remap sites in the mutation table
         // (but only if there's been any changed sites)
         for (j = 0; j < self->mutations->num_rows; j++) {
-            mutation_site = self->mutations->site[j];
             self->mutations->site[j] = site_id_map[self->mutations->site[j]];
         }
     }

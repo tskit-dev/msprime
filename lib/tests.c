@@ -6716,6 +6716,7 @@ test_deduplicate_sites_multichar(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    tables.sequence_length = 10;
     ret = site_table_add_row(tables.sites, 0, "AA", 1, "M", 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = site_table_add_row(tables.sites, 0, "0", 1, NULL, 0);
@@ -6798,14 +6799,20 @@ test_deduplicate_sites(void)
     ret = table_collection_alloc(&messy, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    messy.sequence_length = 10;
+    tidy.sequence_length = 10;
+    parse_individuals(paper_ex_individuals, tidy.individuals);
+    parse_nodes(paper_ex_nodes, tidy.nodes);
     parse_sites(tidy_sites, tidy.sites);
     parse_mutations(tidy_mutations, tidy.mutations);
     // test cleaning doesn't mess up the tidy one
+    parse_individuals(paper_ex_individuals, messy.individuals);
+    parse_nodes(paper_ex_nodes, messy.nodes);
     parse_sites(tidy_sites, messy.sites);
     parse_mutations(tidy_mutations, messy.mutations);
 
     ret = table_collection_deduplicate_sites(&messy, 0);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_site_tables_equal(tidy.sites, messy.sites);
     verify_mutation_tables_equal(tidy.mutations, messy.mutations);
 
@@ -6834,12 +6841,16 @@ test_deduplicate_sites_errors(void)
     ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    tables.sequence_length = 10;
     ret = site_table_add_row(tables.sites, 2, "A", 1, "m", 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = site_table_add_row(tables.sites, 2, "TT", 2, "MM", 2);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     ret = mutation_table_add_row(tables.mutations, 0, 0, -1,
             "T", 1, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = node_table_add_row(tables.nodes, 0, 0, MSP_NULL_POPULATION,
+            MSP_NULL_INDIVIDUAL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Negative position */

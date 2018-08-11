@@ -81,11 +81,12 @@
 #define MSP_CHECK_OFFSETS                (1 << 0)
 #define MSP_CHECK_EDGE_ORDERING          (1 << 1)
 #define MSP_CHECK_SITE_ORDERING          (1 << 2)
-#define MSP_CHECK_MUTATION_ORDERING      (1 << 3)
-#define MSP_CHECK_INDEXES                (1 << 4)
+#define MSP_CHECK_SITE_DUPLICATES        (1 << 3)
+#define MSP_CHECK_MUTATION_ORDERING      (1 << 4)
+#define MSP_CHECK_INDEXES                (1 << 5)
 #define MSP_CHECK_ALL                    \
     (MSP_CHECK_OFFSETS | MSP_CHECK_EDGE_ORDERING | MSP_CHECK_SITE_ORDERING | \
-     MSP_CHECK_MUTATION_ORDERING | MSP_CHECK_INDEXES)
+     MSP_CHECK_SITE_DUPLICATES | MSP_CHECK_MUTATION_ORDERING | MSP_CHECK_INDEXES)
 
 /* Flags for dump tables */
 #define MSP_ALLOC_TABLES 1

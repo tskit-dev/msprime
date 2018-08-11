@@ -1694,7 +1694,7 @@ class TestDeduplicateSites(unittest.TestCase):
         self.assertEqual(t1, t2)
 
     def test_order_maintained(self):
-        t1 = msprime.TableCollection()
+        t1 = msprime.TableCollection(1)
         t1.sites.add_row(position=0, ancestral_state="first")
         t1.sites.add_row(position=0, ancestral_state="second")
         t1.deduplicate_sites()
