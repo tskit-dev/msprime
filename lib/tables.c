@@ -3281,60 +3281,49 @@ static int
 table_sorter_sort_sites(table_sorter_t *self)
 {
     int ret = 0;
-    table_size_t j, ancestral_state_offset, metadata_offset, length;
-    site_t *sorted_sites = malloc(self->sites->num_rows * sizeof(*sorted_sites));
-    char *ancestral_state_mem = malloc(self->sites->ancestral_state_length *
-            sizeof(*ancestral_state_mem));
-    char *metadata_mem = malloc(self->sites->metadata_length *
-            sizeof(*metadata_mem));
+    site_table_t copy;
+    table_size_t j;
+    table_size_t num_sites = self->sites->num_rows;
+    site_t *sorted_sites = malloc(num_sites * sizeof(*sorted_sites));
 
-    if (sorted_sites == NULL || ancestral_state_mem == NULL || metadata_mem == NULL) {
+    ret = site_table_alloc(&copy, num_sites, self->sites->ancestral_state_length,
+            self->sites->metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = site_table_copy(self->sites, &copy);
+    if (ret != 0) {
+        goto out;
+    }
+    if (sorted_sites == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    memcpy(ancestral_state_mem, self->sites->ancestral_state,
-            self->sites->ancestral_state_length * sizeof(char));
-    memcpy(metadata_mem, self->sites->metadata,
-            self->sites->metadata_length * sizeof(char));
-    for (j = 0; j < self->sites->num_rows; j++) {
-        sorted_sites[j].id = (site_id_t) j;
-        sorted_sites[j].position = self->sites->position[j];
-        ancestral_state_offset = self->sites->ancestral_state_offset[j];
-        length = self->sites->ancestral_state_offset[j + 1] - ancestral_state_offset;
-        sorted_sites[j].ancestral_state_length = length;
-        sorted_sites[j].ancestral_state = ancestral_state_mem + ancestral_state_offset;
-        metadata_offset = self->sites->metadata_offset[j];
-        length = self->sites->metadata_offset[j + 1] - metadata_offset;
-        sorted_sites[j].metadata_length = length;
-        sorted_sites[j].metadata = metadata_mem + metadata_offset;
+    for (j = 0; j < num_sites; j++) {
+        ret = site_table_get_row(&copy, j, sorted_sites + j);
+        if (ret != 0) {
+            goto out;
+        }
     }
 
     /* Sort the sites by position */
     qsort(sorted_sites, self->sites->num_rows, sizeof(*sorted_sites), cmp_site);
 
     /* Build the mapping from old site IDs to new site IDs and copy back into the table */
-    ancestral_state_offset = 0;
-    metadata_offset = 0;
-    for (j = 0; j < self->sites->num_rows; j++) {
+    site_table_clear(self->sites);
+    for (j = 0; j < num_sites; j++) {
         self->site_id_map[sorted_sites[j].id] = (site_id_t) j;
-        self->sites->position[j] = sorted_sites[j].position;
-        self->sites->ancestral_state_offset[j] = ancestral_state_offset;
-        memcpy(self->sites->ancestral_state + ancestral_state_offset,
-            sorted_sites[j].ancestral_state,
-            sorted_sites[j].ancestral_state_length);
-        ancestral_state_offset += sorted_sites[j].ancestral_state_length;
-        self->sites->metadata_offset[j] = metadata_offset;
-        memcpy(self->sites->metadata + metadata_offset,
-            sorted_sites[j].metadata,
-            sorted_sites[j].metadata_length);
-        metadata_offset += sorted_sites[j].metadata_length;
+        ret = site_table_add_row(self->sites, sorted_sites[j].position,
+                sorted_sites[j].ancestral_state, sorted_sites[j].ancestral_state_length,
+                sorted_sites[j].metadata, sorted_sites[j].metadata_length);
+        if (ret < 0) {
+            goto out;
+        }
     }
-    self->sites->ancestral_state_offset[self->sites->num_rows] = ancestral_state_offset;
-    self->sites->metadata_offset[self->sites->num_rows] = metadata_offset;
+    ret = 0;
 out:
     msp_safe_free(sorted_sites);
-    msp_safe_free(ancestral_state_mem);
-    msp_safe_free(metadata_mem);
+    site_table_free(&copy);
     return ret;
 }
 
@@ -3342,84 +3331,71 @@ static int
 table_sorter_sort_mutations(table_sorter_t *self)
 {
     int ret = 0;
-    site_id_t site;
-    node_id_t node;
-    table_size_t j, derived_state_offset, metadata_offset, length;
+    size_t j;
     mutation_id_t parent, mapped_parent;
-    mutation_t *sorted_mutations = malloc(self->mutations->num_rows *
-            sizeof(*sorted_mutations));
-    mutation_id_t *mutation_id_map = malloc(self->mutations->num_rows
-            * sizeof(*mutation_id_map));
-    char *derived_state_mem = malloc(self->mutations->derived_state_length
-            * sizeof(*derived_state_mem));
-    char *metadata_mem = malloc(self->mutations->metadata_length
-            * sizeof(*metadata_mem));
+    size_t num_mutations = self->mutations->num_rows;
+    mutation_table_t copy;
+    mutation_t *sorted_mutations = malloc(num_mutations * sizeof(*sorted_mutations));
+    mutation_id_t *mutation_id_map = malloc(num_mutations * sizeof(*mutation_id_map));
 
-    if (mutation_id_map == NULL || derived_state_mem == NULL
-            || sorted_mutations == NULL || metadata_mem == NULL) {
+    ret = mutation_table_alloc(&copy, num_mutations,
+            self->mutations->derived_state_length,
+            self->mutations->metadata_length);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = mutation_table_copy(self->mutations, &copy);
+    if (ret != 0) {
+        goto out;
+    }
+    if (mutation_id_map == NULL || sorted_mutations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
 
-    memcpy(derived_state_mem, self->mutations->derived_state,
-            self->mutations->derived_state_length * sizeof(*derived_state_mem));
-    memcpy(metadata_mem, self->mutations->metadata,
-            self->mutations->metadata_length * sizeof(*metadata_mem));
-    for (j = 0; j < self->mutations->num_rows; j++) {
-        site = self->mutations->site[j];
-        node = self->mutations->node[j];
-        parent = self->mutations->parent[j];
-        sorted_mutations[j].id = (mutation_id_t) j;
-        sorted_mutations[j].site = self->site_id_map[site];
-        sorted_mutations[j].node = node;
-        sorted_mutations[j].parent = self->mutations->parent[j];
-        derived_state_offset = self->mutations->derived_state_offset[j];
-        length = self->mutations->derived_state_offset[j + 1] - derived_state_offset;
-        sorted_mutations[j].derived_state_length = length;
-        sorted_mutations[j].derived_state = derived_state_mem + derived_state_offset;
-        metadata_offset = self->mutations->metadata_offset[j];
-        length = self->mutations->metadata_offset[j + 1] - metadata_offset;
-        sorted_mutations[j].metadata_length = length;
-        sorted_mutations[j].metadata = metadata_mem + metadata_offset;
+    for (j = 0; j < num_mutations; j++) {
+        ret = mutation_table_get_row(&copy, j, sorted_mutations + j);
+        if (ret != 0) {
+            goto out;
+        }
+        sorted_mutations[j].site = self->site_id_map[sorted_mutations[j].site];
+    }
+    ret = mutation_table_clear(self->mutations);
+    if (ret != 0) {
+        goto out;
     }
 
-    qsort(sorted_mutations, self->mutations->num_rows, sizeof(*sorted_mutations),
-        cmp_mutation);
+    qsort(sorted_mutations, num_mutations, sizeof(*sorted_mutations), cmp_mutation);
 
     /* Make a first pass through the sorted mutations to build the ID map. */
-    for (j = 0; j < self->mutations->num_rows; j++) {
+    for (j = 0; j < num_mutations; j++) {
         mutation_id_map[sorted_mutations[j].id] = (mutation_id_t) j;
     }
-    derived_state_offset = 0;
-    metadata_offset = 0;
-    /* Copy the sorted mutations back into the table */
-    for (j = 0; j < self->mutations->num_rows; j++) {
-        self->mutations->site[j] = sorted_mutations[j].site;
-        self->mutations->node[j] = sorted_mutations[j].node;
+
+    for (j = 0; j < num_mutations; j++) {
         mapped_parent = MSP_NULL_MUTATION;
         parent = sorted_mutations[j].parent;
         if (parent != MSP_NULL_MUTATION) {
             mapped_parent = mutation_id_map[parent];
         }
-        self->mutations->parent[j] = mapped_parent;
-        self->mutations->derived_state_offset[j] = derived_state_offset;
-        memcpy(self->mutations->derived_state + derived_state_offset,
+        ret = mutation_table_add_row(self->mutations,
+            sorted_mutations[j].site,
+            sorted_mutations[j].node,
+            mapped_parent,
             sorted_mutations[j].derived_state,
-            sorted_mutations[j].derived_state_length * sizeof(char));
-        derived_state_offset += sorted_mutations[j].derived_state_length;
-        self->mutations->metadata_offset[j] = metadata_offset;
-        memcpy(self->mutations->metadata + metadata_offset,
+            sorted_mutations[j].derived_state_length,
             sorted_mutations[j].metadata,
-            sorted_mutations[j].metadata_length * sizeof(char));
-        metadata_offset += sorted_mutations[j].metadata_length;
+            sorted_mutations[j].metadata_length);
+        if (ret < 0) {
+            goto out;
+        }
     }
-    self->mutations->derived_state_offset[self->mutations->num_rows] = derived_state_offset;
-    self->mutations->metadata_offset[self->mutations->num_rows] = metadata_offset;
+    ret = 0;
+
 out:
     msp_safe_free(mutation_id_map);
     msp_safe_free(sorted_mutations);
-    msp_safe_free(derived_state_mem);
-    msp_safe_free(metadata_mem);
+    mutation_table_free(&copy);
     return ret;
 }
 
@@ -3432,15 +3408,13 @@ table_sorter_run(table_sorter_t *self, size_t edge_start)
     if (ret != 0) {
         goto out;
     }
-    if (self->sites != NULL) {
-        ret = table_sorter_sort_sites(self);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = table_sorter_sort_mutations(self);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = table_sorter_sort_sites(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = table_sorter_sort_mutations(self);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;
@@ -3680,20 +3654,23 @@ static int WARN_UNUSED
 simplifier_record_node(simplifier_t *self, node_id_t input_id, bool is_sample)
 {
     int ret = 0;
-    table_size_t offset = self->input_tables.nodes->metadata_offset[input_id];
-    table_size_t length = self->input_tables.nodes->metadata_offset[input_id + 1] - offset;
-    uint32_t flags = self->input_tables.nodes->flags[input_id];
+    node_t node;
+    uint32_t flags;
 
+    ret = node_table_get_row(self->input_tables.nodes, (size_t) input_id, &node);
+    if (ret != 0) {
+        goto out;
+    }
     /* Zero out the sample bit */
-    flags &= (uint32_t) ~MSP_NODE_IS_SAMPLE;
+    flags = node.flags & (uint32_t) ~MSP_NODE_IS_SAMPLE;
     if (is_sample) {
         flags |= MSP_NODE_IS_SAMPLE;
     }
     self->node_id_map[input_id] = (node_id_t) self->tables->nodes->num_rows;
-    ret = node_table_add_row_internal(self->tables->nodes, flags,
-            self->input_tables.nodes->time[input_id], self->input_tables.nodes->population[input_id],
-            self->input_tables.nodes->individual[input_id],
-            self->input_tables.nodes->metadata + offset, length);
+    ret = node_table_add_row(self->tables->nodes, flags,
+            node.time, node.population, node.individual,
+            node.metadata, node.metadata_length);
+out:
     return ret;
 }
 
@@ -4429,7 +4406,6 @@ simplifier_output_sites(simplifier_t *self)
             if (ret < 0) {
                 goto out;
             }
-
         }
         assert(num_output_mutations == (mutation_id_t) self->tables->mutations->num_rows);
         input_mutation = site_end;

@@ -60,7 +60,7 @@
 #endif
 
 /* Node flags */
-#define MSP_NODE_IS_SAMPLE 1
+#define MSP_NODE_IS_SAMPLE 1u
 
 /* The root node indicator */
 #define MSP_NULL_NODE (-1)
