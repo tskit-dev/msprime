@@ -1648,9 +1648,9 @@ class TestDeduplicateSites(unittest.TestCase):
     Tests for the TableCollection.deduplicate_sites method.
     """
     def test_empty(self):
-        tables = msprime.TableCollection()
+        tables = msprime.TableCollection(1)
         tables.deduplicate_sites()
-        self.assertEqual(tables, msprime.TableCollection())
+        self.assertEqual(tables, msprime.TableCollection(1))
 
     def test_unsorted(self):
         tables = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()

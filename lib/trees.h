@@ -26,6 +26,13 @@ extern "C" {
  * this somehow to remove this redundancy. Probably downstream code should
  * be forced to use some functions rather than accessing these structs
  * to obtain pointers to indexes, edges data and so on.
+ *
+ * UPDATE 2018-08-11. This is ready for refactoring now. Anywhere we're looking
+ * the actual arrays we can access via the tables, and should take a
+ * const local pointer anyway, instead of chasing through a bunch of references.
+ * We can make the tree struct a bit more efficient as well by using
+ * const and restrict for the pointers we're using. For printing and so on,
+ * should use the get_row type accesses to simplify the pointers, etc.
  */
 typedef struct {
     size_t num_trees;

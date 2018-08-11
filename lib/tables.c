@@ -5554,18 +5554,13 @@ table_collection_deduplicate_sites(table_collection_t *self, int MSP_UNUSED(flag
     /* Map of old site IDs to new site IDs. */
     site_id_t *site_id_map = NULL;
     site_table_t copy;
+    site_t row, last_row;
 
     /* Must allocate the site table first for site_table_free to be safe */
     ret = site_table_alloc(&copy, 0, 0, 0);
     if (ret != 0) {
         goto out;
     }
-    /* If we have zero sites then there's nothing to do. Exiting early here
-     * simplifies logic below */
-    if (self->sites->num_rows == 0) {
-        return ret;
-    }
-
     /* Check everything except site duplicates (which we expect) and
      * edge indexes (which we don't use) */
     ret = table_collection_check_integrity(self,
@@ -5587,26 +5582,23 @@ table_collection_deduplicate_sites(table_collection_t *self, int MSP_UNUSED(flag
     if (ret != 0) {
         goto out;
     }
-    /* We exit early above if zero rows, so this is safe */
-    ret = site_table_add_row(self->sites, copy.position[0],
-            copy.ancestral_state, copy.ancestral_state_offset[1],
-            copy.metadata, copy.metadata_offset[1]);
-    if (ret < 0) {
-        goto out;
-    }
+
+    last_row.position = -1;
     site_id_map[0] = 0;
-    for (j = 1; j < copy.num_rows; j++) {
-        if (copy.position[j] != copy.position[j - 1]) {
-            ret = site_table_add_row(self->sites, copy.position[j],
-                    copy.ancestral_state + copy.ancestral_state_offset[j],
-                    copy.ancestral_state_offset[j + 1] - copy.ancestral_state_offset[j],
-                    copy.metadata + copy.metadata_offset[j],
-                    copy.metadata_offset[j + 1] - copy.metadata_offset[j]);
+    for (j = 0; j < copy.num_rows; j++) {
+        ret = site_table_get_row(&copy, j, &row);
+        if (ret != 0) {
+            goto out;
+        }
+        if (row.position != last_row.position) {
+            ret = site_table_add_row(self->sites, row.position, row.ancestral_state,
+                row.ancestral_state_length, row.metadata, row.metadata_length);
             if (ret < 0) {
                 goto out;
             }
         }
         site_id_map[j] = (site_id_t) self->sites->num_rows - 1;
+        last_row = row;
     }
 
     if (self->sites->num_rows < copy.num_rows) {
@@ -5811,4 +5803,3 @@ table_collection_clear(table_collection_t *self)
     memset(&start, 0, sizeof(start));
     return table_collection_reset_position(self, &start);
 }
-
