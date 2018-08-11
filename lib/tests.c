@@ -7042,6 +7042,7 @@ test_node_table(void)
         CU_ASSERT_NSTRING_EQUAL(metadata_copy, test_metadata, test_metadata_length);
         ret = node_table_get_row(&table, j, &node);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(node.id, j);
         CU_ASSERT_EQUAL(node.flags, j);
         CU_ASSERT_EQUAL(node.time, j);
         CU_ASSERT_EQUAL(node.population, j);
@@ -7203,6 +7204,7 @@ test_edge_table(void)
     edge_table_t table;
     size_t num_rows = 100;
     size_t j;
+    edge_t edge;
     node_id_t *parent, *child;
     double *left, *right;
 
@@ -7219,7 +7221,16 @@ test_edge_table(void)
         CU_ASSERT_EQUAL(table.parent[j], j);
         CU_ASSERT_EQUAL(table.child[j], j);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
+        ret = edge_table_get_row(&table, j, &edge);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(edge.id, j);
+        CU_ASSERT_EQUAL(edge.left, j);
+        CU_ASSERT_EQUAL(edge.right, j);
+        CU_ASSERT_EQUAL(edge.parent, j);
+        CU_ASSERT_EQUAL(edge.child, j);
     }
+    ret = edge_table_get_row(&table, num_rows, &edge);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     edge_table_print_state(&table, _devnull);
     edge_table_dump_text(&table, _devnull);
 
@@ -7298,6 +7309,7 @@ test_site_table(void)
     char *ancestral_state;
     char *metadata;
     double *position;
+    site_t site;
     table_size_t *ancestral_state_offset;
     table_size_t *metadata_offset;
 
@@ -7317,6 +7329,13 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.metadata_length, 0);
     CU_ASSERT_EQUAL(table.num_rows, 1);
 
+    ret = site_table_get_row(&table, 0, &site);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(site.position, 0);
+    CU_ASSERT_EQUAL(site.ancestral_state_length, 1);
+    CU_ASSERT_NSTRING_EQUAL(site.ancestral_state, "A", 1);
+    CU_ASSERT_EQUAL(site.metadata_length, 0);
+
     ret = site_table_add_row(&table, 1, "AA", 2, "{}", 2);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_EQUAL(table.position[1], 1);
@@ -7326,6 +7345,14 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.metadata_length, 2);
     CU_ASSERT_EQUAL(table.num_rows, 2);
 
+    ret = site_table_get_row(&table, 1, &site);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(site.position, 1);
+    CU_ASSERT_EQUAL(site.ancestral_state_length, 2);
+    CU_ASSERT_NSTRING_EQUAL(site.ancestral_state, "AA", 2);
+    CU_ASSERT_EQUAL(site.metadata_length, 2);
+    CU_ASSERT_NSTRING_EQUAL(site.metadata, "{}", 2);
+
     ret = site_table_add_row(&table, 2, "A", 1, "metadata", 8);
     CU_ASSERT_EQUAL_FATAL(ret, 2);
     CU_ASSERT_EQUAL(table.position[1], 1);
@@ -7334,6 +7361,9 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.metadata_offset[3], 10);
     CU_ASSERT_EQUAL(table.metadata_length, 10);
     CU_ASSERT_EQUAL(table.num_rows, 3);
+
+    ret = site_table_get_row(&table, 3, &site);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
 
     site_table_print_state(&table, _devnull);
     site_table_dump_text(&table, _devnull);
@@ -7500,6 +7530,7 @@ test_mutation_table(void)
     char *derived_state, *metadata;
     char c[max_len + 1];
     table_size_t *derived_state_offset, *metadata_offset;
+    mutation_t mutation;
 
     for (j = 0; j < max_len; j++) {
         c[j] = 'A' + j;
@@ -7526,7 +7557,20 @@ test_mutation_table(void)
         CU_ASSERT_EQUAL(table.derived_state_length, len);
         CU_ASSERT_EQUAL(table.metadata_offset[j + 1], len);
         CU_ASSERT_EQUAL(table.metadata_length, len);
+
+        ret = mutation_table_get_row(&table, j, &mutation);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(mutation.id, j);
+        CU_ASSERT_EQUAL(mutation.site, j);
+        CU_ASSERT_EQUAL(mutation.node, j);
+        CU_ASSERT_EQUAL(mutation.parent, j);
+        CU_ASSERT_EQUAL(mutation.metadata_length, k);
+        CU_ASSERT_NSTRING_EQUAL(mutation.metadata, c, k);
+        CU_ASSERT_EQUAL(mutation.derived_state_length, k);
+        CU_ASSERT_NSTRING_EQUAL(mutation.derived_state, c, k);
     }
+    ret = mutation_table_get_row(&table, num_rows, &mutation);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     mutation_table_print_state(&table, _devnull);
     mutation_table_dump_text(&table, _devnull);
 
@@ -7725,6 +7769,7 @@ test_migration_table(void)
     node_id_t *node;
     population_id_t *source, *dest;
     double *left, *right, *time;
+    migration_t migration;
 
     ret = migration_table_alloc(&table, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -7741,7 +7786,19 @@ test_migration_table(void)
         CU_ASSERT_EQUAL(table.dest[j], j);
         CU_ASSERT_EQUAL(table.time[j], j);
         CU_ASSERT_EQUAL(table.num_rows, j + 1);
+
+        ret = migration_table_get_row(&table, j, &migration);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(migration.id, j);
+        CU_ASSERT_EQUAL(migration.left, j);
+        CU_ASSERT_EQUAL(migration.right, j);
+        CU_ASSERT_EQUAL(migration.node, j);
+        CU_ASSERT_EQUAL(migration.source, j);
+        CU_ASSERT_EQUAL(migration.dest, j);
+        CU_ASSERT_EQUAL(migration.time, j);
     }
+    ret = migration_table_get_row(&table, num_rows, &migration);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     migration_table_print_state(&table, _devnull);
     migration_table_dump_text(&table, _devnull);
 
@@ -7855,7 +7912,7 @@ test_individual_table(void)
     char *metadata;
     uint32_t *metadata_offset;
     uint32_t *location_offset;
-
+    individual_t individual;
     const char *test_metadata = "test";
     size_t test_metadata_length = 4;
     char metadata_copy[test_metadata_length + 1];
@@ -7885,7 +7942,19 @@ test_individual_table(void)
         memcpy(metadata_copy, table.metadata + table.metadata_offset[j],
                 test_metadata_length);
         CU_ASSERT_NSTRING_EQUAL(metadata_copy, test_metadata, test_metadata_length);
+
+        ret = individual_table_get_row(&table, j, &individual);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(individual.id, j);
+        CU_ASSERT_EQUAL(individual.flags, j);
+        CU_ASSERT_EQUAL(individual.location_length, spatial_dimension);
+        CU_ASSERT_NSTRING_EQUAL(individual.location, test_location,
+                spatial_dimension * sizeof(double));
+        CU_ASSERT_EQUAL(individual.metadata_length, test_metadata_length);
+        CU_ASSERT_NSTRING_EQUAL(individual.metadata, test_metadata, test_metadata_length);
     }
+    ret = individual_table_get_row(&table, num_rows, &individual);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     individual_table_print_state(&table, _devnull);
     individual_table_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
@@ -8095,6 +8164,7 @@ test_population_table(void)
     char *metadata;
     char c[max_len + 1];
     table_size_t *metadata_offset;
+    tmp_population_t population;
 
     for (j = 0; j < max_len; j++) {
         c[j] = 'A' + j;
@@ -8126,7 +8196,15 @@ test_population_table(void)
         len += k;
         CU_ASSERT_EQUAL(table.metadata_offset[j + 1], len);
         CU_ASSERT_EQUAL(table.metadata_length, len);
+
+        ret = population_table_get_row(&table, j, &population);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(population.id, j);
+        CU_ASSERT_EQUAL(population.metadata_length, k);
+        CU_ASSERT_NSTRING_EQUAL(population.metadata, c, k);
     }
+    ret = population_table_get_row(&table, num_rows, &population);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     population_table_print_state(&table, _devnull);
     population_table_dump_text(&table, _devnull);
 
@@ -8210,6 +8288,7 @@ test_provenance_table(void)
     const char *test_record = "{\"json\"=1234}";
     size_t test_record_length = strlen(test_record);
     char record_copy[test_record_length + 1];
+    provenance_t provenance;
 
     timestamp_copy[test_timestamp_length] = '\0';
     record_copy[test_record_length] = '\0';
@@ -8234,7 +8313,19 @@ test_provenance_table(void)
         memcpy(record_copy, table.record + table.record_offset[j],
                 test_record_length);
         CU_ASSERT_NSTRING_EQUAL(record_copy, test_record, test_record_length);
+
+        ret = provenance_table_get_row(&table, j, &provenance);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(provenance.id, j);
+        CU_ASSERT_EQUAL(provenance.timestamp_length, test_timestamp_length);
+        CU_ASSERT_NSTRING_EQUAL(provenance.timestamp, test_timestamp,
+                test_timestamp_length);
+        CU_ASSERT_EQUAL(provenance.record_length, test_record_length);
+        CU_ASSERT_NSTRING_EQUAL(provenance.record, test_record,
+                test_record_length);
     }
+    ret = provenance_table_get_row(&table, num_rows, &provenance);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OUT_OF_BOUNDS);
     provenance_table_print_state(&table, _devnull);
     provenance_table_dump_text(&table, _devnull);
     provenance_table_clear(&table);

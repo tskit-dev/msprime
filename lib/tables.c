@@ -526,6 +526,7 @@ node_table_get_row(node_table_t *self, size_t index, node_t *row)
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
+    row->id = (node_id_t) index;
     row->flags = self->flags[index];
     row->time = self->time[index];
     row->population = self->population[index];
@@ -774,6 +775,23 @@ edge_table_equals(edge_table_t *self, edge_table_t *other)
             && memcmp(self->child, other->child,
                     self->num_rows * sizeof(node_id_t)) == 0;
     }
+    return ret;
+}
+
+int
+edge_table_get_row(edge_table_t *self, size_t index, edge_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (edge_id_t) index;
+    row->left = self->left[index];
+    row->right = self->right[index];
+    row->parent = self->parent[index];
+    row->child = self->child[index];
+out:
     return ret;
 }
 
@@ -1138,6 +1156,30 @@ site_table_print_state(site_table_t *self, FILE *out)
             == self->ancestral_state_offset[self->num_rows]);
     assert(self->metadata_offset[0] == 0);
     assert(self->metadata_length == self->metadata_offset[self->num_rows]);
+}
+
+int
+site_table_get_row(site_table_t *self, size_t index, site_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (site_id_t) index;
+    row->position = self->position[index];
+    row->ancestral_state_length = self->ancestral_state_offset[index + 1]
+        - self->ancestral_state_offset[index];
+    row->ancestral_state = self->ancestral_state + self->ancestral_state_offset[index];
+    row->metadata_length = self->metadata_offset[index + 1]
+        - self->metadata_offset[index];
+    row->metadata = self->metadata + self->metadata_offset[index];
+    /* This struct has a placeholder for mutations. Probably should be separate
+     * structs for this (site_table_row_t?) */
+    row->mutations_length = 0;
+    row->mutations = NULL;
+out:
+    return ret;
 }
 
 int
@@ -1569,6 +1611,28 @@ mutation_table_print_state(mutation_table_t *self, FILE *out)
 }
 
 int
+mutation_table_get_row(mutation_table_t *self, size_t index, mutation_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (mutation_id_t) index;
+    row->site = self->site[index];
+    row->node = self->node[index];
+    row->parent = self->parent[index];
+    row->derived_state_length = self->derived_state_offset[index + 1]
+        - self->derived_state_offset[index];
+    row->derived_state = self->derived_state + self->derived_state_offset[index];
+    row->metadata_length = self->metadata_offset[index + 1]
+        - self->metadata_offset[index];
+    row->metadata = self->metadata + self->metadata_offset[index];
+out:
+    return ret;
+}
+
+int
 mutation_table_dump_text(mutation_table_t *self, FILE *out)
 {
     size_t j;
@@ -1820,6 +1884,25 @@ migration_table_print_state(migration_table_t *self, FILE *out)
     fprintf(out, TABLE_SEP);
     ret = migration_table_dump_text(self, out);
     assert(ret == 0);
+}
+
+int
+migration_table_get_row(migration_table_t *self, size_t index, migration_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (migration_id_t) index;
+    row->left = self->left[index];
+    row->right = self->right[index];
+    row->node = self->node[index];
+    row->source = self->source[index];
+    row->dest = self->dest[index];
+    row->time = self->time[index];
+out:
+    return ret;
 }
 
 int
@@ -2220,6 +2303,27 @@ individual_table_print_state(individual_table_t *self, FILE *out)
 }
 
 int
+individual_table_get_row(individual_table_t *self, size_t index, individual_t *row)
+{
+    int ret = 0;
+
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (individual_id_t) index;
+    row->flags = self->flags[index];
+    row->location_length = self->location_offset[index + 1]
+        - self->location_offset[index];
+    row->location = self->location + self->location_offset[index];
+    row->metadata_length = self->metadata_offset[index + 1]
+        - self->metadata_offset[index];
+    row->metadata = self->metadata + self->metadata_offset[index];
+out:
+    return ret;
+}
+
+int
 individual_table_dump_text(individual_table_t *self, FILE *out)
 {
     int ret = MSP_ERR_IO;
@@ -2540,6 +2644,22 @@ population_table_print_state(population_table_t *self, FILE *out)
     }
     assert(self->metadata_offset[0] == 0);
     assert(self->metadata_offset[self->num_rows] == self->metadata_length);
+}
+
+int
+population_table_get_row(population_table_t *self, size_t index, tmp_population_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (population_id_t) index;
+    row->metadata_length = self->metadata_offset[index + 1]
+        - self->metadata_offset[index];
+    row->metadata = self->metadata + self->metadata_offset[index];
+out:
+    return ret;
 }
 
 int
@@ -2913,6 +3033,25 @@ provenance_table_print_state(provenance_table_t *self, FILE *out)
     assert(self->timestamp_offset[self->num_rows] == self->timestamp_length);
     assert(self->record_offset[0] == 0);
     assert(self->record_offset[self->num_rows] == self->record_length);
+}
+
+int
+provenance_table_get_row(provenance_table_t *self, size_t index, provenance_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->id = (provenance_id_t) index;
+    row->timestamp_length = self->timestamp_offset[index + 1]
+        - self->timestamp_offset[index];
+    row->timestamp = self->timestamp + self->timestamp_offset[index];
+    row->record_length = self->record_offset[index + 1]
+        - self->record_offset[index];
+    row->record = self->record + self->record_offset[index];
+out:
+    return ret;
 }
 
 int

@@ -1064,7 +1064,8 @@ static PyObject *
 IndividualTable_get_row(IndividualTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    int err;
+    Py_ssize_t row_id;
     individual_t individual;
 
     if (IndividualTable_check_state(self) != 0) {
@@ -1073,20 +1074,11 @@ IndividualTable_get_row(IndividualTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = individual_table_get_row(self->table, (size_t) row_id, &individual);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    individual.flags = self->table->flags[row_id];
-    individual.location = self->table->location
-        + self->table->location_offset[row_id];
-    individual.location_length = self->table->location_offset[row_id + 1]
-        - self->table->location_offset[row_id];
-    individual.metadata = self->table->metadata
-        + self->table->metadata_offset[row_id];
-    individual.metadata_length = self->table->metadata_offset[row_id + 1]
-        - self->table->metadata_offset[row_id];
     ret = make_individual_row(&individual);
 out:
     return ret;
@@ -2056,7 +2048,8 @@ static PyObject *
 EdgeTable_get_row(EdgeTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     edge_t edge;
 
     if (EdgeTable_check_state(self) != 0) {
@@ -2065,15 +2058,11 @@ EdgeTable_get_row(EdgeTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = edge_table_get_row(self->table, (size_t) row_id, &edge);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    edge.left = self->table->left[row_id];
-    edge.right = self->table->right[row_id];
-    edge.parent = self->table->parent[row_id];
-    edge.child = self->table->child[row_id];
     ret = make_edge(&edge);
 out:
     return ret;
@@ -2485,7 +2474,8 @@ static PyObject *
 MigrationTable_get_row(MigrationTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     migration_t migration;
 
     if (MigrationTable_check_state(self) != 0) {
@@ -2494,17 +2484,11 @@ MigrationTable_get_row(MigrationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = migration_table_get_row(self->table, (size_t) row_id, &migration);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    migration.left = self->table->left[row_id];
-    migration.right = self->table->right[row_id];
-    migration.node = self->table->node[row_id];
-    migration.source = self->table->source[row_id];
-    migration.dest = self->table->dest[row_id];
-    migration.time = self->table->time[row_id];
     ret = make_migration(&migration);
 out:
     return ret;
@@ -2963,7 +2947,8 @@ static PyObject *
 SiteTable_get_row(SiteTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     site_t site;
 
     if (SiteTable_check_state(self) != 0) {
@@ -2972,21 +2957,11 @@ SiteTable_get_row(SiteTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = site_table_get_row(self->table, (size_t) row_id, &site);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    site.position = self->table->position[row_id];
-    site.ancestral_state = self->table->ancestral_state
-        + self->table->ancestral_state_offset[row_id];
-    site.ancestral_state_length = self->table->ancestral_state_offset[row_id + 1]
-        - self->table->ancestral_state_offset[row_id];
-    site.metadata = self->table->metadata
-        + self->table->metadata_offset[row_id];
-    site.metadata_length = self->table->metadata_offset[row_id + 1]
-        - self->table->metadata_offset[row_id];
-    site.mutations_length = 0;
     ret = make_site_row(&site);
 out:
     return ret;
@@ -3465,7 +3440,8 @@ static PyObject *
 MutationTable_get_row(MutationTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     mutation_t mutation;
 
     if (MutationTable_check_state(self) != 0) {
@@ -3474,22 +3450,11 @@ MutationTable_get_row(MutationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = mutation_table_get_row(self->table, (size_t) row_id, &mutation);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    mutation.site = self->table->site[row_id];
-    mutation.node = self->table->node[row_id];
-    mutation.parent = self->table->parent[row_id];
-    mutation.derived_state = self->table->derived_state
-        + self->table->derived_state_offset[row_id];
-    mutation.derived_state_length = self->table->derived_state_offset[row_id + 1]
-        - self->table->derived_state_offset[row_id];
-    mutation.metadata = self->table->metadata
-        + self->table->metadata_offset[row_id];
-    mutation.metadata_length = self->table->metadata_offset[row_id + 1]
-        - self->table->metadata_offset[row_id];
     ret = make_mutation(&mutation);
 out:
     return ret;
@@ -4017,7 +3982,8 @@ static PyObject *
 PopulationTable_get_row(PopulationTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     tmp_population_t population;
 
     if (PopulationTable_check_state(self) != 0) {
@@ -4026,15 +3992,11 @@ PopulationTable_get_row(PopulationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = population_table_get_row(self->table, (size_t) row_id, &population);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    population.metadata = self->table->metadata
-        + self->table->metadata_offset[row_id];
-    population.metadata_length = self->table->metadata_offset[row_id + 1]
-        - self->table->metadata_offset[row_id];
     ret = make_population(&population);
 out:
     return ret;
@@ -4411,7 +4373,8 @@ static PyObject *
 ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     provenance_t provenance;
 
     if (ProvenanceTable_check_state(self) != 0) {
@@ -4420,19 +4383,11 @@ ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = provenance_table_get_row(self->table, (size_t) row_id, &provenance);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    provenance.timestamp = self->table->timestamp
-        + self->table->timestamp_offset[row_id];
-    provenance.timestamp_length = self->table->timestamp_offset[row_id + 1]
-        - self->table->timestamp_offset[row_id];
-    provenance.record = self->table->record
-        + self->table->record_offset[row_id];
-    provenance.record_length = self->table->record_offset[row_id + 1]
-        - self->table->record_offset[row_id];
     ret = make_provenance(&provenance);
 out:
     return ret;

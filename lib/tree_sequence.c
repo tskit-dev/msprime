@@ -914,7 +914,7 @@ tree_sequence_get_population(tree_sequence_t *self, size_t index,
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    population->id = (table_size_t) index;
+    population->id = (provenance_id_t) index;
     offset = self->populations.metadata_offset[index];
     length = self->populations.metadata_offset[index + 1] - offset;
     population->metadata = self->populations.metadata + offset;
@@ -933,7 +933,7 @@ tree_sequence_get_provenance(tree_sequence_t *self, size_t index, provenance_t *
         ret = MSP_ERR_OUT_OF_BOUNDS;
         goto out;
     }
-    provenance->id = (table_size_t) index;
+    provenance->id = (provenance_id_t) index;
     offset = self->provenances.timestamp_offset[index];
     length = self->provenances.timestamp_offset[index + 1] - offset;
     provenance->timestamp = self->provenances.timestamp + offset;
