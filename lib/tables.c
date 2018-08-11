@@ -3716,29 +3716,6 @@ out:
 
 }
 
-static int
-simplifier_check_samples(simplifier_t *self)
-{
-    int ret = 0;
-    node_id_t num_nodes = (node_id_t) self->tables->nodes->num_rows;
-    size_t j;
-
-    /* Check the samples */
-    for (j = 0; j < self->num_samples; j++) {
-        if (self->samples[j] < 0 || self->samples[j] >= num_nodes) {
-            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (!(self->tables->nodes->flags[self->samples[j]] & MSP_NODE_IS_SAMPLE)) {
-            ret = MSP_ERR_BAD_SAMPLES;
-            goto out;
-        }
-
-    }
-out:
-    return ret;
-}
-
 static int WARN_UNUSED
 simplifier_add_ancestry(simplifier_t *self, node_id_t input_id, double left, double right,
         node_id_t output_id)
@@ -3782,7 +3759,11 @@ simplifier_init_samples(simplifier_t *self, node_id_t *samples)
     /* Go through the samples to check for errors. */
     for (j = 0; j < self->num_samples; j++) {
         if (samples[j] < 0 || samples[j] > (node_id_t) self->input_tables.nodes->num_rows) {
-            ret = MSP_ERR_OUT_OF_BOUNDS;
+            ret = MSP_ERR_NODE_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (!(self->input_tables.nodes->flags[self->samples[j]] & MSP_NODE_IS_SAMPLE)) {
+            ret = MSP_ERR_BAD_SAMPLES;
             goto out;
         }
         if (self->is_sample[samples[j]]) {
@@ -3849,10 +3830,6 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         goto out;
     }
     memcpy(self->samples, samples, num_samples * sizeof(node_id_t));
-    ret = simplifier_check_samples(self);
-    if (ret != 0) {
-        goto out;
-    }
 
     /* Allocate the heaps used for small objects-> Assuming 8K is a good chunk size */
     ret = block_allocator_alloc(&self->segment_heap, 8192);
@@ -5046,6 +5023,9 @@ table_collection_build_indexes(table_collection_t *self, int MSP_UNUSED(flags))
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    /* TODO we should probably drop these checks and call check_integrity instead.
+     * Do this when we're providing the Python API for build_indexes, so that
+     * we can test it properly. */
 
     /* sort by left and increasing time to give us the order in which
      * records should be inserted */

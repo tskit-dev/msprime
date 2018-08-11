@@ -857,7 +857,7 @@ test_mixed_model_simulation(void)
     /* TODO remove this when populate tables takes table_collection as arg */
     tables.sequence_length = msp->num_loci;
     CU_ASSERT_EQUAL_FATAL(tables.sequence_length, msp->num_loci);
-    ret = tree_sequence_load_tables(&ts, &tables, 0);
+    ret = tree_sequence_load_tables(&ts, &tables, MSP_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tree_sequence_print_state(&ts, _devnull);
     tree_sequence_free(&ts);
@@ -1282,7 +1282,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         /* TODO remove this when populate tables takes table_collection as arg */
         tables.sequence_length = m;
-        ret = tree_sequence_load_tables(&ts, &tables, 0);
+        ret = tree_sequence_load_tables(&ts, &tables, MSP_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_simulator_tree_sequence_equality(&msp, &ts, &mutgen, 1.0);
         tree_sequence_print_state(&ts, _devnull);
