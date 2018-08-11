@@ -120,8 +120,7 @@ ld_calc_position_trees(ld_calc_t *self, size_t site_index)
     sparse_tree_t *tA = self->outer_tree;
     sparse_tree_t *tB = self->inner_tree;
 
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) site_index,
-            &mut);
+    ret = tree_sequence_get_site(self->tree_sequence, site_index, &mut);
     if (ret != 0) {
         goto out;
     }
@@ -216,7 +215,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) source_index, &sA);
+    ret = tree_sequence_get_site(self->tree_sequence, source_index, &sA);
     if (ret != 0) {
         goto out;
     }
@@ -231,8 +230,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         if (source_index + j + 1 >= self->num_sites) {
             break;
         }
-        ret = tree_sequence_get_site(self->tree_sequence,
-                (site_id_t) (source_index + j + 1), &sB);
+        ret = tree_sequence_get_site(self->tree_sequence, (source_index + j + 1), &sB);
         if (ret != 0) {
             goto out;
         }
@@ -306,7 +304,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) source_index, &sA);
+    ret = tree_sequence_get_site(self->tree_sequence, source_index, &sA);
     if (ret != 0) {
         goto out;
     }
@@ -322,7 +320,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         if (site_index < 0) {
             break;
         }
-        ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) site_index, &sB);
+        ret = tree_sequence_get_site(self->tree_sequence, (size_t) site_index, &sB);
         if (ret != 0) {
             goto out;
         }
@@ -434,11 +432,11 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     /* We can probably do a lot better than this implementation... */
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) a, &sA);
+    ret = tree_sequence_get_site(self->tree_sequence, a, &sA);
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) b, &sB);
+    ret = tree_sequence_get_site(self->tree_sequence, b, &sB);
     if (ret != 0) {
         goto out;
     }

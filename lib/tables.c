@@ -2319,6 +2319,10 @@ individual_table_get_row(individual_table_t *self, size_t index, individual_t *r
     row->metadata_length = self->metadata_offset[index + 1]
         - self->metadata_offset[index];
     row->metadata = self->metadata + self->metadata_offset[index];
+    /* Also have referencing individuals here. Should this be a different struct?
+     * See also site. */
+    row->nodes_length = 0;
+    row->nodes = NULL;
 out:
     return ret;
 }

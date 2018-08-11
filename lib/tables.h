@@ -211,8 +211,6 @@ typedef struct _mutation_t {
     table_size_t derived_state_length;
     const char *metadata;
     table_size_t metadata_length;
-    // TODO remove this and change to ID?
-    size_t index;
 } mutation_t;
 
 typedef struct {

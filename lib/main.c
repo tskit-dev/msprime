@@ -673,11 +673,11 @@ print_ld_matrix(tree_sequence_t *ts)
             fatal_library_error(ret, "ld_calc_get_r2_array");
         }
         for (k = 0; k < num_r2_values; k++) {
-            ret = tree_sequence_get_site(ts, (site_id_t) j, &sA);
+            ret = tree_sequence_get_site(ts, j, &sA);
             if (ret != 0) {
                 fatal_library_error(ret, "get_site");
             }
-            ret = tree_sequence_get_site(ts, (site_id_t) (j + k + 1), &sB);
+            ret = tree_sequence_get_site(ts, (j + k + 1), &sB);
             if (ret != 0) {
                 fatal_library_error(ret, "get_site");
             }

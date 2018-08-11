@@ -227,7 +227,7 @@ tree_sequence_free(tree_sequence_t *self)
 static int
 tree_sequence_init_sites(tree_sequence_t *self)
 {
-    site_id_t j;
+    size_t j;
     table_size_t k;
     int ret = 0;
     size_t offset = 0;
@@ -249,19 +249,19 @@ tree_sequence_init_sites(tree_sequence_t *self)
     }
 
     for (k = 0; k < (table_size_t) self->mutations.num_records; k++) {
-        ret = tree_sequence_get_mutation(self, (mutation_id_t) k,
+        ret = tree_sequence_get_mutation(self, k,
                 self->sites.site_mutations_mem + k);
         if (ret != 0) {
             goto out;
         }
     }
     k = 0;
-    for (j = 0; j < (site_id_t) self->sites.num_records; j++) {
+    for (j = 0; j < self->sites.num_records; j++) {
         self->sites.site_mutations[j] = self->sites.site_mutations_mem + offset;
         self->sites.site_mutations_length[j] = 0;
         /* Go through all mutations for this site */
         while (k < (table_size_t) self->mutations.num_records
-                && self->mutations.site[k] == j) {
+                && self->mutations.site[k] == (site_id_t) j) {
             self->sites.site_mutations_length[j]++;
             offset++;
             k++;
@@ -767,112 +767,40 @@ out:
 }
 
 int WARN_UNUSED
-tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node)
+tree_sequence_get_node(tree_sequence_t *self, size_t index, node_t *node)
 {
-    int ret = 0;
-    table_size_t offset, length;
-
-    if (index < 0 || index >= (node_id_t) self->nodes.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    node->time = self->nodes.time[index];
-    node->population = self->nodes.population[index];
-    node->individual = self->nodes.individual[index];
-    node->flags = self->nodes.flags[index];
-    offset = self->nodes.metadata_offset[index];
-    length = self->nodes.metadata_offset[index + 1] - offset;
-    node->metadata = self->nodes.metadata+ offset;
-    node->metadata_length = length;
-out:
-    return ret;
+    return node_table_get_row(self->tables->nodes, index, node);
 }
 
 int WARN_UNUSED
 tree_sequence_get_edge(tree_sequence_t *self, size_t index, edge_t *edge)
 {
-    int ret = 0;
-
-    if (index >= self->edges.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    edge->left = self->edges.left[index];
-    edge->right = self->edges.right[index];
-    edge->parent = self->edges.parent[index];
-    edge->child = self->edges.child[index];
-out:
-    return ret;
+    return edge_table_get_row(self->tables->edges, index, edge);
 }
 
 int WARN_UNUSED
-tree_sequence_get_migration(tree_sequence_t *self, size_t index, migration_t *record)
+tree_sequence_get_migration(tree_sequence_t *self, size_t index, migration_t *migration)
 {
-    int ret = 0;
-
-    if (index >= self->migrations.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    record->node = self->migrations.node[index];
-    record->source = self->migrations.source[index];
-    record->dest = self->migrations.dest[index];
-    record->left = self->migrations.left[index];
-    record->right = self->migrations.right[index];
-    record->time = self->migrations.time[index];
-out:
-    return ret;
+    return migration_table_get_row(self->tables->migrations, index, migration);
 }
 
 int WARN_UNUSED
-tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id, mutation_t *record)
+tree_sequence_get_mutation(tree_sequence_t *self, size_t index, mutation_t *mutation)
 {
-    int ret = 0;
-    table_size_t offset, length;
-
-    if (id < 0 || id >= (mutation_id_t) self->mutations.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    record->id = id;
-    record->index = (size_t) id; // TODO what is this for?
-    record->site = self->mutations.site[id];
-    record->node = self->mutations.node[id];
-    record->parent = self->mutations.parent[id];
-    offset = self->mutations.derived_state_offset[id];
-    length = self->mutations.derived_state_offset[id + 1] - offset;
-    record->derived_state = self->mutations.derived_state + offset;
-    record->derived_state_length = length;
-    offset = self->mutations.metadata_offset[id];
-    length = self->mutations.metadata_offset[id + 1] - offset;
-    record->metadata = self->mutations.metadata + offset;
-    record->metadata_length = length;
-out:
-    return ret;
+    return mutation_table_get_row(self->tables->mutations, index, mutation);
 }
 
 int WARN_UNUSED
-tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *record)
+tree_sequence_get_site(tree_sequence_t *self, size_t index, site_t *site)
 {
     int ret = 0;
-    table_size_t offset, length;
 
-    if (id < 0 || id >= (site_id_t) self->sites.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
+    ret = site_table_get_row(self->tables->sites, index, site);
+    if (ret != 0) {
         goto out;
     }
-    record->id = id;
-    offset = self->sites.ancestral_state_offset[id];
-    length = self->sites.ancestral_state_offset[id + 1] - offset;
-    record->ancestral_state = self->sites.ancestral_state + offset;
-    record->ancestral_state_length = length;
-    offset = self->sites.metadata_offset[id];
-    length = self->sites.metadata_offset[id + 1] - offset;
-    record->metadata = self->sites.metadata + offset;
-    record->metadata_length = length;
-    record->position = self->sites.position[id];
-    record->mutations = self->sites.site_mutations[id];
-    record->mutations_length = self->sites.site_mutations_length[id];
+    site->mutations = self->sites.site_mutations[index];
+    site->mutations_length = self->sites.site_mutations_length[index];
 out:
     return ret;
 }
@@ -881,22 +809,11 @@ int WARN_UNUSED
 tree_sequence_get_individual(tree_sequence_t *self, size_t index, individual_t *individual)
 {
     int ret = 0;
-    table_size_t offset, length;
 
-    if (index >= self->individuals.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
+    ret = individual_table_get_row(self->tables->individuals, index, individual);
+    if (ret != 0) {
         goto out;
     }
-    individual->id = (individual_id_t) index;
-    individual->flags = self->individuals.flags[index];
-    offset = self->individuals.location_offset[index];
-    length = self->individuals.location_offset[index + 1] - offset;
-    individual->location = self->individuals.location + offset;
-    individual->location_length = length;
-    offset = self->individuals.metadata_offset[index];
-    length = self->individuals.metadata_offset[index + 1] - offset;
-    individual->metadata = self->individuals.metadata + offset;
-    individual->metadata_length = length;
     individual->nodes = self->individuals.individual_nodes[index];
     individual->nodes_length = self->individuals.individual_nodes_length[index];
 out:
@@ -907,43 +824,13 @@ int WARN_UNUSED
 tree_sequence_get_population(tree_sequence_t *self, size_t index,
         tmp_population_t *population)
 {
-    int ret = 0;
-    table_size_t offset, length;
-
-    if (index >= self->populations.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    population->id = (provenance_id_t) index;
-    offset = self->populations.metadata_offset[index];
-    length = self->populations.metadata_offset[index + 1] - offset;
-    population->metadata = self->populations.metadata + offset;
-    population->metadata_length = length;
-out:
-    return ret;
+    return population_table_get_row(self->tables->populations, index, population);
 }
 
 int WARN_UNUSED
 tree_sequence_get_provenance(tree_sequence_t *self, size_t index, provenance_t *provenance)
 {
-    int ret = 0;
-    table_size_t offset, length;
-
-    if (index >= self->provenances.num_records) {
-        ret = MSP_ERR_OUT_OF_BOUNDS;
-        goto out;
-    }
-    provenance->id = (provenance_id_t) index;
-    offset = self->provenances.timestamp_offset[index];
-    length = self->provenances.timestamp_offset[index + 1] - offset;
-    provenance->timestamp = self->provenances.timestamp + offset;
-    provenance->timestamp_length = length;
-    offset = self->provenances.record_offset[index];
-    length = self->provenances.record_offset[index + 1] - offset;
-    provenance->record = self->provenances.record + offset;
-    provenance->record_length = length;
-out:
-    return ret;
+   return provenance_table_get_row(self->tables->provenances, index, provenance);
 }
 
 int WARN_UNUSED
