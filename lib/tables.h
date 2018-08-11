@@ -340,6 +340,7 @@ int node_table_dump_text(node_table_t *self, FILE *out);
 int node_table_copy(node_table_t *self, node_table_t *dest);
 void node_table_print_state(node_table_t *self, FILE *out);
 bool node_table_equals(node_table_t *self, node_table_t *other);
+int node_table_get_row(node_table_t *self, size_t index, node_t *row);
 
 int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
 edge_id_t edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,

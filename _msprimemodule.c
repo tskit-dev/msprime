@@ -210,6 +210,9 @@ handle_library_error(int err)
             case MSP_ERR_FILE_FORMAT:
                 PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
                 break;
+            case MSP_ERR_OUT_OF_BOUNDS:
+                PyErr_SetString(PyExc_IndexError, msp_strerror(err));
+                break;
             default:
                 PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
         }
@@ -1560,7 +1563,8 @@ static PyObject *
 NodeTable_get_row(NodeTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    int err;
+    Py_ssize_t row_id;
     node_t node;
 
     if (NodeTable_check_state(self) != 0) {
@@ -1569,19 +1573,11 @@ NodeTable_get_row(NodeTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = node_table_get_row(self->table, (size_t) row_id, &node);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    node.time = self->table->time[row_id];
-    node.flags = self->table->flags[row_id];
-    node.population = self->table->population[row_id];
-    node.individual = self->table->individual[row_id];
-    node.metadata = self->table->metadata
-        + self->table->metadata_offset[row_id];
-    node.metadata_length = self->table->metadata_offset[row_id + 1]
-        - self->table->metadata_offset[row_id];
     ret = make_node(&node);
 out:
     return ret;

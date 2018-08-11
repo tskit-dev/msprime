@@ -7008,6 +7008,7 @@ test_node_table(void)
 {
     int ret;
     node_table_t table;
+    node_t node;
     size_t num_rows = 100;
     size_t j;
     uint32_t *flags;
@@ -7039,7 +7040,17 @@ test_node_table(void)
         /* check the metadata */
         memcpy(metadata_copy, table.metadata + table.metadata_offset[j], test_metadata_length);
         CU_ASSERT_NSTRING_EQUAL(metadata_copy, test_metadata, test_metadata_length);
+        ret = node_table_get_row(&table, j, &node);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(node.flags, j);
+        CU_ASSERT_EQUAL(node.time, j);
+        CU_ASSERT_EQUAL(node.population, j);
+        CU_ASSERT_EQUAL(node.individual, j);
+        CU_ASSERT_EQUAL(node.metadata_length, test_metadata_length);
+        CU_ASSERT_NSTRING_EQUAL(node.metadata, test_metadata, test_metadata_length);
     }
+    CU_ASSERT_EQUAL(node_table_get_row(&table, num_rows, &node),
+            MSP_ERR_OUT_OF_BOUNDS);
     node_table_print_state(&table, _devnull);
     node_table_dump_text(&table, _devnull);
 

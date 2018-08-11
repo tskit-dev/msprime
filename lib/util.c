@@ -63,7 +63,7 @@ msp_strerror_internal(int err)
             ret = "Links Overflow occurred.";
             break;
         case MSP_ERR_OUT_OF_BOUNDS:
-            ret = "Array index out of bounds";
+            ret = "Object reference out of bounds";
             break;
         case MSP_ERR_BAD_ORDERING:
             ret = "Bad record ordering requested";

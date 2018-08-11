@@ -518,6 +518,25 @@ node_table_equals(node_table_t *self, node_table_t *other)
     return ret;
 }
 
+int
+node_table_get_row(node_table_t *self, size_t index, node_t *row)
+{
+    int ret = 0;
+    if (index >= self->num_rows) {
+        ret = MSP_ERR_OUT_OF_BOUNDS;
+        goto out;
+    }
+    row->flags = self->flags[index];
+    row->time = self->time[index];
+    row->population = self->population[index];
+    row->individual = self->individual[index];
+    row->metadata_length = self->metadata_offset[index + 1]
+        - self->metadata_offset[index];
+    row->metadata = self->metadata + self->metadata_offset[index];
+out:
+    return ret;
+}
+
 static int
 node_table_dump(node_table_t *self, kastore_t *store)
 {
@@ -4505,8 +4524,11 @@ out:
  * 0                             Check the integrity of ID & spatial references.
  * MSP_CHECK_OFFSETS             Check offsets for ragged columns.
  * MSP_CHECK_EDGE_ORDERING       Check edge ordering contraints for a tree sequence.
- * MSP_CHECK_SITE_ORDERING       Check site ordering contraints for a tree sequence.
+ * MSP_CHECK_SITE_ORDERING       Check that sites are in nondecreasing position order.
+ * MSP_CHECK_SITE_DUPLICATES     Check for any duplicate site positions.
  * MSP_CHECK_MUTATION_ORDERING   Check mutation ordering contraints for a tree sequence.
+ * MSP_CHECK_INDEXES             Check indexes exist & reference integrity.
+ * MSP_CHECK_ALL                 All above checks.
  */
 int WARN_UNUSED
 table_collection_check_integrity(table_collection_t *self, int flags)

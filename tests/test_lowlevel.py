@@ -3404,9 +3404,9 @@ class TestLdCalculator(LowLevelTestCase):
         ldc = _msprime.LdCalculator(ts)
         for bad_index in bad_indexes:
             self.assertRaises(
-                _msprime.LibraryError, ldc.get_r2_array, self.get_buffer(1), bad_index)
-            self.assertRaises(_msprime.LibraryError, ldc.get_r2, bad_index, 0)
-            self.assertRaises(_msprime.LibraryError, ldc.get_r2, 0, bad_index)
+                IndexError, ldc.get_r2_array, self.get_buffer(1), bad_index)
+            self.assertRaises(IndexError, ldc.get_r2, bad_index, 0)
+            self.assertRaises(IndexError, ldc.get_r2, 0, bad_index)
 
     def test_get_r2_interface(self):
         ts = self.get_tree_sequence()
