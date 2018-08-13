@@ -3407,7 +3407,7 @@ test_simplest_bad_individuals(void)
 }
 
 static void
-test_simplest_bad_records(void)
+test_simplest_bad_edges(void)
 {
     const char *nodes =
         "1  0   0\n"
@@ -3465,6 +3465,13 @@ test_simplest_bad_records(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tree_sequence_free(&ts);
     tables.edges->right[0]= 1.0;
+
+    /* Left coordinate < 0. */
+    tables.edges->left[0] = -1;
+    ret = tree_sequence_load_tables(&ts, &tables, load_flags);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_LEFT_LESS_ZERO);
+    tree_sequence_free(&ts);
+    tables.edges->left[0]= 0.0;
 
     /* Right coordinate > sequence length. */
     tables.edges->right[0] = 2.0;
@@ -3565,6 +3572,149 @@ test_simplest_bad_records(void)
     ret = tree_sequence_load_tables(&ts, &tables, load_flags);
     CU_ASSERT_EQUAL(ret, 0);
     tree_sequence_free(&ts);
+
+    table_collection_free(&tables);
+}
+
+static void
+test_simplest_bad_indexes(void)
+{
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "1  0   0\n"
+        "0  1   0\n";
+    const char *edges =
+        "0  1   2   0\n"
+        "0  1   2   1\n"
+        "0  1   4   3\n";
+    table_collection_t tables;
+    edge_id_t bad_indexes[] = {-1, 3, 4, 1000};
+    size_t j;
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tables.sequence_length = 1.0;
+    parse_nodes(nodes, tables.nodes);
+    CU_ASSERT_EQUAL_FATAL(tables.nodes->num_rows, 5);
+    parse_edges(edges, tables.edges);
+    CU_ASSERT_EQUAL_FATAL(tables.edges->num_rows, 3);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Make sure we have a good set of records */
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = table_collection_check_integrity(&tables, MSP_CHECK_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_TABLES_NOT_INDEXED);
+    ret = table_collection_build_indexes(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_check_integrity(&tables, MSP_CHECK_ALL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < sizeof(bad_indexes) / sizeof(*bad_indexes); j++) {
+        tables.indexes.edge_insertion_order[0] = bad_indexes[j];
+        ret = table_collection_check_integrity(&tables, MSP_CHECK_ALL);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_EDGE_INDEX);
+        tables.indexes.edge_insertion_order[0] = 0;
+
+        tables.indexes.edge_removal_order[0] = bad_indexes[j];
+        ret = table_collection_check_integrity(&tables, MSP_CHECK_ALL);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_EDGE_INDEX);
+        tables.indexes.edge_removal_order[0] = 0;
+    }
+
+    ret = table_collection_drop_indexes(&tables);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = table_collection_check_integrity(&tables, MSP_CHECK_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_TABLES_NOT_INDEXED);
+
+    table_collection_free(&tables);
+}
+
+static void
+test_simplest_bad_migrations(void)
+{
+    table_collection_t tables;
+    int ret;
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
+
+    /* insert two populations and one node to refer to. */
+    ret = node_table_add_row(tables.nodes, 0, 0.0, MSP_NULL_POPULATION,
+            MSP_NULL_INDIVIDUAL, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    /* One migration, node 0 goes from population 0 to 1. */
+    ret = migration_table_add_row(tables.migrations, 0, 1, 0, 0, 1, 1.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* We only need basic intregity checks for migrations */
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Bad node reference */
+    tables.migrations->node[0] = -1;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tables.migrations->node[0] = 0;
+
+    /* Bad node reference */
+    tables.migrations->node[0] = 1;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_NODE_OUT_OF_BOUNDS);
+    tables.migrations->node[0] = 0;
+
+    /* Bad population reference */
+    tables.migrations->source[0] = -1;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    tables.migrations->source[0] = 0;
+
+    /* Bad population reference */
+    tables.migrations->source[0] = 2;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    tables.migrations->source[0] = 0;
+
+    /* Bad population reference */
+    tables.migrations->dest[0] = -1;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    tables.migrations->dest[0] = 1;
+
+    /* Bad population reference */
+    tables.migrations->dest[0] = 2;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    tables.migrations->dest[0] = 1;
+
+    /* Bad left coordinate */
+    tables.migrations->left[0] = -1;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_LEFT_LESS_ZERO);
+    tables.migrations->left[0] = 0;
+
+    /* Bad right coordinate */
+    tables.migrations->right[0] = 2;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_RIGHT_GREATER_SEQ_LENGTH);
+    tables.migrations->right[0] = 1;
+
+    /* Bad interval coordinate */
+    tables.migrations->right[0] = 0;
+    ret = table_collection_check_integrity(&tables, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
+    tables.migrations->right[0] = 1;
 
     table_collection_free(&tables);
 }
@@ -9280,7 +9430,9 @@ main(int argc, char **argv)
             test_simplest_final_gap_tree_sequence_mutation_parents},
         {"test_simplest_individuals", test_simplest_individuals},
         {"test_simplest_bad_individuals", test_simplest_bad_individuals},
-        {"test_simplest_bad_records", test_simplest_bad_records},
+        {"test_simplest_bad_edges", test_simplest_bad_edges},
+        {"test_simplest_bad_indexes", test_simplest_bad_indexes},
+        {"test_simplest_bad_migrations", test_simplest_bad_migrations},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
         {"test_simplest_contradictory_children", test_simplest_contradictory_children},
         {"test_simplest_overlapping_edges_simplify",
