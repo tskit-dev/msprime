@@ -2392,8 +2392,11 @@ class TreeSequence(object):
             output.write(record)
 
     def simplify(
-            self, samples=None, filter_zero_mutation_sites=None, map_nodes=False,
-            reduce_to_site_topology=False, filter_sites=True):
+            self, samples=None,
+            filter_zero_mutation_sites=None,  # Deprecated alias for filter_sites
+            map_nodes=False,
+            reduce_to_site_topology=False,
+            filter_populations=True, filter_individuals=True, filter_sites=True):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -2421,16 +2424,34 @@ class TreeSequence(object):
         (up to node ID remapping) to the topology of the corresponding tree
         in the input tree sequence.
 
+        If ``filter_populations``, ``filter_individuals`` or ``filter_sites`` is
+        True, any of the corresponding objects that are not referenced elsewhere
+        are filtered out. As this is the default behaviour, it is important to
+        realise IDs for these objects may change through simplification. By setting
+        these parameters to False, however, the corresponding tables can be preserved
+        without changes.
+
         :param list samples: The list of nodes for which to retain information. This
             may be a numpy array (or array-like) object (dtype=np.int32).
-        :param bool filter_zero_mutation_sites: If True, remove any sites that have
-            no mutations in the simplified tree sequence. Defaults to True.
+        :param bool filter_zero_mutation_sites: Deprecated alias for ``filter_sites``.
         :param bool map_nodes: If True, return a tuple containing the resulting
             tree sequence and a numpy array mapping node IDs in the current tree
             sequence to their corresponding node IDs in the returned tree sequence.
             If False (the default), return only the tree sequence object itself.
         :param bool reduce_to_site_topology: Whether to reduce the topology down
-            to the trees that are present at sites. (default: False).
+            to the trees that are present at sites. (Default: False)
+        :param bool filter_populations: If True, remove any populations that are
+            not referenced by nodes after simplification; new population IDs are
+            allocated sequentially from zero. If False, the population table will
+            not be altered in any way. (Default: True)
+        :param bool filter_individuals: If True, remove any individuals that are
+            not referenced by nodes after simplification; new individual IDs are
+            allocated sequentially from zero. If False, the individual table will
+            not be altered in any way. (Default: True)
+        :param bool filter_sites: If True, remove any sites that are
+            not referenced by mutations after simplification; new site IDs are
+            allocated sequentially from zero. If False, the site table will not
+            be altered in any way. (Default: True)
         :return: The simplified tree sequence, or (if ``map_nodes`` is True)
             a tuple consisting of the simplified tree sequence and a numpy array
             mapping source node IDs to their corresponding IDs in the new tree
@@ -2445,6 +2466,8 @@ class TreeSequence(object):
             samples=samples,
             filter_zero_mutation_sites=filter_zero_mutation_sites,
             reduce_to_site_topology=reduce_to_site_topology,
+            filter_populations=filter_populations,
+            filter_individuals=filter_individuals,
             filter_sites=filter_sites)
         # TODO add simplify arguments here??
         tables.provenances.add_row(record=json.dumps(

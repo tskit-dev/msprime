@@ -1440,6 +1440,19 @@ class TestTreeSequence(HighLevelTestCase):
             j += 1
         self.assertGreater(j, 1)
 
+    def test_simplify_migrations_fails(self):
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10)],
+            migration_matrix=[[0, 1], [1, 0]],
+            random_seed=2,
+            record_migrations=True)
+        self.assertGreater(ts.num_migrations, 0)
+        # We don't support simplify with migrations, so should fail.
+        with self.assertRaises(_msprime.LibraryError):
+            ts.simplify()
+
     def test_deprecated_apis(self):
         ts = msprime.simulate(10, random_seed=1)
         self.assertEqual(ts.get_ll_tree_sequence(), ts.ll_tree_sequence)

@@ -98,7 +98,7 @@ class Simplifier(object):
     """
     def __init__(
             self, ts, sample, reduce_to_site_topology=False, filter_sites=True,
-            filter_populations=False, filter_individuals=False):
+            filter_populations=True, filter_individuals=True):
         self.ts = ts
         self.n = len(sample)
         self.reduce_to_site_topology = reduce_to_site_topology

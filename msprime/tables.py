@@ -25,6 +25,7 @@ from __future__ import print_function
 import base64
 import collections
 import datetime
+import warnings
 
 import numpy as np
 from six.moves import copyreg
@@ -1559,9 +1560,10 @@ class TableCollection(object):
         return msprime.TreeSequence.load_tables(self)
 
     def simplify(
-            self, samples, filter_zero_mutation_sites=None,
+            self, samples,
+            filter_zero_mutation_sites=None,  # Deprecated alias for filter_sites
             reduce_to_site_topology=False,
-            filter_populations=False, filter_individuals=False, filter_sites=True):
+            filter_populations=True, filter_individuals=True, filter_sites=True):
         """
         Simplifies the tables in place to retain only the information necessary
         to reconstruct the tree sequence describing the given ``samples``.
@@ -1586,15 +1588,30 @@ class TableCollection(object):
         of the remaining parameters.
 
         :param list[int] samples: A list of node IDs to retain as samples.
-        :param bool filter_zero_mutation_sites: Whether to remove sites that have no
-            mutations from the output (default: True).
+        :param bool filter_zero_mutation_sites: Deprecated alias for ``filter_sites``.
         :param bool reduce_to_site_topology: Whether to reduce the topology down
             to the trees that are present at sites. (default: False).
+        :param bool filter_populations: If True, remove any populations that are
+            not referenced by nodes after simplification; new population IDs are
+            allocated sequentially from zero. If False, the population table will
+            not be altered in any way. (Default: True)
+        :param bool filter_individuals: If True, remove any individuals that are
+            not referenced by nodes after simplification; new individual IDs are
+            allocated sequentially from zero. If False, the individual table will
+            not be altered in any way. (Default: True)
+        :param bool filter_sites: If True, remove any sites that are
+            not referenced by mutations after simplification; new site IDs are
+            allocated sequentially from zero. If False, the site table will not
+            be altered in any way. (Default: True)
         :return: A numpy array mapping node IDs in the input tables to their
             corresponding node IDs in the output tables.
         :rtype: numpy array (dtype=np.int32).
         """
         if filter_zero_mutation_sites is not None:
+            # Deprecated in 0.6.1.
+            warnings.warn(
+                "filter_zero_mutation_sites is deprecated; use filter_sites instead",
+                DeprecationWarning)
             filter_sites = filter_zero_mutation_sites
         return self.ll_tables.simplify(
             samples, filter_sites=filter_sites,

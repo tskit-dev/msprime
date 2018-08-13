@@ -1,4 +1,31 @@
 ********************
+[0.6.1] - 2018-xx-xx
+********************
+
+**Breaking changes**:
+
+- Change in the semantics of how populations are treated by simplify. By
+  default, populations that are not refenced will now be removed from the
+  data model. This can be avoided by setting ``filter_populations=False``.
+
+- Simplify now raises an error if called on a set of tables that contain
+  one or more migrations.
+
+**New features**:
+
+- Simplify generalised to support individuals, and the ``filter_populations``,
+  ``filter_individuals`` and ``filter_sites`` parameters added to allow
+  filtering of unreferenced objects from the data model. (#567).
+
+
+**Bug fixes**:
+
+**Deprecated**:
+
+- The ``filter_zero_mutation_sites`` parameter for simplify has been deprecated
+  in favour of ``filter_sites``.
+
+********************
 [0.6.0] - 2018-06-20
 ********************
 

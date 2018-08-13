@@ -28,6 +28,8 @@ import pickle
 import random
 import string
 import unittest
+import warnings
+import sys
 
 import numpy as np
 import six
@@ -35,6 +37,8 @@ import six
 import msprime
 import _msprime
 import tests.tsutil as tsutil
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 def random_bytes(max_length):
@@ -1263,6 +1267,29 @@ class TestSimplifyTables(unittest.TestCase):
     Tests for the simplify_tables function.
     """
     random_seed = 42
+
+    @unittest.skipIf(IS_PY2, "Warnings different in Py2")
+    def test_deprecated_zero_mutation_sites(self):
+        ts = msprime.simulate(10,  mutation_rate=1, random_seed=self.random_seed)
+        tables = ts.dump_tables()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            tables.simplify(ts.samples(), filter_zero_mutation_sites=True)
+            assert len(w) == 1
+            assert issubclass(w[-1].category, DeprecationWarning)
+
+    def test_zero_mutation_sites(self):
+        ts = msprime.simulate(10,  mutation_rate=1, random_seed=self.random_seed)
+        for filter_sites in [True, False]:
+            t1 = ts.dump_tables()
+            t1.simplify([0, 1], filter_zero_mutation_sites=filter_sites)
+            t2 = ts.dump_tables()
+            t2.simplify([0, 1], filter_sites=filter_sites)
+            t1.provenances.clear()
+            t2.provenances.clear()
+            self.assertEqual(t1, t2)
+            if filter_sites:
+                self.assertGreater(ts.num_sites, len(t1.sites))
 
     def test_full_samples(self):
         for n in [2, 10, 100, 1000]:

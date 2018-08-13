@@ -2586,7 +2586,7 @@ class TestSimplify(unittest.TestCase):
 
     def do_simplify(
             self, ts, samples=None, compare_lib=True, filter_sites=True,
-            filter_populations=False, filter_individuals=False):  # False for now
+            filter_populations=True, filter_individuals=True):
         """
         Runs the Python test implementation of simplify.
         """
@@ -2597,25 +2597,39 @@ class TestSimplify(unittest.TestCase):
             filter_populations=filter_populations, filter_individuals=filter_individuals)
         new_ts, node_map = s.simplify()
         if compare_lib:
-            lib_tables = ts.dump_tables()
-            lib_node_map = lib_tables.simplify(
-                samples, filter_sites=filter_sites,
+            sts, lib_node_map1 = ts.simplify(
+                samples,
+                filter_sites=filter_sites,
+                filter_individuals=filter_individuals,
+                filter_populations=filter_populations,
+                map_nodes=True)
+            lib_tables1 = sts.dump_tables()
+
+            lib_tables2 = ts.dump_tables()
+            lib_node_map2 = lib_tables2.simplify(
+                samples,
+                filter_sites=filter_sites,
                 filter_individuals=filter_individuals,
                 filter_populations=filter_populations)
-            py_tables = new_ts.dump_tables()
-            # print("lib = ")
-            # print(lib_tables.nodes)
-            # print(lib_tables.edges)
-            # print("py = ")
-            # print(py_tables.nodes)
-            # print(py_tables.edges)
 
-            self.assertEqual(lib_tables.nodes, py_tables.nodes)
-            self.assertEqual(lib_tables.edges, py_tables.edges)
-            self.assertEqual(lib_tables.migrations, py_tables.migrations)
-            self.assertEqual(lib_tables.sites, py_tables.sites)
-            self.assertEqual(lib_tables.mutations, py_tables.mutations)
-            self.assertTrue(all(node_map == lib_node_map))
+            py_tables = new_ts.dump_tables()
+            for lib_tables, lib_node_map in [
+                    (lib_tables1, lib_node_map1), (lib_tables2, lib_node_map2)]:
+                # print("lib = ")
+                # print(lib_tables.nodes)
+                # print(lib_tables.edges)
+                # print("py = ")
+                # print(py_tables.nodes)
+                # print(py_tables.edges)
+
+                self.assertEqual(lib_tables.nodes, py_tables.nodes)
+                self.assertEqual(lib_tables.edges, py_tables.edges)
+                self.assertEqual(lib_tables.migrations, py_tables.migrations)
+                self.assertEqual(lib_tables.sites, py_tables.sites)
+                self.assertEqual(lib_tables.mutations, py_tables.mutations)
+                self.assertEqual(lib_tables.individuals, py_tables.individuals)
+                self.assertEqual(lib_tables.populations, py_tables.populations)
+                self.assertTrue(all(node_map == lib_node_map))
         return new_ts, node_map
 
     def verify_single_childified(self, ts):
