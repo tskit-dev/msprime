@@ -4447,6 +4447,20 @@ simplifier_finalise_references(simplifier_t *self)
         goto out;
     }
 
+    /* TODO Migrations fit reasonably neatly into the pattern that we have here. We can
+     * consider references to populations from migration objects in the same way
+     * as from nodes, so that we only remove a population if its referenced by
+     * neither. Mapping the population IDs in migrations is then easy. In principle
+     * nodes are similar, but the semantics are slightly different because we've
+     * already allocated all the nodes by their references from edges. We then
+     * need to decide whether we remove migrations that reference unmapped nodes
+     * or whether to add these nodes back in (probably the former is the correct
+     * approach).*/
+    if (self->input_tables.migrations->num_rows != 0) {
+        ret = MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED;
+        goto out;
+    }
+
     for (j = 0; j < num_nodes; j++) {
         pop_id = node_population[j];
         if (pop_id != MSP_NULL_POPULATION) {

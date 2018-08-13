@@ -265,6 +265,11 @@ msp_strerror_internal(int err)
         case MSP_ERR_TABLES_NOT_INDEXED:
             ret = "Table collection must be indexed.";
             break;
+        case MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED:
+            ret = "Migrations currently not supported in simplify. Please open an "
+                "issue on GitHub if this operation is important to you.";
+            break;
+
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

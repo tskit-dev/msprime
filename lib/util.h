@@ -179,6 +179,7 @@
 #define MSP_ERR_BAD_EDGE_INDEX                                      -74
 #define MSP_ERR_LEFT_LESS_ZERO                                      -75
 #define MSP_ERR_TABLES_NOT_INDEXED                                  -76
+#define MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED                   -77
 
 /* This bit is 0 for any errors originating from kastore */
 #define MSP_KAS_ERR_BIT 14

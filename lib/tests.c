@@ -1415,6 +1415,13 @@ verify_simplify(tree_sequence_t *ts)
     CU_ASSERT_FATAL(node_map != NULL);
     ret = tree_sequence_get_samples(ts, &sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    if (tree_sequence_get_num_migrations(ts) > 0) {
+        ret = tree_sequence_simplify(ts, sample, 2, 0, &subset, NULL);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED);
+        /* Exiting early here because simplify isn't supported with migrations. */
+        goto out;
+    }
+
     for (j = 0; j < sizeof(num_samples) / sizeof(uint32_t); j++) {
         if (num_samples[j] <= n) {
             ret = tree_sequence_simplify(ts, sample, num_samples[j], flags, &subset,
@@ -1433,6 +1440,7 @@ verify_simplify(tree_sequence_t *ts)
             tree_sequence_free(&subset);
         }
     }
+out:
     free(node_map);
 }
 
@@ -1451,6 +1459,12 @@ verify_reduce_topology(tree_sequence_t *ts)
 
     ret = tree_sequence_get_samples(ts, &sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    if (tree_sequence_get_num_migrations(ts) > 0) {
+        ret = tree_sequence_simplify(ts, sample, 2, flags, &reduced, NULL);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED);
+        return;
+    }
 
     ret = tree_sequence_simplify(ts, sample, n, flags, &reduced, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3715,6 +3729,38 @@ test_simplest_bad_migrations(void)
     ret = table_collection_check_integrity(&tables, 0);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_EDGE_INTERVAL);
     tables.migrations->right[0] = 1;
+
+    table_collection_free(&tables);
+}
+
+static void
+test_simplest_migration_simplify(void)
+{
+    table_collection_t tables;
+    int ret;
+    node_id_t samples[] = {0, 1};
+
+    ret = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
+
+    /* insert two populations and one node to refer to. */
+    ret = node_table_add_row(tables.nodes, MSP_NODE_IS_SAMPLE, 0.0,
+            MSP_NULL_POPULATION, MSP_NULL_INDIVIDUAL, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = node_table_add_row(tables.nodes, MSP_NODE_IS_SAMPLE, 0.0,
+            MSP_NULL_POPULATION, MSP_NULL_INDIVIDUAL, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = population_table_add_row(tables.populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 1);
+    /* One migration, node 0 goes from population 0 to 1. */
+    ret = migration_table_add_row(tables.migrations, 0, 1, 0, 0, 1, 1.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = table_collection_simplify(&tables, samples, 2, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED);
 
     table_collection_free(&tables);
 }
@@ -6445,7 +6491,11 @@ test_simplify_from_examples(void)
     CU_ASSERT_FATAL(examples != NULL);
     for (j = 0; examples[j] != NULL; j++) {
         verify_simplify(examples[j]);
-        verify_simplify_errors(examples[j]);
+        if (tree_sequence_get_num_migrations(examples[j]) == 0) {
+            /* Migrations are not supported at the moment, so skip these tests
+             * rather than complicate them */
+            verify_simplify_errors(examples[j]);
+        }
         tree_sequence_free(examples[j]);
         free(examples[j]);
     }
@@ -9433,6 +9483,7 @@ main(int argc, char **argv)
         {"test_simplest_bad_edges", test_simplest_bad_edges},
         {"test_simplest_bad_indexes", test_simplest_bad_indexes},
         {"test_simplest_bad_migrations", test_simplest_bad_migrations},
+        {"test_simplest_migration_simplify", test_simplest_migration_simplify},
         {"test_simplest_overlapping_parents", test_simplest_overlapping_parents},
         {"test_simplest_contradictory_children", test_simplest_contradictory_children},
         {"test_simplest_overlapping_edges_simplify",
