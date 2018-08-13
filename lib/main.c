@@ -596,7 +596,7 @@ print_variants(tree_sequence_t *ts)
     uint32_t j, k;
     variant_t* var;
 
-    printf("variants (%d) \n", (int) ts->sites.num_records);
+    printf("variants (%d) \n", (int) tree_sequence_get_num_sites(ts));
     ret = vargen_alloc(&vg, ts, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");

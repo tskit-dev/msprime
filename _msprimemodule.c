@@ -6704,15 +6704,18 @@ static PyObject *
 SparseTree_get_population(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    population_id_t population;
-    int node;
+    node_t node;
+    int node_id, err;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (SparseTree_get_node_argument(self, args, &node_id) != 0) {
         goto out;
     }
-    /* TODO add a sparse_tree_get_population function or a get_tree_sequence */
-    population = self->sparse_tree->tree_sequence->nodes.population[node];
-    ret = Py_BuildValue("i", (int) population);
+    err = tree_sequence_get_node(self->sparse_tree->tree_sequence, node_id, &node);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", (int) node.population);
 out:
     return ret;
 }
