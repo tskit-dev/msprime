@@ -288,6 +288,11 @@ msp_strerror_internal(int err)
                 "for the specified tree sequence. It is either too coarse (num_loci "
                 "is too small) or contains zero recombination rates. Please either "
                 "increase the number of loci or recombination rate";
+        case MSP_ERR_TIME_TRAVEL:
+            ret = "The simulation model supplied resulted in a parent node having "
+                "a time value <= to its child. This can occur either as a result "
+                "of multiple bottlenecks happening at the same time or because of "
+                "numerical imprecision with very small population sizes.";
             break;
 
         case MSP_ERR_IO:

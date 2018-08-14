@@ -20,6 +20,9 @@
 
 **Bug fixes**:
 
+- Throw a more intelligle error during simulation if a topology is produced
+  where the time of a parent is equal to the time of the child. (#570, #87).
+
 **Deprecated**:
 
 - The ``filter_zero_mutation_sites`` parameter for simplify has been deprecated

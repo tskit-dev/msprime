@@ -992,8 +992,10 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
 {
     int ret = 0;
     edge_t *edge;
+    const double *node_time = self->tables.nodes->time;
 
     assert(parent > child);
+    assert(parent < (node_id_t) self->tables.nodes->num_rows);
     if (self->num_buffered_edges == self->max_buffered_edges - 1) {
         /* Grow the array */
         self->max_buffered_edges *= 2;
@@ -1003,6 +1005,10 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
             goto out;
         }
         self->buffered_edges = edge;
+    }
+    if (node_time[child] >= node_time[parent]) {
+        ret = MSP_ERR_TIME_TRAVEL;
+        goto out;
     }
     edge = self->buffered_edges + self->num_buffered_edges;
     edge->left = left;
