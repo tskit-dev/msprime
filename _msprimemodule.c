@@ -231,8 +231,7 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
 {
     int ret = -1;
     PyObject *item;
-    size_t j;
-    Py_ssize_t num_samples_local;
+    Py_ssize_t j, num_samples_local;
     node_id_t *samples_local = NULL;
 
     num_samples_local = PyList_Size(py_samples);
@@ -252,7 +251,8 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
             goto out;
         }
         samples_local[j] = (node_id_t) PyLong_AsLong(item);
-        if (samples_local[j] < 0 || samples_local[j] >= tree_sequence_get_num_nodes(ts)) {
+        if (samples_local[j] < 0
+                || samples_local[j] >= (node_id_t) tree_sequence_get_num_nodes(ts)) {
             PyErr_SetString(PyExc_ValueError, "node ID out of bounds");
             goto out;
         }
@@ -868,12 +868,12 @@ table_read_column_array(PyObject *input, int npy_type, size_t *num_rows, bool ch
     }
     shape = PyArray_DIMS(array);
     if (check_num_rows) {
-        if (*num_rows != shape[0]) {
+        if (*num_rows != (size_t) shape[0]) {
             PyErr_SetString(PyExc_ValueError, "Input array dimensions must be equal.");
             goto out;
         }
     } else {
-        *num_rows = shape[0];
+        *num_rows = (size_t) shape[0];
     }
     ret = array;
 out:
@@ -6512,7 +6512,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    if (flags & MSP_SAMPLE_COUNTS) {
+    if (!!(flags & MSP_SAMPLE_COUNTS)) {
         err = sparse_tree_set_tracked_samples(self->sparse_tree, num_tracked_samples,
                 tracked_samples);
         if (err != 0) {
@@ -6704,15 +6704,18 @@ static PyObject *
 SparseTree_get_population(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    population_id_t population;
-    int node;
+    node_t node;
+    int node_id, err;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (SparseTree_get_node_argument(self, args, &node_id) != 0) {
         goto out;
     }
-    /* TODO add a sparse_tree_get_population function or a get_tree_sequence */
-    population = self->sparse_tree->tree_sequence->nodes.population[node];
-    ret = Py_BuildValue("i", (int) population);
+    err = tree_sequence_get_node(self->sparse_tree->tree_sequence, node_id, &node);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", (int) node.population);
 out:
     return ret;
 }

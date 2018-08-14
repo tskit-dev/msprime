@@ -11,8 +11,8 @@ extern "C" {
 #define MSP_LIBRARY_VERSION_STR "undefined"
 #endif
 
-#define MSP_SAMPLE_COUNTS  1
-#define MSP_SAMPLE_LISTS   2
+#define MSP_SAMPLE_COUNTS  (1 << 0)
+#define MSP_SAMPLE_LISTS   (1 << 1)
 
 #define MSP_16_BIT_GENOTYPES    1
 
@@ -20,120 +20,26 @@ extern "C" {
 #define MSP_DIR_REVERSE -1
 
 /* Tree sequences */
-/* TODO This struct has some redundancy now, where we mirror the structure
- * of the table_collection_t within internal structs and keep pointers
- * to its memory (and also a copy of sequence_length). We need to refactor
- * this somehow to remove this redundancy. Probably downstream code should
- * be forced to use some functions rather than accessing these structs
- * to obtain pointers to indexes, edges data and so on.
- *
- * UPDATE 2018-08-11. This is ready for refactoring now. Anywhere we're looking
- * the actual arrays we can access via the tables, and should take a
- * const local pointer anyway, instead of chasing through a bunch of references.
- * We can make the tree struct a bit more efficient as well by using
- * const and restrict for the pointers we're using. For printing and so on,
- * should use the get_row type accesses to simplify the pointers, etc.
- */
 typedef struct {
     size_t num_trees;
-    double sequence_length;
     size_t num_samples;
     node_id_t *samples;
-
-    struct {
-        size_t num_records;
-        uint32_t *flags;
-        double *location;
-        table_size_t *location_offset;
-        char *metadata;
-        table_size_t *metadata_offset;
-        node_id_t *individual_nodes_mem;
-        node_id_t **individual_nodes;
-        table_size_t *individual_nodes_length;
-    } individuals;
-
-    struct {
-        size_t num_records;
-        double *time;
-        uint32_t *flags;
-        population_id_t *population;
-        individual_id_t *individual;
-        char *metadata;
-        table_size_t *metadata_offset;
-        node_id_t *sample_index_map;
-    } nodes;
-
-    struct {
-        size_t num_records;
-        double *left;
-        double *right;
-        node_id_t *parent;
-        node_id_t *child;
-        struct {
-            node_id_t *insertion_order;
-            node_id_t *removal_order;
-        } indexes;
-    } edges;
-
-    struct {
-        size_t num_records;
-        size_t ancestral_state_length;
-        char *ancestral_state;
-        table_size_t *ancestral_state_offset;
-        size_t metadata_length;
-        char *metadata;
-        table_size_t *metadata_offset;
-        double *position;
-        site_t *tree_sites_mem;
-        site_t **tree_sites;
-        table_size_t *tree_sites_length;
-        mutation_t *site_mutations_mem;
-        mutation_t **site_mutations;
-        table_size_t *site_mutations_length;
-    } sites;
-
-    struct {
-        size_t num_records;
-        size_t derived_state_length;
-        char *derived_state;
-        table_size_t *derived_state_offset;
-        size_t metadata_length;
-        char *metadata;
-        table_size_t *metadata_offset;
-        node_id_t *node;
-        site_id_t *site;
-        mutation_id_t *parent;
-    } mutations;
-
-    struct {
-        size_t num_records;
-        node_id_t *node;
-        population_id_t *source;
-        population_id_t *dest;
-        double *left;
-        double *right;
-        double *time;
-    } migrations;
-
-    struct {
-        size_t num_records;
-        size_t timestamp_length;
-        size_t record_length;
-        char *timestamp;
-        table_size_t *timestamp_offset;
-        char *record;
-        table_size_t *record_offset;
-    } provenances;
-
-    struct {
-        size_t num_records;
-        size_t metadata_length;
-        char *metadata;
-        table_size_t *metadata_offset;
-    } populations;
-
+    /* If a node is a sample, map to it's index in the samples list */
+    node_id_t *sample_index_map;
+    /* Map individuals to the list of nodes that reference them */
+    node_id_t *individual_nodes_mem;
+    node_id_t **individual_nodes;
+    table_size_t *individual_nodes_length;
+    /* For each tree, a list of sites on that tree */
+    site_t *tree_sites_mem;
+    site_t **tree_sites;
+    table_size_t *tree_sites_length;
+    /* For each site, a list of mutations at that site */
+    mutation_t *site_mutations_mem;
+    mutation_t **site_mutations;
+    table_size_t *site_mutations_length;
+    /* The underlying tables */
     table_collection_t *tables;
-
 } tree_sequence_t;
 
 typedef struct _edge_list_t {

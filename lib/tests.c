@@ -1159,16 +1159,18 @@ verify_individual_nodes(tree_sequence_t *ts)
     int ret;
     individual_t individual;
     individual_id_t k;
+    size_t num_nodes = tree_sequence_get_num_nodes(ts);
+    size_t num_individuals = tree_sequence_get_num_individuals(ts);
     size_t j;
 
-    for (k = 0; k < (individual_id_t) ts->individuals.num_records; k++) {
+    for (k = 0; k < (individual_id_t) num_individuals; k++) {
         ret = tree_sequence_get_individual(ts, k, &individual);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_FATAL(individual.nodes_length >= 0);
         for (j = 0; j < individual.nodes_length; j++) {
-            CU_ASSERT_FATAL(individual.nodes[j] < ts->nodes.num_records);
+            CU_ASSERT_FATAL(individual.nodes[j] < num_nodes);
             CU_ASSERT_EQUAL_FATAL(k,
-                    ts->nodes.individual[individual.nodes[j]]);
+                    ts->tables->nodes->individual[individual.nodes[j]]);
         }
     }
 }
@@ -1828,7 +1830,7 @@ make_gappy_copy(tree_sequence_t *ts)
         tables.sites->position[j] += gap_size;
     }
     /* Add a site into the gap at the end. */
-    ret = site_table_add_row(tables.sites, ts->sequence_length + 0.5, "0", 1, "end-gap", 7);
+    ret = site_table_add_row(tables.sites, tables.sequence_length + 0.5, "0", 1, "end-gap", 7);
     CU_ASSERT_FATAL(ret >= 0);
     ret = mutation_table_add_row(tables.mutations, ret, 0, MSP_NULL_MUTATION,
             "1", 1, NULL, 0);
@@ -1836,7 +1838,7 @@ make_gappy_copy(tree_sequence_t *ts)
     ret = provenance_table_add_row(tables.provenances,
             timestamp, strlen(timestamp), record, strlen(record));
     CU_ASSERT_FATAL(ret >= 0);
-    tables.sequence_length = ts->sequence_length + 1.0;
+    tables.sequence_length = tables.sequence_length + 1.0;
     ret = tree_sequence_load_tables(new_ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -1903,7 +1905,7 @@ make_multichar_mutations_copy(tree_sequence_t *ts)
 
     for (j = 0; j < GSL_MIN(strlen(string), ts->num_samples); j++) {
         ret = site_table_add_row(tables.sites,
-                j * (ts->sequence_length / strlen(string)),
+                j * (tree_sequence_get_sequence_length(ts) / strlen(string)),
                 string, j, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
         ret = mutation_table_add_row(tables.mutations, j, j, MSP_NULL_NODE,
@@ -5161,13 +5163,12 @@ test_single_tree_compute_mutation_parents(void)
 
     /* Check to make sure we have legal mutations */
     ret = tree_sequence_load_tables(&ts, &tables, 0);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(tree_sequence_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tree_sequence_get_num_mutations(&ts), 6);
 
     /* Compute the mutation parents */
     verify_compute_mutation_parents(&ts);
-    tree_sequence_free(&ts);
 
     /* Verify consistency of individuals */
     verify_individual_nodes(&ts);
@@ -6813,7 +6814,7 @@ test_save_kas_tables(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_dump_tables(ts1, &t1, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        t1.sequence_length = ts1->sequence_length;
+        t1.sequence_length = tree_sequence_get_sequence_length(ts1);
         for (k = 0; k < sizeof(dump_flags) / sizeof(int); k++) {
             ret = table_collection_dump(&t1, _tmp_file_name, dump_flags[k]);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
