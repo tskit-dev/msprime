@@ -11,8 +11,8 @@ extern "C" {
 #define MSP_LIBRARY_VERSION_STR "undefined"
 #endif
 
-#define MSP_SAMPLE_COUNTS  1
-#define MSP_SAMPLE_LISTS   2
+#define MSP_SAMPLE_COUNTS  (1 << 0)
+#define MSP_SAMPLE_LISTS   (1 << 1)
 
 #define MSP_16_BIT_GENOTYPES    1
 

@@ -6512,7 +6512,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    if (flags & MSP_SAMPLE_COUNTS) {
+    if (!!(flags & MSP_SAMPLE_COUNTS)) {
         err = sparse_tree_set_tracked_samples(self->sparse_tree, num_tracked_samples,
                 tracked_samples);
         if (err != 0) {
