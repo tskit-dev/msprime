@@ -1537,9 +1537,12 @@ static inline void
 sparse_tree_update_sample_lists(sparse_tree_t *self, node_id_t node)
 {
     node_id_t u, v;
-    node_list_t **head = self->sample_list_head;
-    node_list_t **tail = self->sample_list_tail;
+    node_list_t * restrict *head = self->sample_list_head;
+    node_list_t * restrict *tail = self->sample_list_tail;
     const uint32_t *node_flags = self->tree_sequence->tables->nodes->flags;
+    const node_id_t * restrict left_child = self->left_child;
+    const node_id_t * restrict right_sib = self->right_sib;
+    const node_id_t * restrict parent = self->parent;
 
     u = node;
     while (u != MSP_NULL_NODE) {
@@ -1549,7 +1552,7 @@ sparse_tree_update_sample_lists(sparse_tree_t *self, node_id_t node)
             head[u] = NULL;
             tail[u] = NULL;
         }
-        v = self->left_child[u];
+        v = left_child[u];
         while (v != MSP_NULL_NODE) {
             if (head[v] != NULL) {
                 assert(tail[v] != NULL);
@@ -1561,9 +1564,9 @@ sparse_tree_update_sample_lists(sparse_tree_t *self, node_id_t node)
                     tail[u] = tail[v];
                 }
             }
-            v = self->right_sib[v];
+            v = right_sib[v];
         }
-        u = self->parent[u];
+        u = parent[u];
     }
 }
 
