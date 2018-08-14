@@ -673,11 +673,11 @@ print_ld_matrix(tree_sequence_t *ts)
             fatal_library_error(ret, "ld_calc_get_r2_array");
         }
         for (k = 0; k < num_r2_values; k++) {
-            ret = tree_sequence_get_site(ts, (site_id_t) j, &sA);
+            ret = tree_sequence_get_site(ts, j, &sA);
             if (ret != 0) {
                 fatal_library_error(ret, "get_site");
             }
-            ret = tree_sequence_get_site(ts, (site_id_t) (j + k + 1), &sB);
+            ret = tree_sequence_get_site(ts, (j + k + 1), &sB);
             if (ret != 0) {
                 fatal_library_error(ret, "get_site");
             }
@@ -1018,15 +1018,15 @@ run_stats(const char *filename, int MSP_UNUSED(verbose))
 
 static void
 run_simplify(const char *input_filename, const char *output_filename, size_t num_samples,
-        bool filter_zero_mutation_sites, int verbose)
+        bool filter_sites, int verbose)
 {
     tree_sequence_t ts, subset;
     node_id_t *samples;
     int flags = 0;
     int ret;
 
-    if (filter_zero_mutation_sites) {
-        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
+    if (filter_sites) {
+        flags |= MSP_FILTER_SITES;
     }
 
     load_tree_sequence(&ts, input_filename);
@@ -1139,12 +1139,12 @@ main(int argc, char** argv)
     struct arg_lit *verbose9 = arg_lit0("v", "verbose", NULL);
     struct arg_int *num_samples9 = arg_int0("s", "sample-size", "<sample-size>",
             "Number of samples to keep in the simplified tree sequence.");
-    struct arg_lit *filter_zero_mutation_sites9 = arg_lit0("i",
+    struct arg_lit *filter_sites9 = arg_lit0("i",
             "filter-invariant-sites", "<filter-invariant-sites>");
     struct arg_file *infiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *outfiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_end *end9 = arg_end(20);
-    void* argtable9[] = {cmd9, verbose9, filter_zero_mutation_sites9, num_samples9,
+    void* argtable9[] = {cmd9, verbose9, filter_sites9, num_samples9,
         infiles9, outfiles9, end9};
     int nerrors9;
 
@@ -1187,7 +1187,7 @@ main(int argc, char** argv)
         run_stats(infiles8->filename[0], verbose8->count);
     } else if (nerrors9 == 0) {
         run_simplify(infiles9->filename[0], outfiles9->filename[0],
-                (size_t) num_samples9->ival[0], (bool) filter_zero_mutation_sites9->count,
+                (size_t) num_samples9->ival[0], (bool) filter_sites9->count,
                 verbose9->count);
     } else {
         /* We get here if the command line matched none of the possible syntaxes */

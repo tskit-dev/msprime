@@ -427,7 +427,7 @@ class TestEmptyTreeSequences(TopologyTestCase):
             self.assertEqual(method(0), msprime.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
-        tsp = ts.simplify(filter_zero_mutation_sites=False)
+        tsp = ts.simplify(filter_sites=False)
         self.assertEqual(tsp.num_nodes, 1)
         self.assertEqual(tsp.num_edges, 0)
         self.assertEqual(tsp.num_sites, 1)
@@ -1066,7 +1066,7 @@ class TestSimplifyExamples(TopologyTestCase):
     or we detect expected errors.
     """
     def verify_simplify(
-            self, samples, filter_zero_mutation_sites=True,
+            self, samples, filter_sites=True,
             nodes_before=None, edges_before=None, sites_before=None,
             mutations_before=None, nodes_after=None, edges_after=None,
             sites_after=None, mutations_after=None, debug=False):
@@ -1101,7 +1101,7 @@ class TestSimplifyExamples(TopologyTestCase):
         for t in ts.trees():
             self.assertTrue(t is not None)
         before.simplify(
-            samples=samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            samples=samples, filter_sites=filter_sites)
         if debug:
             print("before")
             print(before)
@@ -1312,7 +1312,7 @@ class TestSimplifyExamples(TopologyTestCase):
         # If we don't filter the fixed sites, we should get the same
         # mutations and the original sites table back.
         self.verify_simplify(
-            samples=[0, 1, 6], filter_zero_mutation_sites=False,
+            samples=[0, 1, 6], filter_sites=False,
             nodes_before=nodes_before, edges_before=edges_before,
             sites_before=sites_before, mutations_before=mutations_before,
             nodes_after=nodes_after, edges_after=edges_after,
@@ -1744,7 +1744,7 @@ class TestMultipleRoots(TopologyTestCase):
         variants = [b"100", b"010", b"110", b"110", b"001", b"001"]
         self.assertEqual(list(ts.haplotypes()), haplotypes)
         self.assertEqual([v.genotypes for v in ts.variants(as_bytes=True)], variants)
-        ts_simplified = ts.simplify(filter_zero_mutation_sites=False)
+        ts_simplified = ts.simplify(filter_sites=False)
         self.assertEqual(list(ts_simplified.haplotypes()), haplotypes)
         self.assertEqual(
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
@@ -2551,7 +2551,7 @@ class TestBadTrees(unittest.TestCase):
 
 class TestSimplify(unittest.TestCase):
     """
-    Tests that the implementations of simplify() does what they are supposed to.
+    Tests that the implementations of simplify() do what they are supposed to.
     """
     random_seed = 23
     #
@@ -2585,37 +2585,51 @@ class TestSimplify(unittest.TestCase):
     """
 
     def do_simplify(
-            self, ts, samples=None, compare_lib=True, filter_zero_mutation_sites=True):
+            self, ts, samples=None, compare_lib=True, filter_sites=True,
+            filter_populations=True, filter_individuals=True):
         """
         Runs the Python test implementation of simplify.
         """
         if samples is None:
             samples = ts.samples()
         s = tests.Simplifier(
-            ts, samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            ts, samples, filter_sites=filter_sites,
+            filter_populations=filter_populations, filter_individuals=filter_individuals)
         new_ts, node_map = s.simplify()
         if compare_lib:
-            lib_tables = ts.dump_tables()
-            lib_node_map = np.empty(ts.num_nodes, dtype=np.int32)
-            lib_node_map = msprime.simplify_tables(
-                samples=samples, nodes=lib_tables.nodes, edges=lib_tables.edges,
-                sites=lib_tables.sites, mutations=lib_tables.mutations,
-                filter_zero_mutation_sites=filter_zero_mutation_sites,
-                sequence_length=ts.sequence_length)
-            py_tables = new_ts.dump_tables()
-            # print("lib = ")
-            # print(lib_tables.nodes)
-            # print(lib_tables.edges)
-            # print("py = ")
-            # print(py_tables.nodes)
-            # print(py_tables.edges)
+            sts, lib_node_map1 = ts.simplify(
+                samples,
+                filter_sites=filter_sites,
+                filter_individuals=filter_individuals,
+                filter_populations=filter_populations,
+                map_nodes=True)
+            lib_tables1 = sts.dump_tables()
 
-            self.assertEqual(lib_tables.nodes, py_tables.nodes)
-            self.assertEqual(lib_tables.edges, py_tables.edges)
-            self.assertEqual(lib_tables.migrations, py_tables.migrations)
-            self.assertEqual(lib_tables.sites, py_tables.sites)
-            self.assertEqual(lib_tables.mutations, py_tables.mutations)
-            self.assertTrue(all(node_map == lib_node_map))
+            lib_tables2 = ts.dump_tables()
+            lib_node_map2 = lib_tables2.simplify(
+                samples,
+                filter_sites=filter_sites,
+                filter_individuals=filter_individuals,
+                filter_populations=filter_populations)
+
+            py_tables = new_ts.dump_tables()
+            for lib_tables, lib_node_map in [
+                    (lib_tables1, lib_node_map1), (lib_tables2, lib_node_map2)]:
+                # print("lib = ")
+                # print(lib_tables.nodes)
+                # print(lib_tables.edges)
+                # print("py = ")
+                # print(py_tables.nodes)
+                # print(py_tables.edges)
+
+                self.assertEqual(lib_tables.nodes, py_tables.nodes)
+                self.assertEqual(lib_tables.edges, py_tables.edges)
+                self.assertEqual(lib_tables.migrations, py_tables.migrations)
+                self.assertEqual(lib_tables.sites, py_tables.sites)
+                self.assertEqual(lib_tables.mutations, py_tables.mutations)
+                self.assertEqual(lib_tables.individuals, py_tables.individuals)
+                self.assertEqual(lib_tables.populations, py_tables.populations)
+                self.assertTrue(all(node_map == lib_node_map))
         return new_ts, node_map
 
     def verify_single_childified(self, ts):
@@ -2781,10 +2795,10 @@ class TestSimplify(unittest.TestCase):
         ts = tsutil.insert_branch_sites(ts)
         self.assertEqual(ts.num_sites, 8)
         self.assertEqual(ts.num_mutations, 8)
-        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_zero_mutation_sites=True)
+        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_sites=True)
         self.assertEqual(tss.num_sites, 5)
         self.assertEqual(tss.num_mutations, 5)
-        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_zero_mutation_sites=False)
+        tss, _ = self.do_simplify(ts, [4, 0, 1], filter_sites=False)
         self.assertEqual(tss.num_sites, 8)
         self.assertEqual(tss.num_mutations, 5)
 
@@ -2819,7 +2833,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(ts.num_sites, 1)
         self.assertEqual(ts.num_mutations, 1)
         for filt in [True, False]:
-            tss, _ = self.do_simplify(ts, [0, 1], filter_zero_mutation_sites=filt)
+            tss, _ = self.do_simplify(ts, [0, 1], filter_sites=filt)
             self.assertEqual(tss.num_sites, 1)
             self.assertEqual(tss.num_mutations, 1)
 
@@ -3038,9 +3052,9 @@ class TestSimplify(unittest.TestCase):
         ts = tsutil.insert_branch_sites(ts)
         self.assertEqual(ts.num_sites, ts.num_mutations)
         self.assertGreater(ts.num_sites, ts.num_trees)
-        for filter_zero_mutation_sites in [True, False]:
+        for filter_sites in [True, False]:
             tss, _ = self.do_simplify(
-                ts, samples=None, filter_zero_mutation_sites=filter_zero_mutation_sites)
+                ts, samples=None, filter_sites=filter_sites)
             self.assertEqual(ts.num_sites, tss.num_sites)
             self.assertEqual(ts.num_mutations, tss.num_mutations)
 
@@ -3050,15 +3064,121 @@ class TestSimplify(unittest.TestCase):
         ts = tsutil.insert_multichar_mutations(ts)
         self.assertEqual(ts.num_sites, ts.num_trees)
         self.assertEqual(ts.num_mutations, ts.num_trees)
-        for filter_zero_mutation_sites in [True, False]:
-            tss, _ = self.do_simplify(
-                ts, samples=None, filter_zero_mutation_sites=filter_zero_mutation_sites)
+        for filter_sites in [True, False]:
+            tss, _ = self.do_simplify(ts, samples=None, filter_sites=filter_sites)
             self.assertEqual(ts.num_sites, tss.num_sites)
             self.assertEqual(ts.num_mutations, tss.num_mutations)
 
+    def test_simple_population_filter(self):
+        ts = msprime.simulate(10, random_seed=2)
+        tables = ts.dump_tables()
+        tables.populations.add_row(metadata=b"unreferenced")
+        self.assertEqual(len(tables.populations), 2)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_populations=True)
+        self.assertEqual(tss.num_populations, 1)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_populations=False)
+        self.assertEqual(tss.num_populations, 2)
+
+    def test_interleaved_populations_filter(self):
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            random_seed=2)
+        self.assertEqual(ts.num_populations, 4)
+        tables = ts.dump_tables()
+        # Edit the populations so we can identify the rows.
+        tables.populations.clear()
+        for j in range(4):
+            tables.populations.add_row(metadata=bytes([j]))
+        ts = tables.tree_sequence()
+        id_map = np.array([-1, 0, -1, -1], dtype=np.int32)
+        tss, _ = self.do_simplify(ts, filter_populations=True)
+        self.assertEqual(tss.num_populations, 1)
+        population = tss.population(0)
+        self.assertEqual(population.metadata, bytes([1]))
+        self.assertTrue(np.array_equal(
+            id_map[ts.tables.nodes.population], tss.tables.nodes.population))
+        tss, _ = self.do_simplify(ts, filter_populations=False)
+        self.assertEqual(tss.num_populations, 4)
+
+    def test_removed_node_population_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.populations.add_row(metadata=bytes(0))
+        tables.populations.add_row(metadata=bytes(1))
+        tables.populations.add_row(metadata=bytes(2))
+        tables.nodes.add_row(flags=1, population=0)
+        # Because flags=0 here, this node will be simplified out and the node
+        # will disappear.
+        tables.nodes.add_row(flags=0, population=1)
+        tables.nodes.add_row(flags=1, population=2)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_populations=True)
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_populations, 2)
+        self.assertEqual(tss.population(0).metadata, bytes(0))
+        self.assertEqual(tss.population(1).metadata, bytes(2))
+        self.assertEqual(tss.node(0).population, 0)
+        self.assertEqual(tss.node(1).population, 1)
+
+        tss, _ = self.do_simplify(
+            tables.tree_sequence(), filter_populations=False)
+        self.assertEqual(tss.tables.populations, tables.populations)
+
+    def test_simple_individual_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.individuals.add_row(flags=0)
+        tables.individuals.add_row(flags=1)
+        tables.nodes.add_row(flags=1, individual=0)
+        tables.nodes.add_row(flags=1, individual=0)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=True)
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_individuals, 1)
+        self.assertEqual(tss.individual(0).flags, 0)
+
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=False)
+        self.assertEqual(tss.tables.individuals, tables.individuals)
+
+    def test_interleaved_individual_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.individuals.add_row(flags=0)
+        tables.individuals.add_row(flags=1)
+        tables.individuals.add_row(flags=2)
+        tables.nodes.add_row(flags=1, individual=1)
+        tables.nodes.add_row(flags=1, individual=-1)
+        tables.nodes.add_row(flags=1, individual=1)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=True)
+        self.assertEqual(tss.num_nodes, 3)
+        self.assertEqual(tss.num_individuals, 1)
+        self.assertEqual(tss.individual(0).flags, 1)
+
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=False)
+        self.assertEqual(tss.tables.individuals, tables.individuals)
+
+    def test_removed_node_individual_filter(self):
+        tables = msprime.TableCollection(1)
+        tables.individuals.add_row(flags=0)
+        tables.individuals.add_row(flags=1)
+        tables.individuals.add_row(flags=2)
+        tables.nodes.add_row(flags=1, individual=0)
+        # Because flags=0 here, this node will be simplified out and the node
+        # will disappear.
+        tables.nodes.add_row(flags=0, individual=1)
+        tables.nodes.add_row(flags=1, individual=2)
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=True)
+        self.assertEqual(tss.num_nodes, 2)
+        self.assertEqual(tss.num_individuals, 2)
+        self.assertEqual(tss.individual(0).flags, 0)
+        self.assertEqual(tss.individual(1).flags, 2)
+        self.assertEqual(tss.node(0).individual, 0)
+        self.assertEqual(tss.node(1).individual, 1)
+
+        tss, _ = self.do_simplify(tables.tree_sequence(), filter_individuals=False)
+        self.assertEqual(tss.tables.individuals, tables.individuals)
+
     def verify_simplify_haplotypes(self, ts, samples):
-        sub_ts, node_map = self.do_simplify(
-            ts, samples, filter_zero_mutation_sites=False)
+        sub_ts, node_map = self.do_simplify(ts, samples, filter_sites=False)
         self.assertEqual(ts.num_sites, sub_ts.num_sites)
         sub_haplotypes = list(sub_ts.haplotypes())
         all_samples = list(ts.samples())
@@ -3375,7 +3495,7 @@ def reduce_topology(ts):
     tables.sort()
     ts = tables.tree_sequence()
     # Now simplify to remove redundant nodes.
-    return ts.simplify(map_nodes=True, filter_zero_mutation_sites=False)
+    return ts.simplify(map_nodes=True, filter_sites=False)
 
 
 class TestReduceTopology(unittest.TestCase):
@@ -3439,11 +3559,9 @@ class TestReduceTopology(unittest.TestCase):
 
         # Verify against simplify implementations.
         s = tests.Simplifier(
-            ts, ts.samples(), reduce_to_site_topology=True,
-            filter_zero_mutation_sites=False)
+            ts, ts.samples(), reduce_to_site_topology=True, filter_sites=False)
         sts1, _ = s.simplify()
-        sts2 = ts.simplify(
-            reduce_to_site_topology=True, filter_zero_mutation_sites=False)
+        sts2 = ts.simplify(reduce_to_site_topology=True, filter_sites=False)
         t1 = mts.tables
         for sts in [sts2, sts2]:
             t2 = sts.tables

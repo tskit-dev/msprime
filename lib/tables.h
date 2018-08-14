@@ -185,6 +185,7 @@ typedef struct {
 } individual_t;
 
 typedef struct {
+    node_id_t id;
     uint32_t flags;
     double time;
     population_id_t population;
@@ -194,6 +195,7 @@ typedef struct {
 } node_t;
 
 typedef struct {
+    edge_id_t id;
     node_id_t parent;
     node_id_t child;
     double left;
@@ -209,8 +211,6 @@ typedef struct _mutation_t {
     table_size_t derived_state_length;
     const char *metadata;
     table_size_t metadata_length;
-    // TODO remove this and change to ID?
-    size_t index;
 } mutation_t;
 
 typedef struct {
@@ -225,6 +225,7 @@ typedef struct {
 } site_t;
 
 typedef struct {
+    migration_id_t id;
     population_id_t source;
     population_id_t dest;
     node_id_t node;
@@ -238,13 +239,13 @@ typedef struct {
  * moved this code into tskit we can rename it, probably
  * tsk_population_t */
 typedef struct {
-    table_size_t id;
+    population_id_t id;
     const char *metadata;
     table_size_t metadata_length;
 } tmp_population_t;
 
 typedef struct {
-    table_size_t id;
+    provenance_id_t id;
     const char *timestamp;
     table_size_t timestamp_length;
     const char *record;
@@ -288,22 +289,9 @@ typedef struct {
     node_id_t *samples;
     size_t num_samples;
     int flags;
-    double sequence_length;
-    /* Keep a copy of the input nodes simplify mapping */
-    node_table_t input_nodes;
-    /* Also keep a copy of the input edges and a buffer to store unsorted edges */
-    edge_table_t input_edges;
-    /* Input copy of the sites and mutations */
-    site_table_t input_sites;
-    mutation_table_t input_mutations;
-    /* Input/output tables. */
-    node_table_t *nodes;
-    edge_table_t *edges;
-    site_table_t *sites;
-    mutation_table_t *mutations;
-    individual_table_t *individuals;
-    population_table_t *populations;
-    provenance_table_t *provenances;
+    table_collection_t *tables;
+    /* Keep a copy of the input tables */
+    table_collection_t input_tables;
     /* State for topology */
     simplify_segment_t **ancestor_map_head;
     simplify_segment_t **ancestor_map_tail;
@@ -333,7 +321,6 @@ typedef struct {
     /* When reducing topology, we need a map positions to their corresponding
      * sites.*/
     double *position_lookup;
-
 } simplifier_t;
 
 int node_table_alloc(node_table_t *self, size_t max_rows_increment,
@@ -354,6 +341,7 @@ int node_table_dump_text(node_table_t *self, FILE *out);
 int node_table_copy(node_table_t *self, node_table_t *dest);
 void node_table_print_state(node_table_t *self, FILE *out);
 bool node_table_equals(node_table_t *self, node_table_t *other);
+int node_table_get_row(node_table_t *self, size_t index, node_t *row);
 
 int edge_table_alloc(edge_table_t *self, size_t max_rows_increment);
 edge_id_t edge_table_add_row(edge_table_t *self, double left, double right, node_id_t parent,
@@ -369,6 +357,7 @@ int edge_table_dump_text(edge_table_t *self, FILE *out);
 int edge_table_copy(edge_table_t *self, edge_table_t *dest);
 void edge_table_print_state(edge_table_t *self, FILE *out);
 bool edge_table_equals(edge_table_t *self, edge_table_t *other);
+int edge_table_get_row(edge_table_t *self, size_t index, edge_t *row);
 
 int site_table_alloc(site_table_t *self, size_t max_rows_increment,
         size_t max_ancestral_state_length_increment,
@@ -389,6 +378,7 @@ int site_table_copy(site_table_t *self, site_table_t *dest);
 int site_table_free(site_table_t *self);
 int site_table_dump_text(site_table_t *self, FILE *out);
 void site_table_print_state(site_table_t *self, FILE *out);
+int site_table_get_row(site_table_t *self, size_t index, site_t *row);
 
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
 int mutation_table_alloc(mutation_table_t *self, size_t max_rows_increment,
@@ -413,6 +403,7 @@ int mutation_table_copy(mutation_table_t *self, mutation_table_t *dest);
 int mutation_table_free(mutation_table_t *self);
 int mutation_table_dump_text(mutation_table_t *self, FILE *out);
 void mutation_table_print_state(mutation_table_t *self, FILE *out);
+int mutation_table_get_row(mutation_table_t *self, size_t index, mutation_t *row);
 
 int migration_table_alloc(migration_table_t *self, size_t max_rows_increment);
 migration_id_t migration_table_add_row(migration_table_t *self, double left,
@@ -431,6 +422,7 @@ int migration_table_copy(migration_table_t *self, migration_table_t *dest);
 int migration_table_dump_text(migration_table_t *self, FILE *out);
 void migration_table_print_state(migration_table_t *self, FILE *out);
 bool migration_table_equals(migration_table_t *self, migration_table_t *other);
+int migration_table_get_row(migration_table_t *self, size_t index, migration_t *row);
 
 int individual_table_alloc(individual_table_t *self, size_t max_rows_increment,
         size_t max_location_length_increment, size_t max_metadata_length_increment);
@@ -450,6 +442,7 @@ int individual_table_dump_text(individual_table_t *self, FILE *out);
 int individual_table_copy(individual_table_t *self, individual_table_t *dest);
 void individual_table_print_state(individual_table_t *self, FILE *out);
 bool individual_table_equals(individual_table_t *self, individual_table_t *other);
+int individual_table_get_row(individual_table_t *self, size_t index, individual_t *row);
 
 int population_table_alloc(population_table_t *self, size_t max_rows_increment,
         size_t max_metadata_length_increment);
@@ -466,6 +459,7 @@ int population_table_free(population_table_t *self);
 void population_table_print_state(population_table_t *self, FILE *out);
 int population_table_dump_text(population_table_t *self, FILE *out);
 bool population_table_equals(population_table_t *self, population_table_t *other);
+int population_table_get_row(population_table_t *self, size_t index, tmp_population_t *row);
 
 int provenance_table_alloc(provenance_table_t *self, size_t max_rows_increment,
         size_t max_timestamp_length_increment,
@@ -486,6 +480,7 @@ int provenance_table_free(provenance_table_t *self);
 int provenance_table_dump_text(provenance_table_t *self, FILE *out);
 void provenance_table_print_state(provenance_table_t *self, FILE *out);
 bool provenance_table_equals(provenance_table_t *self, provenance_table_t *other);
+int provenance_table_get_row(provenance_table_t *self, size_t index, provenance_t *row);
 
 int table_collection_alloc(table_collection_t *self, int flags);
 int table_collection_set_tables(table_collection_t *self,
@@ -511,6 +506,8 @@ int table_collection_record_position(table_collection_t *self,
         table_collection_position_t *position);
 int table_collection_reset_position(table_collection_t *self,
         table_collection_position_t *position);
+int table_collection_clear(table_collection_t *self);
+int table_collection_check_integrity(table_collection_t *self, int flags);
 
 int simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags);

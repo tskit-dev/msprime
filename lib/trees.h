@@ -26,6 +26,13 @@ extern "C" {
  * this somehow to remove this redundancy. Probably downstream code should
  * be forced to use some functions rather than accessing these structs
  * to obtain pointers to indexes, edges data and so on.
+ *
+ * UPDATE 2018-08-11. This is ready for refactoring now. Anywhere we're looking
+ * the actual arrays we can access via the tables, and should take a
+ * const local pointer anyway, instead of chasing through a bunch of references.
+ * We can make the tree struct a bit more efficient as well by using
+ * const and restrict for the pointers we're using. For printing and so on,
+ * should use the get_row type accesses to simplify the pointers, etc.
  */
 typedef struct {
     size_t num_trees;
@@ -282,12 +289,12 @@ size_t tree_sequence_get_num_samples(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 
-int tree_sequence_get_node(tree_sequence_t *self, node_id_t index, node_t *node);
+int tree_sequence_get_node(tree_sequence_t *self, size_t index, node_t *node);
 int tree_sequence_get_edge(tree_sequence_t *self, size_t index, edge_t *edge);
 int tree_sequence_get_migration(tree_sequence_t *self, size_t index,
         migration_t *migration);
-int tree_sequence_get_site(tree_sequence_t *self, site_id_t id, site_t *site);
-int tree_sequence_get_mutation(tree_sequence_t *self, mutation_id_t id,
+int tree_sequence_get_site(tree_sequence_t *self, size_t index, site_t *site);
+int tree_sequence_get_mutation(tree_sequence_t *self, size_t index,
         mutation_t *mutation);
 int tree_sequence_get_provenance(tree_sequence_t *self, size_t index,
         provenance_t *provenance);

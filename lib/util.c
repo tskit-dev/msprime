@@ -63,7 +63,7 @@ msp_strerror_internal(int err)
             ret = "Links Overflow occurred.";
             break;
         case MSP_ERR_OUT_OF_BOUNDS:
-            ret = "Array index out of bounds";
+            ret = "Object reference out of bounds";
             break;
         case MSP_ERR_BAD_ORDERING:
             ret = "Bad record ordering requested";
@@ -83,8 +83,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_POPULATION_SIZE:
             ret = "Bad population size provided. Must be > 0.";
             break;
-        case MSP_ERR_BAD_POPULATION_ID:
-            ret = "Bad population id provided.";
+        case MSP_ERR_POPULATION_OUT_OF_BOUNDS:
+            ret = "Population ID out of bounds.";
             break;
         case MSP_ERR_BAD_MIGRATION_MATRIX:
             ret = "Bad migration matrix provided.";
@@ -119,9 +119,6 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS:
             ret = "All edges for a given parent must be contiguous";
-            break;
-        case MSP_ERR_NODES_NONCONTIGUOUS_INDIVIDUALS:
-            ret = "All nodes for a given individual must be contiguous";
             break;
         case MSP_ERR_EDGES_NOT_SORTED_CHILD:
             ret = "Edges must be listed in (time[parent], child, left) order;"
@@ -226,6 +223,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_SEQUENCE_LENGTH:
             ret = "Sequence length must be > 0.";
             break;
+        case MSP_ERR_LEFT_LESS_ZERO:
+            ret = "Left coordinate must be >= 0";
+            break;
         case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
             ret = "Right coordinate > sequence length.";
             break;
@@ -247,8 +247,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_TOO_MANY_ALLELES:
             ret = "Cannot have more than 255 alleles.";
             break;
-        case MSP_ERR_BAD_INDIVIDUAL:
-            ret = "Individual ID not in individual table.";
+        case MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
+            ret = "Individual ID out of bounds";
             break;
         case MSP_ERR_GENERATE_UUID:
             ret = "Error generating UUID";
@@ -256,13 +256,20 @@ msp_strerror_internal(int err)
         case MSP_ERR_DUPLICATE_SITE_POSITION:
             ret = "Duplicate site positions.";
             break;
-        case MSP_ERR_INDIVIDUALS_NOT_SUPPORTED:
-            /* Temporary error to flag a limitation in current implementation. */
-            ret = "Individuals are currently not supported in simplify.";
-            break;
         case MSP_ERR_BAD_TABLE_POSITION:
             ret = "Bad table position provided to truncate/reset.";
             break;
+        case MSP_ERR_BAD_EDGE_INDEX:
+            ret = "Invalid edge index value.";
+            break;
+        case MSP_ERR_TABLES_NOT_INDEXED:
+            ret = "Table collection must be indexed.";
+            break;
+        case MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED:
+            ret = "Migrations currently not supported in simplify. Please open an "
+                "issue on GitHub if this operation is important to you.";
+            break;
+
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

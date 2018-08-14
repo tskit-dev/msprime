@@ -192,7 +192,7 @@ vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_seq
     size_t j;
 
     for (j = 0; j < self->num_sites; j++) {
-        ret = tree_sequence_get_site(tree_sequence, (site_id_t) j, &site);
+        ret = tree_sequence_get_site(tree_sequence, j, &site);
         if (ret != 0) {
             goto out;
         }

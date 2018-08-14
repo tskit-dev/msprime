@@ -28,6 +28,8 @@ import pickle
 import random
 import string
 import unittest
+import warnings
+import sys
 
 import numpy as np
 import six
@@ -35,6 +37,8 @@ import six
 import msprime
 import _msprime
 import tests.tsutil as tsutil
+
+IS_PY2 = sys.version_info[0] < 3
 
 
 def random_bytes(max_length):
@@ -1117,22 +1121,13 @@ class TestSortTables(unittest.TestCase):
             sites=tables2.sites, mutations=tables2.mutations)
 
     def test_empty_tables(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        msprime.sort_tables(nodes, edges)
-        self.assertEqual(nodes.num_rows, 0)
-        self.assertEqual(edges.num_rows, 0)
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
-        msprime.sort_tables(nodes, edges, sites=sites, mutations=mutations)
-        self.assertEqual(sites.num_rows, 0)
-        self.assertEqual(mutations.num_rows, 0)
-        migrations = msprime.MigrationTable()
-        msprime.sort_tables(
-            nodes, edges, sites=sites, mutations=mutations, migrations=migrations)
-        self.assertEqual(migrations.num_rows, 0)
-        msprime.sort_tables(nodes, edges, migrations=migrations)
-        self.assertEqual(migrations.num_rows, 0)
+        tables = msprime.TableCollection(1)
+        tables.sort()
+        self.assertEqual(tables.nodes.num_rows, 0)
+        self.assertEqual(tables.edges.num_rows, 0)
+        self.assertEqual(tables.sites.num_rows, 0)
+        self.assertEqual(tables.mutations.num_rows, 0)
+        self.assertEqual(tables.migrations.num_rows, 0)
 
     def test_sort_interface(self):
         self.assertRaises(TypeError, msprime.sort_tables)
@@ -1141,8 +1136,6 @@ class TestSortTables(unittest.TestCase):
             TypeError, msprime.sort_tables, edges=msprime.EdgeTable())
         self.assertRaises(
             TypeError, msprime.sort_tables, nodes=msprime.NodeTable(), edges=None)
-        self.assertRaises(
-            TypeError, msprime.sort_tables, nodes=None, edges=msprime.EdgeTable())
         nodes = msprime.NodeTable()
         edges = msprime.EdgeTable()
         # Verify that nodes and edges are OK
@@ -1167,6 +1160,11 @@ class TestSortTables(unittest.TestCase):
                 TypeError, msprime.sort_tables,
                 nodes=nodes, edges=edges, sites=sites, mutations=mutations,
                 migrations=bad_type)
+        # Cannot have a node table with individuals in it.
+        nodes = msprime.NodeTable()
+        nodes.add_row(flags=0, individual=1)
+        self.assertRaises(
+            ValueError, msprime.sort_tables, nodes=nodes, edges=msprime.EdgeTable())
 
 
 class TestSortMutations(unittest.TestCase):
@@ -1269,6 +1267,29 @@ class TestSimplifyTables(unittest.TestCase):
     Tests for the simplify_tables function.
     """
     random_seed = 42
+
+    @unittest.skipIf(IS_PY2, "Warnings different in Py2")
+    def test_deprecated_zero_mutation_sites(self):
+        ts = msprime.simulate(10,  mutation_rate=1, random_seed=self.random_seed)
+        tables = ts.dump_tables()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            tables.simplify(ts.samples(), filter_zero_mutation_sites=True)
+            assert len(w) == 1
+            assert issubclass(w[-1].category, DeprecationWarning)
+
+    def test_zero_mutation_sites(self):
+        ts = msprime.simulate(10,  mutation_rate=1, random_seed=self.random_seed)
+        for filter_sites in [True, False]:
+            t1 = ts.dump_tables()
+            t1.simplify([0, 1], filter_zero_mutation_sites=filter_sites)
+            t2 = ts.dump_tables()
+            t2.simplify([0, 1], filter_sites=filter_sites)
+            t1.provenances.clear()
+            t2.provenances.clear()
+            self.assertEqual(t1, t2)
+            if filter_sites:
+                self.assertGreater(ts.num_sites, len(t1.sites))
 
     def test_full_samples(self):
         for n in [2, 10, 100, 1000]:
@@ -1453,22 +1474,19 @@ class TestSimplifyTables(unittest.TestCase):
         self.assertRaises(
             TypeError, msprime.simplify_tables, samples=[0, 1],
             nodes=msprime.NodeTable(), edges=None)
-        self.assertRaises(
-            TypeError, msprime.simplify_tables, samples=[0, 1],
-            nodes=None, edges=msprime.EdgeTable())
         tables = msprime.simulate(2, random_seed=1).dump_tables()
         samples = [0, 1]
         # Verify that samples, nodes and edges are OK
         msprime.simplify_tables(samples=samples, nodes=tables.nodes, edges=tables.edges)
-        for bad_type in [None, "", 1]:
+        for bad_type in [{}, "", 1]:
             self.assertRaises(
-                TypeError, msprime.simplify_tables, samples=samples, nodes=None,
+                TypeError, msprime.simplify_tables, samples=samples, nodes=tables.nodes,
                 edges=msprime.EdgeTable(), sites=bad_type)
             self.assertRaises(
-                TypeError, msprime.simplify_tables, samples=samples, nodes=None,
+                TypeError, msprime.simplify_tables, samples=samples, nodes=tables.nodes,
                 edges=msprime.EdgeTable(), mutations=bad_type)
             self.assertRaises(
-                TypeError, msprime.simplify_tables, samples=samples, nodes=None,
+                TypeError, msprime.simplify_tables, samples=samples, nodes=tables.nodes,
                 edges=msprime.EdgeTable(), migrations=bad_type)
         sites = msprime.SiteTable()
         mutations = msprime.MutationTable()
@@ -1481,6 +1499,12 @@ class TestSimplifyTables(unittest.TestCase):
                 TypeError, msprime.simplify_tables,
                 nodes=tables.nodes, edges=tables.edges, sites=sites,
                 mutations=mutations, migrations=bad_type)
+        # Cannot have a node table with individuals in it.
+        nodes = msprime.NodeTable()
+        nodes.add_row(flags=0, individual=1)
+        self.assertRaises(
+            ValueError, msprime.simplify_tables, samples=[0], nodes=nodes,
+            edges=msprime.EdgeTable())
 
     def test_node_table_empty_name_bug(self):
         # Issue #236. Calling simplify on copied tables unexpectedly fails.
@@ -1651,9 +1675,9 @@ class TestDeduplicateSites(unittest.TestCase):
     Tests for the TableCollection.deduplicate_sites method.
     """
     def test_empty(self):
-        tables = msprime.TableCollection()
+        tables = msprime.TableCollection(1)
         tables.deduplicate_sites()
-        self.assertEqual(tables, msprime.TableCollection())
+        self.assertEqual(tables, msprime.TableCollection(1))
 
     def test_unsorted(self):
         tables = msprime.simulate(10, mutation_rate=1, random_seed=1).dump_tables()
@@ -1697,7 +1721,7 @@ class TestDeduplicateSites(unittest.TestCase):
         self.assertEqual(t1, t2)
 
     def test_order_maintained(self):
-        t1 = msprime.TableCollection()
+        t1 = msprime.TableCollection(1)
         t1.sites.add_row(position=0, ancestral_state="first")
         t1.sites.add_row(position=0, ancestral_state="second")
         t1.deduplicate_sites()

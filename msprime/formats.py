@@ -97,16 +97,14 @@ def _convert_hdf5_mutations(
         derived_state_offset=np.arange(num_mutations + 1, dtype=np.uint32))
 
 
-def _get_populations(nodes):
+def _set_populations(tables):
     """
-    Returns a PopulationTable suitable to represent the populations referred to
-    in the specified node table.
+    Updates PopulationTable suitable to represent the populations referred to
+    in the node table.
     """
-    populations = msprime.PopulationTable()
-    if len(nodes) > 0:
-        for _ in range(np.max(nodes.population) + 1):
-            populations.add_row()
-    return populations
+    if len(tables.nodes) > 0:
+        for _ in range(np.max(tables.nodes.population) + 1):
+            tables.populations.add_row()
 
 
 def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
@@ -129,8 +127,9 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     right[2 * index] = trees_group["right"]
     right[2 * index + 1] = trees_group["right"]
     child = np.array(trees_group["children"], dtype=np.int32).flatten()
-    edges = msprime.EdgeTable()
-    edges.set_columns(left=left, right=right, parent=parent, child=child)
+
+    tables = msprime.TableCollection(np.max(right))
+    tables.edges.set_columns(left=left, right=right, parent=parent, child=child)
 
     cr_node = np.array(trees_group["node"], dtype=np.int32)
     num_nodes = max(np.max(child), np.max(cr_node)) + 1
@@ -148,25 +147,19 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
         population[:sample_size] = samples_group["population"]
         if "time" in samples_group:
             time[:sample_size] = samples_group["time"]
-    nodes = msprime.NodeTable()
-    nodes.set_columns(flags=flags, population=population, time=time)
+    tables.nodes.set_columns(flags=flags, population=population, time=time)
+    _set_populations(tables)
 
-    populations = _get_populations(nodes)
-
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
     if "mutations" in root:
         mutations_group = root["mutations"]
         _convert_hdf5_mutations(
-            mutations_group, sites, mutations, remove_duplicate_positions)
+            mutations_group, tables.sites, tables.mutations, remove_duplicate_positions)
         provenances.add_row(
             timestamp=old_timestamp,
             record=_get_v2_provenance("generate_mutations", mutations_group.attrs))
-    provenances.add_row(_get_upgrade_provenance(root))
-    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-    return msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=provenances, populations=populations)
+    tables.provenances.add_row(_get_upgrade_provenance(root))
+    tables.sort()
+    return tables.tree_sequence()
 
 
 def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
@@ -199,32 +192,25 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
             right[k] = record_right[j]
             parent[k] = record_node[j]
             k += 1
-    nodes = msprime.NodeTable()
-    nodes.set_columns(
+    tables = msprime.TableCollection(np.max(right))
+    tables.nodes.set_columns(
         flags=flags,
         time=nodes_group["time"],
         population=nodes_group["population"])
-
-    populations = _get_populations(nodes)
-
-    edges = msprime.EdgeTable()
-    edges.set_columns(
+    _set_populations(tables)
+    tables.edges.set_columns(
         left=left, right=right, parent=parent, child=records_group["children"])
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
     if "mutations" in root:
         _convert_hdf5_mutations(
-            root["mutations"], sites, mutations, remove_duplicate_positions)
+            root["mutations"], tables.sites, tables.mutations,
+            remove_duplicate_positions)
     old_timestamp = datetime.datetime.min.isoformat()
-    provenances = msprime.ProvenanceTable()
     if "provenance" in root:
         for record in root["provenance"]:
-            provenances.add_row(timestamp=old_timestamp, record=record)
-    provenances.add_row(_get_upgrade_provenance(root))
-    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-    return msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=provenances, populations=populations)
+            tables.provenances.add_row(timestamp=old_timestamp, record=record)
+    tables.provenances.add_row(_get_upgrade_provenance(root))
+    tables.sort()
+    return tables.tree_sequence()
 
 
 def load_legacy(filename, remove_duplicate_positions=False):
@@ -474,16 +460,16 @@ def _dump_legacy_hdf5_v10(tree_sequence, root):
 def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
     # We cannot have duplicate positions in v10, so this parameter is ignored
     sequence_length = root.attrs["sequence_length"]
+    tables = msprime.TableCollection(sequence_length)
 
     nodes_group = root["nodes"]
-    nodes = msprime.NodeTable()
     metadata = None
     metadata_offset = None
     if "metadata" in nodes_group:
         metadata = nodes_group["metadata"]
         metadata_offset = nodes_group["metadata_offset"]
     if "flags" in nodes_group:
-        nodes.set_columns(
+        tables.nodes.set_columns(
             flags=nodes_group["flags"],
             population=nodes_group["population"],
             time=nodes_group["time"],
@@ -491,18 +477,16 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
             metadata_offset=metadata_offset)
 
     edges_group = root["edges"]
-    edges = msprime.EdgeTable()
     if "left" in edges_group:
-        edges.set_columns(
+        tables.edges.set_columns(
             left=edges_group["left"],
             right=edges_group["right"],
             parent=edges_group["parent"],
             child=edges_group["child"])
 
     migrations_group = root["migrations"]
-    migrations = msprime.MigrationTable()
     if "left" in migrations_group:
-        migrations.set_columns(
+        tables.migrations.set_columns(
             left=migrations_group["left"],
             right=migrations_group["right"],
             node=migrations_group["node"],
@@ -511,14 +495,13 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
             time=migrations_group["time"])
 
     sites_group = root["sites"]
-    sites = msprime.SiteTable()
     if "position" in sites_group:
         metadata = None
         metadata_offset = None
         if "metadata" in sites_group:
             metadata = sites_group["metadata"]
             metadata_offset = sites_group["metadata_offset"]
-        sites.set_columns(
+        tables.sites.set_columns(
             position=sites_group["position"],
             ancestral_state=sites_group["ancestral_state"],
             ancestral_state_offset=sites_group["ancestral_state_offset"],
@@ -526,14 +509,13 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
             metadata_offset=metadata_offset)
 
     mutations_group = root["mutations"]
-    mutations = msprime.MutationTable()
     if "site" in mutations_group:
         metadata = None
         metadata_offset = None
         if "metadata" in mutations_group:
             metadata = mutations_group["metadata"]
             metadata_offset = mutations_group["metadata_offset"]
-        mutations.set_columns(
+        tables.mutations.set_columns(
             site=mutations_group["site"],
             node=mutations_group["node"],
             parent=mutations_group["parent"],
@@ -543,7 +525,6 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
             metadata_offset=metadata_offset)
 
     provenances_group = root["provenances"]
-    provenances = msprime.ProvenanceTable()
     if "timestamp" in provenances_group:
         timestamp = provenances_group["timestamp"]
         timestamp_offset = provenances_group["timestamp_offset"]
@@ -553,19 +534,14 @@ def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
         else:
             record = np.empty_like(timestamp)
             record_offset = np.zeros_like(timestamp_offset)
-        provenances.set_columns(
+        tables.provenances.set_columns(
             timestamp=timestamp,
             timestamp_offset=timestamp_offset,
             record=record,
             record_offset=record_offset)
-    provenances.add_row(_get_upgrade_provenance(root))
-
-    populations = _get_populations(nodes)
-
-    return msprime.load_tables(
-        nodes=nodes, edges=edges, migrations=migrations, sites=sites,
-        mutations=mutations, provenances=provenances,
-        populations=populations, sequence_length=sequence_length)
+    tables.provenances.add_row(_get_upgrade_provenance(root))
+    _set_populations(tables)
+    return tables.tree_sequence()
 
 
 def dump_legacy(tree_sequence, filename, version=3):

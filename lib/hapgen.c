@@ -162,7 +162,7 @@ hapgen_alloc(hapgen_t *self, tree_sequence_t *tree_sequence)
     }
     /* For each site set the ancestral type */
     for (k = 0; k < self->num_sites; k++) {
-        ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) k, &site);
+        ret = tree_sequence_get_site(self->tree_sequence, k, &site);
         if (ret != 0) {
             goto out;
         }

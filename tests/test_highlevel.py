@@ -50,6 +50,7 @@ import msprime
 import _msprime
 import tests
 import tests.tsutil as tsutil
+import tests.simplify as simplify
 
 
 def insert_uniform_mutations(tables, num_mutations, nodes):
@@ -293,12 +294,12 @@ def get_pairwise_diversity(tree_sequence, samples=None):
     return pi
 
 
-def simplify_tree_sequence(ts, samples, filter_zero_mutation_sites=True):
+def simplify_tree_sequence(ts, samples, filter_sites=True):
     """
     Simple tree-by-tree algorithm to get a simplify of a tree sequence.
     """
-    s = tests.Simplifier(
-        ts, samples, filter_zero_mutation_sites=filter_zero_mutation_sites)
+    s = simplify.Simplifier(
+        ts, samples, filter_sites=filter_sites)
     return s.simplify()
 
 
@@ -1368,19 +1369,17 @@ class TestTreeSequence(HighLevelTestCase):
                         old_tree.get_population(mrca1), new_tree.get_population(mrca2))
 
     def verify_simplify_equality(self, ts, sample):
-        for filter_zero_mutation_sites in [False, True]:
+        for filter_sites in [False, True]:
             s1, node_map1 = ts.simplify(
-                sample, map_nodes=True,
-                filter_zero_mutation_sites=filter_zero_mutation_sites)
+                sample, map_nodes=True, filter_sites=filter_sites)
             t1 = s1.dump_tables()
-            s2, node_map2 = simplify_tree_sequence(
-                ts, sample, filter_zero_mutation_sites=filter_zero_mutation_sites)
+            s2, node_map2 = simplify_tree_sequence(ts, sample, filter_sites=filter_sites)
             t2 = s2.dump_tables()
             self.assertEqual(s1.num_samples,  len(sample))
             self.assertEqual(s2.num_samples,  len(sample))
             self.assertTrue(all(node_map1 == node_map2))
             self.assertEqual(t1.individuals, t2.individuals)
-            # self.assertEqual(t1.nodes, t2.nodes)
+            self.assertEqual(t1.nodes, t2.nodes)
             self.assertEqual(t1.edges, t2.edges)
             self.assertEqual(t1.migrations, t2.migrations)
             self.assertEqual(t1.sites, t2.sites)
@@ -1406,24 +1405,17 @@ class TestTreeSequence(HighLevelTestCase):
     def test_simplify(self):
         num_mutations = 0
         for ts in get_example_tree_sequences():
-            if ts.num_individuals > 0:
-                # We don't support individuals in simplify for the moment,
-                # so we raise an error. See
-                # https://github.com/tskit-dev/msprime/issues/522
-                self.assertRaises(
-                    _msprime.LibraryError, self.verify_simplify_provenance, ts)
-            else:
-                self.verify_simplify_provenance(ts)
-                n = ts.get_sample_size()
-                num_mutations += ts.get_num_mutations()
-                sample_sizes = {0, 1}
-                if n > 2:
-                    sample_sizes |= set([2, max(2, n // 2), n - 1])
-                for k in sample_sizes:
-                    subset = random.sample(list(ts.samples()), k)
-                    self.verify_simplify_topology(ts, subset)
-                    self.verify_simplify_equality(ts, subset)
-                    self.verify_simplify_variants(ts, subset)
+            self.verify_simplify_provenance(ts)
+            n = ts.get_sample_size()
+            num_mutations += ts.get_num_mutations()
+            sample_sizes = {0, 1}
+            if n > 2:
+                sample_sizes |= set([2, max(2, n // 2), n - 1])
+            for k in sample_sizes:
+                subset = random.sample(list(ts.samples()), k)
+                self.verify_simplify_topology(ts, subset)
+                self.verify_simplify_equality(ts, subset)
+                self.verify_simplify_variants(ts, subset)
         self.assertGreater(num_mutations, 0)
 
     def test_simplify_bugs(self):
@@ -1447,6 +1439,19 @@ class TestTreeSequence(HighLevelTestCase):
             self.verify_simplify_equality(ts, samples)
             j += 1
         self.assertGreater(j, 1)
+
+    def test_simplify_migrations_fails(self):
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10)],
+            migration_matrix=[[0, 1], [1, 0]],
+            random_seed=2,
+            record_migrations=True)
+        self.assertGreater(ts.num_migrations, 0)
+        # We don't support simplify with migrations, so should fail.
+        with self.assertRaises(_msprime.LibraryError):
+            ts.simplify()
 
     def test_deprecated_apis(self):
         ts = msprime.simulate(10, random_seed=1)
