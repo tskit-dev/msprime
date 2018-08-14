@@ -5,7 +5,7 @@ EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wcast-align -Wcast-qual \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= 
-CFLAGS=-g -O2 -DH5_NO_DEPRECATED_SYMBOLS -Ikastore/c
+CFLAGS=-g -O2 -Ikastore/c
 LDFLAGS=-lgsl -lgslcblas -lm
 
 HEADERS=msprime.h util.h trees.h tables.h
@@ -59,7 +59,7 @@ coverity:
 
 # Examples using just the tables API.
 table_example: table_example.c
-	gcc -Ikastore/c -o table_example table_example.c tables.c uuid.c util.c kastore/c/kastore.c
+	gcc -std=c99 -Ikastore/c -o table_example table_example.c tables.c uuid.c util.c kastore/c/kastore.c
 
 # Make sure that all the files are compiled as C code.
 table_example_cpp: table_example_cpp.cc tables.o util.o
