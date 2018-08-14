@@ -1636,7 +1636,7 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
             while (v != MSP_NULL_NODE && !above_sample) {
                 above_sample = !!(node_flags[v] & MSP_NODE_IS_SAMPLE);
                 u = self->left_child[v];
-                while (u != MSP_NULL_NODE) {
+                while (u != MSP_NULL_NODE && !above_sample) {
                     above_sample = above_sample || self->above_sample[u];
                     u = self->right_sib[u];
                 }
