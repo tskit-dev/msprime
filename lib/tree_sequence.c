@@ -832,11 +832,13 @@ static int WARN_UNUSED
 sparse_tree_clear(sparse_tree_t *self)
 {
     int ret = 0;
-    size_t N = self->num_nodes;
-    size_t num_samples = self->tree_sequence->num_samples;
     size_t j;
     node_id_t u;
     node_list_t *w;
+    const size_t N = self->num_nodes;
+    const size_t num_samples = self->tree_sequence->num_samples;
+    const bool sample_counts = !!(self->flags & MSP_SAMPLE_COUNTS);
+    const bool sample_lists = !!(self->flags & MSP_SAMPLE_LISTS);
 
     self->left = 0;
     self->right = 0;
@@ -850,7 +852,7 @@ sparse_tree_clear(sparse_tree_t *self)
     memset(self->left_sib, 0xff, N * sizeof(node_id_t));
     memset(self->right_sib, 0xff, N * sizeof(node_id_t));
     memset(self->above_sample, 0, N * sizeof(bool));
-    if (self->flags & MSP_SAMPLE_COUNTS) {
+    if (sample_counts) {
         memset(self->num_samples, 0, N * sizeof(node_id_t));
         memset(self->marked, 0, N * sizeof(uint8_t));
         /* We can't reset the tracked samples via memset because we don't
@@ -862,7 +864,7 @@ sparse_tree_clear(sparse_tree_t *self)
             }
         }
     }
-    if (self->flags & MSP_SAMPLE_LISTS) {
+    if (sample_lists) {
         memset(self->sample_list_head, 0, N * sizeof(node_list_t *));
         memset(self->sample_list_tail, 0, N * sizeof(node_list_t *));
     }
@@ -874,10 +876,10 @@ sparse_tree_clear(sparse_tree_t *self)
     for (j = 0; j < num_samples; j++) {
         u = self->samples[j];
         self->above_sample[u] = true;
-        if (self->flags & MSP_SAMPLE_COUNTS) {
+        if (sample_counts) {
             self->num_samples[u] = 1;
         }
-        if (self->flags & MSP_SAMPLE_LISTS) {
+        if (sample_lists) {
             w = &self->sample_list_node_mem[j];
             w->next = NULL;
             w->node = (node_id_t) u;
@@ -886,10 +888,10 @@ sparse_tree_clear(sparse_tree_t *self)
         }
         /* Set initial roots */
         if (j < num_samples - 1) {
-            self->right_sib[self->samples[j]] = self->samples[j + 1];
+            self->right_sib[u] = self->samples[j + 1];
         }
         if (j > 0) {
-            self->left_sib[self->samples[j]] = self->samples[j - 1];
+            self->left_sib[u] = self->samples[j - 1];
         }
     }
     return ret;
@@ -931,7 +933,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
     if (self->stack1 == NULL || self->stack2 == NULL) {
         goto out;
     }
-    if (self->flags & MSP_SAMPLE_COUNTS) {
+    if (!!(self->flags & MSP_SAMPLE_COUNTS)) {
         self->num_samples = calloc(num_nodes, sizeof(node_id_t));
         self->num_tracked_samples = calloc(num_nodes, sizeof(node_id_t));
         self->marked = calloc(num_nodes, sizeof(uint8_t));
@@ -940,7 +942,7 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
             goto out;
         }
     }
-    if (self->flags & MSP_SAMPLE_LISTS) {
+    if (!!(self->flags & MSP_SAMPLE_LISTS)) {
         self->sample_list_head = calloc(num_nodes, sizeof(node_list_t *));
         self->sample_list_tail = calloc(num_nodes, sizeof(node_list_t *));
         self->sample_list_node_mem = calloc(num_samples, sizeof(node_list_t));
@@ -1489,17 +1491,22 @@ static inline void
 sparse_tree_propagate_sample_count_loss(sparse_tree_t *self, node_id_t parent,
         node_id_t child)
 {
+    node_id_t v;
     const node_id_t all_samples_diff = self->num_samples[child];
     const node_id_t tracked_samples_diff = self->num_tracked_samples[child];
     const uint8_t mark = self->mark;
-    node_id_t v = parent;
+    const node_id_t * restrict tree_parent = self->parent;
+    node_id_t * restrict num_samples = self->num_samples;
+    node_id_t * restrict num_tracked_samples = self->num_tracked_samples;
+    uint8_t * restrict marked = self->marked;
 
     /* propagate this loss up as far as we can */
+    v = parent;
     while (v != MSP_NULL_NODE) {
-        self->num_samples[v] -= all_samples_diff;
-        self->num_tracked_samples[v] -= tracked_samples_diff;
-        self->marked[v] = mark;
-        v = self->parent[v];
+        num_samples[v] -= all_samples_diff;
+        num_tracked_samples[v] -= tracked_samples_diff;
+        marked[v] = mark;
+        v = tree_parent[v];
     }
 }
 
@@ -1511,14 +1518,18 @@ sparse_tree_propagate_sample_count_gain(sparse_tree_t *self, node_id_t parent,
     const node_id_t all_samples_diff = self->num_samples[child];
     const node_id_t tracked_samples_diff = self->num_tracked_samples[child];
     const uint8_t mark = self->mark;
+    const node_id_t * restrict tree_parent = self->parent;
+    node_id_t * restrict num_samples = self->num_samples;
+    node_id_t * restrict num_tracked_samples = self->num_tracked_samples;
+    uint8_t * restrict marked = self->marked;
 
     /* propogate this gain up as far as we can */
     v = parent;
     while (v != MSP_NULL_NODE) {
-        self->num_samples[v] += all_samples_diff;
-        self->num_tracked_samples[v] += tracked_samples_diff;
-        self->marked[v] = mark;
-        v = self->parent[v];
+        num_samples[v] += all_samples_diff;
+        num_tracked_samples[v] += tracked_samples_diff;
+        marked[v] = mark;
+        v = tree_parent[v];
     }
 }
 
@@ -1558,23 +1569,24 @@ sparse_tree_update_sample_lists(sparse_tree_t *self, node_id_t node)
 
 static int
 sparse_tree_advance(sparse_tree_t *self, int direction,
-        double *out_breakpoints, node_id_t *out_order, node_id_t *out_index,
-        double *in_breakpoints, node_id_t *in_order, node_id_t *in_index,
-        int MSP_UNUSED(first_tree))
+        const double * restrict out_breakpoints,
+        const node_id_t * restrict out_order,
+        node_id_t *out_index,
+        const double * restrict in_breakpoints,
+        const node_id_t * restrict in_order,
+        node_id_t *in_index)
 {
     int ret = 0;
-    int direction_change = direction * (direction != self->direction);
+    const int direction_change = direction * (direction != self->direction);
     node_id_t in = *in_index + direction_change;
     node_id_t out = *out_index + direction_change;
     node_id_t k, p, c, u, v, root, lsib, rsib, lroot, rroot;
     table_collection_t *tables = self->tree_sequence->tables;
-    /* TODO remove this variable. */
-    tree_sequence_t *s = self->tree_sequence;
     const double sequence_length = tables->sequence_length;
     const node_id_t num_edges = (node_id_t) tables->edges->num_rows;
-    const node_id_t *edge_parent = tables->edges->parent;
-    const node_id_t *edge_child = tables->edges->child;
-    const uint32_t *node_flags = tables->nodes->flags;
+    const node_id_t * restrict edge_parent = tables->edges->parent;
+    const node_id_t * restrict edge_child = tables->edges->child;
+    const uint32_t * restrict node_flags = tables->nodes->flags;
     double x;
     bool above_sample;
 
@@ -1757,9 +1769,9 @@ sparse_tree_advance(sparse_tree_t *self, int direction,
     assert(self->left < self->right);
     *out_index = out;
     *in_index = in;
-    if (s->tables->sites->num_rows > 0) {
-        self->sites = s->tree_sites[self->index];
-        self->sites_length = s->tree_sites_length[self->index];
+    if (tables->sites->num_rows > 0) {
+        self->sites = self->tree_sequence->tree_sites[self->index];
+        self->sites_length = self->tree_sequence->tree_sites_length[self->index];
     }
     ret = 1;
 out:
@@ -1796,7 +1808,7 @@ sparse_tree_first(sparse_tree_t *self)
         ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
                 tables->edges->right, tables->indexes.edge_removal_order,
                 &self->right_index, tables->edges->left,
-                tables->indexes.edge_insertion_order, &self->left_index, 1);
+                tables->indexes.edge_insertion_order, &self->left_index);
     }
 out:
     return ret;
@@ -1834,7 +1846,7 @@ sparse_tree_last(sparse_tree_t *self)
         ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
                 tables->edges->left, tables->indexes.edge_insertion_order,
                 &self->left_index, tables->edges->right,
-                tables->indexes.edge_removal_order, &self->right_index, 1);
+                tables->indexes.edge_removal_order, &self->right_index);
     }
 out:
     return ret;
@@ -1852,7 +1864,7 @@ sparse_tree_next(sparse_tree_t *self)
         ret = sparse_tree_advance(self, MSP_DIR_FORWARD,
                 tables->edges->right, tables->indexes.edge_removal_order,
                 &self->right_index, tables->edges->left,
-                tables->indexes.edge_insertion_order, &self->left_index, 0);
+                tables->indexes.edge_insertion_order, &self->left_index);
     }
     return ret;
 }
@@ -1867,7 +1879,7 @@ sparse_tree_prev(sparse_tree_t *self)
         ret = sparse_tree_advance(self, MSP_DIR_REVERSE,
                 tables->edges->left, tables->indexes.edge_insertion_order,
                 &self->left_index, tables->edges->right,
-                tables->indexes.edge_removal_order, &self->right_index, 0);
+                tables->indexes.edge_removal_order, &self->right_index);
     }
     return ret;
 }
