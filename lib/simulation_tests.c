@@ -1759,7 +1759,7 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_populate_tables(&msp, &final_tables);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tree_sequence_load_tables(&final, &final_tables, 0);
+        ret = tree_sequence_load_tables(&final, &final_tables, MSP_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         ret = sparse_tree_alloc(&tree, &final, 0);
@@ -1822,7 +1822,7 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
     /* Add some provenances */
     ret = provenance_table_add_row(from_tables.provenances, "time", 4, "record", 6);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     verify_simulate_from(model, &recomb_map, &from, num_replicates);
@@ -1935,7 +1935,7 @@ test_simulate_from_completed(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_populate_tables(&msp, &from_tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from, 1);
@@ -1957,6 +1957,7 @@ test_simulate_from_incompatible(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tree_sequence_t from;
     table_collection_t from_tables;
+    int load_flags = MSP_BUILD_INDEXES;
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = recomb_map_alloc_uniform(&recomb_map, 1, 10.0, 1);
@@ -1964,7 +1965,7 @@ test_simulate_from_incompatible(void)
     ret = table_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     from_tables.sequence_length = 1.0;
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Sequence length mismatch */
@@ -1974,7 +1975,7 @@ test_simulate_from_incompatible(void)
 
     /* Num populations should be 1 */
     from_tables.sequence_length = 10.0;
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1987,7 +1988,7 @@ test_simulate_from_incompatible(void)
     from_tables.sequence_length = 10.0;
     ret = population_table_add_row(from_tables.populations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2003,7 +2004,7 @@ test_simulate_from_incompatible(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 2.0, 0,
             MSP_NULL_INDIVIDUAL, NULL, 0);
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2012,7 +2013,7 @@ test_simulate_from_incompatible(void)
     tree_sequence_free(&from);
     msp_free(&msp);
 
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2025,20 +2026,20 @@ test_simulate_from_incompatible(void)
 
     /* Must have legitimate population references */
     from_tables.nodes->population[0] = -1;
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_POPULATION_ID);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     tree_sequence_free(&from);
     msp_free(&msp);
 
     /* Check to make sure we can run this correctly */
     from_tables.nodes->population[0] = 0;
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2073,7 +2074,7 @@ test_simulate_init_errors(void)
     ret = table_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     from_tables.sequence_length = 1.0;
-    ret = tree_sequence_load_tables(&from, &from_tables, 0);
+    ret = tree_sequence_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     memset(samples, 0, n * sizeof(sample_t));

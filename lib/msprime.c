@@ -1806,7 +1806,7 @@ msp_init_from_ts(msp_t *self)
         }
         pop = self->tables.nodes->population[j];
         if (pop < 0 || pop >= (population_id_t) self->num_populations) {
-            ret = MSP_ERR_BAD_POPULATION_ID;
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
     }
