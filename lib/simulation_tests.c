@@ -1972,6 +1972,7 @@ test_simulate_from_incompatible(void)
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
     msp_free(&msp);
+    tree_sequence_free(&from);
 
     /* Num populations should be 1 */
     from_tables.sequence_length = 10.0;
