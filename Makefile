@@ -3,7 +3,7 @@
 SRC=_msprimemodule.c
 
 ext3: ${SRC}
-	python3 setup.py build_ext --inplace
+	CFLAGS="-Wall" python3 setup.py build_ext --inplace
 
 ext2: ${SRC}
 	python setup.py build_ext --inplace

@@ -231,8 +231,7 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
 {
     int ret = -1;
     PyObject *item;
-    size_t j;
-    Py_ssize_t num_samples_local;
+    Py_ssize_t j, num_samples_local;
     node_id_t *samples_local = NULL;
 
     num_samples_local = PyList_Size(py_samples);
@@ -252,7 +251,8 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
             goto out;
         }
         samples_local[j] = (node_id_t) PyLong_AsLong(item);
-        if (samples_local[j] < 0 || samples_local[j] >= tree_sequence_get_num_nodes(ts)) {
+        if (samples_local[j] < 0
+                || samples_local[j] >= (node_id_t) tree_sequence_get_num_nodes(ts)) {
             PyErr_SetString(PyExc_ValueError, "node ID out of bounds");
             goto out;
         }
@@ -868,12 +868,12 @@ table_read_column_array(PyObject *input, int npy_type, size_t *num_rows, bool ch
     }
     shape = PyArray_DIMS(array);
     if (check_num_rows) {
-        if (*num_rows != shape[0]) {
+        if (*num_rows != (size_t) shape[0]) {
             PyErr_SetString(PyExc_ValueError, "Input array dimensions must be equal.");
             goto out;
         }
     } else {
-        *num_rows = shape[0];
+        *num_rows = (size_t) shape[0];
     }
     ret = array;
 out:

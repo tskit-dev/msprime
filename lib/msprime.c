@@ -1669,6 +1669,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+    r_max = 0; /* keep compiler happy */
     l_min = 0;
     z = NULL;
     while (avl_count(Q) > 0) {
