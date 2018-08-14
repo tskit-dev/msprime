@@ -116,7 +116,7 @@ tree_sequence_init_sites(tree_sequence_t *self)
     size_t offset = 0;
     const table_size_t num_mutations = self->tables->mutations->num_rows;
     const table_size_t num_sites = self->tables->sites->num_rows;
-    const site_id_t *mutation_site = self->tables->mutations->site;
+    const site_id_t *restrict mutation_site = self->tables->mutations->site;
 
     self->site_mutations_mem = malloc(num_mutations * sizeof(mutation_t));
     self->site_mutations_length = malloc(num_sites * sizeof(table_size_t));
@@ -159,58 +159,53 @@ static int
 tree_sequence_init_individuals(tree_sequence_t *self)
 {
     int ret = 0;
-    individual_id_t j;
-    node_id_t k;
+    node_id_t node;
+    individual_id_t ind;
     table_size_t offset = 0;
-    table_size_t total_nodes = 0;
+    table_size_t total_node_refs = 0;
     table_size_t *node_count = NULL;
     node_id_t *node_array;
-    size_t num_inds = self->tables->individuals->num_rows;
-    size_t num_nodes = self->tables->nodes->num_rows;
-    const individual_id_t *node_individual = self->tables->nodes->individual;
+    const size_t num_inds = self->tables->individuals->num_rows;
+    const size_t num_nodes = self->tables->nodes->num_rows;
+    const individual_id_t *restrict node_individual = self->tables->nodes->individual;
 
     // First find number of nodes per individual
-    self->individual_nodes_length = calloc(
-            MSP_MAX(1, num_inds), sizeof(table_size_t));
+    self->individual_nodes_length = calloc(MSP_MAX(1, num_inds), sizeof(table_size_t));
     node_count = calloc(MSP_MAX(1, num_inds), sizeof(size_t));
-    if (self->individual_nodes_length == NULL
-            || node_count == NULL) {
+
+    if (self->individual_nodes_length == NULL || node_count == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
 
-    for (k = 0; k < (node_id_t) num_nodes; k++) {
-        j = node_individual[k];
-        if (j != MSP_NULL_INDIVIDUAL) {
-            self->individual_nodes_length[j] += 1;
+    for (node = 0; node < (node_id_t) num_nodes; node++) {
+        ind = node_individual[node];
+        if (ind != MSP_NULL_INDIVIDUAL) {
+            self->individual_nodes_length[ind]++;
+            total_node_refs++;
         }
-        total_nodes++;
     }
 
-    // now fill in the node IDs
-    self->individual_nodes_mem = malloc(
-            MSP_MAX(1, total_nodes) * sizeof(node_id_t));
-    self->individual_nodes = malloc(
-            MSP_MAX(1, num_inds) * sizeof(node_id_t *));
-    if (self->individual_nodes_mem == NULL
-            || self->individual_nodes == NULL) {
+    self->individual_nodes_mem = malloc(MSP_MAX(1, total_node_refs) * sizeof(node_t));
+    self->individual_nodes = malloc(MSP_MAX(1, num_inds) * sizeof(node_t *));
+    if (self->individual_nodes_mem == NULL || self->individual_nodes == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
 
-    for (j = 0; j < (individual_id_t) num_inds; j++) {
-        self->individual_nodes[j] = self->individual_nodes_mem + offset;
-        offset += self->individual_nodes_length[j];
+    /* Now fill in the node IDs */
+    for (ind = 0; ind < (individual_id_t) num_inds; ind++) {
+        self->individual_nodes[ind] = self->individual_nodes_mem + offset;
+        offset += self->individual_nodes_length[ind];
     }
-
-    for (k = 0; k < (node_id_t) num_nodes; k++) {
-        j = node_individual[k];
-        if (j != MSP_NULL_INDIVIDUAL) {
-            node_array = self->individual_nodes[j];
+    for (node = 0; node < (node_id_t) num_nodes; node++) {
+        ind = node_individual[node];
+        if (ind != MSP_NULL_INDIVIDUAL) {
+            node_array = self->individual_nodes[ind];
             assert(node_array - self->individual_nodes_mem
-                    < total_nodes - node_count[j]);
-            node_array[node_count[j]] = k;
-            node_count[j] += 1;
+                    < total_node_refs - node_count[ind]);
+            node_array[node_count[ind]] = node;
+            node_count[ind] += 1;
         }
     }
 out:
@@ -230,11 +225,11 @@ tree_sequence_init_trees(tree_sequence_t *self)
     const double sequence_length = self->tables->sequence_length;
     const site_id_t num_sites = (site_id_t) self->tables->sites->num_rows;
     const size_t num_edges = self->tables->edges->num_rows;
-    const double *site_position = self->tables->sites->position;
-    const node_id_t *I = self->tables->indexes.edge_insertion_order;
-    const node_id_t *O = self->tables->indexes.edge_removal_order;
-    const double *edge_right = self->tables->edges->right;
-    const double *edge_left = self->tables->edges->left;
+    const double * restrict site_position = self->tables->sites->position;
+    const node_id_t * restrict I = self->tables->indexes.edge_insertion_order;
+    const node_id_t * restrict O = self->tables->indexes.edge_removal_order;
+    const double * restrict edge_right = self->tables->edges->right;
+    const double * restrict edge_left = self->tables->edges->left;
 
     tree_left = 0;
     tree_right = sequence_length;
@@ -310,7 +305,7 @@ tree_sequence_init_nodes(tree_sequence_t *self)
 {
     size_t j, k;
     size_t num_nodes = self->tables->nodes->num_rows;
-    const uint32_t *node_flags = self->tables->nodes->flags;
+    const uint32_t *restrict node_flags = self->tables->nodes->flags;
     int ret = 0;
 
     /* Determine the sample size */
@@ -367,6 +362,8 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     if (ret != 0) {
         goto out;
     }
+    /* TODO This should be removed: the tables should be read only. We'll
+     * raise an error if the tables aren't indexed. */
     if (!!(flags & MSP_BUILD_INDEXES)) {
         ret = table_collection_build_indexes(self->tables, 0);
         if (ret != 0) {
