@@ -33,6 +33,46 @@ import msprime
 import _msprime
 
 
+class TestTimeTravelErrors(unittest.TestCase):
+    """
+    It is possible to specify models in msprime that result in malformed
+    tree sequences where the parent node has time equal to its child.
+    We throw an error in this case and expect the user to fix their model.
+    """
+    def test_multiple_bottlenecks(self):
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.simulate(
+                sample_size=100,
+                demographic_events=[
+                    msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.75),
+                    msprime.SimpleBottleneck(time=0.1, population=0, proportion=1.0)],
+                random_seed=1)
+
+    def test_tiny_population_size(self):
+        # Derived from bug report in #570.
+        n = 3
+        population_configurations = [
+            msprime.PopulationConfiguration(
+                sample_size=10000,
+                initial_size=10000,
+                growth_rate=0)
+            for k in range(n)]
+        demographic_events = [
+            msprime.PopulationParametersChange(
+                time=0.01, initial_size=1e-10, population_id=2, growth_rate=0),
+            msprime.MassMigration(
+                time=0.02, source=1, destination=2, proportion=1.0)]
+        M = [[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.simulate(
+                population_configurations=population_configurations,
+                demographic_events=demographic_events,
+                migration_matrix=M,
+                recombination_rate=0.0,
+                mutation_rate=0.0,
+                random_seed=1)
+
+
 class TestBadDemographicParameters(unittest.TestCase):
     """
     Tests for nonsensical demographic parameters.

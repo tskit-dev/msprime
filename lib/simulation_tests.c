@@ -773,6 +773,40 @@ test_demographic_events_start_time(void)
     recomb_map_free(&recomb_map);
 }
 
+static void
+test_time_travel_error(void)
+{
+    int ret;
+    uint32_t n = 100;
+    sample_t *samples = calloc(n, sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    msp_t msp;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_simple_bottleneck(&msp, 0.1, 0, 0.75);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_simple_bottleneck(&msp, 0.1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_TIME_TRAVEL);
+
+    free(samples);
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    recomb_map_free(&recomb_map);
+}
+
 static int
 get_num_children(size_t node, edge_table_t *edges)
 {
@@ -2169,6 +2203,7 @@ main(int argc, char **argv)
         {"test_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_demographic_events},
         {"test_demographic_events_start_time", test_demographic_events_start_time},
+        {"test_time_travel_error", test_time_travel_error},
         {"test_single_locus_simulation", test_single_locus_simulation},
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
