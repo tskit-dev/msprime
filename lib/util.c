@@ -269,6 +269,26 @@ msp_strerror_internal(int err)
             ret = "Migrations currently not supported in simplify. Please open an "
                 "issue on GitHub if this operation is important to you.";
             break;
+        case MSP_ERR_INCOMPATIBLE_FROM_TS:
+            ret = "The specified tree sequence is not a compatible starting point "
+                "for the current simulation";
+            break;
+        case MSP_ERR_BAD_START_TIME_FROM_TS:
+            ret = "The specified start_time and from_ts are not compatible. All "
+                "node times in the tree sequence must be <= start_time.";
+            break;
+        case MSP_ERR_BAD_START_TIME:
+            ret = "start_time must be >= 0.";
+            break;
+        case MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME:
+            ret = "demographic event time must be >= start_time.";
+            break;
+        case MSP_ERR_RECOMB_MAP_TOO_COARSE:
+            ret = "The specified recombination map is cannot translate the coordinates"
+                "for the specified tree sequence. It is either too coarse (num_loci "
+                "is too small) or contains zero recombination rates. Please either "
+                "increase the number of loci or recombination rate";
+            break;
 
         case MSP_ERR_IO:
             if (errno != 0) {

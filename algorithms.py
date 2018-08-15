@@ -238,7 +238,7 @@ class Simulator(object):
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
             migration_matrix_element_changes, bottlenecks, model='hudson',
-	    max_segments=100):
+            from_ts=None, max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -264,26 +264,60 @@ class Simulator(object):
         self.P = [Population(id_) for id_ in range(N)]
         self.L = FenwickTree(self.max_segments)
         self.S = bintrees.AVLTree()
-        # The output tree sequence.
-        self.nodes = msprime.NodeTable()
-        self.edges = msprime.EdgeTable()
-        self.edge_buffer = []
         for pop_index in range(N):
-            sample_size = sample_configuration[pop_index]
             self.P[pop_index].set_start_size(population_sizes[pop_index])
-            self.P[pop_index].set_growth_rate(
-                population_growth_rates[pop_index], 0)
-            for k in range(sample_size):
-                j = len(self.nodes)
-                x = self.alloc_segment(0, self.m, j, pop_index)
-                self.L.set_value(x.index, self.m - 1)
-                self.P[pop_index].add(x)
-                self.nodes.add_row(
-                    flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index)
-                j += 1
-        self.S[0] = self.n
-        self.S[self.m] = -1
-        self.t = 0
+            self.P[pop_index].set_growth_rate(population_growth_rates[pop_index], 0)
+        self.edge_buffer = []
+        if from_ts is None:
+            self.tables = msprime.TableCollection(sequence_length=num_loci)
+            for pop_index in range(N):
+                self.tables.populations.add_row()
+                sample_size = sample_configuration[pop_index]
+                for k in range(sample_size):
+                    j = len(self.tables.nodes)
+                    x = self.alloc_segment(0, self.m, j, pop_index)
+                    self.L.set_value(x.index, self.m - 1)
+                    self.P[pop_index].add(x)
+                    self.tables.nodes.add_row(
+                        flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index)
+                    j += 1
+            self.S[0] = self.n
+            self.S[self.m] = -1
+            self.t = 0
+        else:
+            ts = msprime.load(from_ts)
+            if ts.sequence_length != self.m:
+                raise ValueError("Sequence length in from_ts must match")
+            if ts.num_populations != N:
+                raise ValueError("Number of populations in from_ts must match")
+            self.tables = ts.dump_tables()
+            prev_map = {}
+            for tree in ts.trees():
+                left, right = tree.interval
+                if int(left) != left or int(right) != right:
+                    raise ValueError("Coordinates must be integers")
+                if tree.num_roots == 1:
+                    self.S[left] = 0
+                else:
+                    for root in tree.roots:
+                        population = ts.node(root).population
+                        prev = prev_map.get(root, None)
+                        x = self.alloc_segment(left, right, root, population, prev=prev)
+                        if prev is None:
+                            self.L.set_value(x.index, right - left - 1)
+                            self.P[pop_index].add(x)
+                        else:
+                            self.L.set_value(x.index, right - prev.right)
+                            prev.next = x
+                        prev_map[root] = x
+                    self.S[left] = tree.num_roots
+            self.S[self.m] = -1
+            self.t = self.tables.nodes.time.max()
+            for j in range(N):
+                for x in self.P[j]:
+                    self.defrag_segment_chain(x)
+            self.defrag_breakpoints()
+
         self.num_ca_events = 0
         self.num_re_events = 0
         self.modifier_events = [(sys.float_info.max, None, None)]
@@ -315,8 +349,7 @@ class Simulator(object):
         print("Changing migration rate", pop_i, pop_j, rate)
         self.migration_matrix[pop_i][pop_j] = rate
 
-    def alloc_segment(
-            self, left, right, node, pop_index, prev=None, next=None):
+    def alloc_segment(self, left, right, node, pop_index, prev=None, next=None):
         """
         Pops a new segment off the stack and sets its properties.
         """
@@ -339,14 +372,14 @@ class Simulator(object):
 
     def store_node(self, population):
         self.flush_edges()
-        self.nodes.add_row(time=self.t, population=population)
+        self.tables.nodes.add_row(time=self.t, population=population)
 
     def flush_edges(self):
         """
         Flushes the edges in the edge buffer to the table, squashing any adjacent edges.
         """
         if len(self.edge_buffer) > 0:
-            parent = len(self.nodes) - 1
+            parent = len(self.tables.nodes) - 1
             self.edge_buffer.sort(key=lambda e: (e.child, e.left))
             left = self.edge_buffer[0].left
             right = self.edge_buffer[0].right
@@ -355,11 +388,11 @@ class Simulator(object):
             for e in self.edge_buffer[1:]:
                 assert e.parent == parent
                 if e.left != right or e.child != child:
-                    self.edges.add_row(left, right, parent, child)
+                    self.tables.edges.add_row(left, right, parent, child)
                     left = e.left
                     child = e.child
                 right = e.right
-            self.edges.add_row(left, right, parent, child)
+            self.tables.edges.add_row(left, right, parent, child)
             self.edge_buffer = []
 
     def store_edge(self, left, right, parent, child):
@@ -374,7 +407,7 @@ class Simulator(object):
         Finalises the simulation returns an msprime tree sequence object.
         """
         self.flush_edges()
-        return msprime.load_tables(nodes=self.nodes, edges=self.edges)
+        return self.tables.tree_sequence()
 
     def simulate(self, model='hudson'):
         if self.model == 'hudson':
@@ -456,7 +489,7 @@ class Simulator(object):
             offspring = bintrees.AVLTree()
             for i in range(pop.get_num_ancestors()-1, -1, -1):
                 ## Popping every ancestor every generation is inefficient.
-                ## In the C implementation we store a pointer to the 
+                ## In the C implementation we store a pointer to the
                 ## ancestor so we can pop only if we need to merge
                 anc = pop.remove(i)
                 parent = np.random.choice(cur_inds)
@@ -671,7 +704,7 @@ class Simulator(object):
                 if not coalescence:
                     coalescence = True
                     self.store_node(pop_id)
-                u = len(self.nodes) - 1
+                u = len(self.tables.nodes) - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if l not in self.S:
@@ -784,7 +817,7 @@ class Simulator(object):
                     if not coalescence:
                         coalescence = True
                         self.store_node(population_index)
-                    u = len(self.nodes) - 1
+                    u = len(self.tables.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
                     l = x.left
@@ -859,9 +892,9 @@ class Simulator(object):
                 print(
                     "\t", j, "->", s, self.L.get_cumulative_frequency(j))
         print("nodes")
-        print(self.nodes)
+        print(self.tables.nodes)
         print("edges")
-        print(self.edges)
+        print(self.tables.edges)
         self.verify()
 
     def verify(self):
@@ -954,7 +987,8 @@ def run_simulate(args):
         population_sizes, args.population_growth_rate_change,
         args.population_size_change,
         args.migration_matrix_element_change,
-        args.bottleneck, args.model, 10000)
+        args.bottleneck, args.model, from_ts=args.from_ts,
+        max_segments=10000)
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -997,6 +1031,11 @@ def add_simulator_arguments(parser):
         "--bottleneck", type=float, nargs=3, action="append", default=[])
     parser.add_argument(
         "--model", default='hudson')
+    parser.add_argument(
+        "--from-ts", "-F", default=None,
+        help=(
+            "Specify the tree sequence to complete. The sample_size argument "
+            "is ignored if this is provided"))
 
 
 def main():

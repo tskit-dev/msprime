@@ -31,7 +31,6 @@ except ImportError:
 
 import collections
 import datetime
-import gzip
 import itertools
 import json
 import math
@@ -594,14 +593,10 @@ class TestSimulator(HighLevelTestCase):
         self.assertEqual(sim.random_generator, rng)
         sim.run()
         self.assertEqual(sim.num_breakpoints, len(sim.breakpoints))
-        self.assertGreater(sim.used_memory, 0)
         self.assertGreater(sim.time, 0)
         self.assertGreater(sim.num_avl_node_blocks, 0)
         self.assertGreater(sim.num_segment_blocks, 0)
         self.assertGreater(sim.num_node_mapping_blocks, 0)
-        self.assertGreater(sim.num_node_blocks, 0)
-        self.assertGreater(sim.num_edge_blocks, 0)
-        self.assertGreater(sim.max_memory, 0)
         tree_sequence = sim.get_tree_sequence()
         t = 0.0
         for record in tree_sequence.nodes():
@@ -629,19 +624,13 @@ class TestSimulator(HighLevelTestCase):
         self.assertGreater(sim.avl_node_block_size, 0)
         self.assertGreater(sim.segment_block_size, 0)
         self.assertGreater(sim.node_mapping_block_size, 0)
-        self.assertGreater(sim.node_block_size, 0)
-        self.assertGreater(sim.edge_block_size, 0)
         sim.reset()
         sim.avl_node_block_size = 1
         sim.segment_block_size = 1
         sim.node_mapping_block_size = 1
-        sim.node_block_size = 1
-        sim.edge_block_size = 1
         self.assertEqual(sim.avl_node_block_size, 1)
         self.assertEqual(sim.segment_block_size, 1)
         self.assertEqual(sim.node_mapping_block_size, 1)
-        self.assertEqual(sim.node_block_size, 1)
-        self.assertEqual(sim.edge_block_size, 1)
 
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
@@ -1964,156 +1953,6 @@ class TestSparseTree(HighLevelTestCase):
             self.assertEqual(t1.get_tmrca(*pair), t1.tmrca(*pair))
 
 
-class TestRecombinationMap(HighLevelTestCase):
-    """
-    Tests the code for recombination map.
-    """
-
-    def verify_coordinate_conversion(self, positions, rates):
-        """
-        Verifies coordinate conversions by the specified RecombinationMap
-        instance.
-        """
-        num_loci = 10
-        rm = msprime.RecombinationMap(positions, rates, num_loci)
-        other_rm = tests.PythonRecombinationMap(positions, rates, num_loci)
-        self.assertEqual(
-            rm.get_total_recombination_rate(),
-            other_rm.get_total_recombination_rate())
-        num_random_trials = 10
-        num_systematic_trials = 10
-        values = [random.random() for j in range(num_random_trials)]
-        for j in range(num_systematic_trials):
-            values.append(j * 1 / num_systematic_trials)
-        values += positions
-        for x in values:
-            # x is a physical coordinate
-            y = rm.physical_to_genetic(x)
-            self.assertEqual(y, other_rm.physical_to_genetic(x))
-            self.assertTrue(0 <= y <= num_loci)
-            z = rm.genetic_to_physical(y)
-            self.assertAlmostEqual(x, z)
-
-            # Now x is a genetic coordinate
-            y = rm.genetic_to_physical(x)
-            self.assertTrue(0 <= y <= 1)
-            self.assertAlmostEqual(y, other_rm.genetic_to_physical(x))
-            z = rm.physical_to_genetic(y)
-            self.assertAlmostEqual(x, z)
-
-    def test_zero_rate_values(self):
-        # When we have a zero rate in some interval we no longer have a
-        # bijective function, since all the physical coordinates in this
-        # interval map to a single genetic coordinate.
-        positions = [0, 0.25, 0.5, 0.75, 1]
-        rates = [1, 0, 1, 0, 0]
-        num_loci = 100
-        rm = msprime.RecombinationMap(positions, rates, num_loci)
-        other_rm = tests.PythonRecombinationMap(positions, rates, num_loci)
-        self.assertEqual(0.5, rm.get_total_recombination_rate())
-        self.assertEqual(0.5, other_rm.get_total_recombination_rate())
-        # Between 0 and 0.25 and 0.5 and 0.75 we should be able to map 1-1
-        # in physical coordinates.
-        for x in [0, 0.125, 0.25, 0.50001, 0.66, 0.75]:
-            y = rm.physical_to_genetic(x)
-            self.assertEqual(y, other_rm.physical_to_genetic(x))
-            self.assertTrue(0 <= y <= num_loci)
-            z = rm.genetic_to_physical(y)
-            self.assertAlmostEqual(x, z)
-        # All physical coordinates within the 0 region should map down to
-        # the first point.
-        for start, end in [(0.25, 0.5), (0.75, 1)]:
-            for x in [start + delta for delta in [0, 0.01, 0.1]] + [end]:
-                y = rm.physical_to_genetic(x)
-                self.assertEqual(y, other_rm.physical_to_genetic(x))
-                self.assertTrue(0 <= y <= num_loci)
-                z = rm.genetic_to_physical(y)
-                self.assertEqual(z, start)
-
-    def test_one_rate(self):
-        num_loci = 1024
-        for rate in [0.1, 1.0, 10]:
-            positions = [0, 1]
-            rates = [rate, 0]
-            rm = msprime.RecombinationMap(positions, rates, num_loci)
-            self.assertEqual(rate, rm.get_total_recombination_rate())
-            self.verify_coordinate_conversion(positions, rates)
-
-    def test_simple_map(self):
-        positions = [0, 0.25, 0.5, 0.75, 1]
-        rates = [0.125, 0.25, 0.5, 0.75, 0]
-        self.verify_coordinate_conversion(positions, rates)
-
-    def test_random_map(self):
-        for size in [2, 3, 4, 100]:
-            positions = [0] + sorted(
-                random.random() for _ in range(size - 2)) + [1]
-            rates = [random.random() for _ in range(size - 1)] + [0]
-            self.verify_coordinate_conversion(positions, rates)
-
-    def test_zero_rate(self):
-        positions = [0, 1]
-        rates = [0, 0]
-        for m in [1, 10]:
-            rm = msprime.RecombinationMap(positions, rates, m)
-            other_rm = tests.PythonRecombinationMap(positions, rates, m)
-            self.assertEqual(0.0, rm.get_total_recombination_rate())
-            self.assertEqual(0.0, other_rm.get_total_recombination_rate())
-            # All values should map directly to themselves.
-            for x in [0, 0.24, 0.33, 0.99, 1]:
-                self.assertEqual(rm.genetic_to_physical(m * x), x)
-                self.assertEqual(other_rm.genetic_to_physical(m * x), x)
-                self.assertEqual(other_rm.physical_to_genetic(x), x * m)
-                self.assertEqual(rm.physical_to_genetic(x), x * m)
-
-    def test_simple_examples(self):
-        rm = msprime.RecombinationMap([0, 0.9, 1], [2, 1, 0], 10)
-        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
-        rm = msprime.RecombinationMap([0, 0.5, 0.6, 1], [2, 1, 2, 0], 100)
-        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
-
-    def test_read_hapmap_simple(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 0 1", file=f)
-            print("chr1 1 5 x", file=f)
-            print("s    2 0 x x x", file=f)
-        rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
-        self.assertEqual(rm.get_positions(), [0, 1, 2])
-        self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
-
-    def test_read_hapmap_nonzero_start(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 1 5 x", file=f)
-            print("s    2 0 x x x", file=f)
-        rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
-        self.assertEqual(rm.get_positions(), [0, 1, 2])
-        self.assertEqual(rm.get_rates(), [0, 5e-8, 0])
-
-    def test_read_hapmap_nonzero_end(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 0 5 x", file=f)
-            print("s    2 1 x x x", file=f)
-        self.assertRaises(
-            ValueError, msprime.RecombinationMap.read_hapmap, self.temp_file)
-
-    def test_read_hapmap_gzipped(self):
-        try:
-            filename = self.temp_file + ".gz"
-            with gzip.open(filename, "w+") as f:
-                f.write(b"HEADER\n")
-                f.write(b"chr1 0 1\n")
-                f.write(b"chr1 1 5.5\n")
-                f.write(b"s    2 0\n")
-            rm = msprime.RecombinationMap.read_hapmap(filename)
-            self.assertEqual(rm.get_positions(), [0, 1, 2])
-            self.assertEqual(rm.get_rates(), [1e-8, 5.5e-8, 0])
-        finally:
-            os.unlink(filename)
-
-
 class TestSimulatorFactory(unittest.TestCase):
     """
     Tests that the simulator factory high-level function correctly
@@ -2139,7 +1978,7 @@ class TestSimulatorFactory(unittest.TestCase):
             ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
-            self.assertEqual(sim.sample_size, n)
+            self.assertEqual(len(sim.samples), n)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_num_samples(), n)
             samples = ll_sim.get_samples()
@@ -2172,7 +2011,7 @@ class TestSimulatorFactory(unittest.TestCase):
             sample_size = 5 * N
             sim = msprime.simulator_factory(population_configurations=pop_configs)
             self.assertEqual(sim.population_configurations, pop_configs)
-            self.assertEqual(sim.sample_size, sample_size)
+            self.assertEqual(len(sim.samples), sample_size)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(len(ll_sim.get_population_configuration()), N)
         # The default is a single population
@@ -2188,7 +2027,7 @@ class TestSimulatorFactory(unittest.TestCase):
                 ValueError, msprime.simulator_factory, population_configurations=configs)
             configs = [msprime.PopulationConfiguration(2) for _ in range(d)]
             sim = msprime.simulator_factory(population_configurations=configs)
-            self.assertEqual(sim.sample_size, 2 * d)
+            self.assertEqual(len(sim.samples), 2 * d)
             samples = []
             for j in range(d):
                 samples += [msprime.Sample(population=j, time=0) for _ in range(2)]
@@ -2430,37 +2269,23 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 0)
 
-    def test_mutation_generator(self):
-        n = 10
-        rng = msprime.RandomGenerator(1)
-        mutgen = msprime.MutationGenerator(rng, 10)
-        ts = msprime.simulate(n, mutation_generator=mutgen)
-        self.assertIsInstance(ts, msprime.TreeSequence)
-        self.assertEqual(ts.get_sample_size(), n)
-        self.assertEqual(ts.get_num_trees(), 1)
-        self.assertGreater(ts.get_num_mutations(), 0)
+    def test_no_mutations_with_start_time(self):
+        with self.assertRaises(ValueError):
+            msprime.simulate(10, mutation_rate=10, start_time=3)
+        # But fine if we set start_time = None
+        ts = msprime.simulate(10, mutation_rate=10, start_time=None, random_seed=1)
+        self.assertGreater(ts.num_sites, 0)
 
-    @unittest.skipIf(
-        sys.version_info[:2] < (3, 4), "Warnings work differently in Py <= 3.3")
-    def test_mutation_generator_deprecated(self):
+    def test_mutation_generator_unsupported(self):
         n = 10
-        rng = msprime.RandomGenerator(1)
-        mutgen = msprime.MutationGenerator(rng, 10)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
+        with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[-1].category, DeprecationWarning))
-            self.assertIn("deprecated", str(w[-1].message))
 
     def test_mutation_interface(self):
         for bad_type in ["x", [], {}]:
             self.assertRaises(
                 TypeError, msprime.simulate, 10, mutation_rate=bad_type)
-        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
-        self.assertRaises(
-            ValueError, msprime.simulate, 10, mutation_generator=mutgen,
-            mutation_rate=1)
 
     def test_recombination(self):
         n = 10

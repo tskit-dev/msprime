@@ -130,14 +130,15 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    msp_t *sim;
-    RandomGenerator *random_generator;
-} Simulator;
+    recomb_map_t *recomb_map;
+} RecombinationMap;
 
 typedef struct {
     PyObject_HEAD
-    recomb_map_t *recomb_map;
-} RecombinationMap;
+    msp_t *sim;
+    RecombinationMap *recombination_map;
+    RandomGenerator *random_generator;
+} Simulator;
 
 typedef struct {
     PyObject_HEAD
@@ -5418,6 +5419,37 @@ out:
 }
 
 static PyObject *
+RecombinationMap_physical_to_discrete_genetic(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double physical_x, sequence_length;
+    int err;
+    uint32_t locus;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
+        goto out;
+    }
+    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
+    if (physical_x < 0 || physical_x > sequence_length) {
+        PyErr_SetString(PyExc_ValueError,
+            "coordinates must be 0 <= x <= sequence_length");
+        goto out;
+    }
+    err = recomb_map_phys_to_discrete_genetic(self->recomb_map, physical_x, &locus);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("k", (unsigned long) locus);
+out:
+    return ret;
+}
+
+
+static PyObject *
 RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -5543,6 +5575,9 @@ static PyMethodDef RecombinationMap_methods[] = {
         METH_VARARGS, "Converts the specified value into physical coordinates."},
     {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
         METH_VARARGS, "Converts the specified value into genetic coordinates."},
+    {"physical_to_discrete_genetic",
+        (PyCFunction) RecombinationMap_physical_to_discrete_genetic,
+        METH_VARARGS, "Converts the specified value into discete genetic coordinates."},
     {"get_total_recombination_rate",
         (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},
@@ -8650,6 +8685,7 @@ Simulator_dealloc(Simulator* self)
         self->sim = NULL;
     }
     Py_XDECREF(self->random_generator);
+    Py_XDECREF(self->recombination_map);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -8658,61 +8694,75 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {"samples", "random_generator",
-        "num_loci", "recombination_rate",
+    static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
-        "model", "max_memory", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "node_block_size", "edge_block_size",
-        "migration_block_size", "store_migrations", NULL};
+        "model", "from_ts", "avl_node_block_size", "segment_block_size",
+        "node_mapping_block_size", "store_migrations", "start_time", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
     PyObject *py_model = NULL;
+    PyObject *py_from_ts = Py_None;
     RandomGenerator *random_generator = NULL;
+    RecombinationMap *recombination_map = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t num_samples = 2;
-    unsigned long num_loci = 1;
-    double recombination_rate = 0.0;
-    Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
-    Py_ssize_t node_block_size = 10;
-    Py_ssize_t edge_block_size = 10;
-    Py_ssize_t migration_block_size = 10;
+    tree_sequence_t *from_ts = NULL;
     int store_migrations = 0;
+    double start_time = 0;
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnnni", kwlist,
+    self->recombination_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!Onnnid", kwlist,
             &PyList_Type, &py_samples,
+            &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
-            &num_loci, &recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
-            &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &node_block_size, &edge_block_size,
-            &migration_block_size, &store_migrations)) {
+            &py_from_ts, &avl_node_block_size, &segment_block_size,
+            &node_mapping_block_size, &store_migrations, &start_time)) {
         goto out;
     }
     self->random_generator = random_generator;
+    self->recombination_map = recombination_map;
     Py_INCREF(self->random_generator);
+    Py_INCREF(self->recombination_map);
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
     if (parse_samples(py_samples, &num_samples, &samples) != 0) {
         goto out;
     }
+    if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
+        goto out;
+    }
+    if (py_from_ts != Py_None) {
+        if (!PyObject_TypeCheck(py_from_ts, &TreeSequenceType)) {
+            goto out;
+        }
+        if (TreeSequence_check_tree_sequence((TreeSequence *) py_from_ts) != 0) {
+            goto out;
+        }
+        /* Note that we take a copy of the from_ts in simulate at the moment,
+         * so we don't need to worry about INCREF'ing the Python object. */
+        from_ts = ((TreeSequence *) py_from_ts)->tree_sequence;
+    }
+
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
+            recombination_map->recomb_map, from_ts,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -8723,22 +8773,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    sim_ret = msp_set_start_time(self->sim, start_time);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_num_loci(self->sim, (size_t) num_loci);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_recombination_rate(self->sim, recombination_rate);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_max_memory(self->sim, (size_t) max_memory);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -8757,22 +8797,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     sim_ret = msp_set_node_mapping_block_size(self->sim,
             (size_t) node_mapping_block_size);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_node_block_size(self->sim, (size_t) node_block_size);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_edge_block_size(self->sim, (size_t) edge_block_size);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_migration_block_size(self->sim,
-            (size_t) migration_block_size);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -8965,18 +8989,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_max_memory(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", self->sim->max_memory);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_segment_block_size(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -9011,44 +9023,6 @@ Simulator_get_node_mapping_block_size(Simulator  *self)
 out:
     return ret;
 }
-
-static PyObject *
-Simulator_get_edge_block_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->edge_block_size);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_node_block_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->node_block_size);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_migration_block_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) self->sim->migration_block_size);
-out:
-    return ret;
-}
-
 
 static PyObject *
 Simulator_get_time(Simulator  *self)
@@ -9192,56 +9166,6 @@ Simulator_get_num_segment_blocks(Simulator  *self)
 out:
     return ret;
 }
-
-static PyObject *
-Simulator_get_num_edge_blocks(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_edge_blocks(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_node_blocks(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_node_blocks(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_migration_blocks(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) msp_get_num_migration_blocks(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_used_memory(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_used_memory(self->sim));
-out:
-    return ret;
-}
-
 
 static PyObject *
 Simulator_get_num_breakpoints(Simulator  *self)
@@ -9433,38 +9357,41 @@ out:
     return ret;
 }
 
+/* TODO these get_edge/nodes/migration methods are no longer necessary
+ * once we have an direct reference to the underlying tables. They're
+ * only used for testing, so remove and update the tests to work from the
+ * tables instead.
+ */
 static PyObject *
 Simulator_get_edges(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
-    PyObject *py_cr = NULL;
-    edge_t *edges = NULL;
-    edge_t *cr;
+    PyObject *py_edge = NULL;
+    edge_table_t *edges = NULL;
+    edge_t edge;
     size_t num_edges, j;
-    int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_edges = msp_get_num_edges(self->sim);
-    err = msp_get_edges(self->sim, &edges);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    edges = self->sim->tables.edges;
     l = PyList_New(num_edges);
     if (l == NULL) {
         goto out;
     }
     for (j = 0; j < num_edges; j++) {
-        cr = &edges[j];
-        py_cr = make_edge(cr);
-        if (py_cr == NULL) {
+        edge.left = edges->left[j];
+        edge.right = edges->right[j];
+        edge.parent = edges->parent[j];
+        edge.child = edges->child[j];
+        py_edge = make_edge(&edge);
+        if (py_edge == NULL) {
             Py_DECREF(l);
             goto out;
         }
-        PyList_SET_ITEM(l, j, py_cr);
+        PyList_SET_ITEM(l, j, py_edge);
     }
     ret = l;
 out:
@@ -9476,31 +9403,32 @@ Simulator_get_nodes(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
-    PyObject *py_cr = NULL;
-    node_t *nodes = NULL;
+    PyObject *py_node = NULL;
+    node_table_t *nodes;
+    node_t node;
     size_t num_nodes, j;
-    int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_nodes = msp_get_num_nodes(self->sim);
-    err = msp_get_nodes(self->sim, &nodes);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    nodes = self->sim->tables.nodes;
     l = PyList_New(num_nodes);
     if (l == NULL) {
         goto out;
     }
     for (j = 0; j < num_nodes; j++) {
-        py_cr = make_node(&nodes[j]);
-        if (py_cr == NULL) {
+        node.flags = nodes->flags[j];
+        node.time = nodes->time[j];
+        node.population = nodes->population[j];
+        node.individual = nodes->individual[j];
+        node.metadata_length = 0;
+        py_node = make_node(&node);
+        if (py_node == NULL) {
             Py_DECREF(l);
             goto out;
         }
-        PyList_SET_ITEM(l, j, py_cr);
+        PyList_SET_ITEM(l, j, py_node);
     }
     ret = l;
 out:
@@ -9513,27 +9441,27 @@ Simulator_get_migrations(Simulator *self)
     PyObject *ret = NULL;
     PyObject *l = NULL;
     PyObject *py_mr = NULL;
-    migration_t *migrations = NULL;
-    migration_t *mr;
+    migration_table_t *migrations = NULL;
+    migration_t mr;
     size_t num_migrations, j;
-    int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_migrations = msp_get_num_migrations(self->sim);
-    err = msp_get_migrations(self->sim, &migrations);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    migrations = self->sim->tables.migrations;
     l = PyList_New(num_migrations);
     if (l == NULL) {
         goto out;
     }
     for (j = 0; j < num_migrations; j++) {
-        mr = &migrations[j];
-        py_mr = make_migration(mr);
+        mr.left = migrations->left[j];
+        mr.right = migrations->right[j];
+        mr.node = migrations->node[j];
+        mr.source = migrations->source[j];
+        mr.dest = migrations->dest[j];
+        mr.time = migrations->time[j];
+        py_mr = make_migration(&mr);
         if (py_mr == NULL) {
             Py_DECREF(l);
             goto out;
@@ -9692,25 +9620,16 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
     int err;
     PyObject *ret = NULL;
     TableCollection *tables = NULL;
-    RecombinationMap *recombination_map = NULL;
-    recomb_map_t *recomb_map = NULL;
-    static char *kwlist[] = {"tables", "recombination_map", NULL};
+    static char *kwlist[] = {"tables", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
-            &TableCollectionType, &tables,
-            &RecombinationMapType, &recombination_map)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (recombination_map != NULL) {
-        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
-            goto out;
-        }
-        recomb_map = recombination_map->recomb_map;
-    }
-    err = msp_populate_tables(self->sim, recomb_map, tables->tables);
+    err = msp_populate_tables(self->sim, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -9801,8 +9720,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the recombination rate." },
-    {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
-            "Returns the maximum memory used by the simulator" },
     {"get_segment_block_size",
             (PyCFunction) Simulator_get_segment_block_size, METH_NOARGS,
             "Returns segment block size." },
@@ -9812,15 +9729,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_node_mapping_block_size",
             (PyCFunction) Simulator_get_node_mapping_block_size, METH_NOARGS,
             "Returns node_mapping block size" },
-    {"get_node_block_size",
-            (PyCFunction) Simulator_get_node_block_size,
-            METH_NOARGS, "Returns the coalescent record block size" },
-    {"get_edge_block_size",
-            (PyCFunction) Simulator_get_edge_block_size,
-            METH_NOARGS, "Returns the coalescent record block size" },
-    {"get_migration_block_size",
-            (PyCFunction) Simulator_get_migration_block_size,
-            METH_NOARGS, "Returns the migration record block size" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
@@ -9851,15 +9759,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_segment_blocks",
             (PyCFunction) Simulator_get_num_segment_blocks, METH_NOARGS,
             "Returns the number of segment memory blocks"},
-    {"get_num_node_blocks",
-            (PyCFunction) Simulator_get_num_node_blocks, METH_NOARGS,
-            "Returns the number of coalescence record memory blocks"},
-    {"get_num_edge_blocks",
-            (PyCFunction) Simulator_get_num_edge_blocks, METH_NOARGS,
-            "Returns the number of coalescence record memory blocks"},
-    {"get_num_migration_blocks",
-            (PyCFunction) Simulator_get_num_migration_blocks, METH_NOARGS,
-            "Returns the number of coalescence record memory blocks"},
     {"get_num_breakpoints", (PyCFunction) Simulator_get_num_breakpoints,
             METH_NOARGS, "Returns the number of recombination breakpoints" },
     {"get_num_nodes",
@@ -9871,8 +9770,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_migrations",
             (PyCFunction) Simulator_get_num_migrations,
             METH_NOARGS, "Returns the number of migration records" },
-    {"get_used_memory", (PyCFunction) Simulator_get_used_memory,
-            METH_NOARGS, "Returns the approximate amount of memory used." },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_breakpoints", (PyCFunction) Simulator_get_breakpoints,

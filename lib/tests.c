@@ -1534,16 +1534,17 @@ get_example_tree_sequence(uint32_t num_samples,
 
     ret = mutgen_alloc(mutgen, mutation_rate, rng, alphabet, 10);
     CU_ASSERT_EQUAL(ret, 0);
+    rates[0] = recombination_rate;
+    positions[1] = sequence_length;
+    ret = recomb_map_alloc(recomb_map, num_loci, sequence_length,
+            positions, rates, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* initialise the samples to zero for the default configuration */
     memset(samples, 0, num_samples * sizeof(sample_t));
     for (j = 0; j < num_historical_samples; j++) {
         samples[j].time = 0.1 * (j + 1);
     }
-    ret = msp_alloc(msp, num_samples, samples, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_num_loci(msp, num_loci);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_recombination_rate(msp, recombination_rate);
+    ret = msp_alloc(msp, num_samples, samples, recomb_map, NULL, rng);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
         if (bottlenecks[j].type == SIMPLE_BOTTLENECK) {
@@ -1570,16 +1571,7 @@ get_example_tree_sequence(uint32_t num_samples,
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    rates[0] = recombination_rate;
-    positions[1] = sequence_length;
-    ret = recomb_map_alloc(recomb_map, num_loci, sequence_length,
-            positions, rates, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* Create the tree_sequence from the state of the simulator.
-     * We want to use coalescent time here, so use an Ne of 1/4
-     * to cancel scaling factor. */
-    ret = msp_populate_tables(msp, recomb_map, &tables);
+    ret = msp_populate_tables(msp, &tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sequence_length, sequence_length);
     ret = mutgen_generate(mutgen, &tables, 0);

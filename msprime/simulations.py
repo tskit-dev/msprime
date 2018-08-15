@@ -28,11 +28,11 @@ import json
 import math
 import random
 import sys
-import warnings
 
 import _msprime
 import msprime.tables as _tables
 import msprime.provenance as provenance
+import msprime.trees as trees
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
@@ -71,7 +71,8 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def _replicate_generator(sim, mutation_generator, num_replicates, provenance_dict):
+def _replicate_generator(
+        sim, mutation_generator, num_replicates, provenance_dict, max_time):
     """
     Generator function for the many-replicates case of the simulate
     function.
@@ -86,7 +87,7 @@ def _replicate_generator(sim, mutation_generator, num_replicates, provenance_dic
     j = 0
     while j < num_replicates:
         j += 1
-        sim.run()
+        sim.run(max_time)
         tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
         yield tree_sequence
         sim.reset()
@@ -104,7 +105,9 @@ def simulator_factory(
         samples=None,
         demographic_events=[],
         model=None,
-        record_migrations=False):
+        record_migrations=False,
+        from_ts=None,
+        start_time=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -112,11 +115,13 @@ def simulator_factory(
     condition = (
         sample_size is None and
         population_configurations is None and
-        samples is None)
+        samples is None and
+        from_ts is None)
     if condition:
         raise ValueError(
-            "Either sample_size, population_configurations or samples "
+            "Either sample_size, population_configurations, samples or from_ts must "
             "be specified")
+    the_samples = None
     if sample_size is not None:
         if samples is not None:
             raise ValueError(
@@ -146,8 +151,29 @@ def simulator_factory(
     elif samples is not None:
         the_samples = samples
 
+    if from_ts is not None:
+        if start_time is None:
+            raise ValueError("Must specify start_time when using from_ts argument")
+        if not isinstance(from_ts, trees.TreeSequence):
+            raise TypeError("from_ts must be a TreeSequence instance.")
+        population_mismatch_message = (
+            "Mismatch in the number of populations in from_ts and simulation "
+            "parameters. The number of populations in the simulation must be "
+            "equal to the number of populations in from_ts")
+        if population_configurations is None:
+            if from_ts.num_populations != 1:
+                raise ValueError(population_mismatch_message)
+        else:
+            if from_ts.num_populations != len(population_configurations):
+                raise ValueError(population_mismatch_message)
+
     if recombination_map is None:
-        the_length = 1 if length is None else length
+        # Default to 1 if no from_ts; otherwise default to the sequence length
+        # of from_ts
+        if from_ts is None:
+            the_length = 1 if length is None else length
+        else:
+            the_length = from_ts.sequence_length if length is None else length
         the_rate = 0 if recombination_rate is None else recombination_rate
         if the_length <= 0:
             raise ValueError("Cannot provide non-positive sequence length")
@@ -161,8 +187,15 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
-    sim = Simulator(the_samples, recomb_map, model, Ne)
+    if from_ts is not None:
+        if from_ts.sequence_length != recomb_map.get_length():
+            raise ValueError(
+                "The simulated sequence length must be the same as "
+                "from_ts.sequence_length")
+
+    sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
+    sim.start_time = start_time
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -191,7 +224,17 @@ def simulate(
         record_migrations=False,
         random_seed=None,
         mutation_generator=None,
-        num_replicates=None):
+        num_replicates=None,
+        from_ts=None,
+        start_time=None,
+        # Note max_time is not documented here because it does not currently have
+        # exactly the semantics that we want as it doesn't guarantee that the
+        # times of nodes returned are < max_time. However, it's useful for
+        # testing, so we keep it. We call it __tmp_max_time just to make sure
+        # it's not used accidentially though.
+        # TODO also, when implementing rename to end_time. See
+        # https://github.com/tskit-dev/msprime/issues/564
+        __tmp_max_time=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`.TreeSequence`. Note that
@@ -260,6 +303,8 @@ def simulate(
         returned. If :obj:`num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`.TreeSequence` objects returned.
+    :param .TreeSequence from_ts: TODO document.
+    :param float start_time: TODO document.
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -277,52 +322,82 @@ def simulate(
     # To support numpy integer inputs here too we convert to integer.
     rng = RandomGenerator(int(seed))
     sim = simulator_factory(
-        sample_size=sample_size, random_generator=rng,
-        Ne=Ne, length=length,
+        sample_size=sample_size,
+        random_generator=rng,
+        Ne=Ne,
+        length=length,
         recombination_rate=recombination_rate,
         recombination_map=recombination_map,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
-        samples=samples, model=model, record_migrations=record_migrations)
+        samples=samples,
+        model=model,
+        record_migrations=record_migrations,
+        from_ts=from_ts,
+        start_time=start_time)
     # The provenance API is very tentative, and only included now as a
     # pre-alpha feature.
     parameters = {"TODO": "encode simulation parameters"}
     provenance_dict = provenance.get_provenance_dict("simulate", parameters)
-    if mutation_generator is None:
-        mu = 0 if mutation_rate is None else mutation_rate
-        mutation_generator = MutationGenerator(rng, mu)
-    else:
-        warnings.warn(
-            "Specifying a MutationGenerator instance is deprecated and will be "
-            "removed in future versions. Use msprime.mutate() instead",
-            DeprecationWarning)
-        if mutation_rate is not None:
+    if mutation_generator is not None:
+        # This error was added in version 0.6.1.
+        raise ValueError(
+            "mutation_generator is not longer supported. Please use "
+            "msprime.mutate instead")
+
+    if mutation_rate is not None:
+        # There is ambiguity in how we should throw mutations onto partially
+        # built tree sequences: on the whole thing, or must the newly added
+        # topology? Before or after start_time? We avoid this complexity by
+        # asking the user to use mutate(), which should have the required
+        # flexibility.
+        if from_ts is not None:
             raise ValueError(
-                "Cannot specify both mutation_rate and mutation_generator")
+                "Cannot specify mutation rate combined with from_ts. Please use "
+                "msprime.mutate on the final tree sequence instead")
+        # There is ambiguity in how the start_time argument should interact with
+        # the mutation generator: should we throw mutations down on the whole
+        # tree or just the (partial) edges after start_time? To avoid complicating
+        # things here, make the user use mutate() which should have the flexibility
+        # to do whatever is needed.
+        if start_time is not None and start_time > 0:
+            raise ValueError(
+                "Cannot specify mutation rate combined with a non-zero "
+                "start_time. Please use msprime.mutate on the returned "
+                "tree sequence instead")
+        mutation_generator = MutationGenerator(rng, mutation_rate)
     if num_replicates is None:
-        return next(_replicate_generator(sim, mutation_generator, 1, provenance_dict))
+        return next(_replicate_generator(
+            sim, mutation_generator, 1, provenance_dict, __tmp_max_time))
     else:
         return _replicate_generator(
-            sim, mutation_generator, num_replicates, provenance_dict)
+            sim, mutation_generator, num_replicates, provenance_dict, __tmp_max_time)
 
 
 class Simulator(object):
     """
     Class to simulate trees under a variety of population models.
     """
-    def __init__(self, samples, recombination_map, model="hudson", Ne=0.25):
-        if len(samples) < 2:
-            raise ValueError("Sample size must be >= 2")
-        if len(samples) >= 2**32:
-            raise ValueError("sample_size must be < 2**32")
-        self.sample_size = len(samples)
-        self.samples = samples
+    def __init__(
+            self, samples, recombination_map, model="hudson", Ne=0.25, from_ts=None):
+        if from_ts is None:
+            if len(samples) < 2:
+                raise ValueError("Sample size must be >= 2")
+            if len(samples) >= 2**32:
+                raise ValueError("sample_size must be < 2**32")
+            self.samples = samples
+        else:
+            if samples is not None and len(samples) > 0:
+                raise ValueError("Cannot specify samples with from_ts")
+            self.samples = []
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self.ll_sim = None
         self.set_model(model, Ne)
         self.recombination_map = recombination_map
+        self.from_ts = from_ts
+        self.start_time = None
         self.random_generator = None
         self.population_configurations = [
             PopulationConfiguration(initial_size=self.model.population_size)]
@@ -332,17 +407,17 @@ class Simulator(object):
         self.store_migrations = False
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
+        num_samples = (
+            len(self.samples) if self.samples is not None else from_ts.num_samples)
         block_size = 64 * 1024
-        self.segment_block_size = max(block_size, self.sample_size)
+        self.segment_block_size = max(block_size, num_samples)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
-        self.node_block_size = block_size
-        self.edge_block_size = block_size
-        self.migration_block_size = block_size
-        # TODO is it useful to bring back the API to set this? Mostly
-        # the amount of memory required is tiny.
-        self.max_memory = sys.maxsize
         self.tables = _tables.TableCollection()
+        self.num_input_provenances = 0
+        if self.from_ts is not None:
+            self.num_input_provenances = self.from_ts.num_provenances
+        self.max_time = None
 
     @property
     def num_loci(self):
@@ -367,24 +442,12 @@ class Simulator(object):
             for x in self.ll_sim.get_breakpoints()]
 
     @property
-    def used_memory(self):
-        return self.ll_sim.get_used_memory()
-
-    @property
     def time(self):
         return self.ll_sim.get_time()
 
     @property
     def num_avl_node_blocks(self):
         return self.ll_sim.get_num_avl_node_blocks()
-
-    @property
-    def num_node_blocks(self):
-        return self.ll_sim.get_num_node_blocks()
-
-    @property
-    def num_edge_blocks(self):
-        return self.ll_sim.get_num_edge_blocks()
 
     @property
     def num_node_mapping_blocks(self):
@@ -528,27 +591,28 @@ class Simulator(object):
             conf.get_ll_representation() for conf in self.population_configurations]
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
-        ll_recomb_rate = self.recombination_map.get_per_locus_recombination_rate()
+        ll_recomb_map = self.recombination_map.get_ll_recombination_map()
+        ll_from_ts = None
+        if self.from_ts is not None:
+            ll_from_ts = self.from_ts.get_ll_tree_sequence()
+        start_time = 0 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
+            recombination_map=ll_recomb_map,
+            from_ts=ll_from_ts,
+            start_time=start_time,
             random_generator=self.random_generator,
             model=ll_simulation_model,
-            num_loci=self.recombination_map.get_num_loci(),
-            recombination_rate=ll_recomb_rate,
             migration_matrix=ll_migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             store_migrations=self.store_migrations,
-            max_memory=self.max_memory,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
-            node_mapping_block_size=self.node_mapping_block_size,
-            node_block_size=self.node_block_size,
-            edge_block_size=self.edge_block_size,
-            migration_block_size=self.migration_block_size)
+            node_mapping_block_size=self.node_mapping_block_size)
         return ll_sim
 
-    def run(self):
+    def run(self, max_time=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -558,18 +622,21 @@ class Simulator(object):
         for event in self.model_change_events:
             self.ll_sim.run(event.time)
             self.ll_sim.set_model(event.model.get_ll_representation())
-        self.ll_sim.run()
+        max_time = sys.float_info.max if max_time is None else max_time
+        self.ll_sim.run(max_time)
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        self.ll_sim.populate_tables(
-            self.tables.ll_tables, recombination_map=ll_recomb_map)
+        # TODO it's a waste of time copying the tables from the simulation
+        # into the local table here. We should just work directly with the
+        # tables held in the simulator. To do this we need an interface
+        # to the simulators tables.
+        self.ll_sim.populate_tables(self.tables.ll_tables)
         if mutation_generator is not None:
             mutation_generator.generate(self.tables.ll_tables)
-        self.tables.provenances.clear()
+        self.tables.provenances.truncate(self.num_input_provenances)
         if provenance_record is not None:
             self.tables.provenances.add_row(provenance_record)
         return self.tables.tree_sequence()
@@ -619,11 +686,10 @@ class RecombinationMap(object):
     The default number of non-recombining loci in a RecombinationMap.
     """
     def __init__(self, positions, rates, num_loci=None):
-        m = self.DEFAULT_NUM_LOCI
-        if num_loci is not None:
-            m = num_loci
+        if num_loci is None:
+            num_loci = self.DEFAULT_NUM_LOCI
         self._ll_recombination_map = _msprime.RecombinationMap(
-            m, positions, rates)
+            num_loci, positions, rates)
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None):
@@ -698,6 +764,9 @@ class RecombinationMap(object):
 
     def physical_to_genetic(self, physical_x):
         return self._ll_recombination_map.physical_to_genetic(physical_x)
+
+    def physical_to_discrete_genetic(self, physical_x):
+        return self._ll_recombination_map.physical_to_discrete_genetic(physical_x)
 
     def genetic_to_physical(self, genetic_x):
         return self._ll_recombination_map.genetic_to_physical(genetic_x)

@@ -170,7 +170,7 @@ def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
         individual[nodes] = ind_id
         j += ploidy
     tables.nodes.individual = individual
-    return msprime.load_tables(**tables.asdict())
+    return tables.tree_sequence()
 
 
 def permute_nodes(ts, node_map):

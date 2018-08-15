@@ -632,6 +632,152 @@ class SimulationVerifier(object):
         pyplot.savefig(filename)
         pyplot.close('all')
 
+    def run_simulate_from_single_locus(self):
+        num_replicates = 1000
+
+        basedir = "tmp__NOBACKUP__/simulate_from_single_locus"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        for n in [10, 50, 100, 200]:
+            print("running for n =", n)
+            T1 = np.zeros(num_replicates)
+            reps = msprime.simulate(n, num_replicates=num_replicates)
+            for j, ts in enumerate(reps):
+                T1[j] = np.max(ts.tables.nodes.time)
+
+            for t in [0.5, 1, 1.5, 5]:
+                T2 = np.zeros(num_replicates)
+                reps = msprime.simulate(
+                    n, num_replicates=num_replicates, __tmp_max_time=t)
+                for j, ts in enumerate(reps):
+                    final_ts = msprime.simulate(
+                        from_ts=ts, start_time=np.max(ts.tables.nodes.time))
+                    T2[j] = np.max(final_ts.tables.nodes.time)
+
+                sm.graphics.qqplot(T1)
+                sm.qqplot_2samples(T1, T2, line="45")
+                filename = os.path.join(basedir, "T_mrca_n={}_t={}.png".format(n, t))
+                pyplot.savefig(filename, dpi=72)
+                pyplot.close('all')
+
+    def run_simulate_from_multi_locus(self):
+        num_replicates = 1000
+        n = 100
+
+        basedir = "tmp__NOBACKUP__/simulate_from_multi_locus"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        for m in [10, 50, 100, 1000]:
+            print("running for m =", m)
+            T1 = np.zeros(num_replicates)
+            num_trees1 = np.zeros(num_replicates)
+            recomb_map = msprime.RecombinationMap.uniform_map(1, 1, num_loci=m)
+            reps = msprime.simulate(
+                n, recombination_map=recomb_map, num_replicates=num_replicates)
+            for j, ts in enumerate(reps):
+                T1[j] = np.max(ts.tables.nodes.time)
+                num_trees1[j] = ts.num_trees
+
+            for t in [0.5, 1, 1.5, 5]:
+                T2 = np.zeros(num_replicates)
+                num_trees2 = np.zeros(num_replicates)
+                reps = msprime.simulate(
+                    n, num_replicates=num_replicates,
+                    recombination_map=recomb_map, __tmp_max_time=t)
+                for j, ts in enumerate(reps):
+                    final_ts = msprime.simulate(
+                        from_ts=ts,
+                        recombination_map=recomb_map,
+                        start_time=np.max(ts.tables.nodes.time))
+                    T2[j] = np.max(final_ts.tables.nodes.time)
+                    num_trees2[j] = final_ts.num_trees
+
+                sm.graphics.qqplot(T1)
+                sm.qqplot_2samples(T1, T2, line="45")
+                filename = os.path.join(basedir, "T_mrca_m={}_t={}.png".format(m, t))
+                pyplot.savefig(filename, dpi=72)
+                pyplot.close('all')
+
+                sm.graphics.qqplot(num_trees1)
+                sm.qqplot_2samples(num_trees1, num_trees2, line="45")
+                filename = os.path.join(basedir, "num_trees_m={}_t={}.png".format(m, t))
+                pyplot.savefig(filename, dpi=72)
+                pyplot.close('all')
+
+    def run_simulate_from_recombination(self):
+        num_replicates = 1000
+        n = 10
+        recombination_rate = 10
+
+        basedir = "tmp__NOBACKUP__/simulate_from_recombination"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        T1 = np.zeros(num_replicates)
+        num_trees1 = np.zeros(num_replicates)
+        num_edges1 = np.zeros(num_replicates)
+        num_nodes1 = np.zeros(num_replicates)
+        reps = msprime.simulate(
+            n, recombination_rate=recombination_rate, num_replicates=num_replicates)
+        for j, ts in enumerate(reps):
+            T1[j] = np.max(ts.tables.nodes.time)
+            num_trees1[j] = ts.num_trees
+            num_nodes1[j] = ts.num_nodes
+            num_edges1[j] = ts.num_edges
+
+        print(
+            "original\tmean trees = ", np.mean(num_trees1),
+            "\tmean nodes = ", np.mean(num_nodes1),
+            "\tmean edges = ", np.mean(num_edges1))
+
+        for t in [0.5, 1.0, 1.5, 5.0]:
+            T2 = np.zeros(num_replicates)
+            num_trees2 = np.zeros(num_replicates)
+            num_nodes2 = np.zeros(num_replicates)
+            num_edges2 = np.zeros(num_replicates)
+            reps = msprime.simulate(
+                n, num_replicates=num_replicates,
+                recombination_rate=recombination_rate, __tmp_max_time=t)
+            for j, ts in enumerate(reps):
+                final_ts = msprime.simulate(
+                    from_ts=ts,
+                    recombination_rate=recombination_rate,
+                    start_time=np.max(ts.tables.nodes.time))
+                assert max(t.num_roots for t in final_ts.trees()) == 1
+                T2[j] = np.max(final_ts.tables.nodes.time)
+                num_trees2[j] = final_ts.num_trees
+                num_nodes2[j] = final_ts.num_nodes
+                num_edges2[j] = final_ts.num_edges
+            print(
+                "t = ", t, "\tmean trees = ", np.mean(num_trees2),
+                "\tmean nodes = ", np.mean(num_nodes2),
+                "\tmean edges = ", np.mean(num_edges2))
+
+            sm.graphics.qqplot(T1)
+            sm.qqplot_2samples(T1, T2, line="45")
+            filename = os.path.join(basedir, "T_mrca_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_trees1)
+            sm.qqplot_2samples(num_trees1, num_trees2, line="45")
+            filename = os.path.join(basedir, "num_trees_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_edges1)
+            sm.qqplot_2samples(num_edges1, num_edges2, line="45")
+            filename = os.path.join(basedir, "num_edges_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_nodes1)
+            sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
+            filename = os.path.join(basedir, "num_nodes_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
 
     def run_dtwf_coalescent_comparison(self, test_name, **kwargs):
         df = pd.DataFrame()
@@ -828,6 +974,30 @@ class SimulationVerifier(object):
         coalescence in the smc using scrm.
         """
         self._instances["smc_oldest_time"] = self.run_smc_oldest_time
+
+    def add_simulate_from_single_locus_check(self):
+        """
+        Check that the distributions are identitical when we run simulate_from
+        at various time points.
+        """
+        self._instances[
+            "simulate_from_single_locus"] = self.run_simulate_from_single_locus
+
+    def add_simulate_from_multi_locus_check(self):
+        """
+        Check that the distributions are identitical when we run simulate_from
+        at various time points.
+        """
+        self._instances[
+            "simulate_from_multi_locus"] = self.run_simulate_from_multi_locus
+
+    def add_simulate_from_recombination_check(self):
+        """
+        Check that the distributions are identitical when we run simulate_from
+        at various time points.
+        """
+        self._instances[
+            "simulate_from_recombination"] = self.run_simulate_from_recombination
 
     def add_random_instance(
             self, key, num_populations=1, num_replicates=1000,
@@ -1034,6 +1204,11 @@ def main():
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()
     verifier.add_cli_num_trees_analytical_check()
+
+    # Simulate-from checks.
+    verifier.add_simulate_from_single_locus_check()
+    verifier.add_simulate_from_multi_locus_check()
+    verifier.add_simulate_from_recombination_check()
 
     # Add SMC checks against scrm.
     verifier.add_smc_num_trees_analytical_check()
