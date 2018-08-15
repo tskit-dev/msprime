@@ -6129,6 +6129,19 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_file_uuid(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("s", tree_sequence_get_file_uuid(self->tree_sequence));
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_num_samples(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -6386,6 +6399,8 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
+    {"get_file_uuid", (PyCFunction) TreeSequence_get_file_uuid,
+        METH_NOARGS, "Returns the UUID of the underlying file, if present." },
     {"get_num_sites", (PyCFunction) TreeSequence_get_num_sites,
         METH_NOARGS, "Returns the number of sites" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,

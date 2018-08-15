@@ -1774,6 +1774,10 @@ class TreeSequence(object):
         return self.num_samples
 
     @property
+    def file_uuid(self):
+        return self._ll_tree_sequence.get_file_uuid()
+
+    @property
     def sequence_length(self):
         """
         Returns the sequence length in this tree sequence. This defines the

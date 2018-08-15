@@ -43,6 +43,7 @@ import tempfile
 import unittest
 import warnings
 import multiprocessing
+import uuid as _uuid
 
 import numpy as np
 
@@ -576,6 +577,7 @@ class TestSimulator(HighLevelTestCase):
         """
         tree_sequence.dump(self.temp_file)
         other = msprime.load(self.temp_file)
+        self.assertIsNotNone(other.file_uuid)
         records = list(tree_sequence.edges())
         other_records = list(other.edges())
         self.assertEqual(records, other_records)
@@ -1565,6 +1567,58 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(tables.sequence_length, sequence_length)
             new_ts = tables.tree_sequence()
             self.assertEqual(new_ts.sequence_length, sequence_length)
+
+
+class TestFileUuid(HighLevelTestCase):
+    """
+    Tests that the file UUID attribute is handled correctly.
+    """
+    def validate(self, ts):
+        self.assertIsNone(ts.file_uuid)
+        ts.dump(self.temp_file)
+        other_ts = msprime.load(self.temp_file)
+        self.assertIsNotNone(other_ts.file_uuid)
+        self.assertTrue(len(other_ts.file_uuid), 36)
+        uuid = other_ts.file_uuid
+        other_ts = msprime.load(self.temp_file)
+        self.assertEqual(other_ts.file_uuid, uuid)
+        self.assertEqual(ts.tables, other_ts.tables)
+
+        # Check that the UUID is well-formed.
+        parsed = _uuid.UUID("{" + uuid + "}")
+        self.assertEqual(str(parsed), uuid)
+        print(parsed, uuid)
+
+        # Save the same tree sequence to the file. We should get a different UUID.
+        ts.dump(self.temp_file)
+        other_ts = msprime.load(self.temp_file)
+        self.assertIsNotNone(other_ts.file_uuid)
+        self.assertNotEqual(other_ts.file_uuid, uuid)
+
+        # Even saving a ts that has a UUID to another file changes the UUID
+        old_uuid = other_ts.file_uuid
+        other_ts.dump(self.temp_file)
+        self.assertEqual(other_ts.file_uuid, old_uuid)
+        other_ts = msprime.load(self.temp_file)
+        self.assertIsNotNone(other_ts.file_uuid)
+        self.assertNotEqual(other_ts.file_uuid, old_uuid)
+
+        # Tables dumped from this ts are a deep copy, so they don't have
+        # the file_uuid.
+        tables = other_ts.dump_tables()
+        self.assertIsNone(tables.file_uuid)
+
+        # For now, ts.tables also returns a deep copy. This will hopefully
+        # change in the future thoug.
+        self.assertIsNone(ts.tables.file_uuid)
+
+    def test_simple_simulation(self):
+        ts = msprime.simulate(2, random_seed=1)
+        self.validate(ts)
+
+    def test_empty_tables(self):
+        tables = msprime.TableCollection(1)
+        self.validate(tables.tree_sequence())
 
 
 class TestTreeSequenceTextIO(HighLevelTestCase):
