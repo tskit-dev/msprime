@@ -6765,12 +6765,15 @@ test_save_kas(void)
     tree_sequence_t **examples = get_example_tree_sequences(1);
     tree_sequence_t ts2;
     tree_sequence_t *ts1;
+    char *file_uuid;
     int dump_flags[] = {0};
 
     CU_ASSERT_FATAL(examples != NULL);
 
     for (j = 0; examples[j] != NULL; j++) {
         ts1 = examples[j];
+        file_uuid = tree_sequence_get_file_uuid(ts1);
+        CU_ASSERT_EQUAL_FATAL(file_uuid, NULL);
         for (k = 0; k < sizeof(dump_flags) / sizeof(int); k++) {
             ret = tree_sequence_dump(ts1, _tmp_file_name, dump_flags[k]);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -6780,6 +6783,9 @@ test_save_kas(void)
             tree_sequence_print_state(&ts2, _devnull);
             verify_hapgen(&ts2);
             verify_vargen(&ts2);
+            file_uuid = tree_sequence_get_file_uuid(&ts2);
+            CU_ASSERT_NOT_EQUAL_FATAL(file_uuid, NULL);
+            CU_ASSERT_EQUAL(strlen(file_uuid), TSK_UUID_SIZE);
             tree_sequence_free(&ts2);
         }
         tree_sequence_free(ts1);
@@ -6806,17 +6812,18 @@ test_save_kas_tables(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tree_sequence_dump_tables(ts1, &t1, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        t1.sequence_length = tree_sequence_get_sequence_length(ts1);
+        CU_ASSERT_EQUAL_FATAL(t1.file_uuid, NULL);
         for (k = 0; k < sizeof(dump_flags) / sizeof(int); k++) {
             ret = table_collection_dump(&t1, _tmp_file_name, dump_flags[k]);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-
             ret = table_collection_alloc(&t2, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = table_collection_load(&t2, _tmp_file_name, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-
             CU_ASSERT_TRUE(table_collection_equals(&t1, &t2));
+            CU_ASSERT_EQUAL_FATAL(t1.file_uuid, NULL);
+            CU_ASSERT_NOT_EQUAL_FATAL(t2.file_uuid, NULL);
+            CU_ASSERT_EQUAL(strlen(t2.file_uuid), TSK_UUID_SIZE);
             table_collection_free(&t2);
         }
         table_collection_free(&t1);

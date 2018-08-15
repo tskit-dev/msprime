@@ -1667,7 +1667,15 @@ class TestTableCollection(unittest.TestCase):
             ll_tables.edges.add_row(0, sequence_length + 1, 0, 1)
             tables = msprime.TableCollection(ll_tables=ll_tables)
             self.assertEqual(ll_tables.sequence_length, sequence_length)
-            self.assertEqual(tables.sequence_length, sequence_length)
+
+    def test_uuid_simulation(self):
+        ts = msprime.simulate(10, random_seed=1)
+        tables = ts.tables
+        self.assertIsNone(tables.file_uuid, None)
+
+    def test_uuid_empty(self):
+        tables = msprime.TableCollection(sequence_length=1)
+        self.assertIsNone(tables.file_uuid, None)
 
 
 class TestDeduplicateSites(unittest.TestCase):

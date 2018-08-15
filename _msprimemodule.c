@@ -4885,6 +4885,12 @@ TableCollection_get_sequence_length(TableCollection *self, void *closure)
 }
 
 static PyObject *
+TableCollection_get_file_uuid(TableCollection *self, void *closure)
+{
+    return Py_BuildValue("s", self->tables->file_uuid);
+}
+
+static PyObject *
 TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
 {
     int err;
@@ -5032,6 +5038,8 @@ static PyGetSetDef TableCollection_getsetters[] = {
     {"provenances", (getter) TableCollection_get_provenances, NULL, "The provenance table."},
     {"sequence_length", (getter) TableCollection_get_sequence_length, NULL,
         "The sequence length."},
+    {"file_uuid", (getter) TableCollection_get_file_uuid, NULL,
+        "The UUID of the corresponding file."},
     {NULL}  /* Sentinel */
 };
 
@@ -6121,6 +6129,19 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_file_uuid(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("s", tree_sequence_get_file_uuid(self->tree_sequence));
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_num_samples(TreeSequence  *self)
 {
     PyObject *ret = NULL;
@@ -6378,6 +6399,8 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
+    {"get_file_uuid", (PyCFunction) TreeSequence_get_file_uuid,
+        METH_NOARGS, "Returns the UUID of the underlying file, if present." },
     {"get_num_sites", (PyCFunction) TreeSequence_get_num_sites,
         METH_NOARGS, "Returns the number of sites" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,

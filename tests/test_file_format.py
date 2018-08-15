@@ -445,17 +445,19 @@ class TestDumpFormat(TestFileFormat):
         store = kastore.load(self.temp_file)
         self.assertEqual(sorted(list(store.keys())), keys)
 
-    def verify_uuid(self, uuid):
+    def verify_uuid(self, ts, uuid):
         self.assertEqual(len(uuid), 36)
         # Check that the UUID is well-formed.
         parsed = _uuid.UUID("{" + uuid + "}")
         self.assertEqual(str(parsed), uuid)
+        self.assertEqual(uuid, ts.file_uuid)
 
     def verify_dump_format(self, ts):
         ts.dump(self.temp_file)
         self.assertTrue(os.path.exists(self.temp_file))
         self.assertGreater(os.path.getsize(self.temp_file), 0)
         self.verify_keys(ts)
+
         store = kastore.load(self.temp_file, use_mmap=False)
         # Check the basic root attributes
         format_name = store['format/name']
@@ -465,7 +467,9 @@ class TestDumpFormat(TestFileFormat):
         self.assertEqual(format_version[0], CURRENT_FILE_MAJOR)
         self.assertEqual(format_version[1], 0)
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
-        self.verify_uuid(store["uuid"].tobytes().decode())
+        # Load another copy from file so we can check the uuid.
+        other_ts = msprime.load(self.temp_file)
+        self.verify_uuid(other_ts, store["uuid"].tobytes().decode())
 
         tables = ts.tables
 
