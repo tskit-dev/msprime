@@ -1562,8 +1562,8 @@ class TestTableCollection(unittest.TestCase):
         ts = msprime.simulate(10, random_seed=1)
         t = ts.tables
         self.assertEqual(
-            t.asdict(),
-            {
+            t.asdict(), {
+                # "sequence_length": t.sequence_length,
                 "individuals": t.individuals,
                 "populations": t.populations,
                 "nodes": t.nodes,
@@ -1676,6 +1676,43 @@ class TestTableCollection(unittest.TestCase):
     def test_uuid_empty(self):
         tables = msprime.TableCollection(sequence_length=1)
         self.assertIsNone(tables.file_uuid, None)
+
+
+class TestTableCollectionPickle(unittest.TestCase):
+    """
+    Tests that we can round-trip table collections through pickle.
+    """
+    def verify(self, tables):
+        other_tables = pickle.loads(pickle.dumps(tables))
+        self.assertEqual(tables, other_tables)
+
+    def test_simple_simulation(self):
+        ts = msprime.simulate(2, random_seed=1)
+        self.verify(ts.dump_tables())
+
+    def test_simulation_populations(self):
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10)],
+            migration_matrix=[[0, 1], [1, 0]],
+            record_migrations=True,
+            random_seed=1)
+        self.verify(ts.dump_tables())
+
+    def test_simulation_sites(self):
+        ts = msprime.simulate(12, random_seed=1, mutation_rate=5)
+        self.assertGreater(ts.num_sites, 1)
+        self.verify(ts.dump_tables())
+
+    def test_simulation_individuals(self):
+        ts = msprime.simulate(100, random_seed=1)
+        ts = tsutil.insert_random_ploidy_individuals(ts, seed=1)
+        self.assertGreater(ts.num_individuals, 1)
+        self.verify(ts.dump_tables())
+
+    def test_empty_tables(self):
+        self.verify(msprime.TableCollection())
 
 
 class TestDeduplicateSites(unittest.TestCase):
