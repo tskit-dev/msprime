@@ -1587,7 +1587,6 @@ class TestFileUuid(HighLevelTestCase):
         # Check that the UUID is well-formed.
         parsed = _uuid.UUID("{" + uuid + "}")
         self.assertEqual(str(parsed), uuid)
-        print(parsed, uuid)
 
         # Save the same tree sequence to the file. We should get a different UUID.
         ts.dump(self.temp_file)

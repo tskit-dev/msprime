@@ -1388,20 +1388,6 @@ def _provenance_table_pickle(table):
     return ProvenanceTable, tuple(), state
 
 
-# Pickle support for the various tables. We are forced to use copyreg.pickle
-# here to support Python 2. For Python 3, we can just use the __setstate__.
-# It would be cleaner to attach the pickle_*_table functions to the classes
-# themselves, but this causes issues with Mocking on readthedocs. Sigh.
-copyreg.pickle(IndividualTable, _pickle_individual_table)
-copyreg.pickle(NodeTable, _pickle_node_table)
-copyreg.pickle(EdgeTable, _edge_table_pickle)
-copyreg.pickle(MigrationTable, _migration_table_pickle)
-copyreg.pickle(SiteTable, _site_table_pickle)
-copyreg.pickle(MutationTable, _mutation_table_pickle)
-copyreg.pickle(PopulationTable, _population_table_pickle)
-copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
-
-
 class TableCollection(object):
     """
     A collection of mutable tables defining a tree sequence. See the
@@ -1501,13 +1487,17 @@ class TableCollection(object):
         return self.ll_tables.file_uuid
 
     def asdict(self):
+        # This function really only exists to support the older table functions
+        # like sort_tables etc, so we could say sort_tables(**tables.asdict()).
+        # This is why we don't have sequence_length in here, as we'd need to
+        # update all those functions too. However, when we get rid of them, we
+        # should update this function to include sequence_length or else remove
+        # it if it's not really useful any more.
         """
         Returns this TableCollection as a dictionary mapping the keys "nodes",
         "edges", etc to their respective table objects.
         """
         return {
-            # Leaving individuals out for now to until stuff that depends on it
-            # is implemented.
             "individuals": self.individuals,
             "nodes": self.nodes,
             "edges": self.edges,
@@ -1551,6 +1541,20 @@ class TableCollection(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    # Unpickle support
+    def __setstate__(self, state):
+        ll_tables = _msprime.TableCollection(
+            individuals=state["individuals"].ll_table,
+            nodes=state["nodes"].ll_table,
+            edges=state["edges"].ll_table,
+            migrations=state["migrations"].ll_table,
+            sites=state["sites"].ll_table,
+            mutations=state["mutations"].ll_table,
+            populations=state["populations"].ll_table,
+            provenances=state["provenances"].ll_table,
+            sequence_length=state["sequence_length"])
+        self.__init__(ll_tables=ll_tables)
 
     def tree_sequence(self):
         """
@@ -1693,6 +1697,37 @@ class TableCollection(object):
         appropriately.  This requires the site table to be sorted by position.
         """
         self.ll_tables.deduplicate_sites()
+
+
+# Pickle support. See copyreg registration for this function below.
+def _table_collection_pickle(tables):
+    state = {
+        "sequence_length": tables.sequence_length,
+        "individuals": tables.individuals,
+        "populations": tables.populations,
+        "nodes": tables.nodes,
+        "edges": tables.edges,
+        "migrations": tables.migrations,
+        "sites": tables.sites,
+        "mutations": tables.mutations,
+        "provenances": tables.provenances,
+    }
+    return TableCollection, tuple(), state
+
+
+# Pickle support for the various tables. We are forced to use copyreg.pickle
+# here to support Python 2. For Python 3, we can just use the __setstate__.
+# It would be cleaner to attach the pickle_*_table functions to the classes
+# themselves, but this causes issues with Mocking on readthedocs. Sigh.
+copyreg.pickle(IndividualTable, _pickle_individual_table)
+copyreg.pickle(NodeTable, _pickle_node_table)
+copyreg.pickle(EdgeTable, _edge_table_pickle)
+copyreg.pickle(MigrationTable, _migration_table_pickle)
+copyreg.pickle(SiteTable, _site_table_pickle)
+copyreg.pickle(MutationTable, _mutation_table_pickle)
+copyreg.pickle(PopulationTable, _population_table_pickle)
+copyreg.pickle(ProvenanceTable, _provenance_table_pickle)
+copyreg.pickle(TableCollection, _table_collection_pickle)
 
 
 #############################################
