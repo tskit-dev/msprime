@@ -28,6 +28,7 @@ import json
 import math
 import random
 import sys
+import os
 
 import _msprime
 import msprime.tables as _tables
@@ -46,8 +47,35 @@ Sample = collections.namedtuple(
     ["population", "time"])
 
 
+# Some machinery here for generating default random seeds. We need a map
+# indexed by process ID here because we cannot use a global variable
+# to store the state across multiple processes. Copy-on-write semantics
+# for child processes means that they inherit the state of the parent
+# process, so if we just keep a global variable without indexing by
+# PID, child processes will share the same random generator as the
+# parent.
+
+_seed_rng_map = {}
+
+
+def _get_seed_rng():
+    return _seed_rng_map.get(os.getpid(), None)
+
+
+def _clear_seed_rng():
+    _seed_rng_map.pop(os.getpid(), None)
+
+
 def _get_random_seed():
-    return random.randint(1, 2**32 - 1)
+    global _seed_rng_map
+    pid = os.getpid()
+    if pid not in _seed_rng_map:
+        # If we don't provide a seed to Random(), Python will seed either
+        # from a system source of randomness (i.e., /dev/urandom) or the
+        # current time if this is not available. Thus, our seed rng should
+        # be unique, even across different processes.
+        _seed_rng_map[pid] = random.Random()
+    return _seed_rng_map[pid].randint(1, 2**32 - 1)
 
 
 def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):

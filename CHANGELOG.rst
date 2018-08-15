@@ -17,6 +17,9 @@
   ``filter_individuals`` and ``filter_sites`` parameters added to allow
   filtering of unreferenced objects from the data model. (#567).
 
+- Default random seeds are now generated from a sequence initialised by
+  a system source of randomness (#534). Random seeds should also be safely generated
+  across multiple processes.
 
 **Bug fixes**:
 
