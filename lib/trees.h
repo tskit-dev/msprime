@@ -192,6 +192,7 @@ size_t tree_sequence_get_num_populations(tree_sequence_t *self);
 size_t tree_sequence_get_num_individuals(tree_sequence_t *self);
 size_t tree_sequence_get_num_trees(tree_sequence_t *self);
 size_t tree_sequence_get_num_samples(tree_sequence_t *self);
+char * tree_sequence_get_file_uuid(tree_sequence_t *self);
 double tree_sequence_get_sequence_length(tree_sequence_t *self);
 bool tree_sequence_is_sample(tree_sequence_t *self, node_id_t u);
 

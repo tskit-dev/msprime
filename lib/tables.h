@@ -141,6 +141,7 @@ typedef struct {
 
 typedef struct {
     double sequence_length;
+    char *file_uuid;
     individual_table_t *individuals;
     node_table_t *nodes;
     edge_table_t *edges;

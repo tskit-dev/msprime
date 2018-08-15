@@ -5126,12 +5126,14 @@ table_collection_free(table_collection_t *self)
         kastore_close(self->store);
         free(self->store);
     }
+    msp_safe_free(self->file_uuid);
     return ret;
 }
 
 /* Returns true if all the tables and collection metadata are equal. Note
  * this does *not* consider the indexes, since these are derived from the
- * tables. */
+ * tables. We do not consider the file_uuids either, since this is a property of
+ * the file that set of tables is stored in. */
 bool
 table_collection_equals(table_collection_t *self, table_collection_t *other)
 {
@@ -5371,6 +5373,15 @@ table_collection_read_format_data(table_collection_t *self)
         ret = MSP_ERR_FILE_FORMAT;
         goto out;
     }
+
+    /* Allow space for \0 so we can print it as a string */
+    self->file_uuid = malloc(TSK_UUID_SIZE + 1);
+    if (self->file_uuid == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(self->file_uuid, uuid, TSK_UUID_SIZE);
+    self->file_uuid[TSK_UUID_SIZE] = '\0';
 out:
     return ret;
 }

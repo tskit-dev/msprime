@@ -1434,6 +1434,9 @@ class TableCollection(object):
     :ivar sequence_length: The sequence length defining the coordinate
         space.
     :vartype sequence_length: float
+    :ivar file_uuid: The UUID for the file this TableCollection is derived
+        from, or None if not derived from a file.
+    :vartype file_uuid: str
     """
     def __init__(self, sequence_length=0, ll_tables=None):
         if ll_tables is None:
@@ -1492,6 +1495,10 @@ class TableCollection(object):
     @property
     def sequence_length(self):
         return self.ll_tables.sequence_length
+
+    @property
+    def file_uuid(self):
+        return self.ll_tables.file_uuid
 
     def asdict(self):
         """

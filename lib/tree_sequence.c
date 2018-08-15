@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "trees.h"
+#include "uuid.h"
 
 
 /* ======================================================== *
@@ -376,6 +377,22 @@ tree_sequence_load_tables(tree_sequence_t *self, table_collection_t *tables,
     }
     assert(table_collection_is_indexed(self->tables));
 
+    /* This is a hack to workaround the fact we're copying the tables here.
+     * In general, we don't want the file_uuid to be copied, as this should
+     * only be present if the tables are genuinely backed by a file and in
+     * read-only mode (which we also need to do). So, we copy the file_uuid
+     * into the local copy of the table for now until we have proper read-only
+     * access to the tables set up, where any attempts to modify the tables
+     * will fail. */
+    if (tables->file_uuid != NULL) {
+        self->tables->file_uuid = malloc(TSK_UUID_SIZE + 1);
+        if (self->tables->file_uuid == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        memcpy(self->tables->file_uuid, tables->file_uuid, TSK_UUID_SIZE + 1);
+    }
+
     ret = tree_sequence_init_nodes(self);
     if (ret != 0) {
         goto out;
@@ -455,6 +472,12 @@ double
 tree_sequence_get_sequence_length(tree_sequence_t *self)
 {
     return self->tables->sequence_length;
+}
+
+char *
+tree_sequence_get_file_uuid(tree_sequence_t *self)
+{
+    return self->tables->file_uuid;
 }
 
 size_t
