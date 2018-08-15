@@ -1420,7 +1420,8 @@ class HistoricalSamplingMixin(object):
                 model=self.model,
                 recombination_rate=recombination_rate,
                 samples=[
-                    msprime.Sample(0, 0), msprime.Sample(0, sampling_time)])
+                    msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
+                random_seed=5)
             for t in ts.trees():
                 self.assertEqual(t.get_time(0), 0)
                 self.assertEqual(t.get_time(1), sampling_time)
@@ -1477,7 +1478,7 @@ class HistoricalSamplingMixin(object):
         samples = [
             msprime.Sample(0, sampling_time) for j in range(n - 1)] + [
             msprime.Sample(0, 0)]
-        ts = msprime.simulate(Ne=N, samples=samples, model=self.model)
+        ts = msprime.simulate(Ne=N, samples=samples, model=self.model, random_seed=4)
         time = [node.time for node in ts.nodes()]
         for j in range(n - 1):
             self.assertEqual(time[j], sampling_time)

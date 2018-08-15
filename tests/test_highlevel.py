@@ -42,6 +42,7 @@ import sys
 import tempfile
 import unittest
 import warnings
+import multiprocessing
 
 import numpy as np
 
@@ -2417,3 +2418,50 @@ class TestNodeOrdering(HighLevelTestCase):
         self.assertTrue(found)
         for _ in range(self.num_random_permutations):
             self.verify_random_permutation(ts)
+
+
+# Convenience method for getting seeds in a subprocess.
+def _get_seed(x):
+    return msprime.simulations._get_random_seed()
+
+
+class TestDefaultRandomSeeds(unittest.TestCase):
+    """
+    Tests for the default random seed generator.
+    """
+
+    def test_seed_generator_init(self):
+        msprime.simulations._clear_seed_rng()
+        seed = msprime.simulations._get_random_seed()
+        self.assertGreater(seed, 0)
+        self.assertIsNotNone(msprime.simulations._get_seed_rng())
+
+    def test_unique(self):
+        n = 100
+        msprime.simulations._clear_seed_rng()
+        seeds1 = [msprime.simulations._get_random_seed() for _ in range(n)]
+        self.assertEqual(len(set(seeds1)), n)
+        seeds2 = [msprime.simulations._get_random_seed() for _ in range(n)]
+        self.assertEqual(len(set(seeds2)), n)
+        self.assertEqual(len(set(seeds2)) + len(set(seeds2)), 2 * n)
+
+    def test_unique_multiple_processes_no_init(self):
+        n = 100
+        msprime.simulations._clear_seed_rng()
+        # Would use with block here, but not supported in Py < 3.3.
+        pool = multiprocessing.Pool(5)
+        seeds = pool.map(_get_seed, range(n))
+        self.assertEqual(len(set(seeds)), n)
+        pool.terminate()
+        pool.join()
+
+    def test_unique_multiple_processes_init(self):
+        n = 100
+        msprime.simulations._get_random_seed()
+        self.assertIsNotNone(msprime.simulations._get_seed_rng())
+        # Would use with block here, but not supported in Py < 3.3.
+        pool = multiprocessing.Pool(5)
+        seeds = pool.map(_get_seed, range(n))
+        self.assertEqual(len(set(seeds)), n)
+        pool.terminate()
+        pool.join()
