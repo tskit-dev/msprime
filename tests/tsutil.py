@@ -457,3 +457,111 @@ def algorithm_T(ts):
             right = min(right, edges[out_order[k]].right)
         yield (left, right), parent
         left = right
+
+
+
+class LinkedTree(object):
+    def __init__(self, tree_sequence):
+        self.tree_sequence = tree_sequence
+        num_nodes = tree_sequence.num_nodes
+        # Quintuply linked tree.
+        self.parent = [-1 for _ in range(num_nodes)]
+        self.left_sib = [-1 for _ in range(num_nodes)]
+        self.right_sib = [-1 for _ in range(num_nodes)]
+        self.left_child = [-1 for _ in range(num_nodes)]
+        self.right_child = [-1 for _ in range(num_nodes)]
+        # Circular linked list of samples.
+        self.left_sample_sib = [-1 for _ in range(num_nodes)]
+        self.right_sample_sib = [-1 for _ in range(num_nodes)]
+        self.left_sample = [-1 for _ in range(num_nodes)]
+        self.right_sample = [-1 for _ in range(num_nodes)]
+
+        # Samples are initially set in a circular list in arbitrary order.
+        samples = list(tree_sequence.samples())
+        n = len(samples)
+        for j in range(n):
+            u = samples[j]
+            self.left_sample[u] = u
+            self.right_sample[u] = u
+            self.left_sample_sib[u] = samples[j - 1]
+            self.right_sample_sib[u] = samples[(j + 1) % n]
+
+    def __str__(self):
+        s = "\tparent\tlsib\trsib\tlchild\trchild\tlssib\trssib\tls\trs\n"
+        for u in range(self.tree_sequence.num_nodes):
+            s += "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                u, self.parent[u],
+                self.left_sib[u], self.right_sib[u],
+                self.left_child[u], self.right_child[u],
+                self.left_sample_sib[u], self.right_sample_sib[u],
+                self.left_sample[u], self.right_sample[u])
+        return s
+
+    def remove_edge(self, edge):
+        p = edge.parent
+        c = edge.child
+        lsib = self.left_sib[c]
+        rsib = self.right_sib[c]
+        if lsib == -1:
+            self.left_child[p] = rsib
+        else:
+            self.right_sib[lsib] = rsib
+        if rsib == -1:
+            self.right_child[p] = lsib
+        else:
+            self.left_sib[rsib] = lsib
+        self.parent[c] = -1
+        self.left_sib[c] = -1
+        self.right_sib[c] = -1
+
+    def insert_edge(self, edge):
+        p = edge.parent
+        c = edge.child
+        # assert self.parent[c] != -1, "contradictory edges"
+        self.parent[c] = p
+        u = self.right_child[p]
+        lsib = self.left_sib[c]
+        rsib = self.right_sib[c]
+        if u == -1:
+            self.left_child[p] = c
+            self.left_sib[c] = -1
+            self.right_sib[c] = -1
+        else:
+            self.right_sib[u] = c
+            self.left_sib[c] = u
+            self.right_sib[c] = -1
+        self.right_child[p] = c
+
+    def sample_lists(self):
+        """
+        Version of algorithm T above in which we maintain lists of samples
+        that are below every node.
+        """
+        ts = self.tree_sequence
+        sequence_length = ts.sequence_length
+        edges = list(ts.edges())
+        M = len(edges)
+        time = [ts.node(edge.parent).time for edge in edges]
+        in_order = sorted(range(M), key=lambda j: (
+            edges[j].left, time[j], edges[j].parent, edges[j].child))
+        out_order = sorted(range(M), key=lambda j: (
+            edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
+        j = 0
+        k = 0
+        left = 0
+
+        while j < M or left < sequence_length:
+            while k < M and edges[out_order[k]].right == left:
+                self.remove_edgee(edges[out_order[k]])
+                k += 1
+            while j < M and edges[in_order[j]].left == left:
+                self.insert_edge(edges[in_order[j]])
+                j += 1
+            right = sequence_length
+            if j < M:
+                right = min(right, edges[in_order[j]].left)
+            if k < M:
+                right = min(right, edges[out_order[k]].right)
+            yield left, right
+            left = right
+
