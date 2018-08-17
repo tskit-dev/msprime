@@ -460,7 +460,7 @@ def algorithm_T(ts):
 
 
 class LinkedTree(object):
-    def __init__(self, tree_sequence):
+    def __init__(self, tree_sequence, tracked_samples=None):
         self.tree_sequence = tree_sequence
         num_nodes = tree_sequence.num_nodes
         # Quintuply linked tree.
@@ -469,17 +469,20 @@ class LinkedTree(object):
         self.right_sib = [-1 for _ in range(num_nodes)]
         self.left_child = [-1 for _ in range(num_nodes)]
         self.right_child = [-1 for _ in range(num_nodes)]
-
-        self.sample_next = [-1 for _ in range(num_nodes)]
         self.sample_head = [-1 for _ in range(num_nodes)]
         self.sample_tail = [-1 for _ in range(num_nodes)]
+        # This is too long, but it's convenient for printing.
+        self.sample_next = [-1 for _ in range(num_nodes)]
 
-        samples = list(tree_sequence.samples())
-        n = len(samples)
-        for j in range(n):
+        self.sample_index_map = [-1 for _ in range(num_nodes)]
+        samples = tracked_samples
+        if tracked_samples is None:
+            samples = list(tree_sequence.samples())
+        for j in range(len(samples)):
             u = samples[j]
-            self.sample_head[u] = u
-            self.sample_tail[u] = u
+            self.sample_index_map[u] = j
+            self.sample_head[u] = j
+            self.sample_tail[u] = j
 
     def __str__(self):
         fmt = "{:<5}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}\n"
@@ -532,8 +535,9 @@ class LinkedTree(object):
         # print("Updating for ", parent)
         u = parent
         while u != -1:
-            is_sample = self.tree_sequence.node(u).is_sample()
-            if is_sample:
+            sample_index = self.sample_index_map[u]
+            # is_sample = self.tree_sequence.node(u).is_sample()
+            if sample_index != -1:
                 self.sample_tail[u] = self.sample_head[u]
             else:
                 self.sample_tail[u] = -1
