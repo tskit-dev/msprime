@@ -4,7 +4,7 @@
 Tree sequence interchange
 #########################
 
-The correlated genealogical trees that describe the shared ancestry of set of
+The correlated genealogical trees that describe the shared ancestry of a set of
 samples are stored concisely in ``msprime`` as a collection of
 easy-to-understand tables. These are output by coalescent simulation in
 ``msprime`` or can be read in from another source. This page documents
@@ -29,8 +29,9 @@ To begin, here are definitions of some key ideas encountered later.
 
 tree
     A "gene tree", i.e., the genealogical tree describing how a collection of
-    genomes (usually at the tips of the tree) are related to each other.
-    See :ref:`sec_nodes_or_individuals` for discussion of what a "genome" is.
+    genomes (usually at the tips of the tree) are related to each other at some
+    chromosomal location. See :ref:`sec_nodes_or_individuals` for discussion
+    of what a "genome" is.
 
 tree sequence
     A "succinct tree sequence" (or tree sequence, for brevity) is an efficient
@@ -85,7 +86,7 @@ mutation
     where it occurs within the tree at this position), and a derived state
     (which defines the mutational state inherited by all nodes in the subtree
     rooted at the focal node). In more complex situations in which we have
-    back or recurrent mutations, a mutation must also specify it's 'parent'
+    back or recurrent mutations, a mutation must also specify its 'parent'
     mutation.
 
 migration
@@ -123,7 +124,7 @@ A tree sequence can be stored in a collection of eight tables:
 :ref:`Provenance <sec_provenance_table_definition>`.
 The Node and Edge tables store the genealogical
 relationships that define the trees, and the Individual table
-describes how multiple chromosomes are grouped within individuals;
+describes how multiple genomes are grouped within individuals;
 the Site and Mutation tables describe where mutations fall
 on the trees; the Migration table describes how lineages move across space;
 and the Provenance table contains information on where the data came from.
@@ -136,16 +137,15 @@ more detail.
 
 .. _sec_nodes_or_individuals:
 
-*******************************
 Nodes, Genomes, or Individuals?
-*******************************
+===============================
 
 The natural unit of biological analysis is (usually) the *individual*. However,
 many organisms we study are diploid, and so each individual contains *two*
 homologous copies of the entire genome, separately inherited from the two
 parental individuals. Since each monoploid copy of the genome is inherited separately,
 each diploid individual lies at the end of two distinct lineages, and so will
-be represented by *two* places in any genealogical tree. This makes it
+be represented by *two* places in any given genealogical tree. This makes it
 difficult to precisely discuss tree sequences for diploids, as we have no
 simple way to refer to the bundle of chromosomes that make up the "copy of the
 genome inherited from one particular parent". For this reason, in this
@@ -165,8 +165,14 @@ even though their birth times might be inferred.
 
 .. _sec_table_definitions:
 
+*****************
 Table definitions
-=================
+*****************
+
+.. _sec_table_types_definitions:
+
+Table types
+===========
 
 .. _sec_node_table_definition:
 

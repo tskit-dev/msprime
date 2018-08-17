@@ -37,7 +37,7 @@ NUCLEOTIDES = 1
 class InfiniteSites(object):
     """
     The "infinitely many sites" mutation model. In this model each mutation
-    corresponds to a unique site, which has a floating-point position chose
+    corresponds to a unique site, which has a floating-point position chosen
     uniformly along the sequence. As a result, each site is associated with
     exactly one mutation.
 

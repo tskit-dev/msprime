@@ -41,21 +41,21 @@ def segregating_sites_example(n, theta, num_replicates):
 
 def migration_example():
     # M is the overall symmetric migration rate, and d is the number
-    # of demes.
+    # of subpopulations.
     M = 0.2
     d = 3
     # We rescale m into per-generation values for msprime.
     m = M / (4 * (d - 1))
     # Allocate the initial sample. Because we are interested in the
-    # between deme coalescence times, we choose one sample each
-    # from the first two demes.
+    # between subpopulation coalescence times, we choose one sample each
+    # from the first two subpopulations.
     population_configurations = [
         msprime.PopulationConfiguration(sample_size=1),
         msprime.PopulationConfiguration(sample_size=1),
         msprime.PopulationConfiguration(sample_size=0)]
     # Now we set up the migration matrix. Since this is a symmetric
     # island model, we have the same rate of migration between all
-    # pairs of demes. Diagonal elements must be zero.
+    # pairs of subpopulations. Diagonal elements must be zero.
     migration_matrix = [
         [0, m, m],
         [m, 0, m],
