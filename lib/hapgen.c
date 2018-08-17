@@ -50,11 +50,10 @@ hapgen_print_state(hapgen_t *self, FILE *out)
 
 
 static inline int
-hapgen_update_sample(hapgen_t * self, node_id_t sample_id, site_id_t site,
+hapgen_update_sample(hapgen_t * self, size_t sample_index, site_id_t site,
         const char *derived_state)
 {
     int ret = 0;
-    size_t sample_index = (size_t) self->sample_index_map[sample_id];
     size_t index = sample_index * (self->num_sites + 1) + (size_t) site;
 
     if (self->haplotype_matrix[index] == derived_state[0]) {
@@ -70,31 +69,33 @@ static int
 hapgen_apply_tree_site(hapgen_t *self, site_t *site)
 {
     int ret = 0;
-    node_list_t *w, *tail;
-    bool not_done;
+    const node_id_t *restrict list_head = self->tree.sample_list_head;
+    const node_id_t *restrict list_tail = self->tree.sample_list_tail;
+    const node_id_t *restrict list_next = self->tree.sample_list_next;
+    node_id_t node, tail, sample_index;
     table_size_t j;
     const char *derived_state;
 
     for (j = 0; j < site->mutations_length; j++) {
-        ret = sparse_tree_get_sample_list(&self->tree, site->mutations[j].node, &w, &tail);
-        if (ret != 0) {
-            goto out;
-        }
         if (site->mutations[j].derived_state_length != 1) {
             ret = MSP_ERR_NON_SINGLE_CHAR_MUTATION;
             goto out;
         }
         derived_state = site->mutations[j].derived_state;
-        if (w != NULL) {
-            not_done = true;
-            while (not_done) {
-                assert(w != NULL);
-                ret = hapgen_update_sample(self, w->node, site->id, derived_state);
+        node = site->mutations[j].node;
+        sample_index = list_head[node];
+        if (sample_index != MSP_NULL_NODE) {
+            tail = list_tail[node];
+            while (true) {
+                ret = hapgen_update_sample(self, (size_t) sample_index, site->id,
+                        derived_state);
                 if (ret != 0) {
                     goto out;
                 }
-                not_done = w != tail;
-                w = w->next;
+                if (tail == sample_index) {
+                    break;
+                }
+                sample_index = list_next[sample_index];
             }
         }
     }

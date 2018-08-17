@@ -144,61 +144,95 @@ out:
  * iterating over millions of samples. The compiler hints are included for the
  * same reason */
 static int WARN_UNUSED
-vargen_update_genotypes_u8(vargen_t *self,
-        const node_list_t *restrict head, const node_list_t *restrict tail,
-        const table_size_t derived)
+vargen_update_genotypes_u8(vargen_t *self, node_id_t node, table_size_t derived)
 {
-    const node_id_t *restrict sample_index_map = self->sample_index_map;
     uint8_t *restrict genotypes = self->variant.genotypes.u8;
-    const node_list_t *restrict w = head;
-    node_id_t sample_index;
+    const node_id_t *restrict list_head = self->tree.sample_list_head;
+    const node_id_t *restrict list_tail = self->tree.sample_list_tail;
+    const node_id_t *restrict list_next = self->tree.sample_list_next;
+    node_id_t tail, sample_index;
     int ret = 0;
 
     assert(derived < UINT8_MAX);
-    while (1) {
-        assert(w != NULL);
-        sample_index = sample_index_map[w->node];
-        assert(sample_index >= 0);
-        if (genotypes[sample_index] == derived) {
-            ret = MSP_ERR_INCONSISTENT_MUTATIONS;
-            goto out;
+
+    sample_index = list_head[node];
+    if (sample_index != MSP_NULL_NODE) {
+        tail = list_tail[node];
+        while (true) {
+            if (genotypes[sample_index] == derived) {
+                ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+                goto out;
+            }
+            genotypes[sample_index] = (uint8_t) derived;
+            if (tail == sample_index) {
+                break;
+            }
+            sample_index = list_next[sample_index];
         }
-        genotypes[sample_index] = (uint8_t) derived;
-        if (w == tail) {
-            break;
-        }
-        w = w->next;
     }
+
+    /* while (1) { */
+    /*     assert(w != NULL); */
+    /*     sample_index = sample_index_map[w->node]; */
+    /*     assert(sample_index >= 0); */
+    /*     if (genotypes[sample_index] == derived) { */
+    /*         ret = MSP_ERR_INCONSISTENT_MUTATIONS; */
+    /*         goto out; */
+    /*     } */
+    /*     genotypes[sample_index] = (uint8_t) derived; */
+    /*     if (w == tail) { */
+    /*         break; */
+    /*     } */
+    /*     w = w->next; */
+    /* } */
 out:
     return ret;
 }
 
 static int WARN_UNUSED
-vargen_update_genotypes_u16(vargen_t *self,
-        const node_list_t *restrict head, const node_list_t *restrict tail,
-        const table_size_t derived)
+vargen_update_genotypes_u16(vargen_t *self, node_id_t node, table_size_t derived)
 {
-    const node_id_t *restrict sample_index_map = self->sample_index_map;
     uint16_t *restrict genotypes = self->variant.genotypes.u16;
-    const node_list_t *restrict w = head;
-    node_id_t sample_index;
+    const node_id_t *restrict list_head = self->tree.sample_list_head;
+    const node_id_t *restrict list_tail = self->tree.sample_list_tail;
+    const node_id_t *restrict list_next = self->tree.sample_list_next;
+    node_id_t tail, sample_index;
     int ret = 0;
 
     assert(derived < UINT16_MAX);
-    while (1) {
-        assert(w != NULL);
-        sample_index = sample_index_map[w->node];
-        assert(sample_index >= 0);
-        if (genotypes[sample_index] == derived) {
-            ret = MSP_ERR_INCONSISTENT_MUTATIONS;
-            goto out;
+    sample_index = list_head[node];
+    if (sample_index != MSP_NULL_NODE) {
+        tail = list_tail[node];
+        while (true) {
+            if (genotypes[sample_index] == derived) {
+                ret = MSP_ERR_INCONSISTENT_MUTATIONS;
+                goto out;
+            }
+            genotypes[sample_index] = (uint16_t) derived;
+            if (tail == sample_index) {
+                break;
+            }
+            sample_index = list_next[sample_index];
         }
-        genotypes[sample_index] = (uint16_t) derived;
-        if (w == tail) {
-            break;
-        }
-        w = w->next;
     }
+
+
+
+/*     kk */
+/*     while (1) { */
+/*         assert(w != NULL); */
+/*         sample_index = sample_index_map[w->node]; */
+/*         assert(sample_index >= 0); */
+/*         if (genotypes[sample_index] == derived) { */
+/*             ret = MSP_ERR_INCONSISTENT_MUTATIONS; */
+/*             goto out; */
+/*         } */
+/*         genotypes[sample_index] = (uint16_t) derived; */
+/*         if (w == tail) { */
+/*             break; */
+/*         } */
+/*         w = w->next; */
+/*     } */
 out:
     return ret;
 }
@@ -207,10 +241,10 @@ static int
 vargen_update_site(vargen_t *self)
 {
     int ret = 0;
-    node_list_t *head, *tail;
     table_size_t j, derived;
     variant_t *var = &self->variant;
     site_t *site = var->site;
+    mutation_t mutation;
 
     /* Ancestral state is always allele 0 */
     var->alleles[0] = site->ancestral_state;
@@ -232,11 +266,12 @@ vargen_update_site(vargen_t *self)
         memset(self->variant.genotypes.u8, 0, self->num_samples);
     }
     for (j = 0; j < site->mutations_length; j++) {
+        mutation = site->mutations[j];
         /* Compute the allele index for this derived state value. */
         derived = 0;
         while (derived < var->num_alleles) {
-            if (site->mutations[j].derived_state_length == var->allele_lengths[derived]
-                    && memcmp(site->mutations[j].derived_state, var->alleles[derived],
+            if (mutation.derived_state_length == var->allele_lengths[derived]
+                    && memcmp(mutation.derived_state, var->alleles[derived],
                         var->allele_lengths[derived]) == 0) {
                 break;
             }
@@ -249,25 +284,18 @@ vargen_update_site(vargen_t *self)
                     goto out;
                 }
             }
-            var->alleles[derived] = site->mutations[j].derived_state;
-            var->allele_lengths[derived] = site->mutations[j].derived_state_length;
+            var->alleles[derived] = mutation.derived_state;
+            var->allele_lengths[derived] = mutation.derived_state_length;
             var->num_alleles++;
         }
 
-        ret = sparse_tree_get_sample_list(&self->tree, site->mutations[j].node,
-                &head, &tail);
+        if (self->flags & MSP_16_BIT_GENOTYPES) {
+            ret = vargen_update_genotypes_u16(self, mutation.node, derived);
+        } else {
+            ret = vargen_update_genotypes_u8(self, mutation.node, derived);
+        }
         if (ret != 0) {
             goto out;
-        }
-        if (head != NULL) {
-            if (self->flags & MSP_16_BIT_GENOTYPES) {
-                ret = vargen_update_genotypes_u16(self, head, tail, derived);
-            } else {
-                ret = vargen_update_genotypes_u8(self, head, tail, derived);
-            }
-            if (ret != 0) {
-                goto out;
-            }
         }
     }
 out:

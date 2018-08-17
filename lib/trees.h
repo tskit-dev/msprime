@@ -47,10 +47,6 @@ typedef struct _edge_list_t {
     struct _edge_list_t *next;
 } edge_list_t;
 
-typedef struct _node_list {
-    node_id_t node;
-    struct _node_list *next;
-} node_list_t;
 
 typedef struct {
     size_t num_nodes;
@@ -91,9 +87,10 @@ typedef struct {
     uint8_t *marked;
     uint8_t mark;
     /* These are for the optional sample list tracking. */
-    node_list_t **sample_list_head;
-    node_list_t **sample_list_tail;
-    node_list_t *sample_list_node_mem;
+    node_id_t *sample_list_head;
+    node_id_t *sample_list_tail;
+    node_id_t *sample_list_next;
+    node_id_t *sample_index_map;
     /* traversal stacks */
     node_id_t *stack1;
     node_id_t *stack2;
@@ -234,7 +231,7 @@ int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
 int sparse_tree_set_tracked_samples(sparse_tree_t *self,
         size_t num_tracked_samples, node_id_t *tracked_samples);
 int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
-        node_list_t *head, node_list_t *tail);
+        sparse_tree_t *other, node_id_t node);
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 size_t sparse_tree_get_num_roots(sparse_tree_t *self);
@@ -244,8 +241,6 @@ int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v, node_id_
 int sparse_tree_get_num_samples(sparse_tree_t *self, node_id_t u, size_t *num_samples);
 int sparse_tree_get_num_tracked_samples(sparse_tree_t *self, node_id_t u,
         size_t *num_tracked_samples);
-int sparse_tree_get_sample_list(sparse_tree_t *self, node_id_t u,
-        node_list_t **head, node_list_t **tail);
 int sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, table_size_t *sites_length);
 int sparse_tree_get_newick(sparse_tree_t *self, node_id_t root,
         size_t precision, int flags, size_t buffer_size, char *newick_buffer);

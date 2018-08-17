@@ -5556,8 +5556,6 @@ test_sparse_tree_errors(void)
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         ret = sparse_tree_get_num_tracked_samples(&t, u, NULL);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
-        ret = sparse_tree_get_sample_list(&t, u, NULL, NULL);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
         /* Also check tree sequence methods */
         ret = tree_sequence_get_node(&ts, u, &node);
         CU_ASSERT_EQUAL(ret, MSP_ERR_OUT_OF_BOUNDS);
@@ -5575,8 +5573,6 @@ test_sparse_tree_errors(void)
     tracked_samples[1] = 0;
     ret = sparse_tree_set_tracked_samples(&t, 2, tracked_samples);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DUPLICATE_SAMPLE);
-    ret = sparse_tree_set_tracked_samples_from_sample_list(&t, NULL, NULL);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     tree_sequence_from_text(&other_ts, 10, paper_ex_nodes, paper_ex_edges, NULL, NULL, NULL,
             paper_ex_individuals, NULL);
@@ -5794,8 +5790,8 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
 {
     int ret;
     size_t j, num_samples, n, k;
+    node_id_t start, stop, sample_index;
     sparse_tree_t tree;
-    node_list_t *u, *head, *tail;
     node_id_t *samples;
 
     n = tree_sequence_get_num_samples(ts);
@@ -5818,8 +5814,6 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
         /* all operations depending on tracked samples should fail. */
         ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-        ret = sparse_tree_get_sample_list(&tree, 0, NULL, NULL);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
     }
     sparse_tree_free(&tree);
 
@@ -5840,9 +5834,6 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
         ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(num_samples, 0);
-        /* Getting sample lists should still fail, as it's not enabled. */
-        ret = sparse_tree_get_sample_list(&tree, 0, NULL, NULL);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
     }
     sparse_tree_free(&tree);
 
@@ -5862,17 +5853,14 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
         /* all operations depending on tracked samples should fail. */
         ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-        ret = sparse_tree_get_sample_list(&tree, tests[j].node, &head, &tail);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        u = head;
+
+        start = tree.sample_list_head[tests[j].node];
+        stop = tree.sample_list_next[tree.sample_list_tail[tests[j].node]];
         k = 0;
-        while (1) {
+        for (sample_index = start; sample_index != stop;
+                sample_index = tree.sample_list_next[sample_index]) {
             k++;
-            if (u == tail) {
-                break;
-            }
-            CU_ASSERT_TRUE(sparse_tree_is_sample(&tree, u->node));
-            u = u->next;
+            CU_ASSERT_FATAL(k <= tests[j].count);
         }
         CU_ASSERT_EQUAL(tests[j].count, k);
     }
@@ -5898,17 +5886,13 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
         ret = sparse_tree_get_num_tracked_samples(&tree, tests[j].node, &num_samples);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(tests[j].count, num_samples);
-        ret = sparse_tree_get_sample_list(&tree, tests[j].node, &head, &tail);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        u = head;
+
+        start = tree.sample_list_head[tests[j].node];
+        stop = tree.sample_list_next[tree.sample_list_tail[tests[j].node]];
         k = 0;
-        while (1) {
+        for (sample_index = start; sample_index != stop;
+                sample_index = tree.sample_list_next[sample_index]) {
             k++;
-            if (u == tail) {
-                break;
-            }
-            CU_ASSERT_TRUE(sparse_tree_is_sample(&tree, u->node));
-            u = u->next;
         }
         CU_ASSERT_EQUAL(tests[j].count, k);
     }
@@ -5923,8 +5907,12 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     node_id_t u, v, n, num_nodes, num_samples;
     size_t tmp;
     node_id_t *stack, *samples;
-    node_list_t *z, *head, *tail;
     tree_sequence_t *ts = tree->tree_sequence;
+    node_id_t *sample_index_map = ts->sample_index_map;
+    const node_id_t *list_head = tree->sample_list_head;
+    const node_id_t *list_tail = tree->sample_list_tail;
+    const node_id_t *list_next = tree->sample_list_next;
+    node_id_t start, stop, sample_index;
 
     n = tree_sequence_get_num_samples(ts);
     num_nodes = tree_sequence_get_num_nodes(ts);
@@ -5934,10 +5922,11 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     CU_ASSERT_FATAL(samples != NULL);
     for (u = 0; u < num_nodes; u++) {
         if (tree->left_child[u] == MSP_NULL_NODE && !tree_sequence_is_sample(ts, u)) {
-            ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(head, NULL);
-            CU_ASSERT_EQUAL(tail, NULL);
+            /* printf("u = %d, pi = %d head = %d\n", u, tree->parent[u], list_head[u]); */
+            /* FIXME*/
+
+            CU_ASSERT_EQUAL(list_head[u], MSP_NULL_NODE);
+            CU_ASSERT_EQUAL(list_tail[u], MSP_NULL_NODE);
         } else {
             stack_top = 0;
             num_samples = 0;
@@ -5957,21 +5946,18 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
             ret = sparse_tree_get_num_samples(tree, u, &tmp);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_samples, tmp);
-            ret = sparse_tree_get_sample_list(tree, u, &head, &tail);
 
-            CU_ASSERT_EQUAL(ret, 0);
-            z = head;
             j = 0;
-            while (1) {
+            start = list_head[u];
+            stop = list_next[list_tail[u]];
+            for (sample_index = start; sample_index != stop;
+                    sample_index = list_next[sample_index]) {
                 CU_ASSERT_TRUE_FATAL(j < n);
-                CU_ASSERT_EQUAL_FATAL(samples[j], z->node);
+                CU_ASSERT_EQUAL_FATAL(sample_index, sample_index_map[samples[j]]);
                 j++;
-                if (z == tail) {
-                    break;
-                }
-                z = z->next;
+
             }
-            CU_ASSERT_EQUAL(j, num_samples);
+            CU_ASSERT_EQUAL_FATAL(j, num_samples);
         }
     }
     free(stack);

@@ -186,16 +186,10 @@ static inline int WARN_UNUSED
 ld_calc_set_tracked_samples(ld_calc_t *self, site_t sA)
 {
     int ret = 0;
-    node_list_t *head, *tail;
 
     assert(sA.mutations_length == 1);
-    ret = sparse_tree_get_sample_list(self->outer_tree, sA.mutations[0].node, &head, &tail);
-    if (ret != 0) {
-        goto out;
-    }
     ret = sparse_tree_set_tracked_samples_from_sample_list(self->inner_tree,
-            head, tail);
-out:
+            self->outer_tree, sA.mutations[0].node);
     return ret;
 }
 
