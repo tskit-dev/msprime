@@ -459,7 +459,6 @@ def algorithm_T(ts):
         left = right
 
 
-
 class LinkedTree(object):
     def __init__(self, tree_sequence):
         self.tree_sequence = tree_sequence
@@ -470,32 +469,31 @@ class LinkedTree(object):
         self.right_sib = [-1 for _ in range(num_nodes)]
         self.left_child = [-1 for _ in range(num_nodes)]
         self.right_child = [-1 for _ in range(num_nodes)]
-        # Circular linked list of samples.
-        self.left_sample_sib = [-1 for _ in range(num_nodes)]
-        self.right_sample_sib = [-1 for _ in range(num_nodes)]
-        self.left_sample = [-1 for _ in range(num_nodes)]
-        self.right_sample = [-1 for _ in range(num_nodes)]
 
-        # Samples are initially set in a circular list in arbitrary order.
+        self.sample_next = [-1 for _ in range(num_nodes)]
+        self.sample_head = [-1 for _ in range(num_nodes)]
+        self.sample_tail = [-1 for _ in range(num_nodes)]
+
         samples = list(tree_sequence.samples())
         n = len(samples)
         for j in range(n):
             u = samples[j]
-            self.left_sample[u] = u
-            self.right_sample[u] = u
-            self.left_sample_sib[u] = samples[j - 1]
-            self.right_sample_sib[u] = samples[(j + 1) % n]
+            self.sample_head[u] = u
+            self.sample_tail[u] = u
 
     def __str__(self):
-        s = "\tparent\tlsib\trsib\tlchild\trchild\tlssib\trssib\tls\trs\n"
+        fmt = "{:<5}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}\n"
+        s = fmt.format(
+            "node", "parent", "lsib", "rsib", "lchild", "rchild",
+            "next", "head", "tail")
         for u in range(self.tree_sequence.num_nodes):
-            s += "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+            s += fmt.format(
                 u, self.parent[u],
                 self.left_sib[u], self.right_sib[u],
                 self.left_child[u], self.right_child[u],
-                self.left_sample_sib[u], self.right_sample_sib[u],
-                self.left_sample[u], self.right_sample[u])
-        return s
+                self.sample_next[u], self.sample_head[u], self.sample_tail[u])
+        # Strip off trailing newline
+        return s[:-1]
 
     def remove_edge(self, edge):
         p = edge.parent
@@ -517,11 +515,9 @@ class LinkedTree(object):
     def insert_edge(self, edge):
         p = edge.parent
         c = edge.child
-        # assert self.parent[c] != -1, "contradictory edges"
+        assert self.parent[c] == -1, "contradictory edges"
         self.parent[c] = p
         u = self.right_child[p]
-        lsib = self.left_sib[c]
-        rsib = self.right_sib[c]
         if u == -1:
             self.left_child[p] = c
             self.left_sib[c] = -1
@@ -531,6 +527,29 @@ class LinkedTree(object):
             self.left_sib[c] = u
             self.right_sib[c] = -1
         self.right_child[p] = c
+
+    def update_sample_list(self, parent):
+        # print("Updating for ", parent)
+        u = parent
+        while u != -1:
+            is_sample = self.tree_sequence.node(u).is_sample()
+            if is_sample:
+                self.sample_tail[u] = self.sample_head[u]
+            else:
+                self.sample_tail[u] = -1
+                self.sample_head[u] = -1
+            v = self.left_child[u]
+            while v != -1:
+                if self.sample_head[v] != -1:
+                    assert self.sample_tail[v] != -1
+                    if self.sample_head[u] == -1:
+                        self.sample_head[u] = self.sample_head[v]
+                        self.sample_tail[u] = self.sample_tail[v]
+                    else:
+                        self.sample_next[self.sample_tail[u]] = self.sample_head[v]
+                        self.sample_tail[u] = self.sample_tail[v]
+                v = self.right_sib[v]
+            u = self.parent[u]
 
     def sample_lists(self):
         """
@@ -552,10 +571,14 @@ class LinkedTree(object):
 
         while j < M or left < sequence_length:
             while k < M and edges[out_order[k]].right == left:
-                self.remove_edgee(edges[out_order[k]])
+                edge = edges[out_order[k]]
+                self.remove_edge(edge)
+                self.update_sample_list(edge.parent)
                 k += 1
             while j < M and edges[in_order[j]].left == left:
-                self.insert_edge(edges[in_order[j]])
+                edge = edges[in_order[j]]
+                self.insert_edge(edge)
+                self.update_sample_list(edge.parent)
                 j += 1
             right = sequence_length
             if j < M:
@@ -564,4 +587,3 @@ class LinkedTree(object):
                 right = min(right, edges[out_order[k]].right)
             yield left, right
             left = right
-
