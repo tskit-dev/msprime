@@ -30,6 +30,7 @@ import numpy as np
 import msprime
 import _msprime
 import tests.tsutil as tsutil
+import tests.test_wright_fisher as wf
 
 
 class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
@@ -55,6 +56,13 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
             10, recombination_rate=0.1, random_seed=1, __tmp_max_time=0.5)
         self.verify(ts)
 
+    def test_discrete_loci(self):
+        ts = msprime.simulate(
+            10,
+            recombination_map=msprime.RecombinationMap.uniform_map(10, 1, 10),
+            random_seed=1, __tmp_max_time=0.5)
+        self.verify(ts)
+
     def test_simple_recombination_time_zero(self):
         ts = msprime.simulate(
             10, recombination_rate=0.1, random_seed=4, __tmp_max_time=0.0)
@@ -66,6 +74,30 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
 
     def test_no_recombination_time_zero(self):
         ts = msprime.simulate(10, random_seed=3, __tmp_max_time=0.0)
+        self.verify(ts)
+
+    def test_wright_fisher_small_n(self):
+
+        tables = wf.wf_sim(
+            10, 3, seed=5, deep_history=False, initial_generation_samples=True)
+        # print(tables.nodes)
+        tables.sort()
+        flags = tables.nodes.flags
+        tables.simplify(
+            samples=np.where(flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32))
+        # Unmark the ancient samples
+        flags = tables.nodes.flags
+        flags = np.zeros_like(flags)
+        flags[tables.nodes.time == 0] = msprime.NODE_IS_SAMPLE
+        tables.nodes.set_columns(
+            flags=flags,
+            time=tables.nodes.time)
+        ts = tables.tree_sequence()
+        ts.dump("wf-encaptitate.trees")
+        print()
+        for tree in ts.trees():
+            print("interval = ", tree.interval)
+            print(tree.draw(format="unicode"))
         self.verify(ts)
 
 

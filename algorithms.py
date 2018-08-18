@@ -15,6 +15,44 @@ import bintrees
 import msprime
 
 
+def overlapping_segments(segments):
+    """
+    Returns an iterator over the (left, right, X) tuples describing the
+    distinct overlapping segments in the specified set.
+    """
+    S = sorted(segments, key=lambda x: x.left)
+    n = len(S)
+    # Insert a sentinel at the end for convenience.
+    sentinel = Segment(0)
+    sentinel.left = sys.float_info.max
+    sentinel.right = 0
+    S.append(sentinel)
+    right = S[0].left
+    X = []
+    j = 0
+    while j < n:
+        # Remove any elements of X with right <= left
+        left = right
+        X = [x for x in X if x.right > left]
+        if len(X) == 0:
+            left = S[j].left
+        while j < n and S[j].left == left:
+            X.append(S[j])
+            j += 1
+        j -= 1
+        right = min(x.right for x in X)
+        right = min(right, S[j + 1].left)
+        yield left, right, X
+        j += 1
+
+    while len(X) > 0:
+        left = right
+        X = [x for x in X if x.right > left]
+        if len(X) > 0:
+            right = min(x.right for x in X)
+            yield left, right, X
+
+
 class FenwickTree(object):
     """
     A Fenwick Tree to represent cumulative frequency tables over
@@ -268,6 +306,7 @@ class Simulator(object):
             self.P[pop_index].set_start_size(population_sizes[pop_index])
             self.P[pop_index].set_growth_rate(population_growth_rates[pop_index], 0)
         self.edge_buffer = []
+        self.from_ts = from_ts
         if from_ts is None:
             self.tables = msprime.TableCollection(sequence_length=num_loci)
             for pop_index in range(N):
@@ -290,33 +329,7 @@ class Simulator(object):
                 raise ValueError("Sequence length in from_ts must match")
             if ts.num_populations != N:
                 raise ValueError("Number of populations in from_ts must match")
-            self.tables = ts.dump_tables()
-            prev_map = {}
-            for tree in ts.trees():
-                left, right = tree.interval
-                if int(left) != left or int(right) != right:
-                    raise ValueError("Coordinates must be integers")
-                if tree.num_roots == 1:
-                    self.S[left] = 0
-                else:
-                    for root in tree.roots:
-                        population = ts.node(root).population
-                        prev = prev_map.get(root, None)
-                        x = self.alloc_segment(left, right, root, population, prev=prev)
-                        if prev is None:
-                            self.L.set_value(x.index, right - left - 1)
-                            self.P[pop_index].add(x)
-                        else:
-                            self.L.set_value(x.index, right - prev.right)
-                            prev.next = x
-                        prev_map[root] = x
-                    self.S[left] = tree.num_roots
-            self.S[self.m] = -1
-            self.t = self.tables.nodes.time.max()
-            for j in range(N):
-                for x in self.P[j]:
-                    self.defrag_segment_chain(x)
-            self.defrag_breakpoints()
+            self.initialise_from_ts(ts)
 
         self.num_ca_events = 0
         self.num_re_events = 0
@@ -336,6 +349,69 @@ class Simulator(object):
             self.modifier_events.append(
                 (time, self.bottleneck_event, (int(pop_id), intensity)))
         self.modifier_events.sort()
+
+    def initialise_from_ts(self, ts):
+        self.tables = ts.dump_tables()
+        root_time = np.max(self.tables.nodes.time)
+        self.t = root_time
+        root_edges = [
+            edge for edge in ts.edges() if ts.node(edge.parent).time == root_time]
+
+        parent_count = [0 for _ in range(ts.num_nodes)]
+        root_segments_head = [None for _ in range(ts.num_nodes)]
+        root_segments_tail = [None for _ in range(ts.num_nodes)]
+        last_S = -1
+        for left, right, X in overlapping_segments(root_edges):
+            for edge in X:
+                parent_count[edge.parent] += 1
+            num_roots = 0
+            for edge in X:
+                # We could get rid of unary edge joining the real roots to ancient
+                # nodes here by looking for parent_count[edge.parent] == 1 and
+                # setting the root node to the edge's child. However, we'd need to
+                # get rid of the corresponding edges from the table, which would
+                # probably end up being tricky. Simpler the just run simplify at
+                # the end to get rid of these unary edges.
+                if parent_count[edge.parent] >= 1:
+                    root = edge.parent
+                    # Make sure we don't insert this parent again and also reset
+                    # the counter array for the next iteration of the outer loop.
+                    parent_count[edge.parent] = 0
+                    population = ts.node(edge.parent).population
+                    num_roots += 1
+                    if root_segments_head[root] is None:
+                        seg = self.alloc_segment(left, right, root, population)
+                        root_segments_head[root] = seg
+                        root_segments_tail[root] = seg
+                    else:
+                        tail = root_segments_tail[root]
+                        if tail.right == left:
+                            tail.right = right
+                        else:
+                            seg = self.alloc_segment(left, right, root, population, tail)
+                            tail.next = seg
+                            root_segments_tail[root] = seg
+            if num_roots == 1:
+                S = 0
+            else:
+                S = num_roots
+            if S != last_S:
+                self.S[left] = S
+                last_S = S
+        self.S[self.m] = -1
+
+        # Insert the segment chains into the algorithm state.
+        for node in range(ts.num_nodes):
+            seg = root_segments_head[node]
+            if seg is not None:
+                self.L.set_value(seg.index, seg.right - seg.left - 1)
+                self.P[seg.population].add(seg)
+                prev = seg
+                seg = seg.next
+                while seg is not None:
+                    self.L.set_value(seg.index, seg.right - prev.right)
+                    prev = seg
+                    seg = seg.next
 
     def change_population_size(self, pop_id, size):
         print("Changing pop size to ", size)
@@ -407,7 +483,11 @@ class Simulator(object):
         Finalises the simulation returns an msprime tree sequence object.
         """
         self.flush_edges()
-        return self.tables.tree_sequence()
+        ts = self.tables.tree_sequence()
+        if self.from_ts is not None:
+            # Need to simplify to get rid of unary edges and old root nodes.
+            ts = ts.simplify()
+        return ts
 
     def simulate(self, model='hudson'):
         if self.model == 'hudson':
@@ -417,7 +497,6 @@ class Simulator(object):
         else:
             print("Error: bad model specification -", self.model)
             raise ValueError
-
         return self.finalise()
 
     def hudson_simulate(self):

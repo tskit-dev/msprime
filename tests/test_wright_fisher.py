@@ -41,11 +41,14 @@ class WrightFisherSimulator(object):
     survival and only those who die are replaced.  The chromosome is 1.0
     Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
     """
-    def __init__(self, N, survival=0.0, seed=None, deep_history=True, debug=False):
+    def __init__(
+            self, N, survival=0.0, seed=None, deep_history=True, debug=False,
+            initial_generation_samples=False):
         self.N = N
         self.survival = survival
         self.deep_history = deep_history
         self.debug = debug
+        self.initial_generation_samples = initial_generation_samples
         if seed is not None:
             random.seed(seed)
 
@@ -101,16 +104,21 @@ class WrightFisherSimulator(object):
         if self.debug:
             print("Done! Final pop:")
             print(pop)
-        flags = [
+        flags = np.array([
             (msprime.NODE_IS_SAMPLE if u in pop else 0)
-            for u in range(len(tables.nodes))]
+            for u in range(len(tables.nodes))], dtype=np.uint32)
+        if self.initial_generation_samples:
+            flags[tables.nodes.time == ngens] = msprime.NODE_IS_SAMPLE
         tables.nodes.set_columns(time=tables.nodes.time, flags=flags)
         return tables
 
 
-def wf_sim(N, ngens, survival=0.0, deep_history=True, debug=False, seed=None):
+def wf_sim(
+        N, ngens, survival=0.0, deep_history=True, debug=False, seed=None,
+        initial_generation_samples=False):
     sim = WrightFisherSimulator(
-        N, survival=survival, deep_history=deep_history, debug=debug, seed=seed)
+        N, survival=survival, deep_history=deep_history, debug=debug, seed=seed,
+        initial_generation_samples=initial_generation_samples)
     return sim.run(ngens)
 
 

@@ -1840,6 +1840,8 @@ msp_init_from_ts(msp_t *self)
                 pop = self->tables.nodes->population[root];
                 prev = prev_map[root];
 
+                printf("Inserting seg %d-%d node=%d\n", left,right, root);
+
                 seg = msp_alloc_segment(self, left, right, root, pop, prev, NULL);
                 if (seg == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -2537,14 +2539,19 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     avl_node_t *a;
     segment_t *seg;
     node_id_t node;
+    int64_t edge_start;
     const double *node_time = tables->nodes->time;
     const double current_time = self->model.model_time_to_generations(&self->model,
             self->time);
 
-    /* msp_print_state(self, stdout); */
-
     for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
         for (a = self->populations[pop].ancestors.head; a != NULL; a = a->next) {
+            /* If there are any nodes in the segment chain with the current time,
+             * then we don't make any unary edges for them. This is because (a)
+             * we'd end up edges with the same parent and child time (if we didn't
+             * hack an extra epsilon onto the parent time) and (b), this node
+             * could only have arisen as the result of a coalescence and so this
+             * node really does represent the current ancestor */
             node = MSP_NULL_NODE;
             for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
                 if (node_time[seg->value] == current_time) {
@@ -2560,15 +2567,10 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
                     ret = node;
                     goto out;
                 }
-                /* printf("Adding new node %d\n", node); */
-            /* } else { */
-                /* printf("Reusing existing node %d\n", node); */
             }
             /* For every segment add an edge pointing to this new node */
             for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
                 if (seg->value != node) {
-                    /* printf("\tedge %d (%f) -> %d\n", */
-                    /*         seg->value, tables->nodes->time[seg->value], node); */
                     assert(node_time[node] > node_time[seg->value]);
                     ret = edge_table_add_row(tables->edges,
                         msp_genetic_to_phys(self, seg->left),
@@ -2581,9 +2583,17 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
             }
         }
     }
-    /* TEMP hack */
-    table_collection_sort(tables, 0, 0);
-    ret = 0;
+
+    /* Find the first edge with parent == current time */
+    edge_start = ((int64_t) tables->edges->num_rows) - 1;
+    while (edge_start >= 0
+            && node_time[tables->edges->parent[edge_start]] == current_time) {
+        edge_start--;
+    }
+    /* TODO This could be done more efficiently probably, but at least we only
+     * end up sorting a handful of edges at the end, so it's probably not so
+     * bad. */
+    ret = table_collection_sort(tables, (size_t) (edge_start + 1), 0);
 out:
     return ret;
 }
