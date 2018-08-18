@@ -1185,10 +1185,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = z;
             x->next = NULL;
             x->right = (uint32_t) k;
-
-            /* msp_print_state(self, stdout); */
             fenwick_increment(&self->links, x->id, k - z->right);
-
             assert(x->left < x->right);
             x = z;
             k = 1 + k + (int64_t) gsl_ran_exponential(self->rng, mu);
@@ -2517,6 +2514,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     ret = msp_flush_edges(self);
+
     if (ret != 0) {
         goto out;
     }
@@ -2530,10 +2528,83 @@ out:
     return ret;
 }
 
+/* Add in nodes and edges for the remaining segments to the output table. */
+static int WARN_UNUSED
+msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
+{
+    int ret = 0;
+    population_id_t pop;
+    avl_node_t *a;
+    segment_t *seg;
+    node_id_t node;
+    const double *node_time = tables->nodes->time;
+    const double current_time = self->model.model_time_to_generations(&self->model,
+            self->time);
+
+    /* msp_print_state(self, stdout); */
+
+    for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
+        for (a = self->populations[pop].ancestors.head; a != NULL; a = a->next) {
+            node = MSP_NULL_NODE;
+            for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
+                if (node_time[seg->value] == current_time) {
+                    node = seg->value;
+                    break;
+                }
+            }
+            if (node == MSP_NULL_NODE) {
+                /* Add a node for this ancestor */
+                node = node_table_add_row(tables->nodes, 0, current_time, pop,
+                        MSP_NULL_INDIVIDUAL, NULL, 0);
+                if (node < 0) {
+                    ret = node;
+                    goto out;
+                }
+                /* printf("Adding new node %d\n", node); */
+            /* } else { */
+                /* printf("Reusing existing node %d\n", node); */
+            }
+            /* For every segment add an edge pointing to this new node */
+            for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
+                if (seg->value != node) {
+                    /* printf("\tedge %d (%f) -> %d\n", */
+                    /*         seg->value, tables->nodes->time[seg->value], node); */
+                    assert(node_time[node] > node_time[seg->value]);
+                    ret = edge_table_add_row(tables->edges,
+                        msp_genetic_to_phys(self, seg->left),
+                        msp_genetic_to_phys(self, seg->right),
+                        node, seg->value);
+                    if (ret < 0) {
+                        goto out;
+                    }
+                }
+            }
+        }
+    }
+    /* TEMP hack */
+    table_collection_sort(tables, 0, 0);
+    ret = 0;
+out:
+    return ret;
+}
+
 int WARN_UNUSED
 msp_populate_tables(msp_t *self, table_collection_t *tables)
 {
-    return table_collection_copy(&self->tables, tables);
+    int ret = 0;
+
+    ret = table_collection_copy(&self->tables, tables);
+    if (ret != 0) {
+        goto out;
+    }
+    if (!msp_is_completed(self)) {
+        ret = msp_insert_uncoalesced_edges(self, tables);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
 }
 
 int
