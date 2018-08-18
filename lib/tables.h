@@ -257,8 +257,10 @@ typedef struct {
  * expose this API externally, and can use table_collection_simplify
  * instead */
 
-/* For the simplify algorithm, we need specialised forms of ancestral
- * segments, sites and mutations */
+/* TODO: This should be renamed to tsk_segment_t when we move to tskit.
+ * msprime can then #include this and also use it. msprime needs a different
+ * segment definition, which it can continue to call 'segment_t' as it
+ * doesn't export a C API. */
 typedef struct _simplify_segment_t {
     double left;
     double right;
@@ -277,14 +279,20 @@ typedef struct _mutation_id_list_t {
     struct _mutation_id_list_t *next;
 } mutation_id_list_t;
 
-/* State needed for overlapping segments algorithm */
+/* segment overlap finding algorithm */
 typedef struct {
+    /* The input segments. This buffer is sorted by the algorithm and we also
+     * assume that there is space for an extra element at the end */
+    simplify_segment_t *segments;
+    size_t num_segments;
     size_t index;
     size_t num_overlapping;
     double left;
     double right;
+    /* Output buffer */
+    size_t max_overlapping;
     simplify_segment_t **overlapping;
-} overlapping_segments_state_t;
+} segment_overlapper_t;
 
 typedef struct {
     node_id_t *samples;
@@ -302,7 +310,7 @@ typedef struct {
     simplify_segment_t *segment_queue;
     size_t segment_queue_size;
     size_t max_segment_queue_size;
-    overlapping_segments_state_t overlapping_segments_state;
+    segment_overlapper_t segment_overlapper;
     block_allocator_t segment_heap;
     /* Buffer for output edges. For each child we keep a linked list of
      * intervals, and also store the actual children that have been buffered. */
@@ -509,6 +517,14 @@ int table_collection_reset_position(table_collection_t *self,
         table_collection_position_t *position);
 int table_collection_clear(table_collection_t *self);
 int table_collection_check_integrity(table_collection_t *self, int flags);
+
+int segment_overlapper_alloc(segment_overlapper_t *self);
+int segment_overlapper_free(segment_overlapper_t *self);
+int segment_overlapper_init(segment_overlapper_t *self, simplify_segment_t *segments,
+        size_t num_segments);
+int segment_overlapper_next(segment_overlapper_t *self,
+        double *left, double *right, simplify_segment_t ***overlapping,
+        size_t *num_overlapping);
 
 int simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
         table_collection_t *tables, int flags);
