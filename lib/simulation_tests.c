@@ -175,7 +175,7 @@ test_single_locus_two_populations(void)
     ret = msp_add_mass_migration(&msp, t2, 1, 0, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     msp_print_state(&msp, _devnull);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
@@ -487,7 +487,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_get_num_populations(&msp), 2);
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(msp_get_num_breakpoints(&msp), m - 1);
     ret = msp_get_breakpoints(&msp, breakpoints);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1795,8 +1795,6 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
         CU_ASSERT_EQUAL(ret, 0);
     }
     /* TODO add dirac and other models */
-    ret = msp_set_start_time(&msp, 1000);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, error);
 
@@ -1835,6 +1833,7 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
 
         sparse_tree_free(&tree);
         ret = msp_reset(&msp);
+        /* printf("ret = %s\n", msp_strerror(ret)); */
         CU_ASSERT_EQUAL(ret, 0);
     }
 out:
@@ -1860,6 +1859,7 @@ verify_initial_simulate_from_state(msp_t *msp_source, recomb_map_t *recomb_map,
     ret = msp_alloc(&msp_dest, 0, NULL, recomb_map, from_ts, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp_dest);
+    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_print_state(&msp_dest, _devnull);
 
@@ -1926,8 +1926,12 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
+    /* msp_print_state(&msp, stdout); */
+
     /* Partially run the simulation */
     ret = msp_run(&msp, DBL_MAX, num_events);
+    /* msp_print_state(&msp, stdout); */
+    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_FALSE(msp_is_completed(&msp));
     ret = table_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
