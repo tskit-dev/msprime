@@ -3450,7 +3450,7 @@ segment_overlapper_alloc(segment_overlapper_t *self)
 
     memset(self, 0, sizeof(*self));
     self->max_overlapping = 8; /* Making sure we call realloc in tests */
-    self->overlapping = malloc(sizeof(*self->overlapping));
+    self->overlapping = malloc(self->max_overlapping * sizeof(*self->overlapping));
     if (self->overlapping == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -3530,6 +3530,7 @@ segment_overlapper_next(segment_overlapper_t *self,
             self->left = S[self->index].left;
         }
         while (self->index < n && S[self->index].left == self->left) {
+            assert(self->num_overlapping < self->max_overlapping);
             self->overlapping[self->num_overlapping] = &S[self->index];
             self->num_overlapping++;
             self->index++;

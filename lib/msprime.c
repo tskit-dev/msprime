@@ -1760,9 +1760,220 @@ out:
     return ret;
 }
 
+static inline int
+msp_allocate_root_segments(msp_t *self,
+        uint32_t left, uint32_t right,
+        simplify_segment_t **overlapping,
+        size_t num_overlapping,
+        uint32_t * restrict parent_count,
+        segment_t * restrict *root_segments_head,
+        segment_t * restrict *root_segments_tail)
+{
+    int ret = 0;
+    size_t j;
+    table_collection_t *tables = self->from_ts->tables;
+    const population_id_t *node_population = tables->nodes->population;
+    population_id_t population;
+    node_id_t root;
+    segment_t *seg, *tail;
+
+    for (j = 0; j < num_overlapping; j++) {
+        if (parent_count[overlapping[j]->node] >= 1) {
+            root = overlapping[j]->node;
+            population = node_population[root];
+            /* Reference integrity has alreay been checked, but the null population
+             * is still possibile */
+            if (population == MSP_NULL_POPULATION) {
+                ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+                goto out;
+            }
+            parent_count[root] = 0;
+            if (root_segments_head[root] == NULL) {
+                seg = msp_alloc_segment(self, left, right, root, population,
+                        NULL, NULL);
+                if (seg == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                root_segments_head[root] = seg;
+                root_segments_tail[root] = seg;
+            } else {
+                tail = root_segments_tail[root];
+                if (tail->right == left) {
+                    tail->right = right;
+                } else {
+                    seg = msp_alloc_segment(self, left, right, root, population,
+                            tail, NULL);
+                    if (seg == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
+                        goto out;
+                    }
+                    tail->next = seg;
+                    root_segments_tail[root] = seg;
+                }
+            }
+        }
+    }
+out:
+    return ret;
+}
+
 static int
 msp_init_from_ts(msp_t *self)
 {
+    int ret = 0;
+    table_collection_t *tables = self->from_ts->tables;
+    const edge_table_t edges = *tables->edges;
+    size_t num_nodes = tables->nodes->num_rows;
+    const double *node_time = tables->nodes->time;
+    simplify_segment_t *root_segments = malloc(
+            (edges.num_rows + 1) * sizeof(*root_segments));
+    uint32_t *parent_count = calloc(num_nodes, sizeof(*parent_count));
+    segment_t **root_segments_head = calloc(num_nodes, sizeof(*root_segments_head));
+    segment_t **root_segments_tail = calloc(num_nodes, sizeof(*root_segments_tail));
+    double root_time, left_dbl, right_dbl;
+    size_t j, num_root_segments, num_overlapping;
+    uint32_t num_roots, tmp_coord, overlap, last_overlap, left, right;
+    node_id_t root;
+    simplify_segment_t *root_seg, **X;
+    segment_t *seg;
+    segment_overlapper_t overlapper;
+
+    ret = segment_overlapper_alloc(&overlapper);
+    if (ret != 0) {
+        goto out;
+    }
+    if (root_segments == NULL || parent_count == NULL ||
+            root_segments_head == NULL || root_segments_tail == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    if (self->num_populations != self->tables.populations->num_rows) {
+        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
+        goto out;
+    }
+    /* Reset the tables to their correct position for replication */
+    ret = table_collection_reset_position(&self->tables, &self->from_position);
+    if (ret != 0) {
+        goto out;
+    }
+
+    root_time = -1;
+    for (j = 0; j < num_nodes; j++) {
+        root_time = GSL_MAX(node_time[j], root_time);
+    }
+    num_root_segments = 0;
+    for (j = 0; j < edges.num_rows; j++) {
+        if (node_time[edges.parent[j]] == root_time) {
+            root_seg = root_segments + num_root_segments;
+            num_root_segments++;
+            root_seg->node = edges.parent[j];
+            ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, edges.left[j],
+                    &tmp_coord);
+            if (ret != 0) {
+                goto out;
+            }
+            root_seg->left = (double) tmp_coord;
+            ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, edges.right[j],
+                    &tmp_coord);
+            if (ret != 0) {
+                goto out;
+            }
+            root_seg->right = (double) tmp_coord;
+            if (root_seg->left == root_seg->right) {
+                ret = MSP_ERR_RECOMB_MAP_TOO_COARSE;
+                goto out;
+            }
+            /* printf("(%f, %f, %d)\n", root_seg->left, root_seg->right, root_seg->node); */
+        }
+    }
+    /* printf("Got %d root segments\n", (int) num_root_segments); */
+    assert(num_root_segments < edges.num_rows + 1);
+
+    ret = segment_overlapper_init(&overlapper, root_segments, num_root_segments);
+    if (ret != 0) {
+        goto out;
+    }
+    last_overlap = UINT32_MAX;
+    /* last_right = 0; */
+    while ((ret = segment_overlapper_next(&overlapper,
+                &left_dbl, &right_dbl, &X, &num_overlapping)) == 1) {
+        assert(left_dbl < right_dbl);
+        assert(round(left_dbl) == left_dbl);
+        assert(round(right_dbl) == right_dbl);
+        left = (uint32_t) left_dbl;
+        right = (uint32_t) right_dbl;
+        /* if (left != last_right) { */
+        /*     printf("ERROR: %d %d\n", (int) last_right, (int) left); */
+        /*     ret = MSP_ERR_NO_ROOT_EDGES_IN_INTERVAL; */
+        /*     goto out; */
+        /* } */
+        /* last_right = right; */
+        printf("INT: %d-%d: %d\n", left, right, (int) num_overlapping);
+        num_roots = 0;
+        for (j = 0; j < num_overlapping; j++) {
+            printf("\t (%f, %f, %d)\n", X[j]->left, X[j]->right, X[j]->node);
+            root = X[j]->node;
+            num_roots += parent_count[root] == 0;
+            parent_count[root]++;
+        }
+        printf("num_roots = %d\n", num_roots);
+        /* When we have 1 root segment his means the interval has fully coalesced
+         * and therefore we don't allocate any segments. */
+        overlap = 0;
+        if (num_roots > 1) {
+            overlap = num_roots;
+            ret = msp_allocate_root_segments(self, left, right,
+                    X, num_overlapping, parent_count, root_segments_head,
+                    root_segments_tail);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        if (overlap != last_overlap) {
+            ret = msp_insert_overlap_count(self, left, overlap);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    if (ret != 0) {
+        goto out;
+    }
+    /* if (last_right != self->num_loci) { */
+    /*     printf("ERROR: %d %d\n", (int) last_right, (int) self->num_loci); */
+    /*     ret = MSP_ERR_NO_ROOT_EDGES_IN_INTERVAL; */
+    /*     goto out; */
+    /* } */
+
+    /* Insert the segment chains into the algorithm state */
+    for (root = 0; root < (node_id_t) num_nodes; root++) {
+        seg = root_segments_head[root];
+        if (seg != NULL) {
+            ret = msp_insert_individual(self, seg);
+            if (ret != 0) {
+                goto out;
+            }
+            fenwick_set_value(&self->links, seg->id, seg->right - seg->left - 1);
+            for (seg = seg->next; seg != NULL; seg = seg->next) {
+                fenwick_set_value(&self->links, seg->id, seg->right - seg->prev->right);
+            }
+        }
+   }
+    root_time = self->model.generations_to_model_time(&self->model, root_time);
+    self->time = root_time; /* TODO implement start_time */
+
+    /* msp_print_state(self, stdout); */
+out:
+    segment_overlapper_free(&overlapper);
+    msp_safe_free(root_segments);
+    msp_safe_free(parent_count);
+    msp_safe_free(root_segments_head);
+    msp_safe_free(root_segments_tail);
+    return ret;
+
+#if 0
     int ret = 0;
     int t_iter;
     sparse_tree_t t;
@@ -1896,6 +2107,7 @@ out:
     sparse_tree_free(&t);
     msp_safe_free(prev_map);
     return ret;
+#endif
 }
 
 static int
@@ -1916,6 +2128,10 @@ msp_init_from_samples(msp_t *self)
         if (ret < 0) {
             goto out;
         }
+    }
+    if (self->num_samples < 2) {
+        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
+        goto out;
     }
     /* Set up the sample */
     for (u = 0; u < (node_id_t) self->num_samples; u++) {
@@ -2543,6 +2759,7 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     const double *node_time = tables->nodes->time;
     const double current_time = self->model.model_time_to_generations(&self->model,
             self->time);
+    /* msp_print_state(self, stdout); */
 
     for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
         for (a = self->populations[pop].ancestors.head; a != NULL; a = a->next) {

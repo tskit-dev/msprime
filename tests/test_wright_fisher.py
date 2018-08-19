@@ -57,6 +57,7 @@ class WrightFisherSimulator(object):
 
     def run(self, ngens):
         tables = msprime.TableCollection(sequence_length=1)
+        tables.populations.add_row()
         if self.deep_history:
             # initial population
             init_ts = msprime.simulate(self.N, recombination_rate=1.0)
@@ -67,8 +68,13 @@ class WrightFisherSimulator(object):
                 left=init_tables.edges.left, right=init_tables.edges.right,
                 parent=init_tables.edges.parent, child=init_tables.edges.child)
         else:
+            flags = 0
+            if self.initial_generation_samples:
+                flags = msprime.NODE_IS_SAMPLE
             for _ in range(self.N):
-                tables.nodes.add_row(time=ngens)
+                tables.nodes.add_row(flags=flags, time=ngens, population=0)
+            print("ADDED INIT")
+            print(tables.nodes)
 
         pop = list(range(self.N))
         for t in range(ngens - 1, -1, -1):
@@ -87,7 +93,7 @@ class WrightFisherSimulator(object):
                 if dead[j]:
                     # this is: offspring ID, lparent, rparent, breakpoint
                     offspring = len(tables.nodes)
-                    tables.nodes.add_row(time=t)
+                    tables.nodes.add_row(time=t, population=0)
                     lparent, rparent = new_parents[k]
                     k += 1
                     bp = self.random_breakpoint()
@@ -104,12 +110,12 @@ class WrightFisherSimulator(object):
         if self.debug:
             print("Done! Final pop:")
             print(pop)
-        flags = np.array([
-            (msprime.NODE_IS_SAMPLE if u in pop else 0)
-            for u in range(len(tables.nodes))], dtype=np.uint32)
-        if self.initial_generation_samples:
-            flags[tables.nodes.time == ngens] = msprime.NODE_IS_SAMPLE
-        tables.nodes.set_columns(time=tables.nodes.time, flags=flags)
+        flags = tables.nodes.flags
+        flags[pop] = msprime.NODE_IS_SAMPLE
+        tables.nodes.set_columns(
+            flags=flags,
+            time=tables.nodes.time,
+            population=tables.nodes.population)
         return tables
 
 

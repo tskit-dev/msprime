@@ -20,7 +20,7 @@ import numpy.random
 import statsmodels.api as sm
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 from matplotlib import pyplot
 import seaborn as sns
 
@@ -740,12 +740,30 @@ class SimulationVerifier(object):
             reps = msprime.simulate(
                 n, num_replicates=num_replicates,
                 recombination_rate=recombination_rate, __tmp_max_time=t)
-            for j, ts in enumerate(reps):
+            # for j, ts in enumerate(reps):
+            for j in range(num_replicates):
+                ts  = msprime.simulate(
+                    n,
+                    recombination_rate=recombination_rate, __tmp_max_time=t,
+                    random_seed=j + 1)
+                # try:
                 final_ts = msprime.simulate(
                     from_ts=ts,
                     recombination_rate=recombination_rate,
                     start_time=np.max(ts.tables.nodes.time))
+                if max(t.num_roots for t in final_ts.trees()) != 1:
+                    print("seed = ", j + 1, n, recombination_rate, t)
+                    for tree in final_ts.trees():
+                        print(tree.draw(format="unicode"))
                 assert max(t.num_roots for t in final_ts.trees()) == 1
+                # except Exception as e:
+                #     print("seed = ", j + 1, n, recombination_rate, t)
+                #     ts.dump("problem.trees")
+                #     raise
+                #     # print(ts.tables)
+                #     # raise
+                #     final_ts = ts
+
                 T2[j] = np.max(final_ts.tables.nodes.time)
                 num_trees2[j] = final_ts.num_trees
                 num_nodes2[j] = final_ts.num_nodes

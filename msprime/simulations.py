@@ -671,6 +671,8 @@ class Simulator(object):
         self.tables.provenances.truncate(self.num_input_provenances)
         if provenance_record is not None:
             self.tables.provenances.add_row(provenance_record)
+        if self.from_ts is not None:
+            self.tables.simplify()
         return self.tables.tree_sequence()
 
     def reset(self):

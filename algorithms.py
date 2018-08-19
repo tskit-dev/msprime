@@ -361,10 +361,24 @@ class Simulator(object):
         root_segments_head = [None for _ in range(ts.num_nodes)]
         root_segments_tail = [None for _ in range(ts.num_nodes)]
         last_S = -1
+        last_right = 0
         for left, right, X in overlapping_segments(root_edges):
-            for edge in X:
-                parent_count[edge.parent] += 1
+            if left != last_right:
+                raise ValueError("No root edges in interval")
+            last_right = right
             num_roots = 0
+            for edge in X:
+                num_roots += int(parent_count[edge.parent] == 0)
+                parent_count[edge.parent] += 1
+            S = 0 if num_roots == 1 else num_roots
+            if S != last_S:
+                self.S[left] = S
+                last_S = S
+            if num_roots == 1:
+                # If we have 1 root this is a special case and we don't add in
+                # any ancestral segments to the state.
+                continue
+
             for edge in X:
                 # We could get rid of unary edge joining the real roots to ancient
                 # nodes here by looking for parent_count[edge.parent] == 1 and
@@ -378,7 +392,6 @@ class Simulator(object):
                     # the counter array for the next iteration of the outer loop.
                     parent_count[edge.parent] = 0
                     population = ts.node(edge.parent).population
-                    num_roots += 1
                     if root_segments_head[root] is None:
                         seg = self.alloc_segment(left, right, root, population)
                         root_segments_head[root] = seg
@@ -391,14 +404,9 @@ class Simulator(object):
                             seg = self.alloc_segment(left, right, root, population, tail)
                             tail.next = seg
                             root_segments_tail[root] = seg
-            if num_roots == 1:
-                S = 0
-            else:
-                S = num_roots
-            if S != last_S:
-                self.S[left] = S
-                last_S = S
         self.S[self.m] = -1
+        if last_right != self.m:
+            raise ValueError("No root edges in last interval")
 
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
