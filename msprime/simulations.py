@@ -179,9 +179,10 @@ def simulator_factory(
     elif samples is not None:
         the_samples = samples
 
+    if start_time is not None and start_time < 0:
+        raise ValueError("start_time cannot be negative")
+
     if from_ts is not None:
-        if start_time is None:
-            raise ValueError("Must specify start_time when using from_ts argument")
         if not isinstance(from_ts, trees.TreeSequence):
             raise TypeError("from_ts must be a TreeSequence instance.")
         population_mismatch_message = (
@@ -194,6 +195,12 @@ def simulator_factory(
         else:
             if from_ts.num_populations != len(population_configurations):
                 raise ValueError(population_mismatch_message)
+        # We currently can't support migrations because simplify won't
+        # work with them.
+        if record_migrations or from_ts.num_migrations > 0:
+            raise ValueError(
+                "simulate_from cannot currently record migration events. Please "
+                "open a bug report")
 
     if recombination_map is None:
         # Default to 1 if no from_ts; otherwise default to the sequence length
@@ -627,7 +634,7 @@ class Simulator(object):
         ll_from_ts = None
         if self.from_ts is not None:
             ll_from_ts = self.from_ts.get_ll_tree_sequence()
-        start_time = 0 if self.start_time is None else self.start_time
+        start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             recombination_map=ll_recomb_map,
@@ -672,7 +679,8 @@ class Simulator(object):
         if provenance_record is not None:
             self.tables.provenances.add_row(provenance_record)
         if self.from_ts is not None:
-            self.tables.simplify()
+            self.tables.simplify(
+                filter_individuals=False, filter_populations=False, filter_sites=False)
         return self.tables.tree_sequence()
 
     def reset(self):

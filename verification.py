@@ -12,6 +12,7 @@ import random
 import subprocess
 import sys
 import tempfile
+import time
 
 import scipy.special
 import pandas as pd
@@ -708,7 +709,7 @@ class SimulationVerifier(object):
 
     def run_simulate_from_recombination(self):
         num_replicates = 1000
-        n = 10
+        n = 100
         recombination_rate = 10
 
         basedir = "tmp__NOBACKUP__/simulate_from_recombination"
@@ -740,30 +741,12 @@ class SimulationVerifier(object):
             reps = msprime.simulate(
                 n, num_replicates=num_replicates,
                 recombination_rate=recombination_rate, __tmp_max_time=t)
-            # for j, ts in enumerate(reps):
-            for j in range(num_replicates):
-                ts  = msprime.simulate(
-                    n,
-                    recombination_rate=recombination_rate, __tmp_max_time=t,
-                    random_seed=j + 1)
-                # try:
+            for j, ts in enumerate(reps):
                 final_ts = msprime.simulate(
                     from_ts=ts,
                     recombination_rate=recombination_rate,
                     start_time=np.max(ts.tables.nodes.time))
-                if max(t.num_roots for t in final_ts.trees()) != 1:
-                    print("seed = ", j + 1, n, recombination_rate, t)
-                    for tree in final_ts.trees():
-                        print(tree.draw(format="unicode"))
                 assert max(t.num_roots for t in final_ts.trees()) == 1
-                # except Exception as e:
-                #     print("seed = ", j + 1, n, recombination_rate, t)
-                #     ts.dump("problem.trees")
-                #     raise
-                #     # print(ts.tables)
-                #     # raise
-                #     final_ts = ts
-
                 T2[j] = np.max(final_ts.tables.nodes.time)
                 num_trees2[j] = final_ts.num_trees
                 num_nodes2[j] = final_ts.num_nodes
@@ -796,6 +779,38 @@ class SimulationVerifier(object):
             filename = os.path.join(basedir, "num_nodes_t={}.png".format(t))
             pyplot.savefig(filename, dpi=72)
             pyplot.close('all')
+
+    def run_simulate_from_benchmark(self):
+        # A quick benchmark to show this running on a large example
+        L = 50 * 10**6
+        seed = 3
+        for n in [10**3, 10**4, 10**5]:
+            print("====================")
+            print("n = ", n)
+            print("====================")
+            before = time.perf_counter()
+            ts = msprime.simulate(
+                n, recombination_rate=1e-8, Ne=10**4, length=L, random_seed=seed)
+            duration = time.perf_counter() - before
+
+            print("Full sim required {:.2f} sec".format(duration))
+
+            before = time.perf_counter()
+            t = ts.tables.nodes.time[-1] / 100
+            ts = msprime.simulate(
+                n, recombination_rate=1e-8, Ne=10**4, length=L, random_seed=seed,
+                __tmp_max_time=t)
+            duration = time.perf_counter() - before
+            print("Initial sim required {:.2f} sec".format(duration))
+            roots = np.array([tree.num_roots for tree in ts.trees()])
+            print("\t", roots.shape[0], "trees, mean roots = ", np.mean(roots))
+            before = time.perf_counter()
+
+            full_ts = msprime.simulate(
+                from_ts=ts, recombination_rate=1e-8, Ne=10**4, length=L,
+                random_seed=seed)
+            duration = time.perf_counter() - before
+            print("Final sim required {:.2f} sec".format(duration))
 
     def run_dtwf_coalescent_comparison(self, test_name, **kwargs):
         df = pd.DataFrame()
@@ -1036,6 +1051,13 @@ class SimulationVerifier(object):
         self._instances[
             "simulate_from_recombination"] = self.run_simulate_from_recombination
 
+    def add_simulate_from_benchmark(self):
+        """
+        Check that the distributions are identitical when we run simulate_from
+        at various time points.
+        """
+        self._instances["simulate_from_benchmark"] = self.run_simulate_from_benchmark
+
     def add_random_instance(
             self, key, num_populations=1, num_replicates=1000,
             num_demographic_events=0):
@@ -1246,6 +1268,7 @@ def main():
     verifier.add_simulate_from_single_locus_check()
     verifier.add_simulate_from_multi_locus_check()
     verifier.add_simulate_from_recombination_check()
+    verifier.add_simulate_from_benchmark()
 
     # Add SMC checks against scrm.
     verifier.add_smc_num_trees_analytical_check()

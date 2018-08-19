@@ -8710,7 +8710,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t node_mapping_block_size = 10;
     tree_sequence_t *from_ts = NULL;
     int store_migrations = 0;
-    double start_time = 0;
+    double start_time = -1;
 
     self->sim = NULL;
     self->random_generator = NULL;
@@ -8769,10 +8769,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    sim_ret = msp_set_start_time(self->sim, start_time);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
+    if (start_time >= 0) {
+        sim_ret = msp_set_start_time(self->sim, start_time);
+        if (sim_ret != 0) {
+            handle_input_error(sim_ret);
+            goto out;
+        }
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
     if (sim_ret != 0) {

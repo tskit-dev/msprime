@@ -73,8 +73,6 @@ class WrightFisherSimulator(object):
                 flags = msprime.NODE_IS_SAMPLE
             for _ in range(self.N):
                 tables.nodes.add_row(flags=flags, time=ngens, population=0)
-            print("ADDED INIT")
-            print(tables.nodes)
 
         pop = list(range(self.N))
         for t in range(ngens - 1, -1, -1):

@@ -2963,10 +2963,9 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     segment_t *seg;
     node_id_t node;
     int64_t edge_start;
-    const double *node_time = tables->nodes->time;
+    node_table_t *nodes = tables->nodes;
     const double current_time = self->model.model_time_to_generations(&self->model,
             self->time);
-    /* msp_print_state(self, stdout); */
 
     for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
         for (a = self->populations[pop].ancestors.head; a != NULL; a = a->next) {
@@ -2978,24 +2977,25 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
              * node really does represent the current ancestor */
             node = MSP_NULL_NODE;
             for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
-                if (node_time[seg->value] == current_time) {
+                if (nodes->time[seg->value] == current_time) {
                     node = seg->value;
                     break;
                 }
             }
             if (node == MSP_NULL_NODE) {
                 /* Add a node for this ancestor */
-                node = node_table_add_row(tables->nodes, 0, current_time, pop,
+                node = node_table_add_row(nodes, 0, current_time, pop,
                         MSP_NULL_INDIVIDUAL, NULL, 0);
                 if (node < 0) {
                     ret = node;
                     goto out;
                 }
             }
+
             /* For every segment add an edge pointing to this new node */
             for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
                 if (seg->value != node) {
-                    assert(node_time[node] > node_time[seg->value]);
+                    assert(nodes->time[node] > nodes->time[seg->value]);
                     ret = edge_table_add_row(tables->edges,
                         msp_genetic_to_phys(self, seg->left),
                         msp_genetic_to_phys(self, seg->right),
@@ -3011,7 +3011,7 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     /* Find the first edge with parent == current time */
     edge_start = ((int64_t) tables->edges->num_rows) - 1;
     while (edge_start >= 0
-            && node_time[tables->edges->parent[edge_start]] == current_time) {
+            && nodes->time[tables->edges->parent[edge_start]] == current_time) {
         edge_start--;
     }
     /* TODO This could be done more efficiently probably, but at least we only
