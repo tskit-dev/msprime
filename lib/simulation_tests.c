@@ -2018,6 +2018,13 @@ test_simulate_from_multi_locus_replicates(void)
 }
 
 static void
+test_simulate_from_empty(void)
+{
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 0, 0, 1);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 0, 0, 1);
+}
+
+static void
 test_simulate_from_completed(void)
 {
     int ret;
@@ -2052,8 +2059,7 @@ test_simulate_from_completed(void)
     ret = tree_sequence_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from, 1,
-            MSP_ERR_NO_ROOT_EDGES_IN_INTERVAL);
+    verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from, 1, 0);
 
     msp_free(&msp);
     gsl_rng_free(rng);
@@ -2100,7 +2106,7 @@ test_simulate_from_incompatible(void)
     tree_sequence_free(&from);
     msp_free(&msp);
 
-    /* no edges */
+    /* zero samples */
     from_tables.sequence_length = 10.0;
     ret = population_table_add_row(from_tables.populations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2109,87 +2115,62 @@ test_simulate_from_incompatible(void)
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_NO_ROOT_EDGES_IN_INTERVAL);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
     tree_sequence_free(&from);
     msp_free(&msp);
 
-    /* Simplest possible initial conditions */
-    node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 0,
-            MSP_NULL_POPULATION, MSP_NULL_INDIVIDUAL, NULL, 0);
-    node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 0,
-            MSP_NULL_POPULATION, MSP_NULL_INDIVIDUAL, NULL, 0);
-    /* two root nodes and edges*/
-    node_table_add_row(from_tables.nodes, 0, 1,
-            0, MSP_NULL_INDIVIDUAL, NULL, 0);
-    edge_table_add_row(from_tables.edges, 0, 10.0, 2, 0);
-    node_table_add_row(from_tables.nodes, 0, 1,
-            0, MSP_NULL_INDIVIDUAL, NULL, 0);
-    edge_table_add_row(from_tables.edges, 0, 10.0, 3, 1);
-
-    /* Check to make sure we can run this correctly */
+    /* older nodes */
+    from_tables.sequence_length = 10.0;
+    ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 1.0, 0,
+            MSP_NULL_INDIVIDUAL, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 2.0, 0,
+            MSP_NULL_INDIVIDUAL, NULL, 0);
     ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 1.999);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME_FROM_TS);
     tree_sequence_free(&from);
     msp_free(&msp);
 
-    from_tables.nodes->population[2] = -1;
     ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 1.999);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME_FROM_TS);
+    tree_sequence_free(&from);
+    msp_free(&msp);
+
+    /* Must have legitimate population references */
+    from_tables.nodes->population[0] = -1;
+    ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     tree_sequence_free(&from);
     msp_free(&msp);
 
-    gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
-    table_collection_free(&from_tables);
-}
-
-static void
-test_simulate_from_simplest_initial_conditions(void)
-{
-    int ret;
-    msp_t msp;
-    recomb_map_t recomb_map;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    tree_sequence_t from;
-    table_collection_t from_tables;
-    int load_flags = MSP_BUILD_INDEXES;
-
-    CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = table_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    from_tables.sequence_length = 1.0;
-
-    /* Simplest possible initial conditions: two nodes, one population. */
-    population_table_add_row(from_tables.populations, NULL, 0);
-    node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 0,
-            MSP_NULL_POPULATION, MSP_NULL_INDIVIDUAL, NULL, 0);
-    node_table_add_row(from_tables.nodes, 0, 0,
-            MSP_NULL_POPULATION, MSP_NULL_INDIVIDUAL, NULL, 0);
-    /* one root node and edge*/
-    node_table_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 1,
-            0, MSP_NULL_INDIVIDUAL, NULL, 0);
-    edge_table_add_row(from_tables.edges, 0, 1, 2, 0);
-
     /* Check to make sure we can run this correctly */
+    from_tables.nodes->population[0] = 0;
     ret = tree_sequence_load_tables(&from, &from_tables, load_flags);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 2.0);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
-
     tree_sequence_free(&from);
     msp_free(&msp);
 
@@ -2337,10 +2318,9 @@ main(int argc, char **argv)
         {"test_simulate_from_multi_locus", test_simulate_from_multi_locus},
         {"test_simulate_from_multi_locus_replicates",
             test_simulate_from_multi_locus_replicates},
+        {"test_simulate_from_empty", test_simulate_from_empty},
         {"test_simulate_from_completed", test_simulate_from_completed},
         {"test_simulate_from_incompatible", test_simulate_from_incompatible},
-        {"test_simulate_from_simplest_initial_conditions",
-            test_simulate_from_simplest_initial_conditions},
         {"test_simulate_init_errors", test_simulate_init_errors},
         CU_TEST_INFO_NULL,
     };

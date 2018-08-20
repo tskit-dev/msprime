@@ -170,12 +170,8 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_from_wf(self):
         from_ts = get_wf_base(6, 4)
-        for tree in from_ts.trees():
-            print(tree.draw(format="unicode"))
         final_ts = msprime.simulate(
             from_ts=from_ts, random_seed=2, recombination_rate=1)
-        for tree in final_ts.trees():
-            print(tree.draw(format="unicode"))
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
 
@@ -597,7 +593,7 @@ class TestMappingFailures(unittest.TestCase):
     Examples in which the coordinate mapping fails and we return a malformed
     tree sequence.
     """
-    @unittest.skip("No longer failing: investigate")
+
     def test_coarse_to_fine_map(self):
         from_ts = msprime.simulate(
             sample_size=4, __tmp_max_time=1, random_seed=5,
@@ -607,13 +603,11 @@ class TestMappingFailures(unittest.TestCase):
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2,
             recombination_rate=2)
-        with self.assertRaises(_msprime.LibraryError):
-            # Raises:
-            # Bad edges: contradictory children for a given parent over an interval.
-            for tree in final_ts.trees():
-                pass
+        max_roots = max(tree.num_roots for tree in final_ts.trees())
+        # We don't correctly finish the tree sequence when we use too fine a map.
+        # This must be documented as a "known issue".
+        self.assertGreater(max_roots, 1)
 
-    @unittest.skip("No longer failing: investigate")
     def test_fine_to_coarse_map(self):
         from_ts = msprime.simulate(
             sample_size=4, __tmp_max_time=1, random_seed=5, recombination_rate=1)
@@ -623,11 +617,10 @@ class TestMappingFailures(unittest.TestCase):
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2,
             recombination_map=msprime.RecombinationMap.uniform_map(1, 1, num_loci=10))
-        with self.assertRaises(_msprime.LibraryError):
-            # Raises:
-            # Bad edges: contradictory children for a given parent over an interval.
-            for tree in final_ts.trees():
-                pass
+        max_roots = max(tree.num_roots for tree in final_ts.trees())
+        # We don't correctly finish the tree sequence when we get mapping problems.
+        # This must be documented as a "known issue".
+        self.assertGreater(max_roots, 1)
 
     def test_zero_recombination_rate(self):
         from_ts = msprime.simulate(
@@ -792,7 +785,6 @@ class TestErrors(unittest.TestCase):
                 msprime.simulate(from_ts=base_ts, start_time=start_time)
 
 
-@unittest.skip("Skipping until update SLiM output added")
 class TestSlimOutput(unittest.TestCase):
     """
     Verify that we can successfully simulate from SLiM output.

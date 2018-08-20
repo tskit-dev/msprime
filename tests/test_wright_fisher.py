@@ -63,7 +63,8 @@ class WrightFisherSimulator(object):
             init_ts = msprime.simulate(self.N, recombination_rate=1.0)
             init_tables = init_ts.dump_tables()
             tables.nodes.set_columns(
-                time=init_tables.nodes.time + ngens, flags=init_tables.nodes.flags)
+                time=init_tables.nodes.time + ngens,
+                flags=np.zeros_like(init_tables.nodes.flags))
             tables.edges.set_columns(
                 left=init_tables.edges.left, right=init_tables.edges.right,
                 parent=init_tables.edges.parent, child=init_tables.edges.child)
@@ -140,12 +141,10 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
         tables.sort()
-        samples = np.where(
-            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        tables.simplify(samples)
-        ts = msprime.load_tables(**tables.asdict())
-        # All trees should have exactly one root and the leaves should be the samples,
-        # and all internal nodes should have arity > 1
+        tables.simplify()
+        ts = tables.tree_sequence()
+        # All trees should have exactly one root and all internal nodes should
+        # have arity > 1
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
             leaves = set(tree.leaves(tree.root))
@@ -162,10 +161,8 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
         tables.sort()
-        samples = np.where(
-            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        tables.simplify(samples)
-        ts = msprime.load_tables(**tables.asdict())
+        tables.simplify()
+        ts = tables.tree_sequence()
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
@@ -177,10 +174,9 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
-        samples = np.where(
-            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         tables.sort()
-        tables.simplify(samples)
+        tables.simplify()
+        ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
         ts = msprime.load_tables(**tables.asdict())
@@ -201,10 +197,9 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
-        samples = np.where(
-            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         tables.sort()
-        tables.simplify(samples)
+        tables.simplify()
+        ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
         ts = msprime.load_tables(**tables.asdict())
@@ -248,19 +243,17 @@ class TestSimulation(unittest.TestCase):
         tables = ts.tables
         self.assertEqual(tables.sites.num_rows, 1)
         self.assertGreater(tables.mutations.num_rows, 0)
-        samples = np.where(
-            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         # before simplify
         for h in ts.haplotypes():
             self.assertEqual(len(h), 1)
         # after simplify
         tables.sort()
-        tables.simplify(samples)
+        tables.simplify()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
         self.assertEqual(tables.sites.num_rows, 1)
         self.assertGreater(tables.mutations.num_rows, 0)
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sample_size, N)
         for hap in ts.haplotypes():
             self.assertEqual(len(hap), ts.num_sites)

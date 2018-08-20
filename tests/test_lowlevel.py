@@ -1124,7 +1124,6 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
         self.assertRaises(_msprime.InputError, f, segment_block_size=0)
         self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
-        self.assertRaises(_msprime.InputError, f, start_time=-1)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
 
