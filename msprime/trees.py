@@ -2356,7 +2356,8 @@ class TreeSequence(object):
             yield hapgen.get_haplotype(j)
             j += 1
 
-    def variants(self, as_bytes=False):
+    # Samples is experimental for now, so we don't document it.
+    def variants(self, as_bytes=False, samples=None):
         """
         Returns an iterator over the variants in this tree sequence. See the
         :class:`Variant` class for details on the fields of each returned
@@ -2382,7 +2383,7 @@ class TreeSequence(object):
         """
         # See comments for the Variant type for discussion on why the
         # present form was chosen.
-        iterator = _msprime.VariantGenerator(self._ll_tree_sequence)
+        iterator = _msprime.VariantGenerator(self._ll_tree_sequence, samples=samples)
         for site_id, genotypes, alleles in iterator:
             site = self.site(site_id)
             if as_bytes:

@@ -7854,14 +7854,19 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
+    static char *kwlist[] = {"tree_sequence", "samples", NULL};
     TreeSequence *tree_sequence = NULL;
+    PyObject *samples_input = Py_None;
+    PyArrayObject *samples_array = NULL;
+    node_id_t *samples = NULL;
+    size_t num_samples = 0;
+    npy_intp *shape;
 
     /* TODO add option for 16 bit genotypes */
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O", kwlist,
+            &TreeSequenceType, &tree_sequence, &samples_input)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -7869,19 +7874,33 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
+    if (samples_input != Py_None) {
+        samples_array = (PyArrayObject *) PyArray_FROMANY(samples_input, NPY_INT32, 1, 1,
+                NPY_ARRAY_IN_ARRAY);
+        if (samples_array == NULL) {
+            goto out;
+        }
+        shape = PyArray_DIMS(samples_array);
+        num_samples = (size_t) shape[0];
+        samples = PyArray_DATA(samples_array);
+    }
     self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
     if (self->variant_generator == NULL) {
         PyErr_NoMemory();
         goto out;
     }
+    /* Note: the vargen currently takes a copy of the samples list. If we wanted
+     * to avoid this we would INCREF the samples array above and keep a reference
+     * to in the object struct */
     err = vargen_alloc(self->variant_generator,
-            self->tree_sequence->tree_sequence, NULL, 0, 0);
+            self->tree_sequence->tree_sequence, samples, num_samples, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = 0;
 out:
+    Py_XDECREF(samples_array);
     return ret;
 }
 

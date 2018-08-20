@@ -650,7 +650,7 @@ class TestVariantGenerator(HighLevelTestCase):
     """
     def get_tree_sequence(self):
         ts = msprime.simulate(
-            10, length=10, recombination_rate=1, mutation_rate=10)
+            10, length=10, recombination_rate=1, mutation_rate=10, random_seed=3)
         self.assertGreater(ts.get_num_mutations(), 10)
         return ts
 
@@ -768,6 +768,54 @@ class TestVariantGenerator(HighLevelTestCase):
                     tables.mutations.add_row(site=site, node=sample, derived_state="1")
                     ts_new = tables.tree_sequence()
                     self.assertRaises(_msprime.LibraryError, list, ts_new.variants())
+
+    def test_zero_samples(self):
+        ts = self.get_tree_sequence()
+        for var1, var2 in zip(ts.variants(), ts.variants(samples=[])):
+            self.assertEqual(var1.site, var2.site)
+            self.assertEqual(var1.alleles, var2.alleles)
+            self.assertEqual(var2.genotypes.shape[0], 0)
+
+    def test_samples(self):
+        n = 4
+        ts = msprime.simulate(
+            n, length=5, recombination_rate=1, mutation_rate=5, random_seed=2)
+        self.assertGreater(ts.num_sites, 1)
+        samples = list(range(n))
+        # Generate all possible sample lists.
+        for j in range(n + 1):
+            for s in itertools.permutations(samples, j):
+                s = np.array(s, dtype=np.int32)
+                count = 0
+                for var1, var2 in zip(ts.variants(), ts.variants(samples=s)):
+                    self.assertEqual(var1.site, var2.site)
+                    self.assertEqual(var1.alleles, var2.alleles)
+                    self.assertEqual(var2.genotypes.shape, (len(s),))
+                    self.assertTrue(np.array_equal(var1.genotypes[s], var2.genotypes))
+                    count += 1
+                self.assertEqual(count, ts.num_sites)
+
+    def test_non_sample_samples(self):
+        # We don't have to use sample nodes. This does make the terminology confusing
+        # but it's probably still the best option.
+        ts = msprime.simulate(
+            10, length=5, recombination_rate=1, mutation_rate=5, random_seed=2)
+        tables = ts.dump_tables()
+        tables.nodes.set_columns(
+            flags=np.zeros_like(tables.nodes.flags) + msprime.NODE_IS_SAMPLE,
+            time=tables.nodes.time)
+        all_samples_ts = tables.tree_sequence()
+        self.assertEqual(all_samples_ts.num_samples, ts.num_nodes)
+
+        count = 0
+        samples = range(ts.num_nodes)
+        for var1, var2 in zip(all_samples_ts.variants(), ts.variants(samples=samples)):
+            self.assertEqual(var1.site, var2.site)
+            self.assertEqual(var1.alleles, var2.alleles)
+            self.assertEqual(var2.genotypes.shape, (len(samples),))
+            self.assertTrue(np.array_equal(var1.genotypes, var2.genotypes))
+            count += 1
+        self.assertEqual(count, ts.num_sites)
 
 
 class TestHaplotypeGenerator(HighLevelTestCase):

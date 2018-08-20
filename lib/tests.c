@@ -5375,6 +5375,11 @@ test_single_tree_inconsistent_mutations(void)
     variant_t *var;
     vargen_t vargen;
     hapgen_t hapgen;
+    int flags[] = {0, MSP_16_BIT_GENOTYPES};
+    node_id_t all_samples[] = {0, 1, 2, 3};
+    node_id_t *samples[] = {NULL, all_samples};
+    size_t num_samples = 4;
+    size_t s, f;
     int ret;
 
     tree_sequence_from_text(&ts, 1, single_tree_ex_nodes, single_tree_ex_edges, NULL,
@@ -5384,15 +5389,19 @@ test_single_tree_inconsistent_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
     ret = hapgen_free(&hapgen);
 
-    ret = vargen_alloc(&vargen, &ts, NULL, 0, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = vargen_next(&vargen, &var);
-    CU_ASSERT_EQUAL_FATAL(ret, 1);
-    ret = vargen_next(&vargen, &var);
-    CU_ASSERT_EQUAL_FATAL(ret, 1);
-    ret = vargen_next(&vargen, &var);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
-    ret = vargen_free(&vargen);
+    for (s = 0; s < 2; s++) {
+        for (f = 0; f < sizeof(flags) / sizeof(*flags); f++) {
+            ret = vargen_alloc(&vargen, &ts, samples[s], num_samples, flags[f]);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            ret = vargen_next(&vargen, &var);
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+            ret = vargen_next(&vargen, &var);
+            CU_ASSERT_EQUAL_FATAL(ret, 1);
+            ret = vargen_next(&vargen, &var);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCONSISTENT_MUTATIONS);
+            vargen_free(&vargen);
+        }
+    }
 
     tree_sequence_free(&ts);
 }

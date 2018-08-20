@@ -2333,7 +2333,6 @@ class TestVariantGenerator(LowLevelTestCase):
         ts = self.get_tree_sequence(num_loci=10)
         for bad_type in ["", {}, [], None]:
             self.assertRaises(TypeError, _msprime.VariantGenerator, bad_type)
-            self.assertRaises(TypeError, _msprime.VariantGenerator, ts, bad_type)
 
         vg = _msprime.VariantGenerator(ts)
         before = [
@@ -2345,6 +2344,25 @@ class TestVariantGenerator(LowLevelTestCase):
             (site, genotypes.tobytes(), alleles) for site, genotypes, alleles in vg]
         self.assertEqual(before, after)
 
+    def test_samples_input_errors(self):
+        ts = self.get_tree_sequence(num_loci=2)
+        uncastable = [np.array([0.112], dtype=float), np.array([1, 2], dtype=np.int64)]
+        for bad_type in uncastable:
+            self.assertRaises(
+                TypeError, _msprime.VariantGenerator, ts, samples=bad_type)
+        # Wrong dims
+        for bad_type in ["1234", [[], []]]:
+            self.assertRaises(
+                ValueError, _msprime.VariantGenerator, ts, samples=bad_type)
+        # Duplicate samples
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.VariantGenerator, ts, samples=[0, 0])
+        # Out of bounds samples
+        self.assertRaises(
+            IndexError, _msprime.VariantGenerator, ts, samples=[-1])
+        self.assertRaises(
+            IndexError, _msprime.VariantGenerator, ts, samples=[2**30])
+
     def test_form(self):
         ts = self.get_tree_sequence(num_loci=10)
         variants = list(_msprime.VariantGenerator(ts))
@@ -2355,6 +2373,13 @@ class TestVariantGenerator(LowLevelTestCase):
         for _, genotypes, alleles in _msprime.VariantGenerator(ts):
             self.assertEqual(genotypes.shape, (ts.get_num_samples(), ))
             self.assertEqual(alleles, ('0', '1'))
+
+    def test_form_samples(self):
+        ts = self.get_tree_sequence(num_loci=10)
+        for samples in [[], [0], [0, 1]]:
+            for _, genotypes, alleles in _msprime.VariantGenerator(ts, samples):
+                self.assertEqual(genotypes.shape, (len(samples), ))
+                self.assertEqual(alleles, ('0', '1'))
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
