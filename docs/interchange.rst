@@ -154,7 +154,7 @@ documentation we use the non-descriptive term "node" to refer to this concept
 term "genome" at times, for concreteness.
 
 Several properties naturally associated with individuals are in fact assigned
-to nodes in what follows: birth time and population. This is for two reasons: 
+to nodes in what follows: birth time and population. This is for two reasons:
 First, since coalescent simulations naturally lack a notion of polyploidy, earlier
 versions of ``msprime`` lacked the notion of an individual. Second, ancestral
 nodes are not naturally grouped together into individuals -- we know they must have
@@ -685,7 +685,7 @@ There are no requirements on a population table.
 Provenance requirements
 -----------------------
 
-The `timestamp` column of a provenance table should be in 
+The `timestamp` column of a provenance table should be in
 `ISO-8601 <https://en.wikipedia.org/wiki/ISO_8601>`_ format.
 
 The `record` should be valid JSON with structure defined in the Provenance
@@ -769,7 +769,7 @@ If each edge had at most only a single mutation, then the ``parent`` property
 of the mutation table would be easily inferred from the tree at that mutation's
 site. If mutations are entered into the mutation table ordered by time of
 appearance, then this sortedness allows us to infer the parent of each mutation
-even for mutations occurring on the same branch. The 
+even for mutations occurring on the same branch. The
 :meth:`TableCollection.compute_mutation_parents` method will take advantage
 of this fact to compute the ``parent`` column of a mutation table, if all
 other information is valid.
@@ -864,6 +864,36 @@ node 1, first from A to T, then a back mutation to A. The genotypes of our two
 samples, nodes 0 and 1, are therefore AA and ATA.
 
 
+.. _sec_individual_text_format:
+
+Individual text format
+======================
+
+The individual text format must contain a ``flags`` column.
+Optionally, there may also be a ``location`` and
+``metadata`` columns. See the :ref:`individual table definitions
+<sec_individual_table_definition>` for details on these columns.
+
+Note that there are currently no globally defined ``flags``, but the column
+is still required; a value of ``0`` means that there are no flags set.
+
+The ``location`` column should be a sequence of comma-separated numeric
+values. They do not all have to be the same length.
+
+An example individual table::
+
+    flags   location
+    0           0.5,1.2
+    0           1.0,3.4
+    0           
+    0           1.2
+    0           3.5,6.3
+    0           0.5,0.5
+    0           0.5
+    0           0.7,0.6,0.0
+    0           0.5,0.0
+
+
 .. _sec_node_text_format:
 
 Node text format
@@ -943,6 +973,23 @@ mutations::
     1      1       A                1
 
 
+
+Population text format
+======================
+
+Population tables only have a ``metadata`` column, so the text format for
+a population table requires there to be a ``metadata`` column. See the
+:ref:`population table definitions <sec_population_table_definition>` for
+details.
+
+An example population table::
+
+    id   metadata
+    0    cG9wMQ==
+    1    cG9wMg==
+
+The ``metadata`` contains base64-encoded data (in this case, the strings
+``pop1`` and ``pop1``).
 
 
 .. _sec_binary_interchange:
