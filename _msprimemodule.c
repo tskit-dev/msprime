@@ -165,14 +165,6 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
-    SparseTree *sparse_tree;
-    node_list_t *head;
-    node_list_t *tail;
-    node_list_t *next;
-} SampleListIterator;
-
-typedef struct {
-    PyObject_HEAD
     TreeSequence *tree_sequence;
     vcf_converter_t *vcf_converter;
 } VcfConverter;
@@ -6321,7 +6313,7 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(vg, self->tree_sequence, 0);
+    err = vargen_alloc(vg, self->tree_sequence, NULL, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -6898,6 +6890,81 @@ out:
     return ret;
 }
 
+static bool
+SparseTree_check_sample_list(SparseTree *self)
+{
+    bool ret = sparse_tree_has_sample_lists(self->sparse_tree);
+    if (! ret) {
+        PyErr_SetString(PyExc_ValueError,
+            "Sample lists not supported. Please set sample_lists=True.");
+    }
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_right_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sample_index;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    sample_index = self->sparse_tree->right_sample[node];
+    ret = Py_BuildValue("i", (int) sample_index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_left_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sample_index;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    sample_index = self->sparse_tree->left_sample[node];
+    ret = Py_BuildValue("i", (int) sample_index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_next_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t out_index;
+    int in_index, num_samples;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &in_index)) {
+        goto out;
+    }
+    num_samples = (int) tree_sequence_get_num_samples(self->sparse_tree->tree_sequence);
+    if (in_index < 0 || in_index >= num_samples) {
+        PyErr_SetString(PyExc_ValueError, "Sample index out of bounds");
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    out_index = self->sparse_tree->next_sample[in_index];
+    ret = Py_BuildValue("i", (int) out_index);
+out:
+    return ret;
+}
 
 static PyObject *
 SparseTree_get_mrca(SparseTree *self, PyObject *args)
@@ -7087,6 +7154,12 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the right-most sib of node u" },
     {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
             "Returns the children of u in left-right order." },
+    {"get_left_sample", (PyCFunction) SparseTree_get_left_sample, METH_VARARGS,
+            "Returns the index of the left-most sample descending from u." },
+    {"get_right_sample", (PyCFunction) SparseTree_get_right_sample, METH_VARARGS,
+            "Returns the index of the right-most sample descending from u." },
+    {"get_next_sample", (PyCFunction) SparseTree_get_next_sample, METH_VARARGS,
+            "Returns the index of the next sample after the specified sample index." },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
     {"get_num_samples", (PyCFunction) SparseTree_get_num_samples, METH_VARARGS,
@@ -7327,135 +7400,6 @@ static PyTypeObject TreeDiffIteratorType = {
     0,                         /* tp_dictoffset */
     (initproc)TreeDiffIterator_init,      /* tp_init */
 };
-
-/*===================================================================
- * SampleListIterator
- *===================================================================
- */
-
-static int
-SampleListIterator_check_state(SampleListIterator *self)
-{
-    int ret = 0;
-    if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-SampleListIterator_dealloc(SampleListIterator* self)
-{
-    Py_XDECREF(self->sparse_tree);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-SampleListIterator_init(SampleListIterator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"sparse_tree", "node", NULL};
-    unsigned int node = 0;
-    SparseTree *sparse_tree = NULL;
-
-    self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!I", kwlist,
-            &SparseTreeType, &sparse_tree, &node)) {
-        goto out;
-    }
-    self->sparse_tree = sparse_tree;
-    Py_INCREF(self->sparse_tree);
-    if (SparseTree_check_sparse_tree(sparse_tree) != 0) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self->sparse_tree, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_sample_list(self->sparse_tree->sparse_tree,
-            (uint32_t) node, &self->head, &self->tail);
-    self->next = self->head;
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-SampleListIterator_next(SampleListIterator  *self)
-{
-    PyObject *ret = NULL;
-
-    if (SampleListIterator_check_state(self) != 0) {
-        goto out;
-    }
-    if (self->next != NULL) {
-        ret = Py_BuildValue("I", (unsigned int) self->next->node);
-        if (ret == NULL) {
-            goto out;
-        }
-        /* Get the next value */
-        if (self->next == self->tail) {
-            self->next = NULL;
-        } else {
-            self->next = self->next->next;
-        }
-    }
-out:
-    return ret;
-}
-
-static PyMemberDef SampleListIterator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef SampleListIterator_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject SampleListIteratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.SampleListIterator",             /* tp_name */
-    sizeof(SampleListIterator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)SampleListIterator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "SampleListIterator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) SampleListIterator_next, /* tp_iternext */
-    SampleListIterator_methods,             /* tp_methods */
-    SampleListIterator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)SampleListIterator_init,      /* tp_init */
-};
-
 
 /*===================================================================
  * SparseTreeIterator
@@ -7910,14 +7854,19 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
+    static char *kwlist[] = {"tree_sequence", "samples", NULL};
     TreeSequence *tree_sequence = NULL;
+    PyObject *samples_input = Py_None;
+    PyArrayObject *samples_array = NULL;
+    node_id_t *samples = NULL;
+    size_t num_samples = 0;
+    npy_intp *shape;
 
     /* TODO add option for 16 bit genotypes */
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O", kwlist,
+            &TreeSequenceType, &tree_sequence, &samples_input)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -7925,18 +7874,33 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
+    if (samples_input != Py_None) {
+        samples_array = (PyArrayObject *) PyArray_FROMANY(samples_input, NPY_INT32, 1, 1,
+                NPY_ARRAY_IN_ARRAY);
+        if (samples_array == NULL) {
+            goto out;
+        }
+        shape = PyArray_DIMS(samples_array);
+        num_samples = (size_t) shape[0];
+        samples = PyArray_DATA(samples_array);
+    }
     self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
     if (self->variant_generator == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(self->variant_generator, self->tree_sequence->tree_sequence, 0);
+    /* Note: the vargen currently takes a copy of the samples list. If we wanted
+     * to avoid this we would INCREF the samples array above and keep a reference
+     * to in the object struct */
+    err = vargen_alloc(self->variant_generator,
+            self->tree_sequence->tree_sequence, samples, num_samples, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = 0;
 out:
+    Py_XDECREF(samples_array);
     return ret;
 }
 
@@ -10071,14 +10035,6 @@ init_msprime(void)
     }
     Py_INCREF(&TreeDiffIteratorType);
     PyModule_AddObject(module, "TreeDiffIterator", (PyObject *) &TreeDiffIteratorType);
-
-    /* SampleListIterator type */
-    SampleListIteratorType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&SampleListIteratorType) < 0) {
-        INITERROR;
-    }
-    Py_INCREF(&SampleListIteratorType);
-    PyModule_AddObject(module, "SampleListIterator", (PyObject *) &SampleListIteratorType);
 
     /* VcfConverter type */
     VcfConverterType.tp_new = PyType_GenericNew;

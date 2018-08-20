@@ -2333,7 +2333,6 @@ class TestVariantGenerator(LowLevelTestCase):
         ts = self.get_tree_sequence(num_loci=10)
         for bad_type in ["", {}, [], None]:
             self.assertRaises(TypeError, _msprime.VariantGenerator, bad_type)
-            self.assertRaises(TypeError, _msprime.VariantGenerator, ts, bad_type)
 
         vg = _msprime.VariantGenerator(ts)
         before = [
@@ -2345,6 +2344,25 @@ class TestVariantGenerator(LowLevelTestCase):
             (site, genotypes.tobytes(), alleles) for site, genotypes, alleles in vg]
         self.assertEqual(before, after)
 
+    def test_samples_input_errors(self):
+        ts = self.get_tree_sequence(num_loci=2)
+        uncastable = [np.array([0.112], dtype=float), np.array([1, 2], dtype=np.int64)]
+        for bad_type in uncastable:
+            self.assertRaises(
+                TypeError, _msprime.VariantGenerator, ts, samples=bad_type)
+        # Wrong dims
+        for bad_type in ["1234", [[], []]]:
+            self.assertRaises(
+                ValueError, _msprime.VariantGenerator, ts, samples=bad_type)
+        # Duplicate samples
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.VariantGenerator, ts, samples=[0, 0])
+        # Out of bounds samples
+        self.assertRaises(
+            IndexError, _msprime.VariantGenerator, ts, samples=[-1])
+        self.assertRaises(
+            IndexError, _msprime.VariantGenerator, ts, samples=[2**30])
+
     def test_form(self):
         ts = self.get_tree_sequence(num_loci=10)
         variants = list(_msprime.VariantGenerator(ts))
@@ -2355,6 +2373,13 @@ class TestVariantGenerator(LowLevelTestCase):
         for _, genotypes, alleles in _msprime.VariantGenerator(ts):
             self.assertEqual(genotypes.shape, (ts.get_num_samples(), ))
             self.assertEqual(alleles, ('0', '1'))
+
+    def test_form_samples(self):
+        ts = self.get_tree_sequence(num_loci=10)
+        for samples in [[], [0], [0, 1]]:
+            for _, genotypes, alleles in _msprime.VariantGenerator(ts, samples):
+                self.assertEqual(genotypes.shape, (len(samples), ))
+                self.assertEqual(alleles, ('0', '1'))
 
     def test_iterator(self):
         ts = self.get_tree_sequence()
@@ -2374,7 +2399,6 @@ class TestSparseTree(LowLevelTestCase):
         # We should still be able to count the samples, just inefficiently.
         self.assertEqual(st.get_num_samples(0), 1)
         self.assertRaises(_msprime.LibraryError, st.get_num_tracked_samples, 0)
-        self.assertRaises(_msprime.LibraryError, _msprime.SampleListIterator, st, 0)
         all_flags = [
             0, _msprime.SAMPLE_COUNTS, _msprime.SAMPLE_LISTS,
             _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS]
@@ -2387,11 +2411,12 @@ class TestSparseTree(LowLevelTestCase):
             else:
                 self.assertRaises(_msprime.LibraryError, st.get_num_tracked_samples, 0)
             if flags & _msprime.SAMPLE_LISTS:
-                samples = list(_msprime.SampleListIterator(st, 0))
-                self.assertEqual(samples, [0])
+                self.assertEqual(0, st.get_left_sample(0))
+                self.assertEqual(0, st.get_right_sample(0))
             else:
-                self.assertRaises(
-                    _msprime.LibraryError, _msprime.SampleListIterator, st, 0)
+                self.assertRaises(ValueError, st.get_left_sample, 0)
+                self.assertRaises(ValueError, st.get_right_sample, 0)
+                self.assertRaises(ValueError, st.get_next_sample, 0)
 
     def test_sites(self):
         for ts in self.get_example_tree_sequences():
@@ -2554,13 +2579,17 @@ class TestSparseTree(LowLevelTestCase):
         for m in range(1, 10):
             ts = self.get_tree_sequence(num_loci=m)
             n = ts.get_num_nodes()
-            st = _msprime.SparseTree(ts)
+            st = _msprime.SparseTree(
+                ts, flags=_msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS)
             for v in [-100, -1, n + 1, n + 100, n * 100]:
                 self.assertRaises(ValueError, st.get_parent, v)
                 self.assertRaises(ValueError, st.get_children, v)
                 self.assertRaises(ValueError, st.get_time, v)
-                self.assertRaises(
-                    ValueError, _msprime.SampleListIterator, st, v)
+                self.assertRaises(ValueError, st.get_left_sample, v)
+                self.assertRaises(ValueError, st.get_right_sample, v)
+            n = ts.get_num_samples()
+            for v in [-100, -1, n + 1, n + 100, n * 100]:
+                self.assertRaises(ValueError, st.get_next_sample, v)
 
     def test_mrca_interface(self):
         for num_loci in range(1, 10):
@@ -2695,6 +2724,42 @@ class TestSparseTree(LowLevelTestCase):
             self.assertRaises(RuntimeError, method, 0)
         for method in two_node_arg_methods:
             self.assertRaises(RuntimeError, method, 0, 0)
+
+    def test_sample_list(self):
+        examples = [
+            self.get_tree_sequence(num_samples=5, num_loci=10),
+            self.get_tree_sequence(
+                demographic_events=[
+                    get_simple_bottleneck_event(0.2, proportion=1.0)])]
+        flags = _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS
+        # Note: we're assuming that samples are 0-n here.
+        for ts in examples:
+            st = _msprime.SparseTree(ts, flags=flags)
+            for t in _msprime.SparseTreeIterator(st):
+                # All sample nodes should have themselves.
+                for j in range(ts.get_num_samples()):
+                    self.assertEqual(t.get_left_sample(j), j)
+                    self.assertEqual(t.get_right_sample(j), j)
+
+                # All non-tree nodes should have 0
+                for j in range(t.get_num_nodes()):
+                    if t.get_parent(j) == NULL_NODE \
+                            and t.get_left_child(j) == NULL_NODE:
+                        self.assertEqual(t.get_left_sample(j), NULL_NODE)
+                        self.assertEqual(t.get_right_sample(j), NULL_NODE)
+                # The roots should have all samples.
+                u = t.get_left_root()
+                samples = []
+                while u != NULL_NODE:
+                    sample = t.get_left_sample(u)
+                    end = t.get_right_sample(u)
+                    while True:
+                        samples.append(sample)
+                        if sample == end:
+                            break
+                        sample = t.get_next_sample(sample)
+                    u = t.get_right_sib(u)
+                self.assertEqual(sorted(samples), list(range(ts.get_num_samples())))
 
 
 class TestTablesInterface(LowLevelTestCase):
@@ -3124,67 +3189,6 @@ class TestTableEquals(unittest.TestCase):
         self.assertTrue(table.equals(other))
         other.add_row("123", "123")
         self.assertFalse(table.equals(other))
-
-
-class TestSampleListIterator(LowLevelTestCase):
-    """
-    Tests for the low-level sample list iterator.
-    """
-
-    def test_constructor(self):
-        self.assertRaises(TypeError, _msprime.SampleListIterator)
-        self.assertRaises(TypeError, _msprime.SampleListIterator, None)
-        ts = self.get_tree_sequence()
-        flags = _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS
-        tree = _msprime.SparseTree(ts, flags=flags)
-        for bad_type in [None, "1", []]:
-            self.assertRaises(
-                TypeError, _msprime.SampleListIterator, tree, bad_type)
-        for bad_node in [-1, tree.get_num_nodes() + 1]:
-            self.assertRaises(
-                ValueError, _msprime.SampleListIterator, tree, bad_node)
-        # Do nasty things...
-        iterator = _msprime.SampleListIterator(tree, 1)
-        del tree
-        del ts
-        self.assertEqual(list(iterator), [1])
-
-    def test_iterator(self):
-        ts = self.get_tree_sequence()
-        flags = _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS
-        tree = _msprime.SparseTree(ts, flags=flags)
-        for tree in _msprime.SparseTreeIterator(tree):
-            self.verify_iterator(_msprime.SampleListIterator(tree, 1))
-            self.verify_iterator(
-                _msprime.SampleListIterator(tree, tree.get_left_root()))
-
-    def test_sample_list(self):
-        examples = [
-            self.get_tree_sequence(num_samples=5, num_loci=10),
-            self.get_tree_sequence(
-                demographic_events=[
-                    get_simple_bottleneck_event(0.2, proportion=1.0)])]
-        flags = _msprime.SAMPLE_COUNTS | _msprime.SAMPLE_LISTS
-        for ts in examples:
-            st = _msprime.SparseTree(ts, flags=flags)
-            for t in _msprime.SparseTreeIterator(st):
-                # All sample nodes should have themselves.
-                for j in range(ts.get_num_samples()):
-                    samples = list(_msprime.SampleListIterator(t, j))
-                    self.assertEqual(samples, [j])
-                # All non-tree nodes should have 0
-                for j in range(t.get_num_nodes()):
-                    if t.get_parent(j) == NULL_NODE \
-                            and t.get_left_child(j) == NULL_NODE:
-                        samples = list(_msprime.SampleListIterator(t, j))
-                        self.assertEqual(len(samples), 0)
-                # The roots should have all samples.
-                u = t.get_left_root()
-                samples = []
-                while u != NULL_NODE:
-                    samples.extend(_msprime.SampleListIterator(t, u))
-                    u = t.get_right_sib(u)
-                self.assertEqual(sorted(samples), list(range(ts.get_num_samples())))
 
 
 class TestRecombinationMap(LowLevelTestCase):

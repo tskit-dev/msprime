@@ -857,7 +857,6 @@ sparse_tree_clear(sparse_tree_t *self)
     int ret = 0;
     size_t j;
     node_id_t u;
-    node_list_t *w;
     const size_t N = self->num_nodes;
     const size_t num_samples = self->tree_sequence->num_samples;
     const bool sample_counts = !!(self->flags & MSP_SAMPLE_COUNTS);
@@ -888,8 +887,9 @@ sparse_tree_clear(sparse_tree_t *self)
         }
     }
     if (sample_lists) {
-        memset(self->sample_list_head, 0, N * sizeof(node_list_t *));
-        memset(self->sample_list_tail, 0, N * sizeof(node_list_t *));
+        memset(self->left_sample, 0xff, N * sizeof(node_id_t));
+        memset(self->right_sample, 0xff, N * sizeof(node_id_t));
+        memset(self->next_sample, 0xff, num_samples * sizeof(node_id_t));
     }
     /* Set the sample attributes */
     self->left_root = MSP_NULL_NODE;
@@ -903,11 +903,9 @@ sparse_tree_clear(sparse_tree_t *self)
             self->num_samples[u] = 1;
         }
         if (sample_lists) {
-            w = &self->sample_list_node_mem[j];
-            w->next = NULL;
-            w->node = (node_id_t) u;
-            self->sample_list_head[u] = w;
-            self->sample_list_tail[u] = w;
+            /* We are mapping to *indexes* into the list of samples here */
+            self->left_sample[u] = (node_id_t) j;
+            self->right_sample[u] = (node_id_t) j;
         }
         /* Set initial roots */
         if (j < num_samples - 1) {
@@ -966,11 +964,11 @@ sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence, int flags
         }
     }
     if (!!(self->flags & MSP_SAMPLE_LISTS)) {
-        self->sample_list_head = calloc(num_nodes, sizeof(node_list_t *));
-        self->sample_list_tail = calloc(num_nodes, sizeof(node_list_t *));
-        self->sample_list_node_mem = calloc(num_samples, sizeof(node_list_t));
-        if (self->sample_list_head == NULL || self->sample_list_tail == NULL
-                || self->sample_list_node_mem == NULL) {
+        self->left_sample = malloc(num_nodes * sizeof(*self->left_sample));
+        self->right_sample = malloc(num_nodes * sizeof(*self->right_sample));
+        self->next_sample = malloc(num_samples * sizeof(*self->next_sample));
+        if (self->left_sample == NULL || self->right_sample == NULL
+                || self->next_sample == NULL) {
             goto out;
         }
     }
@@ -993,10 +991,22 @@ sparse_tree_free(sparse_tree_t *self)
     msp_safe_free(self->num_samples);
     msp_safe_free(self->num_tracked_samples);
     msp_safe_free(self->marked);
-    msp_safe_free(self->sample_list_head);
-    msp_safe_free(self->sample_list_tail);
-    msp_safe_free(self->sample_list_node_mem);
+    msp_safe_free(self->left_sample);
+    msp_safe_free(self->right_sample);
+    msp_safe_free(self->next_sample);
     return 0;
+}
+
+bool
+sparse_tree_has_sample_lists(sparse_tree_t *self)
+{
+    return !!(self->flags & MSP_SAMPLE_LISTS);
+}
+
+bool
+sparse_tree_has_sample_counts(sparse_tree_t *self)
+{
+    return !!(self->flags & MSP_SAMPLE_COUNTS);
 }
 
 static int WARN_UNUSED
@@ -1004,7 +1014,7 @@ sparse_tree_reset_tracked_samples(sparse_tree_t *self)
 {
     int ret = 0;
 
-    if (!(self->flags & MSP_SAMPLE_COUNTS)) {
+    if (!sparse_tree_has_sample_counts(self)) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -1012,7 +1022,6 @@ sparse_tree_reset_tracked_samples(sparse_tree_t *self)
 out:
     return ret;
 }
-
 
 int WARN_UNUSED
 sparse_tree_set_tracked_samples(sparse_tree_t *self, size_t num_tracked_samples,
@@ -1055,15 +1064,15 @@ out:
 
 int WARN_UNUSED
 sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
-        node_list_t *head, node_list_t *tail)
+        sparse_tree_t *other, node_id_t node)
 {
     int ret = MSP_ERR_GENERIC;
-    node_list_t *list_node = head;
-    node_id_t u;
-    int not_done;
+    node_id_t u, stop, index;
+    const node_id_t *next = other->next_sample;
+    const node_id_t *samples = other->tree_sequence->samples;
 
-    if (head == NULL || tail == NULL) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+    if (! sparse_tree_has_sample_lists(other)) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
     /* TODO This is not needed when the sparse tree is new. We should use the
@@ -1073,17 +1082,23 @@ sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
     if (ret != 0) {
         goto out;
     }
-    not_done = 1;
-    while (not_done) {
-        u = list_node->node;
-        /* Propagate this upwards */
-        assert(self->num_tracked_samples[u] == 0);
-        while (u != MSP_NULL_NODE) {
-            self->num_tracked_samples[u] += 1;
-            u = self->parent[u];
+
+    index = other->left_sample[node];
+    if (index != MSP_NULL_NODE) {
+        stop = other->right_sample[node];
+        while (true) {
+            u = samples[index];
+            assert(self->num_tracked_samples[u] == 0);
+            /* Propagate this upwards */
+            while (u != MSP_NULL_NODE) {
+                self->num_tracked_samples[u] += 1;
+                u = self->parent[u];
+            }
+            if (index == stop) {
+                break;
+            }
+            index = next[index];
         }
-        not_done = list_node != tail;
-        list_node = list_node->next;
     }
 out:
     return ret;
@@ -1291,26 +1306,6 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
-sparse_tree_get_sample_list(sparse_tree_t *self, node_id_t u,
-        node_list_t **head, node_list_t **tail)
-{
-    int ret = 0;
-
-    ret = sparse_tree_check_node(self, u);
-    if (ret != 0) {
-        goto out;
-    }
-    if (! (self->flags & MSP_SAMPLE_LISTS)) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
-    *head = self->sample_list_head[u];
-    *tail = self->sample_list_tail[u];
-out:
-    return ret;
-}
-
 bool
 sparse_tree_is_sample(sparse_tree_t *self, node_id_t u)
 {
@@ -1446,13 +1441,13 @@ sparse_tree_check_state(sparse_tree_t *self)
         assert(self->num_tracked_samples == NULL);
     }
     if (self->flags & MSP_SAMPLE_LISTS) {
-        assert(self->sample_list_tail != NULL);
-        assert(self->sample_list_head != NULL);
-        assert(self->sample_list_node_mem != NULL);
+        assert(self->right_sample != NULL);
+        assert(self->left_sample != NULL);
+        assert(self->next_sample != NULL);
     } else {
-        assert(self->sample_list_tail == NULL);
-        assert(self->sample_list_head == NULL);
-        assert(self->sample_list_node_mem == NULL);
+        assert(self->right_sample == NULL);
+        assert(self->left_sample == NULL);
+        assert(self->next_sample == NULL);
     }
 
     free(children);
@@ -1463,7 +1458,6 @@ void
 sparse_tree_print_state(sparse_tree_t *self, FILE *out)
 {
     size_t j;
-    node_list_t *u;
     site_t site;
 
     fprintf(out, "Sparse tree state:\n");
@@ -1472,31 +1466,22 @@ sparse_tree_print_state(sparse_tree_t *self, FILE *out)
     fprintf(out, "right = %f\n", self->right);
     fprintf(out, "left_root = %d\n", (int) self->left_root);
     fprintf(out, "index = %d\n", (int) self->index);
-    fprintf(out, "node\tparent\tlchild\trchild\tlsib\trsib\n");
+    fprintf(out, "node\tparent\tlchild\trchild\tlsib\trsib");
+    if (self->flags & MSP_SAMPLE_LISTS) {
+        fprintf(out, "\thead\ttail");
+    }
+    fprintf(out, "\n");
 
     for (j = 0; j < self->num_nodes; j++) {
         fprintf(out, "%d\t%d\t%d\t%d\t%d\t%d", (int) j, self->parent[j], self->left_child[j],
                 self->right_child[j], self->left_sib[j], self->right_sib[j]);
+        if (self->flags & MSP_SAMPLE_LISTS) {
+            fprintf(out, "\t%d\t%d\t", self->left_sample[j],
+                    self->right_sample[j]);
+        }
         if (self->flags & MSP_SAMPLE_COUNTS) {
             fprintf(out, "\t%d\t%d\t%d", (int) self->num_samples[j],
                     (int) self->num_tracked_samples[j], self->marked[j]);
-        }
-        if (self->flags & MSP_SAMPLE_LISTS) {
-            fprintf(out, "\t[");
-            u = self->sample_list_head[j];
-            if (u != NULL) {
-                while (1) {
-                    fprintf(out, "%d ", (int) u->node);
-                    if (u == self->sample_list_tail[j]) {
-                        break;
-                    }
-                    u = u->next;
-                }
-            } else {
-                assert(self->sample_list_tail[j] == NULL);
-            }
-
-            fprintf(out, "]");
         }
         fprintf(out, "\n");
     }
@@ -1559,37 +1544,35 @@ sparse_tree_propagate_sample_count_gain(sparse_tree_t *self, node_id_t parent,
 static inline void
 sparse_tree_update_sample_lists(sparse_tree_t *self, node_id_t node)
 {
-    node_id_t u, v;
-    node_list_t * restrict *head = self->sample_list_head;
-    node_list_t * restrict *tail = self->sample_list_tail;
-    const uint32_t *node_flags = self->tree_sequence->tables->nodes->flags;
+    node_id_t u, v, sample_index;
+    node_id_t * restrict left = self->left_sample;
+    node_id_t * restrict right = self->right_sample;
+    node_id_t * restrict next = self->next_sample;
     const node_id_t * restrict left_child = self->left_child;
     const node_id_t * restrict right_sib = self->right_sib;
     const node_id_t * restrict parent = self->parent;
+    const node_id_t * restrict sample_index_map = self->tree_sequence->sample_index_map;
 
-    u = node;
-    while (u != MSP_NULL_NODE) {
-        if (!!(node_flags[u] & MSP_NODE_IS_SAMPLE)) {
-            tail[u] = head[u];
+    for (u = node; u != MSP_NULL_NODE; u = parent[u]) {
+        sample_index = sample_index_map[u];
+        if (sample_index != MSP_NULL_NODE) {
+            right[u] = left[u];
         } else {
-            head[u] = NULL;
-            tail[u] = NULL;
+            left[u] = MSP_NULL_NODE;
+            right[u] = MSP_NULL_NODE;
         }
-        v = left_child[u];
-        while (v != MSP_NULL_NODE) {
-            if (head[v] != NULL) {
-                assert(tail[v] != NULL);
-                if (head[u] == NULL) {
-                    head[u] = head[v];
-                    tail[u] = tail[v];
+        for (v = left_child[u]; v != MSP_NULL_NODE; v = right_sib[v]) {
+            if (left[v] != MSP_NULL_NODE) {
+                assert(right[v] != MSP_NULL_NODE);
+                if (left[u] == MSP_NULL_NODE) {
+                    left[u] = left[v];
+                    right[u] = right[v];
                 } else {
-                    tail[u]->next = head[v];
-                    tail[u] = tail[v];
+                    next[right[u]] = left[v];
+                    right[u] = right[v];
                 }
             }
-            v = right_sib[v];
         }
-        u = parent[u];
     }
 }
 

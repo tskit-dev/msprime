@@ -595,7 +595,7 @@ print_variants(tree_sequence_t *ts)
     variant_t* var;
 
     printf("variants (%d) \n", (int) tree_sequence_get_num_sites(ts));
-    ret = vargen_alloc(&vg, ts, 0);
+    ret = vargen_alloc(&vg, ts, NULL, 0, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
     }
@@ -787,7 +787,7 @@ print_tree_sequence(tree_sequence_t *ts, int verbose)
         printf("========================\n");
         printf("trees\n");
         printf("========================\n");
-        ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS);
+        ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
         if (ret != 0) {
             fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
         }
@@ -894,7 +894,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             goto out;
         }
-        ret = tree_sequence_load_tables(&tree_seq, &tables, 0);
+        ret = tree_sequence_load_tables(&tree_seq, &tables, MSP_BUILD_INDEXES);
         if (ret != 0) {
             goto out;
         }

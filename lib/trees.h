@@ -47,10 +47,6 @@ typedef struct _edge_list_t {
     struct _edge_list_t *next;
 } edge_list_t;
 
-typedef struct _node_list {
-    node_id_t node;
-    struct _node_list *next;
-} node_list_t;
 
 typedef struct {
     size_t num_nodes;
@@ -91,9 +87,10 @@ typedef struct {
     uint8_t *marked;
     uint8_t mark;
     /* These are for the optional sample list tracking. */
-    node_list_t **sample_list_head;
-    node_list_t **sample_list_tail;
-    node_list_t *sample_list_node_mem;
+    node_id_t *left_sample;
+    node_id_t *right_sample;
+    node_id_t *next_sample;
+    node_id_t *sample_index_map;
     /* traversal stacks */
     node_id_t *stack1;
     node_id_t *stack2;
@@ -140,6 +137,7 @@ typedef struct {
     size_t num_samples;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
+    node_id_t *samples;
     node_id_t *sample_index_map;
     size_t tree_site_index;
     int finished;
@@ -229,12 +227,14 @@ void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence,
         int flags);
 int sparse_tree_free(sparse_tree_t *self);
+bool sparse_tree_has_sample_lists(sparse_tree_t *self);
+bool sparse_tree_has_sample_counts(sparse_tree_t *self);
 int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
 int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
 int sparse_tree_set_tracked_samples(sparse_tree_t *self,
         size_t num_tracked_samples, node_id_t *tracked_samples);
 int sparse_tree_set_tracked_samples_from_sample_list(sparse_tree_t *self,
-        node_list_t *head, node_list_t *tail);
+        sparse_tree_t *other, node_id_t node);
 int sparse_tree_get_root(sparse_tree_t *self, node_id_t *root);
 bool sparse_tree_is_sample(sparse_tree_t *self, node_id_t u);
 size_t sparse_tree_get_num_roots(sparse_tree_t *self);
@@ -244,8 +244,6 @@ int sparse_tree_get_mrca(sparse_tree_t *self, node_id_t u, node_id_t v, node_id_
 int sparse_tree_get_num_samples(sparse_tree_t *self, node_id_t u, size_t *num_samples);
 int sparse_tree_get_num_tracked_samples(sparse_tree_t *self, node_id_t u,
         size_t *num_tracked_samples);
-int sparse_tree_get_sample_list(sparse_tree_t *self, node_id_t u,
-        node_list_t **head, node_list_t **tail);
 int sparse_tree_get_sites(sparse_tree_t *self, site_t **sites, table_size_t *sites_length);
 int sparse_tree_get_newick(sparse_tree_t *self, node_id_t root,
         size_t precision, int flags, size_t buffer_size, char *newick_buffer);
@@ -284,7 +282,8 @@ int hapgen_get_haplotype(hapgen_t *self, node_id_t j, char **haplotype);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
-int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
+int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence,
+        node_id_t *samples, size_t num_samples, int flags);
 int vargen_next(vargen_t *self, variant_t **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);

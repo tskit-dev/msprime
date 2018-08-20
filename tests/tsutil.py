@@ -457,3 +457,157 @@ def algorithm_T(ts):
             right = min(right, edges[out_order[k]].right)
         yield (left, right), parent
         left = right
+
+
+class LinkedTree(object):
+    """
+    Straightforward implementation of the quintuply linked tree for developing
+    and testing the sample lists feature.
+
+    NOTE: The interface is pretty awkward; it's not intended for anything other
+    than testing.
+    """
+    def __init__(self, tree_sequence, tracked_samples=None):
+        self.tree_sequence = tree_sequence
+        num_nodes = tree_sequence.num_nodes
+        # Quintuply linked tree.
+        self.parent = [-1 for _ in range(num_nodes)]
+        self.left_sib = [-1 for _ in range(num_nodes)]
+        self.right_sib = [-1 for _ in range(num_nodes)]
+        self.left_child = [-1 for _ in range(num_nodes)]
+        self.right_child = [-1 for _ in range(num_nodes)]
+        self.left_sample = [-1 for _ in range(num_nodes)]
+        self.right_sample = [-1 for _ in range(num_nodes)]
+        # This is too long, but it's convenient for printing.
+        self.next_sample = [-1 for _ in range(num_nodes)]
+
+        self.sample_index_map = [-1 for _ in range(num_nodes)]
+        samples = tracked_samples
+        if tracked_samples is None:
+            samples = list(tree_sequence.samples())
+        for j in range(len(samples)):
+            u = samples[j]
+            self.sample_index_map[u] = j
+            self.left_sample[u] = j
+            self.right_sample[u] = j
+
+    def __str__(self):
+        fmt = "{:<5}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}\n"
+        s = fmt.format(
+            "node", "parent", "lsib", "rsib", "lchild", "rchild",
+            "nsamp", "lsamp", "rsamp")
+        for u in range(self.tree_sequence.num_nodes):
+            s += fmt.format(
+                u, self.parent[u],
+                self.left_sib[u], self.right_sib[u],
+                self.left_child[u], self.right_child[u],
+                self.next_sample[u], self.left_sample[u], self.right_sample[u])
+        # Strip off trailing newline
+        return s[:-1]
+
+    def remove_edge(self, edge):
+        p = edge.parent
+        c = edge.child
+        lsib = self.left_sib[c]
+        rsib = self.right_sib[c]
+        if lsib == -1:
+            self.left_child[p] = rsib
+        else:
+            self.right_sib[lsib] = rsib
+        if rsib == -1:
+            self.right_child[p] = lsib
+        else:
+            self.left_sib[rsib] = lsib
+        self.parent[c] = -1
+        self.left_sib[c] = -1
+        self.right_sib[c] = -1
+
+    def insert_edge(self, edge):
+        p = edge.parent
+        c = edge.child
+        assert self.parent[c] == -1, "contradictory edges"
+        self.parent[c] = p
+        u = self.right_child[p]
+        if u == -1:
+            self.left_child[p] = c
+            self.left_sib[c] = -1
+            self.right_sib[c] = -1
+        else:
+            self.right_sib[u] = c
+            self.left_sib[c] = u
+            self.right_sib[c] = -1
+        self.right_child[p] = c
+
+    def update_sample_list(self, parent):
+        # This can surely be done more efficiently and elegantly. We are iterating
+        # up the tree and iterating over all the siblings of the nodes we visit,
+        # rebuilding the links as we go. This results in visiting the same nodes
+        # over again, which if we have nodes with many siblings will surely be
+        # expensive. Another consequence of the current approach is that the
+        # next pointer contains an arbitrary value for the rightmost sample of
+        # every root. This should point to NULL ideally, but it's quite tricky
+        # to do in practise. It's easier to have a slightly uglier iteration
+        # over samples.
+        #
+        # In the future it would be good have a more efficient version of this
+        # algorithm using next and prev pointers that we keep up to date at all
+        # times, and which we use to patch the lists together more efficiently.
+        u = parent
+        while u != -1:
+            sample_index = self.sample_index_map[u]
+            if sample_index != -1:
+                self.right_sample[u] = self.left_sample[u]
+            else:
+                self.right_sample[u] = -1
+                self.left_sample[u] = -1
+            v = self.left_child[u]
+            while v != -1:
+                if self.left_sample[v] != -1:
+                    assert self.right_sample[v] != -1
+                    if self.left_sample[u] == -1:
+                        self.left_sample[u] = self.left_sample[v]
+                        self.right_sample[u] = self.right_sample[v]
+                    else:
+                        self.next_sample[self.right_sample[u]] = self.left_sample[v]
+                        self.right_sample[u] = self.right_sample[v]
+                v = self.right_sib[v]
+            u = self.parent[u]
+
+    def sample_lists(self):
+        """
+        Iterate over the the trees in this tree sequence, yielding the (left, right)
+        interval tuples. The tree state is maintained internally.
+
+        See note above about the cruddiness of this interface.
+        """
+        ts = self.tree_sequence
+        sequence_length = ts.sequence_length
+        edges = list(ts.edges())
+        M = len(edges)
+        time = [ts.node(edge.parent).time for edge in edges]
+        in_order = sorted(range(M), key=lambda j: (
+            edges[j].left, time[j], edges[j].parent, edges[j].child))
+        out_order = sorted(range(M), key=lambda j: (
+            edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
+        j = 0
+        k = 0
+        left = 0
+
+        while j < M or left < sequence_length:
+            while k < M and edges[out_order[k]].right == left:
+                edge = edges[out_order[k]]
+                self.remove_edge(edge)
+                self.update_sample_list(edge.parent)
+                k += 1
+            while j < M and edges[in_order[j]].left == left:
+                edge = edges[in_order[j]]
+                self.insert_edge(edge)
+                self.update_sample_list(edge.parent)
+                j += 1
+            right = sequence_length
+            if j < M:
+                right = min(right, edges[in_order[j]].left)
+            if k < M:
+                right = min(right, edges[out_order[k]].right)
+            yield left, right
+            left = right
