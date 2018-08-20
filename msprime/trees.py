@@ -1316,8 +1316,6 @@ def parse_individuals(
         tokens = line.split(sep)
         if len(tokens) >= 1:
             flags = int(tokens[flags_index])
-            print("--------")
-            print(line)
             location = ()
             if location_index is not None:
                 location_string = tokens[location_index]
@@ -1328,7 +1326,6 @@ def parse_individuals(
                 metadata = tokens[metadata_index].encode(encoding)
                 if base64_metadata:
                     metadata = base64.b64decode(metadata)
-            print(flags, location, metadata)
             table.add_row(
                 flags=flags, location=location, metadata=metadata)
     return table

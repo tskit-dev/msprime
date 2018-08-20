@@ -38,29 +38,39 @@ class WrightFisherSimulator(object):
     """
     SIMPLE simulation of a bisexual, haploid Wright-Fisher population of size N
     for ngens generations, in which each individual survives with probability
-    survival and only those who die are replaced.  The chromosome is 1.0
-    Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
+    survival and only those who die are replaced.  If num_loci is None,
+    the chromosome is 1.0 Morgans long, and the mutation rate is in units of
+    mutations/Morgan/generation. If num_loci not None, a discrete recombination
+    model is used where breakpoints are chosen uniformly from 1 to num_loci - 1.
     """
     def __init__(
             self, N, survival=0.0, seed=None, deep_history=True, debug=False,
-            initial_generation_samples=False):
+            initial_generation_samples=False, num_loci=None):
         self.N = N
+        self.num_loci = num_loci
         self.survival = survival
         self.deep_history = deep_history
         self.debug = debug
         self.initial_generation_samples = initial_generation_samples
-        if seed is not None:
-            random.seed(seed)
+        self.seed = seed
+        self.rng = random.Random(seed)
 
     def random_breakpoint(self):
-        return min(1.0, max(0.0, 2 * random.random() - 0.5))
+        if self.num_loci is None:
+            return min(1.0, max(0.0, 2 * self.rng.random() - 0.5))
+        else:
+            return self.rng.randint(1, self.num_loci - 1)
 
     def run(self, ngens):
-        tables = msprime.TableCollection(sequence_length=1)
+        L = 1
+        if self.num_loci is not None:
+            L = self.num_loci
+        tables = msprime.TableCollection(sequence_length=L)
         tables.populations.add_row()
         if self.deep_history:
             # initial population
-            init_ts = msprime.simulate(self.N, recombination_rate=1.0)
+            init_ts = msprime.simulate(
+                self.N, recombination_rate=1.0, length=L, random_seed=self.seed)
             init_tables = init_ts.dump_tables()
             tables.nodes.set_columns(
                 time=init_tables.nodes.time + ngens,
@@ -81,10 +91,10 @@ class WrightFisherSimulator(object):
                 print("t:", t)
                 print("pop:", pop)
 
-            dead = [random.random() > self.survival for k in pop]
+            dead = [self.rng.random() > self.survival for k in pop]
             # sample these first so that all parents are from the previous gen
             new_parents = [
-                (random.choice(pop), random.choice(pop)) for k in range(sum(dead))]
+                (self.rng.choice(pop), self.rng.choice(pop)) for k in range(sum(dead))]
             k = 0
             if self.debug:
                 print("Replacing", sum(dead), "individuals.")
@@ -102,9 +112,9 @@ class WrightFisherSimulator(object):
                     if bp > 0.0:
                         tables.edges.add_row(
                             left=0.0, right=bp, parent=lparent, child=offspring)
-                    if bp < 1.0:
+                    if bp < L:
                         tables.edges.add_row(
-                            left=bp, right=1.0, parent=rparent, child=offspring)
+                            left=bp, right=L, parent=rparent, child=offspring)
 
         if self.debug:
             print("Done! Final pop:")
@@ -120,10 +130,10 @@ class WrightFisherSimulator(object):
 
 def wf_sim(
         N, ngens, survival=0.0, deep_history=True, debug=False, seed=None,
-        initial_generation_samples=False):
+        initial_generation_samples=False, num_loci=None):
     sim = WrightFisherSimulator(
         N, survival=survival, deep_history=deep_history, debug=debug, seed=seed,
-        initial_generation_samples=initial_generation_samples)
+        initial_generation_samples=initial_generation_samples, num_loci=num_loci)
     return sim.run(ngens)
 
 

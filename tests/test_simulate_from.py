@@ -33,14 +33,14 @@ import tests.tsutil as tsutil
 import tests.test_wright_fisher as wf
 
 
-def get_wf_base(N, ngens, seed=1):
+def get_wf_base(N, ngens, survival=0.0, num_loci=10, seed=1):
     """
     Returns a forward time simulation suitable for using with simulate-from.
     """
     tables = wf.wf_sim(
-        N, ngens, seed=seed, deep_history=False, initial_generation_samples=True)
+        N, ngens, seed=seed, survival=survival, deep_history=False,
+        initial_generation_samples=True, num_loci=num_loci)
     tables.sort()
-    flags = tables.nodes.flags
     tables.simplify()
     # Unmark the ancient samples
     flags = tables.nodes.flags
@@ -127,33 +127,11 @@ class TestBasicFunctionality(unittest.TestCase):
     def verify_from_tables(self, from_ts, final_ts, start_time=None):
         from_tables = from_ts.dump_tables()
         final_tables = final_ts.dump_tables()
+        if start_time is None:
+            start_time = np.max(from_tables.nodes.time)
         # Populations and individuals should be equal.
         self.assertEqual(from_tables.populations, final_tables.populations)
         self.assertEqual(from_tables.individuals, final_tables.individuals)
-        # FIXME tests for the how the tables relate to each other before and
-        # after need fixing.
-        # time = from_tables.nodes.time
-        # max_time = np.max(time)
-        # # Get rid of the nodes with max_time that were inserted.
-        # N = time.shape[0]
-        # while time[N - 1] == max_time:
-        #     N -= 1
-        # # Time for new nodes > start_time
-        # new_time = final_tables.nodes.time[from_ts.num_nodes:]
-        # self.assertTrue(np.all(new_time > start_time))
-        # # Other tables should be equal up to the from_tables, after getting
-        # # rid of the max_time nodes.
-        # final_tables.nodes.truncate(N)
-        # from_tables.nodes.truncate(N)
-        # self.assertEqual(final_tables.nodes, from_tables.nodes)
-        # # Remove edges with max_time.
-        # parent = from_tables.edges.parent
-        # M = parent.shape[0]
-        # while parent[M - 1] >= N:
-        #     M -= 1
-        # from_tables.edges.truncate(M)
-        # final_tables.edges.truncate(M)
-        # self.assertEqual(final_tables.edges, from_tables.edges)
         # The mutation_rate parameter in simulate is not permitted, so we
         # should always have the same set of mutations before and after.
         self.assertEqual(final_tables.sites, from_tables.sites)
@@ -168,10 +146,21 @@ class TestBasicFunctionality(unittest.TestCase):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
-    def test_from_wf(self):
-        from_ts = get_wf_base(6, 4)
+    def test_from_wf_nonoverlapping(self):
+        m = 100
+        from_ts = get_wf_base(6, 4, num_loci=m)
         final_ts = msprime.simulate(
-            from_ts=from_ts, random_seed=2, recombination_rate=1)
+            from_ts=from_ts, random_seed=2,
+            recombination_map=msprime.RecombinationMap.uniform_map(m, 1, m))
+        self.verify_from_tables(from_ts, final_ts)
+        self.verify_simulation_completed(final_ts)
+
+    def test_from_wf_overlapping(self):
+        m = 100
+        from_ts = get_wf_base(6, 14, survival=0.25, num_loci=m)
+        final_ts = msprime.simulate(
+            from_ts=from_ts, random_seed=2,
+            recombination_map=msprime.RecombinationMap.uniform_map(m, 1, m))
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
 
@@ -705,7 +694,7 @@ class TestErrors(unittest.TestCase):
 
     def test_start_time_bad_type(self):
         base_ts = self.get_example_base()
-        for bad_type in ["£4", {}]:
+        for bad_type in ["4", {}]:
             self.assertRaises(
                 TypeError, msprime.simulate, from_ts=base_ts, start_time=bad_type)
 
