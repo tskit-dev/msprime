@@ -5790,7 +5790,7 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
 {
     int ret;
     size_t j, num_samples, n, k;
-    node_id_t start, stop, sample_index;
+    node_id_t stop, sample_index;
     sparse_tree_t tree;
     node_id_t *samples;
 
@@ -5854,13 +5854,18 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
         ret = sparse_tree_get_num_tracked_samples(&tree, 0, &num_samples);
         CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
 
-        start = tree.sample_list_head[tests[j].node];
-        stop = tree.sample_list_next[tree.sample_list_tail[tests[j].node]];
+        sample_index = tree.sample_list_left[tests[j].node];
         k = 0;
-        for (sample_index = start; sample_index != stop;
-                sample_index = tree.sample_list_next[sample_index]) {
-            k++;
-            CU_ASSERT_FATAL(k <= tests[j].count);
+        if (sample_index != MSP_NULL_NODE) {
+            stop = tree.sample_list_right[tests[j].node];
+            while (true) {
+                k++;
+                CU_ASSERT_FATAL(k <= tests[j].count);
+                if (sample_index == stop) {
+                    break;
+                }
+                sample_index = tree.sample_list_next[sample_index];
+            }
         }
         CU_ASSERT_EQUAL(tests[j].count, k);
     }
@@ -5887,12 +5892,17 @@ verify_sample_counts(tree_sequence_t *ts, size_t num_tests, sample_count_test_t 
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(tests[j].count, num_samples);
 
-        start = tree.sample_list_head[tests[j].node];
-        stop = tree.sample_list_next[tree.sample_list_tail[tests[j].node]];
+        sample_index = tree.sample_list_left[tests[j].node];
         k = 0;
-        for (sample_index = start; sample_index != stop;
-                sample_index = tree.sample_list_next[sample_index]) {
-            k++;
+        if (sample_index != MSP_NULL_NODE) {
+            stop = tree.sample_list_right[tests[j].node];
+            while (true) {
+                k++;
+                if (sample_index == stop) {
+                    break;
+                }
+                sample_index = tree.sample_list_next[sample_index];
+            }
         }
         CU_ASSERT_EQUAL(tests[j].count, k);
     }
@@ -5909,10 +5919,10 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     node_id_t *stack, *samples;
     tree_sequence_t *ts = tree->tree_sequence;
     node_id_t *sample_index_map = ts->sample_index_map;
-    const node_id_t *list_head = tree->sample_list_head;
-    const node_id_t *list_tail = tree->sample_list_tail;
+    const node_id_t *list_left = tree->sample_list_left;
+    const node_id_t *list_right = tree->sample_list_right;
     const node_id_t *list_next = tree->sample_list_next;
-    node_id_t start, stop, sample_index;
+    node_id_t stop, sample_index;
 
     n = tree_sequence_get_num_samples(ts);
     num_nodes = tree_sequence_get_num_nodes(ts);
@@ -5922,11 +5932,11 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
     CU_ASSERT_FATAL(samples != NULL);
     for (u = 0; u < num_nodes; u++) {
         if (tree->left_child[u] == MSP_NULL_NODE && !tree_sequence_is_sample(ts, u)) {
-            /* printf("u = %d, pi = %d head = %d\n", u, tree->parent[u], list_head[u]); */
+            /* printf("u = %d, pi = %d head = %d\n", u, tree->parent[u], list_left[u]); */
             /* FIXME*/
 
-            CU_ASSERT_EQUAL(list_head[u], MSP_NULL_NODE);
-            CU_ASSERT_EQUAL(list_tail[u], MSP_NULL_NODE);
+            CU_ASSERT_EQUAL(list_left[u], MSP_NULL_NODE);
+            CU_ASSERT_EQUAL(list_right[u], MSP_NULL_NODE);
         } else {
             stack_top = 0;
             num_samples = 0;
@@ -5948,14 +5958,18 @@ verify_sample_sets_for_tree(sparse_tree_t *tree)
             CU_ASSERT_EQUAL_FATAL(num_samples, tmp);
 
             j = 0;
-            start = list_head[u];
-            stop = list_next[list_tail[u]];
-            for (sample_index = start; sample_index != stop;
-                    sample_index = list_next[sample_index]) {
-                CU_ASSERT_TRUE_FATAL(j < n);
-                CU_ASSERT_EQUAL_FATAL(sample_index, sample_index_map[samples[j]]);
-                j++;
-
+            sample_index = list_left[u];
+            if (sample_index != MSP_NULL_NODE) {
+                stop = list_right[u];
+                while (true) {
+                    CU_ASSERT_TRUE_FATAL(j < n);
+                    CU_ASSERT_EQUAL_FATAL(sample_index, sample_index_map[samples[j]]);
+                    j++;
+                    if (sample_index == stop) {
+                        break;
+                    }
+                    sample_index = list_next[sample_index];
+                }
             }
             CU_ASSERT_EQUAL_FATAL(j, num_samples);
         }

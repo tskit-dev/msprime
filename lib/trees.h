@@ -87,8 +87,8 @@ typedef struct {
     uint8_t *marked;
     uint8_t mark;
     /* These are for the optional sample list tracking. */
-    node_id_t *sample_list_head;
-    node_id_t *sample_list_tail;
+    node_id_t *sample_list_left;
+    node_id_t *sample_list_right;
     node_id_t *sample_list_next;
     node_id_t *sample_index_map;
     /* traversal stacks */
@@ -226,6 +226,8 @@ void tree_diff_iterator_print_state(tree_diff_iterator_t *self, FILE *out);
 int sparse_tree_alloc(sparse_tree_t *self, tree_sequence_t *tree_sequence,
         int flags);
 int sparse_tree_free(sparse_tree_t *self);
+bool sparse_tree_has_sample_lists(sparse_tree_t *self);
+bool sparse_tree_has_sample_counts(sparse_tree_t *self);
 int sparse_tree_copy(sparse_tree_t *self, sparse_tree_t *source);
 int sparse_tree_equal(sparse_tree_t *self, sparse_tree_t *other);
 int sparse_tree_set_tracked_samples(sparse_tree_t *self,

@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 University of Oxford
+** Copyright (C) 2015-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -49,7 +49,7 @@ hapgen_print_state(hapgen_t *self, FILE *out)
 }
 
 
-static inline int
+static inline int WARN_UNUSED
 hapgen_update_sample(hapgen_t * self, size_t sample_index, site_id_t site,
         const char *derived_state)
 {
@@ -69,10 +69,10 @@ static int
 hapgen_apply_tree_site(hapgen_t *self, site_t *site)
 {
     int ret = 0;
-    const node_id_t *restrict list_head = self->tree.sample_list_head;
-    const node_id_t *restrict list_tail = self->tree.sample_list_tail;
+    const node_id_t *restrict list_left = self->tree.sample_list_left;
+    const node_id_t *restrict list_right = self->tree.sample_list_right;
     const node_id_t *restrict list_next = self->tree.sample_list_next;
-    node_id_t node, tail, sample_index;
+    node_id_t node, index, stop;
     table_size_t j;
     const char *derived_state;
 
@@ -83,19 +83,18 @@ hapgen_apply_tree_site(hapgen_t *self, site_t *site)
         }
         derived_state = site->mutations[j].derived_state;
         node = site->mutations[j].node;
-        sample_index = list_head[node];
-        if (sample_index != MSP_NULL_NODE) {
-            tail = list_tail[node];
+        index = list_left[node];
+        if (index != MSP_NULL_NODE) {
+            stop = list_right[node];
             while (true) {
-                ret = hapgen_update_sample(self, (size_t) sample_index, site->id,
-                        derived_state);
+                ret = hapgen_update_sample(self, (size_t) index, site->id, derived_state);
                 if (ret != 0) {
                     goto out;
                 }
-                if (tail == sample_index) {
+                if (index == stop) {
                     break;
                 }
-                sample_index = list_next[sample_index];
+                index = list_next[index];
             }
         }
     }

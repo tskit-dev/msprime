@@ -41,6 +41,8 @@ import msprime.formats as formats
 
 from _msprime import NODE_IS_SAMPLE
 
+NULL = -1
+
 # TODO change to using NULL when porting to tskit. I.e., all of these
 # would be tskit.NULL.
 
@@ -528,6 +530,17 @@ class SparseTree(object):
     def right_sib(self, u):
         return self._ll_sparse_tree.get_right_sib(u)
 
+    # Sample list.
+
+    def left_sample(self, u):
+        return self._ll_sparse_tree.get_left_sample(u)
+
+    def right_sample(self, u):
+        return self._ll_sparse_tree.get_right_sample(u)
+
+    def next_sample(self, u):
+        return self._ll_sparse_tree.get_next_sample(u)
+
     # TODO do we also have right_root?
     @property
     def left_root(self):
@@ -908,9 +921,22 @@ class SparseTree(object):
                     yield v
 
     def _sample_generator(self, u):
-        for v in self.nodes(u):
-            if self.is_sample(v):
-                yield v
+        if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
+            samples = self.tree_sequence.samples()
+            index = self.left_sample(u)
+            if index != NULL:
+                stop = self.right_sample(u)
+                while True:
+                    yield samples[index]
+                    if index == stop:
+                        break
+                    index = self.next_sample(index)
+        else:
+            # Fall back on iterating over all nodes in the tree, yielding
+            # samples as we see them.
+            for v in self.nodes(u):
+                if self.is_sample(v):
+                    yield v
 
     def samples(self, u=None):
         """
@@ -930,12 +956,8 @@ class SparseTree(object):
         if u is None:
             roots = self.roots
         for root in roots:
-            if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
-                for v in _msprime.SampleListIterator(self._ll_sparse_tree, root):
-                    yield v
-            else:
-                for v in self._sample_generator(root):
-                    yield v
+            for v in self._sample_generator(root):
+                yield v
 
     def get_num_leaves(self, u):
         # Deprecated alias for num_samples. The method name is inaccurate

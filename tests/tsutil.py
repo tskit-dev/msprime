@@ -460,6 +460,13 @@ def algorithm_T(ts):
 
 
 class LinkedTree(object):
+    """
+    Straightforward implementation of the quintuply linked tree for developing
+    and testing the sample lists feature.
+
+    NOTE: The interface is pretty awkward; it's not intended for anything other
+    than testing.
+    """
     def __init__(self, tree_sequence, tracked_samples=None):
         self.tree_sequence = tree_sequence
         num_nodes = tree_sequence.num_nodes
@@ -469,10 +476,10 @@ class LinkedTree(object):
         self.right_sib = [-1 for _ in range(num_nodes)]
         self.left_child = [-1 for _ in range(num_nodes)]
         self.right_child = [-1 for _ in range(num_nodes)]
-        self.sample_head = [-1 for _ in range(num_nodes)]
-        self.sample_tail = [-1 for _ in range(num_nodes)]
+        self.left_sample = [-1 for _ in range(num_nodes)]
+        self.right_sample = [-1 for _ in range(num_nodes)]
         # This is too long, but it's convenient for printing.
-        self.sample_next = [-1 for _ in range(num_nodes)]
+        self.next_sample = [-1 for _ in range(num_nodes)]
 
         self.sample_index_map = [-1 for _ in range(num_nodes)]
         samples = tracked_samples
@@ -481,20 +488,20 @@ class LinkedTree(object):
         for j in range(len(samples)):
             u = samples[j]
             self.sample_index_map[u] = j
-            self.sample_head[u] = j
-            self.sample_tail[u] = j
+            self.left_sample[u] = j
+            self.right_sample[u] = j
 
     def __str__(self):
         fmt = "{:<5}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}\n"
         s = fmt.format(
             "node", "parent", "lsib", "rsib", "lchild", "rchild",
-            "next", "head", "tail")
+            "nsamp", "lsamp", "rsamp")
         for u in range(self.tree_sequence.num_nodes):
             s += fmt.format(
                 u, self.parent[u],
                 self.left_sib[u], self.right_sib[u],
                 self.left_child[u], self.right_child[u],
-                self.sample_next[u], self.sample_head[u], self.sample_tail[u])
+                self.next_sample[u], self.left_sample[u], self.right_sample[u])
         # Strip off trailing newline
         return s[:-1]
 
@@ -532,33 +539,46 @@ class LinkedTree(object):
         self.right_child[p] = c
 
     def update_sample_list(self, parent):
-        # print("Updating for ", parent)
+        # This can surely be done more efficiently and elegantly. We are iterating
+        # up the tree and iterating over all the siblings of the nodes we visit,
+        # rebuilding the links as we go. This results in visiting the same nodes
+        # over again, which if we have nodes with many siblings will surely be
+        # expensive. Another consequence of the current approach is that the
+        # next pointer contains an arbitrary value for the rightmost sample of
+        # every root. This should point to NULL ideally, but it's quite tricky
+        # to do in practise. It's easier to have a slightly uglier iteration
+        # over samples.
+        #
+        # In the future it would be good have a more efficient version of this
+        # algorithm using next and prev pointers that we keep up to date at all
+        # times, and which we use to patch the lists together more efficiently.
         u = parent
         while u != -1:
             sample_index = self.sample_index_map[u]
-            # is_sample = self.tree_sequence.node(u).is_sample()
             if sample_index != -1:
-                self.sample_tail[u] = self.sample_head[u]
+                self.right_sample[u] = self.left_sample[u]
             else:
-                self.sample_tail[u] = -1
-                self.sample_head[u] = -1
+                self.right_sample[u] = -1
+                self.left_sample[u] = -1
             v = self.left_child[u]
             while v != -1:
-                if self.sample_head[v] != -1:
-                    assert self.sample_tail[v] != -1
-                    if self.sample_head[u] == -1:
-                        self.sample_head[u] = self.sample_head[v]
-                        self.sample_tail[u] = self.sample_tail[v]
+                if self.left_sample[v] != -1:
+                    assert self.right_sample[v] != -1
+                    if self.left_sample[u] == -1:
+                        self.left_sample[u] = self.left_sample[v]
+                        self.right_sample[u] = self.right_sample[v]
                     else:
-                        self.sample_next[self.sample_tail[u]] = self.sample_head[v]
-                        self.sample_tail[u] = self.sample_tail[v]
+                        self.next_sample[self.right_sample[u]] = self.left_sample[v]
+                        self.right_sample[u] = self.right_sample[v]
                 v = self.right_sib[v]
             u = self.parent[u]
 
     def sample_lists(self):
         """
-        Version of algorithm T above in which we maintain lists of samples
-        that are below every node.
+        Iterate over the the trees in this tree sequence, yielding the (left, right)
+        interval tuples. The tree state is maintained internally.
+
+        See note above about the cruddiness of this interface.
         """
         ts = self.tree_sequence
         sequence_length = ts.sequence_length

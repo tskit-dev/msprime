@@ -6890,6 +6890,81 @@ out:
     return ret;
 }
 
+static bool
+SparseTree_check_sample_list(SparseTree *self)
+{
+    bool ret = sparse_tree_has_sample_lists(self->sparse_tree);
+    if (! ret) {
+        PyErr_SetString(PyExc_ValueError,
+            "Sample lists not supported. Please set sample_lists=True.");
+    }
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_right_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sample_index;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    sample_index = self->sparse_tree->sample_list_right[node];
+    ret = Py_BuildValue("i", (int) sample_index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_left_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sample_index;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    sample_index = self->sparse_tree->sample_list_left[node];
+    ret = Py_BuildValue("i", (int) sample_index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_next_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t out_index;
+    int in_index, num_samples;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &in_index)) {
+        goto out;
+    }
+    num_samples = (int) tree_sequence_get_num_samples(self->sparse_tree->tree_sequence);
+    if (in_index < 0 || in_index >= num_samples) {
+        PyErr_SetString(PyExc_ValueError, "Sample index out of bounds");
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    out_index = self->sparse_tree->sample_list_next[in_index];
+    ret = Py_BuildValue("i", (int) out_index);
+out:
+    return ret;
+}
 
 static PyObject *
 SparseTree_get_mrca(SparseTree *self, PyObject *args)
@@ -7079,6 +7154,12 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the right-most sib of node u" },
     {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
             "Returns the children of u in left-right order." },
+    {"get_left_sample", (PyCFunction) SparseTree_get_left_sample, METH_VARARGS,
+            "Returns the index of the left-most sample descending from u." },
+    {"get_right_sample", (PyCFunction) SparseTree_get_right_sample, METH_VARARGS,
+            "Returns the index of the right-most sample descending from u." },
+    {"get_next_sample", (PyCFunction) SparseTree_get_next_sample, METH_VARARGS,
+            "Returns the index of the next sample after the specified sample index." },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
     {"get_num_samples", (PyCFunction) SparseTree_get_num_samples, METH_VARARGS,

@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2017 University of Oxford
+** Copyright (C) 2016-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -147,44 +147,29 @@ static int WARN_UNUSED
 vargen_update_genotypes_u8(vargen_t *self, node_id_t node, table_size_t derived)
 {
     uint8_t *restrict genotypes = self->variant.genotypes.u8;
-    const node_id_t *restrict list_head = self->tree.sample_list_head;
-    const node_id_t *restrict list_tail = self->tree.sample_list_tail;
+    const node_id_t *restrict list_left = self->tree.sample_list_left;
+    const node_id_t *restrict list_right = self->tree.sample_list_right;
     const node_id_t *restrict list_next = self->tree.sample_list_next;
-    node_id_t tail, sample_index;
+    node_id_t index, stop;
     int ret = 0;
 
     assert(derived < UINT8_MAX);
 
-    sample_index = list_head[node];
-    if (sample_index != MSP_NULL_NODE) {
-        tail = list_tail[node];
+    index = list_left[node];
+    if (index != MSP_NULL_NODE) {
+        stop = list_right[node];
         while (true) {
-            if (genotypes[sample_index] == derived) {
+            if (genotypes[index] == derived) {
                 ret = MSP_ERR_INCONSISTENT_MUTATIONS;
                 goto out;
             }
-            genotypes[sample_index] = (uint8_t) derived;
-            if (tail == sample_index) {
+            genotypes[index] = (uint8_t) derived;
+            if (index == stop) {
                 break;
             }
-            sample_index = list_next[sample_index];
+            index = list_next[index];
         }
     }
-
-    /* while (1) { */
-    /*     assert(w != NULL); */
-    /*     sample_index = sample_index_map[w->node]; */
-    /*     assert(sample_index >= 0); */
-    /*     if (genotypes[sample_index] == derived) { */
-    /*         ret = MSP_ERR_INCONSISTENT_MUTATIONS; */
-    /*         goto out; */
-    /*     } */
-    /*     genotypes[sample_index] = (uint8_t) derived; */
-    /*     if (w == tail) { */
-    /*         break; */
-    /*     } */
-    /*     w = w->next; */
-    /* } */
 out:
     return ret;
 }
@@ -193,46 +178,29 @@ static int WARN_UNUSED
 vargen_update_genotypes_u16(vargen_t *self, node_id_t node, table_size_t derived)
 {
     uint16_t *restrict genotypes = self->variant.genotypes.u16;
-    const node_id_t *restrict list_head = self->tree.sample_list_head;
-    const node_id_t *restrict list_tail = self->tree.sample_list_tail;
+    const node_id_t *restrict list_left = self->tree.sample_list_left;
+    const node_id_t *restrict list_right = self->tree.sample_list_right;
     const node_id_t *restrict list_next = self->tree.sample_list_next;
-    node_id_t tail, sample_index;
+    node_id_t index, stop;
     int ret = 0;
 
     assert(derived < UINT16_MAX);
-    sample_index = list_head[node];
-    if (sample_index != MSP_NULL_NODE) {
-        tail = list_tail[node];
+
+    index = list_left[node];
+    if (index != MSP_NULL_NODE) {
+        stop = list_right[node];
         while (true) {
-            if (genotypes[sample_index] == derived) {
+            if (genotypes[index] == derived) {
                 ret = MSP_ERR_INCONSISTENT_MUTATIONS;
                 goto out;
             }
-            genotypes[sample_index] = (uint16_t) derived;
-            if (tail == sample_index) {
+            genotypes[index] = (uint16_t) derived;
+            if (index == stop) {
                 break;
             }
-            sample_index = list_next[sample_index];
+            index = list_next[index];
         }
     }
-
-
-
-/*     kk */
-/*     while (1) { */
-/*         assert(w != NULL); */
-/*         sample_index = sample_index_map[w->node]; */
-/*         assert(sample_index >= 0); */
-/*         if (genotypes[sample_index] == derived) { */
-/*             ret = MSP_ERR_INCONSISTENT_MUTATIONS; */
-/*             goto out; */
-/*         } */
-/*         genotypes[sample_index] = (uint16_t) derived; */
-/*         if (w == tail) { */
-/*             break; */
-/*         } */
-/*         w = w->next; */
-/*     } */
 out:
     return ret;
 }

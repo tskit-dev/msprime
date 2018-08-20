@@ -40,6 +40,7 @@ import msprime
 import _msprime
 import tests
 import tests.tsutil as tsutil
+import tests.test_wright_fisher as wf
 
 
 def generate_segments(n, sequence_length=100, seed=None):
@@ -3414,6 +3415,112 @@ class TestSimpleTreeAlgorithm(unittest.TestCase):
             self.assertEqual(interval, tree.interval)
             self.assertEqual(p1, p2)
         self.assertRaises(StopIteration, next, new_trees)
+
+
+class TestSampleLists(unittest.TestCase):
+    """
+    Tests for the sample lists algorithm.
+    """
+    def verify(self, ts):
+        tree1 = tsutil.LinkedTree(ts)
+        s = str(tree1)
+        self.assertIsNotNone(s)
+        trees = ts.trees(sample_lists=True)
+        for left, right in tree1.sample_lists():
+            tree2 = next(trees)
+            assert (left, right) == tree2.interval
+            for u in tree2.nodes():
+                self.assertEqual(tree1.left_sample[u], tree2.left_sample(u))
+                self.assertEqual(tree1.right_sample[u], tree2.right_sample(u))
+            for j in range(ts.num_samples):
+                self.assertEqual(tree1.next_sample[j], tree2.next_sample(j))
+        assert right == ts.sequence_length
+
+        tree1 = tsutil.LinkedTree(ts)
+        trees = ts.trees(sample_lists=False)
+        sample_index_map = ts.samples()
+        for left, right in tree1.sample_lists():
+            tree2 = next(trees)
+            for u in range(ts.num_nodes):
+                samples2 = list(tree2.samples(u))
+                samples1 = []
+                index = tree1.left_sample[u]
+                if index != msprime.NULL:
+                    self.assertEqual(
+                        sample_index_map[tree1.left_sample[u]], samples2[0])
+                    self.assertEqual(
+                        sample_index_map[tree1.right_sample[u]], samples2[-1])
+                    stop = tree1.right_sample[u]
+                    while True:
+                        assert index != -1
+                        samples1.append(sample_index_map[index])
+                        if index == stop:
+                            break
+                        index = tree1.next_sample[index]
+                self.assertEqual(samples1, samples2)
+        assert right == ts.sequence_length
+
+    def test_single_coalescent_tree(self):
+        ts = msprime.simulate(10, random_seed=1, length=10)
+        self.verify(ts)
+
+    def test_coalescent_trees(self):
+        ts = msprime.simulate(8, recombination_rate=5, random_seed=1, length=2)
+        self.assertGreater(ts.num_trees, 2)
+        self.verify(ts)
+
+    def test_coalescent_trees_internal_samples(self):
+        ts = msprime.simulate(8, recombination_rate=5, random_seed=10, length=2)
+        self.assertGreater(ts.num_trees, 2)
+        self.verify(tsutil.jiggle_samples(ts))
+
+    def test_coalescent_trees_all_samples(self):
+        ts = msprime.simulate(8, recombination_rate=5, random_seed=10, length=2)
+        self.assertGreater(ts.num_trees, 2)
+        tables = ts.dump_tables()
+        tables.nodes.set_columns(
+            flags=np.zeros_like(tables.nodes.flags) + msprime.NODE_IS_SAMPLE,
+            time=tables.nodes.time)
+        self.verify(tables.tree_sequence())
+
+    def test_wright_fisher_trees_unsimplified(self):
+        tables = wf.wf_sim(10, 5, deep_history=False, seed=2)
+        tables.sort()
+        ts = tables.tree_sequence()
+        self.verify(ts)
+
+    def test_wright_fisher_trees_simplified(self):
+        tables = wf.wf_sim(10, 5, deep_history=False, seed=1)
+        tables.sort()
+        ts = tables.tree_sequence()
+        ts = ts.simplify()
+        self.verify(ts)
+
+    def test_wright_fisher_trees_simplified_one_gen(self):
+        tables = wf.wf_sim(10, 1, deep_history=False, seed=1)
+        tables.sort()
+        ts = tables.tree_sequence()
+        ts = ts.simplify()
+        self.verify(ts)
+
+    def test_nonbinary_trees(self):
+        demographic_events = [
+            msprime.SimpleBottleneck(time=1.0, population=0, proportion=0.95)]
+        ts = msprime.simulate(
+            20, recombination_rate=10, mutation_rate=5,
+            demographic_events=demographic_events, random_seed=7)
+        found = False
+        for e in ts.edgesets():
+            if len(e.children) > 2:
+                found = True
+        self.assertTrue(found)
+        self.verify(ts)
+
+    def test_many_multiroot_trees(self):
+        ts = msprime.simulate(7, recombination_rate=1, random_seed=10)
+        self.assertGreater(ts.num_trees, 3)
+        ts = tsutil.decapitate(ts, ts.num_edges // 2)
+        self.verify(ts)
 
 
 def squash_edges(ts):
