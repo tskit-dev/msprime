@@ -259,7 +259,7 @@ vcf_converter_alloc(vcf_converter_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = vargen_alloc(self->vargen, tree_sequence, 0);
+    ret = vargen_alloc(self->vargen, tree_sequence, NULL, 0, 0);
     if (ret != 0) {
         goto out;
     }

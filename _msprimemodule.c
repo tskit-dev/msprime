@@ -6313,7 +6313,7 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(vg, self->tree_sequence, 0);
+    err = vargen_alloc(vg, self->tree_sequence, NULL, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -6914,7 +6914,7 @@ SparseTree_get_right_sample(SparseTree *self, PyObject *args)
     if (!SparseTree_check_sample_list(self)) {
         goto out;
     }
-    sample_index = self->sparse_tree->sample_list_right[node];
+    sample_index = self->sparse_tree->right_sample[node];
     ret = Py_BuildValue("i", (int) sample_index);
 out:
     return ret;
@@ -6933,7 +6933,7 @@ SparseTree_get_left_sample(SparseTree *self, PyObject *args)
     if (!SparseTree_check_sample_list(self)) {
         goto out;
     }
-    sample_index = self->sparse_tree->sample_list_left[node];
+    sample_index = self->sparse_tree->left_sample[node];
     ret = Py_BuildValue("i", (int) sample_index);
 out:
     return ret;
@@ -6960,7 +6960,7 @@ SparseTree_get_next_sample(SparseTree *self, PyObject *args)
     if (!SparseTree_check_sample_list(self)) {
         goto out;
     }
-    out_index = self->sparse_tree->sample_list_next[in_index];
+    out_index = self->sparse_tree->next_sample[in_index];
     ret = Py_BuildValue("i", (int) out_index);
 out:
     return ret;
@@ -7874,7 +7874,8 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(self->variant_generator, self->tree_sequence->tree_sequence, 0);
+    err = vargen_alloc(self->variant_generator,
+            self->tree_sequence->tree_sequence, NULL, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;

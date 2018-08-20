@@ -87,9 +87,9 @@ typedef struct {
     uint8_t *marked;
     uint8_t mark;
     /* These are for the optional sample list tracking. */
-    node_id_t *sample_list_left;
-    node_id_t *sample_list_right;
-    node_id_t *sample_list_next;
+    node_id_t *left_sample;
+    node_id_t *right_sample;
+    node_id_t *next_sample;
     node_id_t *sample_index_map;
     /* traversal stacks */
     node_id_t *stack1;
@@ -137,6 +137,7 @@ typedef struct {
     size_t num_samples;
     size_t num_sites;
     tree_sequence_t *tree_sequence;
+    node_id_t *samples;
     node_id_t *sample_index_map;
     size_t tree_site_index;
     int finished;
@@ -281,7 +282,8 @@ int hapgen_get_haplotype(hapgen_t *self, node_id_t j, char **haplotype);
 int hapgen_free(hapgen_t *self);
 void hapgen_print_state(hapgen_t *self, FILE *out);
 
-int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence, int flags);
+int vargen_alloc(vargen_t *self, tree_sequence_t *tree_sequence,
+        node_id_t *samples, size_t num_samples, int flags);
 int vargen_next(vargen_t *self, variant_t **variant);
 int vargen_free(vargen_t *self);
 void vargen_print_state(vargen_t *self, FILE *out);

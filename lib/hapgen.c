@@ -69,9 +69,9 @@ static int
 hapgen_apply_tree_site(hapgen_t *self, site_t *site)
 {
     int ret = 0;
-    const node_id_t *restrict list_left = self->tree.sample_list_left;
-    const node_id_t *restrict list_right = self->tree.sample_list_right;
-    const node_id_t *restrict list_next = self->tree.sample_list_next;
+    const node_id_t *restrict list_left = self->tree.left_sample;
+    const node_id_t *restrict list_right = self->tree.right_sample;
+    const node_id_t *restrict list_next = self->tree.next_sample;
     node_id_t node, index, stop;
     table_size_t j;
     const char *derived_state;
