@@ -3525,15 +3525,13 @@ compute_falling_factorial_log(unsigned int m)
 
 /* This calculates the rate given by Eq (2) in the notes
  */
-static double
-msp_dirac_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors)
+double
+compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
 {
     unsigned int l, m;
     double r[5], r_max;
-    double psi = self->model.params.dirac_coalescent.psi;
-    double c = self->model.params.dirac_coalescent.c;
-    double b = num_ancestors;
     double ret = 0;
+    double b = num_ancestors;
 
     assert(b > 0);
     assert(psi > 0);
@@ -3565,6 +3563,15 @@ msp_dirac_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors)
     ret += b * (b - 1) / 2;
 
     return ret;
+}
+
+static double
+msp_dirac_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors)
+{
+    double psi = self->model.params.dirac_coalescent.psi;
+    double c = self->model.params.dirac_coalescent.c;
+
+    return compute_dirac_coalescence_rate(num_ancestors, psi, c);
 }
 
 static double

@@ -337,6 +337,7 @@ int mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 double compute_falling_factorial_log(unsigned int  m);
+double compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c);
 
 
 #endif /*__MSPRIME_H__*/
