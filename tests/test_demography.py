@@ -1565,7 +1565,8 @@ class HistoricalSamplingMixin(object):
             demographic_events=[
                 msprime.MassMigration(time=t1, source=0, dest=1),
                 msprime.MassMigration(time=t2, source=1, dest=2),
-                msprime.MassMigration(time=t3, source=2, dest=3)])
+                msprime.MassMigration(time=t3, source=2, dest=3)],
+            random_seed=2)
         t = next(ts.trees())
         self.assertEqual(t.get_time(0), 0)
         self.assertEqual(t.get_time(1), t1)

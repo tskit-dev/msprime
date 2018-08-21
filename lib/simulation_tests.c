@@ -1538,6 +1538,22 @@ test_compute_falling_factorial(void)
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(4), 3.178054, 0.000001);
 }
 
+//compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
+
+static void
+test_compute_dirac_coalescence_rate(void)
+{
+    // Falls to Kingman coalescent
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0), 1.0, 0.000000);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(3, 0.1, 0), 3.0, 0.000000);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(4, 0.1, 0), 6.0, 0.000000);
+
+    // Pairwise coalescent, psi is irrelevant
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0.1), 1.1, 0.0000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 1.0), 2.0, 0.0000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 10.0), 11.0, 0.0000001);
+}
+
 static void
 test_multiple_mergers_simulation(void)
 {
@@ -2213,6 +2229,7 @@ main(int argc, char **argv)
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_compute_falling_factorial", test_compute_falling_factorial},
+        {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_simple_recombination_map", test_simple_recomb_map},
