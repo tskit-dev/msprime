@@ -364,10 +364,14 @@ def simulate(
         record_migrations=record_migrations,
         from_ts=from_ts,
         start_time=start_time)
-    # The provenance API is very tentative, and only included now as a
-    # pre-alpha feature.
-    parameters = {"TODO": "encode simulation parameters"}
-    provenance_dict = provenance.get_provenance_dict("simulate", parameters)
+
+    parameters = {
+        "command": "simulate",
+        "sample_size": sample_size,
+        "TODO": "add other simulation parameters"
+    }
+    provenance_dict = provenance.get_provenance_dict(parameters)
+
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
         raise ValueError(

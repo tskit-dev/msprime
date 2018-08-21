@@ -26,6 +26,7 @@ import os
 import tempfile
 import unittest
 import uuid as _uuid
+import json
 
 import h5py
 import kastore
@@ -235,6 +236,8 @@ class TestRoundTrip(TestFileFormat):
         tsp.dump(self.temp_file)
         tsp = msprime.load(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp, simplify=simplify)
+        for provenance in tsp.provenances():
+            msprime.validate_provenance(json.loads(provenance.record))
 
     def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
         msprime.dump_legacy(ts, self.temp_file, 2)

@@ -49,3 +49,9 @@ class VersionTooOldError(FileFormatError):
     """
     The version of the file is too old and cannot be read by the library.
     """
+
+
+class ProvenanceValidationError(MsprimeException):
+    """
+    The provenance information for the tree sequence violated the schema.
+    """
