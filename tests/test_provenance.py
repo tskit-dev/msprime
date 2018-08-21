@@ -26,6 +26,8 @@ from __future__ import division
 import unittest
 import json
 
+import python_jsonschema_objects as pjs
+
 import _msprime
 import msprime
 import msprime.provenance as provenance
@@ -57,8 +59,10 @@ class TestEnvironment(unittest.TestCase):
 
 
 def get_provenance(
-        software_name="x", software_version="y", environment=None, parameters=None):
+        software_name="x", software_version="y", schema_version="1", environment=None,
+        parameters=None):
     document = {
+        "schema_version": schema_version,
         "software": {
             "name": software_name,
             "version": software_version,
@@ -103,6 +107,11 @@ class TestSchema(unittest.TestCase):
             with self.assertRaises(msprime.ProvenanceValidationError):
                 msprime.validate_provenance(doc)
 
+    def test_schema_version_empth(self):
+        doc = get_provenance(schema_version="")
+        with self.assertRaises(msprime.ProvenanceValidationError):
+            msprime.validate_provenance(doc)
+
     def test_software_empty_strings(self):
         doc = get_provenance(software_name="")
         with self.assertRaises(msprime.ProvenanceValidationError):
@@ -113,6 +122,7 @@ class TestSchema(unittest.TestCase):
 
     def test_minimal(self):
         minimal = {
+            "schema_version": "1",
             "software": {
                 "name": "x",
                 "version": "y",
@@ -125,6 +135,7 @@ class TestSchema(unittest.TestCase):
     def test_extra_stuff(self):
         extra = {
             "you": "can",
+            "schema_version": "1",
             "software": {
                 "put": "anything",
                 "name": "x",
@@ -159,3 +170,22 @@ class ValidateSchemas(unittest.TestCase):
         prov = json.loads(ts.provenance(1).record)
         msprime.validate_provenance(prov)
         self.assertEqual(prov["parameters"]["command"], "simplify")
+
+
+class TestBuildObjects(unittest.TestCase):
+    """
+    Check that we can build objects from the json schema as we'd expect.
+    """
+    def test_simulation(self):
+        schema_file = "msprime/provenance.schema.json"
+        with open(schema_file) as f:
+            schema = f.read()
+
+        builder = pjs.ObjectBuilder(json.loads(schema))
+        ns = builder.build_classes()
+        ts = msprime.simulate(5, random_seed=1)
+        prov = ts.provenance(0).record
+        decoded = ns.TskitProvenance.from_json(prov)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "simulate")
+        self.assertEqual(decoded.parameters.sample_size, 5)

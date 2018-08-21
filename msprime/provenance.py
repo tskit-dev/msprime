@@ -92,6 +92,7 @@ def get_provenance_dict(parameters=None):
     provenance schema.
     """
     document = {
+        "schema_version": "1.0.0",
         "software": {
             "name": "msprime",
             "version": __version__,
