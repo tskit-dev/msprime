@@ -214,7 +214,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         goto out;
     }
     if (sA.mutations_length > 1) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        ret = MSP_ERR_ONLY_INFINITE_SITES;
         goto out;
     }
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
@@ -229,7 +229,7 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
             goto out;
         }
         if (sB.mutations_length > 1) {
-            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            ret = MSP_ERR_ONLY_INFINITE_SITES;
             goto out;
         }
         if (sB.position - sA.position > max_distance) {
@@ -303,7 +303,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         goto out;
     }
     if (sA.mutations_length > 1) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        ret = MSP_ERR_ONLY_INFINITE_SITES;
         goto out;
     }
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
@@ -319,7 +319,7 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
             goto out;
         }
         if (sB.mutations_length > 1) {
-            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            ret = MSP_ERR_ONLY_INFINITE_SITES;
             goto out;
         }
         if (sA.position - sB.position > max_distance) {
@@ -435,7 +435,7 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
         goto out;
     }
     if (sA.mutations_length > 1 || sB.mutations_length > 1) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        ret = MSP_ERR_ONLY_INFINITE_SITES;
         goto out;
     }
     assert(sA.mutations_length == 1);

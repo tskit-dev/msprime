@@ -1128,7 +1128,7 @@ verify_stats(tree_sequence_t *ts)
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_TRUE_FATAL(pi >= 0);
         } else {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         }
     }
 }
@@ -2131,7 +2131,7 @@ verify_ld(tree_sequence_t *ts)
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_DOUBLE_EQUAL_FATAL(x, 1.0, eps);
         } else {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         }
     }
 
@@ -2140,7 +2140,7 @@ verify_ld(tree_sequence_t *ts)
         ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD,
                 num_sites, DBL_MAX, r2, &num_r2_values);
         if (multi_mutations_exist(ts, 0, num_sites)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
@@ -2150,7 +2150,7 @@ verify_ld(tree_sequence_t *ts)
         ret = ld_calc_get_r2_array(&ld_calc, num_sites - 2, MSP_DIR_FORWARD,
                 num_sites, DBL_MAX, r2_prime, &num_r2_values);
         if (multi_mutations_exist(ts, num_sites - 2, num_sites)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
@@ -2160,7 +2160,7 @@ verify_ld(tree_sequence_t *ts)
         ret = ld_calc_get_r2_array(&ld_calc, 0, MSP_DIR_FORWARD,
                 num_sites, DBL_MAX, r2_prime, &num_r2_values);
         if (multi_mutations_exist(ts, 0, num_sites)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
@@ -2179,7 +2179,7 @@ verify_ld(tree_sequence_t *ts)
                 MSP_DIR_REVERSE, num_sites, DBL_MAX,
                 r2, &num_r2_values);
         if (multi_mutations_exist(ts, 0, num_sites)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
@@ -2189,7 +2189,7 @@ verify_ld(tree_sequence_t *ts)
         ret = ld_calc_get_r2_array(&ld_calc, 1, MSP_DIR_REVERSE,
                 num_sites, DBL_MAX, r2_prime, &num_r2_values);
         if (multi_mutations_exist(ts, 0, 1)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
@@ -2200,7 +2200,7 @@ verify_ld(tree_sequence_t *ts)
                 MSP_DIR_REVERSE, num_sites, DBL_MAX,
                 r2_prime, &num_r2_values);
         if (multi_mutations_exist(ts, 0, num_sites)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, num_sites - 1);
@@ -2228,7 +2228,7 @@ verify_ld(tree_sequence_t *ts)
         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_FORWARD, num_sites,
                 x, r2, &num_r2_values);
         if (multi_mutations_exist(ts, j, num_sites)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
@@ -2238,7 +2238,7 @@ verify_ld(tree_sequence_t *ts)
         ret = ld_calc_get_r2_array(&ld_calc, j, MSP_DIR_REVERSE, num_sites,
                 x, r2, &num_r2_values);
         if (multi_mutations_exist(ts, 0, j + 1)) {
-            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ONLY_INFINITE_SITES);
         } else {
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(num_r2_values, 1);
