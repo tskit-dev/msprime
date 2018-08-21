@@ -318,7 +318,7 @@ class Population(SimpleContainer):
 
 class Variant(SimpleContainer):
     """
-    A variant is represents the observed variation among the samples
+    A variant represents the observed variation among the samples
     for a given site. A variant consists (a) of a reference to the
     :class:`.Site` instance in question; (b) the **alleles** that may be
     observed at the samples for this site; and (c) the **genotypes**
