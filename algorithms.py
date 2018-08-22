@@ -15,44 +15,6 @@ import bintrees
 import msprime
 
 
-def overlapping_segments(segments):
-    """
-    Returns an iterator over the (left, right, X) tuples describing the
-    distinct overlapping segments in the specified set.
-    """
-    S = sorted(segments, key=lambda x: x.left)
-    n = len(S)
-    # Insert a sentinel at the end for convenience.
-    sentinel = Segment(0)
-    sentinel.left = sys.float_info.max
-    sentinel.right = 0
-    S.append(sentinel)
-    right = S[0].left
-    X = []
-    j = 0
-    while j < n:
-        # Remove any elements of X with right <= left
-        left = right
-        X = [x for x in X if x.right > left]
-        if len(X) == 0:
-            left = S[j].left
-        while j < n and S[j].left == left:
-            X.append(S[j])
-            j += 1
-        j -= 1
-        right = min(x.right for x in X)
-        right = min(right, S[j + 1].left)
-        yield left, right, X
-        j += 1
-
-    while len(X) > 0:
-        left = right
-        X = [x for x in X if x.right > left]
-        if len(X) > 0:
-            right = min(x.right for x in X)
-            yield left, right, X
-
-
 class FenwickTree(object):
     """
     A Fenwick Tree to represent cumulative frequency tables over
@@ -354,44 +316,21 @@ class Simulator(object):
         self.tables = ts.dump_tables()
         root_time = np.max(self.tables.nodes.time)
         self.t = root_time
-        root_edges = [
-            edge for edge in ts.edges() if ts.node(edge.parent).time == root_time]
 
-        parent_count = [0 for _ in range(ts.num_nodes)]
         root_segments_head = [None for _ in range(ts.num_nodes)]
         root_segments_tail = [None for _ in range(ts.num_nodes)]
         last_S = -1
-        last_right = 0
-        for left, right, X in overlapping_segments(root_edges):
-            if left != last_right:
-                raise ValueError("No root edges in interval")
-            last_right = right
-            num_roots = 0
-            for edge in X:
-                num_roots += int(parent_count[edge.parent] == 0)
-                parent_count[edge.parent] += 1
-            S = 0 if num_roots == 1 else num_roots
+        for tree in ts.trees():
+            left, right = tree.interval
+            S = 0 if tree.num_roots == 1 else tree.num_roots
             if S != last_S:
                 self.S[left] = S
                 last_S = S
-            if num_roots == 1:
-                # If we have 1 root this is a special case and we don't add in
-                # any ancestral segments to the state.
-                continue
-
-            for edge in X:
-                # We could get rid of unary edge joining the real roots to ancient
-                # nodes here by looking for parent_count[edge.parent] == 1 and
-                # setting the root node to the edge's child. However, we'd need to
-                # get rid of the corresponding edges from the table, which would
-                # probably end up being tricky. Simpler the just run simplify at
-                # the end to get rid of these unary edges.
-                if parent_count[edge.parent] >= 1:
-                    root = edge.parent
-                    # Make sure we don't insert this parent again and also reset
-                    # the counter array for the next iteration of the outer loop.
-                    parent_count[edge.parent] = 0
-                    population = ts.node(edge.parent).population
+            # If we have 1 root this is a special case and we don't add in
+            # any ancestral segments to the state.
+            if tree.num_roots > 1:
+                for root in tree.roots:
+                    population = ts.node(root).population
                     if root_segments_head[root] is None:
                         seg = self.alloc_segment(left, right, root, population)
                         root_segments_head[root] = seg
@@ -405,8 +344,6 @@ class Simulator(object):
                             tail.next = seg
                             root_segments_tail[root] = seg
         self.S[self.m] = -1
-        if last_right != self.m:
-            raise ValueError("No root edges in last interval")
 
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
@@ -492,9 +429,6 @@ class Simulator(object):
         """
         self.flush_edges()
         ts = self.tables.tree_sequence()
-        if self.from_ts is not None:
-            # Need to simplify to get rid of unary edges and old root nodes.
-            ts = ts.simplify()
         return ts
 
     def simulate(self, model='hudson'):
