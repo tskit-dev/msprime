@@ -136,11 +136,23 @@ class TestBasicFunctionality(unittest.TestCase):
         # should always have the same set of mutations before and after.
         self.assertEqual(final_tables.sites, from_tables.sites)
         self.assertEqual(final_tables.mutations, from_tables.mutations)
+
+        # Afterwards, the other tables should be equal up to the length of the
+        # input tables.
+        final_tables.nodes.truncate(len(from_tables.nodes))
+        final_tables.edges.truncate(len(from_tables.edges))
+        final_tables.migrations.truncate(len(from_tables.migrations))
         final_tables.provenances.truncate(len(from_tables.provenances))
-        self.assertEqual(final_tables.provenances, from_tables.provenances)
-        # check for any unary edges in the trees.
-        for edgeset in final_ts.edgesets():
-            assert len(edgeset.children) > 1
+        self.assertEqual(final_tables, from_tables)
+
+        if final_ts.num_migrations == 0:
+            # Simplify doesn't support migrations at the moment so we don't
+            # check in this case.
+            ts = final_ts.simplify()
+
+            # check for any unary edges in the simplified trees.
+            for edgeset in ts.edgesets():
+                assert len(edgeset.children) > 1
 
     def verify_simulation_completed(self, ts):
         for tree in ts.trees():
@@ -203,7 +215,6 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
-    @unittest.skip("Simplify removes mutations")
     def test_decapitated_mutations(self):
         ts = msprime.simulate(10, random_seed=5, mutation_rate=10)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
@@ -439,10 +450,7 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
-    def test_record_migrations_fails(self):
-        # Because simplify doesn't currently support migrations, we fail.
-        # No real reason for this, just lack of time to implement support
-        # for migrations in simplify.
+    def test_migrations(self):
         n = 10
         seed = 1234
         base_ts = msprime.simulate(
@@ -454,26 +462,16 @@ class TestBasicFunctionality(unittest.TestCase):
             __tmp_max_time=1.0,
             random_seed=seed)
         for record_migrations in [True, False]:
-            with self.assertRaises(ValueError):
-                msprime.simulate(
-                    from_ts=base_ts,
-                    population_configurations=[
-                        msprime.PopulationConfiguration(),
-                        msprime.PopulationConfiguration()],
-                    migration_matrix=[[0, 1], [1, 0]],
-                    record_migrations=record_migrations,
-                    random_seed=seed)
-        tables = base_ts.dump_tables()
-        tables.migrations.clear()
-        with self.assertRaises(ValueError):
-            msprime.simulate(
-                from_ts=tables.tree_sequence(),
+            final_ts = msprime.simulate(
+                from_ts=base_ts,
                 population_configurations=[
                     msprime.PopulationConfiguration(),
                     msprime.PopulationConfiguration()],
                 migration_matrix=[[0, 1], [1, 0]],
-                record_migrations=True,
+                record_migrations=record_migrations,
                 random_seed=seed)
+            self.verify_from_tables(base_ts, final_ts)
+            self.verify_simulation_completed(final_ts)
 
 
 class TestBaseEquivalance(unittest.TestCase):

@@ -195,12 +195,6 @@ def simulator_factory(
         else:
             if from_ts.num_populations != len(population_configurations):
                 raise ValueError(population_mismatch_message)
-        # We currently can't support migrations because simplify won't
-        # work with them.
-        if record_migrations or from_ts.num_migrations > 0:
-            raise ValueError(
-                "simulate_from cannot currently record migration events. Please "
-                "open a bug report")
 
     if recombination_map is None:
         # Default to 1 if no from_ts; otherwise default to the sequence length
@@ -678,9 +672,6 @@ class Simulator(object):
         self.tables.provenances.truncate(self.num_input_provenances)
         if provenance_record is not None:
             self.tables.provenances.add_row(provenance_record)
-        if self.from_ts is not None:
-            self.tables.simplify(
-                filter_individuals=False, filter_populations=False, filter_sites=False)
         return self.tables.tree_sequence()
 
     def reset(self):
