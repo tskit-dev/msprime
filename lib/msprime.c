@@ -26,6 +26,7 @@
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_int.h>
 #include <gsl/gsl_sf.h>
+#include <gsl/gsl_integration.h>
 
 #include "util.h"
 #include "avl.h"
@@ -3712,7 +3713,7 @@ compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
     ret = exp(r_max + log(ret));
 
     ret = 1 - ret;
-    ret *= c * 4.0 / gsl_pow_2(psi);
+    ret *= c;
     ret += b * (b - 1) / 2;
 
     return ret;
@@ -3824,75 +3825,259 @@ out:
  **************************************************************/
 
 static double
+beta_model_time_to_generations(simulation_model_t *model, double t)
+{
+    return 4 * model->population_size * t;
+}
+
+static double
+beta_generations_to_model_time(simulation_model_t *model, double g)
+{
+    return g /(4 * model->population_size);
+}
+
+static double
+beta_generation_rate_to_model_rate(simulation_model_t *model, double rate)
+{
+    return rate * 4 * model->population_size;
+}
+
+static double
+beta_model_rate_to_generation_rate(simulation_model_t *model, double rate)
+{
+    // This works for comparing beta kingman case ... but why 4Ne^2
+    //return rate / ( 4 * gsl_pow_2(model->population_size));
+    double alpha = model->params.beta_coalescent.alpha;
+    double m = model->params.beta_coalescent.m;
+    double phi = model->params.beta_coalescent.phi;
+    double scalar = exp(log(alpha) - alpha * log(m) + gsl_sf_beta_inc (2 - alpha, alpha, phi) - (alpha-1) * model->population_size);
+    return rate / ( 4 * scalar );
+}
+
+//static double
+//beta_compute_phi(double population_size, double truncation_point, double m)
+//{
+    //double phi, K;
+
+    //K = population_size / truncation_point;
+    //phi = K / (K+m);
+    //return phi;
+//}
+
+double beta_integrand(double x, void * p){
+
+    struct beta_params * params = (struct beta_params *)p;
+    unsigned int num_ancestors = params->num_ancestors;
+    double alpha = params->alpha;
+
+    unsigned int l, m;
+    double r[5], r_max;
+    double ret = 0;
+    double b = num_ancestors;
+
+    double log_x = gsl_sf_log(x);
+    double log_1_minus_x = gsl_sf_log(1 - x);
+    m = GSL_MIN(num_ancestors, 4);
+    /* An underflow error occurs because of the large exponent (b-l). We use the
+     * LSE trick to approximate this calculation. For details, see at
+     * https://en.wikipedia.org/wiki/LogSumExp
+     */
+    r[0] = b * gsl_sf_log(1 - x);
+    r_max = r[0];
+    for (l = 1; l <= m; l++){
+        r[l] = gsl_sf_lnchoose(num_ancestors, l)
+                + compute_falling_factorial_log(l)
+                - l * 1.386294      /* log(4) = 1.386294 */
+                + l * log_x
+                + (b - l) * log_1_minus_x;
+        r_max = GSL_MAX(r_max, r[l]);
+    }
+
+    for (l = 0; l <= m; l++)  {
+        ret += exp(r[l] - r_max);
+    }
+    ret = exp(r_max + log(ret));
+
+    ret = 1 - ret;
+
+    ret *= exp((-1-alpha)*log_x + (alpha-1)*log_1_minus_x);
+    ret *= 4 / gsl_sf_beta(2-alpha, alpha);
+    return ret;
+}
+
+
+double compute_beta_integral( unsigned int num_ancestors, double alpha){
+    gsl_integration_workspace *w = gsl_integration_workspace_alloc (1000);
+
+    double ret, err;
+    struct beta_params beta_params_value ={num_ancestors, alpha};
+//printf("num_ancestors = %d , alpha = %f\n", num_ancestors, alpha);
+    gsl_function F;
+    F.function = &beta_integrand;
+    F.params = &beta_params_value;
+    /* less than 2e-6 won't work,
+     * roundoff error detected in the extrapolation table */
+    //gsl_integration_qags (&F, 0, 1, 0, 2e-6, 1000, w, &ret, &err);
+    gsl_integration_qags (&F, 0, 1, 0, 1e-5, 1000, w, &ret, &err);
+
+    gsl_integration_workspace_free (w);
+
+    return ret;
+}
+
+
+/* This calculates the rate given by Eq (25) in the notes
+ */
+double
+compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha)
+{
+    double b = num_ancestors;
+
+    assert(b > 0);
+    assert(alpha > 1);
+    assert(alpha < 2);
+    //assert(phi >= 0);
+    //assert(phi <= 1);
+
+    double ret = 1.0;
+    if ( num_ancestors > 2.0 ){
+        //ret *= 4.0 / gsl_sf_beta_inc (2 - alpha, alpha, phi);
+        //printf("phi = %f, ret = %f, integral = %f\n", phi, ret,compute_beta_integral(num_ancestors, alpha));
+        ret *= compute_beta_integral(num_ancestors, alpha);
+    }
+    //printf("beta coalescent rate is = %f\n", ret);
+    return ret;
+}
+
+
+static double
+msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors)
+{
+    double ret = 1;
+    double alpha = self->model.params.beta_coalescent.alpha;
+    //double phi = self->model.params.beta_coalescent.phi;
+    if (self->model.params.beta_coalescent.truncation_point != 0){
+        ret = compute_beta_coalescence_rate(num_ancestors, alpha);
+    }
+    return ret;
+}
+
+
+static double
 msp_beta_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id)
 {
     population_t *pop = &self->populations[pop_id];
-    /* TODO FIXME!! */
-    double lambda = 1.0;
 
+    unsigned int n = (unsigned int) avl_count(&pop->ancestors);
+    double lambda = msp_beta_compute_coalescence_rate(self, n) * 2;
     return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
+
 
 static int WARN_UNUSED
 msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id)
 {
     int ret = 0;
-    uint32_t j, n;
-    avl_tree_t *ancestors, Q;
+    uint32_t j, n, max_pot_size;
+    const uint32_t num_pots = 4;
+    avl_tree_t *ancestors, Q[5]; /* MSVC won't let us use num_pots here */
     avl_node_t *x_node, *y_node, *node, *next, *q_node;
     segment_t *x, *y, *u;
 
-    ancestors = &self->populations[pop_id].ancestors;
-    /* This is just an example to show how to perform the two regimes. With probability 1/2
-     * we do the usual choose-two behaviour. We can call this the Bullshit-Coalescent.
-     */
-    if (gsl_rng_uniform(self->rng) < 0.5) {
-        /* Choose x and y */
-        n = avl_count(ancestors);
-        j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-        x_node = avl_at(ancestors, j);
-        assert(x_node != NULL);
-        x = (segment_t *) x_node->item;
-        avl_unlink_node(ancestors, x_node);
-        j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-        y_node = avl_at(ancestors, j);
-        assert(y_node != NULL);
-        y = (segment_t *) y_node->item;
-        avl_unlink_node(ancestors, y_node);
-        self->num_ca_events++;
-        msp_free_avl_node(self, x_node);
-        msp_free_avl_node(self, y_node);
-        ret = msp_merge_two_ancestors(self, 0, x, y);
-    } else {
-        /* This is the Lambda coalescent regime. Every individual has a probability 1/2
-         * of being included. This isn't how things will work for the real simulation,
-         * but it should show how the machinery of merging lots of ancestors should work.
-         */
-        avl_init_tree(&Q, cmp_segment_queue, NULL);
-        node = ancestors->head;
-        while (node != NULL) {
-            next = node->next;
-            if (gsl_rng_uniform(self->rng) < 0.5) {
-                u = (segment_t *) node->item;
-                avl_unlink_node(ancestors, node);
-                msp_free_avl_node(self, node);
-                q_node = msp_alloc_avl_node(self);
-                if (q_node == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                avl_init_node(q_node, u);
-                q_node = avl_insert_node(&Q, q_node);
-                assert(q_node != NULL);
-            }
-            node = next;
-        }
-        /* Now that we have filled Q in the correct way, we can merge the ancestors. */
-        ret = msp_merge_ancestors(self, &Q, 0);
+    double beta_x;
+
+    for (j = 0; j < 5; j++){
+        avl_init_tree(&Q[j], cmp_segment_queue, NULL);
     }
+
+    ancestors = &self->populations[pop_id].ancestors;
+    /* Choose x and y */
+    n = avl_count(ancestors);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+    x_node = avl_at(ancestors, j);
+    assert(x_node != NULL);
+    x = (segment_t *) x_node->item;
+    avl_unlink_node(ancestors, x_node);
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+    y_node = avl_at(ancestors, j);
+    assert(y_node != NULL);
+    y = (segment_t *) y_node->item;
+    avl_unlink_node(ancestors, y_node);
+    self->num_ca_events++;
+    msp_free_avl_node(self, x_node);
+    msp_free_avl_node(self, y_node);
+
+    q_node = msp_alloc_avl_node(self);
+    if (q_node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(q_node, x);
+    q_node = avl_insert_node(&Q[4], q_node);
+
+    q_node = msp_alloc_avl_node(self);
+    if (q_node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(q_node, y);
+    q_node = avl_insert_node(&Q[4], q_node);
+
+
+
+
+    beta_x = gsl_ran_beta(self->rng,
+                 2.0 - self->model.params.beta_coalescent.alpha,
+                 self->model.params.beta_coalescent.alpha);
+
+    /* In the multiple merger regime we have four different 'pots' that
+     * lineages get assigned to, where all lineages in a given pot are merged into
+     * a common ancestor.
+     */
+
+    node = ancestors->head;
+    while (node != NULL) {
+        next = node->next;
+        /* With probability psi / 4, a given lineage participates in this event. */
+        if (gsl_rng_uniform(self->rng) < beta_x / 4.0) {
+            u = (segment_t *) node->item;
+            avl_unlink_node(ancestors, node);
+            msp_free_avl_node(self, node);
+            q_node = msp_alloc_avl_node(self);
+            if (q_node == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            avl_init_node(q_node, u);
+            /* Now assign this ancestor to a uniformly chosen pot */
+            j = (uint32_t) gsl_rng_uniform_int(self->rng, num_pots);
+            q_node = avl_insert_node(&Q[j], q_node);
+            assert(q_node != NULL);
+        }
+        node = next;
+    }
+    /* All the lineages that have been assigned to the particular pots can now be
+     * merged.
+     */
+    max_pot_size = 0;
+    for (j = 0; j < 5; j++){
+        max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[j]));
+        ret = msp_merge_ancestors(self, &Q[j], 0);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+    /* If no coalescence has occured, we need to signal this back to the calling
+     * function so that the event can be 'cancelled'. This is done by returning 1.
+     */
+    if (max_pot_size < 2){
+        ret = 1;
+    }
+
 out:
     return ret;
 }
+
 
 /**************************************************************
  * Discrete Time Wright Fisher
@@ -4143,6 +4328,17 @@ msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
     self->model.params.beta_coalescent.alpha = alpha;
     self->model.params.beta_coalescent.truncation_point = truncation_point;
 
+    self->model.params.beta_coalescent.m =
+        2.0 + exp( alpha * 0.6931472 + (1-alpha) * 1.098612 - log(alpha-1));
+    //self->model.params.beta_coalescent.phi = beta_compute_phi(population_size,
+                        //truncation_point, self->model.params.beta_coalescent.m);
+
+    //self->model.params.beta_coalescent.K = truncation_point;
+
+    self->model.model_time_to_generations = beta_model_time_to_generations;
+    self->model.generations_to_model_time = beta_generations_to_model_time;
+    self->model.generation_rate_to_model_rate = beta_generation_rate_to_model_rate;
+    self->model.model_rate_to_generation_rate = beta_model_rate_to_generation_rate;
     self->get_common_ancestor_waiting_time = msp_beta_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_beta_common_ancestor_event;
     ret = msp_rescale_model_times(self);

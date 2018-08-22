@@ -1538,21 +1538,48 @@ test_compute_falling_factorial(void)
     CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(4), 3.178054, 0.000001);
 }
 
-//compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
 
 static void
 test_compute_dirac_coalescence_rate(void)
 {
+    // compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
+
     // Falls to Kingman coalescent
     CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0), 1.0, 0.000000);
     CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(3, 0.1, 0), 3.0, 0.000000);
     CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(4, 0.1, 0), 6.0, 0.000000);
 
-    // Pairwise coalescent, psi is irrelevant
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0.1), 1.1, 0.0000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 1.0), 2.0, 0.0000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 10.0), 11.0, 0.0000001);
+    // Pairwise coalescent, λ_2 = 1 + cψ^2 /4
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0.1), 1.00025, 0.000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 1.0), 1.0025, 0.000001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 10.0), 1.025, 0.000001);
+
+    // Other cases, check against lambdab r code
+    // PASS when e = 1e-5, FAIL when e = 1e-6, in particular with low psi
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(10, 0.001, 0.5), 45.00001, 0.00001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(10, 0.001, 50), 45.00056, 0.00001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(10, 0.01, 0.5), 45.00055, 0.00001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(100, 0.99, 50.0), 5000.0, 0.00001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(101, 0.51, 5.0), 5055.0, 0.00001);
 }
+
+
+static void
+test_compute_beta_coalescence_rate(void)
+{
+    // compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha, double phi)
+    //printf("compute_beta_coalescence_rate(100, 1.5) = %f\n", compute_beta_coalescence_rate(100, 1.5));
+    //printf("compute_beta_coalescence_rate(100, 1.8) = %f\n", compute_beta_coalescence_rate(100, 1.8));
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.01), 225.6396, 0.001);
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.5), 1140.782, 0.01);
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.8), 2815.267, 0.1);
+
+    // Pairwise coalescent, alpha is irrelevant
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.1), 1.0, 0.000000);
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.5), 1.0, 0.000000);
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.9), 1.0, 0.000000);
+}
+
 
 static void
 test_multiple_mergers_simulation(void)
@@ -1584,7 +1611,7 @@ test_multiple_mergers_simulation(void)
             // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
             ret = msp_set_simulation_model_dirac(msp, 1, 0.5, 1);
         } else {
-            ret = msp_set_simulation_model_beta(msp, 1, 1.0, 10.0);
+            ret = msp_set_simulation_model_beta(msp, 1, 1.5, 10.0);
         }
         CU_ASSERT_EQUAL(ret, 0);
         /* TODO check for adding various complications like multiple populations etc
@@ -2260,6 +2287,7 @@ main(int argc, char **argv)
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_compute_falling_factorial", test_compute_falling_factorial},
         {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
+        {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_simple_recombination_map", test_simple_recomb_map},

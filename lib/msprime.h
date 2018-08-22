@@ -87,6 +87,10 @@ typedef struct {
 typedef struct {
     double alpha;
     double truncation_point;
+
+    double m;  // private
+    double phi;  // private
+    //double K;  // private
 } beta_coalescent_t;
 
 typedef struct {
@@ -342,5 +346,11 @@ void mutgen_print_state(mutgen_t *self, FILE *out);
 double compute_falling_factorial_log(unsigned int  m);
 double compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c);
 
-
+struct beta_params {
+    unsigned int num_ancestors;
+    double alpha;
+};
+double beta_integrand(double x, void * p);
+double compute_beta_integral( unsigned int num_ancestors, double alpha);
+double compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha);
 #endif /*__MSPRIME_H__*/
