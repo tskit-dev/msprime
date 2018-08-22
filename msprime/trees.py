@@ -2169,6 +2169,21 @@ class TreeSequence(object):
             yield edgeset
 
     def edge_diffs(self):
+        """
+        Returns an iterator over all the edges that are inserted and removed to
+        build the trees as we move from left-to-right along the tree sequence.
+        The iterator yields a sequence of 3-tuples, ``(interval, edges_out,
+        edges_in)``. The ``interval`` is a pair ``(left, right)`` representing
+        the genomic interval (see :attr:`SparseTree.interval`). The
+        ``edges_out`` value is a tuple of the edges that were just-removed to
+        create the tree covering the interval (hence, ``edges_out`` will always
+        be empty for the first tree). The ``edges_in`` value is a tuple of
+        edges that were just inserted to contruct the tree convering the
+        current interval.
+
+        :return: An iterator over the (interval, edges_out, edges_in) tuples.
+        :rtype: iter(tuple, tuple, tuple)
+        """
         iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
         for interval, edge_tuples_out, edge_tuples_in in iterator:
             edges_out = [Edge(*e) for e in edge_tuples_out]
