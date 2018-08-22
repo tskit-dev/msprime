@@ -25,8 +25,61 @@ from __future__ import division
 import unittest
 import json
 
+import numpy as np
+
 import msprime
 from tests import tsutil
+import tests.test_wright_fisher as wf
+
+
+class TestMutateProvenance(unittest.TestCase):
+    """
+    Test that we correctly record the provenance for calls to mutate.
+    """
+    def test_mutation_rate(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for mutation_rate in [0, 1, 1e-5]:
+            mutated = msprime.mutate(ts, mutation_rate)
+            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
+            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["rate"], mutation_rate)
+            self.assertTrue(record["parameters"]["random_seed"] >= 0)
+
+    def test_start_time(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for start_time in [0, 1, -1]:
+            mutated = msprime.mutate(ts, 1, start_time=start_time)
+            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
+            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["start_time"], start_time)
+            self.assertTrue(record["parameters"]["random_seed"] >= 0)
+
+    def test_end_time(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for end_time in [0, 1, 100]:
+            mutated = msprime.mutate(ts, 1, start_time=-1, end_time=end_time)
+            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
+            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["start_time"], -1)
+            self.assertEqual(record["parameters"]["end_time"], end_time)
+            self.assertTrue(record["parameters"]["random_seed"] >= 0)
+
+    def test_seed(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for seed in range(1, 10):
+            mutated = msprime.mutate(ts, rate=1, random_seed=seed)
+            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
+            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["rate"], 1)
+            self.assertEqual(record["parameters"]["random_seed"], seed)
+
+    def test_keep(self):
+        ts = msprime.simulate(10, random_seed=1)
+        for keep in [True, False]:
+            mutated = msprime.mutate(ts, rate=1, keep=keep)
+            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
+            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["keep"], keep)
 
 
 class TestMutate(unittest.TestCase):
@@ -88,7 +141,7 @@ class TestMutate(unittest.TestCase):
 
     def test_bad_rates(self):
         ts = msprime.simulate(2, random_seed=2)
-        for bad_type in [None, {}, "234"]:
+        for bad_type in [{}, "234"]:
             self.assertRaises(TypeError, msprime.mutate, ts, rate=bad_type)
         for bad_rate in [-1, -1e-6, -1e7]:
             self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
@@ -105,22 +158,6 @@ class TestMutate(unittest.TestCase):
     def test_bad_tree_sequence(self):
         for bad_type in [None, {}, "sdrf"]:
             self.assertRaises(ValueError, msprime.mutate, bad_type)
-
-    def test_provenance(self):
-        ts = msprime.simulate(10, random_seed=1)
-        for mutation_rate in [0, 1, 1e-5]:
-            mutated = msprime.mutate(ts, mutation_rate)
-            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
-            self.assertEqual(record["parameters"]["rate"], mutation_rate)
-            self.assertTrue(record["parameters"]["random_seed"] >= 0)
-
-        for seed in range(1, 10):
-            mutated = msprime.mutate(ts, rate=1, random_seed=seed)
-            record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
-            self.assertEqual(record["parameters"]["rate"], 1)
-            self.assertEqual(record["parameters"]["random_seed"], seed)
 
     def test_default_seeds(self):
         ts = msprime.simulate(20, random_seed=2)
@@ -185,6 +222,113 @@ class TestMutate(unittest.TestCase):
         for s1, s2 in zip(binary.sites(), nucleotides.sites()):
             self.assertEqual(s1.position, s2.position)
             self.assertEqual(s1.mutations[0].node, s2.mutations[0].node)
+
+
+class TestInterval(unittest.TestCase):
+    """
+    Tests on the start_time and end_time parameters.
+    """
+    def test_errors(self):
+        ts = msprime.simulate(10, random_seed=2)
+        for start, end in [(-2, -3), (1, 0), (1e6, 1e5)]:
+            with self.assertRaises(ValueError):
+                msprime.mutate(ts, start_time=-2.0, end_time=-3.0)
+
+    def test_stick_tree(self):
+        tables = msprime.TableCollection(1.0)
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=0, time=1)
+        tables.nodes.add_row(flags=0, time=2)
+        tables.edges.add_row(0, 1, 1, 0)
+        tables.edges.add_row(0, 1, 2, 1)
+        ts = tables.tree_sequence()
+
+        tsm = msprime.mutate(ts, rate=100, end_time=1, random_seed=1)
+        self.assertGreater(tsm.num_sites, 0)
+        self.assertTrue(all(mut.node == 0 for mut in ts.mutations()))
+
+        tsm = msprime.mutate(ts, rate=100, start_time=0, end_time=1, random_seed=1)
+        self.assertGreater(tsm.num_sites, 0)
+        self.assertTrue(all(mut.node == 0 for mut in ts.mutations()))
+
+        tsm = msprime.mutate(ts, rate=100, start_time=0.5, end_time=1, random_seed=1)
+        self.assertGreater(tsm.num_sites, 0)
+        self.assertTrue(all(mut.node == 0 for mut in ts.mutations()))
+
+        tsm = msprime.mutate(ts, rate=100, start_time=1, random_seed=1)
+        self.assertGreater(tsm.num_sites, 0)
+        self.assertTrue(all(mut.node == 1 for mut in ts.mutations()))
+
+        tsm = msprime.mutate(ts, rate=100, start_time=1, end_time=2, random_seed=1)
+        self.assertGreater(tsm.num_sites, 0)
+        self.assertTrue(all(mut.node == 1 for mut in ts.mutations()))
+
+        tsm = msprime.mutate(ts, rate=100, start_time=1.5, end_time=2, random_seed=1)
+        self.assertGreater(tsm.num_sites, 0)
+        self.assertTrue(all(mut.node == 0 for mut in ts.mutations()))
+
+    def verify_mutations(self, ts, start, end):
+        self.assertGreater(ts.num_sites, 0)
+        time = ts.tables.nodes.time
+        if start is None:
+            start = np.min(time) - 1
+        if end is None:
+            end = np.min(time) + 1
+        for tree in ts.trees():
+            for site in tree.sites():
+                for mutation in site.mutations:
+                    top_node = tree.parent(mutation.node)
+                    self.assertGreater(time[top_node], start)
+
+    def verify(self, ts, rate=100):
+        root_time = max(node.time for node in ts.nodes())
+        leaf_time = min(node.time for node in ts.nodes())
+        length = root_time - leaf_time
+
+        end = root_time - length / 2
+        tsm = msprime.mutate(ts, rate=rate, end_time=end)
+        self.verify_mutations(tsm, None, end)
+
+        start = leaf_time + length / 4
+        end = root_time - length / 2
+        tsm = msprime.mutate(ts, rate=rate, start_time=start, end_time=end)
+        self.verify_mutations(tsm, start, end)
+
+        start = root_time - length / 2
+        end = root_time
+        tsm = msprime.mutate(ts, rate=rate, start_time=start, end_time=end)
+        self.verify_mutations(tsm, start, end)
+
+        tsm = msprime.mutate(ts, rate=rate, start_time=start)
+        self.verify_mutations(tsm, start, None)
+
+    def test_coalescent_tree(self):
+        ts = msprime.simulate(20, random_seed=2)
+        self.verify(ts)
+
+    def test_coalescent_trees(self):
+        ts = msprime.simulate(20, recombination_rate=1, random_seed=2)
+        self.verify(ts)
+
+    def test_wright_fisher_trees(self):
+        tables = wf.wf_sim(20, 10, seed=1, deep_history=False)
+        tables.sort()
+        ts = tables.tree_sequence()
+        self.verify(ts, rate=10)
+        ts = ts.simplify()
+        self.verify(ts, rate=10)
+
+    def test_negative_time(self):
+        ts = msprime.simulate(10, recombination_rate=1, random_seed=2)
+        tables = ts.dump_tables()
+        time = tables.nodes.time
+        max_time = np.max(time)
+        for offset in [max_time / 2, max_time, 2 * max_time]:
+            tables.nodes.set_columns(
+                flags=tables.nodes.flags,
+                time=time - offset)
+            ts = tables.tree_sequence()
+            self.verify(ts)
 
 
 class TestKeep(unittest.TestCase):

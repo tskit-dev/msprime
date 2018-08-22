@@ -5611,6 +5611,80 @@ test_single_tree_mutgen_keep_sites(void)
 }
 
 static void
+test_single_tree_mutgen_interval(void)
+{
+    int ret = 0;
+    const char *nodes =
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "1  0   0\n"
+        "0  1   0\n"
+        "0  2   0\n"
+        "0  3   0\n";
+    const char *edges =
+        "0  1   4   0,1\n"
+        "0  1   5   2,3\n"
+        "0  1   6   4,5\n";
+    mutgen_t mutgen;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    table_collection_t tables1;
+    size_t j;
+    node_id_t node;
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = table_collection_alloc(&tables1, MSP_ALLOC_TABLES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    parse_nodes(nodes, tables1.nodes);
+    parse_edges(edges, tables1.edges);
+
+    ret = mutgen_alloc(&mutgen, 10.0, rng, MSP_ALPHABET_BINARY, 100);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows > 0);
+    mutgen_print_state(&mutgen, _devnull);
+
+    /* End before start is an error */
+    ret = mutgen_set_time_interval(&mutgen, 0, -1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    /* Setting start and end == 0 should give 0 mutations */
+    ret = mutgen_set_time_interval(&mutgen, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables1.sites->num_rows == 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows == 0);
+
+    /* Setting start = 3 should give 0 mutations */
+    ret = mutgen_set_time_interval(&mutgen, 3, DBL_MAX);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables1.sites->num_rows == 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows == 0);
+
+    /* Setting start = 2 should give mutations only above 4 and 5 */
+    ret = mutgen_set_time_interval(&mutgen, 2, DBL_MAX);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables1, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables1.sites->num_rows > 0);
+    CU_ASSERT_TRUE(tables1.mutations->num_rows > 0);
+    for (j = 0; j < tables1.sites->num_rows; j++) {
+        node = tables1.mutations->node[j];
+        CU_ASSERT_TRUE(node == 4 || node == 5);
+    }
+
+    ret = mutgen_free(&mutgen);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    table_collection_free(&tables1);
+    gsl_rng_free(rng);
+}
+
+static void
 test_single_tree_newick(void)
 {
     int ret;
@@ -9650,6 +9724,7 @@ main(int argc, char **argv)
         {"test_single_unary_tree_hapgen", test_single_unary_tree_hapgen},
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
+        {"test_single_tree_mutgen_interval", test_single_tree_mutgen_interval},
         {"test_single_tree_newick", test_single_tree_newick},
         {"test_sparse_tree_errors", test_sparse_tree_errors},
         {"test_tree_sequence_iter", test_tree_sequence_iter},

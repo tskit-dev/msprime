@@ -21,6 +21,8 @@
   a system source of randomness (#534). Random seeds should also be safely generated
   across multiple processes.
 
+- Add start_time and end_time parameters to the ``mutate`` function (#508).
+
 **Bug fixes**:
 
 - Throw a more intelligle error during simulation if a topology is produced

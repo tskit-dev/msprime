@@ -5126,14 +5126,18 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     int alphabet = 0;
-    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet", NULL};
+    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet",
+        "start_time", "end_time", NULL};
     double mutation_rate = 0;
+    double start_time = -DBL_MAX;
+    double end_time = DBL_MAX;
     RandomGenerator *random_generator = NULL;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|i", kwlist,
-            &RandomGeneratorType, &random_generator, &mutation_rate, &alphabet)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|idd", kwlist,
+            &RandomGeneratorType, &random_generator, &mutation_rate,
+            &alphabet, &start_time, &end_time)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -5156,6 +5160,11 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     }
     err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
             alphabet, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = mutgen_set_time_interval(self->mutgen, start_time, end_time);
     if (err != 0) {
         handle_library_error(err);
         goto out;
