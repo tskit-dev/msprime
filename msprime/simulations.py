@@ -306,8 +306,8 @@ def simulate(
         of migration between all pairs of populations. If :math:`N`
         populations are defined in the ``population_configurations``
         parameter, then the migration matrix must be an
-        :math:`N\\times N` matrix with 0 on the diagonal, consisting of
-        :math:`N` lists of length :math:`N` or an :math`N\\times N` numpy
+        :math:`N \\times N` matrix with 0 on the diagonal, consisting of
+        :math:`N` lists of length :math:`N` or an :math:`N \\times N` numpy
         array.
     :param list demographic_events: The list of demographic events to
         simulate. Demographic events describe changes to the populations
