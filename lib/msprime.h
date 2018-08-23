@@ -231,6 +231,8 @@ typedef struct {
 typedef struct {
     int alphabet;
     gsl_rng *rng;
+    double start_time;
+    double end_time;
     double mutation_rate;
     avl_tree_t sites;
     block_allocator_t allocator;
@@ -332,6 +334,7 @@ void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
         int alphabet, size_t mutation_block_size);
+int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);

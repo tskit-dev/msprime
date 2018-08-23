@@ -23,6 +23,7 @@ from __future__ import division
 from __future__ import print_function
 
 import json
+import sys
 
 import _msprime
 import msprime.simulations as simulations
@@ -57,7 +58,9 @@ class InfiniteSites(object):
         self.alphabet = alphabet
 
 
-def mutate(tree_sequence, rate=None, random_seed=None, model=None, keep=False):
+def mutate(
+        tree_sequence, rate=None, random_seed=None, model=None, keep=False,
+        start_time=None, end_time=None):
     """
     Simulates mutations on the specified ancestry and returns the resulting
     :class:`.TreeSequence`. Mutations are generated at the specified rate in
@@ -83,15 +86,27 @@ def mutate(tree_sequence, rate=None, random_seed=None, model=None, keep=False):
     mutations generated will occur at distinct positions from each other and
     from any existing mutations (by rejection sampling).
 
+    The time interval over which mutations can occur may be controlled
+    using the ``start_time`` and ``end_time`` parameters. The ``start_time``
+    defines the lower bound (in time-ago) on this interval and ``max_time``
+    the upper bound. Note that we may have mutations associated with
+    nodes with time <= ``start_time`` since mutations store the node at the
+    bottom (i.e., towards the leaves) of the branch that they occur on.
+
     :param TreeSequence tree_sequence: The tree sequence onto which we
         wish to throw mutations.
-    :param float rate: The rate of mutation per generation.
+    :param float rate: The rate of mutation per generation. (Default: 0).
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
     :param MutationModel model: The mutation model to use when generating
         mutations. If not specified or None, the :class:`.InfiniteSites`
         mutation model is used.
+    :param bool keep: Whether to keep existing mutations (default: False).
+    :param float start_time: The minimum time at which a mutation can
+        occur. (Default: no restriction.)
+    :param float end_time: The maximum time at which a mutation can occur
+        (Default: no restriction).
     :return: The :class:`.TreeSequence` object  resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`.TreeSequence`
@@ -109,9 +124,27 @@ def mutate(tree_sequence, rate=None, random_seed=None, model=None, keep=False):
         alphabet = model.alphabet
     except AttributeError:
         raise TypeError("model must be an InfiniteSites instance")
-    mutation_generator = _msprime.MutationGenerator(rng, rate, alphabet=alphabet)
-    mutation_generator.generate(tables.ll_tables, keep=keep)
-    parameters = {"rate": rate, "random_seed": random_seed}
+    if rate is None:
+        rate = 0
+
+    parameters = {"rate": rate, "random_seed": random_seed, "keep": keep}
+    if start_time is not None:
+        parameters["start_time"] = start_time
+    else:
+        start_time = -sys.float_info.max
+    if end_time is not None:
+        parameters["end_time"] = end_time
+    else:
+        end_time = sys.float_info.max
+    # TODO Add a JSON representation of the model to the provenance.
     provenance_dict = provenance.get_provenance_dict("mutate", parameters)
+
+    if start_time > end_time:
+        raise ValueError("start_time must be <= end_time")
+
+    mutation_generator = _msprime.MutationGenerator(
+        rng, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
+    mutation_generator.generate(tables.ll_tables, keep=keep)
+
     tables.provenances.add_row(json.dumps(provenance_dict))
     return tables.tree_sequence()

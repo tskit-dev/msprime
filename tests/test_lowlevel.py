@@ -3314,6 +3314,18 @@ class TestMutationGenerator(unittest.TestCase):
             mutgen = _msprime.MutationGenerator(rng, rate)
             self.assertEqual(mutgen.get_mutation_rate(), rate)
 
+    def test_time_interval(self):
+        rng = _msprime.RandomGenerator(1)
+        for bad_type in ["x", {}, None]:
+            with self.assertRaises(TypeError):
+                _msprime.MutationGenerator(rng, 0, start_time=bad_type)
+            with self.assertRaises(TypeError):
+                _msprime.MutationGenerator(rng, 0, end_time=bad_type)
+        for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
+            with self.assertRaises(_msprime.LibraryError):
+                _msprime.MutationGenerator(
+                    rng, 0, start_time=start_time, end_time=end_time)
+
     def test_alphabet(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None]:

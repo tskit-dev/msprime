@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <float.h>
 
 #include <gsl/gsl_randist.h>
 
@@ -64,7 +65,9 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     table_size_t j;
 
     fprintf(out, "Mutgen state\n");
-    fprintf(out, "\tmutation_rate = %f\n", (double) self->mutation_rate);
+    fprintf(out, "\tmutation_rate = %f\n", self->mutation_rate);
+    fprintf(out, "\tstart_time = %f\n", self->start_time);
+    fprintf(out, "\tend_time = %f\n", self->end_time);
     block_allocator_print_state(&self->allocator, out);
 
     for (a = self->sites.head; a != NULL; a = a->next) {
@@ -96,6 +99,8 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
     self->alphabet = alphabet;
     self->mutation_rate = mutation_rate;
     self->rng = rng;
+    self->start_time = -DBL_MAX;
+    self->end_time = DBL_MAX;
 
     avl_init_tree(&self->sites, cmp_site, NULL);
     if (block_size == 0) {
@@ -116,6 +121,21 @@ mutgen_free(mutgen_t *self)
 {
     block_allocator_free(&self->allocator);
     return 0;
+}
+
+int
+mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time)
+{
+    int ret = 0;
+
+    if (end_time < start_time) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->start_time = start_time;
+    self->end_time = end_time;
+out:
+    return ret;
 }
 
 static int WARN_UNUSED
@@ -315,6 +335,9 @@ mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
     const mutation_type_t *mutation_types;
     unsigned long num_mutation_types;
     unsigned long type;
+    double start_time = self->start_time;
+    double end_time = self->end_time;
+    double branch_start, branch_end;
     avl_node_t *avl_node;
     site_t search;
 
@@ -351,7 +374,9 @@ mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
         parent = edges->parent[j];
         child = edges->child[j];
         assert(child >= 0 && child < (node_id_t) nodes->num_rows);
-        branch_length = nodes->time[parent] - nodes->time[child];
+        branch_start = MSP_MAX(start_time, nodes->time[child]);
+        branch_end = MSP_MIN(end_time, nodes->time[parent]);
+        branch_length = branch_end - branch_start;
         mu = branch_length * distance * self->mutation_rate;
         branch_mutations = gsl_ran_poisson(self->rng, mu);
         for (l = 0; l < branch_mutations; l++) {
