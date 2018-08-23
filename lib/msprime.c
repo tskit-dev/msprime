@@ -3488,25 +3488,26 @@ msp_std_common_ancestor_event(msp_t *self, population_id_t population_id)
 static double
 dirac_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * gsl_pow_2(model->population_size) * t; // THE problem is with this 4
+    return 4 * model->population_size * t;
 }
 
 static double
 dirac_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g /(4 * gsl_pow_2(model->population_size));
+    return g /(4 * model->population_size);
 }
 
 static double
 dirac_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * model->population_size;
+    return rate * 4 * model->population_size;
 }
 
 static double
 dirac_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    return rate / model->population_size;
+    // This works for comparing dirac kingman case ... but why 4Ne^2
+    return rate / ( 4 * gsl_pow_2(model->population_size));
 }
 
 double
