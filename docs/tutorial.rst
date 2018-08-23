@@ -1140,8 +1140,8 @@ the recent past using a forwards-time simulator and then complete the
 simulation of the ancient past using ``msprime``.
 
 First, we define a simple Wright-Fisher simulator which returns a tree sequence
-with the properties that we require (please see the :func:`.simulate` function
-for a formal description of these properties):
+with the properties that we require (please see the :ref:`API <sec_api_simulate_from>`
+section for a formal description of these properties):
 
 .. code-block:: python
 
@@ -1207,7 +1207,8 @@ for 5 generations, and print out the resulting trees:
 .. code-block:: python
 
     num_loci = 2
-    wf_ts = wright_fisher(10, 5, L=num_loci, random_seed=3)
+    N = 10
+    wf_ts = wright_fisher(N, 5, L=num_loci, random_seed=3)
     for tree in wf_ts.trees():
         print("interval = ", tree.interval)
         print(tree.draw(format="unicode"))
@@ -1233,21 +1234,53 @@ We get::
     ┏━━┳━━┳━┻┳━━┳━━┓   ┃   ┃  ┃   ┃
     14 19 10 13 16 18  11  15 17  12
 
-
 Because our Wright Fisher simulation ran for only 5 generations, there has not
 been enough time for the trees to fully coalesce. Therefore, instead of having
 one root, the trees have several --- the first tree has 2 and the second 4.
+Nodes 0 to 9 in this simulation represent the initial population of the
+simulation, and so we can see that all samples in the first tree trace back
+to one of two individuals from the initial generation.
+These unary branches joining samples and coalesced subtrees to the nodes
+in the initial generation are essential as they allow use to correctly
+assemble the various fragments of ancestral material into chromosomes
+when creating the initial conditions for the coalescent simulation.
+(Please see the :ref:`API <sec_api_simulate_from>` section for more details on the
+required properties of input tree sequences.)
 
-**TODO FINISH THIS BIT**
+The process of completing this tree sequence using a coalescent simulation
+begins by first examining the root segments on the input trees. We get the
+following segments::
+
+    [(0, 2, 0), (0, 2, 7), (1, 2, 8), (1, 2, 4)]
+
+where each segment is a ``(left, right, node)`` tuple. As nodes 0 and 7 are present in both
+trees, they have segments spanning both loci. Nodes 8 and 4 are present only in the
+second tree, and so they have ancestral segments only for the second locus. Note
+that this means that we do *not* simulate the ancestry of the entire initial generation
+of the simulation, but rather the exact minimum that we need in order to complete
+the ancestry of the current generation.
+
+We run the coalescent simulation to complete this tree sequence using the
+``from_ts`` argument to :func:`.simulate`. Because we have simulated a
+two locus system with a recombination rate of ``1 / num_loci`` per generation
+in the Wright-Fisher model, we want to use the same system in the coalescent simulation.
+To do this we create recombination map using the
+:meth:`.RecombinationMap.uniform_map` class method to easily create a
+discrete map with the required number of loci.
+(Please see the :ref:`API <sec_api_simulate_from>` section for more details on the
+restrictions on recombination maps when completing an existing simulation.)
+We also use a ``Ne`` value of ``N / 2``
+since the Wright-Fisher simulation was haploid and ``msprime`` is diploid.
 
 .. code-block:: python
 
-    recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1, num_loci)
+    recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1 / num_loci, num_loci)
     coalesced_ts = msprime.simulate(
-        from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
+        Ne=N / 2, from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
 
 
-After asking msprime to complete this simulation, we get the following trees::
+
+After running this simulation we get the following trees::
 
     interval =  (0.0, 1.0)
                     26
@@ -1274,7 +1307,6 @@ After asking msprime to complete this simulation, we get the following trees::
             21        ┃  ┃  ┃  ┃
     ┏━━┳━━┳━┻┳━━┳━━┓  ┃  ┃  ┃  ┃
     14 19 10 13 16 18 12 15 17 11
-
 
 The trees have fully coalesced and we've successfully combined a forwards-time
 Wright-Fisher simulation with a coalescent simulation: hooray! However, these
