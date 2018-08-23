@@ -830,103 +830,118 @@ class SimulationVerifier(object):
                 num_replicates=100, recombination_rate=0.01)
         self._instances["dtwf_vs_coalescent_low_recombination"] = f
 
-    def _get_xi_dirac_mutation_stats(self, sample_size, num_repeat, mut_rate, rec_rate, num_loci):
-        # TODO Fix this! We can write the output to a proper temporary file, or
-        # pipe it directly into sample_stats.
-        output = open("tmp", "w")
-        output.write("msprimedirac "+str(sample_size)+ " " +str(num_repeat) +"\n1 1 1\n")
-        model = msprime.DiracCoalescent(psi=0.99, c=0)
-        rep_ts = msprime.simulate(sample_size,
-            recombination_rate = rec_rate,
-            mutation_rate = mut_rate / 4,  # See line 317, theta divide by 4
-            length = num_loci,
-            model=model,
-            num_replicates = num_repeat)
-        for i, ts in enumerate(rep_ts):
-            print("\n//", file = output)
-            print("segsites: " + str(ts.get_num_mutations()), file = output)
-            print("positions: " + ' '.join(str(mutation.position / num_loci) for mutation in
-                        ts.mutations()), file = output)
-            for hap in ts.haplotypes():
-                print(hap, file = output)
-        output.close()
+    def run_xi_hudson_comparison(self, test_name, xi_model, **kwargs):
+        df = pd.DataFrame()
+        for model in ["hudson", xi_model]:
+            kwargs["model"] = model
+            model_str = "hudson"
+            if model != "hudson":
+                model_str = "Xi"
+            print("Running: ", kwargs)
+            replicates = msprime.simulate(**kwargs)
+            data = collections.defaultdict(list)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["num_nodes"].append(ts.num_nodes)
+                data["num_edges"].append(ts.num_edges)
+                data["model"].append(model_str)
+            df = df.append(pd.DataFrame(data))
 
-    def _run_xi_dirac_mutation_stats(self, sample_size, num_repeat, theta, r, num_loci):
-        self._get_xi_dirac_mutation_stats(
-            sample_size, num_repeat, theta/num_loci, r/(num_loci-1), num_loci)
-        p1 = subprocess.Popen(["cat", "tmp"], stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(
-            ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE)
-        p1.stdout.close()
-        output = p2.communicate()[0]
-        with tempfile.TemporaryFile() as f:
-            f.write(output)
-            f.seek(0)
-            df = pd.read_table(f)
-        return df
+        basedir = os.path.join("tmp__NOBACKUP__", test_name)
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
 
-    def _run_xi_dirac_coalescent_stats(self, sample_size, num_repeat, r, num_loci):
-        print("\t msprime dirac")
-        replicates = num_repeat
-        model = msprime.DiracCoalescent(psi=0.99, c=0)
-        sim = msprime.simulator_factory(sample_size = sample_size,
-                recombination_map = msprime.RecombinationMap.uniform_map(
-                    num_loci, r / (num_loci - 1), num_loci),
-                model=model)
-        num_populations = sim.num_populations
+        df_hudson = df[df.model == "hudson"]
+        df_xi = df[df.model == "Xi"]
+        for stat in ["tmrca_mean", "num_trees", "num_nodes", "num_edges"]:
+            v1 = df_hudson[stat]
+            v2 = df_xi[stat]
+            sm.graphics.qqplot(v1)
+            sm.qqplot_2samples(v1, v2, line="45")
+            f = os.path.join(basedir, "{}.png".format(stat))
+            pyplot.savefig(f, dpi=72)
+            pyplot.close('all')
 
-        num_trees = [0 for j in range(replicates)]
-        time = [0 for j in range(replicates)]
-        ca_events = [0 for j in range(replicates)]
-        re_events = [0 for j in range(replicates)]
-        mig_events = [None for j in range(replicates)]
-
-        for j in range(replicates):
-            sim.reset()
-            sim.run()
-            num_trees[j] = sim.num_breakpoints + 1
-            time[j] = sim.time / 4  # Convert to coalescent units
-            ### THIS IS NOT RIGHT, this following line will work, but it is not right
-            #time[j] = sim.time  # Convert to coalescent units
-            ca_events[j] = sim.num_common_ancestor_events
-            re_events[j] = sim.num_recombination_events
-            mig_events[j] = [r for row in sim.num_migration_events for r in row]
-        d = {
-            "t": time, "num_trees": num_trees,
-            "ca_events": ca_events, "re_events": re_events}
-        for j in range(num_populations**2):
-            events = [mig_events[k][j] for k in range(replicates)]
-            d["mig_events_{}".format(j)] = events
-        df = pd.DataFrame(d)
-        return df
-
-    def run_xi_dirac_kingman_check(self):
-        sample_size = 15
-        num_replicates = 10000
-        theta = 10.04
-        r = 100.0
-        num_loci = 2501
-        basedir = "tmp__NOBACKUP__/xi_dirac_kingman"
-        args = "{} {} -t {} -r {} {}".format(
-            sample_size, num_replicates, theta, r, num_loci)
-        df_msp_dirac = self._run_xi_dirac_mutation_stats(
-                sample_size, num_replicates, theta, r, num_loci)
-        df_msp = self._run_msprime_mutation_stats(args)
-        self._plot_stats("xi_dirac_kingman", "mutation", df_msp, df_msp_dirac)
-        df_ms = self._run_ms_mutation_stats(args)
-        self._plot_stats("xi_dirac_kingman", "ms_mutation", df_ms, df_msp)
-        df_msp_dirac = self._run_xi_dirac_coalescent_stats(
-                sample_size, num_replicates, r, num_loci)
-        df_msp = self._run_msprime_coalescent_stats(args)
-        self._plot_stats("xi_dirac_kingman", "coalescent", df_msp, df_msp_dirac)
-        df_ms = self._run_ms_coalescent_stats(args)
-        self._plot_stats("xi_dirac_kingman", "ms_coalescent", df_ms, df_msp)
-
-    def add_xi_dirac_vs_kingman_coalescent_check(self):
+    def add_xi_dirac_vs_hudson_single_locus(self):
         """
-        Adds a check for xi_dirac the same as kingman coalescent
+        Checks Xi-dirac against the standard coalescent at a single locus.
         """
-        self._instances["xi_dirac_kingman"] = self.run_xi_dirac_kingman_check
+        def f():
+            N = 100
+            self.run_xi_hudson_comparison(
+                "xi_dirac_vs_hudson_single_locus",
+                msprime.DiracCoalescent(N, psi=0.99, c=0),
+                sample_size=10, Ne=N, num_replicates=100)
+        self._instances["xi_dirac_vs_hudson_single_locus"] = f
+
+    def add_xi_dirac_vs_hudson_recombination(self):
+        """
+        Checks Xi-dirac against the standard coalescent with recombination.
+        """
+        def f():
+            N = 10
+            self.run_xi_hudson_comparison(
+                "xi_dirac_vs_hudson_recombination",
+                msprime.DiracCoalescent(N, psi=0.99, c=0),
+                sample_size=50, Ne=N, num_replicates=100,
+                recombination_rate=0.1)
+        self._instances["xi_dirac_vs_hudson_recombination"] = f
+
+    def compare_xi_dirac_sfs(self, sample_size, psi, sfs, num_replicates=1000):
+        """
+        Runs simulations of the xi dirac model and compares to the expected SFS.
+        """
+        print("running SFS for", sample_size, psi)
+        reps = msprime.simulate(
+            sample_size, num_replicates=num_replicates,
+            model=msprime.DiracCoalescent(psi=psi))
+
+        data = collections.defaultdict(list)
+        for j, ts in enumerate(reps):
+            for tree in ts.trees():
+                for node in tree.nodes():
+                    if tree.parent(node) != msprime.NULL_NODE:
+                        tbl = sum(tree.branch_length(u) for u in tree.nodes(node))
+                        data["total_branch_length"].append(tbl)
+                        data["num_leaves"].append(tree.num_samples(node))
+        df = pd.DataFrame(data)
+
+        basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        f = os.path.join(basedir, "n={}_psi={}.png".format(sample_size, psi))
+
+        ax = sns.violinplot(data=data, x="num_leaves", y="total_branch_length", color="grey")
+        ax.set_xlabel("num leaves")
+        # We seem to be computing the SFS in the other order, so I've just reversed the
+        # the list to show it the same way around.
+        ax.plot(np.arange(sample_size - 1), sfs[::-1], "--", linewidth=3)
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
+
+    def run_xi_dirac_expected_sfs(self):
+        self.compare_xi_dirac_sfs(
+            num_replicates=1000,
+            sample_size=4, psi=0.01, sfs=[0.545977, 0.272234, 0.181789])
+
+        # MORE
+
+        self.compare_xi_dirac_sfs(
+            num_replicates=1000,
+            sample_size=13, psi=0.5,
+            sfs=[
+                0.418425, 0.121938, 0.092209, 0.070954, 0.056666, 0.047179,
+                0.040545, 0.035631, 0.031841, 0.028832, 0.026796, 0.028985])
+
+    def add_xi_dirac_expected_sfs(self):
+        """
+        Adds a check for xi_dirac matching expected SFS calculations.
+        """
+        self._instances["xi_dirac_expected_sfs"] = self.run_xi_dirac_expected_sfs
 
     def add_s_analytical_check(self):
         """
@@ -1215,8 +1230,9 @@ def main():
     verifier.add_smc_oldest_time_check()
 
     # Add XiDirac checks against standard coalescent.
-    # TODO fixup these tests.
-    verifier.add_xi_dirac_vs_kingman_coalescent_check()
+    verifier.add_xi_dirac_vs_hudson_single_locus()
+    verifier.add_xi_dirac_vs_hudson_recombination()
+    verifier.add_xi_dirac_expected_sfs()
 
     # DTWF checks against coalescent.
     verifier.add_dtwf_vs_coalescent_single_locus()
