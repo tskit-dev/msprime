@@ -875,7 +875,7 @@ class SimulationVerifier(object):
             self.run_xi_hudson_comparison(
                 "xi_dirac_vs_hudson_single_locus",
                 msprime.DiracCoalescent(N, psi=0.99, c=0),
-                sample_size=10, Ne=N, num_replicates=100)
+                sample_size=10, Ne=N, num_replicates=5000)
         self._instances["xi_dirac_vs_hudson_single_locus"] = f
 
     def add_xi_dirac_vs_hudson_recombination(self):
@@ -883,31 +883,37 @@ class SimulationVerifier(object):
         Checks Xi-dirac against the standard coalescent with recombination.
         """
         def f():
-            N = 10
+            N = 100
             self.run_xi_hudson_comparison(
                 "xi_dirac_vs_hudson_recombination",
                 msprime.DiracCoalescent(N, psi=0.99, c=0),
-                sample_size=50, Ne=N, num_replicates=100,
+                sample_size=50, Ne=N, num_replicates=1000,
                 recombination_rate=0.1)
         self._instances["xi_dirac_vs_hudson_recombination"] = f
 
-    def compare_xi_dirac_sfs(self, sample_size, psi, sfs, num_replicates=1000):
+    def compare_xi_dirac_sfs(self, sample_size, psi, c, sfs, num_replicates=1000):
         """
         Runs simulations of the xi dirac model and compares to the expected SFS.
         """
-        print("running SFS for", sample_size, psi)
+        print("running SFS for", sample_size, psi, c)
         reps = msprime.simulate(
             sample_size, num_replicates=num_replicates,
-            model=msprime.DiracCoalescent(psi=psi))
+            model=msprime.DiracCoalescent(psi=psi, c=c))
 
         data = collections.defaultdict(list)
         for j, ts in enumerate(reps):
             for tree in ts.trees():
+                tot_bl = 0.0
+                tbl = [0] * (sample_size - 1)
                 for node in tree.nodes():
                     if tree.parent(node) != msprime.NULL_NODE:
-                        tbl = sum(tree.branch_length(u) for u in tree.nodes(node))
-                        data["total_branch_length"].append(tbl)
-                        data["num_leaves"].append(tree.num_samples(node))
+                        tbl[tree.num_samples(node)-1] = tbl[
+                            tree.num_samples(node)-1] + tree.branch_length(node)
+                        tot_bl = tot_bl + tree.branch_length(node)
+                for x in tbl:
+                    data["total_branch_length"].append(x/tot_bl)
+                data["num_leaves"].extend(range(1, sample_size))
+
         df = pd.DataFrame(data)
 
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
@@ -917,22 +923,20 @@ class SimulationVerifier(object):
 
         ax = sns.violinplot(data=data, x="num_leaves", y="total_branch_length", color="grey")
         ax.set_xlabel("num leaves")
-        # We seem to be computing the SFS in the other order, so I've just reversed the
-        # the list to show it the same way around.
-        ax.plot(np.arange(sample_size - 1), sfs[::-1], "--", linewidth=3)
+        ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
     def run_xi_dirac_expected_sfs(self):
         self.compare_xi_dirac_sfs(
             num_replicates=1000,
-            sample_size=4, psi=0.01, sfs=[0.545977, 0.272234, 0.181789])
+            sample_size=4, psi=0.01, c=1, sfs=[0.545977, 0.272234, 0.181789])
 
         # MORE
 
         self.compare_xi_dirac_sfs(
             num_replicates=1000,
-            sample_size=13, psi=0.5,
+            sample_size=13, psi=0.5, c=1,
             sfs=[
                 0.418425, 0.121938, 0.092209, 0.070954, 0.056666, 0.047179,
                 0.040545, 0.035631, 0.031841, 0.028832, 0.026796, 0.028985])
