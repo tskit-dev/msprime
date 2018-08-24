@@ -172,8 +172,8 @@ class SimulationVerifier(object):
         the_keys = sorted(self._instances.keys())
         if keys is not None:
             the_keys = keys
-
         for key in the_keys:
+            print(key)
             runner = self._instances[key]
             runner()
 
