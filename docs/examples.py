@@ -398,16 +398,14 @@ def simulate_from_example():
     num_loci = 2
     wf_ts = wright_fisher(10, 5, L=num_loci, random_seed=3)
     for tree in wf_ts.trees():
-        print("interval = ", tree.interval)
-        print(tree.draw(format="unicode"))
+        tree.draw(path="_static/simulate_from_wf_{}.svg".format(tree.index))
 
     recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1, num_loci)
     coalesced_ts = msprime.simulate(
         from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
 
     for tree in coalesced_ts.trees():
-        print("interval = ", tree.interval)
-        print(tree.draw(format="unicode"))
+        tree.draw(path="_static/simulate_from_coalesced_{}.svg".format(tree.index))
 
     final_ts = coalesced_ts.simplify()
 

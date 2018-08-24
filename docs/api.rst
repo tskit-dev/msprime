@@ -191,18 +191,20 @@ for further explanation of this point and an example.)
 Recombination map limitations
 -----------------------------
 
-Because of the way that ``msprime`` handles recombination internally,
-care must be taken on how recombination is specified when using the ``from_ts``
-argument. In particular, using variable recombination rates may produce
-unexpected outputs such as trees that contain multiple roots or tree sequences
-that are not valid topologically. In general, if the same recombination map
-that was used to generate the initial tree sequence is provided as input to
-to the coalescent simulation, then everything should work (although there may
-still be unexpected effects due to numerical rounding issues.)
+Because of the way that ``msprime`` handles recombination internally, care must
+be taken when specifying recombination when using the ``from_ts`` argument.
+If recombination positions are generated in the same way in both the initial
+tree sequence and the coalescent simulation, then everything should work.
+However, the fine scale details of the underlying recombination model matter,
+so matching nonuniform recombination maps between simulators may not be
+possible at present. (To make it work, we must ensure that every recombination
+breakpoint in ``from_ts`` matches exactly to a possible recombination
+breakpoint in msprime's recombination map, which is not guaranteed because of
+msprime's discrete recombination model.)
 
-If ``from_ts`` has discrete coordinates and we wish to have a uniform recombination
-rate ``r``, then the following code is guaranteed to produce the correct
-results::
+One case in which it is guaranteed to work is if ``from_ts`` has integer
+coordinates, and we want to simulate a coalescent with a uniform recombination
+rate. In this case, to have a uniform recombination rate ``r`` use::
 
     L = int(from_ts.sequence_length)
     recomb_map = msprime.RecombinationMap.uniform_map(L, r, L)

@@ -1137,7 +1137,8 @@ There are many advantages to using forward-time simulators, but they
 are usually quite slow compared to similar coalescent simulations. In this
 section we show how to combine the best of both approaches by simulating
 the recent past using a forwards-time simulator and then complete the
-simulation of the ancient past using ``msprime``.
+simulation of the ancient past using ``msprime``. (We sometimes refer to this
+"recapitation", as we can think of it as adding a "head" onto a tree sequence.)
 
 First, we define a simple Wright-Fisher simulator which returns a tree sequence
 with the properties that we require (please see the :ref:`API <sec_api_simulate_from>`
@@ -1253,12 +1254,15 @@ following segments::
 
     [(0, 2, 0), (0, 2, 7), (1, 2, 8), (1, 2, 4)]
 
-where each segment is a ``(left, right, node)`` tuple. As nodes 0 and 7 are present in both
-trees, they have segments spanning both loci. Nodes 8 and 4 are present only in the
-second tree, and so they have ancestral segments only for the second locus. Note
-that this means that we do *not* simulate the ancestry of the entire initial generation
-of the simulation, but rather the exact minimum that we need in order to complete
-the ancestry of the current generation.
+where each segment is a ``(left, right, node)`` tuple. As nodes 0 and 7 are
+present in both trees, they have segments spanning both loci. Nodes 8 and 4 are
+present only in the second tree, and so they have ancestral segments only for
+the second locus. Note that this means that we do *not* simulate the ancestry
+of the entire initial generation of the simulation, but rather the exact
+minimum that we need in order to complete the ancestry of the current
+generation. For instance, root ``8`` has not coalesced over the interval from
+``1.0`` to ``2.0``, while root ``0`` has not coalesced over the entire segment
+from ``0.0`` to ``2.0``.
 
 We run the coalescent simulation to complete this tree sequence using the
 ``from_ts`` argument to :func:`.simulate`. Because we have simulated a
@@ -1309,11 +1313,42 @@ After running this simulation we get the following trees::
     14 19 10 13 16 18 12 15 17 11
 
 The trees have fully coalesced and we've successfully combined a forwards-time
-Wright-Fisher simulation with a coalescent simulation: hooray! However, these
-trees have some slightly odd properties which are important to be aware of.
-In both trees we can see that the old roots are still present in the trees,
-even through they have only one child and are clearly redundant. While this
-redundancy is not important for many tasks, there are some subtle gotchas:
+Wright-Fisher simulation with a coalescent simulation: hooray!
+
+-------------------------------------
+Why record the initial generation?
+-------------------------------------
+
+We can now see why it is essential that the forwards simulator records the
+*initial* generation in a tree sequence that will later be used as a
+``from_ts`` argument to ``msprime.simulate()``. In the example above, if node
+``7`` was not in the tree sequence, we would not know that the segment that
+node ``20`` inherits from on ``[0.0, 1.0)`` and the segment that node ``12``
+inherits from on ``[1.0, 2.0)`` both exist in the same node (here, node ``7``).
+
+However, note that although the intial generation (above, nodes ``0``, ``4``,
+``7``, and ``8``) must be in the tree sequence, they do *not* have to be
+samples. The easiest way to do this is to
+(a) retain the initial generation as samples throughout the forwards simulation
+(so they persist through ``simplify()``), but then (b) before we output
+the final tree sequence, we remove the flags that mark them as samples,
+so that ``simulate()`` does not simulate their entire history as well. This
+is the approach taken in the toy simulator provided above (although we skip
+the periodic ``simplify()`` steps which are essential in any practical simulation
+for simplicity).
+
+-------------------------------------
+Topology gotchas
+-------------------------------------
+
+The trees that we output from this combined forwards and backwards simulation
+process have some slightly odd properties that are important to be aware of.
+In the example above, we can see that the old roots are still present in both trees,
+even through they have only one child and are clearly redundant.
+This is because the tables of ``from_ts`` have been retained, without modification,
+at the top of the tables of the output tree sequence. While this
+redundancy is not important for many tasks, there are some cases where
+they may cause problems:
 
 1. When computing statistics on the number of nodes, edges or trees in a tree
    sequence, having these unary edges and redundant nodes will slightly
@@ -1323,8 +1358,8 @@ redundancy is not important for many tasks, there are some subtle gotchas:
    above the "real" root (this would happen if one of the trees had already
    coalesced in the forwards-time simulation).
 
-For these reason it is usually better to remove this redundancy from your
-computed tree sequence. Luckily, this is easily done using the
+For these reasons it is usually better to remove this redundancy from your
+computed tree sequence which is easily done using the
 :meth:`.TreeSequence.simplify` method:
 
 .. code-block:: python
