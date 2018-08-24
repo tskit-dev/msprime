@@ -655,6 +655,7 @@ class SimulationVerifier(object):
                 for j, ts in enumerate(reps):
                     final_ts = msprime.simulate(
                         from_ts=ts, start_time=np.max(ts.tables.nodes.time))
+                    final_ts = final_ts.simplify()
                     T2[j] = np.max(final_ts.tables.nodes.time)
 
                 sm.graphics.qqplot(T1)
@@ -693,6 +694,7 @@ class SimulationVerifier(object):
                         from_ts=ts,
                         recombination_map=recomb_map,
                         start_time=np.max(ts.tables.nodes.time))
+                    final_ts = final_ts.simplify()
                     T2[j] = np.max(final_ts.tables.nodes.time)
                     num_trees2[j] = final_ts.num_trees
 
@@ -748,6 +750,7 @@ class SimulationVerifier(object):
                     recombination_rate=recombination_rate,
                     start_time=np.max(ts.tables.nodes.time))
                 assert max(t.num_roots for t in final_ts.trees()) == 1
+                final_ts = final_ts.simplify()
                 T2[j] = np.max(final_ts.tables.nodes.time)
                 num_trees2[j] = final_ts.num_trees
                 num_nodes2[j] = final_ts.num_nodes
@@ -778,6 +781,124 @@ class SimulationVerifier(object):
             sm.graphics.qqplot(num_nodes1)
             sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
             filename = os.path.join(basedir, "num_nodes_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+    def run_simulate_from_demography(self):
+        num_replicates = 1000
+        n = 50
+        recombination_rate = 10
+        samples = [msprime.Sample(time=0, population=j % 2) for j in range(n)]
+        population_configurations = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration()]
+        migration_matrix = [[0, 1], [1, 0]]
+        demographic_events = [
+            msprime.SimpleBottleneck(time=5.1, population=0, proportion=0.4),
+            msprime.SimpleBottleneck(time=10.1, population=1, proportion=0.4),
+            msprime.SimpleBottleneck(time=15.1, population=1, proportion=0.4),
+            msprime.SimpleBottleneck(time=25.1, population=0, proportion=0.4)]
+
+        basedir = "tmp__NOBACKUP__/simulate_from_demography"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        T1 = np.zeros(num_replicates)
+        num_trees1 = np.zeros(num_replicates)
+        num_edges1 = np.zeros(num_replicates)
+        num_nodes1 = np.zeros(num_replicates)
+        num_migrations1 = np.zeros(num_replicates)
+        reps = msprime.simulate(
+            samples=samples,
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events,
+            recombination_rate=recombination_rate,
+            record_migrations=True,
+            num_replicates=num_replicates)
+        for j, ts in enumerate(reps):
+            T1[j] = np.max(ts.tables.nodes.time)
+            num_trees1[j] = ts.num_trees
+            num_nodes1[j] = ts.num_nodes
+            num_edges1[j] = ts.num_edges
+            num_migrations1[j] = ts.num_migrations
+
+        print(
+            "original\ttrees=", np.mean(num_trees1),
+            "\tnodes=", np.mean(num_nodes1),
+            "\tedges=", np.mean(num_edges1),
+            "\tmigrations=", np.mean(num_migrations1))
+
+        for t in [5.0, 10.0, 15.0, 25.0]:
+            T2 = np.zeros(num_replicates)
+            num_trees2 = np.zeros(num_replicates)
+            num_nodes2 = np.zeros(num_replicates)
+            num_edges2 = np.zeros(num_replicates)
+            num_migrations2 = np.zeros(num_replicates)
+            reps = msprime.simulate(
+                samples=samples,
+                population_configurations=population_configurations,
+                migration_matrix=migration_matrix,
+                demographic_events=demographic_events,
+                recombination_rate=recombination_rate,
+                record_migrations=True,
+                num_replicates=num_replicates,
+                __tmp_max_time=t)
+            for j, ts in enumerate(reps):
+                max_time = max(node.time for node in ts.nodes())
+                final_ts = msprime.simulate(
+                    from_ts=ts,
+                    population_configurations=population_configurations,
+                    migration_matrix=migration_matrix,
+                    demographic_events=[
+                        e for e in demographic_events if e.time > max_time],
+                    recombination_rate=recombination_rate,
+                    record_migrations=True)
+                # We have to get migrations from the initial tree sequence
+                # as simplify won't work for now.
+                num_migrations2[j] = final_ts.num_migrations
+                assert max(t.num_roots for t in final_ts.trees()) == 1
+                tables = final_ts.dump_tables()
+                tables.migrations.clear()
+                final_ts = tables.tree_sequence().simplify()
+                T2[j] = np.max(final_ts.tables.nodes.time)
+                num_trees2[j] = final_ts.num_trees
+                num_nodes2[j] = final_ts.num_nodes
+                num_edges2[j] = final_ts.num_edges
+
+            print(
+                "t=", t, "\ttrees=", np.mean(num_trees2),
+                "\tnodes=", np.mean(num_nodes2),
+                "\tedges=", np.mean(num_edges2),
+                "\tmigrations=", np.mean(num_migrations2))
+
+            sm.graphics.qqplot(T1)
+            sm.qqplot_2samples(T1, T2, line="45")
+            filename = os.path.join(basedir, "T_mrca_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_trees1)
+            sm.qqplot_2samples(num_trees1, num_trees2, line="45")
+            filename = os.path.join(basedir, "num_trees_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_edges1)
+            sm.qqplot_2samples(num_edges1, num_edges2, line="45")
+            filename = os.path.join(basedir, "num_edges_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_nodes1)
+            sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
+            filename = os.path.join(basedir, "num_nodes_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_migrations1)
+            sm.qqplot_2samples(num_migrations1, num_migrations2, line="45")
+            filename = os.path.join(basedir, "num_migrations_t={}.png".format(t))
             pyplot.savefig(filename, dpi=72)
             pyplot.close('all')
 
@@ -1052,6 +1173,14 @@ class SimulationVerifier(object):
         self._instances[
             "simulate_from_recombination"] = self.run_simulate_from_recombination
 
+    def add_simulate_from_demography_check(self):
+        """
+        Check that the distributions are identitical when we run simulate_from
+        at various time points.
+        """
+        self._instances[
+            "simulate_from_demography"] = self.run_simulate_from_demography
+
     def add_simulate_from_benchmark(self):
         """
         Check that the distributions are identitical when we run simulate_from
@@ -1269,6 +1398,7 @@ def main():
     verifier.add_simulate_from_single_locus_check()
     verifier.add_simulate_from_multi_locus_check()
     verifier.add_simulate_from_recombination_check()
+    verifier.add_simulate_from_demography_check()
     verifier.add_simulate_from_benchmark()
 
     # Add SMC checks against scrm.
