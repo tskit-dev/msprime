@@ -179,9 +179,10 @@ def simulator_factory(
     elif samples is not None:
         the_samples = samples
 
+    if start_time is not None and start_time < 0:
+        raise ValueError("start_time cannot be negative")
+
     if from_ts is not None:
-        if start_time is None:
-            raise ValueError("Must specify start_time when using from_ts argument")
         if not isinstance(from_ts, trees.TreeSequence):
             raise TypeError("from_ts must be a TreeSequence instance.")
         population_mismatch_message = (
@@ -331,8 +332,17 @@ def simulate(
         returned. If :obj:`num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`.TreeSequence` objects returned.
-    :param .TreeSequence from_ts: TODO document.
-    :param float start_time: TODO document.
+    :param .TreeSequence from_ts: If specified, initialise the simulation
+        from the root segments of this tree sequence and return the
+        completed tree sequence. Please see :ref:`here
+        <sec_api_simulate_from>` for details on the required properties
+        of this tree sequence and its interactions with other parameters.
+        (Default: None).
+    :param float start_time: If specified, set the initial time that the
+        simulation starts to this value. If not specified, the start
+        time is zero if performing a simulation of a set of samples,
+        or is the time of the oldest node if simulating from an
+        existing tree sequence (see the ``from_ts`` parameter).
     :return: The :class:`.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -627,7 +637,7 @@ class Simulator(object):
         ll_from_ts = None
         if self.from_ts is not None:
             ll_from_ts = self.from_ts.get_ll_tree_sequence()
-        start_time = 0 if self.start_time is None else self.start_time
+        start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             recombination_map=ll_recomb_map,

@@ -258,7 +258,7 @@ class Simplifier(object):
             if len(X) == 1:
                 ancestry_node = X[0].node
                 if is_sample:
-                    self.record_edge(left, right, output_id, X[0].node)
+                    self.record_edge(left, right, output_id, ancestry_node)
                     ancestry_node = output_id
             else:
                 if output_id == -1:

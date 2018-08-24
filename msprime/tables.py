@@ -1574,7 +1574,7 @@ class TableCollection(object):
         return msprime.TreeSequence.load_tables(self)
 
     def simplify(
-            self, samples,
+            self, samples=None,
             filter_zero_mutation_sites=None,  # Deprecated alias for filter_sites
             reduce_to_site_topology=False,
             filter_populations=True, filter_individuals=True, filter_sites=True):
@@ -1601,7 +1601,8 @@ class TableCollection(object):
         Please see the :meth:`TreeSequence.simplify` method for a description
         of the remaining parameters.
 
-        :param list[int] samples: A list of node IDs to retain as samples.
+        :param list[int] samples: A list of node IDs to retain as samples. If
+            not specified or None, use all nodes marked with the IS_SAMPLE flag.
         :param bool filter_zero_mutation_sites: Deprecated alias for ``filter_sites``.
         :param bool reduce_to_site_topology: Whether to reduce the topology down
             to the trees that are present at sites. (default: False).
@@ -1627,6 +1628,10 @@ class TableCollection(object):
                 "filter_zero_mutation_sites is deprecated; use filter_sites instead",
                 DeprecationWarning)
             filter_sites = filter_zero_mutation_sites
+        if samples is None:
+            flags = self.nodes.flags
+            samples = np.where(
+                np.bitwise_and(flags, _msprime.NODE_IS_SAMPLE) != 0)[0].astype(np.int32)
         return self.ll_tables.simplify(
             samples, filter_sites=filter_sites,
             filter_individuals=filter_individuals,

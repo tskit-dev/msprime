@@ -18,6 +18,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as pyplot
 import matplotlib.collections
 
+import random
 import tqdm
 import threading
 
@@ -338,6 +339,84 @@ def historical_samples_example():
     for u in range(tree_seq.get_num_nodes()):
         print(u, tree.get_parent(u), tree.get_time(u), sep="\t")
 
+
+def wright_fisher(N, T, L=100, random_seed=None):
+    """
+    Simulate a Wright-Fisher population of N haploid individuals with L
+    discrete loci for T generations. Based on Algorithm W from
+    https://www.biorxiv.org/content/biorxiv/early/2018/01/16/248500.full.pdf
+    """
+    random.seed(random_seed)
+    tables = msprime.TableCollection(L)
+    P = np.arange(N, dtype=int)
+    # Mark the initial generation as samples so that we remember these nodes.
+    for j in range(N):
+        tables.nodes.add_row(time=T, flags=msprime.NODE_IS_SAMPLE)
+    t = T
+    while t > 0:
+        t -= 1
+        Pp = P.copy()
+        for j in range(N):
+            u = tables.nodes.add_row(time=t, flags=0)
+            Pp[j] = u
+            a = random.randint(0, N - 1)
+            b = random.randint(0, N - 1)
+            x = random.randint(1, L - 1)
+            tables.edges.add_row(0, x, P[a], u)
+            tables.edges.add_row(x, L, P[b], u)
+        P = Pp
+
+    # Now do some table manipulations to ensure that the tree sequence
+    # that we output has the form that msprime needs to finish the
+    # simulation. Much of the complexity here is caused by the tables API
+    # not allowing direct access to memory, which will change soon.
+
+    # Mark the extant population as samples also
+    flags = tables.nodes.flags
+    flags[P] = msprime.NODE_IS_SAMPLE
+    tables.nodes.set_columns(flags=flags, time=tables.nodes.time)
+    tables.sort()
+    # Simplify with respect to the current generation, but ensuring we keep the
+    # ancient nodes from the initial population.
+    tables.simplify()
+    # Unmark the initial generation as samples
+    flags = tables.nodes.flags
+    time = tables.nodes.time
+    flags[:] = 0
+    flags[time == 0] = msprime.NODE_IS_SAMPLE
+    # The final tables must also have at least one population which
+    # the samples are assigned to
+    tables.populations.add_row()
+    tables.nodes.set_columns(
+        flags=flags, time=time,
+        population=np.zeros_like(tables.nodes.population))
+    return tables.tree_sequence()
+
+
+def simulate_from_example():
+
+    num_loci = 2
+    wf_ts = wright_fisher(10, 5, L=num_loci, random_seed=3)
+    for tree in wf_ts.trees():
+        tree.draw(path="_static/simulate_from_wf_{}.svg".format(tree.index))
+
+    recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1, num_loci)
+    coalesced_ts = msprime.simulate(
+        from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
+
+    for tree in coalesced_ts.trees():
+        tree.draw(path="_static/simulate_from_coalesced_{}.svg".format(tree.index))
+
+    final_ts = coalesced_ts.simplify()
+
+    for tree in final_ts.trees():
+        print("interval = ", tree.interval)
+        print(tree.draw(format="unicode"))
+
+
+
+
+
 if __name__ == "__main__":
     # single_locus_example()
     # multi_locus_example()
@@ -345,10 +424,11 @@ if __name__ == "__main__":
     # set_mutations_example()
     # variants_example()
     # variant_matrix_example()
-    historical_samples_example()
+    # historical_samples_example()
     # segregating_sites_example(10, 5, 100000)
     # migration_example()
     # out_of_africa()
     # variable_recomb_example()
     # ld_matrix_example()
     # threads_example()
+    simulate_from_example()

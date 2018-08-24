@@ -3428,7 +3428,7 @@ table_sorter_free(table_sorter_t *self)
 
 
 /*************************
- * simplifier
+ * segment overlapper
  *************************/
 
 static int
@@ -3442,6 +3442,134 @@ cmp_segment(const void *a, const void *b) {
     }
     return ret;
 }
+
+int WARN_UNUSED
+segment_overlapper_alloc(segment_overlapper_t *self)
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(*self));
+    self->max_overlapping = 8; /* Making sure we call realloc in tests */
+    self->overlapping = malloc(self->max_overlapping * sizeof(*self->overlapping));
+    if (self->overlapping == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+out:
+    return ret;
+}
+
+int
+segment_overlapper_free(segment_overlapper_t *self)
+{
+    msp_safe_free(self->overlapping);
+    return 0;
+}
+
+/* Initialise the segment overlapper for use. Note that the segments
+ * array must have space for num_segments + 1 elements!
+ */
+int WARN_UNUSED
+segment_overlapper_init(segment_overlapper_t *self, simplify_segment_t *segments,
+        size_t num_segments)
+{
+    int ret = 0;
+    simplify_segment_t *sentinel;
+    void *p;
+
+    if (self->max_overlapping < num_segments) {
+        self->max_overlapping = num_segments;
+        p = realloc(self->overlapping,
+                self->max_overlapping * sizeof(*self->overlapping));
+        if (p == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->overlapping = p;
+
+    }
+    self->segments = segments;
+    self->num_segments = num_segments;
+    self->index = 0;
+    self->num_overlapping = 0;
+    self->left = 0;
+    self->right = DBL_MAX;
+
+    /* Sort the segments in the buffer by left coordinate */
+    qsort(self->segments, self->num_segments, sizeof(simplify_segment_t), cmp_segment);
+    /* NOTE! We are assuming that there's space for another element on the end
+     * here. This is to insert a sentinel which simplifies the logic. */
+    sentinel = self->segments + self->num_segments;
+    sentinel->left = DBL_MAX;
+out:
+    return ret;
+}
+
+int WARN_UNUSED
+segment_overlapper_next(segment_overlapper_t *self,
+        double *left, double *right, simplify_segment_t ***overlapping,
+        size_t *num_overlapping)
+{
+    int ret = 0;
+    size_t j, k;
+    size_t n = self->num_segments;
+    simplify_segment_t *S = self->segments;
+
+    if (self->index < n) {
+        self->left = self->right;
+        /* Remove any elements of X with right <= left */
+        k = 0;
+        for (j = 0; j < self->num_overlapping; j++) {
+            if (self->overlapping[j]->right > self->left) {
+                self->overlapping[k] = self->overlapping[j];
+                k++;
+            }
+        }
+        self->num_overlapping = k;
+        if (k == 0) {
+            self->left = S[self->index].left;
+        }
+        while (self->index < n && S[self->index].left == self->left) {
+            assert(self->num_overlapping < self->max_overlapping);
+            self->overlapping[self->num_overlapping] = &S[self->index];
+            self->num_overlapping++;
+            self->index++;
+        }
+        self->index--;
+        self->right = S[self->index + 1].left;
+        for (j = 0; j < self->num_overlapping; j++) {
+            self->right = MSP_MIN(self->right, self->overlapping[j]->right);
+        }
+        assert(self->left < self->right);
+        self->index++;
+        ret = 1;
+    } else {
+        self->left = self->right;
+        self->right = DBL_MAX;
+        k = 0;
+        for (j = 0; j < self->num_overlapping; j++) {
+            if (self->overlapping[j]->right > self->left) {
+                self->right = MSP_MIN(self->right, self->overlapping[j]->right);
+                self->overlapping[k] = self->overlapping[j];
+                k++;
+            }
+        }
+        self->num_overlapping = k;
+        if (k > 0) {
+            ret = 1;
+        }
+    }
+
+    *left = self->left;
+    *right = self->right;
+    *overlapping = self->overlapping;
+    *num_overlapping = self->num_overlapping;
+    return ret;
+}
+
+/*************************
+ * simplifier
+ *************************/
 
 static int
 cmp_node_id(const void *a, const void *b) {
@@ -3979,6 +4107,10 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
+    ret = segment_overlapper_alloc(&self->segment_overlapper);
+    if (ret != 0) {
+        goto out;
+    }
     /* Need to avoid malloc(0) so make sure we have at least 1. */
     num_nodes_alloc = 1 + tables->nodes->num_rows;
     /* Make the maps and set the intial state */
@@ -3992,8 +4124,6 @@ simplifier_alloc(simplifier_t *self, node_id_t *samples, size_t num_samples,
     self->max_segment_queue_size = 64;
     self->segment_queue = malloc(self->max_segment_queue_size
             * sizeof(simplify_segment_t));
-    self->overlapping_segments_state.overlapping = malloc(self->max_segment_queue_size
-            * sizeof(simplify_segment_t *));
     if (self->ancestor_map_head == NULL || self->ancestor_map_tail == NULL
             || self->child_edge_map_head == NULL || self->child_edge_map_tail == NULL
             || self->node_id_map == NULL || self->is_sample == NULL
@@ -4030,6 +4160,7 @@ simplifier_free(simplifier_t *self)
     table_collection_free(&self->input_tables);
     block_allocator_free(&self->segment_heap);
     block_allocator_free(&self->interval_list_heap);
+    segment_overlapper_free(&self->segment_overlapper);
     msp_safe_free(self->samples);
     msp_safe_free(self->ancestor_map_head);
     msp_safe_free(self->ancestor_map_tail);
@@ -4037,7 +4168,6 @@ simplifier_free(simplifier_t *self)
     msp_safe_free(self->child_edge_map_tail);
     msp_safe_free(self->node_id_map);
     msp_safe_free(self->segment_queue);
-    msp_safe_free(self->overlapping_segments_state.overlapping);
     msp_safe_free(self->is_sample);
     msp_safe_free(self->mutation_id_map);
     msp_safe_free(self->mutation_node_map);
@@ -4068,15 +4198,6 @@ simplifier_enqueue_segment(simplifier_t *self, double left, double right, node_i
             goto out;
         }
         self->segment_queue = p;
-
-        p = realloc(self->overlapping_segments_state.overlapping,
-                self->max_segment_queue_size
-                * sizeof(*self->overlapping_segments_state.overlapping));
-        if (p == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        self->overlapping_segments_state.overlapping = p;
     }
     seg = self->segment_queue + self->segment_queue_size;
     seg->left = left;
@@ -4084,87 +4205,6 @@ simplifier_enqueue_segment(simplifier_t *self, double left, double right, node_i
     seg->node = node;
     self->segment_queue_size++;
 out:
-    return ret;
-}
-
-static int WARN_UNUSED
-simplifier_overlapping_segments_init(simplifier_t *self)
-{
-    int ret = 0;
-    simplify_segment_t *sentinel;
-
-    /* Sort the segments in the buffer by left coordinate */
-    qsort(self->segment_queue, self->segment_queue_size, sizeof(simplify_segment_t),
-            cmp_segment);
-    assert(self->segment_queue_size < self->max_segment_queue_size);
-    sentinel = self->segment_queue + self->segment_queue_size;
-    sentinel->left = DBL_MAX;
-    self->overlapping_segments_state.index = 0;
-    self->overlapping_segments_state.num_overlapping = 0;
-    self->overlapping_segments_state.left = 0;
-    self->overlapping_segments_state.right = DBL_MAX;
-    return ret;
-}
-
-static int WARN_UNUSED
-simplifier_overlapping_segments_next(simplifier_t *self,
-        double *left, double *right, simplify_segment_t ***overlapping,
-        size_t *num_overlapping)
-{
-    int ret = 0;
-    size_t j, k;
-    size_t n = self->segment_queue_size;
-    overlapping_segments_state_t *state = &self->overlapping_segments_state;
-    simplify_segment_t *S = self->segment_queue;
-
-    if (state->index < n) {
-        state->left = state->right;
-        /* Remove any elements of X with right <= left */
-        k = 0;
-        for (j = 0; j < state->num_overlapping; j++) {
-            if (state->overlapping[j]->right > state->left) {
-                state->overlapping[k] = state->overlapping[j];
-                k++;
-            }
-        }
-        state->num_overlapping = k;
-        if (k == 0) {
-            state->left = S[state->index].left;
-        }
-        while (state->index < n && S[state->index].left == state->left) {
-            state->overlapping[state->num_overlapping] = &S[state->index];
-            state->num_overlapping++;
-            state->index++;
-        }
-        state->index--;
-        state->right = S[state->index + 1].left;
-        for (j = 0; j < state->num_overlapping; j++) {
-            state->right = MSP_MIN(state->right, state->overlapping[j]->right);
-        }
-        assert(state->left < state->right);
-        state->index++;
-        ret = 1;
-    } else {
-        state->left = state->right;
-        state->right = DBL_MAX;
-        k = 0;
-        for (j = 0; j < state->num_overlapping; j++) {
-            if (state->overlapping[j]->right > state->left) {
-                state->right = MSP_MIN(state->right, state->overlapping[j]->right);
-                state->overlapping[k] = state->overlapping[j];
-                k++;
-            }
-        }
-        state->num_overlapping = k;
-        if (k > 0) {
-            ret = 1;
-        }
-    }
-
-    *left = state->left;
-    *right = state->right;
-    *overlapping = state->overlapping;
-    *num_overlapping = state->num_overlapping;
     return ret;
 }
 
@@ -4187,13 +4227,14 @@ simplifier_merge_ancestors(simplifier_t *self, node_id_t input_id)
         self->ancestor_map_tail[input_id] = NULL;
     }
 
-    ret = simplifier_overlapping_segments_init(self);
+    ret = segment_overlapper_init(&self->segment_overlapper,
+            self->segment_queue, self->segment_queue_size);
     if (ret != 0) {
         goto out;
     }
     prev_right = 0;
-    while ((ret = simplifier_overlapping_segments_next(
-                    self, &left, &right, &X, &num_overlapping)) == 1) {
+    while ((ret = segment_overlapper_next(&self->segment_overlapper,
+                    &left, &right, &X, &num_overlapping)) == 1) {
         assert(left < right);
         assert(num_overlapping > 0);
         if (num_overlapping == 1) {

@@ -140,6 +140,77 @@ Variable recombination rates
 .. autoclass:: msprime.RecombinationMap
     :members:
 
+.. _sec_api_simulate_from:
+
++++++++++++++++++++++++++++++++++++++++++++++
+Initialising simulations from a tree sequence
++++++++++++++++++++++++++++++++++++++++++++++
+
+By default ``msprime`` simulations are initialised by specifying a set of samples,
+using the ``sample_size`` or  ``samples`` parameters to :func:`.simulate`. This
+initialises the simulation with segments of ancestral material covering the
+whole sequence. Simulation then proceeds backwards in time until a most recent
+common ancestor has been found at all points along this sequence. We can
+also start simulations from different initial conditions by using the
+``from_ts`` argument to :func:`.simulate`. Informally, we take an 'unfinished'
+tree sequence as a parameter to simulate, initialise the simulation
+from the state of this tree sequence and then run the simulation until
+coalescence. The returned tree sequence is then the result of taking the
+input tree sequence and completing the trees using the coalescent.
+
+This is useful for forwards-time simulators such as
+`SLiM <https://messerlab.org/slim/>`_ that can output tree sequences. By running
+forward-time simulation for a certain number of generations we obtain a
+tree sequence, but these trees may not have had sufficient time to
+reach a most recent common ancestor. By using the ``from_ts`` argument
+to :func:`.simulate` we can combine the best of both forwards- and
+backwards-time simulators. The recent past can be simulated forwards
+in time and the ancient past by the coalescent. The coalescent
+simulation is initialised by the root segments of the
+input tree sequence, ensuring that the minimal amount of ancestral
+material possible is simulated.
+
+Please see the :ref:`tutorial <sec_tutorial_simulate_from>` for an example of how to use this
+feature with a simple forwards-time Wright-Fisher simulator
+
+------------------
+Input requirements
+------------------
+
+Any tree sequence can be provided as input to this process, but there is a
+specific topological requirement that must be met for the simulations to be
+statistically correct. To ensure that ancestral segments are correctly associated within chromosomes
+when constructing the initial conditions for the coalescent simulation,
+forward-time simulators **must** retain the nodes corresponding to the
+initial generation. Furthermore, for every sample in the final generation
+(i.e. the extant population at the present time) there must be a path
+to one of the founder population nodes. (Please see the :ref:`tutorial <sec_tutorial_simulate_from>`
+for further explanation of this point and an example.)
+
+-----------------------------
+Recombination map limitations
+-----------------------------
+
+Because of the way that ``msprime`` handles recombination internally, care must
+be taken when specifying recombination when using the ``from_ts`` argument.
+If recombination positions are generated in the same way in both the initial
+tree sequence and the coalescent simulation, then everything should work.
+However, the fine scale details of the underlying recombination model matter,
+so matching nonuniform recombination maps between simulators may not be
+possible at present. (To make it work, we must ensure that every recombination
+breakpoint in ``from_ts`` matches exactly to a possible recombination
+breakpoint in msprime's recombination map, which is not guaranteed because of
+msprime's discrete recombination model.)
+
+One case in which it is guaranteed to work is if ``from_ts`` has integer
+coordinates, and we want to simulate a coalescent with a uniform recombination
+rate. In this case, to have a uniform recombination rate ``r`` use::
+
+    L = int(from_ts.sequence_length)
+    recomb_map = msprime.RecombinationMap.uniform_map(L, r, L)
+    final_ts = mpsrime.simulate(from_ts=from_ts, recomb_map=recomb_map)
+
+
 ++++++++++++++++++++
 Simulating mutations
 ++++++++++++++++++++

@@ -1123,48 +1123,281 @@ We can then finally obtain the tree sequence::
       print(t.draw(format='unicode'))
 
 
-.. ***************************
-.. Stuff copied from elsewhere
-.. ***************************
+.. _sec_tutorial_simulate_from:
 
-.. In addition to genealogical relationships, ``msprime`` generates and stores
-.. mutations.  Associating these with nodes means that a variant shared by many
-.. individuals need only be stored once, allowing retrieval and processing of
-.. variant information much more efficiently than if every individual's genotype
-.. was stored directly.
+*******************************
+Completing forwards simulations
+*******************************
+
+The ``msprime`` simulator generates tree sequences using the backwards in
+time coalescent model. But it is also possible to output tree sequences
+from `forwards-time <https://www.biorxiv.org/content/early/2018/01/16/248500>`_
+simulators such as `SLiM <https://messerlab.org/slim/>`_.
+There are many advantages to using forward-time simulators, but they
+are usually quite slow compared to similar coalescent simulations. In this
+section we show how to combine the best of both approaches by simulating
+the recent past using a forwards-time simulator and then complete the
+simulation of the ancient past using ``msprime``. (We sometimes refer to this
+"recapitation", as we can think of it as adding a "head" onto a tree sequence.)
+
+First, we define a simple Wright-Fisher simulator which returns a tree sequence
+with the properties that we require (please see the :ref:`API <sec_api_simulate_from>`
+section for a formal description of these properties):
+
+.. code-block:: python
+
+    import random
+    import numpy as np
+
+    def wright_fisher(N, T, L=100, random_seed=None):
+        """
+        Simulate a Wright-Fisher population of N haploid individuals with L
+        discrete loci for T generations. Based on Algorithm W from
+        https://www.biorxiv.org/content/biorxiv/early/2018/01/16/248500.full.pdf
+        """
+        random.seed(random_seed)
+        tables = msprime.TableCollection(L)
+        P = np.arange(N, dtype=int)
+        # Mark the initial generation as samples so that we remember these nodes.
+        for j in range(N):
+            tables.nodes.add_row(time=T, flags=msprime.NODE_IS_SAMPLE)
+        t = T
+        while t > 0:
+            t -= 1
+            Pp = P.copy()
+            for j in range(N):
+                u = tables.nodes.add_row(time=t, flags=0)
+                Pp[j] = u
+                a = random.randint(0, N - 1)
+                b = random.randint(0, N - 1)
+                x = random.randint(1, L - 1)
+                tables.edges.add_row(0, x, P[a], u)
+                tables.edges.add_row(x, L, P[b], u)
+            P = Pp
+
+        # Now do some table manipulations to ensure that the tree sequence
+        # that we output has the form that msprime needs to finish the
+        # simulation. Much of the complexity here is caused by the tables API
+        # not allowing direct access to memory, which will change soon.
+
+        # Mark the extant population as samples also
+        flags = tables.nodes.flags
+        flags[P] = msprime.NODE_IS_SAMPLE
+        tables.nodes.set_columns(flags=flags, time=tables.nodes.time)
+        tables.sort()
+        # Simplify with respect to the current generation, but ensuring we keep the
+        # ancient nodes from the initial population.
+        tables.simplify()
+        # Unmark the initial generation as samples
+        flags = tables.nodes.flags
+        time = tables.nodes.time
+        flags[:] = 0
+        flags[time == 0] = msprime.NODE_IS_SAMPLE
+        # The final tables must also have at least one population which
+        # the samples are assigned to
+        tables.populations.add_row()
+        tables.nodes.set_columns(
+            flags=flags, time=time,
+            population=np.zeros_like(tables.nodes.population))
+        return tables.tree_sequence()
 
 
-.. Rather than storing a position on the genome directly, a ``mutation``
-.. stores the index of a ``site``, that describes that position.  This is to
-.. allow efficient processing of multiple mutations at the same genomic
-.. position.  A ``site`` records a position on the genome where a mutation has
-.. occurred along with the ancestral state (i.e., the state at the root of the
-.. tree at that position)::
+We then run a tiny forward simulation of 10 two-locus individuals
+for 5 generations, and print out the resulting trees:
 
-..     id    position    ancestral_state
-..     0    0.1            0
+.. code-block:: python
 
-.. As with nodes, the ``id`` is not stored directly, but is implied by its
-.. index in the site table.
-
-
-.. This type records a mutation that has occurred at some point in the
-.. genealogical history.  Each mutation is associated with a particular
-.. ``node`` (i.e., a particular ancestor), so that any sample which inherits
-.. from that node will also inherit that mutation, unless another mutation
-.. intervenes.  The type records::
-
-..     site    node    derived_state
-..     0        14        1
-
-.. Here ``site`` is the index of the ``site`` at which the mutation occurred,
-.. ``node`` records the ID of the ancestral node associated with the mutation,
-.. and ``derived_state`` is the allele that any sample inheriting from that
-.. node at this site will have if another mutation does not intervene.  The
-.. ``node`` is not necessarily the ancestor in whom the mutation occurred, but
-.. rather the ancestor at the bottom of the branch in the tree at that site on
-.. which the mutation occurred.
+    num_loci = 2
+    N = 10
+    wf_ts = wright_fisher(N, 5, L=num_loci, random_seed=3)
+    for tree in wf_ts.trees():
+        print("interval = ", tree.interval)
+        print(tree.draw(format="unicode"))
 
 
+We get::
+
+    interval =  (0.0, 1.0)
+           0                 7
+           ┃                 ┃
+           25                ┃
+      ┏━━━━┻━━━━┓            ┃
+      23        24           ┃
+    ┏━┻━┓    ┏━━╋━━━┓        ┃
+    ┃   21   ┃  ┃   22       20
+    ┃  ┏┻━┓  ┃  ┃  ┏┻━┓   ┏━━╋━━┓
+    10 14 19 11 18 15 17  12 13 16
+
+    interval =  (1.0, 2.0)
+            0          8    4     7
+            ┃          ┃   ┏┻━┓   ┃
+            21         ┃   ┃  ┃   ┃
+    ┏━━┳━━┳━┻┳━━┳━━┓   ┃   ┃  ┃   ┃
+    14 19 10 13 16 18  11  15 17  12
+
+Because our Wright Fisher simulation ran for only 5 generations, there has not
+been enough time for the trees to fully coalesce. Therefore, instead of having
+one root, the trees have several --- the first tree has 2 and the second 4.
+Nodes 0 to 9 in this simulation represent the initial population of the
+simulation, and so we can see that all samples in the first tree trace back
+to one of two individuals from the initial generation.
+These unary branches joining samples and coalesced subtrees to the nodes
+in the initial generation are essential as they allow use to correctly
+assemble the various fragments of ancestral material into chromosomes
+when creating the initial conditions for the coalescent simulation.
+(Please see the :ref:`API <sec_api_simulate_from>` section for more details on the
+required properties of input tree sequences.)
+
+The process of completing this tree sequence using a coalescent simulation
+begins by first examining the root segments on the input trees. We get the
+following segments::
+
+    [(0, 2, 0), (0, 2, 7), (1, 2, 8), (1, 2, 4)]
+
+where each segment is a ``(left, right, node)`` tuple. As nodes 0 and 7 are
+present in both trees, they have segments spanning both loci. Nodes 8 and 4 are
+present only in the second tree, and so they have ancestral segments only for
+the second locus. Note that this means that we do *not* simulate the ancestry
+of the entire initial generation of the simulation, but rather the exact
+minimum that we need in order to complete the ancestry of the current
+generation. For instance, root ``8`` has not coalesced over the interval from
+``1.0`` to ``2.0``, while root ``0`` has not coalesced over the entire segment
+from ``0.0`` to ``2.0``.
+
+We run the coalescent simulation to complete this tree sequence using the
+``from_ts`` argument to :func:`.simulate`. Because we have simulated a
+two locus system with a recombination rate of ``1 / num_loci`` per generation
+in the Wright-Fisher model, we want to use the same system in the coalescent simulation.
+To do this we create recombination map using the
+:meth:`.RecombinationMap.uniform_map` class method to easily create a
+discrete map with the required number of loci.
+(Please see the :ref:`API <sec_api_simulate_from>` section for more details on the
+restrictions on recombination maps when completing an existing simulation.)
+We also use a ``Ne`` value of ``N / 2``
+since the Wright-Fisher simulation was haploid and ``msprime`` is diploid.
+
+.. code-block:: python
+
+    recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1 / num_loci, num_loci)
+    coalesced_ts = msprime.simulate(
+        Ne=N / 2, from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
 
 
+
+After running this simulation we get the following trees::
+
+    interval =  (0.0, 1.0)
+                    26
+           ┏━━━━━━━━┻━━━━━━━┓
+           0                7
+           ┃                ┃
+           25               ┃
+      ┏━━━━┻━━━━┓           ┃
+      23        24          ┃
+    ┏━┻━┓    ┏━━╋━━━┓       ┃
+    ┃   21   ┃  ┃   22      20
+    ┃  ┏┻━┓  ┃  ┃  ┏┻━┓  ┏━━╋━━┓
+    10 14 19 11 18 15 17 12 13 16
+
+    interval =  (1.0, 2.0)
+                      28
+                 ┏━━━━┻━━━━━┓
+                 ┃          27
+                 ┃        ┏━┻━━┓
+                 26       ┃    ┃
+            ┏━━━━┻━━━━┓   ┃    ┃
+            0         7   4    8
+            ┃         ┃  ┏┻━┓  ┃
+            21        ┃  ┃  ┃  ┃
+    ┏━━┳━━┳━┻┳━━┳━━┓  ┃  ┃  ┃  ┃
+    14 19 10 13 16 18 12 15 17 11
+
+The trees have fully coalesced and we've successfully combined a forwards-time
+Wright-Fisher simulation with a coalescent simulation: hooray!
+
+-------------------------------------
+Why record the initial generation?
+-------------------------------------
+
+We can now see why it is essential that the forwards simulator records the
+*initial* generation in a tree sequence that will later be used as a
+``from_ts`` argument to ``msprime.simulate()``. In the example above, if node
+``7`` was not in the tree sequence, we would not know that the segment that
+node ``20`` inherits from on ``[0.0, 1.0)`` and the segment that node ``12``
+inherits from on ``[1.0, 2.0)`` both exist in the same node (here, node ``7``).
+
+However, note that although the intial generation (above, nodes ``0``, ``4``,
+``7``, and ``8``) must be in the tree sequence, they do *not* have to be
+samples. The easiest way to do this is to
+(a) retain the initial generation as samples throughout the forwards simulation
+(so they persist through ``simplify()``), but then (b) before we output
+the final tree sequence, we remove the flags that mark them as samples,
+so that ``simulate()`` does not simulate their entire history as well. This
+is the approach taken in the toy simulator provided above (although we skip
+the periodic ``simplify()`` steps which are essential in any practical simulation
+for simplicity).
+
+-------------------------------------
+Topology gotchas
+-------------------------------------
+
+The trees that we output from this combined forwards and backwards simulation
+process have some slightly odd properties that are important to be aware of.
+In the example above, we can see that the old roots are still present in both trees,
+even through they have only one child and are clearly redundant.
+This is because the tables of ``from_ts`` have been retained, without modification,
+at the top of the tables of the output tree sequence. While this
+redundancy is not important for many tasks, there are some cases where
+they may cause problems:
+
+1. When computing statistics on the number of nodes, edges or trees in a tree
+   sequence, having these unary edges and redundant nodes will slightly
+   inflate the values.
+2. If you are computing the overall tree "height" by taking the time of the
+   root node, you may overestimate the height because there is a unary edge
+   above the "real" root (this would happen if one of the trees had already
+   coalesced in the forwards-time simulation).
+
+For these reasons it is usually better to remove this redundancy from your
+computed tree sequence which is easily done using the
+:meth:`.TreeSequence.simplify` method:
+
+.. code-block:: python
+
+    final_ts = coalesced_ts.simplify()
+
+    for tree in final_ts.trees():
+        print("interval = ", tree.interval)
+        print(tree.draw(format="unicode"))
+
+giving us::
+
+    interval =  (0.0, 1.0)
+          17
+      ┏━━━┻━━━━┓
+      ┃        15
+      ┃     ┏━━┻━━┓
+      ┃     13    14
+      ┃   ┏━┻┓  ┏━╋━━┓
+      10  ┃  11 ┃ ┃  12
+    ┏━╋━┓ ┃ ┏┻┓ ┃ ┃ ┏┻┓
+    2 3 6 0 4 9 1 8 5 7
+
+    interval =  (1.0, 2.0)
+              19
+        ┏━━━━━┻━━━━━┓
+        ┃           18
+        ┃         ┏━┻┓
+        17        ┃  ┃
+    ┏━━━┻━━┓      ┃  ┃
+    ┃      ┃      ┃  16
+    ┃      ┃      ┃ ┏┻┓
+    ┃      11     ┃ ┃ ┃
+    ┃ ┏━┳━┳┻┳━┳━┓ ┃ ┃ ┃
+    2 4 9 0 3 6 8 1 5 7
+
+This final tree sequence is topologically identical to the original tree sequence,
+but has the redundant nodes and edges removed. Note also that he node IDs have been
+reassigned so that the samples are 0 to 9 --- if you need the IDs from the original
+tree sequence, please set ``map_nodes=True`` when calling ``simplify`` to get a
+mapping between the two sets of IDs.

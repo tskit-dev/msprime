@@ -268,6 +268,7 @@ class Simulator(object):
             self.P[pop_index].set_start_size(population_sizes[pop_index])
             self.P[pop_index].set_growth_rate(population_growth_rates[pop_index], 0)
         self.edge_buffer = []
+        self.from_ts = from_ts
         if from_ts is None:
             self.tables = msprime.TableCollection(sequence_length=num_loci)
             for pop_index in range(N):
@@ -290,33 +291,7 @@ class Simulator(object):
                 raise ValueError("Sequence length in from_ts must match")
             if ts.num_populations != N:
                 raise ValueError("Number of populations in from_ts must match")
-            self.tables = ts.dump_tables()
-            prev_map = {}
-            for tree in ts.trees():
-                left, right = tree.interval
-                if int(left) != left or int(right) != right:
-                    raise ValueError("Coordinates must be integers")
-                if tree.num_roots == 1:
-                    self.S[left] = 0
-                else:
-                    for root in tree.roots:
-                        population = ts.node(root).population
-                        prev = prev_map.get(root, None)
-                        x = self.alloc_segment(left, right, root, population, prev=prev)
-                        if prev is None:
-                            self.L.set_value(x.index, right - left - 1)
-                            self.P[pop_index].add(x)
-                        else:
-                            self.L.set_value(x.index, right - prev.right)
-                            prev.next = x
-                        prev_map[root] = x
-                    self.S[left] = tree.num_roots
-            self.S[self.m] = -1
-            self.t = self.tables.nodes.time.max()
-            for j in range(N):
-                for x in self.P[j]:
-                    self.defrag_segment_chain(x)
-            self.defrag_breakpoints()
+            self.initialise_from_ts(ts)
 
         self.num_ca_events = 0
         self.num_re_events = 0
@@ -336,6 +311,52 @@ class Simulator(object):
             self.modifier_events.append(
                 (time, self.bottleneck_event, (int(pop_id), intensity)))
         self.modifier_events.sort()
+
+    def initialise_from_ts(self, ts):
+        self.tables = ts.dump_tables()
+        root_time = np.max(self.tables.nodes.time)
+        self.t = root_time
+
+        root_segments_head = [None for _ in range(ts.num_nodes)]
+        root_segments_tail = [None for _ in range(ts.num_nodes)]
+        last_S = -1
+        for tree in ts.trees():
+            left, right = tree.interval
+            S = 0 if tree.num_roots == 1 else tree.num_roots
+            if S != last_S:
+                self.S[left] = S
+                last_S = S
+            # If we have 1 root this is a special case and we don't add in
+            # any ancestral segments to the state.
+            if tree.num_roots > 1:
+                for root in tree.roots:
+                    population = ts.node(root).population
+                    if root_segments_head[root] is None:
+                        seg = self.alloc_segment(left, right, root, population)
+                        root_segments_head[root] = seg
+                        root_segments_tail[root] = seg
+                    else:
+                        tail = root_segments_tail[root]
+                        if tail.right == left:
+                            tail.right = right
+                        else:
+                            seg = self.alloc_segment(left, right, root, population, tail)
+                            tail.next = seg
+                            root_segments_tail[root] = seg
+        self.S[self.m] = -1
+
+        # Insert the segment chains into the algorithm state.
+        for node in range(ts.num_nodes):
+            seg = root_segments_head[node]
+            if seg is not None:
+                self.L.set_value(seg.index, seg.right - seg.left - 1)
+                self.P[seg.population].add(seg)
+                prev = seg
+                seg = seg.next
+                while seg is not None:
+                    self.L.set_value(seg.index, seg.right - prev.right)
+                    prev = seg
+                    seg = seg.next
 
     def change_population_size(self, pop_id, size):
         print("Changing pop size to ", size)
@@ -407,7 +428,8 @@ class Simulator(object):
         Finalises the simulation returns an msprime tree sequence object.
         """
         self.flush_edges()
-        return self.tables.tree_sequence()
+        ts = self.tables.tree_sequence()
+        return ts
 
     def simulate(self, model='hudson'):
         if self.model == 'hudson':
@@ -417,7 +439,6 @@ class Simulator(object):
         else:
             print("Error: bad model specification -", self.model)
             raise ValueError
-
         return self.finalise()
 
     def hudson_simulate(self):

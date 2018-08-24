@@ -1300,15 +1300,13 @@ class TestSimplifyTables(unittest.TestCase):
             edges_before = tables.edges.copy()
             sites_before = tables.sites.copy()
             mutations_before = tables.mutations.copy()
-            node_map = msprime.simplify_tables(
-                samples=list(ts.samples()),
-                nodes=tables.nodes, edges=tables.edges, sites=tables.sites,
-                mutations=tables.mutations)
-            self.assertEqual(node_map.shape, (len(nodes_before),))
-            self.assertEqual(nodes_before, tables.nodes)
-            self.assertEqual(edges_before, tables.edges)
-            self.assertEqual(sites_before, tables.sites)
-            self.assertEqual(mutations_before, tables.mutations)
+            for samples in [None, list(ts.samples()), ts.samples()]:
+                node_map = tables.simplify(samples=samples)
+                self.assertEqual(node_map.shape, (len(nodes_before),))
+                self.assertEqual(nodes_before, tables.nodes)
+                self.assertEqual(edges_before, tables.edges)
+                self.assertEqual(sites_before, tables.sites)
+                self.assertEqual(mutations_before, tables.mutations)
 
     def test_bad_samples(self):
         n = 10
