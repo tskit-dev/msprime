@@ -41,7 +41,7 @@ class TestMutateProvenance(unittest.TestCase):
         for mutation_rate in [0, 1, 1e-5]:
             mutated = msprime.mutate(ts, mutation_rate)
             record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["command"], "mutate")
             self.assertEqual(record["parameters"]["rate"], mutation_rate)
             self.assertTrue(record["parameters"]["random_seed"] >= 0)
 
@@ -50,7 +50,7 @@ class TestMutateProvenance(unittest.TestCase):
         for start_time in [0, 1, -1]:
             mutated = msprime.mutate(ts, 1, start_time=start_time)
             record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["command"], "mutate")
             self.assertEqual(record["parameters"]["start_time"], start_time)
             self.assertTrue(record["parameters"]["random_seed"] >= 0)
 
@@ -59,7 +59,7 @@ class TestMutateProvenance(unittest.TestCase):
         for end_time in [0, 1, 100]:
             mutated = msprime.mutate(ts, 1, start_time=-1, end_time=end_time)
             record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["command"], "mutate")
             self.assertEqual(record["parameters"]["start_time"], -1)
             self.assertEqual(record["parameters"]["end_time"], end_time)
             self.assertTrue(record["parameters"]["random_seed"] >= 0)
@@ -69,7 +69,7 @@ class TestMutateProvenance(unittest.TestCase):
         for seed in range(1, 10):
             mutated = msprime.mutate(ts, rate=1, random_seed=seed)
             record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["command"], "mutate")
             self.assertEqual(record["parameters"]["rate"], 1)
             self.assertEqual(record["parameters"]["random_seed"], seed)
 
@@ -78,7 +78,7 @@ class TestMutateProvenance(unittest.TestCase):
         for keep in [True, False]:
             mutated = msprime.mutate(ts, rate=1, keep=keep)
             record = json.loads(mutated.provenance(mutated.num_provenances - 1).record)
-            self.assertEqual(record["command"], "mutate")
+            self.assertEqual(record["parameters"]["command"], "mutate")
             self.assertEqual(record["parameters"]["keep"], keep)
 
 

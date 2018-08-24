@@ -1,0 +1,50 @@
+{
+  "schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "title": "tskit provenance",
+  "description": "The combination of software, parameters and environment that produced a tree sequence",
+  "type": "object",
+  "required": ["schema_version", "software", "parameters", "environment"],
+  "properties": {
+    "schema_version": {
+      "description": "The version of this schema used.",
+      "type": "string",
+      "minLength": 1
+    },
+    "software": {
+      "description": "The primary software used to produce the tree sequence.",
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "description": "The name of the primary software.",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "description": "The version of primary software.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "parameters": {
+      "description": "The parameters used to produce the tree sequence.",
+      "type": "object"
+    },
+    "environment": {
+      "description": "The computational environment within which the primary software ran.",
+      "type": "object",
+      "properties": {
+        "os": {
+          "description": "Operating system.",
+          "type": "object"
+        },
+        "libraries": {
+          "description": "Details of libraries the primary software linked against.",
+          "type": "object"
+        }
+      }
+    }
+  }
+}

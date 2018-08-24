@@ -49,3 +49,9 @@ class VersionTooOldError(FileFormatError):
     """
     The version of the file is too old and cannot be read by the library.
     """
+
+
+class ProvenanceValidationError(MsprimeException):
+    """
+    A JSON document did non validate against the provenance schema.
+    """

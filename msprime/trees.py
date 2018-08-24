@@ -2664,9 +2664,13 @@ class TreeSequence(object):
             filter_populations=filter_populations,
             filter_individuals=filter_individuals,
             filter_sites=filter_sites)
-        # TODO add simplify arguments here??
+        # TODO add simplify arguments here
+        parameters = {
+            "command": "simplify",
+            "TODO": "add simplify parameters"
+        }
         tables.provenances.add_row(record=json.dumps(
-            provenance.get_provenance_dict("simplify", [])))
+            provenance.get_provenance_dict(parameters)))
         new_ts = tables.tree_sequence()
         assert new_ts.sequence_length == self.sequence_length
         if map_nodes:

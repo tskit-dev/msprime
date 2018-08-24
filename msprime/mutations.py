@@ -127,7 +127,8 @@ def mutate(
     if rate is None:
         rate = 0
 
-    parameters = {"rate": rate, "random_seed": random_seed, "keep": keep}
+    parameters = {
+        "command": "mutate", "rate": rate, "random_seed": random_seed, "keep": keep}
     if start_time is not None:
         parameters["start_time"] = start_time
     else:
@@ -137,7 +138,7 @@ def mutate(
     else:
         end_time = sys.float_info.max
     # TODO Add a JSON representation of the model to the provenance.
-    provenance_dict = provenance.get_provenance_dict("mutate", parameters)
+    provenance_dict = provenance.get_provenance_dict(parameters)
 
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")

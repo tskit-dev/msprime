@@ -635,3 +635,21 @@ Table functions
 .. autofunction:: msprime.pack_bytes
 
 .. autofunction:: msprime.unpack_bytes
+
+
+.. _sec_provenance_api:
+
+**************
+Provenance API
+**************
+
+We provide some preliminary support for validating JSON documents against the
+:ref:`provenance schema <sec_provenance>`. Programmatic access to provenance
+information is planned for future versions.
+
+.. autofunction:: msprime.validate_provenance
+
+.. autoexception:: msprime.ProvenanceValidationError
+
+
+

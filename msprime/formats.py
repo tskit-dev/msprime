@@ -51,7 +51,8 @@ def _get_v2_provenance(command, attrs):
         parameters = json.loads(str(attrs["parameters"]))
     except ValueError:
         logging.warn("Failed to convert parameters provenance")
-    provenance_dict = provenance.get_provenance_dict(command, parameters)
+    parameters["command"] = command
+    provenance_dict = provenance.get_provenance_dict(parameters)
     provenance_dict["version"] = environment.get("msprime_version", "Unknown_version")
     provenance_dict["environment"] = environment
     return json.dumps(provenance_dict).encode()
@@ -63,9 +64,10 @@ def _get_upgrade_provenance(root):
     """
     # TODO add more parameters here like filename, etc.
     parameters = {
+        "command": "upgrade",
         "source_version": list(map(int, root.attrs["format_version"]))
     }
-    s = json.dumps(provenance.get_provenance_dict("upgrade", parameters))
+    s = json.dumps(provenance.get_provenance_dict(parameters))
     return s.encode()
 
 

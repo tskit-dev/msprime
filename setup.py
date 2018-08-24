@@ -161,7 +161,8 @@ setup(
             'msp=msprime.cli:msp_main',
         ]
     },
-    install_requires=["numpy>=1.7.0", "h5py", "svgwrite", "six"],
+    include_package_data=True,
+    install_requires=["numpy>=1.7.0", "h5py", "svgwrite", "six", "jsonschema"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
