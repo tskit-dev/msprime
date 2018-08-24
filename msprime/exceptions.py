@@ -53,5 +53,5 @@ class VersionTooOldError(FileFormatError):
 
 class ProvenanceValidationError(MsprimeException):
     """
-    The provenance information for the tree sequence violated the schema.
+    A JSON document did non validate against the provenance schema.
     """

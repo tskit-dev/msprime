@@ -105,7 +105,14 @@ def get_provenance_dict(parameters=None):
 
 def validate_provenance(provenance):
     """
-    TODO document.
+    Validates the specified dict-like object against the tskit
+    :ref:`provenance schema <sec_provenance>`. If the input does
+    not represent a valid instance of the schema an exception is
+    raised.
+
+    :param dict provenance: The dictionary representing a JSON document
+        to be validated against the schema.
+    :raises: :class:`.ProvenanceValidationError`
     """
     base = os.path.dirname(__file__)
     schema_file = os.path.join(base, "provenance.schema.json")
