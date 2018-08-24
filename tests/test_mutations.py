@@ -141,9 +141,9 @@ class TestMutate(unittest.TestCase):
 
     def test_bad_rates(self):
         ts = msprime.simulate(2, random_seed=2)
-        for bad_type in [{}, "234"]:
+        for bad_type in [{}, [], ts]:
             self.assertRaises(TypeError, msprime.mutate, ts, rate=bad_type)
-        for bad_rate in [-1, -1e-6, -1e7]:
+        for bad_rate in ["abc", -1, -1e-6, -1e7]:
             self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
 
     def test_bad_models(self):

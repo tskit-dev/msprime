@@ -357,8 +357,10 @@ def simulate(
     seed = random_seed
     if random_seed is None:
         seed = _get_random_seed()
-    # To support numpy integer inputs here too we convert to integer.
-    rng = RandomGenerator(int(seed))
+    # TODO We need to be careful with input parameters that may not be JSON
+    # serialisable or usable by lower-levels because they are numpy values.
+    seed = int(seed)
+    rng = RandomGenerator(seed)
     sim = simulator_factory(
         sample_size=sample_size,
         random_generator=rng,
@@ -377,7 +379,7 @@ def simulate(
 
     parameters = {
         "command": "simulate",
-        "sample_size": sample_size,
+        "random_seed": seed,
         "TODO": "add other simulation parameters"
     }
     provenance_dict = provenance.get_provenance_dict(parameters)

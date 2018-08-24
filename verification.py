@@ -18,12 +18,13 @@ import scipy.special
 import pandas as pd
 import numpy as np
 import numpy.random
-import statsmodels.api as sm
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
-# matplotlib.use('Agg')
+# Note this must be done before importing statsmodels.
+matplotlib.use('Agg')
 from matplotlib import pyplot
 import seaborn as sns
+import statsmodels.api as sm
 
 import dendropy
 import msprime.cli as cli
@@ -171,8 +172,8 @@ class SimulationVerifier(object):
         the_keys = sorted(self._instances.keys())
         if keys is not None:
             the_keys = keys
-
         for key in the_keys:
+            print(key)
             runner = self._instances[key]
             runner()
 

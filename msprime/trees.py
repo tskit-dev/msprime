@@ -2662,6 +2662,8 @@ class TreeSequence(object):
             filter_individuals=filter_individuals,
             filter_sites=filter_sites)
         # TODO add simplify arguments here
+        # TODO also make sure we convert all the arguments so that they are
+        # definitely JSON encodable.
         parameters = {
             "command": "simplify",
             "TODO": "add simplify parameters"

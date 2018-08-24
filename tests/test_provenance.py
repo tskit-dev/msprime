@@ -27,6 +27,7 @@ import unittest
 import json
 
 import python_jsonschema_objects as pjs
+import numpy as np
 
 import _msprime
 import msprime
@@ -176,16 +177,58 @@ class TestBuildObjects(unittest.TestCase):
     """
     Check that we can build objects from the json schema as we'd expect.
     """
-    def test_simulation(self):
+    def decode(self, prov):
         schema_file = "msprime/provenance.schema.json"
         with open(schema_file) as f:
             schema = f.read()
-
         builder = pjs.ObjectBuilder(json.loads(schema))
         ns = builder.build_classes()
+        return ns.TskitProvenance.from_json(prov)
+
+    def test_simulation(self):
         ts = msprime.simulate(5, random_seed=1)
         prov = ts.provenance(0).record
-        decoded = ns.TskitProvenance.from_json(prov)
+        decoded = self.decode(prov)
         self.assertEqual(decoded.schema_version, "1.0.0")
         self.assertEqual(decoded.parameters.command, "simulate")
-        self.assertEqual(decoded.parameters.sample_size, 5)
+        self.assertEqual(decoded.parameters.random_seed, 1)
+
+    def test_simulation_numpy(self):
+        seeds = np.ones(1, dtype=int)
+        ts = msprime.simulate(5, random_seed=seeds[0])
+        prov = ts.provenance(0).record
+        decoded = self.decode(prov)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "simulate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+
+    def test_mutate(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(
+            ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False)
+        decoded = self.decode(ts.provenance(1).record)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "mutate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+        self.assertEqual(decoded.parameters.rate, 2)
+        self.assertEqual(decoded.parameters.start_time, 0)
+        self.assertEqual(decoded.parameters.end_time, 100)
+        self.assertEqual(decoded.parameters.keep, False)
+
+    def test_mutate_numpy(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(
+            ts,
+            rate=np.array([2])[0],
+            random_seed=np.array([1])[0],
+            start_time=np.array([0])[0],
+            end_time=np.array([100][0]),
+            keep=np.array([False][0]))
+        decoded = self.decode(ts.provenance(1).record)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "mutate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+        self.assertEqual(decoded.parameters.rate, 2)
+        self.assertEqual(decoded.parameters.start_time, 0)
+        self.assertEqual(decoded.parameters.end_time, 100)
+        self.assertEqual(decoded.parameters.keep, False)

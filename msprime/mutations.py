@@ -117,7 +117,9 @@ def mutate(
         raise ValueError("First argument must be a TreeSequence instance.")
     if random_seed is None:
         random_seed = simulations._get_random_seed()
-    rng = _msprime.RandomGenerator(int(random_seed))
+    random_seed = int(random_seed)
+
+    rng = _msprime.RandomGenerator(random_seed)
     if model is None:
         model = InfiniteSites()
     try:
@@ -126,17 +128,23 @@ def mutate(
         raise TypeError("model must be an InfiniteSites instance")
     if rate is None:
         rate = 0
+    rate = float(rate)
+    keep = bool(keep)
 
     parameters = {
         "command": "mutate", "rate": rate, "random_seed": random_seed, "keep": keep}
-    if start_time is not None:
-        parameters["start_time"] = start_time
-    else:
+
+    if start_time is None:
         start_time = -sys.float_info.max
-    if end_time is not None:
-        parameters["end_time"] = end_time
     else:
+        start_time = float(start_time)
+        parameters["start_time"] = start_time
+
+    if end_time is None:
         end_time = sys.float_info.max
+    else:
+        end_time = float(end_time)
+        parameters["end_time"] = end_time
     # TODO Add a JSON representation of the model to the provenance.
     provenance_dict = provenance.get_provenance_dict(parameters)
 
