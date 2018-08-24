@@ -217,6 +217,12 @@ a particular node as a "sample" means, for example, that the mutational state
 of the node will be included in the genotypes produced by
 :meth:`.TreeSequence.variants`.
 
+Bits 0-15 (inclusive) of the ``flags`` column are reserved for internal use by
+``tskit`` and should not be used by applications for anything other
+than the purposes documented here. Bits 16-31 (inclusive) are free for applications
+to use for any purpose and will not be altered or interpreteted by
+``tskit``.
+
 See the :ref:`sec_node_requirements` section for details on the properties
 required for a valid set of nodes.
 
@@ -261,6 +267,12 @@ required for a valid set of individuals.
 The ``flags`` column stores information about a particular individual, and
 is composed of 32 bitwise boolean values. Currently, no flags are
 defined.
+
+Bits 0-15 (inclusive) of the ``flags`` column are reserved for internal use by
+``tskit`` and should not be used by applications for anything other
+than the purposes documented here. Bits 16-31 (inclusive) are free for applications
+to use for any purpose and will not be altered or interpreteted by
+``tskit``.
 
 The ``location`` column stores the location of an individual in arbitrary
 dimensions. This column is :ref:`ragged <sec_encoding_ragged_columns>`, and
@@ -885,7 +897,7 @@ An example individual table::
     flags   location
     0           0.5,1.2
     0           1.0,3.4
-    0           
+    0
     0           1.2
     0           3.5,6.3
     0           0.5,0.5
