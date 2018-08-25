@@ -1772,7 +1772,7 @@ test_recomb_map_examples(void)
 
 static void
 verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
-        size_t num_replicates, int error)
+        size_t num_replicates)
 {
     int ret;
     size_t j;
@@ -1796,12 +1796,7 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
     }
     /* TODO add dirac and other models */
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, error);
-
-    /* Don't run any checks if we expected to fail with error above */
-    if (error != 0) {
-        goto out;
-    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < num_replicates; j++) {
         msp_verify(&msp);
@@ -1836,7 +1831,6 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tree_sequence_t *from,
         /* printf("ret = %s\n", msp_strerror(ret)); */
         CU_ASSERT_EQUAL(ret, 0);
     }
-out:
     table_collection_free(&from_tables);
     msp_free(&msp);
     gsl_rng_free(rng);
@@ -1850,56 +1844,25 @@ verify_initial_simulate_from_state(msp_t *msp_source, recomb_map_t *recomb_map,
 {
     int ret;
     msp_t msp_dest;
-    size_t j, num_ancestors;
-    segment_t *seg, **source_ancestors, **dest_ancestors;
+    size_t num_ancestors;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-
-    /* msp_print_state(msp_source, stdout); */
 
     ret = msp_alloc(&msp_dest, 0, NULL, recomb_map, from_ts, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp_dest);
-    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_print_state(&msp_dest, _devnull);
+
+    /* In principle we can examine the generated ancestors to ensure
+     * that we have correctly translated the segments. In practise this
+     * is quite tricky, so we content ourselves with checking the number
+     * is the same. */
 
     num_ancestors = msp_get_num_ancestors(msp_source);
     CU_ASSERT_EQUAL_FATAL(num_ancestors, msp_get_num_ancestors(&msp_dest));
 
-    source_ancestors = malloc(num_ancestors * sizeof(*source_ancestors));
-    dest_ancestors = malloc(num_ancestors * sizeof(*dest_ancestors));
-    CU_ASSERT_FATAL(source_ancestors != NULL && dest_ancestors != NULL);
-
-    /* printf("SOURCE\n"); */
-    /* msp_print_state(msp_source, stdout); */
-    ret = msp_get_ancestors(msp_source, source_ancestors);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    for (j = 0; j < num_ancestors; j++) {
-        /* printf("%d\t", (int) j); */
-        for (seg = source_ancestors[j]; seg != NULL; seg = seg->next) {
-            /* printf("[%d, %d, %d] ", seg->left, seg->right, seg->value); */
-        }
-        /* printf("\n"); */
-    }
-
-    /* printf("DEST\n"); */
-
-    ret = msp_get_ancestors(&msp_dest, dest_ancestors);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* for (j = 0; j < num_ancestors; j++) { */
-    /*     printf("%d\t", (int) j); */
-    /*     for (seg = dest_ancestors[j]; seg != NULL; seg = seg->next) { */
-    /*         printf("[%d, %d, %d] ", seg->left, seg->right, seg->value); */
-    /*     } */
-    /*     printf("\n"); */
-    /* } */
-
     msp_free(&msp_dest);
     gsl_rng_free(rng);
-    free(source_ancestors);
-    free(dest_ancestors);
 }
 
 static void
@@ -1926,12 +1889,8 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
-    /* msp_print_state(&msp, stdout); */
-
     /* Partially run the simulation */
     ret = msp_run(&msp, DBL_MAX, num_events);
-    /* msp_print_state(&msp, stdout); */
-    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 1);
     CU_ASSERT_FALSE(msp_is_completed(&msp));
     ret = table_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
@@ -1942,11 +1901,9 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
     ret = provenance_table_add_row(from_tables.provenances, "time", 4, "record", 6);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tree_sequence_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
-    /* printf("ret = %s\n", msp_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     verify_initial_simulate_from_state(&msp, &recomb_map, &from);
-
-    verify_simulate_from(model, &recomb_map, &from, num_replicates, 0);
+    verify_simulate_from(model, &recomb_map, &from, num_replicates);
 
     msp_free(&msp);
     gsl_rng_free(rng);
@@ -2059,7 +2016,7 @@ test_simulate_from_completed(void)
     ret = tree_sequence_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from, 1, 0);
+    verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from, 1);
 
     msp_free(&msp);
     gsl_rng_free(rng);
