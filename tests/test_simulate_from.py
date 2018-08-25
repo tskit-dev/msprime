@@ -575,6 +575,80 @@ class TestBaseEquivalance(unittest.TestCase):
         self.assertEqual(tables1, tables2)
 
 
+class TestDemography(unittest.TestCase):
+    """
+    Test that we correctly set up the initial conditions under different
+    demographies.
+    """
+    def test_two_populations_no_migration_one_locus(self):
+        seed = 1234
+        ts1 = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10)],
+            migration_matrix=np.zeros((2, 2)),
+            __tmp_max_time=0.1,
+            random_seed=seed)
+        ts2 = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            migration_matrix=np.zeros((2, 2)),
+            from_ts=ts1,
+            demographic_events=[
+                msprime.MassMigration(100, 0, 1, 1.0)],
+            random_seed=seed)
+        tree = ts2.first()
+        # We should have two children at the root, and every node below
+        # should be in one population.
+        root_children = tree.children(tree.root)
+        self.assertEqual(len(root_children), 2)
+        populations = {ts2.node(u).population: u for u in root_children}
+        self.assertEqual(len(populations), 2)
+        for pop in [0, 1]:
+            for node in tree.nodes(populations[pop]):
+                self.assertEqual(ts2.node(node).population, pop)
+
+    def test_three_populations_no_migration_recombination(self):
+        seed = 1234
+        ts1 = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10)],
+            migration_matrix=np.zeros((3, 3)),
+            recombination_rate=0.5,
+            __tmp_max_time=0.1,
+            random_seed=seed)
+        ts2 = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration(),
+                msprime.PopulationConfiguration()],
+            migration_matrix=np.zeros((3, 3)),
+            from_ts=ts1,
+            recombination_rate=0.5,
+            demographic_events=[
+                msprime.SimpleBottleneck(time=0.5, population=0, proportion=1.0),
+                msprime.SimpleBottleneck(time=0.5, population=1, proportion=1.0),
+                msprime.SimpleBottleneck(time=0.5, population=2, proportion=1.0),
+                msprime.MassMigration(0.61, 1, 0, 1.0),
+                msprime.MassMigration(0.61, 2, 0, 1.0),
+                msprime.SimpleBottleneck(0.61, population=0, proportion=1.0)],
+            random_seed=seed)
+        self.assertGreater(ts2.num_trees, 1)
+        for tree in ts2.trees():
+            # We should have three children at the root, and every node below
+            # should be in one population.
+            root_children = tree.children(tree.root)
+            self.assertEqual(len(root_children), 3)
+            populations = {ts2.node(u).population: u for u in root_children}
+            self.assertEqual(len(populations), 3)
+            for pop in [0, 1, 2]:
+                for node in tree.nodes(populations[pop]):
+                    self.assertEqual(ts2.node(node).population, pop)
+
+
 class TestMappingFailures(unittest.TestCase):
     """
     Examples in which the coordinate mapping fails and we return a malformed
