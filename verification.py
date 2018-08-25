@@ -785,6 +785,12 @@ class SimulationVerifier(object):
             pyplot.close('all')
 
     def run_simulate_from_demography(self):
+        # TODO this test is considerably complicated by the fact that we
+        # can't compare migrations without having support in simplify.
+        # When simplify with migrations support is added, also add a test
+        # here to check that the number of migrations is equivalent.
+        # It's  still a good check to have the underlying numbers of
+        # events reported though, so keep these now that it's implemented.
         num_replicates = 1000
         n = 50
         recombination_rate = 10
@@ -804,73 +810,94 @@ class SimulationVerifier(object):
             os.mkdir(basedir)
 
         T1 = np.zeros(num_replicates)
+        num_ca_events1 = np.zeros(num_replicates)
+        num_re_events1 = np.zeros(num_replicates)
+        num_mig_events1 = np.zeros(num_replicates)
         num_trees1 = np.zeros(num_replicates)
         num_edges1 = np.zeros(num_replicates)
         num_nodes1 = np.zeros(num_replicates)
-        num_migrations1 = np.zeros(num_replicates)
-        reps = msprime.simulate(
+
+        sim = msprime.simulator_factory(
             samples=samples,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events,
-            recombination_rate=recombination_rate,
-            record_migrations=True,
-            num_replicates=num_replicates)
-        for j, ts in enumerate(reps):
+            recombination_rate=recombination_rate)
+        print("t\ttrees\tnodes\tedges\tca\tre\tmig")
+        for j in range(num_replicates):
+            sim.run()
+            ts = sim.get_tree_sequence()
+            num_ca_events1[j] = sim.num_common_ancestor_events
+            num_re_events1[j] = sim.num_recombination_events
+            num_mig_events1[j] = sum([r for row in sim.num_migration_events for r in row])
             T1[j] = np.max(ts.tables.nodes.time)
             num_trees1[j] = ts.num_trees
             num_nodes1[j] = ts.num_nodes
             num_edges1[j] = ts.num_edges
-            num_migrations1[j] = ts.num_migrations
+            sim.reset()
 
         print(
-            "original\ttrees=", np.mean(num_trees1),
-            "\tnodes=", np.mean(num_nodes1),
-            "\tedges=", np.mean(num_edges1),
-            "\tmigrations=", np.mean(num_migrations1))
+            "{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(
+                -1,
+                np.mean(num_trees1),
+                np.mean(num_nodes1),
+                np.mean(num_edges1),
+                np.mean(num_ca_events1),
+                np.mean(num_re_events1),
+                np.mean(num_mig_events1)))
 
         for t in [5.0, 10.0, 15.0, 25.0]:
             T2 = np.zeros(num_replicates)
             num_trees2 = np.zeros(num_replicates)
             num_nodes2 = np.zeros(num_replicates)
             num_edges2 = np.zeros(num_replicates)
-            num_migrations2 = np.zeros(num_replicates)
-            reps = msprime.simulate(
+            num_ca_events2 = np.zeros(num_replicates)
+            num_re_events2 = np.zeros(num_replicates)
+            num_mig_events2 = np.zeros(num_replicates)
+            sim = msprime.simulator_factory(
                 samples=samples,
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events,
-                recombination_rate=recombination_rate,
-                record_migrations=True,
-                num_replicates=num_replicates,
-                __tmp_max_time=t)
-            for j, ts in enumerate(reps):
+                recombination_rate=recombination_rate)
+            for j in range(num_replicates):
+                sim.run(max_time=t)
+                ts = sim.get_tree_sequence()
+                num_ca_events2[j] = sim.num_common_ancestor_events
+                num_re_events2[j] = sim.num_recombination_events
+                num_mig_events2[j] = sum([r for row in sim.num_migration_events for r in row])
+                sim.reset()
+
                 max_time = max(node.time for node in ts.nodes())
-                final_ts = msprime.simulate(
+                sim2 = msprime.simulator_factory(
                     from_ts=ts,
                     population_configurations=population_configurations,
                     migration_matrix=migration_matrix,
                     demographic_events=[
                         e for e in demographic_events if e.time > max_time],
-                    recombination_rate=recombination_rate,
-                    record_migrations=True)
-                # We have to get migrations from the initial tree sequence
-                # as simplify won't work for now.
-                num_migrations2[j] = final_ts.num_migrations
-                assert max(t.num_roots for t in final_ts.trees()) == 1
-                tables = final_ts.dump_tables()
-                tables.migrations.clear()
-                final_ts = tables.tree_sequence().simplify()
+                    recombination_rate=recombination_rate)
+                sim2.run()
+
+                num_ca_events2[j] += sim2.num_common_ancestor_events
+                num_re_events2[j] += sim2.num_recombination_events
+                num_mig_events2[j] += sum([r for row in sim2.num_migration_events for r in row])
+
+                final_ts = sim2.get_tree_sequence().simplify()
                 T2[j] = np.max(final_ts.tables.nodes.time)
                 num_trees2[j] = final_ts.num_trees
                 num_nodes2[j] = final_ts.num_nodes
                 num_edges2[j] = final_ts.num_edges
+                sim.reset()
 
             print(
-                "t=", t, "\ttrees=", np.mean(num_trees2),
-                "\tnodes=", np.mean(num_nodes2),
-                "\tedges=", np.mean(num_edges2),
-                "\tmigrations=", np.mean(num_migrations2))
+                "{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(
+                    t,
+                    np.mean(num_trees2),
+                    np.mean(num_nodes2),
+                    np.mean(num_edges2),
+                    np.mean(num_ca_events2),
+                    np.mean(num_re_events2),
+                    np.mean(num_mig_events2)))
 
             sm.graphics.qqplot(T1)
             sm.qqplot_2samples(T1, T2, line="45")
@@ -896,9 +923,21 @@ class SimulationVerifier(object):
             pyplot.savefig(filename, dpi=72)
             pyplot.close('all')
 
-            sm.graphics.qqplot(num_migrations1)
-            sm.qqplot_2samples(num_migrations1, num_migrations2, line="45")
-            filename = os.path.join(basedir, "num_migrations_t={}.png".format(t))
+            sm.graphics.qqplot(num_ca_events1)
+            sm.qqplot_2samples(num_ca_events1, num_ca_events2, line="45")
+            filename = os.path.join(basedir, "num_ca_events_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_re_events1)
+            sm.qqplot_2samples(num_re_events1, num_re_events2, line="45")
+            filename = os.path.join(basedir, "num_re_events_t={}.png".format(t))
+            pyplot.savefig(filename, dpi=72)
+            pyplot.close('all')
+
+            sm.graphics.qqplot(num_mig_events1)
+            sm.qqplot_2samples(num_mig_events1, num_mig_events2, line="45")
+            filename = os.path.join(basedir, "num_mig_events_t={}.png".format(t))
             pyplot.savefig(filename, dpi=72)
             pyplot.close('all')
 
