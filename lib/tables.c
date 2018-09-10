@@ -4720,7 +4720,10 @@ table_collection_check_edge_ordering(table_collection_t *self)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-
+    /* Just keeping compiler happy; these values don't matter. */
+    last_left = 0;
+    last_parent = 0;
+    last_child = 0;
     for (j = 0; j < self->edges->num_rows; j++) {
         left = self->edges->left[j];
         parent = self->edges->parent[j];
