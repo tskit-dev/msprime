@@ -20,7 +20,7 @@ avl.o: avl.c
 	${CC} -Wall -g -O2 -c avl.c
 
 argtable3.o: argtable3.c
-	${CC} -Wall -g -O2 -c argtable3.c
+	${CC} -Dlint -Wall -g -O2 -c argtable3.c
 
 %.o : %.c ${HEADERS}
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
