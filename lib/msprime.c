@@ -4330,7 +4330,7 @@ msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
 
     /* TODO we probably want to make these input parameters, as there will be situations
      * where integration fails and being able to tune them will be useful */
-    self->model.params.beta_coalescent.integration_epsrel = 1e-5;
+    self->model.params.beta_coalescent.integration_epsrel = 1e-3;
     self->model.params.beta_coalescent.integration_epsabs = 0;
     /* TODO Is 1000 a good size for the workspace here? Should it be a parameter? */
     self->model.params.beta_coalescent.integration_workspace_size = 1000;

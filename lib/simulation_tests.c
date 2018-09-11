@@ -1606,7 +1606,7 @@ test_compute_beta_coalescence_rate(void)
     //printf("compute_beta_coalescence_rate(100, 1.5) = %f\n", compute_beta_coalescence_rate(100, 1.5));
     //printf("compute_beta_coalescence_rate(100, 1.8) = %f\n", compute_beta_coalescence_rate(100, 1.8));
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.01), 225.6396, 0.001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.5), 1140.782, 0.01);
+    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.5), 1140.782, 1140.782*1e-3);
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.8), 2815.267, 0.1);
 
     // Pairwise coalescent, alpha is irrelevant
