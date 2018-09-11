@@ -187,6 +187,7 @@
 #define MSP_ERR_RECOMB_MAP_TOO_COARSE                               -82
 #define MSP_ERR_TIME_TRAVEL                                         -83
 #define MSP_ERR_ONLY_INFINITE_SITES                                 -84
+#define MSP_ERR_INTEGRATION_FAILED                                  -85
 
 /* This bit is 0 for any errors originating from kastore */
 #define MSP_KAS_ERR_BIT 14

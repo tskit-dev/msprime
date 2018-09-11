@@ -1563,6 +1563,41 @@ test_compute_dirac_coalescence_rate(void)
     CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(101, 0.51, 5.0), 5055.0, 0.00001);
 }
 
+/* Because the beta coalescent uses allocated memory we must allocate a simulator.
+ * This function hides this detail away for convenience. */
+static double
+compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha)
+{
+    int ret;
+    msp_t msp;
+    unsigned int n = 10;
+    double value;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* TODO is truncation_point arbitrary here? */
+    ret = msp_set_simulation_model_beta(&msp, 1, alpha, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_beta_compute_coalescence_rate(&msp, num_ancestors, &value);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    free(samples);
+    gsl_rng_free(rng);
+    return value;
+}
 
 static void
 test_compute_beta_coalescence_rate(void)
@@ -1579,7 +1614,6 @@ test_compute_beta_coalescence_rate(void)
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.5), 1.0, 0.000000);
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.9), 1.0, 0.000000);
 }
-
 
 static void
 test_multiple_mergers_simulation(void)
