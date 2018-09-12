@@ -25,6 +25,7 @@
 #include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_integration.h>
 
 #include "avl.h"
 #include "fenwick.h"
@@ -87,6 +88,13 @@ typedef struct {
 typedef struct {
     double alpha;
     double truncation_point;
+    /* private state */
+    double m;
+    double phi;
+    double integration_epsabs;
+    double integration_epsrel;
+    size_t integration_workspace_size;
+    gsl_integration_workspace *integration_workspace;
 } beta_coalescent_t;
 
 typedef struct {
@@ -101,6 +109,8 @@ typedef struct _simulation_model_t {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
     } params;
+    /* If the model allocates memory this function should be non-null. */
+    void (*free)(struct _simulation_model_t *model);
     /* Time and rate conversions */
     double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
     double (*generations_to_model_time)(struct _simulation_model_t *model, double g);
@@ -339,8 +349,10 @@ int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
+/* Functions exposed here for unit testing. Not part of public API. */
 double compute_falling_factorial_log(unsigned int  m);
 double compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c);
-
+int msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha, double *result);
+int msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, double *result);
 
 #endif /*__MSPRIME_H__*/

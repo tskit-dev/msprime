@@ -1159,7 +1159,7 @@ class BetaCoalescent(ParametricSimulationModel):
 
     # TODO what is a meaningful value for this parameter? Ideally, the default
     # would be the equivalent of the Kingman coalescent or something similar.
-    def __init__(self, population_size=1, alpha=1, truncation_point=None):
+    def __init__(self, population_size=1, alpha=1.5, truncation_point=None):
         self.population_size = population_size
         self.alpha = alpha
         if truncation_point is None:

@@ -298,6 +298,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_ONLY_INFINITE_SITES:
             ret = "Only infinite sites mutations are supported for this operation.";
             break;
+        case MSP_ERR_INTEGRATION_FAILED:
+            ret = "GSL numerical integration failed. Please check the stderr for details.";
+            break;
 
         case MSP_ERR_IO:
             if (errno != 0) {

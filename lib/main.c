@@ -749,7 +749,7 @@ print_newick_trees(tree_sequence_t *ts)
     int ret = 0;
     char *newick = NULL;
     size_t precision = 8;
-    size_t newick_buffer_size = (precision + 3) * tree_sequence_get_num_nodes(ts);
+    size_t newick_buffer_size = (precision + 5) * tree_sequence_get_num_nodes(ts);
     sparse_tree_t tree;
 
     newick = malloc(newick_buffer_size);
