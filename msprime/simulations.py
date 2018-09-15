@@ -135,7 +135,8 @@ def simulator_factory(
         model=None,
         record_migrations=False,
         from_ts=None,
-        start_time=None):
+        start_time=None,
+        event_time_file=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -224,6 +225,7 @@ def simulator_factory(
 
     sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
+    sim.event_time_file = event_time_file
     sim.start_time = start_time
     rng = random_generator
     if rng is None:
@@ -256,6 +258,7 @@ def simulate(
         num_replicates=None,
         from_ts=None,
         start_time=None,
+        event_time_file=None,
         # Note max_time is not documented here because it does not currently have
         # exactly the semantics that we want as it doesn't guarantee that the
         # times of nodes returned are < max_time. However, it's useful for
@@ -375,7 +378,8 @@ def simulate(
         model=model,
         record_migrations=record_migrations,
         from_ts=from_ts,
-        start_time=start_time)
+        start_time=start_time,
+        event_time_file=event_time_file)
 
     parameters = {
         "command": "simulate",
@@ -653,7 +657,8 @@ class Simulator(object):
             store_migrations=self.store_migrations,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
-            node_mapping_block_size=self.node_mapping_block_size)
+            node_mapping_block_size=self.node_mapping_block_size,
+            event_time_file=self.event_time_file)
         return ll_sim
 
     def run(self, max_time=None):

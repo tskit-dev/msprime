@@ -8693,7 +8693,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
         "model", "from_ts", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "store_migrations", "start_time", NULL};
+        "node_mapping_block_size", "store_migrations", "start_time",
+        "event_time_file", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -8703,6 +8704,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     RandomGenerator *random_generator = NULL;
     RecombinationMap *recombination_map = NULL;
     sample_t *samples = NULL;
+    char *event_time_file = NULL;
     /* parameter defaults */
     Py_ssize_t num_samples = 2;
     Py_ssize_t avl_node_block_size = 10;
@@ -8715,7 +8717,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!Onnnid", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!Onnnidz", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -8724,7 +8726,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
             &py_from_ts, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &store_migrations, &start_time)) {
+            &node_mapping_block_size, &store_migrations, &start_time,
+            &event_time_file)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -8780,6 +8783,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
+    }
+    if (event_time_file != NULL) {
+        sim_ret = msp_set_event_time_file(self->sim, event_time_file);
+        if (sim_ret != 0) {
+            handle_input_error(sim_ret);
+            goto out;
+        }
     }
     sim_ret = msp_set_avl_node_block_size(self->sim,
             (size_t) avl_node_block_size);

@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
@@ -1273,6 +1274,51 @@ test_multi_locus_simulation(void)
 }
 
 static void
+test_event_time_file(void)
+{
+    int ret;
+    uint32_t num_events;
+    uint32_t n = 100;
+    uint32_t m = 100;
+    long seed = 10;
+    recomb_map_t recomb_map;
+    struct stat st;
+
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    gsl_rng_set(rng, seed);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, NULL, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_event_time_file(msp, _tmp_file_name);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    num_events = 0;
+    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+        num_events++;
+        stat(_tmp_file_name, &st);
+        CU_ASSERT_EQUAL(st.st_size, num_events * 12); /* 4 bytes for type, 8 for time */
+    }
+
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+}
+
+static void
 test_simulation_replicates(void)
 {
     int ret;
@@ -2317,6 +2363,7 @@ main(int argc, char **argv)
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
+        {"test_event_time_file", test_event_time_file},
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_compute_falling_factorial", test_compute_falling_factorial},

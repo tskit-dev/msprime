@@ -156,6 +156,9 @@ typedef struct _msp_t {
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
+    /* File tracking all events */
+    char *event_time_file_name;
+    FILE *event_time_file;
     /* sampling events */
     sampling_event_t *sampling_events;
     size_t num_sampling_events;
@@ -261,6 +264,7 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
+int msp_set_event_time_file(msp_t *self, const char *event_time_file);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);

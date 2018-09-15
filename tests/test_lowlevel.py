@@ -961,34 +961,49 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
 
     def test_event_by_event(self):
-        n = 10
-        m = 100
-        sim = _msprime.Simulator(
-            samples=get_samples(n),
-            recombination_map=uniform_recombination_map(num_loci=m, rate=1),
-            random_generator=_msprime.RandomGenerator(1))
-        # We run until time -1 to for initialisation
-        sim.run(-1)
-        self.assertEqual(sim.get_time(), 0)
-        ancestors = sim.get_ancestors()
-        self.assertEqual(len(ancestors), n)
-        nodes = []
-        for ancestor in ancestors:
-            self.assertEqual(len(ancestor), 1)
-            for l, r, node, pop_id in ancestor:
-                self.assertEqual(l, 0)
-                self.assertEqual(r, m)
-                self.assertEqual(pop_id, 0)
-                nodes.append(node)
-        self.assertEqual(sorted(nodes), list(range(n)))
-        events = 0
-        while not sim.run_event():
-            events += 1
-            total_events = (
-                sim.get_num_common_ancestor_events() +
-                sim.get_num_recombination_events() +
-                sum(sim.get_num_migration_events()))
-            self.assertEqual(events, total_events)
+
+        fd, temp_file = tempfile.mkstemp(prefix="msp_ll_sim_")
+        try:
+            os.close(fd)
+            n = 10
+            m = 100
+            sim = _msprime.Simulator(
+                samples=get_samples(n),
+                recombination_map=uniform_recombination_map(num_loci=m, rate=1),
+                random_generator=_msprime.RandomGenerator(1),
+                event_time_file=temp_file)
+            # We run until time -1 to for initialisation
+            sim.run(-1)
+            self.assertEqual(sim.get_time(), 0)
+            ancestors = sim.get_ancestors()
+            self.assertEqual(len(ancestors), n)
+            nodes = []
+            for ancestor in ancestors:
+                self.assertEqual(len(ancestor), 1)
+                for l, r, node, pop_id in ancestor:
+                    self.assertEqual(l, 0)
+                    self.assertEqual(r, m)
+                    self.assertEqual(pop_id, 0)
+                    nodes.append(node)
+            self.assertEqual(sorted(nodes), list(range(n)))
+            events = 0
+            while not sim.run_event():
+                events += 1
+                total_events = (
+                    sim.get_num_common_ancestor_events() +
+                    sim.get_num_recombination_events() +
+                    sum(sim.get_num_migration_events()))
+                self.assertEqual(events, total_events)
+            # Read the event time file.
+            events = np.fromfile(
+                temp_file, dtype=[("type", np.int32), ("time", np.float64)])
+            re_event_times = events[events['type'] == 0]["time"]
+            ca_event_times = events[events['type'] == 1]["time"]
+            self.assertEqual(re_event_times.shape[0], sim.get_num_recombination_events())
+            self.assertEqual(
+                ca_event_times.shape[0], sim.get_num_common_ancestor_events())
+        finally:
+            os.unlink(temp_file)
 
     def test_demographic_events(self):
         random.seed(11)
@@ -1133,6 +1148,19 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, from_ts=bad_type)
         # The tree sequence can be uninitialised
         self.assertRaises(ValueError, f, from_ts=_msprime.TreeSequence())
+
+    def test_bad_event_time_files(self):
+        recomb_map = uniform_recombination_map()
+
+        def f(num_samples=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(num_samples),
+                recomb_map, _msprime.RandomGenerator(random_seed), **kwargs)
+        bad_files = ["/", "/nopermission"]
+        for bad_file in bad_files:
+            self.assertRaises(_msprime.InputError, f, event_time_file=bad_file)
+        for bad_type in [0, {}, []]:
+            self.assertRaises(TypeError, f, event_time_file=bad_type)
 
     def test_non_parametric_simulation_models(self):
 

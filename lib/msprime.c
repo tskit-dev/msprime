@@ -139,6 +139,22 @@ msp_set_store_migrations(msp_t *self, bool store_migrations)
 }
 
 int
+msp_set_event_time_file(msp_t *self, const char *event_time_file)
+{
+    int ret = 0;
+    size_t len = strlen(event_time_file) + 1;
+
+    self->event_time_file_name = malloc(len);
+    if (self->event_time_file_name == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    strcpy(self->event_time_file_name, event_time_file);
+out:
+    return ret;
+}
+
+int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     int ret = 0;
@@ -531,6 +547,13 @@ msp_free(msp_t *self)
     }
     if (self->model.free != NULL) {
         self->model.free(&self->model);
+    }
+
+    msp_safe_free(self->event_time_file_name);
+    /* Ignore IO errors here --- should have been caught by earlier calls to flush. */
+    if (self->event_time_file != NULL) {
+        fclose(self->event_time_file);
+        self->event_time_file = NULL;
     }
     ret = 0;
     return ret;
@@ -1981,6 +2004,29 @@ out:
     return ret;
 }
 
+static int
+msp_reopen_event_time_file(msp_t *self)
+{
+    int ret = MSP_ERR_IO;
+
+    if (self->event_time_file != NULL) {
+        if (fclose(self->event_time_file) != 0) {
+            goto out;
+        }
+        self->event_time_file = NULL;
+    }
+
+    if (self->event_time_file_name != NULL) {
+        self->event_time_file = fopen(self->event_time_file_name, "wb");
+        if (self->event_time_file == NULL) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
 int
 msp_reset(msp_t *self)
 {
@@ -2022,6 +2068,11 @@ msp_reset(msp_t *self)
     self->num_rejected_ca_events = 0;
     self->num_trapped_re_events = 0;
     self->num_multiple_re_events = 0;
+
+    ret = msp_reopen_event_time_file(self);
+    if (ret != 0) {
+        goto out;
+    }
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
     self->state = MSP_STATE_INITIALISED;
 out:
@@ -2166,6 +2217,7 @@ msp_initialise(msp_t *self)
             goto out;
         }
     }
+
     ret = msp_reset(self);
     if (ret != 0) {
         goto out;
@@ -2238,6 +2290,30 @@ msp_sanity_check(msp_t *self, int64_t num_links)
         ret = MSP_ERR_LINKS_OVERFLOW;
         goto out;
     }
+out:
+    return ret;
+}
+
+static int
+msp_record_event_time(msp_t *self, int32_t event)
+{
+    int ret = MSP_ERR_IO;
+    double scaled_time;
+    size_t written;
+
+    if (self->event_time_file != NULL) {
+        written = fwrite(&event, sizeof(event), 1, self->event_time_file);
+        if (written != 1) {
+            goto out;
+        }
+        scaled_time = self->model.generations_to_model_time(&self->model, self->time);
+        written = fwrite(&scaled_time, sizeof(scaled_time), 1,
+                self->event_time_file);
+        if (written != 1) {
+            goto out;
+        }
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -2342,6 +2418,10 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         } else {
             self->time += t_wait;
             if (re_t_wait == t_wait) {
+                ret = msp_record_event_time(self, 0);
+                if (ret != 0) {
+                    goto out;
+                }
                 ret = msp_recombination_event(self);
             } else if (ca_t_wait == t_wait) {
                 ret = self->common_ancestor_event(self, ca_pop_id);
@@ -2349,6 +2429,11 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                     /* The CA event has signalled that this event should be rejected */
                     self->time -= t_wait;
                     ret = 0;
+                } else {
+                    ret = msp_record_event_time(self, 1);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
             } else {
                 ret = msp_migration_event(self, mig_source_pop, mig_dest_pop);
@@ -2578,6 +2663,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     int ret = 0;
     simulation_model_t *model = &self->model;
     double scaled_time = model->generations_to_model_time(model, max_time);
+    int err;
 
     /* printf("Running until %f generations = %f scaled time\n", max_time, */
     /*         scaled_time); */
@@ -2598,7 +2684,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
     ret = msp_flush_edges(self);
-
     if (ret != 0) {
         goto out;
     }
@@ -2606,6 +2691,14 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = 1;
         if (self->time >= scaled_time) {
             ret = 2;
+        }
+    }
+    /* Flush the event time file */
+    if (self->event_time_file != NULL) {
+        err = fflush(self->event_time_file);
+        if (err != 0) {
+            ret = MSP_ERR_IO;
+            goto out;
         }
     }
 out:
