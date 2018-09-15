@@ -53,15 +53,16 @@ class TestTimeTravelErrors(unittest.TestCase):
         n = 3
         population_configurations = [
             msprime.PopulationConfiguration(
-                sample_size=10000,
+                sample_size=10,
                 initial_size=10000,
                 growth_rate=0)
             for k in range(n)]
         demographic_events = [
             msprime.PopulationParametersChange(
-                time=0.01, initial_size=1e-10, population_id=2, growth_rate=0),
+                time=0.00001, initial_size=1e-18, population_id=2, growth_rate=0),
             msprime.MassMigration(
-                time=0.02, source=1, destination=2, proportion=1.0)]
+                time=0.02, source=1, destination=2, proportion=1.0),
+            msprime.MigrationRateChange(time=0.02, rate=0)]
         M = [[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
         with self.assertRaises(_msprime.LibraryError):
             msprime.simulate(
