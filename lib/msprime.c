@@ -2306,7 +2306,7 @@ msp_record_event_time(msp_t *self, int32_t event)
         if (written != 1) {
             goto out;
         }
-        scaled_time = self->model.generations_to_model_time(&self->model, self->time);
+        scaled_time = self->model.model_time_to_generations(&self->model, self->time);
         written = fwrite(&scaled_time, sizeof(scaled_time), 1,
                 self->event_time_file);
         if (written != 1) {

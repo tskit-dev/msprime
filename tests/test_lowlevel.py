@@ -1874,6 +1874,31 @@ class TestSimulator(LowLevelTestCase):
         sim.populate_tables(tables)
         self.assertEqual(tables.edges.num_rows, sim.get_num_edges())
 
+    def test_event_times_single_locus(self):
+        fd, temp_file = tempfile.mkstemp(prefix="msp_ll_sim_")
+        try:
+            os.close(fd)
+            n = 10
+            tables = new_table_collection()
+            sim = _msprime.Simulator(
+                samples=get_samples(n),
+                recombination_map=uniform_recombination_map(num_loci=1, rate=1),
+                random_generator=_msprime.RandomGenerator(1),
+                event_time_file=temp_file)
+            sim.run()
+            sim.populate_tables(tables)
+
+            # Read the event time file.
+            events = np.fromfile(
+                temp_file, dtype=[("type", np.int32), ("time", np.float64)])
+            re_event_times = events[events['type'] == 0]["time"]
+            ca_event_times = events[events['type'] == 1]["time"]
+            self.assertEqual(re_event_times.shape, (0, ))
+            time = tables.nodes.time
+            self.assertTrue(np.array_equal(ca_event_times, time[n:]))
+        finally:
+            os.unlink(temp_file)
+
 
 class TestTreeSequence(LowLevelTestCase):
     """
