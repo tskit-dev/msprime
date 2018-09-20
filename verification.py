@@ -1004,6 +1004,70 @@ class SimulationVerifier(object):
             pyplot.savefig(f, dpi=72)
             pyplot.close('all')
 
+
+    def run_equivalent_models_comparison(self, test_name, kwargs1, kwargs2):
+        df = pd.DataFrame()
+        for i, kwargs in enumerate([kwargs1, kwargs2]):
+            print("Running: ", kwargs)
+            replicates = msprime.simulate(**kwargs)
+            data = collections.defaultdict(list)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["param_set"].append(i)
+            df = df.append(pd.DataFrame(data))
+
+        basedir = os.path.join("tmp__NOBACKUP__", test_name)
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        df_1 = df[df.param_set == 0]
+        df_2 = df[df.param_set == 1]
+        for stat in ["tmrca_mean", "num_trees"]:
+            v1 = df_1[stat]
+            v2 = df_2[stat]
+            sm.graphics.qqplot(v1)
+            sm.qqplot_2samples(v1, v2, line="45")
+            f = os.path.join(basedir, "{}.png".format(stat))
+            pyplot.xlabel("Parameter set 2")
+            pyplot.ylabel("Parameter set 1")
+            pyplot.savefig(f, dpi=72)
+            pyplot.close('all')
+
+    def add_coalescent_diff_Ne(self):
+        """
+        Checks that setting Ne in the hudson coalescent has the expected
+        effect.
+        """
+        population_configurations = [
+            msprime.PopulationConfiguration(sample_size=10, initial_size=1000)]
+        num_replicates=1000
+        recombination_rate=0.1
+
+        kwargs1 = dict(
+                population_configurations=population_configurations,
+                num_replicates=num_replicates,
+                recombination_rate=recombination_rate,
+                model='hudson',
+                Ne=0.5)
+
+        kwargs2 = dict(
+                population_configurations=population_configurations,
+                num_replicates=num_replicates,
+                recombination_rate=recombination_rate,
+                model='hudson',
+                Ne=1.0)
+
+        def f():
+            self.run_equivalent_models_comparison(
+                    "coalescent_diff_Ne",
+                    kwargs1,
+                    kwargs2)
+        self._instances["coalescent_diff_Ne"] = f
+
     def add_dtwf_vs_coalescent_single_locus(self):
         """
         Checks the DTWF against the standard coalescent at a single locus.
@@ -1543,6 +1607,9 @@ def main():
     # DTWF checks against coalescent.
     verifier.add_dtwf_vs_coalescent_single_locus()
     verifier.add_dtwf_vs_coalescent_low_recombination()
+
+    # Sanity Checks
+    verifier.add_coalescent_diff_Ne()
 
     keys = None
     if len(sys.argv) > 1:
