@@ -990,10 +990,10 @@ class SparseTree(object):
         :return: The number of samples in the subtree rooted at u.
         :rtype: int
         """
-        roots = [u]
         if u is None:
-            roots = self.roots
-        return sum(self._ll_sparse_tree.get_num_samples(u) for u in roots)
+            return sum(self._ll_sparse_tree.get_num_samples(u) for u in self.roots)
+        else:
+            return self._ll_sparse_tree.get_num_samples(u)
 
     def get_num_tracked_leaves(self, u):
         # Deprecated alias for num_tracked_samples. The method name is inaccurate
