@@ -990,10 +990,10 @@ class SparseTree(object):
         :return: The number of samples in the subtree rooted at u.
         :rtype: int
         """
-        roots = [u]
         if u is None:
-            roots = self.roots
-        return sum(self._ll_sparse_tree.get_num_samples(u) for u in roots)
+            return sum(self._ll_sparse_tree.get_num_samples(u) for u in self.roots)
+        else:
+            return self._ll_sparse_tree.get_num_samples(u)
 
     def get_num_tracked_leaves(self, u):
         # Deprecated alias for num_tracked_samples. The method name is inaccurate
@@ -2588,7 +2588,8 @@ class TreeSequence(object):
             filter_zero_mutation_sites=None,  # Deprecated alias for filter_sites
             map_nodes=False,
             reduce_to_site_topology=False,
-            filter_populations=True, filter_individuals=True, filter_sites=True):
+            filter_populations=True, filter_individuals=True, filter_sites=True,
+            record_provenance=True):
         """
         Returns a simplified tree sequence that retains only the history of
         the nodes given in the list ``samples``. If ``map_nodes`` is true,
@@ -2644,6 +2645,9 @@ class TreeSequence(object):
             not referenced by mutations after simplification; new site IDs are
             allocated sequentially from zero. If False, the site table will not
             be altered in any way. (Default: True)
+        :param bool record_provenance: If True, record details of this call to
+            simplify in the returned tree sequence's provenance information
+            (Default: True).
         :return: The simplified tree sequence, or (if ``map_nodes`` is True)
             a tuple consisting of the simplified tree sequence and a numpy array
             mapping source node IDs to their corresponding IDs in the new tree
@@ -2661,15 +2665,16 @@ class TreeSequence(object):
             filter_populations=filter_populations,
             filter_individuals=filter_individuals,
             filter_sites=filter_sites)
-        # TODO add simplify arguments here
-        # TODO also make sure we convert all the arguments so that they are
-        # definitely JSON encodable.
-        parameters = {
-            "command": "simplify",
-            "TODO": "add simplify parameters"
-        }
-        tables.provenances.add_row(record=json.dumps(
-            provenance.get_provenance_dict(parameters)))
+        if record_provenance:
+            # TODO add simplify arguments here
+            # TODO also make sure we convert all the arguments so that they are
+            # definitely JSON encodable.
+            parameters = {
+                "command": "simplify",
+                "TODO": "add simplify parameters"
+            }
+            tables.provenances.add_row(record=json.dumps(
+                provenance.get_provenance_dict(parameters)))
         new_ts = tables.tree_sequence()
         assert new_ts.sequence_length == self.sequence_length
         if map_nodes:

@@ -1354,6 +1354,9 @@ class TestTreeSequence(HighLevelTestCase):
         self.assertGreater(len(new[-1].timestamp), 0)
         self.assertGreater(len(new[-1].record), 0)
 
+        new_ts = ts.simplify(record_provenance=False)
+        self.assertEqual(new_ts.tables.provenances, ts.tables.provenances)
+
     def verify_simplify_topology(self, ts, sample):
         new_ts, node_map = ts.simplify(sample, map_nodes=True)
         if len(sample) == 0:
