@@ -355,4 +355,6 @@ double compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, do
 int msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha, double *result);
 int msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, double *result);
 
+int msp_multi_merger_common_ancestor_event(msp_t *self, double x, avl_tree_t *ancestors, avl_tree_t *Q);
+
 #endif /*__MSPRIME_H__*/
