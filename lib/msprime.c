@@ -3754,10 +3754,9 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id)
 {
     int ret = 0;
     uint32_t j, n, max_pot_size;
-    const uint32_t num_pots = 4;
     avl_tree_t *ancestors, Q[4]; /* MSVC won't let us use num_pots here */
-    avl_node_t *x_node, *y_node, *node, *next, *q_node;
-    segment_t *x, *y, *u;
+    avl_node_t *x_node, *y_node;
+    segment_t *x, *y;
 
     ancestors = &self->populations[pop_id].ancestors;
     if (gsl_rng_uniform(self->rng) < (1 / (1.0 + self->model.params.dirac_coalescent.c))) {
@@ -3778,39 +3777,20 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id)
         msp_free_avl_node(self, y_node);
         ret = msp_merge_two_ancestors(self, 0, x, y);
     } else {
-        /* In the multiple merger regime we have four different 'pots' that
-         * lineages get assigned to, where all lineages in a given pot are merged into
-         * a common ancestor.
-         */
-        for (j = 0; j < num_pots; j++){
+        for (j = 0; j < 4; j++){
             avl_init_tree(&Q[j], cmp_segment_queue, NULL);
         }
-        node = ancestors->head;
-        while (node != NULL) {
-            next = node->next;
-            /* With probability psi / 4, a given lineage participates in this event. */
-            if (gsl_rng_uniform(self->rng) < self->model.params.dirac_coalescent.psi / 4.0) {
-                u = (segment_t *) node->item;
-                avl_unlink_node(ancestors, node);
-                msp_free_avl_node(self, node);
-                q_node = msp_alloc_avl_node(self);
-                if (q_node == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                avl_init_node(q_node, u);
-                /* Now assign this ancestor to a uniformly chosen pot */
-                j = (uint32_t) gsl_rng_uniform_int(self->rng, num_pots);
-                q_node = avl_insert_node(&Q[j], q_node);
-                assert(q_node != NULL);
-            }
-            node = next;
+
+        ret = msp_multi_merger_common_ancestor_event(self,
+            self->model.params.dirac_coalescent.psi, ancestors, Q);
+        if (ret < 0) {
+            goto out;
         }
         /* All the lineages that have been assigned to the particular pots can now be
          * merged.
          */
         max_pot_size = 0;
-        for (j = 0; j < num_pots; j++){
+        for (j = 0; j < 4; j++){
             max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[j]));
             ret = msp_merge_ancestors(self, &Q[j], 0);
             if (ret < 0) {
@@ -3974,16 +3954,53 @@ msp_beta_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id)
     return result;
 }
 
+int WARN_UNUSED
+msp_multi_merger_common_ancestor_event(msp_t *self, double x,
+    avl_tree_t *ancestors, avl_tree_t *Q)
+{
+    int ret = 0;
+    uint32_t j, k, i;
+    avl_node_t  *node, *q_node;
+    segment_t *u;
+    /* In the multiple merger regime we have four different 'pots' that
+     * lineages get assigned to, where all lineages in a given pot are merged into
+     * a common ancestor.
+     */
+    k = gsl_ran_binomial(self->rng, x, avl_count(ancestors));
+    for (i = 0; i < k; i++){
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(ancestors));
+        node = avl_at(ancestors, j);
+        assert(node != NULL);
+
+        u = (segment_t *) node->item;
+        avl_unlink_node(ancestors, node);
+        msp_free_avl_node(self, node);
+
+        q_node = msp_alloc_avl_node(self);
+        if (q_node == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        avl_init_node(q_node, u);
+        /* Now assign this ancestor to a uniformly chosen pot */
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, 4);
+        q_node = avl_insert_node(&Q[j], q_node);
+        assert(q_node != NULL);
+    }
+
+out:
+    return ret;
+}
+
+
 static int WARN_UNUSED
 msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id)
 {
     int ret = 0;
     uint32_t j, n, max_pot_size;
-    const uint32_t num_pots = 4;
     avl_tree_t *ancestors, Q[5]; /* MSVC won't let us use num_pots here */
-    avl_node_t *x_node, *y_node, *node, *next, *q_node;
-    segment_t *x, *y, *u;
-
+    avl_node_t *x_node, *y_node, *q_node;
+    segment_t *x, *y;
     double beta_x;
 
     for (j = 0; j < 5; j++){
@@ -4026,31 +4043,11 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id)
                  2.0 - self->model.params.beta_coalescent.alpha,
                  self->model.params.beta_coalescent.alpha);
 
-    /* In the multiple merger regime we have four different 'pots' that
-     * lineages get assigned to, where all lineages in a given pot are merged into
-     * a common ancestor.
-     */
-    node = ancestors->head;
-    while (node != NULL) {
-        next = node->next;
-        /* With probability beta_x / 4, a given lineage participates in this event. */
-        if (gsl_rng_uniform(self->rng) < beta_x / 4.0) {
-            u = (segment_t *) node->item;
-            avl_unlink_node(ancestors, node);
-            msp_free_avl_node(self, node);
-            q_node = msp_alloc_avl_node(self);
-            if (q_node == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            avl_init_node(q_node, u);
-            /* Now assign this ancestor to a uniformly chosen pot */
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, num_pots);
-            q_node = avl_insert_node(&Q[j], q_node);
-            assert(q_node != NULL);
-        }
-        node = next;
+    ret = msp_multi_merger_common_ancestor_event(self, beta_x, ancestors, Q);
+    if (ret < 0) {
+        goto out;
     }
+
     /* All the lineages that have been assigned to the particular pots can now be
      * merged.
      */
