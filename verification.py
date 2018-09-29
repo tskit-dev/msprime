@@ -1128,17 +1128,17 @@ class SimulationVerifier(object):
         pyplot.close('all')
 
     def run_xi_dirac_expected_sfs(self):
-        self.compare_xi_dirac_sfs(num_replicates=1000,
+        self.compare_xi_dirac_sfs(num_replicates=5000,
             sample_size=3, psi=0.01, c=1, sfs=[0.666667, 0.333333])
 
-        self.compare_xi_dirac_sfs(num_replicates=1000,
+        self.compare_xi_dirac_sfs(num_replicates=5000,
             sample_size=3, psi=0.99, c=1, sfs=[0.6722604, 0.3277396])
 
-        self.compare_xi_dirac_sfs(num_replicates=1000,
-            sample_size=4, psi=0.01, c=1, sfs=[0.5835401, 0.2502068, 0.1662531])
+        self.compare_xi_dirac_sfs(num_replicates=5000,
+            sample_size=4, psi=0.01, c=1, sfs=[0.5457826, 0.2728913, 0.1813261])
 
-        self.compare_xi_dirac_sfs(num_replicates=1000,
-            sample_size=4, psi=0.99, c=1, sfs=[0.5986774, 0.2477669, 0.1535557])
+        self.compare_xi_dirac_sfs(num_replicates=5000,
+            sample_size=4, psi=0.99, c=1, sfs=[0.5611642, 0.2747103, 0.1641255])
 
         # MORE, NEED TO CHECK THESE VALUES
 
@@ -1200,20 +1200,20 @@ class SimulationVerifier(object):
 
     def run_xi_beta_expected_sfs(self):
         self.compare_xi_beta_sfs(
-            num_replicates=1000,
+            num_replicates=5000,
             sample_size=3, alpha=1.01, sfs=[0.681653, 0.318347])
 
         self.compare_xi_beta_sfs(
-            num_replicates=1000,
+            num_replicates=5000,
             sample_size=3, alpha=1.8, sfs=[0.6694913, 0.3305087])
 
         self.compare_xi_beta_sfs(
-            num_replicates=1000,
-            sample_size=4, alpha=1.01, sfs=[0.568427, 0.257653, 0.173919])
+            num_replicates=5000,
+            sample_size=4, alpha=1.01, sfs=[0.5684275, 0.2576535, 0.1739190])
 
         self.compare_xi_beta_sfs(
-            num_replicates=1000,
-            sample_size=4, alpha=1.99, sfs=[0.545689, 0.272542, 0.181770])
+            num_replicates=5000,
+            sample_size=4, alpha=1.8, sfs=[0.5501309, 0.2691312, 0.1807379])
 
         # MORE
 
