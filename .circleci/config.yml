@@ -29,6 +29,7 @@ jobs:
           name: Compile
           command: |
             CFLAGS=--coverage python setup.py build_ext --inplace
+            make -C lib/tskit
             make -C lib debian-tests
       - run:
           name: Run highlevel tests and upload coverage
@@ -41,7 +42,7 @@ jobs:
       - run:
           name: Run the low-level tests.
           command: |
-            ./lib/tests
+            # ./lib/tests
             ./lib/simulation_tests
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.

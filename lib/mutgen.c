@@ -51,8 +51,8 @@ static const mutation_type_t acgt_mutation_types[] = {
 
 static int
 cmp_site(const void *a, const void *b) {
-    const site_t *ia = (const site_t *) a;
-    const site_t *ib = (const site_t *) b;
+    const tsk_site_t *ia = (const tsk_site_t *) a;
+    const tsk_site_t *ib = (const tsk_site_t *) b;
     return (ia->position > ib->position) - (ia->position < ib->position);
 }
 
@@ -60,18 +60,18 @@ void
 mutgen_print_state(mutgen_t *self, FILE *out)
 {
     avl_node_t *a;
-    site_t *site;
-    mutation_t *mutation;
-    table_size_t j;
+    tsk_site_t *site;
+    tsk_mutation_t *mutation;
+    tsk_tbl_size_t j;
 
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\tmutation_rate = %f\n", self->mutation_rate);
     fprintf(out, "\tstart_time = %f\n", self->start_time);
     fprintf(out, "\tend_time = %f\n", self->end_time);
-    block_allocator_print_state(&self->allocator, out);
+    tsk_blkalloc_print_state(&self->allocator, out);
 
     for (a = self->sites.head; a != NULL; a = a->next) {
-        site = (site_t *) a->item;
+        site = (tsk_site_t *) a->item;
         fprintf(out, "%f\t%.*s\t%.*s\n", site->position,
                 (int) site->ancestral_state_length, site->ancestral_state,
                 (int) site->metadata_length, site->metadata);
@@ -108,7 +108,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
     }
     /* In practice this is the minimum we can support */
     block_size = MSP_MAX(block_size, 128);
-    ret = block_allocator_alloc(&self->allocator, block_size);
+    ret = tsk_blkalloc_alloc(&self->allocator, block_size);
     if (ret != 0) {
         goto out;
     }
@@ -119,7 +119,7 @@ out:
 int
 mutgen_free(mutgen_t *self)
 {
-    block_allocator_free(&self->allocator);
+    tsk_blkalloc_free(&self->allocator);
     return 0;
 }
 
@@ -143,9 +143,9 @@ mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
         const char *ancestral_state, const char *derived_state)
 {
     int ret = 0;
-    site_t *site = block_allocator_get(&self->allocator, sizeof(*site));
-    mutation_t *mutation = block_allocator_get(&self->allocator, sizeof(*mutation));
-    avl_node_t* avl_node = block_allocator_get(&self->allocator, sizeof(*avl_node));
+    tsk_site_t *site = tsk_blkalloc_get(&self->allocator, sizeof(*site));
+    tsk_mutation_t *mutation = tsk_blkalloc_get(&self->allocator, sizeof(*mutation));
+    avl_node_t* avl_node = tsk_blkalloc_get(&self->allocator, sizeof(*avl_node));
 
     if (site == NULL || mutation == NULL || avl_node == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -171,30 +171,30 @@ out:
 }
 
 static int WARN_UNUSED
-mutget_initialise_sites(mutgen_t *self, table_collection_t *tables)
+mutget_initialise_sites(mutgen_t *self, tsk_tbl_collection_t *tables)
 {
     int ret = 0;
-    site_table_t *sites = tables->sites;
-    mutation_table_t *mutations = tables->mutations;
+    tsk_site_tbl_t *sites = tables->sites;
+    tsk_mutation_tbl_t *mutations = tables->mutations;
     mutation_id_t mutation_id;
     site_id_t site_id;
-    site_t *site;
+    tsk_site_t *site;
     avl_node_t *avl_node;
-    mutation_t *site_mutations;
-    table_size_t j, num_mutations, length;
+    tsk_mutation_t *site_mutations;
+    tsk_tbl_size_t j, num_mutations, length;
     char *buff;
 
     mutation_id = 0;
     for (site_id = 0; site_id < (site_id_t) sites->num_rows; site_id++) {
-        j = (table_size_t) mutation_id;
+        j = (tsk_tbl_size_t) mutation_id;
         while (j < mutations->num_rows && mutations->site[j] == site_id) {
             j++;
         }
-        num_mutations = j - (table_size_t) mutation_id;
+        num_mutations = j - (tsk_tbl_size_t) mutation_id;
 
-        site = block_allocator_get(&self->allocator, sizeof(*site));
-        avl_node = block_allocator_get(&self->allocator, sizeof(*avl_node));
-        site_mutations = block_allocator_get(&self->allocator,
+        site = tsk_blkalloc_get(&self->allocator, sizeof(*site));
+        avl_node = tsk_blkalloc_get(&self->allocator, sizeof(*avl_node));
+        site_mutations = tsk_blkalloc_get(&self->allocator,
                 num_mutations * sizeof(*mutations));
         if (site == NULL || avl_node == NULL || site_mutations == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -206,7 +206,7 @@ mutget_initialise_sites(mutgen_t *self, table_collection_t *tables)
         /* ancestral state */
         length = sites->ancestral_state_offset[site_id + 1]
             - sites->ancestral_state_offset[site_id];
-        buff = block_allocator_get(&self->allocator, length);
+        buff = tsk_blkalloc_get(&self->allocator, length);
         if (buff == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -219,7 +219,7 @@ mutget_initialise_sites(mutgen_t *self, table_collection_t *tables)
         /* metadata */
         length = sites->metadata_offset[site_id + 1]
             - sites->metadata_offset[site_id];
-        buff = block_allocator_get(&self->allocator, length);
+        buff = tsk_blkalloc_get(&self->allocator, length);
         if (buff == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -241,7 +241,7 @@ mutget_initialise_sites(mutgen_t *self, table_collection_t *tables)
             /* ancestral state */
             length = mutations->derived_state_offset[mutation_id + 1]
                 - mutations->derived_state_offset[mutation_id];
-            buff = block_allocator_get(&self->allocator, length);
+            buff = tsk_blkalloc_get(&self->allocator, length);
             if (buff == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -254,7 +254,7 @@ mutget_initialise_sites(mutgen_t *self, table_collection_t *tables)
             /* metadata */
             length = mutations->metadata_offset[mutation_id + 1]
                 - mutations->metadata_offset[mutation_id];
-            buff = block_allocator_get(&self->allocator, length);
+            buff = tsk_blkalloc_get(&self->allocator, length);
             if (buff == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -278,20 +278,20 @@ out:
 }
 
 static int
-mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mutations)
+mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t *mutations)
 {
     int ret = 0;
     size_t j;
     site_id_t site_id;
     avl_node_t *a;
-    site_t *site;
-    mutation_t *mutation;
+    tsk_site_t *site;
+    tsk_mutation_t *mutation;
     mutation_id_t new_mutations = 0;
     mutation_id_t parent;
 
     for (a = self->sites.head; a != NULL; a = a->next) {
-        site = (site_t *) a->item;
-        site_id = site_table_add_row(sites, site->position, site->ancestral_state,
+        site = (tsk_site_t *) a->item;
+        site_id = tsk_site_tbl_add_row(sites, site->position, site->ancestral_state,
                 site->ancestral_state_length, site->metadata, site->metadata_length);
         if (site_id < 0) {
             ret = site_id;
@@ -303,7 +303,7 @@ mutgen_populate_tables(mutgen_t *self, site_table_t *sites, mutation_table_t *mu
             if (parent != MSP_NULL_MUTATION) {
                 parent += new_mutations;
             }
-            ret = mutation_table_add_row(mutations, site_id,
+            ret = tsk_mutation_tbl_add_row(mutations, site_id,
                     mutation->node, parent,
                     mutation->derived_state, mutation->derived_state_length,
                     mutation->metadata, mutation->metadata_length);
@@ -324,11 +324,11 @@ out:
 }
 
 int WARN_UNUSED
-mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
+mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
 {
     int ret = 0;
-    node_table_t *nodes = tables->nodes;
-    edge_table_t *edges = tables->edges;
+    tsk_node_tbl_t *nodes = tables->nodes;
+    tsk_edge_tbl_t *edges = tables->edges;
     size_t j, l, branch_mutations;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
@@ -339,10 +339,10 @@ mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
     double end_time = self->end_time;
     double branch_start, branch_end;
     avl_node_t *avl_node;
-    site_t search;
+    tsk_site_t search;
 
     avl_clear_tree(&self->sites);
-    block_allocator_reset(&self->allocator);
+    tsk_blkalloc_reset(&self->allocator);
 
     if (flags & MSP_KEEP_SITES) {
         ret = mutget_initialise_sites(self, tables);
@@ -350,11 +350,11 @@ mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags)
             goto out;
         }
     }
-    ret = site_table_clear(tables->sites);
+    ret = tsk_site_tbl_clear(tables->sites);
     if (ret != 0) {
         goto out;
     }
-    ret = mutation_table_clear(tables->mutations);
+    ret = tsk_mutation_tbl_clear(tables->mutations);
     if (ret != 0) {
         goto out;
     }

@@ -27,11 +27,15 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_integration.h>
 
+#include "util.h"
 #include "avl.h"
 #include "fenwick.h"
 #include "object_heap.h"
-#include "tables.h"
-#include "trees.h"
+#include "tskit/tsk_tables.h"
+#include "tskit/tsk_trees.h"
+
+/* #include "tables.h" */
+/* #include "trees.h" */
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -47,6 +51,12 @@
 /* Flags for mutgen */
 #define MSP_KEEP_SITES  1
 
+/* FIXME: Using these typedefs to keep the diff size small on the initial
+ * tskit transition. Can remove later. */
+typedef tsk_id_t population_id_t;
+typedef tsk_id_t node_id_t;
+typedef tsk_id_t mutation_id_t;
+typedef tsk_id_t site_id_t;
 
 typedef struct segment_t_t {
     population_id_t population_id;
@@ -141,7 +151,7 @@ typedef struct _msp_t {
     uint32_t num_populations;
     sample_t *samples;
     double start_time;
-    tree_sequence_t *from_ts;
+    tsk_treeseq_t *from_ts;
     simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;
@@ -177,10 +187,10 @@ typedef struct _msp_t {
     object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
     /* The tables used to store the simulation state */
-    table_collection_t tables;
-    table_collection_position_t from_position;
+    tsk_tbl_collection_t tables;
+    tsk_tbl_collection_position_t from_position;
     /* edges are buffered in a flat array until they are squashed and flushed */
-    edge_t *buffered_edges;
+    tsk_edge_t *buffered_edges;
     size_t num_buffered_edges;
     size_t max_buffered_edges;
     /* Methods for getting the waiting time until the next common ancestor
@@ -245,12 +255,12 @@ typedef struct {
     double end_time;
     double mutation_rate;
     avl_tree_t sites;
-    block_allocator_t allocator;
+    tsk_blkalloc_t allocator;
 } mutgen_t;
 
 int msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
-        recomb_map_t *recomb_map, tree_sequence_t *from, gsl_rng *rng);
+        recomb_map_t *recomb_map, tsk_treeseq_t *from, gsl_rng *rng);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);
@@ -284,7 +294,7 @@ int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
-int msp_populate_tables(msp_t *self, table_collection_t *tables);
+int msp_populate_tables(msp_t *self, tsk_tbl_collection_t *tables);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);
@@ -346,7 +356,7 @@ int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
         int alphabet, size_t mutation_block_size);
 int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
 int mutgen_free(mutgen_t *self);
-int mutgen_generate(mutgen_t *self, table_collection_t *tables, int flags);
+int mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Functions exposed here for unit testing. Not part of public API. */
