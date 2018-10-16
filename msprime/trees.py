@@ -29,6 +29,12 @@ import json
 import sys
 import base64
 import warnings
+import functools
+try:
+    import concurrent.futures
+except ImportError:
+    # We're on Python2; any attempts to use futures are dealt with below.
+    pass
 
 import numpy as np
 
@@ -2450,6 +2456,35 @@ class TreeSequence(object):
         if samples is None:
             samples = self.samples()
         return self._ll_tree_sequence.get_pairwise_diversity(list(samples))
+
+    def mean_descendants(self, reference_sets):
+        return self._ll_tree_sequence.mean_descendants(reference_sets)
+
+    def genealogical_nearest_neighbours(self, focal, reference_sets, num_threads=0):
+        # TODO this may not be a good name because there is another version of the
+        # statistic which may be occasionally useful where we return the tree-by-tree
+        # value. We could do this by adding an extra dimension to the returned array
+        # which would give the values tree-by-tree. The tree lengths can be computed
+        # easily enough, *but* there may be occasions when the statistic isn't
+        # defined over particular trees.
+        #
+        # Probably the best thing to do is to add an option which allows us to compute
+        # the tree-wise GNNs, returning the values in a higher dimensional array
+        # rather than have another function entirely.
+        if num_threads <= 0:
+            return self._ll_tree_sequence.genealogical_nearest_neighbours(
+                focal, reference_sets)
+        else:
+            if IS_PY2:
+                raise ValueError("Threads not supported on Python 2.")
+            worker = functools.partial(
+                self._ll_tree_sequence.genealogical_nearest_neighbours,
+                reference_sets=reference_sets)
+            focal = np.array(focal).astype(np.int32)
+            splits = np.array_split(focal, num_threads)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as pool:
+                arrays = pool.map(worker, splits)
+            return np.vstack(arrays)
 
     def individual(self, id_):
         """

@@ -612,6 +612,348 @@ out:
     return ret;
 }
 
+#define GET_2D_ROW(array, row_len, row) (array + (((size_t) (row_len)) * (size_t) row))
+
+int WARN_UNUSED
+tree_sequence_genealogical_nearest_neighbours(tree_sequence_t *self,
+        node_id_t *focal, size_t num_focal,
+        node_id_t **reference_sets, size_t *reference_set_size, size_t num_reference_sets,
+        int MSP_UNUSED(flags), double *ret_array)
+{
+    int ret = 0;
+    node_id_t u, v, p;
+    size_t j;
+    /* TODO It's probably not worth bothering with the int16_t here. */
+    int16_t k, focal_reference_set;
+    /* We use the K'th element of the array for the total. */
+    const int16_t K = (int16_t) (num_reference_sets + 1);
+    size_t num_nodes = self->tables->nodes->num_rows;
+    const edge_id_t num_edges = (edge_id_t) self->tables->edges->num_rows;
+    const edge_id_t *restrict I = self->tables->indexes.edge_insertion_order;
+    const edge_id_t *restrict O = self->tables->indexes.edge_removal_order;
+    const double *restrict edge_left = self->tables->edges->left;
+    const double *restrict edge_right = self->tables->edges->right;
+    const node_id_t *restrict edge_parent = self->tables->edges->parent;
+    const node_id_t *restrict edge_child = self->tables->edges->child;
+    const double sequence_length = self->tables->sequence_length;
+    edge_id_t tj, tk, h;
+    double left, right, *A_row, scale, tree_length;
+    node_id_t *restrict parent = malloc(num_nodes * sizeof(*parent));
+    double *restrict length = calloc(num_focal, sizeof(*length));
+    uint32_t *restrict ref_count = calloc(num_nodes * ((size_t) K), sizeof(*ref_count));
+    int16_t *restrict reference_set_map = malloc(num_nodes * sizeof(*reference_set_map));
+    uint32_t *restrict row, *restrict child_row, total;
+
+    /* We support a max of 8K focal sets */
+    if (num_reference_sets == 0 || num_reference_sets > (INT16_MAX - 1)) {
+        /* TODO: more specific error */
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (parent == NULL || ref_count == NULL || reference_set_map == NULL
+            || length == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    memset(parent, 0xff, num_nodes * sizeof(*parent));
+    memset(reference_set_map, 0xff, num_nodes * sizeof(*reference_set_map));
+    memset(ret_array, 0, num_focal * num_reference_sets * sizeof(*ret_array));
+
+    /* Set the initial conditions and check the input. */
+    for (k = 0; k < (int16_t) num_reference_sets; k++) {
+        for (j = 0; j < reference_set_size[k]; j++) {
+            u = reference_sets[k][j];
+            if (u < 0 || u >= (node_id_t) num_nodes) {
+                ret = MSP_ERR_OUT_OF_BOUNDS;
+                goto out;
+            }
+            if (reference_set_map[u] != MSP_NULL_NODE) {
+                /* FIXME Technically inaccurate here: duplicate focal not sample */
+                ret = MSP_ERR_DUPLICATE_SAMPLE;
+                goto out;
+            }
+            reference_set_map[u] = k;
+            row = GET_2D_ROW(ref_count, K, u);
+            row[k] = 1;
+            /* Also set the count for the total among all sets */
+            row[K - 1] = 1;
+        }
+    }
+    for (j = 0; j < num_focal; j++) {
+        u = focal[j];
+        if (u < 0 || u >= (node_id_t) num_nodes) {
+            ret = MSP_ERR_OUT_OF_BOUNDS;
+            goto out;
+        }
+    }
+
+    /* Iterate over the trees */
+    tj = 0;
+    tk = 0;
+    left = 0;
+    while (tj < num_edges || left < sequence_length) {
+        while (tk < num_edges && edge_right[O[tk]] == left) {
+            h = O[tk];
+            tk++;
+            u = edge_child[h];
+            v = edge_parent[h];
+            parent[u] = MSP_NULL_NODE;
+            child_row = GET_2D_ROW(ref_count, K, u);
+            while (v != MSP_NULL_NODE) {
+                row = GET_2D_ROW(ref_count, K, v);
+                for (k = 0; k < K; k++) {
+                    row[k] -= child_row[k];
+                }
+                v = parent[v];
+            }
+        }
+        while (tj < num_edges && edge_left[I[tj]] == left) {
+            h = I[tj];
+            tj++;
+            u = edge_child[h];
+            v = edge_parent[h];
+            parent[u] = v;
+            child_row = GET_2D_ROW(ref_count, K, u);
+            while (v != MSP_NULL_NODE) {
+                row = GET_2D_ROW(ref_count, K, v);
+                for (k = 0; k < K; k++) {
+                    row[k] += child_row[k];
+                }
+                v = parent[v];
+            }
+        }
+        right = sequence_length;
+        if (tj < num_edges) {
+            right = MSP_MIN(right, edge_left[I[tj]]);
+        }
+        if (tk < num_edges) {
+            right = MSP_MIN(right, edge_right[O[tk]]);
+        }
+
+        tree_length = right - left;
+        /* Process this tree */
+        for (j = 0; j < num_focal; j++) {
+            u = focal[j];
+            p = parent[u];
+            while (p != MSP_NULL_NODE) {
+                row = GET_2D_ROW(ref_count, K, p);
+                total = row[K - 1];
+                if (total > 1) {
+                    break;
+                }
+                p = parent[p];
+            }
+            if (p != MSP_NULL_NODE) {
+                length[j] += tree_length;
+                focal_reference_set = reference_set_map[u];
+                scale = tree_length / (total - (focal_reference_set != -1));
+                A_row = GET_2D_ROW(ret_array, num_reference_sets, j);
+                for (k = 0; k < K - 1; k++) {
+                    A_row[k] += row[k] * scale;
+                }
+                if (focal_reference_set != -1) {
+                    /* Remove the contribution for the reference set u belongs to and
+                     * insert the correct value. The long-hand version is
+                     * A_row[k] = A_row[k] - row[k] * scale + (row[k] - 1) * scale;
+                     * which cancels to give: */
+                    A_row[focal_reference_set] -= scale;
+                }
+            }
+        }
+
+        /* Move on to the next tree */
+        left = right;
+    }
+
+    /* Divide by the accumulated length for each node to normalise */
+    for (j = 0; j < num_focal; j++) {
+        A_row = GET_2D_ROW(ret_array, num_reference_sets, j);
+        if (length[j] > 0) {
+            for (k = 0; k < K - 1; k++) {
+                A_row[k] /= length[j];
+            }
+        }
+    }
+out:
+    /* Can't use msp_safe_free here because of restrict */
+    if (parent != NULL) {
+        free(parent);
+    }
+    if (ref_count != NULL) {
+        free(ref_count);
+    }
+    if (reference_set_map != NULL) {
+        free(reference_set_map);
+    }
+    if (length != NULL) {
+        free(length);
+    }
+    return ret;
+}
+
+int WARN_UNUSED
+tree_sequence_mean_descendants(tree_sequence_t *self,
+        node_id_t **reference_sets, size_t *reference_set_size, size_t num_reference_sets,
+        int MSP_UNUSED(flags), double *ret_array)
+{
+    int ret = 0;
+    node_id_t u, v;
+    size_t j;
+    int32_t k;
+    /* We use the K'th element of the array for the total. */
+    const int32_t K = (int32_t) (num_reference_sets + 1);
+    size_t num_nodes = self->tables->nodes->num_rows;
+    const edge_id_t num_edges = (edge_id_t) self->tables->edges->num_rows;
+    const edge_id_t *restrict I = self->tables->indexes.edge_insertion_order;
+    const edge_id_t *restrict O = self->tables->indexes.edge_removal_order;
+    const double *restrict edge_left = self->tables->edges->left;
+    const double *restrict edge_right = self->tables->edges->right;
+    const node_id_t *restrict edge_parent = self->tables->edges->parent;
+    const node_id_t *restrict edge_child = self->tables->edges->child;
+    const double sequence_length = self->tables->sequence_length;
+    edge_id_t tj, tk, h;
+    double left, right, length, *restrict C_row;
+    node_id_t *restrict parent = malloc(num_nodes * sizeof(*parent));
+    uint32_t *restrict ref_count = calloc(num_nodes * ((size_t) K), sizeof(*ref_count));
+    double *restrict last_update = calloc(num_nodes, sizeof(*last_update));
+    double *restrict total_length = calloc(num_nodes, sizeof(*total_length));
+    uint32_t *restrict row, *restrict child_row;
+
+    if (num_reference_sets == 0 || num_reference_sets > (INT32_MAX - 1)) {
+        /* TODO: more specific error */
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (parent == NULL || ref_count == NULL || last_update == NULL
+            || total_length == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    /* TODO add check for duplicate values in the reference sets */
+
+    memset(parent, 0xff, num_nodes * sizeof(*parent));
+    memset(ret_array, 0, num_nodes * num_reference_sets * sizeof(*ret_array));
+
+    /* Set the initial conditions and check the input. */
+    for (k = 0; k < (int32_t) num_reference_sets; k++) {
+        for (j = 0; j < reference_set_size[k]; j++) {
+            u = reference_sets[k][j];
+            if (u < 0 || u >= (node_id_t) num_nodes) {
+                ret = MSP_ERR_OUT_OF_BOUNDS;
+                goto out;
+            }
+            row = GET_2D_ROW(ref_count, K, u);
+            row[k] = 1;
+            /* Also set the count for the total among all sets */
+            row[K - 1] = 1;
+        }
+    }
+
+    /* Iterate over the trees */
+    tj = 0;
+    tk = 0;
+    left = 0;
+    while (tj < num_edges || left < sequence_length) {
+        while (tk < num_edges && edge_right[O[tk]] == left) {
+            h = O[tk];
+            tk++;
+            u = edge_child[h];
+            v = edge_parent[h];
+            parent[u] = MSP_NULL_NODE;
+            child_row = GET_2D_ROW(ref_count, K, u);
+            while (v != MSP_NULL_NODE) {
+                row = GET_2D_ROW(ref_count, K, v);
+                if (last_update[v] != left) {
+                    if (row[K - 1] > 0) {
+                        length = left - last_update[v];
+                        C_row = GET_2D_ROW(ret_array, num_reference_sets, v);
+                        for (k = 0; k < (int32_t) num_reference_sets; k++) {
+                            C_row[k] += length * row[k];
+                        }
+                        total_length[v] += length;
+                    }
+                    last_update[v] = left;
+                }
+                for (k = 0; k < K; k++) {
+                    row[k] -= child_row[k];
+                }
+                v = parent[v];
+            }
+        }
+        while (tj < num_edges && edge_left[I[tj]] == left) {
+            h = I[tj];
+            tj++;
+            u = edge_child[h];
+            v = edge_parent[h];
+            parent[u] = v;
+            child_row = GET_2D_ROW(ref_count, K, u);
+            while (v != MSP_NULL_NODE) {
+                row = GET_2D_ROW(ref_count, K, v);
+                if (last_update[v] != left) {
+                    if (row[K - 1] > 0) {
+                        length = left - last_update[v];
+                        C_row = GET_2D_ROW(ret_array, num_reference_sets, v);
+                        for (k = 0; k < (int32_t) num_reference_sets; k++) {
+                            C_row[k] += length * row[k];
+                        }
+                        total_length[v] += length;
+                    }
+                    last_update[v] = left;
+                }
+                for (k = 0; k < K; k++) {
+                    row[k] += child_row[k];
+                }
+                v = parent[v];
+            }
+        }
+        right = sequence_length;
+        if (tj < num_edges) {
+            right = MSP_MIN(right, edge_left[I[tj]]);
+        }
+        if (tk < num_edges) {
+            right = MSP_MIN(right, edge_right[O[tk]]);
+        }
+        left = right;
+    }
+
+    /* Add the stats for the last tree and divide by the total length that
+     * each node was an ancestor to > 0 of the reference nodes. */
+    for (v = 0; v < (node_id_t) num_nodes; v++) {
+        row = GET_2D_ROW(ref_count, K, v);
+        C_row = GET_2D_ROW(ret_array, num_reference_sets, v);
+        if (row[K - 1] > 0) {
+            length = sequence_length - last_update[v];
+            total_length[v] += length;
+            for (k = 0; k < (int32_t) num_reference_sets; k++) {
+                C_row[k] += length * row[k];
+            }
+        }
+        if (total_length[v] > 0) {
+            length = total_length[v];
+            for (k = 0; k < (int32_t) num_reference_sets; k++) {
+                C_row[k] /= length;
+            }
+        }
+    }
+
+out:
+    /* Can't use msp_safe_free here because of restrict */
+    if (parent != NULL) {
+        free(parent);
+    }
+    if (ref_count != NULL) {
+        free(ref_count);
+    }
+    if (last_update != NULL) {
+        free(last_update);
+    }
+    if (total_length != NULL) {
+        free(total_length);
+    }
+    return ret;
+}
+
 int WARN_UNUSED
 tree_sequence_get_node(tree_sequence_t *self, size_t index, node_t *node)
 {
