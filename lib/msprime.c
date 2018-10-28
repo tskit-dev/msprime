@@ -2486,12 +2486,8 @@ msp_dtwf_generation(msp_t *self)
         parents = NULL;
     }
 out:
-    if (parents != NULL) {
-        free(parents);
-    }
-    if (segment_mem != NULL){
-        free(segment_mem);
-    }
+    msp_safe_free(parents);
+    msp_safe_free(segment_mem);
     return ret;
 }
 
@@ -2583,9 +2579,9 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             // For proper sampling, we need to calculate the proportion
             // of non-migrants as well
             sum = 0;
-            for (uint32_t z = 0; z < self->num_populations; z++) {
-                mig_tmp[z] = self->migration_matrix[j * self->num_populations + z];
-                sum += mig_tmp[z];
+            for (k = 0; k < self->num_populations; k++) {
+                mig_tmp[k] = self->migration_matrix[j * self->num_populations + k];
+                sum += mig_tmp[k];
             }
             assert(mig_tmp[j] == 0);
 
