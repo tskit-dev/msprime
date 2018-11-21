@@ -720,7 +720,7 @@ class SparseTree(object):
         :math:`(l, r)` and is a half-open interval such that the left
         coordinate is inclusive and the right coordinate is exclusive. This
         tree therefore applies to all genomic locations :math:`x` such that
-        :math:`l \leq x < r`.
+        :math:`l \\leq x < r`.
 
         :return: A tuple (l, r) representing the left-most (inclusive)
             and right-most (exclusive) coordinates of the genomic region
@@ -2433,7 +2433,7 @@ class TreeSequence(object):
 
     def pairwise_diversity(self, samples=None):
         """
-        Returns the value of :math:`\pi`, the pairwise nucleotide site
+        Returns the value of :math:`\\pi`, the pairwise nucleotide site
         diversity, the average number of mutations per unit of genome length
         that differ between a randomly chosen pair of samples.  If `samples` is
         specified, calculate the diversity within this set.
