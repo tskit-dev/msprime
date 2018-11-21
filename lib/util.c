@@ -23,30 +23,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-
-#include <hdf5.h>
+#include <assert.h>
 
 #include "util.h"
+#include "kastore.h"
 
-#define MSP_HDF5_ERR_MSG_SIZE 1024
 
-static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
-
-static herr_t
-hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
-{
-    /* We only copy the message from the first element in the error stack */
-    if (_hdf5_error[0] == '\0') {
-        snprintf(_hdf5_error, MSP_HDF5_ERR_MSG_SIZE,
-                "HDF5 Error: %d: %d:'%s'",
-                (int) err_desc->maj_num, (int) err_desc->min_num,
-                err_desc->desc);
-    }
-    return 0;
-}
-
-const char *
-msp_strerror(int err)
+static const char *
+msp_strerror_internal(int err)
 {
     const char *ret = "Unknown error";
 
@@ -79,7 +63,7 @@ msp_strerror(int err)
             ret = "Links Overflow occurred.";
             break;
         case MSP_ERR_OUT_OF_BOUNDS:
-            ret = "Array index out of bounds";
+            ret = "Object reference out of bounds";
             break;
         case MSP_ERR_BAD_ORDERING:
             ret = "Bad record ordering requested";
@@ -99,8 +83,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_POPULATION_SIZE:
             ret = "Bad population size provided. Must be > 0.";
             break;
-        case MSP_ERR_BAD_POPULATION_ID:
-            ret = "Bad population id provided.";
+        case MSP_ERR_POPULATION_OUT_OF_BOUNDS:
+            ret = "Population ID out of bounds.";
             break;
         case MSP_ERR_BAD_MIGRATION_MATRIX:
             ret = "Bad migration matrix provided.";
@@ -166,11 +150,11 @@ msp_strerror(int err)
             ret = "Bad sample configuration provided.";
             break;
         case MSP_ERR_FILE_VERSION_TOO_OLD:
-            ret = "HDF5 file version too old. Please upgrade using the "
+            ret = "tskit file version too old. Please upgrade using the "
                 "'msp upgrade' command";
             break;
         case MSP_ERR_FILE_VERSION_TOO_NEW:
-            ret = "HDF5 file version is too new for this version of msprime. "
+            ret = "tskit file version is too new for this instance. "
                 "Please upgrade msprime to the latest version.";
             break;
         case MSP_ERR_DUPLICATE_SAMPLE:
@@ -236,11 +220,11 @@ msp_strerror(int err)
         case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
             ret = "Bad edges: multiple definitions of a given parent over an interval";
             break;
-        case MSP_ERR_MULTIROOT_NEWICK:
-            ret = "Newick output not supported for trees with > 1 roots.";
-            break;
         case MSP_ERR_BAD_SEQUENCE_LENGTH:
             ret = "Sequence length must be > 0.";
+            break;
+        case MSP_ERR_LEFT_LESS_ZERO:
+            ret = "Left coordinate must be >= 0";
             break;
         case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
             ret = "Right coordinate > sequence length.";
@@ -263,6 +247,7 @@ msp_strerror(int err)
         case MSP_ERR_TOO_MANY_ALLELES:
             ret = "Cannot have more than 255 alleles.";
             break;
+<<<<<<< HEAD
         case MSP_ERR_BAD_SWEEP_LOCUS:
             ret = "Sweep locus must be between 0 and num_loci.";
             break;
@@ -275,21 +260,69 @@ msp_strerror(int err)
         case MSP_ERR_EMPTY_TRAJECTORY:
             ret = "Trajectory must contain at least one time point.";
             break;
+=======
+        case MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
+            ret = "Individual ID out of bounds";
+            break;
+        case MSP_ERR_GENERATE_UUID:
+            ret = "Error generating UUID";
+            break;
+        case MSP_ERR_DUPLICATE_SITE_POSITION:
+            ret = "Duplicate site positions.";
+            break;
+        case MSP_ERR_BAD_TABLE_POSITION:
+            ret = "Bad table position provided to truncate/reset.";
+            break;
+        case MSP_ERR_BAD_EDGE_INDEX:
+            ret = "Invalid edge index value.";
+            break;
+        case MSP_ERR_TABLES_NOT_INDEXED:
+            ret = "Table collection must be indexed.";
+            break;
+        case MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED:
+            ret = "Migrations currently not supported in simplify. Please open an "
+                "issue on GitHub if this operation is important to you.";
+            break;
+        case MSP_ERR_INCOMPATIBLE_FROM_TS:
+            ret = "The specified tree sequence is not a compatible starting point "
+                "for the current simulation";
+            break;
+        case MSP_ERR_BAD_START_TIME_FROM_TS:
+            ret = "The specified start_time and from_ts are not compatible. All "
+                "node times in the tree sequence must be <= start_time.";
+            break;
+        case MSP_ERR_BAD_START_TIME:
+            ret = "start_time must be >= 0.";
+            break;
+        case MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME:
+            ret = "demographic event time must be >= start_time.";
+            break;
+        case MSP_ERR_RECOMB_MAP_TOO_COARSE:
+            ret = "The specified recombination map is cannot translate the coordinates"
+                "for the specified tree sequence. It is either too coarse (num_loci "
+                "is too small) or contains zero recombination rates. Please either "
+                "increase the number of loci or recombination rate";
+            break;
+        case MSP_ERR_TIME_TRAVEL:
+            ret = "The simulation model supplied resulted in a parent node having "
+                "a time value <= to its child. This can occur either as a result "
+                "of multiple bottlenecks happening at the same time or because of "
+                "numerical imprecision with very small population sizes.";
+            break;
+        case MSP_ERR_ONLY_INFINITE_SITES:
+            ret = "Only infinite sites mutations are supported for this operation.";
+            break;
+        case MSP_ERR_INTEGRATION_FAILED:
+            ret = "GSL numerical integration failed. Please check the stderr for details.";
+            break;
+
+>>>>>>> upstream/master
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);
             } else {
                 ret = "Unspecified IO error";
             }
-            break;
-        case MSP_ERR_HDF5:
-            _hdf5_error[0] = '\0';
-            if (H5Ewalk2(H5E_DEFAULT, H5E_WALK_UPWARD, hdf5_error_walker, NULL)
-                    != 0) {
-                ret = "Eek! Error handling HDF5 error.";
-                goto out;
-            }
-            ret = _hdf5_error;
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
@@ -300,6 +333,31 @@ out:
     return ret;
 }
 
+
+int
+msp_set_kas_error(int err)
+{
+    /* Flip this bit. As the error is negative, this sets the bit to 0 */
+    return err ^ (1 << MSP_KAS_ERR_BIT);
+}
+
+bool
+msp_is_kas_error(int err)
+{
+    return !(err & (1 << MSP_KAS_ERR_BIT));
+}
+
+const char *
+msp_strerror(int err)
+{
+    if (msp_is_kas_error(err)) {
+        err ^= (1 << MSP_KAS_ERR_BIT);
+        return kas_strerror(err);
+    } else {
+        return msp_strerror_internal(err);
+    }
+}
+
 void
 __msp_safe_free(void **ptr) {
     if (ptr != NULL) {
@@ -308,4 +366,132 @@ __msp_safe_free(void **ptr) {
             *ptr = NULL;
         }
     }
+}
+
+/* Block allocator. Simple allocator when we lots of chunks of memory
+ * and don't need to free them individually.
+ */
+
+void
+block_allocator_print_state(block_allocator_t *self, FILE *out)
+{
+    fprintf(out, "Block allocator%p::\n", (void *) self);
+    fprintf(out, "\ttop = %d\n", (int) self->top);
+    fprintf(out, "\tchunk_size = %d\n", (int) self->chunk_size);
+    fprintf(out, "\tnum_chunks = %d\n", (int) self->num_chunks);
+    fprintf(out, "\ttotal_allocated = %d\n", (int) self->total_allocated);
+    fprintf(out, "\ttotal_size = %d\n", (int) self->total_size);
+}
+
+int WARN_UNUSED
+block_allocator_reset(block_allocator_t *self)
+{
+    int ret = 0;
+
+    self->top = 0;
+    self->current_chunk = 0;
+    self->total_allocated = 0;
+    return ret;
+}
+
+int WARN_UNUSED
+block_allocator_alloc(block_allocator_t *self, size_t chunk_size)
+{
+    int ret = 0;
+
+    assert(chunk_size > 0);
+    memset(self, 0, sizeof(block_allocator_t));
+    self->chunk_size = chunk_size;
+    self->top = 0;
+    self->current_chunk = 0;
+    self->total_allocated = 0;
+    self->total_size = 0;
+    self->num_chunks = 0;
+    self->mem_chunks = malloc(sizeof(char *));
+    if (self->mem_chunks == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->mem_chunks[0] = malloc(chunk_size);
+    if (self->mem_chunks[0] == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->num_chunks = 1;
+    self->total_size = chunk_size + sizeof(void *);
+out:
+    return ret;
+}
+
+void * WARN_UNUSED
+block_allocator_get(block_allocator_t *self, size_t size)
+{
+    void *ret = NULL;
+    void *p;
+
+    assert(size < self->chunk_size);
+    if ((self->top + size) > self->chunk_size) {
+        if (self->current_chunk == (self->num_chunks - 1)) {
+            p = realloc(self->mem_chunks, (self->num_chunks + 1) * sizeof(void *));
+            if (p == NULL) {
+                goto out;
+            }
+            self->mem_chunks = p;
+            p = malloc(self->chunk_size);
+            if (p == NULL) {
+                goto out;
+            }
+            self->mem_chunks[self->num_chunks] = p;
+            self->num_chunks++;
+            self->total_size += self->chunk_size + sizeof(void *);
+        }
+        self->current_chunk++;
+        self->top = 0;
+    }
+    ret = self->mem_chunks[self->current_chunk] + self->top;
+    self->top += size;
+    self->total_allocated += size;
+out:
+    return ret;
+}
+
+void
+block_allocator_free(block_allocator_t *self)
+{
+    size_t j;
+
+    for (j = 0; j < self->num_chunks; j++) {
+        if (self->mem_chunks[j] != NULL) {
+            free(self->mem_chunks[j]);
+        }
+    }
+    if (self->mem_chunks != NULL) {
+        free(self->mem_chunks);
+    }
+}
+
+/* Mirrors the semantics of numpy's searchsorted function. Uses binary
+ * search to find the index of the closest value in the array. */
+size_t
+msp_search_sorted(const double *restrict array, size_t size, double value)
+{
+    int64_t upper = (int64_t) size;
+    int64_t lower = 0;
+    int64_t offset = 0;
+    int64_t mid;
+
+    if (upper == 0) {
+        return 0;
+    }
+
+    while (upper - lower > 1) {
+        mid = (upper + lower) / 2;
+        if (value >= array[mid]) {
+            lower = mid;
+        } else {
+            upper = mid;
+        }
+    }
+    offset = (int64_t) (array[lower] < value);
+    return (size_t) (lower + offset);
 }

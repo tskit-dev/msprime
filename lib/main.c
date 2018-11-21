@@ -64,6 +64,15 @@ fatal_library_error(int err, const char *msg, ...)
     exit(EXIT_FAILURE);
 }
 
+static void
+load_tree_sequence(tree_sequence_t *ts, const char *filename)
+{
+    int ret = tree_sequence_load(ts, filename, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, "Load error");
+    }
+}
+
 static int
 read_samples(config_t *config, size_t *num_samples, sample_t **samples)
 {
@@ -506,8 +515,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int ret = 0;
     int err;
     int int_tmp;
-    double rho;
-    size_t num_samples, num_loci, num_populations, num_labels;
+    uint32_t num_loci;
+    size_t num_samples, num_labels;
+    const char *from_ts_path;
+    tree_sequence_t *from_ts = NULL;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *setting, *t;
@@ -534,27 +545,24 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
+    if (config_lookup_string(config, "from", &from_ts_path) == CONFIG_TRUE) {
+        from_ts = malloc(sizeof(*from_ts));
+        if (from_ts == NULL) {
+            fatal_error("alloc error");
+        }
+        load_tree_sequence(from_ts, from_ts_path);
+    }
+
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
         fatal_error("num_loci is a required parameter");
     }
-    num_loci = (size_t) int_tmp;
-
-    /* Read the population configurations */
-    setting = config_lookup(config, "population_configuration");
-    if (setting == NULL) {
-        fatal_error("population_configuration is a required parameter");
-    }
-    if (config_setting_is_list(setting) == CONFIG_FALSE) {
-        fatal_error("population_configuration must be a list");
-    }
-    num_populations = (size_t) config_setting_length(setting);
-
-    /* Now allocate the simulator object */
-    ret = msp_alloc(msp, num_loci, num_populations, num_labels, num_samples, samples, rng);
+    num_loci = (uint32_t) int_tmp;
+    ret = read_recomb_map(num_loci, recomb_map, config);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = read_population_configuration(msp, setting, num_populations);
+
+    ret = msp_alloc(msp, num_samples, samples, recomb_map, from_ts, num_labels, rng);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -592,29 +600,9 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_int(config, "node_block_size", &int_tmp)
-            == CONFIG_FALSE) {
-        fatal_error("node_block_size is a required parameter");
-    }
-    ret = msp_set_node_block_size(msp, (size_t) int_tmp);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
-    if (config_lookup_int(config, "edge_block_size", &int_tmp)
-            == CONFIG_FALSE) {
-        fatal_error("edge_block_size is a required parameter");
-    }
-    ret = msp_set_edge_block_size(msp, (size_t) int_tmp);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
     if (config_lookup_int(config, "max_memory", &int_tmp)
             == CONFIG_FALSE) {
         fatal_error("max_memory is a required parameter");
-    }
-    ret = msp_set_max_memory(msp, (size_t) int_tmp * 1024 * 1024);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
     }
     if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
         fatal_error("store_migrations is a required parameter");
@@ -639,19 +627,13 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    ret = read_recomb_map((uint32_t) msp_get_num_loci(msp),
-            recomb_map, config);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
-    rho = recomb_map_get_per_locus_recombination_rate(recomb_map);
-    ret = msp_set_recombination_rate(msp, rho);
-    if (ret != 0) {
-        fatal_error(msp_strerror(ret));
-    }
     config_destroy(config);
     free(config);
     free(samples);
+    if (from_ts != NULL) {
+        tree_sequence_free(from_ts);
+        free(from_ts);
+    }
     return ret;
 }
 
@@ -663,8 +645,8 @@ print_variants(tree_sequence_t *ts)
     uint32_t j, k;
     variant_t* var;
 
-    printf("variants (%d) \n", (int) ts->sites.num_records);
-    ret = vargen_alloc(&vg, ts, 0);
+    printf("variants (%d) \n", (int) tree_sequence_get_num_sites(ts));
+    ret = vargen_alloc(&vg, ts, NULL, 0, 0);
     if (ret != 0) {
         fatal_library_error(ret, "vargen_alloc");
     }
@@ -681,7 +663,7 @@ print_variants(tree_sequence_t *ts)
         }
         printf("\t");
         for (k = 0; k < ts->num_samples; k++) {
-            printf("%d\t", var->genotypes[k]);
+            printf("%d\t", var->genotypes.u8[k]);
         }
         printf("\n");
     }
@@ -740,11 +722,11 @@ print_ld_matrix(tree_sequence_t *ts)
             fatal_library_error(ret, "ld_calc_get_r2_array");
         }
         for (k = 0; k < num_r2_values; k++) {
-            ret = tree_sequence_get_site(ts, (site_id_t) j, &sA);
+            ret = tree_sequence_get_site(ts, j, &sA);
             if (ret != 0) {
                 fatal_library_error(ret, "get_site");
             }
-            ret = tree_sequence_get_site(ts, (site_id_t) (j + k + 1), &sB);
+            ret = tree_sequence_get_site(ts, (j + k + 1), &sB);
             if (ret != 0) {
                 fatal_library_error(ret, "get_site");
             }
@@ -818,7 +800,7 @@ print_newick_trees(tree_sequence_t *ts)
     int ret = 0;
     char *newick = NULL;
     size_t precision = 8;
-    size_t newick_buffer_size = (precision + 3) * tree_sequence_get_num_nodes(ts);
+    size_t newick_buffer_size = (precision + 5) * tree_sequence_get_num_nodes(ts);
     sparse_tree_t tree;
 
     newick = malloc(newick_buffer_size);
@@ -831,7 +813,8 @@ print_newick_trees(tree_sequence_t *ts)
         fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
     }
     for (ret = sparse_tree_first(&tree); ret == 1; ret = sparse_tree_next(&tree)) {
-        ret = sparse_tree_get_newick(&tree, precision, 1, 0, newick_buffer_size, newick);
+        ret = sparse_tree_get_newick(&tree, tree.left_root, precision,
+                0, newick_buffer_size, newick);
         if (ret != 0) {
             fatal_library_error(ret ,"newick");
         }
@@ -855,7 +838,7 @@ print_tree_sequence(tree_sequence_t *ts, int verbose)
         printf("========================\n");
         printf("trees\n");
         printf("========================\n");
-        ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS);
+        ret = sparse_tree_alloc(&tree, ts, MSP_SAMPLE_COUNTS|MSP_SAMPLE_LISTS);
         if (ret != 0) {
             fatal_error("ERROR: %d: %s\n", ret, msp_strerror(ret));
         }
@@ -929,7 +912,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         goto out;
     }
-    record_provenance(&tables.provenances);
+    record_provenance(tables.provenances);
 
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
@@ -954,22 +937,15 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             goto out;
         }
         /* Create the tree_sequence from the state of the simulator. */
-        /* TODO this is messy; we should pass the table_collection to populate_tables */
-        tables.sequence_length = recomb_map->sequence_length;
-        ret = msp_populate_tables(msp, recomb_map, &tables.nodes, &tables.edges,
-                &tables.migrations);
+        ret = msp_populate_tables(msp, &tables);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_generate_tables_tmp(mutgen, &tables.nodes, &tables.edges);
+        ret = mutgen_generate(mutgen, &tables, 0);
         if (ret != 0) {
             goto out;
         }
-        ret = mutgen_populate_tables(mutgen, &tables.sites, &tables.mutations);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = tree_sequence_load_tables(&tree_seq, &tables, 0);
+        ret = tree_sequence_load_tables(&tree_seq, &tables, MSP_BUILD_INDEXES);
         if (ret != 0) {
             goto out;
         }
@@ -1010,17 +986,9 @@ out:
     }
 }
 
-static void
-load_tree_sequence(tree_sequence_t *ts, const char *filename)
-{
-    int ret = tree_sequence_load(ts, filename, 0);
-    if (ret != 0) {
-        fatal_library_error(ret, "Load error");
-    }
-}
 
 static void
-run_ld(const char *filename, int verbose)
+run_ld(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1030,7 +998,7 @@ run_ld(const char *filename, int verbose)
 }
 
 static void
-run_haplotypes(const char *filename, int verbose)
+run_haplotypes(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1040,7 +1008,7 @@ run_haplotypes(const char *filename, int verbose)
 }
 
 static void
-run_variants(const char *filename, int verbose)
+run_variants(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1070,7 +1038,7 @@ run_print(const char *filename, int verbose)
 }
 
 static void
-run_newick(const char *filename, int verbose)
+run_newick(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1080,7 +1048,7 @@ run_newick(const char *filename, int verbose)
 }
 
 static void
-run_stats(const char *filename, int verbose)
+run_stats(const char *filename, int MSP_UNUSED(verbose))
 {
     tree_sequence_t ts;
 
@@ -1091,15 +1059,15 @@ run_stats(const char *filename, int verbose)
 
 static void
 run_simplify(const char *input_filename, const char *output_filename, size_t num_samples,
-        bool filter_zero_mutation_sites, int verbose)
+        bool filter_sites, int verbose)
 {
     tree_sequence_t ts, subset;
     node_id_t *samples;
     int flags = 0;
     int ret;
 
-    if (filter_zero_mutation_sites) {
-        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
+    if (filter_sites) {
+        flags |= MSP_FILTER_SITES;
     }
 
     load_tree_sequence(&ts, input_filename);
@@ -1142,7 +1110,7 @@ main(int argc, char** argv)
             "number of replicates to run");
     struct arg_file *infiles1 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *output1 = arg_file0("o", "output", "output-file",
-            "Output HDF5 file");
+            "Output trees file");
     struct arg_end *end1 = arg_end(20);
     void* argtable1[] = {cmd1, verbose1, infiles1, output1, replicates1, end1};
     int nerrors1;
@@ -1212,12 +1180,12 @@ main(int argc, char** argv)
     struct arg_lit *verbose9 = arg_lit0("v", "verbose", NULL);
     struct arg_int *num_samples9 = arg_int0("s", "sample-size", "<sample-size>",
             "Number of samples to keep in the simplified tree sequence.");
-    struct arg_lit *filter_zero_mutation_sites9 = arg_lit0("i",
+    struct arg_lit *filter_sites9 = arg_lit0("i",
             "filter-invariant-sites", "<filter-invariant-sites>");
     struct arg_file *infiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_file *outfiles9 = arg_file1(NULL, NULL, NULL, NULL);
     struct arg_end *end9 = arg_end(20);
-    void* argtable9[] = {cmd9, verbose9, filter_zero_mutation_sites9, num_samples9,
+    void* argtable9[] = {cmd9, verbose9, filter_sites9, num_samples9,
         infiles9, outfiles9, end9};
     int nerrors9;
 
@@ -1260,7 +1228,7 @@ main(int argc, char** argv)
         run_stats(infiles8->filename[0], verbose8->count);
     } else if (nerrors9 == 0) {
         run_simplify(infiles9->filename[0], outfiles9->filename[0],
-                (size_t) num_samples9->ival[0], (bool) filter_zero_mutation_sites9->count,
+                (size_t) num_samples9->ival[0], (bool) filter_sites9->count,
                 verbose9->count);
     } else {
         /* We get here if the command line matched none of the possible syntaxes */

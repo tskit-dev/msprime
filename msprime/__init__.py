@@ -27,9 +27,11 @@ from _msprime import FORWARD  # NOQA
 from _msprime import REVERSE  # NOQA
 
 from msprime.provenance import __version__  # NOQA
+from msprime.provenance import validate_provenance  # NOQA
 from msprime.formats import *  # NOQA
 from msprime.trees import *  # NOQA
+from msprime.tables import *  # NOQA
 from msprime.simulations import *  # NOQA
 from msprime.stats import *  # NOQA
 from msprime.exceptions import *  # NOQA
-from msprime.tables import *  # NOQA
+from msprime.mutations import *  # NOQA

@@ -61,7 +61,7 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
             metadata_offset=offset, metadata=encoded)
         self.assertTrue(np.array_equal(nodes.metadata_offset, offset))
         self.assertTrue(np.array_equal(nodes.metadata, encoded))
-        ts1 = msprime.load_tables(nodes=nodes, edges=tables.edges)
+        ts1 = tables.tree_sequence()
         for j, node in enumerate(ts1.nodes()):
             decoded_metadata = json.loads(node.metadata.decode())
             self.assertEqual(decoded_metadata, metadata[j])
@@ -72,17 +72,18 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
     def test_pickle(self):
         ts = msprime.simulate(10, random_seed=1)
         tables = ts.dump_tables()
-        nodes = tables.nodes
         # For each node, we create some Python metadata that can be pickled
         metadata = [
-            {"one": j, "two": 2 * j, "three": list(range(j))} for j in range(len(nodes))]
+            {"one": j, "two": 2 * j, "three": list(range(j))}
+            for j in range(ts.num_nodes)]
         encoded, offset = msprime.pack_bytes(list(map(pickle.dumps, metadata)))
-        nodes.set_columns(
-            flags=nodes.flags, time=nodes.time, population=nodes.population,
+        tables.nodes.set_columns(
+            flags=tables.nodes.flags, time=tables.nodes.time,
+            population=tables.nodes.population,
             metadata_offset=offset, metadata=encoded)
-        self.assertTrue(np.array_equal(nodes.metadata_offset, offset))
-        self.assertTrue(np.array_equal(nodes.metadata, encoded))
-        ts1 = msprime.load_tables(nodes=nodes, edges=tables.edges)
+        self.assertTrue(np.array_equal(tables.nodes.metadata_offset, offset))
+        self.assertTrue(np.array_equal(tables.nodes.metadata, encoded))
+        ts1 = tables.tree_sequence()
         for j, node in enumerate(ts1.nodes()):
             decoded_metadata = pickle.loads(node.metadata)
             self.assertEqual(decoded_metadata, metadata[j])
@@ -197,6 +198,27 @@ class TestLoadTextMetadata(unittest.TestCase):
     Tests that use the load_text interface.
     """
 
+    def test_individuals(self):
+        individuals = six.StringIO("""\
+        id  flags location     metadata
+        0   1     0.0,1.0,0.0  abc
+        1   1     1.0,2.0      XYZ+
+        2   0     2.0,3.0,0.0  !@#$%^&*()
+        """)
+        i = msprime.parse_individuals(individuals, strict=False,
+                                      encoding='utf8',
+                                      base64_metadata=False)
+        expected = [(1, [0.0, 1.0, 0.0], 'abc'),
+                    (1, [1.0, 2.0], 'XYZ+'),
+                    (0, [2.0, 3.0, 0.0], '!@#$%^&*()')]
+        for a, b in zip(expected, i):
+            self.assertEqual(a[0], b.flags)
+            self.assertEqual(len(a[1]), len(b.location))
+            for x, y in zip(a[1], b.location):
+                self.assertEqual(x, y)
+            self.assertEqual(a[2].encode('utf8'),
+                             b.metadata)
+
     def test_nodes(self):
         nodes = six.StringIO("""\
         id  is_sample   time    metadata
@@ -235,5 +257,18 @@ class TestLoadTextMetadata(unittest.TestCase):
                                     base64_metadata=False)
         expected = ['mno', ')(*&^%$#@!']
         for a, b in zip(expected, m):
+            self.assertEqual(a.encode('utf8'),
+                             b.metadata)
+
+    def test_populations(self):
+        populations = six.StringIO("""\
+        id    metadata
+        0     mno
+        1     )(*&^%$#@!
+        """)
+        p = msprime.parse_populations(populations, strict=False, encoding='utf8',
+                                      base64_metadata=False)
+        expected = ['mno', ')(*&^%$#@!']
+        for a, b in zip(expected, p):
             self.assertEqual(a.encode('utf8'),
                              b.metadata)

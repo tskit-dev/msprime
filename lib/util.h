@@ -19,6 +19,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <stdbool.h>
+
 /*
  * raise a compiler warning if a potentially error raising function's return
  * value is not used.
@@ -27,19 +29,64 @@
     #define WARN_UNUSED __attribute__ ((warn_unused_result))
 #else
     #define WARN_UNUSED
+    /* Don't bother with restrict for MSVC */
+    #define restrict
 #endif
 
-#define MSP_NODE_IS_SAMPLE 1
+// BCH 30 May 2018: probably the WARN_UNUSED macro above should be retired
+// in favor of MSP_WARN_UNUSED (adapted from KAS_WARN_UNUSED), for clean
+// naming, but I didn't make that change since it would be extensive
+#ifdef __GNUC__
+	#define MSP_WARN_UNUSED __attribute__ ((warn_unused_result))
+	#define MSP_UNUSED(x) MSP_UNUSED_ ## x __attribute__((__unused__))
+#else
+	#define MSP_WARN_UNUSED
+	#define MSP_UNUSED(x) MSP_UNUSED_ ## x
+#endif
+
+/* This sets up MSP_DBL_DECIMAL_DIG, which can then be used as a
+ * precision specifier when writing out doubles, if you want sufficient
+ * decimal digits to be written to guarantee a lossless round-trip
+ * after being read back in.  Usage:
+ *
+ *     printf("%.*g", MSP_DBL_DECIMAL_DIG, foo);
+ *
+ * See https://stackoverflow.com/a/19897395/2752221
+ */
+#ifdef DBL_DECIMAL_DIG
+#define MSP_DBL_DECIMAL_DIG (DBL_DECIMAL_DIG)
+#else
+#define MSP_DBL_DECIMAL_DIG (DBL_DIG + 3)
+#endif
+
+/* Node flags */
+#define MSP_NODE_IS_SAMPLE 1u
 
 /* The root node indicator */
 #define MSP_NULL_NODE (-1)
 /* Indicates the that the population ID has not been set. */
-#define MSP_NULL_POPULATION_ID (-1)
+#define MSP_NULL_POPULATION (-1)
 /* There is no parent for a given mutation */
 #define MSP_NULL_MUTATION (-1)
+/* Indicates that no individual has been set */
+#define MSP_NULL_INDIVIDUAL (-1)
 
 /* Flags for simplify() */
-#define MSP_FILTER_ZERO_MUTATION_SITES 1
+#define MSP_FILTER_SITES                 (1 << 0)
+#define MSP_REDUCE_TO_SITE_TOPOLOGY      (1 << 1)
+#define MSP_FILTER_POPULATIONS           (1 << 2)
+#define MSP_FILTER_INDIVIDUALS           (1 << 3)
+
+/* Flags for check_integrity */
+#define MSP_CHECK_OFFSETS                (1 << 0)
+#define MSP_CHECK_EDGE_ORDERING          (1 << 1)
+#define MSP_CHECK_SITE_ORDERING          (1 << 2)
+#define MSP_CHECK_SITE_DUPLICATES        (1 << 3)
+#define MSP_CHECK_MUTATION_ORDERING      (1 << 4)
+#define MSP_CHECK_INDEXES                (1 << 5)
+#define MSP_CHECK_ALL                    \
+    (MSP_CHECK_OFFSETS | MSP_CHECK_EDGE_ORDERING | MSP_CHECK_SITE_ORDERING | \
+     MSP_CHECK_SITE_DUPLICATES | MSP_CHECK_MUTATION_ORDERING | MSP_CHECK_INDEXES)
 
 /* Flags for dump tables */
 #define MSP_ALLOC_TABLES 1
@@ -47,11 +94,11 @@
 /* Flags for load tables */
 #define MSP_BUILD_INDEXES 1
 
-/* Flags for tree sequence dump/load */
-#define MSP_DUMP_ZLIB_COMPRESSION 1
 #define MSP_LOAD_EXTENDED_CHECKS  1
 
-#define MSP_FILE_FORMAT_VERSION_MAJOR 10
+#define MSP_FILE_FORMAT_NAME          "tskit.trees"
+#define MSP_FILE_FORMAT_NAME_LENGTH   11
+#define MSP_FILE_FORMAT_VERSION_MAJOR 12
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
 
@@ -69,7 +116,7 @@
 #define MSP_ERR_POPULATION_OVERFLOW                                 -11
 #define MSP_ERR_LINKS_OVERFLOW                                      -12
 #define MSP_ERR_HDF5                                                -13
-#define MSP_ERR_BAD_POPULATION_ID                                   -14
+#define MSP_ERR_POPULATION_OUT_OF_BOUNDS                            -14
 #define MSP_ERR_DUPLICATE_SAMPLE                                    -15
 #define MSP_ERR_BAD_ORDERING                                        -16
 #define MSP_ERR_BAD_MUTATION                                        -17
@@ -84,7 +131,7 @@
 #define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
 #define MSP_ERR_BAD_POPULATION_SIZE                                 -27
 #define MSP_ERR_BAD_SAMPLES                                         -28
-#define MSP_ERR_MULTIROOT_NEWICK                                    -29
+#define MSP_ERR_BAD_TABLE_POSITION                                  -29
 #define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
 #define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
 #define MSP_ERR_CANNOT_SIMPLIFY                                     -32
@@ -113,6 +160,7 @@
 #define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -55
 #define MSP_ERR_LENGTH_MISMATCH                                     -56
 #define MSP_ERR_BAD_SWEEP_LOCUS                                     -57
+#define MSP_ERR_DUPLICATE_SITE_POSITION                             -57
 #define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
 #define MSP_ERR_UNSORTED_SITES                                      -59
 #define MSP_ERR_BAD_SITE_POSITION                                   -60
@@ -130,12 +178,58 @@
 #define MSP_ERR_BAD_TRAJECTORY_TIME                                 -73
 #define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -74
 #define MSP_ERR_EMPTY_TRAJECTORY                                    -75
+#define MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS                            -72
+#define MSP_ERR_GENERATE_UUID                                       -73
+#define MSP_ERR_BAD_EDGE_INDEX                                      -74
+#define MSP_ERR_LEFT_LESS_ZERO                                      -75
+#define MSP_ERR_TABLES_NOT_INDEXED                                  -76
+#define MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED                   -77
+#define MSP_ERR_INCOMPATIBLE_FROM_TS                                -78
+#define MSP_ERR_BAD_START_TIME_FROM_TS                              -79
+#define MSP_ERR_BAD_START_TIME                                      -80
+#define MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME                          -81
+#define MSP_ERR_RECOMB_MAP_TOO_COARSE                               -82
+#define MSP_ERR_TIME_TRAVEL                                         -83
+#define MSP_ERR_ONLY_INFINITE_SITES                                 -84
+#define MSP_ERR_INTEGRATION_FAILED                                  -85
 
+/* This bit is 0 for any errors originating from kastore */
+#define MSP_KAS_ERR_BIT 14
+
+int msp_set_kas_error(int err);
+bool msp_is_kas_error(int err);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 #define MSP_MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MSP_MIN(a,b) ((a) < (b) ? (a) : (b))
+
+/* This is a simple allocator that is optimised to efficiently allocate a
+ * large number of small objects without large numbers of calls to malloc.
+ * The allocator mallocs memory in chunks of a configurable size. When
+ * responding to calls to get(), it will return a chunk of this memory.
+ * This memory cannot be subsequently handed back to the allocator. However,
+ * all memory allocated by the allocator can be returned at once by calling
+ * reset.
+ */
+
+typedef struct {
+    size_t chunk_size;        /* number of bytes per chunk */
+    size_t top;               /* the offset of the next available byte in the current chunk */
+    size_t current_chunk;     /* the index of the chunk currently being used */
+    size_t total_size;        /* the total number of bytes allocated + overhead. */
+    size_t total_allocated;   /* the total number of bytes allocated. */
+    size_t num_chunks;        /* the number of memory chunks. */
+    char **mem_chunks;        /* the memory chunks */
+} block_allocator_t;
+
+extern void block_allocator_print_state(block_allocator_t *self, FILE *out);
+extern int block_allocator_reset(block_allocator_t *self);
+extern int block_allocator_alloc(block_allocator_t *self, size_t chunk_size);
+extern void * block_allocator_get(block_allocator_t *self, size_t size);
+extern void block_allocator_free(block_allocator_t *self);
+
+size_t msp_search_sorted(const double *array, size_t size, double value);
 
 #endif /*__UTIL_H__*/

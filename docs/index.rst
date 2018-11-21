@@ -27,6 +27,7 @@ Contents:
    api
    cli
    interchange
+   provenance
    development
    CITATION
 

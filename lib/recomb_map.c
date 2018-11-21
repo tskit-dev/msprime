@@ -30,7 +30,7 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
 {
     size_t j;
 
-    fprintf(out, "recombination_map:: size = %d\n", (int) self->size);
+    fprintf(out, "recombination_map (%p):: size = %d\n", (void *) self, (int) self->size);
     fprintf(out, "\tnum_loci = %d\n", recomb_map_get_num_loci(self));
     fprintf(out, "\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
     fprintf(out, "\tper_locus_rate = %f\n",
@@ -39,6 +39,16 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
     for (j = 0; j < self->size; j++) {
         fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
     }
+}
+
+int WARN_UNUSED
+recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci, double sequence_length,
+        double rate)
+{
+    double positions[] = {0.0, sequence_length};
+    double rates[] = {rate, 0.0};
+
+    return recomb_map_alloc(self, num_loci, sequence_length, positions, rates, 2);
 }
 
 int WARN_UNUSED
@@ -151,7 +161,9 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
     double last_phys_x, phys_x;
 
     if (self->total_recombination_rate == 0) {
-        ret = x;
+        /* When the total recombination rate is zero anything within the interval
+         * maps to 0. L maps to num_loci */
+        ret = x >= self->sequence_length? 1: 0;
     } else {
         last_phys_x = 0;
         for (j = 1; j < self->size && x > self->positions[j]; j++) {
@@ -168,6 +180,22 @@ recomb_map_phys_to_genetic(recomb_map_t *self, double x)
     return ret * self->num_loci;
 }
 
+/* Remaps the specified coordinate in physical space into a discrete genetic
+ * coordinate. */
+int
+recomb_map_phys_to_discrete_genetic(recomb_map_t *self, double x, uint32_t *locus)
+{
+    int ret = 0;
+
+    if (x < 0 || x > self->sequence_length) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    *locus = (uint32_t) round(recomb_map_phys_to_genetic(self, x));
+out:
+    return ret;
+}
+
 /* Remaps the specified genetic coordinate in the range (0, num_loci) to
  * the physical coordinate space in the range (0, sequence_length)
  */
@@ -179,19 +207,25 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
     double x, s, excess;
     double *p = self->positions;
     double *r = self->rates;
+    double num_loci = self->num_loci;
 
-    assert(genetic_x >= 0 && genetic_x <= self->num_loci);
-    if (self->total_recombination_rate == 0 || self->size == 2) {
+    assert(num_loci >= 1);
+    assert(genetic_x >= 0);
+    assert(genetic_x <= num_loci);
+    if (self->total_recombination_rate == 0) {
+        /* When we have a 0 total rate, anything other than m maps to 0. */
+        ret = genetic_x >= self->num_loci? self->sequence_length: 0;
+    } else if (self->size == 2) {
         /* Avoid roundoff when num_loci == self->sequence_length */
         ret = genetic_x;
-        if (self->sequence_length != self->num_loci) {
-            ret = (genetic_x / self->num_loci) * self->sequence_length;
+        if (self->sequence_length != num_loci) {
+            ret = (genetic_x / num_loci) * self->sequence_length;
         }
     } else {
         /* genetic_x is in the range [0,num_loci], and so we rescale
          * this into [0,total_recombination_rate] so that we can
          * map back into physical coordinates. */
-        x = (genetic_x / self->num_loci) * self->total_recombination_rate;
+        x = (genetic_x / num_loci) * self->total_recombination_rate;
         if (x > 0) {
             s = 0;
             k = 0;
@@ -199,64 +233,14 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
                 s += (p[k + 1] - p[k]) * r[k];
                 k++;
             }
-            excess = (s - x) / r[k - 1];
+            assert(k > 0);
+            excess = 0;
+            if (r[k - 1] > 0) {
+                excess = (s - x) / r[k - 1];
+            }
             ret = p[k] - excess;
         }
     }
-    return ret;
-}
-
-/* Remap the specified sorted list of genetic coordinates to physical
- * coordinates in place. This is logically equivalent to calling
- * genetic_to_physical on each coordinate in turn, but is much more
- * efficient.
- */
-int
-recomb_map_genetic_to_phys_bulk(recomb_map_t *self, double *values, size_t n)
-{
-    int ret = 0;
-    size_t j, k;
-    double s, excess, x, last_value;
-    double *p = self->positions;
-    double *r = self->rates;
-
-    if (self->total_recombination_rate == 0 || self->size == 2) {
-        /* Deal with the special cases using the other method as
-         * they have no real overhead and these special cases should
-         * be handled in one place. */
-        for (j = 0; j < n; j++) {
-            values[j] = recomb_map_genetic_to_phys(self, values[j]);
-        }
-    } else {
-        /* Skip over any leading zeros */
-        j = 0;
-        while (j < n && values[j] == 0.0) {
-            j++;
-        }
-        s = 0;
-        k = 0;
-        last_value = 0;
-        for (; j < n; j++) {
-            /* Make sure the list is sorted */
-            if (last_value > values[j]) {
-                ret = MSP_ERR_GENERIC;
-                goto out;
-            }
-            last_value = values[j];
-            if (values[j] < 0 || values[j] > self->num_loci) {
-                ret = MSP_ERR_GENERIC;
-                goto out;
-            }
-            x = (values[j] / self->num_loci) * self->total_recombination_rate;
-            while (s < x && k < self->size - 1) {
-                s += (p[k + 1] - p[k]) * r[k];
-                k++;
-            }
-            excess = (s - x) / r[k - 1];
-            values[j] = p[k] - excess;
-        }
-    }
-out:
     return ret;
 }
 

@@ -56,6 +56,28 @@ class TestTreeDraw(unittest.TestCase):
                     return t
         assert False
 
+    def get_zero_edge_tree(self):
+        tables = msprime.TableCollection(sequence_length=2)
+        # These must be samples or we will have zero roots.
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
+        tables.sites.add_row(position=0, ancestral_state="0")
+        tables.mutations.add_row(site=0, node=0, derived_state="1")
+        tables.mutations.add_row(site=0, node=1, derived_state="1")
+        return tables.tree_sequence().first()
+
+    def get_zero_roots_tree(self):
+        tables = msprime.TableCollection(sequence_length=2)
+        # If we have no samples we have zero roots
+        tables.nodes.add_row(time=0)
+        tables.nodes.add_row(time=0)
+        tables.nodes.add_row(time=1)
+        tables.edges.add_row(0, 2, 2, 0)
+        tables.edges.add_row(0, 2, 2, 1)
+        tree = tables.tree_sequence().first()
+        self.assertEqual(tree.num_roots, 0)
+        return tree
+
     def get_multiroot_tree(self):
         ts = msprime.simulate(15, random_seed=1)
         # Take off the top quarter of edges
@@ -65,7 +87,7 @@ class TestTreeDraw(unittest.TestCase):
         edges.set_columns(
             left=edges.left[:n], right=edges.right[:n],
             parent=edges.parent[:n], child=edges.child[:n])
-        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        ts = tables.tree_sequence()
         for t in ts.trees():
             if t.num_roots > 1:
                 return t
@@ -74,18 +96,14 @@ class TestTreeDraw(unittest.TestCase):
     def get_mutations_over_roots_tree(self):
         ts = msprime.simulate(15, random_seed=1)
         ts = tsutil.decapitate(ts, 20)
-        tables = ts.tables
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        tables = ts.dump_tables()
         delta = 1.0 / (ts.num_nodes + 1)
         x = 0
         for node in range(ts.num_nodes):
-            site_id = sites.add_row(x, ancestral_state="0")
+            site_id = tables.sites.add_row(x, ancestral_state="0")
             x += delta
-            mutations.add_row(site_id, node=node, derived_state="1")
-        ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges,
-            sites=sites, mutations=mutations)
+            tables.mutations.add_row(site_id, node=node, derived_state="1")
+        ts = tables.tree_sequence()
         tree = ts.first()
         assert any(
             tree.parent(mut.node) == msprime.NULL_NODE
@@ -101,7 +119,7 @@ class TestTreeDraw(unittest.TestCase):
         edges.set_columns(
             left=edges.left[:n], right=edges.right[:n],
             parent=edges.parent[:n], child=edges.child[:n])
-        ts = msprime.load_tables(nodes=tables.nodes, edges=edges)
+        ts = tables.tree_sequence()
         for t in ts.trees():
             for u in t.nodes():
                 if len(t.children(u)) == 1:
@@ -202,6 +220,14 @@ class TestDrawText(TestTreeDraw):
 
     def test_draw_empty_tree(self):
         t = self.get_empty_tree()
+        self.assertRaises(ValueError, t.draw, format=self.drawing_format)
+
+    def test_draw_zero_roots_tree(self):
+        t = self.get_zero_roots_tree()
+        self.assertRaises(ValueError, t.draw, format=self.drawing_format)
+
+    def test_draw_zero_edge_tree(self):
+        t = self.get_zero_edge_tree()
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
 
@@ -448,6 +474,14 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_empty(self):
         t = self.get_empty_tree()
+        self.assertRaises(ValueError, t.draw)
+
+    def test_draw_zero_roots(self):
+        t = self.get_zero_roots_tree()
+        self.assertRaises(ValueError, t.draw)
+
+    def test_draw_zero_edge(self):
+        t = self.get_zero_edge_tree()
         svg = t.draw()
         self.verify_basic_svg(svg)
 

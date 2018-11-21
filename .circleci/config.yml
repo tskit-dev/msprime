@@ -10,6 +10,10 @@ jobs:
       - restore_cache:
           key: msprime-{{ .Branch }}
       - run:
+          name: Checkout submodules
+          command: |
+            git submodule update --init --recursive --remote
+      - run:
           name: Install dependencies and set path
           command: |
             sudo apt-get update
@@ -29,7 +33,7 @@ jobs:
       - run:
           name: Run highlevel tests and upload coverage
           command: |
-            flake8 --max-line-length 89 setup.py msprime tests
+            flake8 --max-line-length 89 setup.py msprime tests verification.py
             nosetests -v --with-coverage --cover-package msprime \
               --cover-branches --cover-erase --cover-xml --cover-inclusive tests
             codecov -X gcov -F python
@@ -51,3 +55,10 @@ jobs:
       - run:
           name: Make sure we can build a distribution tarball.
           command: python setup.py sdist
+      - run:
+          name: Install from the distribution tarball
+          command: |
+            python -m venv venv
+            source venv/bin/activate 
+            pip install --upgrade setuptools pip
+            pip install dist/*.tar.gz 

@@ -26,12 +26,13 @@ main(int argc, char **argv)
     for (j = 0; j < 10; j++) {
         /* node and edge_table_add_row return < 0 in the case of an error,
          * or the ID of the node/edge just added otherwise. */
-        ret = node_table_add_row(&tables.nodes, j == 0, j, 0, NULL, 0);
+        ret = node_table_add_row(tables.nodes, j == 0, j, 0, MSP_NULL_INDIVIDUAL,
+                NULL, 0);
         if (ret < 0) {
             goto out;
         }
         if (j > 0) {
-            ret = edge_table_add_row(&tables.edges, 0, 1, j, j - 1);
+            ret = edge_table_add_row(tables.edges, 0, 1, j, j - 1);
             if (ret < 0) {
                 goto out;
             }
@@ -39,7 +40,7 @@ main(int argc, char **argv)
     }
 
     /* Write the state out to file */
-    ret = table_collection_dump(&tables, "tmp.hdf5", 0);
+    ret = table_collection_dump(&tables, "tmp.kas", 0);
     if (ret != 0) {
         goto out;
     }
@@ -52,8 +53,8 @@ main(int argc, char **argv)
         goto out;
     }
     /* After simplify, we only have 1 node left and no edges */
-    node_table_print_state(&tables.nodes, stdout);
-    edge_table_print_state(&tables.edges, stdout);
+    node_table_print_state(tables.nodes, stdout);
+    edge_table_print_state(tables.edges, stdout);
 out:
     /* Free the tables */
     table_collection_free(&tables);

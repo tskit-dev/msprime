@@ -10,6 +10,7 @@ environment:
 
 install:
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "git submodule update --init --recursive --remote"
 
 build: false
 
@@ -17,6 +18,7 @@ test_script:
   - "conda config --add channels conda-forge"
   - "conda install --yes --file=requirements/conda-minimal.txt"
   - "pip install svgwrite"  # svgwrite isn't available in conda
+  - "pip install kastore"  
   - "pip install PyVCF"  
   - "pip install newick"  
   - "pip install python_jsonschema_objects"

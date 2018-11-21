@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2016 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -72,12 +72,12 @@ def positive_int(value):
 def add_sample_size_argument(parser):
     parser.add_argument(
         "sample_size", type=positive_int,
-        help="The number of individuals in the sample")
+        help="The number of genomes in the sample")
 
 
-def add_history_file_argument(parser):
+def add_tree_sequence_argument(parser):
     parser.add_argument(
-        "history_file", help="The msprime history file in HDF5 format")
+        "tree_sequence", help="The msprime tree sequence file")
 
 
 def add_precision_argument(parser):
@@ -124,11 +124,8 @@ class SimulationRunner(object):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
-        # We use unscaled per-generation rates. By setting Ne = 1 we
-        # don't need to rescale, but we still need to divide by 4 to
-        # cancel the factor introduced when calculated the scaled rates.
-        self._recombination_rate = scaled_recombination_rate / 4
-        self._mutation_rate = scaled_mutation_rate / 4
+        self._recombination_rate = scaled_recombination_rate
+        self._mutation_rate = scaled_mutation_rate
         # For strict ms-compability we want to have m non-recombining loci
         recomb_map = msprime.RecombinationMap.uniform_map(
             num_loci, self._recombination_rate, num_loci)
@@ -137,7 +134,11 @@ class SimulationRunner(object):
         sample_size = self._sample_size
         if population_configurations is not None:
             sample_size = None
+        # msprime measure's time in units of generations, given a specific
+        # Ne value whereas ms uses coalescent time. To be compatible with ms,
+        # we therefore need to use an Ne value of 1/4.
         self._simulator = msprime.simulator_factory(
+            Ne=0.25,
             sample_size=sample_size,
             recombination_map=recomb_map,
             population_configurations=population_configurations,
@@ -183,15 +184,14 @@ class SimulationRunner(object):
         simulation and write out a tree for each one.
         """
         breakpoints = self._simulator.breakpoints + [self._num_loci]
-        time_scale = 0.25
         if self._num_loci == 1:
             tree = next(tree_sequence.trees())
-            newick = tree.newick(precision=self._precision, time_scale=time_scale)
+            newick = tree.newick(precision=self._precision)
             print(newick, file=output)
         else:
             j = 0
             for tree in tree_sequence.trees():
-                newick = tree.newick(precision=self._precision, time_scale=time_scale)
+                newick = tree.newick(precision=self._precision)
                 left, right = tree.interval
                 while j < len(breakpoints) and breakpoints[j] <= right:
                     length = breakpoints[j] - left
@@ -344,8 +344,7 @@ def create_simulation_runner(parser, arg_list):
     # Check the structure format.
     symmetric_migration_rate = 0.0
     num_populations = 1
-    population_configurations = [
-        msprime.PopulationConfiguration(args.sample_size)]
+    population_configurations = [msprime.PopulationConfiguration(args.sample_size)]
     migration_matrix = [[0.0]]
     if args.structure is not None:
         num_populations = convert_int(args.structure[0], parser)
@@ -514,19 +513,16 @@ def create_simulation_runner(parser, arg_list):
                         t, matrix[j][k], (j, k))
                     demographic_events.append((index, msp_event))
 
-    # We've created all the events, now we need to rescale the migration rates
-    # We assume Ne = 1 here.
+    # We've created all the events and PopulationConfiguration objects. Because
+    # msprime uses absolute population sizes we need to rescale these relative
+    # to Ne, since this is what ms does.
     for _, msp_event in demographic_events:
-        msp_event.time *= 4
         if isinstance(msp_event, msprime.PopulationParametersChange):
-            msp_event.growth_rate /= 4
-        if isinstance(msp_event, msprime.MigrationRateChange):
-            # Divide by 4 to get a per-generation rate, assuming Ne=1
-            msp_event.rate /= 4
-    # We also need to rescale the migration matrix and growth rates.
-    migration_matrix = [[m / 4 for m in row] for row in migration_matrix]
+            if msp_event.initial_size is not None:
+                msp_event.initial_size /= 4
     for config in population_configurations:
-        config.growth_rate /= 4
+        if config.initial_size is not None:
+            config.initial_size /= 4
 
     demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
@@ -784,47 +780,47 @@ def run_upgrade(args):
 
 
 def run_dump_newick(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     for tree in tree_sequence.trees():
         newick = tree.newick(precision=args.precision)
         print(newick)
 
 
 def run_dump_haplotypes(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     for h in tree_sequence.haplotypes():
         print(h)
 
 
 def run_dump_variants(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     for variant in tree_sequence.variants(as_bytes=True):
         print(variant.position, end="\t")
         print("{}".format(variant.genotypes.decode()))
 
 
 def run_dump_nodes(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(nodes=sys.stdout, precision=args.precision)
 
 
 def run_dump_edges(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(edges=sys.stdout, precision=args.precision)
 
 
 def run_dump_sites(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(sites=sys.stdout, precision=args.precision)
 
 
 def run_dump_mutations(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.dump_text(mutations=sys.stdout, precision=args.precision)
 
 
 def run_dump_provenances(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     if args.human:
         for provenance in tree_sequence.provenances():
             d = json.loads(provenance.record)
@@ -835,7 +831,7 @@ def run_dump_provenances(args):
 
 
 def run_dump_vcf(args):
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     tree_sequence.write_vcf(sys.stdout, args.ploidy)
 
 
@@ -843,7 +839,7 @@ def run_dump_macs(args):
     """
     Write a macs formatted file so we can import into pbwt.
     """
-    tree_sequence = msprime.load(args.history_file)
+    tree_sequence = msprime.load(args.tree_sequence)
     n = tree_sequence.get_sample_size()
     m = tree_sequence.get_sequence_length()
     print("COMMAND:\tnot_macs {} {}".format(n, m))
@@ -862,7 +858,7 @@ def run_simulate(args):
         recombination_rate=args.recombination_rate,
         mutation_rate=args.mutation_rate,
         random_seed=args.random_seed)
-    tree_sequence.dump(args.history_file, zlib_compression=args.compress)
+    tree_sequence.dump(args.tree_sequence, zlib_compression=args.compress)
 
 
 def get_msp_parser():
@@ -880,7 +876,7 @@ def get_msp_parser():
         "simulate",
         help="Run the simulation")
     add_sample_size_argument(parser)
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "--length", "-L", type=float, default=1,
         help="The length of the simulated region in base pairs.")
@@ -892,19 +888,19 @@ def get_msp_parser():
         help="The mutation rate per base per generation")
     parser.add_argument(
         "--effective-population-size", "-N", type=float, default=1,
-        help="The effective population size Ne")
+        help="The diploid effective population size Ne")
     parser.add_argument(
         "--random-seed", "-s", type=int, default=None,
         help="The random seed. If not specified one is chosen randomly")
     parser.add_argument(
         "--compress", "-z", action="store_true",
-        help="Enable HDF5's transparent zlib compression")
+        help="Enable zlib compression")
     parser.set_defaults(runner=run_simulate)
 
     parser = subparsers.add_parser(
         "vcf",
         help="Write the tree sequence out in VCF format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "--ploidy", "-P", type=int, default=1,
         help="The ploidy level of samples")
@@ -913,35 +909,35 @@ def get_msp_parser():
     parser = subparsers.add_parser(
         "nodes",
         help="Dump nodes in tabular format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_nodes)
 
     parser = subparsers.add_parser(
         "edges",
         help="Dump edges in tabular format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_edges)
 
     parser = subparsers.add_parser(
         "sites",
         help="Dump sites in tabular format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_sites)
 
     parser = subparsers.add_parser(
         "mutations",
         help="Dump mutations in tabular format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_mutations)
 
     parser = subparsers.add_parser(
         "provenances",
         help="Dump provenance information in tabular format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "-H", "--human", action="store_true",
         help="Print out the provenances in a human readable format")
@@ -950,25 +946,25 @@ def get_msp_parser():
     parser = subparsers.add_parser(
         "haplotypes",
         help="Dump haplotypes in text format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_haplotypes)
 
     parser = subparsers.add_parser(
         "variants",
         help="Dump variants in text format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_variants)
 
     parser = subparsers.add_parser(
         "macs",
         help="Dump results in MaCS format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_macs)
 
     parser = subparsers.add_parser(
         "newick",
         help="Dump results in newick format.")
-    add_history_file_argument(parser)
+    add_tree_sequence_argument(parser)
     parser.add_argument(
         "--precision", "-p", type=int, default=3,
         help="The number of decimal places in branch lengths")
@@ -976,9 +972,9 @@ def get_msp_parser():
 
     parser = subparsers.add_parser(
         "upgrade",
-        help="Upgrade legacy HDF5 files to the latest version.")
+        help="Upgrade legacy tree sequence files to the latest version.")
     parser.add_argument(
-        "source", help="The source msprime history file in legacy HDF5 format")
+        "source", help="The source msprime tree sequence file in legacy format")
     parser.add_argument(
         "destination", help="The filename of the upgraded copy.")
     parser.add_argument(

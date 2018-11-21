@@ -18,9 +18,8 @@ matrix:
       python: 3.5
     - os: linux
       python: 3.6
-    # Disabling OSX on Travis 2016/09/16 as the build times are too long.
-    # - os: osx
-    #   language: generic
+    - os: osx
+      language: generic
 
 install:
   # We do this conditionally because it saves us some downloading if the
@@ -53,8 +52,3 @@ install:
 
 script:
   - nosetests -vs
-  # We also want to see if we can build without numpy.
-  - conda uninstall numpy -y
-  - rm -fR build
-  - pip install . --upgrade --force-reinstall
-  - nosetests -vs tests/test_cli.py:TestMspmsOutput

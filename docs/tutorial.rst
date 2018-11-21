@@ -19,21 +19,25 @@ Running simulations is very straightforward in ``msprime``::
 
 
     >>> import msprime
-    >>> tree_sequence = msprime.simulate(sample_size=5, Ne=1000)
+    >>> tree_sequence = msprime.simulate(sample_size=6, Ne=1000)
     >>> tree = tree_sequence.first()
     >>> print(tree.draw(format="unicode"))
-        8
-     ┏━━┻━┓
-     ┃    7
-     ┃  ┏━┻┓
-     6  ┃  ┃
-    ┏┻┓ ┃  ┃
-    ┃ ┃ ┃  5
-    ┃ ┃ ┃ ┏┻┓
-    2 3 4 0 1
 
-Here, we simulate the coalescent for a sample of size
-5 with an effective population size of 1000,
+        10
+     ┏━━┻━┓
+     ┃    9
+     ┃  ┏━┻━┓
+     8  ┃   ┃
+    ┏┻┓ ┃   ┃
+    ┃ ┃ ┃   7
+    ┃ ┃ ┃ ┏━┻┓
+    ┃ ┃ ┃ ┃  6
+    ┃ ┃ ┃ ┃ ┏┻┓
+    3 5 0 4 1 2
+
+
+Here, we simulate the coalescent for a sample of size six
+with an effective population size of 1000 diploids,
 and then print out a depiction of the resulting tree.
 The :func:`.simulate` function returns a
 :class:`.TreeSequence` object, which provides a very
@@ -41,10 +45,16 @@ efficient way to access the correlated trees in simulations
 involving recombination. In this example we know that
 there can only be one tree because we have not provided
 a value for ``recombination_rate``, and it
-defaults to zero. Therefore, we access the only tree in the
-sequence using the call ``tree_sequence.first()``. Finally,
-we draw a simple depiction of the tree to the terminal
+defaults to zero.
+Therefore, we access the only tree in the
+sequence using the call ``tree_sequence.first()``.
+Finally, we draw a simple depiction of the tree to the terminal
 using the :meth:`~.SparseTree.draw` method.
+
+Genealogical trees record the lines of descent along which genomes
+have been inherited. Since diploids have two copies of each autosomal
+chromosome, diploid individuals contain two such lines of descent:
+the simulation above provides the genealogical history of only three diploids.
 
 Trees are represented within ``msprime`` in a slightly unusual way. In
 the majority of libraries dealing with trees, each node is
@@ -52,21 +62,22 @@ represented as an object in memory and the relationship
 between nodes as pointers between these objects. In ``msprime``,
 however, nodes are *integers*.
 In the tree above, we can see that the leaves of the tree
-are labelled with 0 to 4, and all the internal nodes of the tree
-are also integers with the root of the tree being 8.
+are labelled with 0 to 5, and all the internal nodes of the tree
+are also integers with the root of the tree being 10.
 
 We can easily trace our path
 back to the root for a particular sample using the
 :meth:`~.SparseTree.parent` method::
 
-    >>> u = 0
+    >>> u = 2
     >>> while u != msprime.NULL_NODE:
     >>>     print("node {}: time = {}".format(u, tree.time(u)))
     >>>     u = tree.parent(u)
-    node 0: time = 0.0
-    node 5: time = 93.8536165443679
-    node 7: time = 770.0314897144547
-    node 8: time = 1950.6090018042169
+    node 2: time = 0.0
+    node 6: time = 11.59282234272971
+    node 7: time = 129.57841077196494
+    node 9: time = 1959.4591339636365
+    node 10: time = 5379.737460469677
 
 
 In this code chunk we iterate up the tree starting at node 0 and
@@ -81,16 +92,18 @@ We can also obtain the length of a branch joining a node to
 its parent using the :meth:`~.SparseTree.branch_length`
 method::
 
-    >>> print(tree.branch_length(5))
-    676.1778731700867
+    >>> print(tree.branch_length(6))
+    117.98558842923524
 
-The branch length for node 5 is about 676 generations as the time for
-node 5 is 94 and the time of its parent is around 770 generation. It is also
+The branch length for node 6 is about 118 generations, since
+the birth times of node 6 was 11 generations ago, and the birth time of its
+parent, node 7, was around 129 generations ago.
+It is also
 often useful to obtain the total branch length of the tree, i.e.,
 the sum of the lengths of all branches::
 
     >>> print(tree.total_branch_length)
-    4926.506226955324
+    13238.125493096279
 
 *************
 Recombination
@@ -102,50 +115,55 @@ regions under the influence of recombination. The ``msprime`` API is
 specifically designed to make this common requirement both easy and efficient.
 To model genomic sequences under the influence of recombination we have
 two parameters to the :func:`.simulate()` function.
-The ``length`` parameter specifies the length of the simulated sequence
-in bases, and may be a floating point number. If ``length`` is not
-supplied, it is assumed to be 1. The ``recombination_rate``
-parameter specifies the rate of crossing over per base per generation,
+The ``length`` parameter specifies the length of the simulated sequence,
+and is a floating point number, so recombination (and mutation) can
+occur at any location along the sequence (the units are arbitrary).
+If ``length`` is not supplied, it is assumed to be 1.0. The ``recombination_rate``
+parameter specifies the rate of crossing over per unit of length per generation,
 and is zero by default. See the :ref:`sec_api` for a discussion of the precise
 recombination model used.
 
 Here, we simulate the trees across over a 10kb region with a recombination
-rate of :math:`2 \times 10^{-8}` per base per generation, with an
+rate of :math:`2 \times 10^{-8}` per base per generation, with a diploid
 effective population size of 1000::
 
     >>> tree_sequence = msprime.simulate(
-    ...     sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8)
+    ...     sample_size=6, Ne=1000, length=1e4, recombination_rate=2e-8)
     >>> for tree in tree_sequence.trees():
     ...     print("-" * 20)
     ...     print("tree {}: interval = {}".format(tree.index, tree.interval))
     ...     print(tree.draw(format="unicode"))
     --------------------
-    tree 0: interval = (0.0, 6016.224463474058)
-        9
-     ┏━━┻━┓
-     ┃    8
-     ┃  ┏━┻┓
-     7  ┃  ┃
-    ┏┻┓ ┃  ┃
-    ┃ ┃ ┃  6
-    ┃ ┃ ┃ ┏┻┓
-    1 2 0 3 4
+    tree 0: interval = (0.0,  6016.224463474058)
+       11
+    ┏━━┻━━┓
+    ┃     10
+    ┃  ┏━━┻━┓
+    ┃  ┃    9
+    ┃  ┃  ┏━┻┓
+    ┃  7  ┃  ┃
+    ┃ ┏┻┓ ┃  ┃
+    ┃ ┃ ┃ ┃  6
+    ┃ ┃ ┃ ┃ ┏┻┓
+    3 0 1 2 4 5
 
     --------------------
     tree 1: interval = (6016.224463474058, 10000.0)
-         9
+         10
       ┏━━┻━━┓
-      8     ┃
-    ┏━┻━┓   ┃
-    ┃   6   ┃
-    ┃ ┏━┻┓  ┃
-    ┃ ┃  5  ┃
-    ┃ ┃ ┏┻┓ ┃
-    0 4 1 3 2
+      9     ┃
+    ┏━┻┓    ┃
+    ┃  ┃    8
+    ┃  ┃  ┏━┻┓
+    ┃  ┃  ┃  7
+    ┃  ┃  ┃ ┏┻┓
+    ┃  6  ┃ ┃ ┃
+    ┃ ┏┻┓ ┃ ┃ ┃
+    2 4 5 3 0 1
 
 In this example, we use the :meth:`~.TreeSequence.trees`
 method to iterate over the trees in the sequence. For each tree
-we print out its index (i.e., it's position in the sequence) and
+we print out its index (i.e., its position in the sequence) and
 the interval the tree covers (i.e., the genomic
 coordinates which all share precisely this tree) using the
 :attr:`~.SparseTree.index` and :attr:`~.SparseTree.interval` attributes.
@@ -175,34 +193,39 @@ occurs at a unique (floating point) point position along the
 genomic interval occupied by a tree. The mutation rate for simulations
 is specified using the ``mutation_rate`` parameter of
 :func:`.simulate`. For example, the following chunk simulates 50kb
-of nonrecombining sequence with a mutation rate of :math:`2 \times 10^{-8}`
+of nonrecombining sequence with a mutation rate of :math:`1 \times 10^{-8}`
 per base per generation::
 
     >>> tree_sequence = msprime.simulate(
-    ...    sample_size=5, Ne=1000, length=50e3, mutation_rate=2e-8, random_seed=30)
+    ...    sample_size=6, Ne=1000, length=50e3, mutation_rate=1e-8, random_seed=30)
     >>> tree = tree_sequence.first()
     >>> for site in tree.sites():
     ...     for mutation in site.mutations:
     ...         print("Mutation @ position {:.2f} over node {}".format(
     ...             site.position, mutation.node))
-    Mutation @ position 1179.94 over node 0
-    Mutation @ position 4485.17 over node 5
-    Mutation @ position 9788.56 over node 5
-    Mutation @ position 11949.32 over node 7
-    Mutation @ position 31454.99 over node 7
-    Mutation @ position 34832.55 over node 0
-    Mutation @ position 36747.63 over node 7
-    Mutation @ position 46692.51 over node 5
+    Mutation @ position 1556.54 over node 9
+    Mutation @ position 4485.17 over node 6
+    Mutation @ position 9788.56 over node 6
+    Mutation @ position 11759.03 over node 6
+    Mutation @ position 11949.32 over node 6
+    Mutation @ position 14321.77 over node 9
+    Mutation @ position 31454.99 over node 6
+    Mutation @ position 45125.69 over node 9
+    Mutation @ position 49709.68 over node 6
+
     >>> print(tree.draw(format="unicode"))
-        8
-     ┏━━┻━┓
-     ┃    7
-     ┃  ┏━┻┓
-     ┃  ┃  6
-     ┃  ┃ ┏┻┓
-     5  ┃ ┃ ┃
-    ┏┻┓ ┃ ┃ ┃
-    0 3 1 2 4
+        10
+     ┏━━┻━━┓
+     ┃     9
+     ┃   ┏━┻━┓
+     ┃   ┃   8
+     ┃   ┃  ┏┻┓
+     ┃   7  ┃ ┃
+     ┃  ┏┻┓ ┃ ┃
+     6  ┃ ┃ ┃ ┃
+    ┏┻┓ ┃ ┃ ┃ ┃
+    0 4 2 5 1 3
+
 
 ********
 Variants
@@ -233,8 +256,9 @@ sequences. We loop through each variant and print out the observed state of
 each sample as an array of zeros and ones, along with the index and position
 of the corresponding mutation.  In this example, the
 alleles are always ``'0'`` (the ancestral state) and ``'1'``
-(the derived state), because we are simulating simple infinite sites mutations. More
-complex models are possible, however.
+(the derived state), because we are simulating with the infinite sites mutation
+model, in which each mutation occurs at a unique position in the genome.
+More complex models are possible, however.
 
 This way of working with the sequence data is quite efficient because we
 do not need to keep the entire genotype matrix in memory at once. However, if
@@ -248,7 +272,7 @@ we do want the full genotype matrix it is simple to obtain::
            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], dtype=uint8)
 
 In this example, we run the same simulation but this time
-store entire variant matrix in a two-dimensional numpy array.
+store the entire variant matrix in a two-dimensional numpy array.
 This is useful for integrating with tools such as
 `scikit allel <https://scikit-allel.readthedocs.io/en/latest/>`_.
 
@@ -267,6 +291,7 @@ we can specify the location and time at which all samples are made.
         samples = [
             msprime.Sample(population=0, time=0),
             msprime.Sample(0, 0),  # Or, we can use positional arguments.
+            msprime.Sample(0, 1.0),
             msprime.Sample(0, 1.0)
         ]
         tree_seq = msprime.simulate(samples=samples)
@@ -275,30 +300,35 @@ we can specify the location and time at which all samples are made.
             print(u, tree.parent(u), tree.time(u), sep="\t")
         print(tree.draw(format="unicode"))
 
-In this example we create three samples, two taken at the present time
-and one taken 1.0 generations in the past. There are a number of
+In this example we create four samples, two taken at the present time
+and two taken 1.0 generations in the past, as might represent one modern
+and one ancient diploid individual. There are a number of
 different ways in which we can describe the samples using the
 ``msprime.Sample`` object (samples can be provided as plain tuples also
 if more convenient). Running this example, we get::
 
 
-	>>> historical_samples_example()
-	4       -1      1.3805592647990812
-	1       4       0.0
-	3       4       1.052473878566028
-	0       3       0.0
-	2       3       1.0
-	  4
-	┏━┻┓
-	┃  3
-	┃ ┏┻┓
-	┃ ┃ 2
-	┃ ┃
-	1 0
+    >>> historical_samples_example()
+    6    -1    2.8240255501413247
+    4    6    0.0864109319103291
+    0    4    0.0
+    1    4    0.0
+    5    6    1.9249243960710336
+    2    5    1.0
+    3    5    1.0
+       6
+     ┏━┻━┓
+     ┃   5
+     ┃  ┏┻┓
+     ┃  2 3
+     ┃
+     4
+    ┏┻┓
+    0 1
 
 
 Because nodes ``0`` and ``1`` were sampled at time 0, their times in the tree
-are both 0. Node ``2`` was sampled at time 1.0, and so its time is recorded
+are both 0. Nodes ``2`` and ``3`` were sampled at time 1.0, and so their times are recorded
 as 1.0 in the tree.
 
 ***********
@@ -321,7 +351,7 @@ analytical results for the number of segregating sites with simulations:
     def segregating_sites_example(n, theta, num_replicates):
         S = np.zeros(num_replicates)
         replicates = msprime.simulate(
-			Ne=0.5,
+            Ne=0.5,
             sample_size=n,
             mutation_rate=theta / 2,
             num_replicates=num_replicates)
@@ -338,16 +368,21 @@ analytical results for the number of segregating sites with simulations:
 
 Running this code, we get::
 
-	>>> segregating_sites_example(10, 5, 100000)
-		      mean              variance
-	Observed      14.17893          53.0746740551
-	Analytical    14.14484          52.63903
+    >>> segregating_sites_example(10, 5, 100000)
+              mean              variance
+    Observed      14.17893          53.0746740551
+    Analytical    14.14484          52.63903
 
 
 Note that in this example we set :math:`N_e = 0.5` and
 the mutation rate to :math:`\theta / 2` when calling :func:`.simulate`.
-This is essential to convert the diploid per-generation time units
-of msprime into the the haploid coalescent units required for many
+This works because ``msprime`` simulates Kingman's coalescent,
+for which :math:`N_e` is only a time scaling;
+since :math:`N_e` is the diploid effective population size,
+setting :math:`N_e = 0.5` means that the mean time for two samples to coalesce
+is equal to one time unit in the resulting trees.
+This is helpful for converting the diploid per-generation time units
+of msprime into the haploid coalescent units used in many
 theoretical results. However, it is important to note that conventions
 vary widely, and great care is needed with such factor-of-two
 rescalings.
@@ -356,19 +391,18 @@ rescalings.
 Population structure
 ********************
 
-.. todo:: Update this example to use Ne=0.5 as recommended elsewhere.
 
 Population structure in ``msprime`` closely follows the model used in the
-``ms`` simulator: we have :math:`N` demes with an :math:`N\times N`
+``ms`` simulator: we have :math:`N` subpopulations with an :math:`N\times N`
 matrix describing the migration rates between these subpopulations. The
-sample sizes, population sizes and growth rates of all demes
+sample sizes, population sizes and growth rates of all subpopulations
 can be specified independently. Migration rates are specified using
 a migration matrix. Unlike ``ms`` however, all times and rates are specified
 in generations and all populations sizes are absolute (that is, not
 multiples of :math:`N_e`).
 
 In the following example, we calculate the mean coalescence time for
-a pair of lineages sampled in different demes in a symmetric island
+a pair of lineages sampled in different subpopulations in a symmetric island
 model, and compare this with the analytical expectation.
 
 .. code-block:: python
@@ -376,29 +410,29 @@ model, and compare this with the analytical expectation.
     import msprime
     import numpy as np
 
-    def migration_example(num_replicates=10**6):
+    def migration_example(num_replicates=10**4):
         # M is the overall symmetric migration rate, and d is the number
-        # of demes.
+        # of subpopulations.
         M = 0.2
         d = 3
-        m = M / (4 * (d - 1))
+        m = M / (2 * (d - 1))
         # Allocate the initial sample. Because we are interested in the
-        # between deme coalescence times, we choose one sample each
-        # from the first two demes.
+        # between-subpopulation coalescence times, we choose one sample each
+        # from the first two subpopulations.
         population_configurations = [
             msprime.PopulationConfiguration(sample_size=1),
             msprime.PopulationConfiguration(sample_size=1),
             msprime.PopulationConfiguration(sample_size=0)]
         # Now we set up the migration matrix. Since this is a symmetric
         # island model, we have the same rate of migration between all
-        # pairs of demes. Diagonal elements must be zero.
+        # pairs of subpopulations. Diagonal elements must be zero.
         migration_matrix = [
             [0, m, m],
             [m, 0, m],
             [m, m, 0]]
         # We pass these values to the simulate function, and ask it
         # to run the required number of replicates.
-        replicates = msprime.simulate(
+        replicates = msprime.simulate(Ne=0.5,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             num_replicates=num_replicates)
@@ -409,15 +443,19 @@ model, and compare this with the analytical expectation.
             T[i] = tree.time(tree.root) / 4
         # Finally, calculate the analytical expectation and print
         # out the results
-        analytical = d / 2 + (d - 1) / (2 * M)
+        analytical = d / 4 + (d - 1) / (4 * M)
         print("Observed  =", np.mean(T))
         print("Predicted =", analytical)
 
+Again, we set :math:`N_e = 0.5` to agree with convention in theoretical results,
+where usually one coalescent time unit is, in generations, the effective number of *haploid* individuals.
 Running this example we get::
 
+
     >>> migration_example()
-    Observed  = 6.50638181614
-    Predicted = 6.5
+    Observed  = 3.254904176088153
+    Predicted = 3.25
+
 
 **********
 Demography
@@ -431,6 +469,9 @@ out-of-Africa model. See
 for a schematic of this model, and
 `Table 1 <http://dx.doi.org/10.1371/journal.pgen.1000695.t001>`_ for
 the values used.
+Coalescent simulation moves from the present back into the past,
+so times are in units of generations *ago*, and we build the model
+with most recent events first.
 
 .. todo:: Add a diagram of the model for convenience.
 
@@ -558,7 +599,7 @@ sizes and growth rates are all as you intend during each epoch::
     is intended only for debugging purposes, and is not meant to be machine
     readable. The format is also preliminary; if there is other information
     that you think would be useful, please `open an issue on GitHub
-    <https://github.com/jeromekelleher/msprime/issues>`_
+    <https://github.com/tskit-dev/msprime/issues>`_
 
 Once you are satisfied that the demographic history that you have built
 is correct, it can then be simulated by calling the :func:`.simulate`
@@ -600,8 +641,8 @@ breakpoints follows the recombination rate closely.
         ax1.set_ylabel("Recombination rate")
         ax1.set_xlabel("Chromosome position")
 
-        # Now we run the simulation for this map. We assume Ne=10^4
-        # and have a sample of 100 individuals
+        # Now we run the simulation for this map. We simulate
+        # 50 diploids (100 sampled genomes) in a population with Ne=10^4.
         tree_sequence = msprime.simulate(
             sample_size=100,
             Ne=10**4,
@@ -751,7 +792,7 @@ progress bar on this computation.
             for site in tree.sites():
                 assert len(site.mutations) == 1
                 mutation = site.mutations[0]
-                counts[site.id] = tree.get_num_samples(mutation.node)
+                counts[site.id] = tree.num_samples(mutation.node)
         doubletons = np.nonzero(counts == 2)[0]
         results = find_ld_sites(ts, doubletons, num_threads=8)
         print(
@@ -789,49 +830,50 @@ Editing tree sequences
 
 Sometimes we wish to make some minor modifications to a tree sequence that has
 been generated by a simulation. However, tree sequence objects are **immutable**
-and so we cannot edit a them in place. The answer is to use the
-:ref:`sec_tables_api`: we export the tree sequence to a set of
-:ref:`tables <sec_table_definitions>`, edit these tables, and then create
-a new tree sequence from them. In the following example, we use this approach
+and so we cannot edit a them in place. To modify a tree sequence, we need to
+extract the underlying :ref:`tables <sec_table_definitions>` of information, edit these tables,
+and then create a new tree sequence from them.
+These tables succinctly store everything we need to know
+about a tree sequence, and can be manipulated using the :ref:`sec_tables_api`.
+In the following example, we use this approach
 to remove all singleton sites from a given tree sequence.
 
-.. code::
+.. code-block:: python
 
     def strip_singletons(ts):
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        tables = ts.dump_tables()
+        tables.sites.clear()
+        tables.mutations.clear()
         for tree in ts.trees():
             for site in tree.sites():
                 assert len(site.mutations) == 1  # Only supports infinite sites muts.
                 mut = site.mutations[0]
                 if tree.num_samples(mut.node) > 1:
-                    site_id = sites.add_row(
+                    site_id = tables.sites.add_row(
                         position=site.position,
                         ancestral_state=site.ancestral_state)
-                    mutations.add_row(
+                    tables.mutations.add_row(
                         site=site_id, node=mut.node, derived_state=mut.derived_state)
-        tables = ts.dump_tables()
-        new_ts = msprime.load_tables(
-            nodes=tables.nodes, edges=tables.edges, sites=sites, mutations=mutations)
-        return new_ts
+        return tables.tree_sequence()
 
 
 This function takes a tree sequence containing some infinite sites mutations as
 input, and returns a copy in which all singleton sites have been removed.
-The approach is very simple: we allocate :class:`.SiteTable` and
-:class:`.MutationTable` instances to hold the new sites and mutations that
-we define, and then consider each site in turn. If the allele frequency of
+The approach is very simple: we get a copy of the underlying
+table data in a :class:`.TableCollection` object, and first clear the
+site and mutation tables. We then consider each site in turn,
+and if the allele frequency of
 the mutation is greater than one, we add the site and mutation to our
 output tables using :meth:`.SiteTable.add_row` and :meth:`.MutationTable.add_row`.
 (In this case we consider only simple infinite sites mutations,
 where we cannot have back or recurrent mutations. These would require a slightly
 more involved approach where we keep a map of mutation IDs so that
-mutation ``parent`` values could be computed.)
+mutation ``parent`` values could be computed. We have also omitted the
+site and mutation metadata in the interest of simplicity.)
 
 After considering each site, we then create a new tree sequence using
-:func:`.load_tables` using the node and edge tables from the original
-tree sequence and the just-created site and mutation tables. Using
-this function then, we get::
+the :meth:`.TableCollection.tree_sequence` method on our updated tables.
+Using this function then, we get::
 
     >>> ts = msprime.simulate(10, mutation_rate=10)
     >>> ts.num_sites
@@ -853,19 +895,28 @@ Thus, we have removed 6 singleton sites from the tree sequence.
 Working with Tables
 *******************
 
-.. todo::
-    This section is a work in progress and needs to be revised.
 
 Tables provide a convenient method for viewing, importing and exporting tree
-sequences.  ``msprime`` provides direct access to the the columns of a table as
-``numpy`` arrays: for instance, if ``n`` is a ``NodeTable``, then ``n.time``
-will return an array containing the birth times of the individuals in the
-table.  *However*, it is important to note that this is *not* a shallow copy:
-modifying ``n.time`` will not change the node table ``n``.  This may change in
-the future, but currently there are two ways to modify tables: ``.add_row()``
-and ``.set_columns()`` (and also ``.clear()``, which empties the table).
+sequences, and are closely tied to the underlying data structures.
+There are eight tables that together define a tree sequence,
+although some may be empty,
+and together they form a :class:`TableCollection`.
+The tables are defined in :ref:`Table Definitions <sec_table_definitions>`,
+and the :ref:`Tables API <sec_tables_api>` section describes how to work with them.
+Here we make some general remarks about what you can, and cannot do with them.
 
-The example node table above would be constructed using ``.add_row()`` as
+
+``msprime`` provides direct access to the columns of each table as
+``numpy`` arrays: for instance, if ``n`` is a ``NodeTable``, then ``n.time``
+will return an array containing the birth times of the individuals whose genomes
+are represented by the nodes in the table.
+*However*, it is important to note that this is *not* a shallow copy:
+modifying ``n.time`` will *not* change the node table ``n``.  This may change in
+the future, but currently there are three ways to modify tables: ``.add_row()``,
+``.set_columns()``, and ``.append_columns()``
+(and also ``.clear()``, which empties the table).
+
+For example, a node table could be constructed using ``.add_row()`` as
 follows::
 
     n = msprime.NodeTable()
@@ -875,74 +926,115 @@ follows::
     for s, t, p in zip(sv, tv, pv):
         n.add_row(flags=s, population=p, time=t)
 
-    print(n)
+
+obtaining::
+
+    >>> print(n)
+    id    flags    population    individual    time    metadata
+    0    1    0    -1    0.0
+    1    1    0    -1    0.0
+    2    1    0    -1    0.0
+    3    0    0    -1    0.4
+    4    0    0    -1    0.5
+    5    0    0    -1    0.7
+    6    0    0    -1    1.0
+
 
 The ``.add_row()`` method is natural (and should be reasonably efficient) if
 new records appear one-by-one. In the example above it would have been more
-natural to use ``.set_columns()``::
+natural to use ``.set_columns()`` - equivalently::
 
     n = msprime.NodeTable()
     n.set_columns(flags=sv, population=pv, time=tv)
 
+Since columns cannot be modified directly as properties of the tables,
+they must be extracted, modified, then replaced.
+For example, here we add 1.4 to every ``time`` except the first
+in the node table constructed above (using ``numpy`` indexing)::
 
-Finally, here is an example where we add 1.4 to every ``time`` except the first
-in the NodeTable constructed above using ``numpy`` indexing::
-
-    fn = n.flags
-    pn = n.population
     tn = n.time
     tn[1:] = tn[1:] + 1.4
-    n.set_columns(flags=fn, population=pn, time=tn)
+    n.set_columns(flags=n.flags, population=n.population, time=tn)
+
+The result is::
+
+    >>> print(n)
+    id    flags    population    individual    time    metadata
+    0    1    0    -1    0.0
+    1    1    0    -1    1.4
+    2    1    0    -1    1.4
+    3    0    0    -1    1.8
+    4    0    0    -1    1.9
+    5    0    0    -1    2.1
+    6    0    0    -1    2.4
 
 
+*****************************
+Overview of the Tables Format
+*****************************
 
+The :ref:`Table Definitions <sec_table_definitions>` section gives a precise
+definition of how a tree sequence is stored in a collection of tables.
+Here we give an overview. Consider the following sequence of trees::
 
-Here is an example.  Consider the following sequence of trees::
+    time ago
+    --------
+       1.0         6
+                 ┏━┻━━┓
+                 ┃    ┃
+       0.7       ┃    ╋                     5
+                 ┃    ┃                   ┏━┻━┓
+       0.5       ┃    4         4         ┃   4
+                 ┃  ┏━┻━┓     ┏━┻━┓       ┃ ┏━┻━┓
+                 ┃  ┃   ┃     ┃   ╋       ┃ ┃   ┃
+       0.4       ┃  ┃   ┃     ┃   3       ┃ ┃   ┃
+                 ┃  ┃   ┃     ┃ ┏━┻━┓     ┃ ┃   ┃
+                 ┃  ┃   ┃     ┃ ┃   ╋     ┃ ┃   ┃
+       0.0       0  1   2     1 0   2     0 1   2
 
-    time
-    ----
-    1.0                6
-    0.7               / \                                       5
-                     /   x                                     / \
-    0.5             /     4                 4                 /   4
-                   /     / \               / x               /   / \
-    0.4           /     /   \             /   3             /   /   \
-                 /     /     \           /   / \           /   /     \
-                /     /       \         /   /   x         /   /       \
-               /     /         \       /   /     \       /   /         \
-    0.0       0     1           2     1   0       2     0   1           2
+    position 0.0          0.2         0.8         1.0
 
-    position 0.0                  0.2               0.8                1.0
+Ancestral recombination events have produced three different trees
+that relate the three sampled genomes ``0``, ``1``, and ``2`` to each other
+along the chromosome of length 1.0.
 
-First, we specify the nodes::
+Each node in each of the above trees represents a particular ancestral genome
+(a *haploid* genome; diploid individuals would be represented by two nodes).
+We record when each of nodes lived in a :class:`NodeTable`::
 
     NodeTable:
 
-    id      is_sample    population   time
-    0       1            0            0
-    1       1            0            0
-    2       1            0            0
-    3       0            0            0.4
-    4       0            0            0.5
-    5       0            0            0.7
-    6       0            0            1.0
+    id      flags    population   time
+    0       1        0            0
+    1       1        0            0
+    2       1        0            0
+    3       0        0            0.4
+    4       0        0            0.5
+    5       0        0            0.7
+    6       0        0            1.0
 
-Importantly, the first column, ``id``, is **not actually recorded**, and is
-only shown when printing out node tables (as here) for convenience. This has
-three samples: nodes 0, 1, and 2, and lists their birth times.  Then, we
-specify the edges::
+Importantly, the first column, ``id``, is not actually recorded, and is
+only shown when printing out node tables (as here) for convenience.
+The second column, ``flags`` records a ``1`` for the individuals that are *samples*,
+i.e., whose entire genealogical history is recorded by these trees.
+(Note that the trees above record that node 3 inherited from node 4
+on the middle portion of the genome, but not on the ends.)
+
+We next need to record each tree's edges. Since some edges are present
+in more than one tree (e.g., node 1 inherits from node 4 across
+the entire sequence), we record in the :class:`EdgeTable` each edge
+and the genomic region for which it appears in the trees::
+
 
     EdgeTable:
 
     left    right   parent  children
     0.2     0.8     3       0
     0.2     0.8     3       2
-    0.0     0.2     4       1
+    0.0     1.0     4       1
     0.0     0.2     4       2
-    0.2     0.8     4       1
-    0.2     0.8     4       3
-    0.8     1.0     4       1
     0.8     1.0     4       2
+    0.2     0.8     4       3
     0.8     1.0     5       0
     0.8     1.0     5       4
     0.0     0.2     6       0
@@ -950,33 +1042,38 @@ specify the edges::
 
 Since node 3 is most recent, the edge that says that nodes 0 and 2 inherit
 from node 3 on the interval between 0.2 and 0.8 comes first.  Next are the
-edges from node 4: there are three of these, for each of the three genomic
+edges from node 4: there are six of these, two for each of the three genomic
 intervals over which node 4 is ancestor to a distinct set of nodes.  At this
 point, we know the full tree on the middle interval.  Finally, edges
 specifying the common ancestor of 0 and 4 on the remaining intervals (parents 6
 and 5 respectively) allow us to construct all trees across the entire interval.
 
-
-In the depiction above, ``x`` denotes mutations. Suppose that the first
-mutation occurs at position 0.1 and the mutations in the second tree both
-occurred at the same position, at 0.5 (with a back mutation).  The positions
-are recorded in the sites table::
+There are three mutations in the depiction above,
+marked by ``╋``: one above node ``4`` on the first tree,
+and the other two above nodes ``2`` and ``3`` on the second tree.
+Suppose that the first mutation occurs at position 0.1 and the mutations in the
+second tree both occurred at the same position, at 0.5 (with a back mutation).
+To record the inheritance patterns of these, we need only record
+the positions on the genome at which they occurred,
+and on which edge (equivalently, above which node) they occurred.
+The positions are recorded in the :class:`SiteTable`::
 
     SiteTable:
 
-    id	position	ancestral_state
-    0	0.1     	0
-    1	0.5     	0
+    id    position    ancestral_state
+    0    0.1         0
+    1    0.5         0
 
 As with node tables, the ``id`` column is **not** actually recorded, but is
-implied by the position in the table.  The acutal mutations are then recorded::
+implied by the position in the table.  The results of the
+actual mutations are then recorded::
 
     MutationTable:
 
-    site	node	derived_state
-    0	    4	    1
-    1	    3	    1
-    1	    2	    0
+    site    node    derived_state
+    0        4        1
+    1        3        1
+    1        2        0
 
 This would then result in the following (two-locus) haplotypes for the three
 samples::
@@ -985,51 +1082,322 @@ samples::
     ------  ---------
     0       01
     1       10
-    2       11
+    2       10
 
 
-.. ***************************
-.. Stuff copied from elsewhere
-.. ***************************
+To create these tables, and the corresponding tree sequence, we would
+create a :class:`TableCollection`, and then use its
+:meth:`TableCollection.tree_sequence` method::
 
-.. In addition to genealogical relationships, ``msprime`` generates and stores
-.. mutations.  Associating these with nodes means that a variant shared by many
-.. individuals need only be stored once, allowing retrieval and processing of
-.. variant information much more efficiently than if every individual's genotype
-.. was stored directly.
+    tables = msprime.TableCollection(sequence_length=1.0)
 
+    # Nodes
+    sv = [True, True, True, False, False, False, False]
+    tv = [0.0, 0.0, 0.0, 0.4, 0.5, 0.7, 1.0]
 
-.. Rather than storing a position on the genome directly, a ``mutation``
-.. stores the index of a ``site``, that describes that position.  This is to
-.. allow efficient processing of multiple mutations at the same genomic
-.. position.  A ``site`` records a position on the genome where a mutation has
-.. occurred along with the ancestral state (i.e., the state at the root of the
-.. tree at that position)::
+    for is_sample, t in zip(sv, tv):
+     flags = msprime.NODE_IS_SAMPLE if is_sample else 0
+     tables.nodes.add_row(flags=flags, time=t)
 
-..     id	position	ancestral_state
-..     0	0.1	        0
+    # Edges
+    lv = [0.2, 0.2, 0.0, 0.2, 0.8, 0.0, 0.8, 0.2, 0.8, 0.8, 0.0, 0.0]
+    rv = [0.8, 0.8, 0.2, 0.8, 1.0, 0.2, 1.0, 0.8, 1.0, 1.0, 0.2, 0.2]
+    pv = [3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 6, 6]
+    cv = [0, 2, 1, 1, 1, 2, 2, 3, 0, 4, 0, 4]
 
-.. As with nodes, the ``id`` is not stored directly, but is implied by its
-.. index in the site table.
+    for l, r, p, c in zip(lv, rv, pv, cv):
+        tables.edges.add_row(left=l, right=r, parent=p, child=c)
 
+    # Sites
+    for p, a in zip([0.1, 0.5], ['0', '0']):
+        tables.sites.add_row(position=p, ancestral_state=a)
 
-.. This type records a mutation that has occurred at some point in the
-.. genealogical history.  Each mutation is associated with a particular
-.. ``node`` (i.e., a particular ancestor), so that any sample which inherits
-.. from that node will also inherit that mutation, unless another mutation
-.. intervenes.  The type records::
+    # Mutations
+    for s, n, d in zip([0, 1, 1], [4, 3, 2], ['1', '1', '0']):
+        tables.mutations.add_row(site=s, node=n, derived_state=d)
 
-..     site	node	derived_state
-..     0	    14	    1
+We can then finally obtain the tree sequence::
 
-.. Here ``site`` is the index of the ``site`` at which the mutation occurred,
-.. ``node`` records the ID of the ancestral node associated with the mutation,
-.. and ``derived_state`` is the allele that any sample inheriting from that
-.. node at this site will have if another mutation does not intervene.  The
-.. ``node`` is not necessarily the ancestor in whom the mutation occurred, but
-.. rather the ancestor at the bottom of the branch in the tree at that site on
-.. which the mutation occurred.
+    ts = tables.tree_sequence()
+    for t in ts.trees():
+      print(t.draw(format='unicode'))
 
 
+.. _sec_tutorial_simulate_from:
+
+*******************************
+Completing forwards simulations
+*******************************
+
+The ``msprime`` simulator generates tree sequences using the backwards in
+time coalescent model. But it is also possible to output tree sequences
+from `forwards-time <https://www.biorxiv.org/content/early/2018/01/16/248500>`_
+simulators such as `SLiM <https://messerlab.org/slim/>`_.
+There are many advantages to using forward-time simulators, but they
+are usually quite slow compared to similar coalescent simulations. In this
+section we show how to combine the best of both approaches by simulating
+the recent past using a forwards-time simulator and then complete the
+simulation of the ancient past using ``msprime``. (We sometimes refer to this
+"recapitation", as we can think of it as adding a "head" onto a tree sequence.)
+
+First, we define a simple Wright-Fisher simulator which returns a tree sequence
+with the properties that we require (please see the :ref:`API <sec_api_simulate_from>`
+section for a formal description of these properties):
+
+.. code-block:: python
+
+    import random
+    import numpy as np
+
+    def wright_fisher(N, T, L=100, random_seed=None):
+        """
+        Simulate a Wright-Fisher population of N haploid individuals with L
+        discrete loci for T generations. Based on Algorithm W from
+        https://www.biorxiv.org/content/biorxiv/early/2018/01/16/248500.full.pdf
+        """
+        random.seed(random_seed)
+        tables = msprime.TableCollection(L)
+        P = np.arange(N, dtype=int)
+        # Mark the initial generation as samples so that we remember these nodes.
+        for j in range(N):
+            tables.nodes.add_row(time=T, flags=msprime.NODE_IS_SAMPLE)
+        t = T
+        while t > 0:
+            t -= 1
+            Pp = P.copy()
+            for j in range(N):
+                u = tables.nodes.add_row(time=t, flags=0)
+                Pp[j] = u
+                a = random.randint(0, N - 1)
+                b = random.randint(0, N - 1)
+                x = random.randint(1, L - 1)
+                tables.edges.add_row(0, x, P[a], u)
+                tables.edges.add_row(x, L, P[b], u)
+            P = Pp
+
+        # Now do some table manipulations to ensure that the tree sequence
+        # that we output has the form that msprime needs to finish the
+        # simulation. Much of the complexity here is caused by the tables API
+        # not allowing direct access to memory, which will change soon.
+
+        # Mark the extant population as samples also
+        flags = tables.nodes.flags
+        flags[P] = msprime.NODE_IS_SAMPLE
+        tables.nodes.set_columns(flags=flags, time=tables.nodes.time)
+        tables.sort()
+        # Simplify with respect to the current generation, but ensuring we keep the
+        # ancient nodes from the initial population.
+        tables.simplify()
+        # Unmark the initial generation as samples
+        flags = tables.nodes.flags
+        time = tables.nodes.time
+        flags[:] = 0
+        flags[time == 0] = msprime.NODE_IS_SAMPLE
+        # The final tables must also have at least one population which
+        # the samples are assigned to
+        tables.populations.add_row()
+        tables.nodes.set_columns(
+            flags=flags, time=time,
+            population=np.zeros_like(tables.nodes.population))
+        return tables.tree_sequence()
 
 
+We then run a tiny forward simulation of 10 two-locus individuals
+for 5 generations, and print out the resulting trees:
+
+.. code-block:: python
+
+    num_loci = 2
+    N = 10
+    wf_ts = wright_fisher(N, 5, L=num_loci, random_seed=3)
+    for tree in wf_ts.trees():
+        print("interval = ", tree.interval)
+        print(tree.draw(format="unicode"))
+
+
+We get::
+
+    interval =  (0.0, 1.0)
+           0                 7
+           ┃                 ┃
+           25                ┃
+      ┏━━━━┻━━━━┓            ┃
+      23        24           ┃
+    ┏━┻━┓    ┏━━╋━━━┓        ┃
+    ┃   21   ┃  ┃   22       20
+    ┃  ┏┻━┓  ┃  ┃  ┏┻━┓   ┏━━╋━━┓
+    10 14 19 11 18 15 17  12 13 16
+
+    interval =  (1.0, 2.0)
+            0          8    4     7
+            ┃          ┃   ┏┻━┓   ┃
+            21         ┃   ┃  ┃   ┃
+    ┏━━┳━━┳━┻┳━━┳━━┓   ┃   ┃  ┃   ┃
+    14 19 10 13 16 18  11  15 17  12
+
+Because our Wright Fisher simulation ran for only 5 generations, there has not
+been enough time for the trees to fully coalesce. Therefore, instead of having
+one root, the trees have several --- the first tree has 2 and the second 4.
+Nodes 0 to 9 in this simulation represent the initial population of the
+simulation, and so we can see that all samples in the first tree trace back
+to one of two individuals from the initial generation.
+These unary branches joining samples and coalesced subtrees to the nodes
+in the initial generation are essential as they allow use to correctly
+assemble the various fragments of ancestral material into chromosomes
+when creating the initial conditions for the coalescent simulation.
+(Please see the :ref:`API <sec_api_simulate_from>` section for more details on the
+required properties of input tree sequences.)
+
+The process of completing this tree sequence using a coalescent simulation
+begins by first examining the root segments on the input trees. We get the
+following segments::
+
+    [(0, 2, 0), (0, 2, 7), (1, 2, 8), (1, 2, 4)]
+
+where each segment is a ``(left, right, node)`` tuple. As nodes 0 and 7 are
+present in both trees, they have segments spanning both loci. Nodes 8 and 4 are
+present only in the second tree, and so they have ancestral segments only for
+the second locus. Note that this means that we do *not* simulate the ancestry
+of the entire initial generation of the simulation, but rather the exact
+minimum that we need in order to complete the ancestry of the current
+generation. For instance, root ``8`` has not coalesced over the interval from
+``1.0`` to ``2.0``, while root ``0`` has not coalesced over the entire segment
+from ``0.0`` to ``2.0``.
+
+We run the coalescent simulation to complete this tree sequence using the
+``from_ts`` argument to :func:`.simulate`. Because we have simulated a
+two locus system with a recombination rate of ``1 / num_loci`` per generation
+in the Wright-Fisher model, we want to use the same system in the coalescent simulation.
+To do this we create recombination map using the
+:meth:`.RecombinationMap.uniform_map` class method to easily create a
+discrete map with the required number of loci.
+(Please see the :ref:`API <sec_api_simulate_from>` section for more details on the
+restrictions on recombination maps when completing an existing simulation.)
+We also use a ``Ne`` value of ``N / 2``
+since the Wright-Fisher simulation was haploid and ``msprime`` is diploid.
+
+.. code-block:: python
+
+    recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1 / num_loci, num_loci)
+    coalesced_ts = msprime.simulate(
+        Ne=N / 2, from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
+
+
+
+After running this simulation we get the following trees::
+
+    interval =  (0.0, 1.0)
+                    26
+           ┏━━━━━━━━┻━━━━━━━┓
+           0                7
+           ┃                ┃
+           25               ┃
+      ┏━━━━┻━━━━┓           ┃
+      23        24          ┃
+    ┏━┻━┓    ┏━━╋━━━┓       ┃
+    ┃   21   ┃  ┃   22      20
+    ┃  ┏┻━┓  ┃  ┃  ┏┻━┓  ┏━━╋━━┓
+    10 14 19 11 18 15 17 12 13 16
+
+    interval =  (1.0, 2.0)
+                      28
+                 ┏━━━━┻━━━━━┓
+                 ┃          27
+                 ┃        ┏━┻━━┓
+                 26       ┃    ┃
+            ┏━━━━┻━━━━┓   ┃    ┃
+            0         7   4    8
+            ┃         ┃  ┏┻━┓  ┃
+            21        ┃  ┃  ┃  ┃
+    ┏━━┳━━┳━┻┳━━┳━━┓  ┃  ┃  ┃  ┃
+    14 19 10 13 16 18 12 15 17 11
+
+The trees have fully coalesced and we've successfully combined a forwards-time
+Wright-Fisher simulation with a coalescent simulation: hooray!
+
+-------------------------------------
+Why record the initial generation?
+-------------------------------------
+
+We can now see why it is essential that the forwards simulator records the
+*initial* generation in a tree sequence that will later be used as a
+``from_ts`` argument to ``msprime.simulate()``. In the example above, if node
+``7`` was not in the tree sequence, we would not know that the segment that
+node ``20`` inherits from on ``[0.0, 1.0)`` and the segment that node ``12``
+inherits from on ``[1.0, 2.0)`` both exist in the same node (here, node ``7``).
+
+However, note that although the intial generation (above, nodes ``0``, ``4``,
+``7``, and ``8``) must be in the tree sequence, they do *not* have to be
+samples. The easiest way to do this is to
+(a) retain the initial generation as samples throughout the forwards simulation
+(so they persist through ``simplify()``), but then (b) before we output
+the final tree sequence, we remove the flags that mark them as samples,
+so that ``simulate()`` does not simulate their entire history as well. This
+is the approach taken in the toy simulator provided above (although we skip
+the periodic ``simplify()`` steps which are essential in any practical simulation
+for simplicity).
+
+-------------------------------------
+Topology gotchas
+-------------------------------------
+
+The trees that we output from this combined forwards and backwards simulation
+process have some slightly odd properties that are important to be aware of.
+In the example above, we can see that the old roots are still present in both trees,
+even through they have only one child and are clearly redundant.
+This is because the tables of ``from_ts`` have been retained, without modification,
+at the top of the tables of the output tree sequence. While this
+redundancy is not important for many tasks, there are some cases where
+they may cause problems:
+
+1. When computing statistics on the number of nodes, edges or trees in a tree
+   sequence, having these unary edges and redundant nodes will slightly
+   inflate the values.
+2. If you are computing the overall tree "height" by taking the time of the
+   root node, you may overestimate the height because there is a unary edge
+   above the "real" root (this would happen if one of the trees had already
+   coalesced in the forwards-time simulation).
+
+For these reasons it is usually better to remove this redundancy from your
+computed tree sequence which is easily done using the
+:meth:`.TreeSequence.simplify` method:
+
+.. code-block:: python
+
+    final_ts = coalesced_ts.simplify()
+
+    for tree in final_ts.trees():
+        print("interval = ", tree.interval)
+        print(tree.draw(format="unicode"))
+
+giving us::
+
+    interval =  (0.0, 1.0)
+          17
+      ┏━━━┻━━━━┓
+      ┃        15
+      ┃     ┏━━┻━━┓
+      ┃     13    14
+      ┃   ┏━┻┓  ┏━╋━━┓
+      10  ┃  11 ┃ ┃  12
+    ┏━╋━┓ ┃ ┏┻┓ ┃ ┃ ┏┻┓
+    2 3 6 0 4 9 1 8 5 7
+
+    interval =  (1.0, 2.0)
+              19
+        ┏━━━━━┻━━━━━┓
+        ┃           18
+        ┃         ┏━┻┓
+        17        ┃  ┃
+    ┏━━━┻━━┓      ┃  ┃
+    ┃      ┃      ┃  16
+    ┃      ┃      ┃ ┏┻┓
+    ┃      11     ┃ ┃ ┃
+    ┃ ┏━┳━┳┻┳━┳━┓ ┃ ┃ ┃
+    2 4 9 0 3 6 8 1 5 7
+
+This final tree sequence is topologically identical to the original tree sequence,
+but has the redundant nodes and edges removed. Note also that he node IDs have been
+reassigned so that the samples are 0 to 9 --- if you need the IDs from the original
+tree sequence, please set ``map_nodes=True`` when calling ``simplify`` to get a
+mapping between the two sets of IDs.

@@ -171,7 +171,7 @@ vcf_converter_write_record(vcf_converter_t *self, variant_t *variant)
     for (j = 0; j < self->num_vcf_samples; j++) {
         for (k = 0; k < p; k++) {
             self->vcf_genotypes[2 * p * j + 2 * k] =
-                (char) ('0' + variant->genotypes[j * p + k]);
+                (char) ('0' + variant->genotypes.u8[j * p + k]);
         }
     }
     assert(offset + self->vcf_genotypes_size < self->record_size);
@@ -192,7 +192,7 @@ vcf_converter_convert_positions(vcf_converter_t *self, tree_sequence_t *tree_seq
     size_t j;
 
     for (j = 0; j < self->num_sites; j++) {
-        ret = tree_sequence_get_site(tree_sequence, (site_id_t) j, &site);
+        ret = tree_sequence_get_site(tree_sequence, j, &site);
         if (ret != 0) {
             goto out;
         }
@@ -259,7 +259,7 @@ vcf_converter_alloc(vcf_converter_t *self,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret = vargen_alloc(self->vargen, tree_sequence, 0);
+    ret = vargen_alloc(self->vargen, tree_sequence, NULL, 0, 0);
     if (ret != 0) {
         goto out;
     }

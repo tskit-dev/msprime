@@ -38,35 +38,52 @@ class WrightFisherSimulator(object):
     """
     SIMPLE simulation of a bisexual, haploid Wright-Fisher population of size N
     for ngens generations, in which each individual survives with probability
-    survival and only those who die are replaced.  The chromosome is 1.0
-    Morgans long, and the mutation rate is in units of mutations/Morgan/generation.
+    survival and only those who die are replaced.  If num_loci is None,
+    the chromosome is 1.0 Morgans long, and the mutation rate is in units of
+    mutations/Morgan/generation. If num_loci not None, a discrete recombination
+    model is used where breakpoints are chosen uniformly from 1 to num_loci - 1.
     """
-    def __init__(self, N, survival=0.0, seed=None, deep_history=True, debug=False):
+    def __init__(
+            self, N, survival=0.0, seed=None, deep_history=True, debug=False,
+            initial_generation_samples=False, num_loci=None):
         self.N = N
+        self.num_loci = num_loci
         self.survival = survival
         self.deep_history = deep_history
         self.debug = debug
-        if seed is not None:
-            random.seed(seed)
+        self.initial_generation_samples = initial_generation_samples
+        self.seed = seed
+        self.rng = random.Random(seed)
 
     def random_breakpoint(self):
-        return min(1.0, max(0.0, 2 * random.random() - 0.5))
+        if self.num_loci is None:
+            return min(1.0, max(0.0, 2 * self.rng.random() - 0.5))
+        else:
+            return self.rng.randint(1, self.num_loci - 1)
 
     def run(self, ngens):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        migrations = msprime.MigrationTable()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
-        provenances = msprime.ProvenanceTable()
+        L = 1
+        if self.num_loci is not None:
+            L = self.num_loci
+        tables = msprime.TableCollection(sequence_length=L)
+        tables.populations.add_row()
         if self.deep_history:
             # initial population
-            init_ts = msprime.simulate(self.N, recombination_rate=1.0)
-            init_ts.dump_tables(nodes=nodes, edges=edges)
-            nodes.set_columns(time=nodes.time + ngens, flags=nodes.flags)
+            init_ts = msprime.simulate(
+                self.N, recombination_rate=1.0, length=L, random_seed=self.seed)
+            init_tables = init_ts.dump_tables()
+            tables.nodes.set_columns(
+                time=init_tables.nodes.time + ngens,
+                flags=np.zeros_like(init_tables.nodes.flags))
+            tables.edges.set_columns(
+                left=init_tables.edges.left, right=init_tables.edges.right,
+                parent=init_tables.edges.parent, child=init_tables.edges.child)
         else:
+            flags = 0
+            if self.initial_generation_samples:
+                flags = msprime.NODE_IS_SAMPLE
             for _ in range(self.N):
-                nodes.add_row(time=ngens)
+                tables.nodes.add_row(flags=flags, time=ngens, population=0)
 
         pop = list(range(self.N))
         for t in range(ngens - 1, -1, -1):
@@ -74,18 +91,18 @@ class WrightFisherSimulator(object):
                 print("t:", t)
                 print("pop:", pop)
 
-            dead = [random.random() > self.survival for k in pop]
+            dead = [self.rng.random() > self.survival for k in pop]
             # sample these first so that all parents are from the previous gen
             new_parents = [
-                (random.choice(pop), random.choice(pop)) for k in range(sum(dead))]
+                (self.rng.choice(pop), self.rng.choice(pop)) for k in range(sum(dead))]
             k = 0
             if self.debug:
                 print("Replacing", sum(dead), "individuals.")
             for j in range(self.N):
                 if dead[j]:
                     # this is: offspring ID, lparent, rparent, breakpoint
-                    offspring = nodes.num_rows
-                    nodes.add_row(time=t)
+                    offspring = len(tables.nodes)
+                    tables.nodes.add_row(time=t, population=0)
                     lparent, rparent = new_parents[k]
                     k += 1
                     bp = self.random_breakpoint()
@@ -93,31 +110,30 @@ class WrightFisherSimulator(object):
                         print("--->", offspring, lparent, rparent, bp)
                     pop[j] = offspring
                     if bp > 0.0:
-                        edges.add_row(
+                        tables.edges.add_row(
                             left=0.0, right=bp, parent=lparent, child=offspring)
-                    if bp < 1.0:
-                        edges.add_row(
-                            left=bp, right=1.0, parent=rparent, child=offspring)
+                    if bp < L:
+                        tables.edges.add_row(
+                            left=bp, right=L, parent=rparent, child=offspring)
 
         if self.debug:
             print("Done! Final pop:")
             print(pop)
-        flags = [
-            (msprime.NODE_IS_SAMPLE if u in pop else 0) for u in range(nodes.num_rows)]
-        nodes.set_columns(time=nodes.time, flags=flags)
-        if self.debug:
-            print("Done.")
-            print("Nodes:")
-            print(nodes)
-            print("Edges:")
-            print(edges)
-        return msprime.TableCollection(
-            nodes, edges, migrations, sites, mutations, provenances)
+        flags = tables.nodes.flags
+        flags[pop] = msprime.NODE_IS_SAMPLE
+        tables.nodes.set_columns(
+            flags=flags,
+            time=tables.nodes.time,
+            population=tables.nodes.population)
+        return tables
 
 
-def wf_sim(N, ngens, survival=0.0, deep_history=True, debug=False, seed=None):
+def wf_sim(
+        N, ngens, survival=0.0, deep_history=True, debug=False, seed=None,
+        initial_generation_samples=False, num_loci=None):
     sim = WrightFisherSimulator(
-        N, survival=survival, deep_history=deep_history, debug=debug, seed=seed)
+        N, survival=survival, deep_history=deep_history, debug=debug, seed=seed,
+        initial_generation_samples=initial_generation_samples, num_loci=num_loci)
     return sim.run(ngens)
 
 
@@ -134,14 +150,11 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
-        nodes = tables.nodes
-        edges = tables.edges
-        msprime.sort_tables(nodes=nodes, edges=edges)
-        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
-        ts = msprime.load_tables(nodes=nodes, edges=edges)
-        # All trees should have exactly one root and the leaves should be the samples,
-        # and all internal nodes should have arity > 1
+        tables.sort()
+        tables.simplify()
+        ts = tables.tree_sequence()
+        # All trees should have exactly one root and all internal nodes should
+        # have arity > 1
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
             leaves = set(tree.leaves(tree.root))
@@ -157,12 +170,9 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
-        nodes = tables.nodes
-        edges = tables.edges
-        msprime.sort_tables(nodes=nodes, edges=edges)
-        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
-        ts = msprime.load_tables(nodes=nodes, edges=edges)
+        tables.sort()
+        tables.simplify()
+        ts = tables.tree_sequence()
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
@@ -174,14 +184,12 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
-        nodes = tables.nodes
-        edges = tables.edges
-        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.sort_tables(nodes=nodes, edges=edges)
-        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
+        tables.sort()
+        tables.simplify()
+        ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
-        ts = msprime.load_tables(nodes=nodes, edges=edges)
+        ts = msprime.load_tables(**tables.asdict())
         for tree in ts.trees():
             all_samples = set()
             for root in tree.roots:
@@ -199,15 +207,13 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(tables.sites.num_rows, 0)
         self.assertEqual(tables.mutations.num_rows, 0)
         self.assertEqual(tables.migrations.num_rows, 0)
-        nodes = tables.nodes
-        edges = tables.edges
-        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.sort_tables(nodes=nodes, edges=edges)
-        msprime.simplify_tables(samples=samples, nodes=nodes, edges=edges)
+        tables.sort()
+        tables.simplify()
+        ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
+        ts = msprime.load_tables(**tables.asdict())
         # We are assuming that everything has coalesced and we have single-root trees
-        ts = msprime.load_tables(nodes=nodes, edges=edges)
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
@@ -215,17 +221,18 @@ class TestSimulation(unittest.TestCase):
         N = 10
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
-        msprime.sort_tables(**tables.asdict())
+        tables.sort()
         ts = msprime.load_tables(**tables.asdict())
         ts = tsutil.jukes_cantor(ts, 10, 0.1, seed=self.random_seed)
         tables = ts.tables
         self.assertGreater(tables.sites.num_rows, 0)
         self.assertGreater(tables.mutations.num_rows, 0)
-        nodes = tables.nodes
-        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
-        msprime.simplify_tables(
-            samples=samples, nodes=tables.nodes, edges=tables.edges,
-            sites=tables.sites, mutations=tables.mutations)
+        samples = np.where(
+            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+        tables.sort()
+        tables.simplify(samples)
+        self.assertGreater(tables.nodes.num_rows, 0)
+        self.assertGreater(tables.edges.num_rows, 0)
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
         self.assertGreater(tables.sites.num_rows, 0)
@@ -240,26 +247,23 @@ class TestSimulation(unittest.TestCase):
         N = 10
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
-        msprime.sort_tables(**tables.asdict())
+        tables.sort()
         ts = msprime.load_tables(**tables.asdict())
         ts = tsutil.jukes_cantor(ts, 1, 10, seed=self.random_seed)
         tables = ts.tables
         self.assertEqual(tables.sites.num_rows, 1)
         self.assertGreater(tables.mutations.num_rows, 0)
-        nodes = tables.nodes
-        samples = np.where(nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
         # before simplify
         for h in ts.haplotypes():
             self.assertEqual(len(h), 1)
         # after simplify
-        msprime.simplify_tables(
-            samples=samples, nodes=tables.nodes, edges=tables.edges,
-            sites=tables.sites, mutations=tables.mutations)
+        tables.sort()
+        tables.simplify()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
         self.assertEqual(tables.sites.num_rows, 1)
         self.assertGreater(tables.mutations.num_rows, 0)
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sample_size, N)
         for hap in ts.haplotypes():
             self.assertEqual(len(hap), ts.num_sites)
@@ -301,7 +305,7 @@ class TestSimplify(unittest.TestCase):
                 for mut in [0.01, 1.0]:
                     for nloci in [1, 2, 3]:
                         tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
-                        msprime.sort_tables(**tables.asdict())
+                        tables.sort()
                         ts = msprime.load_tables(**tables.asdict())
                         ts = tsutil.jukes_cantor(ts, num_sites=nloci, mu=mut, seed=seed)
                         self.verify_simulation(ts, ngens=N)
@@ -411,17 +415,14 @@ class TestSimplify(unittest.TestCase):
     def test_simplify_tables(self):
         seed = 71
         for ts in self.get_wf_sims(seed=seed):
-            tables = ts.dump_tables()
             for nsamples in [2, 5, 10]:
-                nodes = tables.nodes.copy()
-                edges = tables.edges.copy()
-                sites = tables.sites.copy()
-                mutations = tables.mutations.copy()
+                tables = ts.dump_tables()
                 sub_samples = random.sample(
                     list(ts.samples()), min(nsamples, ts.num_samples))
-                node_map = msprime.simplify_tables(
-                    samples=sub_samples, nodes=nodes, edges=edges,
-                    sites=sites, mutations=mutations)
-                small_ts = msprime.load_tables(
-                    nodes=nodes, edges=edges, sites=sites, mutations=mutations)
+                node_map = tables.simplify(samples=sub_samples)
+                small_ts = tables.tree_sequence()
+                other_tables = small_ts.dump_tables()
+                tables.provenances.clear()
+                other_tables.provenances.clear()
+                self.assertEqual(tables, other_tables)
                 self.verify_simplify(ts, small_ts, sub_samples, node_map)

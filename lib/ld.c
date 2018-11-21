@@ -120,8 +120,7 @@ ld_calc_position_trees(ld_calc_t *self, size_t site_index)
     sparse_tree_t *tA = self->outer_tree;
     sparse_tree_t *tB = self->inner_tree;
 
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) site_index,
-            &mut);
+    ret = tree_sequence_get_site(self->tree_sequence, site_index, &mut);
     if (ret != 0) {
         goto out;
     }
@@ -161,15 +160,15 @@ out:
 static double
 ld_calc_overlap_within_tree(ld_calc_t *self, site_t sA, site_t sB)
 {
-    sparse_tree_t *t = self->inner_tree;
-    tree_sequence_t *s = self->tree_sequence;
+    const sparse_tree_t *t = self->inner_tree;
+    const node_table_t *nodes = self->tree_sequence->tables->nodes;
     node_id_t u, v, nAB;
 
     assert(sA.mutations_length == 1);
     assert(sB.mutations_length == 1);
     u = sA.mutations[0].node;
     v = sB.mutations[0].node;
-    if (s->nodes.time[u] > s->nodes.time[v]) {
+    if (nodes->time[u] > nodes->time[v]) {
         v = sA.mutations[0].node;
         u = sB.mutations[0].node;
     }
@@ -187,16 +186,10 @@ static inline int WARN_UNUSED
 ld_calc_set_tracked_samples(ld_calc_t *self, site_t sA)
 {
     int ret = 0;
-    node_list_t *head, *tail;
 
     assert(sA.mutations_length == 1);
-    ret = sparse_tree_get_sample_list(self->outer_tree, sA.mutations[0].node, &head, &tail);
-    if (ret != 0) {
-        goto out;
-    }
     ret = sparse_tree_set_tracked_samples_from_sample_list(self->inner_tree,
-            head, tail);
-out:
+            self->outer_tree, sA.mutations[0].node);
     return ret;
 }
 
@@ -216,12 +209,12 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) source_index, &sA);
+    ret = tree_sequence_get_site(self->tree_sequence, source_index, &sA);
     if (ret != 0) {
         goto out;
     }
     if (sA.mutations_length > 1) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        ret = MSP_ERR_ONLY_INFINITE_SITES;
         goto out;
     }
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
@@ -231,13 +224,12 @@ ld_calc_get_r2_array_forward(ld_calc_t *self, size_t source_index,
         if (source_index + j + 1 >= self->num_sites) {
             break;
         }
-        ret = tree_sequence_get_site(self->tree_sequence,
-                (site_id_t) (source_index + j + 1), &sB);
+        ret = tree_sequence_get_site(self->tree_sequence, (source_index + j + 1), &sB);
         if (ret != 0) {
             goto out;
         }
         if (sB.mutations_length > 1) {
-            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            ret = MSP_ERR_ONLY_INFINITE_SITES;
             goto out;
         }
         if (sB.position - sA.position > max_distance) {
@@ -306,12 +298,12 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
 
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) source_index, &sA);
+    ret = tree_sequence_get_site(self->tree_sequence, source_index, &sA);
     if (ret != 0) {
         goto out;
     }
     if (sA.mutations_length > 1) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        ret = MSP_ERR_ONLY_INFINITE_SITES;
         goto out;
     }
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
@@ -322,12 +314,12 @@ ld_calc_get_r2_array_reverse(ld_calc_t *self, size_t source_index,
         if (site_index < 0) {
             break;
         }
-        ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) site_index, &sB);
+        ret = tree_sequence_get_site(self->tree_sequence, (size_t) site_index, &sB);
         if (ret != 0) {
             goto out;
         }
         if (sB.mutations_length > 1) {
-            ret = MSP_ERR_UNSUPPORTED_OPERATION;
+            ret = MSP_ERR_ONLY_INFINITE_SITES;
             goto out;
         }
         if (sA.position - sB.position > max_distance) {
@@ -434,16 +426,16 @@ ld_calc_get_r2(ld_calc_t *self, size_t a, size_t b, double *r2)
     /* We can probably do a lot better than this implementation... */
     tA = self->outer_tree;
     tB = self->inner_tree;
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) a, &sA);
+    ret = tree_sequence_get_site(self->tree_sequence, a, &sA);
     if (ret != 0) {
         goto out;
     }
-    ret = tree_sequence_get_site(self->tree_sequence, (site_id_t) b, &sB);
+    ret = tree_sequence_get_site(self->tree_sequence, b, &sB);
     if (ret != 0) {
         goto out;
     }
     if (sA.mutations_length > 1 || sB.mutations_length > 1) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        ret = MSP_ERR_ONLY_INFINITE_SITES;
         goto out;
     }
     assert(sA.mutations_length == 1);

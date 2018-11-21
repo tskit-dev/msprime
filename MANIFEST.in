@@ -1,4 +1,6 @@
 include lib/*.h
+include lib/kastore/c/kastore.h
+include msprime/provenance.schema.json
 include README.txt
 include ez_setup.py
 include LICENSE

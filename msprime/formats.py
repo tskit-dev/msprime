@@ -27,22 +27,12 @@ import datetime
 import json
 import logging
 
-try:
-    import h5py
-    _h5py_imported = True
-    # Numpy is required by h5py, so we can safely use it.
-    import numpy as np
-except ImportError:
-    _h5py_imported = False
+import h5py
+import numpy as np
 
 import msprime
 import msprime.provenance as provenance
 import msprime.exceptions as exceptions
-
-
-def _check_h5py():
-    if not _h5py_imported:
-        raise RuntimeError("h5py is required for converting HDF5 files.")
 
 
 def _get_v2_provenance(command, attrs):
@@ -56,13 +46,13 @@ def _get_v2_provenance(command, attrs):
     try:
         environment = json.loads(str(attrs["environment"]))
     except ValueError:
-
         logging.warn("Failed to convert environment provenance")
     try:
         parameters = json.loads(str(attrs["parameters"]))
     except ValueError:
         logging.warn("Failed to convert parameters provenance")
-    provenance_dict = provenance.get_provenance_dict(command, parameters)
+    parameters["command"] = command
+    provenance_dict = provenance.get_provenance_dict(parameters)
     provenance_dict["version"] = environment.get("msprime_version", "Unknown_version")
     provenance_dict["environment"] = environment
     return json.dumps(provenance_dict).encode()
@@ -74,9 +64,10 @@ def _get_upgrade_provenance(root):
     """
     # TODO add more parameters here like filename, etc.
     parameters = {
+        "command": "upgrade",
         "source_version": list(map(int, root.attrs["format_version"]))
     }
-    s = json.dumps(provenance.get_provenance_dict("upgrade", parameters))
+    s = json.dumps(provenance.get_provenance_dict(parameters))
     return s.encode()
 
 
@@ -108,6 +99,16 @@ def _convert_hdf5_mutations(
         derived_state_offset=np.arange(num_mutations + 1, dtype=np.uint32))
 
 
+def _set_populations(tables):
+    """
+    Updates PopulationTable suitable to represent the populations referred to
+    in the node table.
+    """
+    if len(tables.nodes) > 0:
+        for _ in range(np.max(tables.nodes.population) + 1):
+            tables.populations.add_row()
+
+
 def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
@@ -128,8 +129,9 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     right[2 * index] = trees_group["right"]
     right[2 * index + 1] = trees_group["right"]
     child = np.array(trees_group["children"], dtype=np.int32).flatten()
-    edges = msprime.EdgeTable()
-    edges.set_columns(left=left, right=right, parent=parent, child=child)
+
+    tables = msprime.TableCollection(np.max(right))
+    tables.edges.set_columns(left=left, right=right, parent=parent, child=child)
 
     cr_node = np.array(trees_group["node"], dtype=np.int32)
     num_nodes = max(np.max(child), np.max(cr_node)) + 1
@@ -147,24 +149,19 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
         population[:sample_size] = samples_group["population"]
         if "time" in samples_group:
             time[:sample_size] = samples_group["time"]
-    nodes = msprime.NodeTable()
-    nodes.set_columns(
-        flags=flags, population=population, time=time)
+    tables.nodes.set_columns(flags=flags, population=population, time=time)
+    _set_populations(tables)
 
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
     if "mutations" in root:
         mutations_group = root["mutations"]
         _convert_hdf5_mutations(
-            mutations_group, sites, mutations, remove_duplicate_positions)
+            mutations_group, tables.sites, tables.mutations, remove_duplicate_positions)
         provenances.add_row(
             timestamp=old_timestamp,
             record=_get_v2_provenance("generate_mutations", mutations_group.attrs))
-    provenances.add_row(_get_upgrade_provenance(root))
-    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-    return msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=provenances)
+    tables.provenances.add_row(_get_upgrade_provenance(root))
+    tables.sort()
+    return tables.tree_sequence()
 
 
 def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
@@ -197,29 +194,25 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
             right[k] = record_right[j]
             parent[k] = record_node[j]
             k += 1
-    nodes = msprime.NodeTable()
-    nodes.set_columns(
+    tables = msprime.TableCollection(np.max(right))
+    tables.nodes.set_columns(
         flags=flags,
         time=nodes_group["time"],
         population=nodes_group["population"])
-    edges = msprime.EdgeTable()
-    edges.set_columns(
+    _set_populations(tables)
+    tables.edges.set_columns(
         left=left, right=right, parent=parent, child=records_group["children"])
-    sites = msprime.SiteTable()
-    mutations = msprime.MutationTable()
     if "mutations" in root:
         _convert_hdf5_mutations(
-            root["mutations"], sites, mutations, remove_duplicate_positions)
+            root["mutations"], tables.sites, tables.mutations,
+            remove_duplicate_positions)
     old_timestamp = datetime.datetime.min.isoformat()
-    provenances = msprime.ProvenanceTable()
     if "provenance" in root:
         for record in root["provenance"]:
-            provenances.add_row(timestamp=old_timestamp, record=record)
-    provenances.add_row(_get_upgrade_provenance(root))
-    msprime.sort_tables(nodes=nodes, edges=edges, sites=sites, mutations=mutations)
-    return msprime.load_tables(
-        nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-        provenances=provenances)
+            tables.provenances.add_row(timestamp=old_timestamp, record=record)
+    tables.provenances.add_row(_get_upgrade_provenance(root))
+    tables.sort()
+    return tables.tree_sequence()
 
 
 def load_legacy(filename, remove_duplicate_positions=False):
@@ -231,10 +224,10 @@ def load_legacy(filename, remove_duplicate_positions=False):
     first) that contain duplicate positions. If this is False, any input
     files that contain duplicate positions will raise an DuplicatePositionsError.
     """
-    _check_h5py()
     loaders = {
         2: _load_legacy_hdf5_v2,
         3: _load_legacy_hdf5_v3,
+        10: _load_legacy_hdf5_v10,
     }
     root = h5py.File(filename, "r")
     if 'format_version' not in root.attrs:
@@ -249,10 +242,25 @@ def load_legacy(filename, remove_duplicate_positions=False):
     return ts
 
 
+def raise_hdf5_format_error(filename, original_exception):
+    """
+    Tries to open the specified file as a legacy HDF5 file. If it looks like
+    an msprime format HDF5 file, raise an error advising to run msp upgrade.
+    """
+    try:
+        with h5py.File(filename, "r") as root:
+            version = tuple(root.attrs["format_version"])
+            raise exceptions.VersionTooOldError(
+                "File format {} is too old. Please use the ``msp upgrade`` command "
+                "to upgrade this file to the latest version".format(version))
+    except (IOError, OSError, KeyError):
+        raise exceptions.FileFormatError(str(original_exception))
+
+
 def _dump_legacy_hdf5_v2(tree_sequence, root):
     root.attrs["format_version"] = (2, 999)
     root.attrs["sample_size"] = tree_sequence.get_sample_size()
-    root.attrs["sequence_length"] = tree_sequence.get_sequence_length()
+    root.attrs["sequence_length"] = tree_sequence.get_sequence_length(),
     left = []
     right = []
     node = []
@@ -308,8 +316,8 @@ def _dump_legacy_hdf5_v2(tree_sequence, root):
 
 def _dump_legacy_hdf5_v3(tree_sequence, root):
     root.attrs["format_version"] = (3, 999)
-    root.attrs["sample_size"] = 0
-    root.attrs["sequence_length"] = 0
+    root.attrs["sample_size"] = 0,
+    root.attrs["sequence_length"] = 0,
     trees = root.create_group("trees")
     # Get the breakpoints from the records.
     left = [cr.left for cr in tree_sequence.records()]
@@ -378,15 +386,175 @@ def _dump_legacy_hdf5_v3(tree_sequence, root):
         mutations.create_dataset("node", (length, ), data=node, dtype="u4")
 
 
+def _add_dataset(group, name, data):
+    # In the HDF5 format any zero-d arrays must be excluded.
+    if data.shape[0] > 0:
+        group.create_dataset(name, data=data)
+
+
+def _dump_legacy_hdf5_v10(tree_sequence, root):
+    root.attrs["format_version"] = (10, 999)
+    root.attrs["sample_size"] = 0,
+    root.attrs["sequence_length"] = tree_sequence.sequence_length,
+    tables = tree_sequence.dump_tables()
+
+    nodes = root.create_group("nodes")
+    _add_dataset(nodes, "time", tables.nodes.time)
+    _add_dataset(nodes, "flags", tables.nodes.flags)
+    _add_dataset(nodes, "population", tables.nodes.population)
+    _add_dataset(nodes, "metadata", tables.nodes.metadata)
+    _add_dataset(nodes, "metadata_offset", tables.nodes.metadata_offset)
+
+    edges = root.create_group("edges")
+    if len(tables.edges) > 0:
+        edges.create_dataset("left", data=tables.edges.left)
+        edges.create_dataset("right", data=tables.edges.right)
+        edges.create_dataset("parent", data=tables.edges.parent)
+        edges.create_dataset("child", data=tables.edges.child)
+
+        left = tables.edges.left
+        right = tables.edges.right
+        time = tables.nodes.time[tables.edges.parent]
+        # We can do this more efficiently if we ever need to do it for anything
+        # other than testing.
+        indexes_group = edges.create_group("indexes")
+        length = len(tables.edges)
+        left_index = sorted(range(length), key=lambda j: (left[j], time[j]))
+        right_index = sorted(range(length), key=lambda j: (right[j], -time[j]))
+        indexes_group.create_dataset(
+            "insertion_order", data=left_index, dtype="u4")
+        indexes_group.create_dataset(
+            "removal_order", data=right_index, dtype="u4")
+
+    migrations = root.create_group("migrations")
+    if len(tables.migrations) > 0:
+        migrations.create_dataset("left", data=tables.migrations.left)
+        migrations.create_dataset("right", data=tables.migrations.right)
+        migrations.create_dataset("node", data=tables.migrations.node)
+        migrations.create_dataset("source", data=tables.migrations.source)
+        migrations.create_dataset("dest", data=tables.migrations.dest)
+        migrations.create_dataset("time", data=tables.migrations.time)
+
+    sites = root.create_group("sites")
+    _add_dataset(sites, "position", tables.sites.position)
+    _add_dataset(sites, "ancestral_state", tables.sites.ancestral_state)
+    _add_dataset(sites, "ancestral_state_offset", tables.sites.ancestral_state_offset)
+    _add_dataset(sites, "metadata", tables.sites.metadata)
+    _add_dataset(sites, "metadata_offset", tables.sites.metadata_offset)
+
+    mutations = root.create_group("mutations")
+    _add_dataset(mutations, "site", tables.mutations.site)
+    _add_dataset(mutations, "node", tables.mutations.node)
+    _add_dataset(mutations, "parent", tables.mutations.parent)
+    _add_dataset(mutations, "derived_state", tables.mutations.derived_state)
+    _add_dataset(
+        mutations, "derived_state_offset", tables.mutations.derived_state_offset)
+    _add_dataset(mutations, "metadata", tables.mutations.metadata)
+    _add_dataset(mutations, "metadata_offset", tables.mutations.metadata_offset)
+
+    provenances = root.create_group("provenances")
+    _add_dataset(provenances, "timestamp", tables.provenances.timestamp)
+    _add_dataset(provenances, "timestamp_offset", tables.provenances.timestamp_offset)
+    _add_dataset(provenances, "record", tables.provenances.record)
+    _add_dataset(provenances, "record_offset", tables.provenances.record_offset)
+
+
+def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
+    # We cannot have duplicate positions in v10, so this parameter is ignored
+    sequence_length = root.attrs["sequence_length"]
+    tables = msprime.TableCollection(sequence_length)
+
+    nodes_group = root["nodes"]
+    metadata = None
+    metadata_offset = None
+    if "metadata" in nodes_group:
+        metadata = nodes_group["metadata"]
+        metadata_offset = nodes_group["metadata_offset"]
+    if "flags" in nodes_group:
+        tables.nodes.set_columns(
+            flags=nodes_group["flags"],
+            population=nodes_group["population"],
+            time=nodes_group["time"],
+            metadata=metadata,
+            metadata_offset=metadata_offset)
+
+    edges_group = root["edges"]
+    if "left" in edges_group:
+        tables.edges.set_columns(
+            left=edges_group["left"],
+            right=edges_group["right"],
+            parent=edges_group["parent"],
+            child=edges_group["child"])
+
+    migrations_group = root["migrations"]
+    if "left" in migrations_group:
+        tables.migrations.set_columns(
+            left=migrations_group["left"],
+            right=migrations_group["right"],
+            node=migrations_group["node"],
+            source=migrations_group["source"],
+            dest=migrations_group["dest"],
+            time=migrations_group["time"])
+
+    sites_group = root["sites"]
+    if "position" in sites_group:
+        metadata = None
+        metadata_offset = None
+        if "metadata" in sites_group:
+            metadata = sites_group["metadata"]
+            metadata_offset = sites_group["metadata_offset"]
+        tables.sites.set_columns(
+            position=sites_group["position"],
+            ancestral_state=sites_group["ancestral_state"],
+            ancestral_state_offset=sites_group["ancestral_state_offset"],
+            metadata=metadata,
+            metadata_offset=metadata_offset)
+
+    mutations_group = root["mutations"]
+    if "site" in mutations_group:
+        metadata = None
+        metadata_offset = None
+        if "metadata" in mutations_group:
+            metadata = mutations_group["metadata"]
+            metadata_offset = mutations_group["metadata_offset"]
+        tables.mutations.set_columns(
+            site=mutations_group["site"],
+            node=mutations_group["node"],
+            parent=mutations_group["parent"],
+            derived_state=mutations_group["derived_state"],
+            derived_state_offset=mutations_group["derived_state_offset"],
+            metadata=metadata,
+            metadata_offset=metadata_offset)
+
+    provenances_group = root["provenances"]
+    if "timestamp" in provenances_group:
+        timestamp = provenances_group["timestamp"]
+        timestamp_offset = provenances_group["timestamp_offset"]
+        if "record" in provenances_group:
+            record = provenances_group["record"]
+            record_offset = provenances_group["record_offset"]
+        else:
+            record = np.empty_like(timestamp)
+            record_offset = np.zeros_like(timestamp_offset)
+        tables.provenances.set_columns(
+            timestamp=timestamp,
+            timestamp_offset=timestamp_offset,
+            record=record,
+            record_offset=record_offset)
+    tables.provenances.add_row(_get_upgrade_provenance(root))
+    _set_populations(tables)
+    return tables.tree_sequence()
+
+
 def dump_legacy(tree_sequence, filename, version=3):
     """
     Writes the specified tree sequence to a HDF5 file in the specified
     legacy file format version.
     """
-    _check_h5py()
     dumpers = {
         2: _dump_legacy_hdf5_v2,
-        3: _dump_legacy_hdf5_v3
+        3: _dump_legacy_hdf5_v3,
+        10: _dump_legacy_hdf5_v10,
     }
     if version not in dumpers:
         raise ValueError("Version {} file format is supported".format(version))

@@ -150,7 +150,7 @@ class TestParametricModels(unittest.TestCase):
     def test_beta_coalescent_parameters(self):
         N = 1000
         dbl_max = sys.float_info.max
-        for alpha in [-1, 0, 1.1]:
+        for alpha in [1.01, 1.5, 1.99]:
             model = msprime.BetaCoalescent(N, alpha)
             self.assertEqual(model.population_size, N)
             self.assertEqual(model.alpha, alpha)
@@ -161,7 +161,7 @@ class TestParametricModels(unittest.TestCase):
                 "population_size": N,
                 "alpha": alpha,
                 "truncation_point": dbl_max})
-        alpha = 2
+        alpha = 1.5
         for truncation_point in [0, 3, 1e6]:
             model = msprime.BetaCoalescent(N, alpha, truncation_point)
             self.assertEqual(model.population_size, N)
@@ -227,7 +227,8 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.assertTrue(ts is not None)
 
     def test_beta_coalescent(self):
-        model = msprime.BetaCoalescent(5, 10)
+        model = msprime.BetaCoalescent(
+            population_size=5, alpha=1.5, truncation_point=10)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
@@ -265,7 +266,8 @@ class TestMixedModels(unittest.TestCase):
             sample_size=10,
             model=msprime.DiscreteTimeWrightFisher(Ne),
             demographic_events=[
-                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))])
+                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))],
+            random_seed=2)
         tree = ts.first()
         self.assertEqual(tree.num_roots, 1)
         times = ts.tables.nodes.time

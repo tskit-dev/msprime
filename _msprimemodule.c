@@ -22,14 +22,10 @@
 
 #include <Python.h>
 #include <structmember.h>
-
-#ifdef HAVE_NUMPY
 #include <numpy/arrayobject.h>
-#endif
 
 #include <float.h>
 
-#include <hdf5.h>
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
 
@@ -47,6 +43,9 @@
 
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
+static PyObject *MsprimeFileFormatError;
+static PyObject *MsprimeVersionTooOldError;
+static PyObject *MsprimeVersionTooNewError;
 
 typedef struct {
     PyObject_HEAD
@@ -71,49 +70,75 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     bool locked;
-    node_table_t *node_table;
+    individual_table_t *table;
+} IndividualTable;
+
+typedef struct {
+    PyObject_HEAD
+    bool locked;
+    node_table_t *table;
 } NodeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    edge_table_t *edge_table;
+    edge_table_t *table;
 } EdgeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    site_table_t *site_table;
+    site_table_t *table;
 } SiteTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    mutation_table_t *mutation_table;
+    mutation_table_t *table;
 } MutationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    migration_table_t *migration_table;
+    migration_table_t *table;
 } MigrationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
-    provenance_table_t *provenance_table;
+    population_table_t *table;
+} PopulationTable;
+
+typedef struct {
+    PyObject_HEAD
+    bool locked;
+    provenance_table_t *table;
 } ProvenanceTable;
 
 typedef struct {
     PyObject_HEAD
-    msp_t *sim;
-    RandomGenerator *random_generator;
-} Simulator;
+    table_collection_t *tables;
+    IndividualTable *individuals;
+    NodeTable *nodes;
+    EdgeTable *edges;
+    SiteTable *sites;
+    MutationTable *mutations;
+    MigrationTable *migrations;
+    PopulationTable *populations;
+    ProvenanceTable *provenances;
+} TableCollection;
 
 typedef struct {
     PyObject_HEAD
     recomb_map_t *recomb_map;
 } RecombinationMap;
+
+typedef struct {
+    PyObject_HEAD
+    msp_t *sim;
+    RecombinationMap *recombination_map;
+    RandomGenerator *random_generator;
+} Simulator;
 
 typedef struct {
     PyObject_HEAD
@@ -137,14 +162,6 @@ typedef struct {
     TreeSequence *tree_sequence;
     tree_diff_iterator_t *tree_diff_iterator;
 } TreeDiffIterator;
-
-typedef struct {
-    PyObject_HEAD
-    SparseTree *sparse_tree;
-    node_list_t *head;
-    node_list_t *tail;
-    node_list_t *next;
-} SampleListIterator;
 
 typedef struct {
     PyObject_HEAD
@@ -173,10 +190,25 @@ typedef struct {
 static void
 handle_library_error(int err)
 {
-    if (err == MSP_ERR_OUT_OF_BOUNDS) {
-        PyErr_SetString(PyExc_IndexError, msp_strerror(err));
-    } else{
-        PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+    if (msp_is_kas_error(err)) {
+        PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
+    } else {
+        switch (err) {
+            case MSP_ERR_FILE_VERSION_TOO_NEW:
+                PyErr_SetString(MsprimeVersionTooNewError, msp_strerror(err));
+                break;
+            case MSP_ERR_FILE_VERSION_TOO_OLD:
+                PyErr_SetString(MsprimeVersionTooOldError, msp_strerror(err));
+                break;
+            case MSP_ERR_FILE_FORMAT:
+                PyErr_SetString(MsprimeFileFormatError, msp_strerror(err));
+                break;
+            case MSP_ERR_OUT_OF_BOUNDS:
+                PyErr_SetString(PyExc_IndexError, msp_strerror(err));
+                break;
+            default:
+                PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+        }
     }
 }
 
@@ -192,8 +224,7 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
 {
     int ret = -1;
     PyObject *item;
-    size_t j;
-    Py_ssize_t num_samples_local;
+    Py_ssize_t j, num_samples_local;
     node_id_t *samples_local = NULL;
 
     num_samples_local = PyList_Size(py_samples);
@@ -213,7 +244,8 @@ parse_sample_ids(PyObject *py_samples, tree_sequence_t *ts, size_t *num_samples,
             goto out;
         }
         samples_local[j] = (node_id_t) PyLong_AsLong(item);
-        if (samples_local[j] < 0 || samples_local[j] >= tree_sequence_get_num_nodes(ts)) {
+        if (samples_local[j] < 0
+                || samples_local[j] >= (node_id_t) tree_sequence_get_num_nodes(ts)) {
             PyErr_SetString(PyExc_ValueError, "node ID out of bounds");
             goto out;
         }
@@ -467,6 +499,17 @@ out:
 }
 
 static PyObject *
+make_population(tmp_population_t *population)
+{
+    PyObject *ret = NULL;
+    PyObject *metadata = make_metadata(population->metadata,
+            (Py_ssize_t) population->metadata_length);
+
+    ret = Py_BuildValue("(O)", metadata);
+    return ret;
+}
+
+static PyObject *
 make_provenance(provenance_t *provenance)
 {
     PyObject *ret = NULL;
@@ -478,6 +521,53 @@ make_provenance(provenance_t *provenance)
 }
 
 static PyObject *
+make_individual_row(individual_t *r)
+{
+    PyObject *ret = NULL;
+    PyObject *metadata = make_metadata(r->metadata, (Py_ssize_t) r->metadata_length);
+    PyArrayObject *location = NULL;
+    npy_intp dims;
+
+    dims = (npy_intp) r->location_length;
+    location = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+    if (metadata == NULL || location == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(location), r->location, r->location_length * sizeof(double));
+    ret = Py_BuildValue("IOO", (unsigned int) r->flags, location, metadata);
+out:
+    Py_XDECREF(location);
+    Py_XDECREF(metadata);
+    return ret;
+}
+
+static PyObject *
+make_individual_object(individual_t *r)
+{
+    PyObject *ret = NULL;
+    PyObject *metadata = make_metadata(r->metadata, (Py_ssize_t) r->metadata_length);
+    PyArrayObject *location = NULL;
+    PyArrayObject *nodes = NULL;
+    npy_intp dims;
+
+    dims = (npy_intp) r->location_length;
+    location = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+    dims = (npy_intp) r->nodes_length;
+    nodes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
+    if (metadata == NULL || location == NULL || nodes == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(location), r->location, r->location_length * sizeof(double));
+    memcpy(PyArray_DATA(nodes), r->nodes, r->nodes_length * sizeof(node_id_t));
+    ret = Py_BuildValue("IOOO", (unsigned int) r->flags, location, metadata, nodes);
+out:
+    Py_XDECREF(location);
+    Py_XDECREF(metadata);
+    Py_XDECREF(nodes);
+    return ret;
+}
+
+static PyObject *
 make_node(node_t *r)
 {
     PyObject *ret = NULL;
@@ -485,8 +575,8 @@ make_node(node_t *r)
     if (metadata == NULL) {
         goto out;
     }
-    ret = Py_BuildValue("IdiO",
-        (unsigned int) r->flags, r->time, (int) r->population, metadata);
+    ret = Py_BuildValue("IdiiO",
+        (unsigned int) r->flags, r->time, (int) r->population, (int) r->individual, metadata);
 out:
     Py_XDECREF(metadata);
     return ret;
@@ -502,8 +592,8 @@ make_edge(edge_t *edge)
 static PyObject *
 make_migration(migration_t *r)
 {
-    int source = r->source == MSP_NULL_POPULATION_ID ? -1: r->source;
-    int dest = r->dest == MSP_NULL_POPULATION_ID ? -1: r->dest;
+    int source = r->source == MSP_NULL_POPULATION ? -1: r->source;
+    int dest = r->dest == MSP_NULL_POPULATION ? -1: r->dest;
     PyObject *ret = NULL;
 
     ret = Py_BuildValue("ddiiid",
@@ -512,7 +602,24 @@ make_migration(migration_t *r)
 }
 
 static PyObject *
-make_site(site_t *site)
+make_site_row(site_t *site)
+{
+    PyObject *ret = NULL;
+    PyObject* metadata = NULL;
+
+    metadata = make_metadata(site->metadata, (Py_ssize_t) site->metadata_length);
+    if (metadata == NULL) {
+        goto out;
+    }
+    ret = Py_BuildValue("ds#O", site->position, site->ancestral_state,
+            (Py_ssize_t) site->ancestral_state_length, metadata);
+out:
+    Py_XDECREF(metadata);
+    return ret;
+}
+
+static PyObject *
+make_site_object(site_t *site)
 {
     PyObject *ret = NULL;
     PyObject *mutations = NULL;
@@ -535,8 +642,6 @@ out:
     Py_XDECREF(metadata);
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 make_alleles(variant_t *variant)
@@ -570,17 +675,18 @@ make_variant(variant_t *variant, size_t num_samples)
     PyObject *alleles = make_alleles(variant);
     PyArrayObject *genotypes = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_UINT8);
 
+    /* TODO update this to account for 16 bit variants when we provide the
+     * high-level interface. */
     if (genotypes == NULL || alleles == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(genotypes), variant->genotypes, num_samples * sizeof(uint8_t));
+    memcpy(PyArray_DATA(genotypes), variant->genotypes.u8, num_samples * sizeof(uint8_t));
     ret = Py_BuildValue("iOO", variant->site->id, genotypes, alleles);
 out:
     Py_XDECREF(genotypes);
     Py_XDECREF(alleles);
     return ret;
 }
-#endif
 
 static PyObject *
 convert_sites(site_t *sites, size_t num_sites)
@@ -595,7 +701,7 @@ convert_sites(site_t *sites, size_t num_sites)
         goto out;
     }
     for (j = 0; j < num_sites; j++) {
-        py_site = make_site(&sites[j]);
+        py_site = make_site_object(&sites[j]);
         if (py_site == NULL) {
             Py_DECREF(l);
             goto out;
@@ -724,8 +830,6 @@ static PyTypeObject RandomGeneratorType = {
  *===================================================================
  */
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
 table_get_column_array(size_t num_rows, void *data, int npy_type,
         size_t element_size)
@@ -751,22 +855,18 @@ table_read_column_array(PyObject *input, int npy_type, size_t *num_rows, bool ch
     PyArrayObject *array = NULL;
     npy_intp *shape;
 
-    array = (PyArrayObject *) PyArray_FROM_OTF(input, npy_type, NPY_ARRAY_IN_ARRAY);
+    array = (PyArrayObject *) PyArray_FROMANY(input, npy_type, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (array == NULL) {
-        goto out;
-    }
-    if (PyArray_NDIM(array) != 1) {
-        PyErr_SetString(PyExc_ValueError, "Dim != 1");
         goto out;
     }
     shape = PyArray_DIMS(array);
     if (check_num_rows) {
-        if (*num_rows != shape[0]) {
+        if (*num_rows != (size_t) shape[0]) {
             PyErr_SetString(PyExc_ValueError, "Input array dimensions must be equal.");
             goto out;
         }
     } else {
-        *num_rows = shape[0];
+        *num_rows = (size_t) shape[0];
     }
     ret = array;
 out:
@@ -783,12 +883,8 @@ table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool c
     PyArrayObject *array = NULL;
     npy_intp *shape;
 
-    array = (PyArrayObject *) PyArray_FROM_OTF(input, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
+    array = (PyArrayObject *) PyArray_FROMANY(input, NPY_UINT32, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (array == NULL) {
-        goto out;
-    }
-    if (PyArray_NDIM(array) != 1) {
-        PyErr_SetString(PyExc_ValueError, "Dim != 1");
         goto out;
     }
     shape = PyArray_DIMS(array);
@@ -813,23 +909,21 @@ out:
     return ret;
 }
 
-#endif
-
 /*===================================================================
- * NodeTable
+ * IndividualTable
  *===================================================================
  */
 
 static int
-NodeTable_check_state(NodeTable *self)
+IndividualTable_check_state(IndividualTable *self)
 {
     int ret = -1;
-    if (self->node_table == NULL) {
-        PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
+    if (self->table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "IndividualTable not initialised");
         goto out;
     }
     if (self->locked) {
-        PyErr_SetString(PyExc_RuntimeError, "NodeTable in use by other thread.");
+        PyErr_SetString(PyExc_RuntimeError, "IndividualTable in use by other thread.");
         goto out;
     }
     ret = 0;
@@ -838,26 +932,27 @@ out:
 }
 
 static void
-NodeTable_dealloc(NodeTable* self)
+IndividualTable_dealloc(IndividualTable* self)
 {
-    if (self->node_table != NULL) {
-        node_table_free(self->node_table);
-        PyMem_Free(self->node_table);
-        self->node_table = NULL;
+    if (self->table != NULL) {
+        individual_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static int
-NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
+IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_position_length_increment = 0;
     Py_ssize_t max_metadata_length_increment = 0;
 
-    self->node_table = NULL;
+    self->table = NULL;
     self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
@@ -867,12 +962,14 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->node_table = PyMem_Malloc(sizeof(node_table_t));
-    if (self->node_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(individual_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = node_table_alloc(self->node_table, (size_t) max_rows_increment,
+    err = individual_table_alloc(self->table,
+            (size_t) max_rows_increment,
+            (size_t) max_position_length_increment,
             (size_t) max_metadata_length_increment);
     if (err != 0) {
         handle_library_error(err);
@@ -884,23 +981,26 @@ out:
 }
 
 static PyObject *
-NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
+IndividualTable_add_row(IndividualTable *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     int err;
     unsigned int flags = 0;
-    double time = 0;
-    int population = -1;
     PyObject *py_metadata = Py_None;
+    PyObject *py_location = Py_None;
+    PyArrayObject *location_array = NULL;
+    double *location_data = NULL;
+    table_size_t location_length = 0;
     char *metadata = "";
     Py_ssize_t metadata_length = 0;
-    static char *kwlist[] = {"flags", "time", "population", "metadata", NULL};
+    npy_intp *shape;
+    static char *kwlist[] = {"flags", "location", "metadata", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|idiO", kwlist,
-                &flags, &time, &population, &py_metadata)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|iOO", kwlist,
+                &flags, &py_location, &py_metadata)) {
         goto out;
     }
-    if (NodeTable_check_state(self) != 0) {
+    if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
     if (py_metadata != Py_None) {
@@ -908,94 +1008,129 @@ NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = node_table_add_row(self->node_table, (uint32_t) flags, time,
-            (population_id_t) population, metadata, metadata_length);
+    if (py_location != Py_None) {
+        /* This ensures that only 1D arrays are accepted. */
+        location_array = (PyArrayObject *) PyArray_FromAny(py_location,
+                PyArray_DescrFromType(NPY_FLOAT64), 1, 1,
+                NPY_ARRAY_IN_ARRAY, NULL);
+        if (location_array == NULL) {
+            goto out;
+        }
+        shape = PyArray_DIMS(location_array);
+        location_length = (table_size_t) shape[0];
+        location_data = PyArray_DATA(location_array);
+    }
+    err = individual_table_add_row(self->table, (uint32_t) flags,
+            location_data, location_length, metadata, metadata_length);
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("i", err);
 out:
+    Py_XDECREF(location_array);
+    return ret;
+}
+
+
+/* Forward declaration */
+static PyTypeObject IndividualTableType;
+
+static PyObject *
+IndividualTable_equals(IndividualTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    IndividualTable *other = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &IndividualTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", individual_table_equals(self->table, other->table));
+out:
     return ret;
 }
 
 static PyObject *
-NodeTable_get_row(NodeTable *self, PyObject *args)
+IndividualTable_get_row(IndividualTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
-    node_t node;
+    int err;
+    Py_ssize_t row_id;
+    individual_t individual;
 
-    if (NodeTable_check_state(self) != 0) {
+    if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->node_table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = individual_table_get_row(self->table, (size_t) row_id, &individual);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    node.time = self->node_table->time[row_id];
-    node.flags = self->node_table->flags[row_id];
-    node.population = self->node_table->population[row_id];
-    node.metadata = self->node_table->metadata
-        + self->node_table->metadata_offset[row_id];
-    node.metadata_length = self->node_table->metadata_offset[row_id + 1]
-        - self->node_table->metadata_offset[row_id];
-    ret = make_node(&node);
+    ret = make_individual_row(&individual);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
-
 static PyObject *
-NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
+IndividualTable_set_or_append_columns(IndividualTable *self, PyObject *args, PyObject *kwds,
         int method)
 {
     PyObject *ret = NULL;
     int err;
-    size_t num_rows, metadata_length;
+    size_t num_rows, metadata_length, location_length;
     char *metadata_data = NULL;
+    double *location_data = NULL;
     uint32_t *metadata_offset_data = NULL;
-    void *population_data = NULL;
-    PyObject *time_input = NULL;
-    PyArrayObject *time_array = NULL;
+    uint32_t *location_offset_data = NULL;
     PyObject *flags_input = NULL;
     PyArrayObject *flags_array = NULL;
-    PyObject *population_input = Py_None;
-    PyArrayObject *population_array = NULL;
+    PyObject *location_input = Py_None;
+    PyArrayObject *location_array = NULL;
+    PyObject *location_offset_input = Py_None;
+    PyArrayObject *location_offset_array = NULL;
     PyObject *metadata_input = Py_None;
     PyArrayObject *metadata_array = NULL;
     PyObject *metadata_offset_input = Py_None;
     PyArrayObject *metadata_offset_array = NULL;
-    static char *kwlist[] = {"flags", "time", "population", "metadata", "metadata_offset", NULL};
+    static char *kwlist[] = {"flags", "location", "location_offset",
+        "metadata", "metadata_offset", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OOO", kwlist,
-                &flags_input, &time_input, &population_input, &metadata_input,
-                &metadata_offset_input)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|OOOO", kwlist,
+                &flags_input, &location_input, &location_offset_input,
+                &metadata_input, &metadata_offset_input)) {
         goto out;
     }
-    if (NodeTable_check_state(self) != 0) {
+    if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
     flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
     if (flags_array == NULL) {
         goto out;
     }
-    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
-    if (time_array == NULL) {
+    if ((location_input == Py_None) != (location_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "location and location_offset must be specified together");
         goto out;
     }
-    if (population_input != Py_None) {
-        population_array = table_read_column_array(population_input, NPY_INT32,
-                &num_rows, true);
-        if (population_array == NULL) {
+    if (location_input != Py_None) {
+        location_array = table_read_column_array(location_input, NPY_FLOAT64,
+                &location_length, false);
+        if (location_array == NULL) {
             goto out;
         }
-        population_data = PyArray_DATA(population_array);
+        location_data = PyArray_DATA(location_array);
+        location_offset_array = table_read_offset_array(location_offset_input, &num_rows,
+                location_length, true);
+        if (location_offset_array == NULL) {
+            goto out;
+        }
+        location_offset_data = PyArray_DATA(location_offset_array);
     }
     if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
         PyErr_SetString(PyExc_TypeError,
@@ -1017,13 +1152,507 @@ NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
     }
     if (method == SET_COLS) {
-        err = node_table_set_columns(self->node_table, num_rows,
-                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+        err = individual_table_set_columns(self->table, num_rows,
+                PyArray_DATA(flags_array),
+                location_data, location_offset_data,
                 metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = node_table_append_columns(self->node_table, num_rows,
-                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+        err = individual_table_append_columns(self->table, num_rows,
+                PyArray_DATA(flags_array),
+                location_data, location_offset_data,
                 metadata_data, metadata_offset_data);
+    } else {
+        assert(0);
+    }
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(flags_array);
+    Py_XDECREF(location_array);
+    Py_XDECREF(location_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static PyObject *
+IndividualTable_append_columns(IndividualTable *self, PyObject *args, PyObject *kwds)
+{
+    return IndividualTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+IndividualTable_set_columns(IndividualTable *self, PyObject *args, PyObject *kwds)
+{
+    return IndividualTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+IndividualTable_clear(IndividualTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = individual_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_truncate(IndividualTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = individual_table_truncate(self->table, (size_t) num_rows);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_max_rows_increment(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_num_rows(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_max_rows(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_flags(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->num_rows, self->table->flags,
+            NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_location(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->location_length,
+            self->table->location, NPY_FLOAT64, sizeof(double));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_location_offset(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->location_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_metadata(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+IndividualTable_get_metadata_offset(IndividualTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (IndividualTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyGetSetDef IndividualTable_getsetters[] = {
+    {"max_rows_increment",
+        (getter) IndividualTable_get_max_rows_increment, NULL, "The size increment"},
+    {"num_rows", (getter) IndividualTable_get_num_rows, NULL,
+        "The number of rows in the table."},
+    {"max_rows", (getter) IndividualTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
+    {"flags", (getter) IndividualTable_get_flags, NULL, "The flags array"},
+    {"location", (getter) IndividualTable_get_location, NULL, "The location array"},
+    {"location_offset", (getter) IndividualTable_get_location_offset, NULL,
+        "The location offset array"},
+    {"metadata", (getter) IndividualTable_get_metadata, NULL, "The metadata array"},
+    {"metadata_offset", (getter) IndividualTable_get_metadata_offset, NULL,
+        "The metadata offset array"},
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef IndividualTable_methods[] = {
+    {"add_row", (PyCFunction) IndividualTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
+    {"get_row", (PyCFunction) IndividualTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
+    {"equals", (PyCFunction) IndividualTable_equals, METH_VARARGS,
+        "Returns true if the specified individual table is equal."},
+    {"append_columns", (PyCFunction) IndividualTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
+    {"set_columns", (PyCFunction) IndividualTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
+    {"clear", (PyCFunction) IndividualTable_clear, METH_NOARGS,
+        "Clears this table."},
+    {"truncate", (PyCFunction) IndividualTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject IndividualTableType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.IndividualTable",             /* tp_name */
+    sizeof(IndividualTable),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)IndividualTable_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "IndividualTable objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    IndividualTable_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    IndividualTable_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)IndividualTable_init,      /* tp_init */
+};
+
+
+/*===================================================================
+ * NodeTable
+ *===================================================================
+ */
+
+static int
+NodeTable_check_state(NodeTable *self)
+{
+    int ret = -1;
+    if (self->table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "NodeTable not initialised");
+        goto out;
+    }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "NodeTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static void
+NodeTable_dealloc(NodeTable* self)
+{
+    if (self->table != NULL) {
+        node_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"max_rows_increment", NULL};
+    Py_ssize_t max_rows_increment = 0;
+    Py_ssize_t max_metadata_length_increment = 0;
+
+    self->table = NULL;
+    self->locked = false;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
+                &max_rows_increment)) {
+        goto out;
+    }
+    if (max_rows_increment < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    self->table = PyMem_Malloc(sizeof(node_table_t));
+    if (self->table == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = node_table_alloc(self->table, (size_t) max_rows_increment,
+            (size_t) max_metadata_length_increment);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_add_row(NodeTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    unsigned int flags = 0;
+    double time = 0;
+    int population = -1;
+    int individual = -1;
+    PyObject *py_metadata = Py_None;
+    char *metadata = "";
+    Py_ssize_t metadata_length = 0;
+    static char *kwlist[] = {"flags", "time", "population", "individual", "metadata", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|idiiO", kwlist,
+                &flags, &time, &population, &individual, &py_metadata)) {
+        goto out;
+    }
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (py_metadata != Py_None) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
+    }
+    err = node_table_add_row(self->table, (uint32_t) flags, time,
+            (population_id_t) population, individual, metadata, metadata_length);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject NodeTableType;
+
+static PyObject *
+NodeTable_equals(NodeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    NodeTable *other = NULL;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &NodeTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", node_table_equals(self->table, other->table));
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_row(NodeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int err;
+    Py_ssize_t row_id;
+    node_t node;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    err = node_table_get_row(self->table, (size_t) row_id, &node);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_node(&node);
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
+        int method)
+{
+    PyObject *ret = NULL;
+    int err;
+    size_t num_rows, metadata_length;
+    char *metadata_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
+    void *population_data = NULL;
+    void *individual_data = NULL;
+    PyObject *time_input = NULL;
+    PyArrayObject *time_array = NULL;
+    PyObject *flags_input = NULL;
+    PyArrayObject *flags_array = NULL;
+    PyObject *population_input = Py_None;
+    PyArrayObject *population_array = NULL;
+    PyObject *individual_input = Py_None;
+    PyArrayObject *individual_array = NULL;
+    PyObject *metadata_input = Py_None;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = Py_None;
+    PyArrayObject *metadata_offset_array = NULL;
+    static char *kwlist[] = {"flags", "time", "population", "individual",
+        "metadata", "metadata_offset", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OOOO", kwlist,
+                &flags_input, &time_input, &population_input, &individual_input,
+                &metadata_input, &metadata_offset_input)) {
+        goto out;
+    }
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
+    if (flags_array == NULL) {
+        goto out;
+    }
+    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
+    if (time_array == NULL) {
+        goto out;
+    }
+    if (population_input != Py_None) {
+        population_array = table_read_column_array(population_input, NPY_INT32,
+                &num_rows, true);
+        if (population_array == NULL) {
+            goto out;
+        }
+        population_data = PyArray_DATA(population_array);
+    }
+    if (individual_input != Py_None) {
+        individual_array = table_read_column_array(individual_input, NPY_INT32,
+                &num_rows, true);
+        if (individual_array == NULL) {
+            goto out;
+        }
+        individual_data = PyArray_DATA(individual_array);
+    }
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+    if (method == SET_COLS) {
+        err = node_table_set_columns(self->table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+                individual_data, metadata_data, metadata_offset_data);
+    } else if (method == APPEND_COLS) {
+        err = node_table_append_columns(self->table, num_rows,
+                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+                individual_data, metadata_data, metadata_offset_data);
     } else {
         assert(0);
     }
@@ -1036,6 +1665,7 @@ out:
     Py_XDECREF(flags_array);
     Py_XDECREF(time_array);
     Py_XDECREF(population_array);
+    Py_XDECREF(individual_array);
     Py_XDECREF(metadata_array);
     Py_XDECREF(metadata_offset_array);
     return ret;
@@ -1053,8 +1683,6 @@ NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
     return NodeTable_set_or_append_columns(self, args, kwds, SET_COLS);
 }
 
-#endif
-
 static PyObject *
 NodeTable_clear(NodeTable *self)
 {
@@ -1064,7 +1692,34 @@ NodeTable_clear(NodeTable *self)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    err = node_table_clear(self->node_table);
+    err = node_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_truncate(NodeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = node_table_truncate(self->table, (size_t) num_rows);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1081,7 +1736,7 @@ NodeTable_get_max_rows_increment(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -1093,7 +1748,7 @@ NodeTable_get_num_rows(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -1105,12 +1760,11 @@ NodeTable_get_max_rows(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->node_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 NodeTable_get_time(NodeTable *self, void *closure)
 {
@@ -1119,7 +1773,7 @@ NodeTable_get_time(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->time,
+    ret = table_get_column_array(self->table->num_rows, self->table->time,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -1133,7 +1787,7 @@ NodeTable_get_flags(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->flags,
+    ret = table_get_column_array(self->table->num_rows, self->table->flags,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -1147,7 +1801,21 @@ NodeTable_get_population(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows, self->node_table->population,
+    ret = table_get_column_array(self->table->num_rows, self->table->population,
+            NPY_INT32, sizeof(int32_t));
+out:
+    return ret;
+}
+
+static PyObject *
+NodeTable_get_individual(NodeTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (NodeTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->num_rows, self->table->individual,
             NPY_INT32, sizeof(int32_t));
 out:
     return ret;
@@ -1161,8 +1829,8 @@ NodeTable_get_metadata(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->metadata_length,
-            self->node_table->metadata, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -1175,12 +1843,11 @@ NodeTable_get_metadata_offset(NodeTable *self, void *closure)
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->node_table->num_rows + 1,
-            self->node_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
-#endif
 
 static PyGetSetDef NodeTable_getsetters[] = {
     {"max_rows_increment",
@@ -1189,31 +1856,32 @@ static PyGetSetDef NodeTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) NodeTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"time", (getter) NodeTable_get_time, NULL, "The time array"},
     {"flags", (getter) NodeTable_get_flags, NULL, "The flags array"},
     {"population", (getter) NodeTable_get_population, NULL, "The population array"},
+    {"individual", (getter) NodeTable_get_individual, NULL, "The individual array"},
     {"metadata", (getter) NodeTable_get_metadata, NULL, "The metadata array"},
     {"metadata_offset", (getter) NodeTable_get_metadata_offset, NULL,
         "The metadata offset array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef NodeTable_methods[] = {
     {"add_row", (PyCFunction) NodeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) NodeTable_equals, METH_VARARGS,
+        "Returns True if the specified NodeTable is equal to this one."},
     {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) NodeTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
     {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) NodeTable_clear, METH_NOARGS,
         "Clears this table."},
+    {"truncate", (PyCFunction) NodeTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
     {NULL}  /* Sentinel */
 };
 
@@ -1266,7 +1934,7 @@ static int
 EdgeTable_check_state(EdgeTable *self)
 {
     int ret = -1;
-    if (self->edge_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "EdgeTable not initialised");
         goto out;
     }
@@ -1282,10 +1950,10 @@ out:
 static void
 EdgeTable_dealloc(EdgeTable* self)
 {
-    if (self->edge_table != NULL) {
-        edge_table_free(self->edge_table);
-        PyMem_Free(self->edge_table);
-        self->edge_table = NULL;
+    if (self->table != NULL) {
+        edge_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1298,7 +1966,7 @@ EdgeTable_init(EdgeTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->edge_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
@@ -1306,12 +1974,12 @@ EdgeTable_init(EdgeTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->edge_table = PyMem_Malloc(sizeof(edge_table_t));
-    if (self->edge_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(edge_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = edge_table_alloc(self->edge_table, (size_t) max_rows_increment);
+    err = edge_table_alloc(self->table, (size_t) max_rows_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1339,7 +2007,7 @@ EdgeTable_add_row(EdgeTable *self, PyObject *args, PyObject *kwds)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    err = edge_table_add_row(self->edge_table, left, right, parent, child);
+    err = edge_table_add_row(self->table, left, right, parent, child);
     if (err < 0) {
         handle_library_error(err);
         goto out;
@@ -1349,11 +2017,32 @@ out:
     return ret;
 }
 
+/* Forward declaration */
+static PyTypeObject EdgeTableType;
+
+static PyObject *
+EdgeTable_equals(EdgeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    EdgeTable *other = NULL;
+
+    if (EdgeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &EdgeTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", edge_table_equals(self->table, other->table));
+out:
+    return ret;
+}
+
 static PyObject *
 EdgeTable_get_row(EdgeTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     edge_t edge;
 
     if (EdgeTable_check_state(self) != 0) {
@@ -1362,21 +2051,16 @@ EdgeTable_get_row(EdgeTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->edge_table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = edge_table_get_row(self->table, (size_t) row_id, &edge);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    edge.left = self->edge_table->left[row_id];
-    edge.right = self->edge_table->right[row_id];
-    edge.parent = self->edge_table->parent[row_id];
-    edge.child = self->edge_table->child[row_id];
     ret = make_edge(&edge);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 EdgeTable_set_or_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds,
         int method)
@@ -1416,11 +2100,11 @@ EdgeTable_set_or_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds,
         goto out;
     }
     if (method == SET_COLS) {
-        err = edge_table_set_columns(self->edge_table, num_rows,
+        err = edge_table_set_columns(self->table, num_rows,
                 PyArray_DATA(left_array), PyArray_DATA(right_array),
                 PyArray_DATA(parent_array), PyArray_DATA(child_array));
     } else if (method == APPEND_COLS) {
-        err = edge_table_append_columns(self->edge_table, num_rows,
+        err = edge_table_append_columns(self->table, num_rows,
                 PyArray_DATA(left_array), PyArray_DATA(right_array),
                 PyArray_DATA(parent_array), PyArray_DATA(child_array));
     } else {
@@ -1451,7 +2135,6 @@ EdgeTable_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds)
     return EdgeTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-#endif
 
 static PyObject *
 EdgeTable_clear(EdgeTable *self)
@@ -1462,7 +2145,34 @@ EdgeTable_clear(EdgeTable *self)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    err = edge_table_clear(self->edge_table);
+    err = edge_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+EdgeTable_truncate(EdgeTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (EdgeTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = edge_table_truncate(self->table, (size_t) num_rows);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1479,7 +2189,7 @@ EdgeTable_get_max_rows_increment(EdgeTable *self, void *closure)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edge_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -1491,7 +2201,7 @@ EdgeTable_get_num_rows(EdgeTable *self, void *closure)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edge_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -1503,12 +2213,11 @@ EdgeTable_get_max_rows(EdgeTable *self, void *closure)
     if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->edge_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 EdgeTable_get_left(EdgeTable *self, void *closure)
 {
@@ -1518,7 +2227,7 @@ EdgeTable_get_left(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->left, NPY_FLOAT64,
+            self->table->num_rows, self->table->left, NPY_FLOAT64,
             sizeof(double));
 out:
     return ret;
@@ -1533,7 +2242,7 @@ EdgeTable_get_right(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->right, NPY_FLOAT64,
+            self->table->num_rows, self->table->right, NPY_FLOAT64,
             sizeof(double));
 out:
     return ret;
@@ -1548,7 +2257,7 @@ EdgeTable_get_parent(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->parent, NPY_INT32,
+            self->table->num_rows, self->table->parent, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -1563,13 +2272,11 @@ EdgeTable_get_child(EdgeTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->edge_table->num_rows, self->edge_table->child, NPY_INT32,
+            self->table->num_rows, self->table->child, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
 }
-
-#endif
 
 static PyGetSetDef EdgeTable_getsetters[] = {
     {"max_rows_increment",
@@ -1579,28 +2286,28 @@ static PyGetSetDef EdgeTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) EdgeTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"left", (getter) EdgeTable_get_left, NULL, "The left array"},
     {"right", (getter) EdgeTable_get_right, NULL, "The right array"},
     {"parent", (getter) EdgeTable_get_parent, NULL, "The parent array"},
     {"child", (getter) EdgeTable_get_child, NULL, "The child array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef EdgeTable_methods[] = {
     {"add_row", (PyCFunction) EdgeTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) EdgeTable_equals, METH_VARARGS,
+        "Returns True if the specified EdgeTable is equal to this one."},
     {"get_row", (PyCFunction) EdgeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) EdgeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) EdgeTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) EdgeTable_clear, METH_NOARGS,
         "Clears this table."},
+    {"truncate", (PyCFunction) EdgeTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
     {NULL}  /* Sentinel */
 };
 
@@ -1653,7 +2360,7 @@ static int
 MigrationTable_check_state(MigrationTable *self)
 {
     int ret = -1;
-    if (self->migration_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "MigrationTable not initialised");
         goto out;
     }
@@ -1669,10 +2376,10 @@ out:
 static void
 MigrationTable_dealloc(MigrationTable* self)
 {
-    if (self->migration_table != NULL) {
-        migration_table_free(self->migration_table);
-        PyMem_Free(self->migration_table);
-        self->migration_table = NULL;
+    if (self->table != NULL) {
+        migration_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1685,7 +2392,7 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->migration_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
@@ -1694,12 +2401,12 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->migration_table = PyMem_Malloc(sizeof(migration_table_t));
-    if (self->migration_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(migration_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = migration_table_alloc(self->migration_table, (size_t) max_rows_increment);
+    err = migration_table_alloc(self->table, (size_t) max_rows_increment);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1725,7 +2432,7 @@ MigrationTable_add_row(MigrationTable *self, PyObject *args, PyObject *kwds)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    err = migration_table_add_row(self->migration_table, left, right, node,
+    err = migration_table_add_row(self->table, left, right, node,
             source, dest, time);
     if (err < 0) {
         handle_library_error(err);
@@ -1736,11 +2443,32 @@ out:
     return ret;
 }
 
+/* Forward declaration */
+static PyTypeObject MigrationTableType;
+
+static PyObject *
+MigrationTable_equals(MigrationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    MigrationTable *other = NULL;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &MigrationTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", migration_table_equals(self->table, other->table));
+out:
+    return ret;
+}
+
 static PyObject *
 MigrationTable_get_row(MigrationTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     migration_t migration;
 
     if (MigrationTable_check_state(self) != 0) {
@@ -1749,23 +2477,15 @@ MigrationTable_get_row(MigrationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->migration_table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = migration_table_get_row(self->table, (size_t) row_id, &migration);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    migration.left = self->migration_table->left[row_id];
-    migration.right = self->migration_table->right[row_id];
-    migration.node = self->migration_table->node[row_id];
-    migration.source = self->migration_table->source[row_id];
-    migration.dest = self->migration_table->dest[row_id];
-    migration.time = self->migration_table->time[row_id];
     ret = make_migration(&migration);
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds,
@@ -1818,11 +2538,11 @@ MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObj
         goto out;
     }
     if (method == SET_COLS) {
-        err = migration_table_set_columns(self->migration_table, num_rows,
+        err = migration_table_set_columns(self->table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
             PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
     } else if (method == APPEND_COLS) {
-        err = migration_table_append_columns(self->migration_table, num_rows,
+        err = migration_table_append_columns(self->table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
             PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
     } else {
@@ -1855,8 +2575,6 @@ MigrationTable_append_columns(MigrationTable *self, PyObject *args, PyObject *kw
     return MigrationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-#endif
-
 static PyObject *
 MigrationTable_clear(MigrationTable *self)
 {
@@ -1866,7 +2584,34 @@ MigrationTable_clear(MigrationTable *self)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    err = migration_table_clear(self->migration_table);
+    err = migration_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+MigrationTable_truncate(MigrationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (MigrationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = migration_table_truncate(self->table, (size_t) num_rows);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1883,7 +2628,7 @@ MigrationTable_get_max_rows_increment(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -1895,7 +2640,7 @@ MigrationTable_get_num_rows(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -1907,12 +2652,11 @@ MigrationTable_get_max_rows(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->migration_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 MigrationTable_get_left(MigrationTable *self, void *closure)
 {
@@ -1921,7 +2665,7 @@ MigrationTable_get_left(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->left,
+    ret = table_get_column_array(self->table->num_rows, self->table->left,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -1935,7 +2679,7 @@ MigrationTable_get_right(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->right,
+    ret = table_get_column_array(self->table->num_rows, self->table->right,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -1949,7 +2693,7 @@ MigrationTable_get_time(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->time,
+    ret = table_get_column_array(self->table->num_rows, self->table->time,
             NPY_FLOAT64, sizeof(double));
 out:
     return ret;
@@ -1963,7 +2707,7 @@ MigrationTable_get_node(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->node,
+    ret = table_get_column_array(self->table->num_rows, self->table->node,
             NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
@@ -1977,7 +2721,7 @@ MigrationTable_get_source(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->source,
+    ret = table_get_column_array(self->table->num_rows, self->table->source,
             NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
@@ -1991,12 +2735,11 @@ MigrationTable_get_dest(MigrationTable *self, void *closure)
     if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->migration_table->num_rows, self->migration_table->dest,
+    ret = table_get_column_array(self->table->num_rows, self->table->dest,
             NPY_INT32, sizeof(uint32_t));
 out:
     return ret;
 }
-#endif
 
 static PyGetSetDef MigrationTable_getsetters[] = {
     {"max_rows_increment",
@@ -2005,30 +2748,30 @@ static PyGetSetDef MigrationTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) MigrationTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"left", (getter) MigrationTable_get_left, NULL, "The left array"},
     {"right", (getter) MigrationTable_get_right, NULL, "The right array"},
     {"node", (getter) MigrationTable_get_node, NULL, "The node array"},
     {"source", (getter) MigrationTable_get_source, NULL, "The source array"},
     {"dest", (getter) MigrationTable_get_dest, NULL, "The dest array"},
     {"time", (getter) MigrationTable_get_time, NULL, "The time array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef MigrationTable_methods[] = {
     {"add_row", (PyCFunction) MigrationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) MigrationTable_equals, METH_VARARGS,
+        "Returns True if the specified MigrationTable is equal to this one."},
     {"get_row", (PyCFunction) MigrationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MigrationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) MigrationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) MigrationTable_clear, METH_NOARGS,
         "Clears this table."},
+    {"truncate", (PyCFunction) MigrationTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
     {NULL}  /* Sentinel */
 };
 
@@ -2082,7 +2825,7 @@ static int
 SiteTable_check_state(SiteTable *self)
 {
     int ret = -1;
-    if (self->site_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "SiteTable not initialised");
         goto out;
     }
@@ -2098,10 +2841,10 @@ out:
 static void
 SiteTable_dealloc(SiteTable* self)
 {
-    if (self->site_table != NULL) {
-        site_table_free(self->site_table);
-        PyMem_Free(self->site_table);
-        self->site_table = NULL;
+    if (self->table != NULL) {
+        site_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -2114,7 +2857,7 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->site_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
@@ -2122,12 +2865,12 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->site_table = PyMem_Malloc(sizeof(site_table_t));
-    if (self->site_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(site_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = site_table_alloc(self->site_table, (size_t) max_rows_increment, 0, 0);
+    err = site_table_alloc(self->table, (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2162,7 +2905,7 @@ SiteTable_add_row(SiteTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = site_table_add_row(self->site_table, position, ancestral_state,
+    err = site_table_add_row(self->table, position, ancestral_state,
             ancestral_state_length, metadata, metadata_length);
     if (err < 0) {
         handle_library_error(err);
@@ -2173,11 +2916,32 @@ out:
     return ret;
 }
 
+/* Forward declaration */
+static PyTypeObject SiteTableType;
+
+static PyObject *
+SiteTable_equals(SiteTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    SiteTable *other = NULL;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &SiteTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", site_table_equals(self->table, other->table));
+out:
+    return ret;
+}
+
 static PyObject *
 SiteTable_get_row(SiteTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     site_t site;
 
     if (SiteTable_check_state(self) != 0) {
@@ -2186,27 +2950,15 @@ SiteTable_get_row(SiteTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->site_table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = site_table_get_row(self->table, (size_t) row_id, &site);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    site.position = self->site_table->position[row_id];
-    site.ancestral_state = self->site_table->ancestral_state
-        + self->site_table->ancestral_state_offset[row_id];
-    site.ancestral_state_length = self->site_table->ancestral_state_offset[row_id + 1]
-        - self->site_table->ancestral_state_offset[row_id];
-    site.metadata = self->site_table->metadata
-        + self->site_table->metadata_offset[row_id];
-    site.metadata_length = self->site_table->metadata_offset[row_id + 1]
-        - self->site_table->metadata_offset[row_id];
-    site.mutations_length = 0;
-    ret = make_site(&site);
+    ret = make_site_row(&site);
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
@@ -2277,11 +3029,11 @@ SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
     }
 
     if (method == SET_COLS) {
-        err = site_table_set_columns(self->site_table, num_rows,
+        err = site_table_set_columns(self->table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
             PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = site_table_append_columns(self->site_table, num_rows,
+        err = site_table_append_columns(self->table, num_rows,
             PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
             PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
     } else {
@@ -2313,8 +3065,6 @@ SiteTable_append_columns(SiteTable *self, PyObject *args, PyObject *kwds)
     return SiteTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-#endif
-
 static PyObject *
 SiteTable_clear(SiteTable *self)
 {
@@ -2324,7 +3074,7 @@ SiteTable_clear(SiteTable *self)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    err = site_table_clear(self->site_table);
+    err = site_table_clear(self->table);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2334,6 +3084,32 @@ out:
     return ret;
 }
 
+static PyObject *
+SiteTable_truncate(SiteTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (SiteTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = site_table_truncate(self->table, (size_t) num_rows);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
 
 static PyObject *
 SiteTable_get_max_rows_increment(SiteTable *self, void *closure)
@@ -2342,7 +3118,7 @@ SiteTable_get_max_rows_increment(SiteTable *self, void *closure)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -2354,7 +3130,7 @@ SiteTable_get_num_rows(SiteTable *self, void *closure)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -2366,12 +3142,11 @@ SiteTable_get_max_rows(SiteTable *self, void *closure)
     if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->site_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 SiteTable_get_position(SiteTable *self, void *closure)
 {
@@ -2381,8 +3156,8 @@ SiteTable_get_position(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows,
-            self->site_table->position, NPY_FLOAT64, sizeof(double));
+            self->table->num_rows,
+            self->table->position, NPY_FLOAT64, sizeof(double));
 out:
     return ret;
 }
@@ -2396,8 +3171,8 @@ SiteTable_get_ancestral_state(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->ancestral_state_length,
-            self->site_table->ancestral_state, NPY_INT8, sizeof(char));
+            self->table->ancestral_state_length,
+            self->table->ancestral_state, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -2411,8 +3186,8 @@ SiteTable_get_ancestral_state_offset(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows + 1,
-            self->site_table->ancestral_state_offset, NPY_UINT32, sizeof(uint32_t));
+            self->table->num_rows + 1,
+            self->table->ancestral_state_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -2426,8 +3201,8 @@ SiteTable_get_metadata(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->metadata_length,
-            self->site_table->metadata, NPY_INT8, sizeof(char));
+            self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -2441,13 +3216,11 @@ SiteTable_get_metadata_offset(SiteTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->site_table->num_rows + 1,
-            self->site_table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+            self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
-
-#endif
 
 static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows_increment",
@@ -2459,7 +3232,6 @@ static PyGetSetDef SiteTable_getsetters[] = {
     {"max_rows",
         (getter) SiteTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"position", (getter) SiteTable_get_position, NULL,
         "The position array."},
     {"ancestral_state", (getter) SiteTable_get_ancestral_state, NULL,
@@ -2470,23 +3242,24 @@ static PyGetSetDef SiteTable_getsetters[] = {
         "The metadata array."},
     {"metadata_offset", (getter) SiteTable_get_metadata_offset, NULL,
         "The metadata offset array."},
-#endif
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef SiteTable_methods[] = {
     {"add_row", (PyCFunction) SiteTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) SiteTable_equals, METH_VARARGS,
+        "Returns True if the specified SiteTable is equal to this one."},
     {"get_row", (PyCFunction) SiteTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) SiteTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) SiteTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) SiteTable_clear, METH_NOARGS,
         "Clears this table."},
+    {"truncate", (PyCFunction) SiteTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
     {NULL}  /* Sentinel */
 };
 
@@ -2540,7 +3313,7 @@ static int
 MutationTable_check_state(MutationTable *self)
 {
     int ret = -1;
-    if (self->mutation_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "MutationTable not initialised");
         goto out;
     }
@@ -2556,10 +3329,10 @@ out:
 static void
 MutationTable_dealloc(MutationTable* self)
 {
-    if (self->mutation_table != NULL) {
-        mutation_table_free(self->mutation_table);
-        PyMem_Free(self->mutation_table);
-        self->mutation_table = NULL;
+    if (self->table != NULL) {
+        mutation_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -2572,7 +3345,7 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->mutation_table = NULL;
+    self->table = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &max_rows_increment)) {
         goto out;
     }
@@ -2580,12 +3353,12 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->mutation_table = PyMem_Malloc(sizeof(mutation_table_t));
-    if (self->mutation_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(mutation_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = mutation_table_alloc(self->mutation_table, (size_t) max_rows_increment, 0, 0);
+    err = mutation_table_alloc(self->table, (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2623,7 +3396,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = mutation_table_add_row(self->mutation_table, (site_id_t) site,
+    err = mutation_table_add_row(self->table, (site_id_t) site,
             (node_id_t) node, (mutation_id_t) parent,
             derived_state, derived_state_length,
             metadata, metadata_length);
@@ -2636,11 +3409,32 @@ out:
     return ret;
 }
 
+/* Forward declaration */
+static PyTypeObject MutationTableType;
+
+static PyObject *
+MutationTable_equals(MutationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    MutationTable *other = NULL;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &MutationTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", mutation_table_equals(self->table, other->table));
+out:
+    return ret;
+}
+
 static PyObject *
 MutationTable_get_row(MutationTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     mutation_t mutation;
 
     if (MutationTable_check_state(self) != 0) {
@@ -2649,28 +3443,15 @@ MutationTable_get_row(MutationTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->mutation_table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = mutation_table_get_row(self->table, (size_t) row_id, &mutation);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    mutation.site = self->mutation_table->site[row_id];
-    mutation.node = self->mutation_table->node[row_id];
-    mutation.parent = self->mutation_table->parent[row_id];
-    mutation.derived_state = self->mutation_table->derived_state
-        + self->mutation_table->derived_state_offset[row_id];
-    mutation.derived_state_length = self->mutation_table->derived_state_offset[row_id + 1]
-        - self->mutation_table->derived_state_offset[row_id];
-    mutation.metadata = self->mutation_table->metadata
-        + self->mutation_table->metadata_offset[row_id];
-    mutation.metadata_length = self->mutation_table->metadata_offset[row_id + 1]
-        - self->mutation_table->metadata_offset[row_id];
     ret = make_mutation(&mutation);
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObject *kwds,
@@ -2759,13 +3540,13 @@ MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObjec
     }
 
     if (method == SET_COLS) {
-        err = mutation_table_set_columns(self->mutation_table, num_rows,
+        err = mutation_table_set_columns(self->table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
                 PyArray_DATA(derived_state_offset_array),
                 metadata_data, metadata_offset_data);
     } else if (method == APPEND_COLS) {
-        err = mutation_table_append_columns(self->mutation_table, num_rows,
+        err = mutation_table_append_columns(self->table, num_rows,
                 PyArray_DATA(site_array), PyArray_DATA(node_array),
                 parent_data, PyArray_DATA(derived_state_array),
                 PyArray_DATA(derived_state_offset_array),
@@ -2801,9 +3582,6 @@ MutationTable_append_columns(MutationTable *self, PyObject *args, PyObject *kwds
     return MutationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
 }
 
-
-#endif
-
 static PyObject *
 MutationTable_clear(MutationTable *self)
 {
@@ -2813,7 +3591,34 @@ MutationTable_clear(MutationTable *self)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    err = mutation_table_clear(self->mutation_table);
+    err = mutation_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+MutationTable_truncate(MutationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (MutationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = mutation_table_truncate(self->table, (size_t) num_rows);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2830,7 +3635,7 @@ MutationTable_get_max_rows_increment(MutationTable *self, void *closure)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -2842,7 +3647,7 @@ MutationTable_get_num_rows(MutationTable *self, void *closure)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -2854,12 +3659,11 @@ MutationTable_get_max_rows(MutationTable *self, void *closure)
     if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->mutation_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
 
-#ifdef HAVE_NUMPY
 static PyObject *
 MutationTable_get_site(MutationTable *self, void *closure)
 {
@@ -2869,7 +3673,7 @@ MutationTable_get_site(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->site, NPY_INT32,
+            self->table->num_rows, self->table->site, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -2884,7 +3688,7 @@ MutationTable_get_node(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->node, NPY_INT32,
+            self->table->num_rows, self->table->node, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -2899,7 +3703,7 @@ MutationTable_get_parent(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows, self->mutation_table->parent, NPY_INT32,
+            self->table->num_rows, self->table->parent, NPY_INT32,
             sizeof(int32_t));
 out:
     return ret;
@@ -2914,7 +3718,7 @@ MutationTable_get_derived_state(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->derived_state_length, self->mutation_table->derived_state,
+            self->table->derived_state_length, self->table->derived_state,
             NPY_INT8, sizeof(char));
 out:
     return ret;
@@ -2929,7 +3733,7 @@ MutationTable_get_derived_state_offset(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows + 1, self->mutation_table->derived_state_offset,
+            self->table->num_rows + 1, self->table->derived_state_offset,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
@@ -2944,7 +3748,7 @@ MutationTable_get_metadata(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->metadata_length, self->mutation_table->metadata,
+            self->table->metadata_length, self->table->metadata,
             NPY_INT8, sizeof(char));
 out:
     return ret;
@@ -2959,13 +3763,11 @@ MutationTable_get_metadata_offset(MutationTable *self, void *closure)
         goto out;
     }
     ret = table_get_column_array(
-            self->mutation_table->num_rows + 1, self->mutation_table->metadata_offset,
+            self->table->num_rows + 1, self->table->metadata_offset,
             NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
-
-#endif
 
 static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows_increment",
@@ -2977,7 +3779,6 @@ static PyGetSetDef MutationTable_getsetters[] = {
     {"max_rows",
         (getter) MutationTable_get_max_rows, NULL,
         "The curret maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"site", (getter) MutationTable_get_site, NULL, "The site array"},
     {"node", (getter) MutationTable_get_node, NULL, "The node array"},
     {"parent", (getter) MutationTable_get_parent, NULL, "The parent array"},
@@ -2989,23 +3790,24 @@ static PyGetSetDef MutationTable_getsetters[] = {
         "The metadata array"},
     {"metadata_offset", (getter) MutationTable_get_metadata_offset, NULL,
         "The metadata_offset array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef MutationTable_methods[] = {
     {"add_row", (PyCFunction) MutationTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) MutationTable_equals, METH_VARARGS,
+        "Returns True if the specified MutationTable is equal to this one."},
     {"get_row", (PyCFunction) MutationTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"set_columns", (PyCFunction) MutationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
     {"append_columns", (PyCFunction) MutationTable_append_columns, METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified  arrays into the columns."},
-#endif
     {"clear", (PyCFunction) MutationTable_clear, METH_NOARGS,
         "Clears this table."},
+    {"truncate", (PyCFunction) MutationTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
     {NULL}  /* Sentinel */
 };
 
@@ -3050,6 +3852,401 @@ static PyTypeObject MutationTableType = {
 };
 
 /*===================================================================
+ * PopulationTable
+ *===================================================================
+ */
+
+static int
+PopulationTable_check_state(PopulationTable *self)
+{
+    int ret = -1;
+    if (self->table == NULL) {
+        PyErr_SetString(PyExc_SystemError, "PopulationTable not initialised");
+        goto out;
+    }
+    if (self->locked) {
+        PyErr_SetString(PyExc_RuntimeError, "PopulationTable in use by other thread.");
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static void
+PopulationTable_dealloc(PopulationTable* self)
+{
+    if (self->table != NULL) {
+        population_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+PopulationTable_init(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"max_rows_increment", NULL};
+    Py_ssize_t max_rows_increment = 0;
+
+    self->table = NULL;
+    self->locked = false;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
+                &max_rows_increment)) {
+        goto out;
+    }
+    if (max_rows_increment < 0) {
+        PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
+        goto out;
+    }
+    self->table = PyMem_Malloc(sizeof(population_table_t));
+    if (self->table == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    /* Take the default size increments for metadata and record */
+    err = population_table_alloc(self->table,
+            (size_t) max_rows_increment, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_add_row(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    PyObject *py_metadata = Py_None;
+    char *metadata = NULL;
+    Py_ssize_t metadata_length = 0;
+    static char *kwlist[] = {"metadata", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist, &py_metadata)) {
+        goto out;
+    }
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+
+    if (py_metadata != Py_None) {
+        if (PyBytes_AsStringAndSize(py_metadata, &metadata, &metadata_length) < 0) {
+            goto out;
+        }
+    }
+    err = population_table_add_row(self->table, metadata, metadata_length);
+    if (err < 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", err);
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject PopulationTableType;
+
+static PyObject *
+PopulationTable_equals(PopulationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PopulationTable *other = NULL;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &PopulationTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", population_table_equals(self->table, other->table));
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_row(PopulationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t row_id;
+    int err;
+    tmp_population_t population;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &row_id)) {
+        goto out;
+    }
+    err = population_table_get_row(self->table, (size_t) row_id, &population);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_population(&population);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_set_or_append_columns(PopulationTable *self, PyObject *args, PyObject *kwds,
+        int method)
+{
+    PyObject *ret = NULL;
+    int err;
+    size_t num_rows, metadata_length;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+
+    static char *kwlist[] = {"metadata", "metadata_offset", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist,
+                &metadata_input, &metadata_offset_input)) {
+        goto out;
+    }
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if ((metadata_input == Py_None) || (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified");
+        goto out;
+    }
+    metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+            &metadata_length, false);
+    if (metadata_array == NULL) {
+        goto out;
+    }
+    metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+            metadata_length, false);
+    if (metadata_offset_array == NULL) {
+        goto out;
+    }
+    if (method == SET_COLS) {
+        err = population_table_set_columns(self->table, num_rows,
+                PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
+    } else if (method == APPEND_COLS) {
+        err = population_table_append_columns(self->table, num_rows,
+                PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
+    } else {
+        assert(0);
+    }
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static PyObject *
+PopulationTable_append_columns(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    return PopulationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+}
+
+static PyObject *
+PopulationTable_set_columns(PopulationTable *self, PyObject *args, PyObject *kwds)
+{
+    return PopulationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+}
+
+static PyObject *
+PopulationTable_clear(PopulationTable *self)
+{
+    PyObject *ret = NULL;
+    int err;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    err = population_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_truncate(PopulationTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = population_table_truncate(self->table, (size_t) num_rows);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_max_rows_increment(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_num_rows(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_max_rows(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_metadata(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->metadata_length,
+            self->table->metadata, NPY_INT8, sizeof(char));
+out:
+    return ret;
+}
+
+static PyObject *
+PopulationTable_get_metadata_offset(PopulationTable *self, void *closure)
+{
+    PyObject *ret = NULL;
+
+    if (PopulationTable_check_state(self) != 0) {
+        goto out;
+    }
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->metadata_offset, NPY_UINT32, sizeof(uint32_t));
+out:
+    return ret;
+}
+
+static PyGetSetDef PopulationTable_getsetters[] = {
+    {"max_rows_increment",
+        (getter) PopulationTable_get_max_rows_increment, NULL, "The size increment"},
+    {"num_rows", (getter) PopulationTable_get_num_rows, NULL,
+        "The number of rows in the table."},
+    {"max_rows", (getter) PopulationTable_get_max_rows, NULL,
+        "The current maximum number of rows in the table."},
+    {"metadata", (getter) PopulationTable_get_metadata, NULL, "The metadata array"},
+    {"metadata_offset", (getter) PopulationTable_get_metadata_offset, NULL,
+        "The metadata offset array"},
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef PopulationTable_methods[] = {
+    {"add_row", (PyCFunction) PopulationTable_add_row, METH_VARARGS|METH_KEYWORDS,
+        "Adds a new row to this table."},
+    {"equals", (PyCFunction) PopulationTable_equals, METH_VARARGS,
+        "Returns True if the specified PopulationTable is equal to this one."},
+    {"get_row", (PyCFunction) PopulationTable_get_row, METH_VARARGS,
+        "Returns the kth row in this table."},
+    {"append_columns", (PyCFunction) PopulationTable_append_columns,
+        METH_VARARGS|METH_KEYWORDS,
+        "Appends the data in the specified arrays into the columns."},
+    {"set_columns", (PyCFunction) PopulationTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+        "Copies the data in the specified arrays into the columns."},
+    {"clear", (PyCFunction) PopulationTable_clear, METH_NOARGS,
+        "Clears this table."},
+    {"truncate", (PyCFunction) PopulationTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject PopulationTableType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.PopulationTable",             /* tp_name */
+    sizeof(PopulationTable),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)PopulationTable_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "PopulationTable objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    PopulationTable_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    PopulationTable_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)PopulationTable_init,      /* tp_init */
+};
+
+
+/*===================================================================
  * ProvenanceTable
  *===================================================================
  */
@@ -3058,7 +4255,7 @@ static int
 ProvenanceTable_check_state(ProvenanceTable *self)
 {
     int ret = -1;
-    if (self->provenance_table == NULL) {
+    if (self->table == NULL) {
         PyErr_SetString(PyExc_SystemError, "ProvenanceTable not initialised");
         goto out;
     }
@@ -3074,10 +4271,10 @@ out:
 static void
 ProvenanceTable_dealloc(ProvenanceTable* self)
 {
-    if (self->provenance_table != NULL) {
-        provenance_table_free(self->provenance_table);
-        PyMem_Free(self->provenance_table);
-        self->provenance_table = NULL;
+    if (self->table != NULL) {
+        provenance_table_free(self->table);
+        PyMem_Free(self->table);
+        self->table = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -3090,7 +4287,7 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
 
-    self->provenance_table = NULL;
+    self->table = NULL;
     self->locked = false;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
@@ -3100,13 +4297,13 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "max_rows_increment must be positive");
         goto out;
     }
-    self->provenance_table = PyMem_Malloc(sizeof(provenance_table_t));
-    if (self->provenance_table == NULL) {
+    self->table = PyMem_Malloc(sizeof(provenance_table_t));
+    if (self->table == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     /* Take the default size increments for timestamp and record */
-    err = provenance_table_alloc(self->provenance_table,
+    err = provenance_table_alloc(self->table,
             (size_t) max_rows_increment, 0, 0);
     if (err != 0) {
         handle_library_error(err);
@@ -3116,7 +4313,6 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
 out:
     return ret;
 }
-
 static PyObject *
 ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
 {
@@ -3135,7 +4331,7 @@ ProvenanceTable_add_row(ProvenanceTable *self, PyObject *args, PyObject *kwds)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    err = provenance_table_add_row(self->provenance_table,
+    err = provenance_table_add_row(self->table,
             timestamp, timestamp_length, record, record_length);
     if (err < 0) {
         handle_library_error(err);
@@ -3146,12 +4342,32 @@ out:
     return ret;
 }
 
+/* Forward declaration */
+static PyTypeObject ProvenanceTableType;
+
+static PyObject *
+ProvenanceTable_equals(ProvenanceTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    ProvenanceTable *other = NULL;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O!", &ProvenanceTableType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", provenance_table_equals(self->table, other->table));
+out:
+    return ret;
+}
 
 static PyObject *
 ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    Py_ssize_t num_rows, row_id;
+    Py_ssize_t row_id;
+    int err;
     provenance_t provenance;
 
     if (ProvenanceTable_check_state(self) != 0) {
@@ -3160,25 +4376,15 @@ ProvenanceTable_get_row(ProvenanceTable *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n", &row_id)) {
         goto out;
     }
-    num_rows = (Py_ssize_t) self->provenance_table->num_rows;
-    if (row_id < 0 || row_id >= num_rows) {
-        PyErr_SetString(PyExc_IndexError, "row index out of bounds");
+    err = provenance_table_get_row(self->table, (size_t) row_id, &provenance);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
-    provenance.timestamp = self->provenance_table->timestamp
-        + self->provenance_table->timestamp_offset[row_id];
-    provenance.timestamp_length = self->provenance_table->timestamp_offset[row_id + 1]
-        - self->provenance_table->timestamp_offset[row_id];
-    provenance.record = self->provenance_table->record
-        + self->provenance_table->record_offset[row_id];
-    provenance.record_length = self->provenance_table->record_offset[row_id + 1]
-        - self->provenance_table->record_offset[row_id];
     ret = make_provenance(&provenance);
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds,
@@ -3191,8 +4397,8 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     PyArrayObject *timestamp_array = NULL;
     PyObject *timestamp_offset_input = NULL;
     PyArrayObject *timestamp_offset_array = NULL;
-    PyObject *provenance_input = NULL;
-    PyArrayObject *provenance_array = NULL;
+    PyObject *record_input = NULL;
+    PyArrayObject *record_array = NULL;
     PyObject *record_offset_input = NULL;
     PyArrayObject *record_offset_array = NULL;
 
@@ -3201,7 +4407,14 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
                 &timestamp_input, &timestamp_offset_input,
-                &provenance_input, &record_offset_input)) {
+                &record_input, &record_offset_input)) {
+        goto out;
+    }
+    if ((timestamp_input == Py_None)
+            || (timestamp_offset_input == Py_None)
+            || (record_input == Py_None)
+            || (record_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError, "All arguments must be non None");
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {
@@ -3217,9 +4430,9 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
     if (timestamp_offset_array == NULL) {
         goto out;
     }
-    provenance_array = table_read_column_array(provenance_input, NPY_INT8,
+    record_array = table_read_column_array(record_input, NPY_INT8,
             &record_length, false);
-    if (provenance_array == NULL) {
+    if (record_array == NULL) {
         goto out;
     }
     record_offset_array = table_read_offset_array(record_offset_input, &num_rows,
@@ -3228,13 +4441,13 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
         goto out;
     }
     if (method == SET_COLS) {
-        err = provenance_table_set_columns(self->provenance_table, num_rows,
+        err = provenance_table_set_columns(self->table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
+                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else if (method == APPEND_COLS) {
-        err = provenance_table_append_columns(self->provenance_table, num_rows,
+        err = provenance_table_append_columns(self->table, num_rows,
                 PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(provenance_array), PyArray_DATA(record_offset_array));
+                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
     } else {
         assert(0);
     }
@@ -3246,7 +4459,7 @@ ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyO
 out:
     Py_XDECREF(timestamp_array);
     Py_XDECREF(timestamp_offset_array);
-    Py_XDECREF(provenance_array);
+    Py_XDECREF(record_array);
     Py_XDECREF(record_offset_array);
     return ret;
 }
@@ -3263,8 +4476,6 @@ ProvenanceTable_set_columns(ProvenanceTable *self, PyObject *args, PyObject *kwd
     return ProvenanceTable_set_or_append_columns(self, args, kwds, SET_COLS);
 }
 
-#endif
-
 static PyObject *
 ProvenanceTable_clear(ProvenanceTable *self)
 {
@@ -3274,7 +4485,34 @@ ProvenanceTable_clear(ProvenanceTable *self)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    err = provenance_table_clear(self->provenance_table);
+    err = provenance_table_clear(self->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+ProvenanceTable_truncate(ProvenanceTable *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    Py_ssize_t num_rows;
+    int err;
+
+    if (ProvenanceTable_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &num_rows)) {
+        goto out;
+    }
+    if (num_rows < 0 || num_rows > (Py_ssize_t) self->table->num_rows) {
+        PyErr_SetString(PyExc_ValueError, "num_rows out of bounds");
+        goto out;
+    }
+    err = provenance_table_truncate(self->table, (size_t) num_rows);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3291,7 +4529,7 @@ ProvenanceTable_get_max_rows_increment(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->max_rows_increment);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows_increment);
 out:
     return ret;
 }
@@ -3303,7 +4541,7 @@ ProvenanceTable_get_num_rows(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->num_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->num_rows);
 out:
     return ret;
 }
@@ -3315,12 +4553,10 @@ ProvenanceTable_get_max_rows(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->provenance_table->max_rows);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->table->max_rows);
 out:
     return ret;
 }
-
-#ifdef HAVE_NUMPY
 
 static PyObject *
 ProvenanceTable_get_timestamp(ProvenanceTable *self, void *closure)
@@ -3330,8 +4566,8 @@ ProvenanceTable_get_timestamp(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->timestamp_length,
-            self->provenance_table->timestamp, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->timestamp_length,
+            self->table->timestamp, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -3344,8 +4580,8 @@ ProvenanceTable_get_timestamp_offset(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->num_rows + 1,
-            self->provenance_table->timestamp_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->timestamp_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
@@ -3358,8 +4594,8 @@ ProvenanceTable_get_record(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->record_length,
-            self->provenance_table->record, NPY_INT8, sizeof(char));
+    ret = table_get_column_array(self->table->record_length,
+            self->table->record, NPY_INT8, sizeof(char));
 out:
     return ret;
 }
@@ -3372,13 +4608,11 @@ ProvenanceTable_get_record_offset(ProvenanceTable *self, void *closure)
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    ret = table_get_column_array(self->provenance_table->num_rows + 1,
-            self->provenance_table->record_offset, NPY_UINT32, sizeof(uint32_t));
+    ret = table_get_column_array(self->table->num_rows + 1,
+            self->table->record_offset, NPY_UINT32, sizeof(uint32_t));
 out:
     return ret;
 }
-
-#endif
 
 static PyGetSetDef ProvenanceTable_getsetters[] = {
     {"max_rows_increment",
@@ -3387,31 +4621,31 @@ static PyGetSetDef ProvenanceTable_getsetters[] = {
         "The number of rows in the table."},
     {"max_rows", (getter) ProvenanceTable_get_max_rows, NULL,
         "The current maximum number of rows in the table."},
-#ifdef HAVE_NUMPY
     {"timestamp", (getter) ProvenanceTable_get_timestamp, NULL, "The timestamp array"},
     {"timestamp_offset", (getter) ProvenanceTable_get_timestamp_offset, NULL,
         "The timestamp offset array"},
     {"record", (getter) ProvenanceTable_get_record, NULL, "The record array"},
     {"record_offset", (getter) ProvenanceTable_get_record_offset, NULL,
         "The record offset array"},
-#endif
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef ProvenanceTable_methods[] = {
     {"add_row", (PyCFunction) ProvenanceTable_add_row, METH_VARARGS|METH_KEYWORDS,
         "Adds a new row to this table."},
+    {"equals", (PyCFunction) ProvenanceTable_equals, METH_VARARGS,
+        "Returns True if the specified ProvenanceTable is equal to this one."},
     {"get_row", (PyCFunction) ProvenanceTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-#ifdef HAVE_NUMPY
     {"append_columns", (PyCFunction) ProvenanceTable_append_columns,
         METH_VARARGS|METH_KEYWORDS,
         "Appends the data in the specified arrays into the columns."},
     {"set_columns", (PyCFunction) ProvenanceTable_set_columns, METH_VARARGS|METH_KEYWORDS,
         "Copies the data in the specified arrays into the columns."},
-#endif
     {"clear", (PyCFunction) ProvenanceTable_clear, METH_NOARGS,
         "Clears this table."},
+    {"truncate", (PyCFunction) ProvenanceTable_truncate, METH_VARARGS,
+        "Truncates this table to the specified number of rows."},
     {NULL}  /* Sentinel */
 };
 
@@ -3456,6 +4690,404 @@ static PyTypeObject ProvenanceTableType = {
 };
 
 
+/*===================================================================
+ * TableCollection
+ *===================================================================
+ */
+
+static void
+TableCollection_dealloc(TableCollection* self)
+{
+    if (self->tables != NULL) {
+        self->tables->nodes = NULL;
+        table_collection_free(self->tables);
+        PyMem_Free(self->tables);
+        self->tables = NULL;
+    }
+    Py_XDECREF(self->individuals);
+    Py_XDECREF(self->nodes);
+    Py_XDECREF(self->edges);
+    Py_XDECREF(self->migrations);
+    Py_XDECREF(self->sites);
+    Py_XDECREF(self->mutations);
+    Py_XDECREF(self->populations);
+    Py_XDECREF(self->provenances);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {
+        "individuals", "nodes", "edges", "migrations", "sites", "mutations",
+        "populations", "provenances", "sequence_length", NULL};
+    IndividualTable *individuals = NULL;
+    NodeTable *nodes = NULL;
+    EdgeTable *edges = NULL;
+    MigrationTable *migrations = NULL;
+    SiteTable *sites = NULL;
+    MutationTable *mutations = NULL;
+    PopulationTable *populations = NULL;
+    ProvenanceTable *provenances = NULL;
+    /* TODO make sequence_length a mandatory parameter which is set at
+     * initialisation time and cannot be modified. This way we can finally
+     * get rid of the infering sequence length rubbish */
+    double sequence_length = 0;
+
+    self->tables = NULL;
+    self->individuals = NULL;
+    self->nodes = NULL;
+    self->edges = NULL;
+    self->sites = NULL;
+    self->mutations = NULL;
+    self->migrations = NULL;
+    self->populations = NULL;
+    self->provenances = NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!O!O!O!O!|d", kwlist,
+            &IndividualTableType, &individuals,
+            &NodeTableType, &nodes,
+            &EdgeTableType, &edges,
+            &MigrationTableType, &migrations,
+            &SiteTableType, &sites,
+            &MutationTableType, &mutations,
+            &PopulationTableType, &populations,
+            &ProvenanceTableType, &provenances,
+            &sequence_length)) {
+        goto out;
+    }
+
+    self->tables = PyMem_Malloc(sizeof(table_collection_t));
+    if (self->tables == NULL) {
+        PyErr_NoMemory();
+    }
+    err = table_collection_alloc(self->tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    self->tables->sequence_length = sequence_length;
+    if (IndividualTable_check_state(individuals) != 0
+            || NodeTable_check_state(nodes) != 0
+            || EdgeTable_check_state(edges) != 0
+            || MigrationTable_check_state(migrations) != 0
+            || SiteTable_check_state(sites) != 0
+            || MutationTable_check_state(mutations) != 0
+            || PopulationTable_check_state(populations) != 0
+            || ProvenanceTable_check_state(provenances) != 0) {
+        goto out;
+    }
+    self->individuals = individuals;
+    Py_INCREF(individuals);
+    self->nodes = nodes;
+    Py_INCREF(nodes);
+    self->edges = edges;
+    Py_INCREF(edges);
+    self->migrations = migrations;
+    Py_INCREF(migrations);
+    self->sites = sites;
+    Py_INCREF(sites);
+    self->mutations = mutations;
+    Py_INCREF(mutations);
+    self->populations = populations;
+    Py_INCREF(populations);
+    self->provenances = provenances;
+    Py_INCREF(provenances);
+
+    err = table_collection_set_tables(self->tables,
+        individuals->table,
+        nodes->table,
+        edges->table,
+        migrations->table,
+        sites->table,
+        mutations->table,
+        populations->table,
+        provenances->table);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+TableCollection_get_individuals(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->individuals);
+    return (PyObject *) self->individuals;
+}
+
+static PyObject *
+TableCollection_get_nodes(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->nodes);
+    return (PyObject *) self->nodes;
+}
+
+static PyObject *
+TableCollection_get_edges(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->edges);
+    return (PyObject *) self->edges;
+}
+
+static PyObject *
+TableCollection_get_migrations(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->migrations);
+    return (PyObject *) self->migrations;
+}
+
+static PyObject *
+TableCollection_get_sites(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->sites);
+    return (PyObject *) self->sites;
+}
+
+static PyObject *
+TableCollection_get_mutations(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->mutations);
+    return (PyObject *) self->mutations;
+}
+
+static PyObject *
+TableCollection_get_populations(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->populations);
+    return (PyObject *) self->populations;
+}
+
+static PyObject *
+TableCollection_get_provenances(TableCollection *self, void *closure)
+{
+    Py_INCREF(self->provenances);
+    return (PyObject *) self->provenances;
+}
+
+static PyObject *
+TableCollection_get_sequence_length(TableCollection *self, void *closure)
+{
+    return Py_BuildValue("f", self->tables->sequence_length);
+}
+
+static PyObject *
+TableCollection_get_file_uuid(TableCollection *self, void *closure)
+{
+    return Py_BuildValue("s", self->tables->file_uuid);
+}
+
+static PyObject *
+TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    PyObject *samples = NULL;
+    PyArrayObject *samples_array = NULL;
+    PyArrayObject *node_map_array = NULL;
+    npy_intp *shape, dims;
+    size_t num_samples;
+    int flags = 0;
+    int filter_sites = true;
+    int filter_individuals = false;
+    int filter_populations = false;
+    int reduce_to_site_topology = false;
+    static char *kwlist[] = {
+        "samples", "filter_sites", "filter_populations", "filter_individuals",
+        "reduce_to_site_topology", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|iiii", kwlist,
+            &samples, &filter_sites, &filter_populations, &filter_individuals,
+            &reduce_to_site_topology)) {
+        goto out;
+    }
+    samples_array = (PyArrayObject *) PyArray_FROMANY(samples, NPY_INT32, 1, 1,
+            NPY_ARRAY_IN_ARRAY);
+    if (samples_array == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(samples_array);
+    num_samples = shape[0];
+    if (filter_sites) {
+        flags |= MSP_FILTER_SITES;
+    }
+    if (filter_individuals) {
+        flags |= MSP_FILTER_INDIVIDUALS;
+    }
+    if (filter_populations) {
+        flags |= MSP_FILTER_POPULATIONS;
+    }
+    if (reduce_to_site_topology) {
+        flags |= MSP_REDUCE_TO_SITE_TOPOLOGY;
+    }
+
+    /* Allocate a new array to hold the node map. */
+    dims = self->nodes->table->num_rows;
+    node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
+    if (node_map_array == NULL) {
+        goto out;
+    }
+    err = table_collection_simplify(self->tables,
+            PyArray_DATA(samples_array), num_samples, flags,
+            PyArray_DATA(node_map_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = (PyObject *) node_map_array;
+    node_map_array = NULL;
+out:
+    Py_XDECREF(samples_array);
+    Py_XDECREF(node_map_array);
+    return ret;
+}
+
+static PyObject *
+TableCollection_sort(TableCollection *self, PyObject *args, PyObject *kwds)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t edge_start = 0;
+    int flags = 0;
+
+    static char *kwlist[] = {"edge_start", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist, &edge_start)) {
+        goto out;
+    }
+    err = table_collection_sort(self->tables, (size_t) edge_start, flags);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+TableCollection_compute_mutation_parents(TableCollection *self)
+{
+    int err;
+    PyObject *ret = NULL;
+
+    err = table_collection_compute_mutation_parents(self->tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyObject *
+TableCollection_deduplicate_sites(TableCollection *self)
+{
+    int err;
+    PyObject *ret = NULL;
+
+    err = table_collection_deduplicate_sites(self->tables, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+/* Forward declaration */
+static PyTypeObject TableCollectionType;
+
+static PyObject *
+TableCollection_equals(TableCollection *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    TableCollection *other = NULL;
+
+    if (!PyArg_ParseTuple(args, "O!", &TableCollectionType, &other)) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", table_collection_equals(self->tables, other->tables));
+out:
+    return ret;
+}
+
+static PyGetSetDef TableCollection_getsetters[] = {
+    {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
+    {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
+    {"edges", (getter) TableCollection_get_edges, NULL, "The edge table."},
+    {"migrations", (getter) TableCollection_get_migrations, NULL, "The migration table."},
+    {"sites", (getter) TableCollection_get_sites, NULL, "The site table."},
+    {"mutations", (getter) TableCollection_get_mutations, NULL, "The mutation table."},
+    {"populations", (getter) TableCollection_get_populations, NULL, "The population table."},
+    {"provenances", (getter) TableCollection_get_provenances, NULL, "The provenance table."},
+    {"sequence_length", (getter) TableCollection_get_sequence_length, NULL,
+        "The sequence length."},
+    {"file_uuid", (getter) TableCollection_get_file_uuid, NULL,
+        "The UUID of the corresponding file."},
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef TableCollection_methods[] = {
+    {"simplify", (PyCFunction) TableCollection_simplify, METH_VARARGS|METH_KEYWORDS,
+            "Simplifies for a given sample subset." },
+    {"sort", (PyCFunction) TableCollection_sort, METH_VARARGS|METH_KEYWORDS,
+            "Sorts the tables to satisfy tree sequence requirements." },
+    {"equals", (PyCFunction) TableCollection_equals, METH_VARARGS,
+            "Returns True if the parameter table collection is equal to this one." },
+    {"compute_mutation_parents", (PyCFunction) TableCollection_compute_mutation_parents,
+        METH_NOARGS, "Computes the mutation parents for a the tables." },
+    {"deduplicate_sites", (PyCFunction) TableCollection_deduplicate_sites,
+        METH_NOARGS, "Removes sites with duplicate positions." },
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject TableCollectionType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.TableCollection",             /* tp_name */
+    sizeof(TableCollection),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)TableCollection_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT |
+        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "TableCollection objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    TableCollection_methods,             /* tp_methods */
+    0,                             /* tp_members */
+    TableCollection_getsetters,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)TableCollection_init,      /* tp_init */
+};
 
 /*===================================================================
  * MutationGenerator
@@ -3493,20 +5125,28 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    size_t block_size = 1024 * 1024;
-    static char *kwlist[] = {"random_generator", "mutation_rate", NULL};
+    int alphabet = 0;
+    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet",
+        "start_time", "end_time", NULL};
     double mutation_rate = 0;
+    double start_time = -DBL_MAX;
+    double end_time = DBL_MAX;
     RandomGenerator *random_generator = NULL;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d", kwlist,
-            &RandomGeneratorType, &random_generator, &mutation_rate)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|idd", kwlist,
+            &RandomGeneratorType, &random_generator, &mutation_rate,
+            &alphabet, &start_time, &end_time)) {
         goto out;
     }
     self->random_generator = random_generator;
     Py_INCREF(self->random_generator);
     if (RandomGenerator_check_state(self->random_generator) != 0) {
+        goto out;
+    }
+    if (alphabet != MSP_ALPHABET_BINARY && alphabet != MSP_ALPHABET_NUCLEOTIDE) {
+        PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
         goto out;
     }
     if (mutation_rate < 0) {
@@ -3519,7 +5159,12 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            0, block_size);
+            alphabet, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = mutgen_set_time_interval(self->mutgen, start_time, end_time);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3542,48 +5187,40 @@ out:
     return ret;
 }
 
+static PyObject *
+MutationGenerator_get_alphabet(MutationGenerator *self)
+{
+    PyObject *ret = NULL;
+
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->mutgen->alphabet);
+out:
+    return ret;
+}
 
 static PyObject *
 MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgeTable *edges = NULL;
-    MutationTable *mutations = NULL;
-    SiteTable *sites = NULL;
-    static char *kwlist[] = {"nodes", "edges", "sites", "mutations", NULL};
+    TableCollection *tables = NULL;
+    int flags = 0;
+    int keep = 0;
+    static char *kwlist[] = {"tables", "keep", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgeTableType, &edges,
-            &SiteTableType, &sites,
-            &MutationTableType, &mutations)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
+            &TableCollectionType, &tables, &keep)) {
         goto out;
     }
     if (MutationGenerator_check_state(self) != 0) {
         goto out;
     }
-    if (NodeTable_check_state(nodes) != 0) {
-        goto out;
+    if (keep) {
+        flags = MSP_KEEP_SITES;
     }
-    if (EdgeTable_check_state(edges) != 0) {
-        goto out;
-    }
-    if (SiteTable_check_state(sites) != 0) {
-        goto out;
-    }
-    if (MutationTable_check_state(mutations) != 0) {
-        goto out;
-    }
-    err = mutgen_generate_tables_tmp(self->mutgen, nodes->node_table,
-            edges->edge_table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = mutgen_populate_tables(self->mutgen, sites->site_table,
-            mutations->mutation_table);
+    err = mutgen_generate(self->mutgen, tables->tables, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3600,6 +5237,8 @@ static PyMemberDef MutationGenerator_members[] = {
 static PyMethodDef MutationGenerator_methods[] = {
     {"get_mutation_rate", (PyCFunction) MutationGenerator_get_mutation_rate,
         METH_NOARGS, "Returns the mutation rate for this mutation generator."},
+    {"get_alphabet", (PyCFunction) MutationGenerator_get_alphabet,
+        METH_NOARGS, "Returns the alphabet for this mutation generator."},
     {"generate", (PyCFunction) MutationGenerator_generate,
         METH_VARARGS|METH_KEYWORDS,
         "Generate mutations and write to the specified table."},
@@ -3789,6 +5428,37 @@ out:
 }
 
 static PyObject *
+RecombinationMap_physical_to_discrete_genetic(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double physical_x, sequence_length;
+    int err;
+    uint32_t locus;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
+        goto out;
+    }
+    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
+    if (physical_x < 0 || physical_x > sequence_length) {
+        PyErr_SetString(PyExc_ValueError,
+            "coordinates must be 0 <= x <= sequence_length");
+        goto out;
+    }
+    err = recomb_map_phys_to_discrete_genetic(self->recomb_map, physical_x, &locus);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("k", (unsigned long) locus);
+out:
+    return ret;
+}
+
+
+static PyObject *
 RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -3914,6 +5584,9 @@ static PyMethodDef RecombinationMap_methods[] = {
         METH_VARARGS, "Converts the specified value into physical coordinates."},
     {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
         METH_VARARGS, "Converts the specified value into genetic coordinates."},
+    {"physical_to_discrete_genetic",
+        (PyCFunction) RecombinationMap_physical_to_discrete_genetic,
+        METH_VARARGS, "Converts the specified value into discete genetic coordinates."},
     {"get_total_recombination_rate",
         (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},
@@ -4033,23 +5706,13 @@ TreeSequence_dump(TreeSequence *self, PyObject *args, PyObject *kwds)
     int err;
     char *path;
     PyObject *ret = NULL;
-    int zlib_compression = 0;
     int flags = 0;
-    static char *kwlist[] = {"path", "zlib_compression", NULL};
+    static char *kwlist[] = {"path", NULL};
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|i", kwlist,
-                &path, &zlib_compression)) {
-        goto out;
-    }
-    if (zlib_compression) {
-        flags = MSP_DUMP_ZLIB_COMPRESSION;
-    }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
     err = tree_sequence_dump(self->tree_sequence, path, flags);
@@ -4067,115 +5730,26 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    ProvenanceTable *py_provenances = NULL;
-    table_collection_t tables;
-    double sequence_length = 0.0;
-    static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", "sequence_length", NULL};
+    TableCollection *tables = NULL;
+    static char *kwlist[] = {"tables", NULL};
+    /* TODO add an interface to turn this on and off. */
+    int flags = MSP_BUILD_INDEXES;
 
-    /* For now we keep a local table collection object, but we'll want to
-     * update this method to take a TableCollection object. The tricky
-     * bit is keeping API compatability with existing code, but hopefully
-     * this can be handled at the high-level API. */
-    err = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
-    if (ret != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!d", kwlist,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &ProvenanceTableType, &py_provenances,
-            &sequence_length)) {
-        goto out;
-    }
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    err = node_table_copy(py_nodes->node_table, &tables.nodes);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-    err = edge_table_copy(py_edges->edge_table, &tables.edges);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (py_migrations != NULL) {
-        if (MigrationTable_check_state(py_migrations) != 0) {
-            goto out;
-        }
-        err = migration_table_copy(py_migrations->migration_table, &tables.migrations);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        err = site_table_copy(py_sites->site_table, &tables.sites);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        err = mutation_table_copy(py_mutations->mutation_table, &tables.mutations);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_provenances != NULL) {
-        if (ProvenanceTable_check_state(py_provenances) != 0) {
-            goto out;
-        }
-        err = provenance_table_copy(py_provenances->provenance_table, &tables.provenances);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if ((py_mutations == NULL) != (py_sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both site and mutation tables");
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     err = TreeSequence_alloc(self);
     if (err != 0) {
         goto out;
     }
-    tables.sequence_length = sequence_length;
-    err = tree_sequence_load_tables(self->tree_sequence, &tables, 0);
+    err = tree_sequence_load_tables(self->tree_sequence, tables->tables, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    table_collection_free(&tables);
     return ret;
 }
 
@@ -4184,112 +5758,23 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    ProvenanceTable *py_provenances = NULL;
-    table_collection_t tables;
-    static char *kwlist[] = {"nodes", "edges", "migrations",
-        "sites", "mutations", "provenances", NULL};
+    TableCollection *tables = NULL;
+    static char *kwlist[] = {"tables", NULL};
 
-    /* For now we keep a local table collection object, but we'll want to
-     * update this method to take a TableCollection object. The tricky
-     * bit is keeping API compatability with existing code, but hopefully
-     * this can be handled at the high-level API. */
-    err = table_collection_alloc(&tables, MSP_ALLOC_TABLES);
-    if (ret != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!O!", kwlist,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &ProvenanceTableType, &py_provenances)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    err = tree_sequence_dump_tables(self->tree_sequence, &tables, 0);
+    err = tree_sequence_dump_tables(self->tree_sequence, tables->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
-    }
-
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    err = node_table_copy(&tables.nodes, py_nodes->node_table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-    err = edge_table_copy(&tables.edges, py_edges->edge_table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-
-    if (py_migrations != NULL) {
-        if (MigrationTable_check_state(py_migrations) != 0) {
-            goto out;
-        }
-        err = migration_table_copy(&tables.migrations, py_migrations->migration_table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        err = site_table_copy(&tables.sites, py_sites->site_table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        err = mutation_table_copy(&tables.mutations, py_mutations->mutation_table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    if ((py_mutations == NULL) != (py_sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both mutations and sites");
-        goto out;
-    }
-
-    if (py_provenances != NULL) {
-        if (ProvenanceTable_check_state(py_provenances) != 0) {
-            goto out;
-        }
-        err = provenance_table_copy(&tables.provenances, py_provenances->provenance_table);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
     }
     ret = Py_BuildValue("");
 out:
-    table_collection_free(&tables);
     return ret;
 }
 
@@ -4305,12 +5790,6 @@ TreeSequence_load(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist, &path)) {
         goto out;
     }
-    /* Silence the low-level error reporting HDF5 */
-    if (H5Eset_auto(H5E_DEFAULT, NULL, NULL) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Error silencing HDF5 errors");
-        goto out;
-    }
-
     err = TreeSequence_alloc(self);
     if (err != 0) {
         goto out;
@@ -4438,7 +5917,7 @@ TreeSequence_get_site(TreeSequence *self, PyObject *args)
         handle_library_error(err);
         goto out;
     }
-    ret = make_site(&record);
+    ret = make_site_object(&record);
 out:
     return ret;
 }
@@ -4470,6 +5949,64 @@ TreeSequence_get_mutation(TreeSequence *self, PyObject *args)
         goto out;
     }
     ret = make_mutation(&record);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_individual(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    individual_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_individuals(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_individual(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_individual_object(&record);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_population(TreeSequence *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    Py_ssize_t record_index, num_records;
+    tmp_population_t record;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "n", &record_index)) {
+        goto out;
+    }
+    num_records = (Py_ssize_t) tree_sequence_get_num_populations(self->tree_sequence);
+    if (record_index < 0 || record_index >= num_records) {
+        PyErr_SetString(PyExc_IndexError, "record index out of bounds");
+        goto out;
+    }
+    err = tree_sequence_get_population(self->tree_sequence, (size_t) record_index, &record);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = make_population(&record);
 out:
     return ret;
 }
@@ -4534,6 +6071,36 @@ out:
 }
 
 static PyObject *
+TreeSequence_get_num_individuals(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_individuals(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_num_populations(TreeSequence *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    size_t num_records;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    num_records = tree_sequence_get_num_populations(self->tree_sequence);
+    ret = Py_BuildValue("n", (Py_ssize_t) num_records);
+out:
+    return ret;
+}
+
+static PyObject *
 TreeSequence_get_num_trees(TreeSequence *self, PyObject *args)
 {
     PyObject *ret = NULL;
@@ -4558,6 +6125,19 @@ TreeSequence_get_sequence_length(TreeSequence  *self)
     }
     ret = Py_BuildValue("d",
         tree_sequence_get_sequence_length(self->tree_sequence));
+out:
+    return ret;
+}
+
+static PyObject *
+TreeSequence_get_file_uuid(TreeSequence  *self)
+{
+    PyObject *ret = NULL;
+
+    if (TreeSequence_check_tree_sequence(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("s", tree_sequence_get_file_uuid(self->tree_sequence));
 out:
     return ret;
 }
@@ -4711,7 +6291,6 @@ out:
 static PyObject *
 TreeSequence_get_genotype_matrix(TreeSequence  *self)
 {
-#ifdef HAVE_NUMPY
     PyObject *ret = NULL;
     int err;
     size_t num_sites;
@@ -4722,6 +6301,8 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
     char *V;
     variant_t *variant;
     size_t j;
+
+    /* TODO add option for 16 bit genotypes */
 
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
@@ -4741,14 +6322,14 @@ TreeSequence_get_genotype_matrix(TreeSequence  *self)
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(vg, self->tree_sequence, 0);
+    err = vargen_alloc(vg, self->tree_sequence, NULL, 0, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     j = 0;
     while ((err = vargen_next(vg, &variant)) == 1) {
-        memcpy(V + (j * num_samples), variant->genotypes, num_samples * sizeof(uint8_t));
+        memcpy(V + (j * num_samples), variant->genotypes.u8, num_samples * sizeof(uint8_t));
         j++;
     }
     if (err != 0) {
@@ -4764,10 +6345,6 @@ out:
     }
     Py_XDECREF(genotype_matrix);
     return ret;
-#else
-    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
-    return NULL;
-#endif
 }
 
 static PyMemberDef TreeSequence_members[] = {
@@ -4802,6 +6379,12 @@ static PyMethodDef TreeSequence_methods[] = {
     {"get_mutation",
         (PyCFunction) TreeSequence_get_mutation, METH_VARARGS,
         "Returns the mutation record at the specified index."},
+    {"get_individual",
+        (PyCFunction) TreeSequence_get_individual, METH_VARARGS,
+        "Returns the individual record at the specified index."},
+    {"get_population",
+        (PyCFunction) TreeSequence_get_population, METH_VARARGS,
+        "Returns the population record at the specified index."},
     {"get_provenance",
         (PyCFunction) TreeSequence_get_provenance, METH_VARARGS,
         "Returns the provenance record at the specified index."},
@@ -4809,10 +6392,16 @@ static PyMethodDef TreeSequence_methods[] = {
         METH_NOARGS, "Returns the number of coalescence records." },
     {"get_num_migrations", (PyCFunction) TreeSequence_get_num_migrations,
         METH_NOARGS, "Returns the number of migration records." },
+    {"get_num_populations", (PyCFunction) TreeSequence_get_num_populations,
+        METH_NOARGS, "Returns the number of population records." },
+    {"get_num_individuals", (PyCFunction) TreeSequence_get_num_individuals,
+        METH_NOARGS, "Returns the number of individual records." },
     {"get_num_trees", (PyCFunction) TreeSequence_get_num_trees,
         METH_NOARGS, "Returns the number of trees in the tree sequence." },
     {"get_sequence_length", (PyCFunction) TreeSequence_get_sequence_length,
         METH_NOARGS, "Returns the sequence length in bases." },
+    {"get_file_uuid", (PyCFunction) TreeSequence_get_file_uuid,
+        METH_NOARGS, "Returns the UUID of the underlying file, if present." },
     {"get_num_sites", (PyCFunction) TreeSequence_get_num_sites,
         METH_NOARGS, "Returns the number of sites" },
     {"get_num_mutations", (PyCFunction) TreeSequence_get_num_mutations, METH_NOARGS,
@@ -4947,7 +6536,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     num_nodes = tree_sequence_get_num_nodes(tree_sequence->tree_sequence);
     num_tracked_samples = 0;
     if (py_tracked_samples != NULL) {
-        if (!flags & MSP_SAMPLE_COUNTS) {
+        if (!(flags & MSP_SAMPLE_COUNTS)) {
             PyErr_SetString(PyExc_ValueError,
                 "Cannot specified tracked_samples without count_samples flag");
             goto out;
@@ -4982,7 +6571,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    if (flags & MSP_SAMPLE_COUNTS) {
+    if (!!(flags & MSP_SAMPLE_COUNTS)) {
         err = sparse_tree_set_tracked_samples(self->sparse_tree, num_tracked_samples,
                 tracked_samples);
         if (err != 0) {
@@ -5174,15 +6763,18 @@ static PyObject *
 SparseTree_get_population(SparseTree *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    population_id_t population;
-    int node;
+    node_t node;
+    int node_id, err;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (SparseTree_get_node_argument(self, args, &node_id) != 0) {
         goto out;
     }
-    /* TODO add a sparse_tree_get_population function or a get_tree_sequence */
-    population = self->sparse_tree->tree_sequence->nodes.population[node];
-    ret = Py_BuildValue("i", (int) population);
+    err = tree_sequence_get_node(self->sparse_tree->tree_sequence, node_id, &node);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("i", (int) node.population);
 out:
     return ret;
 }
@@ -5307,6 +6899,81 @@ out:
     return ret;
 }
 
+static bool
+SparseTree_check_sample_list(SparseTree *self)
+{
+    bool ret = sparse_tree_has_sample_lists(self->sparse_tree);
+    if (! ret) {
+        PyErr_SetString(PyExc_ValueError,
+            "Sample lists not supported. Please set sample_lists=True.");
+    }
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_right_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sample_index;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    sample_index = self->sparse_tree->right_sample[node];
+    ret = Py_BuildValue("i", (int) sample_index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_left_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t sample_index;
+    int node;
+
+    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    sample_index = self->sparse_tree->left_sample[node];
+    ret = Py_BuildValue("i", (int) sample_index);
+out:
+    return ret;
+}
+
+static PyObject *
+SparseTree_get_next_sample(SparseTree *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    node_id_t out_index;
+    int in_index, num_samples;
+
+    if (SparseTree_check_sparse_tree(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "I", &in_index)) {
+        goto out;
+    }
+    num_samples = (int) tree_sequence_get_num_samples(self->sparse_tree->tree_sequence);
+    if (in_index < 0 || in_index >= num_samples) {
+        PyErr_SetString(PyExc_ValueError, "Sample index out of bounds");
+        goto out;
+    }
+    if (!SparseTree_check_sample_list(self)) {
+        goto out;
+    }
+    out_index = self->sparse_tree->next_sample[in_index];
+    ret = Py_BuildValue("i", (int) out_index);
+out:
+    return ret;
+}
 
 static PyObject *
 SparseTree_get_mrca(SparseTree *self, PyObject *args)
@@ -5411,17 +7078,16 @@ static PyObject *
 SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
-    static char *kwlist[] = {"precision", "time_scale", NULL};
+    static char *kwlist[] = {"root", "precision", NULL};
     int precision = 14;
-    double time_scale = 1.0;
-    int err;
+    int root, err;
     size_t buffer_size;
     char *buffer = NULL;
 
     if (SparseTree_check_sparse_tree(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|id", kwlist, &precision, &time_scale)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "i|i", kwlist, &root, &precision)) {
         goto out;
     }
     if (precision < 0 || precision > 16) {
@@ -5438,7 +7104,7 @@ SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
     if (buffer == NULL) {
         PyErr_NoMemory();
     }
-    err = sparse_tree_get_newick(self->sparse_tree, precision, time_scale, 0,
+    err = sparse_tree_get_newick(self->sparse_tree, (node_id_t) root, precision, 0,
             buffer_size, buffer);
     if (err != 0) {
         handle_library_error(err);
@@ -5497,6 +7163,12 @@ static PyMethodDef SparseTree_methods[] = {
             "Returns the right-most sib of node u" },
     {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
             "Returns the children of u in left-right order." },
+    {"get_left_sample", (PyCFunction) SparseTree_get_left_sample, METH_VARARGS,
+            "Returns the index of the left-most sample descending from u." },
+    {"get_right_sample", (PyCFunction) SparseTree_get_right_sample, METH_VARARGS,
+            "Returns the index of the right-most sample descending from u." },
+    {"get_next_sample", (PyCFunction) SparseTree_get_next_sample, METH_VARARGS,
+            "Returns the index of the next sample after the specified sample index." },
     {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
     {"get_num_samples", (PyCFunction) SparseTree_get_num_samples, METH_VARARGS,
@@ -5737,135 +7409,6 @@ static PyTypeObject TreeDiffIteratorType = {
     0,                         /* tp_dictoffset */
     (initproc)TreeDiffIterator_init,      /* tp_init */
 };
-
-/*===================================================================
- * SampleListIterator
- *===================================================================
- */
-
-static int
-SampleListIterator_check_state(SampleListIterator *self)
-{
-    int ret = 0;
-    if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_SystemError, "iterator not initialised");
-        ret = -1;
-    }
-    return ret;
-}
-
-static void
-SampleListIterator_dealloc(SampleListIterator* self)
-{
-    Py_XDECREF(self->sparse_tree);
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-SampleListIterator_init(SampleListIterator *self, PyObject *args, PyObject *kwds)
-{
-    int ret = -1;
-    int err;
-    static char *kwlist[] = {"sparse_tree", "node", NULL};
-    unsigned int node = 0;
-    SparseTree *sparse_tree = NULL;
-
-    self->sparse_tree = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!I", kwlist,
-            &SparseTreeType, &sparse_tree, &node)) {
-        goto out;
-    }
-    self->sparse_tree = sparse_tree;
-    Py_INCREF(self->sparse_tree);
-    if (SparseTree_check_sparse_tree(sparse_tree) != 0) {
-        goto out;
-    }
-    if (SparseTree_check_bounds(self->sparse_tree, node)) {
-        goto out;
-    }
-    err = sparse_tree_get_sample_list(self->sparse_tree->sparse_tree,
-            (uint32_t) node, &self->head, &self->tail);
-    self->next = self->head;
-    if (err < 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-SampleListIterator_next(SampleListIterator  *self)
-{
-    PyObject *ret = NULL;
-
-    if (SampleListIterator_check_state(self) != 0) {
-        goto out;
-    }
-    if (self->next != NULL) {
-        ret = Py_BuildValue("I", (unsigned int) self->next->node);
-        if (ret == NULL) {
-            goto out;
-        }
-        /* Get the next value */
-        if (self->next == self->tail) {
-            self->next = NULL;
-        } else {
-            self->next = self->next->next;
-        }
-    }
-out:
-    return ret;
-}
-
-static PyMemberDef SampleListIterator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef SampleListIterator_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject SampleListIteratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_msprime.SampleListIterator",             /* tp_name */
-    sizeof(SampleListIterator),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)SampleListIterator_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash  */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "SampleListIterator objects",           /* tp_doc */
-    0,                     /* tp_traverse */
-    0,                     /* tp_clear */
-    0,                     /* tp_richcompare */
-    0,                     /* tp_weaklistoffset */
-    PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) SampleListIterator_next, /* tp_iternext */
-    SampleListIterator_methods,             /* tp_methods */
-    SampleListIterator_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)SampleListIterator_init,      /* tp_init */
-};
-
 
 /*===================================================================
  * SparseTreeIterator
@@ -6291,7 +7834,6 @@ static PyTypeObject HaplotypeGeneratorType = {
  * VariantGenerator
  *===================================================================
  */
-#ifdef HAVE_NUMPY
 
 static int
 VariantGenerator_check_state(VariantGenerator *self)
@@ -6321,13 +7863,19 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"tree_sequence", NULL};
+    static char *kwlist[] = {"tree_sequence", "samples", NULL};
     TreeSequence *tree_sequence = NULL;
+    PyObject *samples_input = Py_None;
+    PyArrayObject *samples_array = NULL;
+    node_id_t *samples = NULL;
+    size_t num_samples = 0;
+    npy_intp *shape;
 
+    /* TODO add option for 16 bit genotypes */
     self->variant_generator = NULL;
     self->tree_sequence = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TreeSequenceType, &tree_sequence)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O", kwlist,
+            &TreeSequenceType, &tree_sequence, &samples_input)) {
         goto out;
     }
     self->tree_sequence = tree_sequence;
@@ -6335,18 +7883,33 @@ VariantGenerator_init(VariantGenerator *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self->tree_sequence) != 0) {
         goto out;
     }
+    if (samples_input != Py_None) {
+        samples_array = (PyArrayObject *) PyArray_FROMANY(samples_input, NPY_INT32, 1, 1,
+                NPY_ARRAY_IN_ARRAY);
+        if (samples_array == NULL) {
+            goto out;
+        }
+        shape = PyArray_DIMS(samples_array);
+        num_samples = (size_t) shape[0];
+        samples = PyArray_DATA(samples_array);
+    }
     self->variant_generator = PyMem_Malloc(sizeof(vargen_t));
     if (self->variant_generator == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = vargen_alloc(self->variant_generator, self->tree_sequence->tree_sequence, 0);
+    /* Note: the vargen currently takes a copy of the samples list. If we wanted
+     * to avoid this we would INCREF the samples array above and keep a reference
+     * to in the object struct */
+    err = vargen_alloc(self->variant_generator,
+            self->tree_sequence->tree_sequence, samples, num_samples, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = 0;
 out:
+    Py_XDECREF(samples_array);
     return ret;
 }
 
@@ -6418,8 +7981,6 @@ static PyTypeObject VariantGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)VariantGenerator_init,      /* tp_init */
 };
-
-#endif
 
 /*===================================================================
  * LdCalculator
@@ -7110,6 +8671,7 @@ Simulator_dealloc(Simulator* self)
         self->sim = NULL;
     }
     Py_XDECREF(self->random_generator);
+    Py_XDECREF(self->recombination_map);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -7118,70 +8680,75 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {"samples", "random_generator",
-        "num_loci", "recombination_rate",
+    static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
-        "model", "max_memory", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "node_block_size", "edge_block_size",
-        "migration_block_size", "store_migrations", NULL};
+        "model", "from_ts", "avl_node_block_size", "segment_block_size",
+        "node_mapping_block_size", "store_migrations", "start_time", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
     PyObject *py_model = NULL;
+    PyObject *py_from_ts = Py_None;
     RandomGenerator *random_generator = NULL;
+    RecombinationMap *recombination_map = NULL;
     sample_t *samples = NULL;
     /* parameter defaults */
     Py_ssize_t num_samples = 2;
-    unsigned long num_loci = 1;
-    double recombination_rate = 0.0;
-    Py_ssize_t num_populations = 1;
-    Py_ssize_t max_memory = 10 * 1024 * 1024;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
-    Py_ssize_t node_block_size = 10;
-    Py_ssize_t edge_block_size = 10;
-    Py_ssize_t migration_block_size = 10;
+    tree_sequence_t *from_ts = NULL;
     int store_migrations = 0;
+    double start_time = -1;
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|kdO!O!O!O!nnnnnnni", kwlist,
+    self->recombination_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!O!O!O!Onnnid", kwlist,
             &PyList_Type, &py_samples,
+            &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
-            &num_loci, &recombination_rate,
             &PyList_Type, &population_configuration,
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
-            &max_memory, &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &node_block_size, &edge_block_size,
-            &migration_block_size, &store_migrations)) {
+            &py_from_ts, &avl_node_block_size, &segment_block_size,
+            &node_mapping_block_size, &store_migrations, &start_time)) {
         goto out;
     }
     self->random_generator = random_generator;
+    self->recombination_map = recombination_map;
     Py_INCREF(self->random_generator);
+    Py_INCREF(self->recombination_map);
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
     if (parse_samples(py_samples, &num_samples, &samples) != 0) {
         goto out;
     }
-    if (population_configuration != NULL) {
-        num_populations = PyList_Size(population_configuration);
-        if (num_populations == 0) {
-            PyErr_SetString(PyExc_ValueError, "Empty population configuration");
+    if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
+        goto out;
+    }
+    if (py_from_ts != Py_None) {
+        if (!PyObject_TypeCheck(py_from_ts, &TreeSequenceType)) {
             goto out;
         }
+        if (TreeSequence_check_tree_sequence((TreeSequence *) py_from_ts) != 0) {
+            goto out;
+        }
+        /* Note that we take a copy of the from_ts in simulate at the moment,
+         * so we don't need to worry about INCREF'ing the Python object. */
+        from_ts = ((TreeSequence *) py_from_ts)->tree_sequence;
     }
+
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, num_loci, num_populations, 1,
-            (size_t) num_samples, samples,
+    sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
+            recombination_map->recomb_map, from_ts,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -7192,17 +8759,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    if (start_time >= 0) {
+        sim_ret = msp_set_start_time(self->sim, start_time);
+        if (sim_ret != 0) {
+            handle_input_error(sim_ret);
+            goto out;
+        }
+    }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_recombination_rate(self->sim, recombination_rate);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_max_memory(self->sim, (size_t) max_memory);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -7221,22 +8785,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     sim_ret = msp_set_node_mapping_block_size(self->sim,
             (size_t) node_mapping_block_size);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_node_block_size(self->sim, (size_t) node_block_size);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_edge_block_size(self->sim, (size_t) edge_block_size);
-    if (sim_ret != 0) {
-        handle_input_error(sim_ret);
-        goto out;
-    }
-    sim_ret = msp_set_migration_block_size(self->sim,
-            (size_t) migration_block_size);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
         goto out;
@@ -7429,18 +8977,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_max_memory(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", self->sim->max_memory);
-out:
-    return ret;
-}
-
-static PyObject *
 Simulator_get_segment_block_size(Simulator  *self)
 {
     PyObject *ret = NULL;
@@ -7475,44 +9011,6 @@ Simulator_get_node_mapping_block_size(Simulator  *self)
 out:
     return ret;
 }
-
-static PyObject *
-Simulator_get_edge_block_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->edge_block_size);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_node_block_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->node_block_size);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_migration_block_size(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) self->sim->migration_block_size);
-out:
-    return ret;
-}
-
 
 static PyObject *
 Simulator_get_time(Simulator  *self)
@@ -7656,56 +9154,6 @@ Simulator_get_num_segment_blocks(Simulator  *self)
 out:
     return ret;
 }
-
-static PyObject *
-Simulator_get_num_edge_blocks(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_edge_blocks(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_node_blocks(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_node_blocks(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_migration_blocks(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) msp_get_num_migration_blocks(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_used_memory(Simulator  *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_used_memory(self->sim));
-out:
-    return ret;
-}
-
 
 static PyObject *
 Simulator_get_num_breakpoints(Simulator  *self)
@@ -7897,38 +9345,41 @@ out:
     return ret;
 }
 
+/* TODO these get_edge/nodes/migration methods are no longer necessary
+ * once we have an direct reference to the underlying tables. They're
+ * only used for testing, so remove and update the tests to work from the
+ * tables instead.
+ */
 static PyObject *
 Simulator_get_edges(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
-    PyObject *py_cr = NULL;
-    edge_t *edges = NULL;
-    edge_t *cr;
+    PyObject *py_edge = NULL;
+    edge_table_t *edges = NULL;
+    edge_t edge;
     size_t num_edges, j;
-    int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_edges = msp_get_num_edges(self->sim);
-    err = msp_get_edges(self->sim, &edges);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    edges = self->sim->tables.edges;
     l = PyList_New(num_edges);
     if (l == NULL) {
         goto out;
     }
     for (j = 0; j < num_edges; j++) {
-        cr = &edges[j];
-        py_cr = make_edge(cr);
-        if (py_cr == NULL) {
+        edge.left = edges->left[j];
+        edge.right = edges->right[j];
+        edge.parent = edges->parent[j];
+        edge.child = edges->child[j];
+        py_edge = make_edge(&edge);
+        if (py_edge == NULL) {
             Py_DECREF(l);
             goto out;
         }
-        PyList_SET_ITEM(l, j, py_cr);
+        PyList_SET_ITEM(l, j, py_edge);
     }
     ret = l;
 out:
@@ -7940,31 +9391,32 @@ Simulator_get_nodes(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *l = NULL;
-    PyObject *py_cr = NULL;
-    node_t *nodes = NULL;
+    PyObject *py_node = NULL;
+    node_table_t *nodes;
+    node_t node;
     size_t num_nodes, j;
-    int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_nodes = msp_get_num_nodes(self->sim);
-    err = msp_get_nodes(self->sim, &nodes);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    nodes = self->sim->tables.nodes;
     l = PyList_New(num_nodes);
     if (l == NULL) {
         goto out;
     }
     for (j = 0; j < num_nodes; j++) {
-        py_cr = make_node(&nodes[j]);
-        if (py_cr == NULL) {
+        node.flags = nodes->flags[j];
+        node.time = nodes->time[j];
+        node.population = nodes->population[j];
+        node.individual = nodes->individual[j];
+        node.metadata_length = 0;
+        py_node = make_node(&node);
+        if (py_node == NULL) {
             Py_DECREF(l);
             goto out;
         }
-        PyList_SET_ITEM(l, j, py_cr);
+        PyList_SET_ITEM(l, j, py_node);
     }
     ret = l;
 out:
@@ -7977,27 +9429,27 @@ Simulator_get_migrations(Simulator *self)
     PyObject *ret = NULL;
     PyObject *l = NULL;
     PyObject *py_mr = NULL;
-    migration_t *migrations = NULL;
-    migration_t *mr;
+    migration_table_t *migrations = NULL;
+    migration_t mr;
     size_t num_migrations, j;
-    int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_migrations = msp_get_num_migrations(self->sim);
-    err = msp_get_migrations(self->sim, &migrations);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
+    migrations = self->sim->tables.migrations;
     l = PyList_New(num_migrations);
     if (l == NULL) {
         goto out;
     }
     for (j = 0; j < num_migrations; j++) {
-        mr = &migrations[j];
-        py_mr = make_migration(mr);
+        mr.left = migrations->left[j];
+        mr.right = migrations->right[j];
+        mr.node = migrations->node[j];
+        mr.source = migrations->source[j];
+        mr.dest = migrations->dest[j];
+        mr.time = migrations->time[j];
+        py_mr = make_migration(&mr);
         if (py_mr == NULL) {
             Py_DECREF(l);
             goto out;
@@ -8076,7 +9528,7 @@ Simulator_get_samples(Simulator *self)
         goto out;
     }
     for (j = 0; j < num_samples; j++) {
-        population = samples[j].population_id == MSP_NULL_POPULATION_ID? -1:
+        population = samples[j].population_id == MSP_NULL_POPULATION? -1:
             samples[j].population_id;
         t = Py_BuildValue("id", population, samples[j].time);
         if (t == NULL) {
@@ -8090,7 +9542,6 @@ out:
     Py_XDECREF(l);
     return ret;
 }
-
 
 
 static PyObject *
@@ -8156,41 +9607,17 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int err;
     PyObject *ret = NULL;
-    NodeTable *nodes = NULL;
-    EdgeTable *edges = NULL;
-    MigrationTable *migrations = NULL;
-    RecombinationMap *recombination_map = NULL;
-    recomb_map_t *recomb_map = NULL;
-    static char *kwlist[] = {"nodes", "edges", "migrations",
-        "recombination_map", NULL};
+    TableCollection *tables = NULL;
+    static char *kwlist[] = {"tables", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!|O!", kwlist,
-            &NodeTableType, &nodes,
-            &EdgeTableType, &edges,
-            &MigrationTableType, &migrations,
-            &RecombinationMapType, &recombination_map)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
+            &TableCollectionType, &tables)) {
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (NodeTable_check_state(nodes) != 0) {
-        goto out;
-    }
-    if (EdgeTable_check_state(edges) != 0) {
-        goto out;
-    }
-    if (MigrationTable_check_state(migrations) != 0) {
-        goto out;
-    }
-    if (recombination_map != NULL) {
-        if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
-            goto out;
-        }
-        recomb_map = recombination_map->recomb_map;
-    }
-    err = msp_populate_tables(self->sim, recomb_map, nodes->node_table,
-            edges->edge_table, migrations->migration_table);
+    err = msp_populate_tables(self->sim, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -8281,8 +9708,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the recombination rate." },
-    {"get_max_memory", (PyCFunction) Simulator_get_max_memory, METH_NOARGS,
-            "Returns the maximum memory used by the simulator" },
     {"get_segment_block_size",
             (PyCFunction) Simulator_get_segment_block_size, METH_NOARGS,
             "Returns segment block size." },
@@ -8292,15 +9717,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_node_mapping_block_size",
             (PyCFunction) Simulator_get_node_mapping_block_size, METH_NOARGS,
             "Returns node_mapping block size" },
-    {"get_node_block_size",
-            (PyCFunction) Simulator_get_node_block_size,
-            METH_NOARGS, "Returns the coalescent record block size" },
-    {"get_edge_block_size",
-            (PyCFunction) Simulator_get_edge_block_size,
-            METH_NOARGS, "Returns the coalescent record block size" },
-    {"get_migration_block_size",
-            (PyCFunction) Simulator_get_migration_block_size,
-            METH_NOARGS, "Returns the migration record block size" },
     {"get_time", (PyCFunction) Simulator_get_time, METH_NOARGS,
             "Returns the current simulation time" },
     {"get_num_ancestors", (PyCFunction) Simulator_get_num_ancestors, METH_NOARGS,
@@ -8331,15 +9747,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_segment_blocks",
             (PyCFunction) Simulator_get_num_segment_blocks, METH_NOARGS,
             "Returns the number of segment memory blocks"},
-    {"get_num_node_blocks",
-            (PyCFunction) Simulator_get_num_node_blocks, METH_NOARGS,
-            "Returns the number of coalescence record memory blocks"},
-    {"get_num_edge_blocks",
-            (PyCFunction) Simulator_get_num_edge_blocks, METH_NOARGS,
-            "Returns the number of coalescence record memory blocks"},
-    {"get_num_migration_blocks",
-            (PyCFunction) Simulator_get_num_migration_blocks, METH_NOARGS,
-            "Returns the number of coalescence record memory blocks"},
     {"get_num_breakpoints", (PyCFunction) Simulator_get_num_breakpoints,
             METH_NOARGS, "Returns the number of recombination breakpoints" },
     {"get_num_nodes",
@@ -8351,8 +9758,6 @@ static PyMethodDef Simulator_methods[] = {
     {"get_num_migrations",
             (PyCFunction) Simulator_get_num_migrations,
             METH_NOARGS, "Returns the number of migration records" },
-    {"get_used_memory", (PyCFunction) Simulator_get_used_memory,
-            METH_NOARGS, "Returns the approximate amount of memory used." },
     {"get_ancestors", (PyCFunction) Simulator_get_ancestors, METH_NOARGS,
             "Returns the ancestors" },
     {"get_breakpoints", (PyCFunction) Simulator_get_breakpoints,
@@ -8436,382 +9841,10 @@ static PyTypeObject SimulatorType = {
  *===================================================================
  */
 
-
-static PyObject *
-msprime_sort_tables(PyObject *self, PyObject *args, PyObject *kwds)
-{
-#ifdef HAVE_NUMPY
-    int err;
-    PyObject *ret = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    node_table_t *nodes = NULL;
-    edge_table_t *edges = NULL;
-    migration_table_t *migrations = NULL;
-    site_table_t *sites = NULL;
-    mutation_table_t *mutations = NULL;
-    Py_ssize_t edge_start = 0;
-    bool nodes_lock_acquired = false;
-    bool edges_lock_acquired = false;
-    bool migrations_lock_acquired = false;
-    bool sites_lock_acquired = false;
-    bool mutations_lock_acquired = false;
-
-    static char *kwlist[] = {"nodes", "edges", "migrations", "sites", "mutations",
-        "edge_start", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!O!n", kwlist,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &edge_start)) {
-        goto out;
-    }
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    py_nodes->locked = true;
-    nodes_lock_acquired = true;
-    nodes = py_nodes->node_table;
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-    py_edges->locked = true;
-    edges_lock_acquired = true;
-    edges = py_edges->edge_table;
-    if (py_migrations != NULL) {
-        if (MigrationTable_check_state(py_migrations) != 0) {
-            goto out;
-        }
-        py_migrations->locked = true;
-        migrations_lock_acquired = true;
-        migrations = py_migrations->migration_table;
-    }
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        py_sites->locked = true;
-        sites_lock_acquired = true;
-        sites = py_sites->site_table;
-    }
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        py_mutations->locked = true;
-        mutations_lock_acquired = true;
-        mutations = py_mutations->mutation_table;
-    }
-    if ((mutations == NULL) != (sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
-        goto out;
-    }
-    if (edge_start < 0 || edge_start > py_edges->edge_table->num_rows) {
-        PyErr_SetString(PyExc_ValueError,
-                "edge_start must be between 0 and len(edges)");
-    }
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    Py_BEGIN_ALLOW_THREADS
-    err = sort_tables(nodes, edges, migrations, sites, mutations, (size_t) edge_start);
-    Py_END_ALLOW_THREADS
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    /* Release the table locks IF we acquired them */
-    if (nodes_lock_acquired) {
-        py_nodes->locked = false;
-    }
-    if (edges_lock_acquired) {
-        py_edges->locked = false;
-    }
-    if (migrations_lock_acquired) {
-        py_migrations->locked = false;
-    }
-    if (sites_lock_acquired) {
-        py_sites->locked = false;
-    }
-    if (mutations_lock_acquired) {
-        py_mutations->locked = false;
-    }
-    return ret;
-#else
-    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
-    return NULL;
-#endif
-}
-
-static PyObject *
-msprime_simplify_tables(PyObject *self, PyObject *args, PyObject *kwds)
-{
-#ifdef HAVE_NUMPY
-    int err;
-    PyObject *ret = NULL;
-    PyObject *samples = NULL;
-    PyArrayObject *samples_array = NULL;
-    NodeTable *py_nodes = NULL;
-    EdgeTable *py_edges = NULL;
-    MigrationTable *py_migrations = NULL;
-    SiteTable *py_sites = NULL;
-    MutationTable *py_mutations = NULL;
-    node_table_t *nodes = NULL;
-    edge_table_t *edges = NULL;
-    migration_table_t *migrations = NULL;
-    site_table_t *sites = NULL;
-    mutation_table_t *mutations = NULL;
-    PyArrayObject *node_map_array = NULL;
-    npy_intp *shape, dims;
-    size_t num_samples;
-    simplifier_t *simplifier = NULL;
-    int flags = 0;
-    int filter_zero_mutation_sites = true;
-    bool migrations_allocated = false;
-    bool sites_allocated = false;
-    bool mutations_allocated = false;
-    bool nodes_lock_acquired = false;
-    bool edges_lock_acquired = false;
-    bool sites_lock_acquired = false;
-    bool mutations_lock_acquired = false;
-    double sequence_length = 0;
-    static char *kwlist[] = {
-        "samples", "nodes", "edges", "migrations",
-        "sites", "mutations", "sequence_length",
-        "filter_zero_mutation_sites", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO!O!|O!O!O!di", kwlist,
-            &samples,
-            &NodeTableType, &py_nodes,
-            &EdgeTableType, &py_edges,
-            &MigrationTableType, &py_migrations,
-            &SiteTableType, &py_sites,
-            &MutationTableType, &py_mutations,
-            &sequence_length, &filter_zero_mutation_sites)) {
-        goto out;
-    }
-    samples_array = (PyArrayObject *) PyArray_FROM_OTF(samples, NPY_INT32,
-            NPY_ARRAY_IN_ARRAY);
-    if (samples_array == NULL) {
-        goto out;
-    }
-    if (PyArray_NDIM(samples_array) != 1) {
-        PyErr_SetString(PyExc_ValueError, "samples must 1D array");
-        goto out;
-    }
-    shape = PyArray_DIMS(samples_array);
-    num_samples = shape[0];
-    if (NodeTable_check_state(py_nodes) != 0) {
-        goto out;
-    }
-    nodes = py_nodes->node_table;
-    if (EdgeTable_check_state(py_edges) != 0) {
-        goto out;
-    }
-
-    /* Set the locks on the node and edge tables. We set the x_lock_acquired flags
-     * here so that we know that we should release the locks in this specific
-     * thread and not others. */
-    py_nodes->locked = true;
-    nodes_lock_acquired = true;
-    py_edges->locked = true;
-    edges_lock_acquired = true;
-    edges = py_edges->edge_table;
-    if (py_migrations != NULL) {
-        PyErr_SetString(PyExc_ValueError,
-                "Migrations not yet supported in simplify. Please file a bug report.");
-        goto out;
-    }
-    if (py_sites != NULL) {
-        if (SiteTable_check_state(py_sites) != 0) {
-            goto out;
-        }
-        py_sites->locked = true;
-        sites_lock_acquired = true;
-        sites = py_sites->site_table;
-    }
-    if (py_mutations != NULL) {
-        if (MutationTable_check_state(py_mutations) != 0) {
-            goto out;
-        }
-        py_mutations->locked = true;
-        mutations_lock_acquired = true;
-        mutations = py_mutations->mutation_table;
-    }
-    if ((mutations == NULL) != (sites == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "Must specify both sites and mutation tables");
-        goto out;
-    }
-    if (filter_zero_mutation_sites) {
-        flags |= MSP_FILTER_ZERO_MUTATION_SITES;
-    }
-
-    /* If migrations, sites or mutations is NULL on the input, allocate an empty
-     * table for convenience. */
-    if (migrations == NULL) {
-        migrations = PyMem_Malloc(sizeof(migration_table_t));
-        if (migrations == NULL) {
-            ret = PyErr_NoMemory();
-            goto out;
-        }
-        migrations_allocated = true;
-        err = migration_table_alloc(migrations, 0);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if (sites == NULL) {
-        sites = PyMem_Malloc(sizeof(site_table_t));
-        if (sites == NULL) {
-            ret = PyErr_NoMemory();
-            goto out;
-        }
-        sites_allocated = true;
-        err = site_table_alloc(sites, 0, 0, 0);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-    if (mutations == NULL) {
-        mutations = PyMem_Malloc(sizeof(mutation_table_t));
-        if (mutations == NULL) {
-            ret = PyErr_NoMemory();
-            goto out;
-        }
-        mutations_allocated = true;
-        err = mutation_table_alloc(mutations, 0, 0, 0);
-        if (err != 0) {
-            handle_library_error(err);
-            goto out;
-        }
-    }
-
-    /* Allocate a new array to hold the node map. Since we've allocated
-     * this array outside of the context of the interpreter, it _should_
-     * be safe to use a pointer to the underlying memory while the GIL
-     * is released. */
-    dims = nodes->num_rows;
-    node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
-    if (node_map_array == NULL) {
-        goto out;
-    }
-    /* Allocate the simplifier and run */
-    simplifier = PyMem_Malloc(sizeof(simplifier_t));
-    if (simplifier == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    /* We cannot release the GIL during alloc here because we are accessing
-     * the memory for the samples array which could change. We could avoid
-     * this by taking a copy before. */
-    err = simplifier_alloc(simplifier, sequence_length,
-            (node_id_t *) PyArray_DATA(samples_array), num_samples,
-            nodes, edges, migrations, sites, mutations, 0, flags);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    Py_BEGIN_ALLOW_THREADS
-    err = simplifier_run(simplifier, (node_id_t *) PyArray_DATA(node_map_array));
-    Py_END_ALLOW_THREADS
-    assert(py_nodes->locked);
-    assert(py_edges->locked);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = (PyObject *) node_map_array;
-    node_map_array = NULL;
-out:
-    /* Release the table locks IF we acquired them in this thread. */
-    if (nodes_lock_acquired) {
-        py_nodes->locked = false;
-    }
-    if (edges_lock_acquired) {
-        py_edges->locked = false;
-    }
-    if (sites_lock_acquired) {
-        py_sites->locked = false;
-    }
-    if (mutations_lock_acquired) {
-        py_mutations->locked = false;
-    }
-    if (simplifier != NULL) {
-        simplifier_free(simplifier);
-        PyMem_Free(simplifier);
-    }
-    Py_XDECREF(samples_array);
-    Py_XDECREF(node_map_array);
-    if (migrations_allocated) {
-        migration_table_free(migrations);
-        PyMem_Free(migrations);
-    }
-    if (sites_allocated) {
-        site_table_free(sites);
-        PyMem_Free(sites);
-    }
-    if (mutations_allocated) {
-        mutation_table_free(mutations);
-        PyMem_Free(mutations);
-    }
-    return ret;
-#else
-    PyErr_SetString(PyExc_SystemError, "Function not available without numpy");
-    return NULL;
-#endif
-}
-
 static PyObject *
 msprime_get_gsl_version(PyObject *self)
 {
     return Py_BuildValue("ii", GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
-}
-
-static PyObject *
-msprime_get_hdf5_version(PyObject *self)
-{
-    herr_t status;
-    PyObject *ret = NULL;
-    unsigned int major, minor, release;
-
-    /* Beware! This seems to leak memory, so don't call it repeatedly */
-    status = H5get_libversion(&major, &minor, &release);
-    if (status != 0) {
-        PyErr_SetString(PyExc_SystemError, "Error getting HDF5 version");
-        goto out;
-    }
-    ret = Py_BuildValue("III", major, minor, release);
-out:
-    return ret;
-}
-
-static PyObject *
-msprime_h5close(PyObject *self)
-{
-    herr_t status;
-    PyObject *ret = NULL;
-
-    status = H5close();
-    if (status != 0) {
-        PyErr_SetString(PyExc_SystemError, "Error calling H5close");
-        goto out;
-    }
-    ret = Py_BuildValue("");
-out:
-    return ret;
 }
 
 static PyObject *
@@ -8820,18 +9853,9 @@ msprime_get_library_version_str(PyObject *self)
     return Py_BuildValue("s", MSP_LIBRARY_VERSION_STR);
 }
 
-
 static PyMethodDef msprime_methods[] = {
-    {"sort_tables", (PyCFunction) msprime_sort_tables, METH_VARARGS|METH_KEYWORDS,
-            "Sorts tables, in place, into canonical ordering for tree sequence input." },
-    {"simplify_tables", (PyCFunction) msprime_simplify_tables, METH_VARARGS|METH_KEYWORDS,
-            "Simplifies the specified set of tables for a given sample subset." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
-    {"get_hdf5_version", (PyCFunction) msprime_get_hdf5_version, METH_NOARGS,
-            "Returns the version of HDF5 we are linking against." },
-    {"h5close", (PyCFunction) msprime_h5close, METH_NOARGS,
-            "Calls H5close()" },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
             METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
@@ -8874,9 +9898,7 @@ init_msprime(void)
     if (module == NULL) {
         INITERROR;
     }
-#ifdef HAVE_NUMPY
     import_array();
-#endif
 
     /* RandomGenerator type */
     RandomGeneratorType.tp_new = PyType_GenericNew;
@@ -8886,13 +9908,13 @@ init_msprime(void)
     Py_INCREF(&RandomGeneratorType);
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
 
-    /* NodeTable type */
-    NodeTableType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&NodeTableType) < 0) {
+    /* IndividualTable type */
+    IndividualTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&IndividualTableType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&NodeTableType);
-    PyModule_AddObject(module, "NodeTable", (PyObject *) &NodeTableType);
+    Py_INCREF(&IndividualTableType);
+    PyModule_AddObject(module, "IndividualTable", (PyObject *) &IndividualTableType);
 
     /* NodeTable type */
     NodeTableType.tp_new = PyType_GenericNew;
@@ -8934,6 +9956,14 @@ init_msprime(void)
     Py_INCREF(&MutationTableType);
     PyModule_AddObject(module, "MutationTable", (PyObject *) &MutationTableType);
 
+    /* PopulationTable type */
+    PopulationTableType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&PopulationTableType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&PopulationTableType);
+    PyModule_AddObject(module, "PopulationTable", (PyObject *) &PopulationTableType);
+
     /* ProvenanceTable type */
     ProvenanceTableType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&ProvenanceTableType) < 0) {
@@ -8941,6 +9971,14 @@ init_msprime(void)
     }
     Py_INCREF(&ProvenanceTableType);
     PyModule_AddObject(module, "ProvenanceTable", (PyObject *) &ProvenanceTableType);
+
+    /* TableCollectionTable type */
+    TableCollectionType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TableCollectionType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&TableCollectionType);
+    PyModule_AddObject(module, "TableCollection", (PyObject *) &TableCollectionType);
 
     /* MutationGenerator type */
     MutationGeneratorType.tp_new = PyType_GenericNew;
@@ -8999,14 +10037,6 @@ init_msprime(void)
     Py_INCREF(&TreeDiffIteratorType);
     PyModule_AddObject(module, "TreeDiffIterator", (PyObject *) &TreeDiffIteratorType);
 
-    /* SampleListIterator type */
-    SampleListIteratorType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&SampleListIteratorType) < 0) {
-        INITERROR;
-    }
-    Py_INCREF(&SampleListIteratorType);
-    PyModule_AddObject(module, "SampleListIterator", (PyObject *) &SampleListIteratorType);
-
     /* VcfConverter type */
     VcfConverterType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&VcfConverterType) < 0) {
@@ -9024,7 +10054,6 @@ init_msprime(void)
     PyModule_AddObject(module, "HaplotypeGenerator",
             (PyObject *) &HaplotypeGeneratorType);
 
-#ifdef HAVE_NUMPY
     /* VariantGenerator type */
     VariantGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&VariantGeneratorType) < 0) {
@@ -9032,7 +10061,6 @@ init_msprime(void)
     }
     Py_INCREF(&VariantGeneratorType);
     PyModule_AddObject(module, "VariantGenerator", (PyObject *) &VariantGeneratorType);
-#endif
 
     /* LdCalculator type */
     LdCalculatorType.tp_new = PyType_GenericNew;
@@ -9049,6 +10077,15 @@ init_msprime(void)
     MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
+    MsprimeFileFormatError = PyErr_NewException("_msprime.FileFormatError", NULL, NULL);
+    Py_INCREF(MsprimeFileFormatError);
+    PyModule_AddObject(module, "FileFormatError", MsprimeFileFormatError);
+    MsprimeVersionTooNewError = PyErr_NewException("_msprime.VersionTooNewError", NULL, NULL);
+    Py_INCREF(MsprimeVersionTooNewError);
+    PyModule_AddObject(module, "VersionTooNewError", MsprimeVersionTooNewError);
+    MsprimeVersionTooOldError = PyErr_NewException("_msprime.VersionTooOldError", NULL, NULL);
+    Py_INCREF(MsprimeVersionTooOldError);
+    PyModule_AddObject(module, "VersionTooOldError", MsprimeVersionTooOldError);
 
     /* Node flags */
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", MSP_NODE_IS_SAMPLE);
@@ -9067,5 +10104,3 @@ init_msprime(void)
     return module;
 #endif
 }
-
-

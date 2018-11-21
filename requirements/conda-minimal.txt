@@ -1,6 +1,6 @@
 numpy
 nose
-hdf5
 h5py
 gsl
 six
+jsonschema

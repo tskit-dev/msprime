@@ -244,7 +244,7 @@ class TestContigLengths(unittest.TestCase):
     def test_long_sequence(self):
         # Nominal case where we expect the positions to map within the original
         # sequence length
-        ts = msprime.simulate(10, length=100, mutation_rate=0.01)
+        ts = msprime.simulate(10, length=100, mutation_rate=0.01, random_seed=3)
         self.assertGreater(ts.num_mutations, 0)
         contig_length = self.get_contig_length(ts)
         self.assertEqual(contig_length, 100)
