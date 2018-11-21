@@ -233,6 +233,12 @@ class TestMultipleMergerModels(unittest.TestCase):
         # TODO real tests
         self.assertTrue(ts is not None)
 
+    def test_beta_coalescent_integration_fails(self):
+        model = msprime.BetaCoalescent(
+            population_size=5, alpha=1e-10, truncation_point=10)
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.simulate(sample_size=10, model=model)
+
     def test_dtwf(self):
         model = msprime.DiscreteTimeWrightFisher()
         ts = msprime.simulate(sample_size=10, model=model)

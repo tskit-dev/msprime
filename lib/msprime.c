@@ -442,9 +442,6 @@ msp_alloc(msp_t *self,
     self->demographic_events_tail = NULL;
     self->next_demographic_event = NULL;
     self->state = MSP_STATE_NEW;
-
-    /* Make sure GSL error handling is turned off */
-    gsl_set_error_handler_off();
 out:
     return ret;
 }
@@ -4005,6 +4002,10 @@ msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha,
     double epsabs = self->model.params.beta_coalescent.integration_epsabs;
     struct beta_integral_params params = {num_ancestors, alpha};
 
+    if (w == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     F.function = &beta_integrand;
     F.params = &params;
     ret = gsl_integration_qags(&F, 0, 1, epsabs, epsrel, workspace_size, w, result, &err);
@@ -4014,6 +4015,7 @@ msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha,
         fprintf(stderr,  "GSL error: %s\n", gsl_strerror(ret));
         ret = MSP_ERR_INTEGRATION_FAILED;
     }
+out:
     return ret;
 }
 

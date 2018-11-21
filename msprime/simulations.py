@@ -41,6 +41,12 @@ import msprime.trees as trees
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
 
+# Make sure the GSL error handler is turned off so that we can be sure that
+# we don't abort on errors. This can be reset by using the function
+# _msprime.restore_gsl_error_handler(), which will set the error handler to
+# the value that it had before this function was called.
+_msprime.unset_gsl_error_handler()
+
 
 Sample = collections.namedtuple(
     "Sample",
