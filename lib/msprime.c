@@ -1995,6 +1995,8 @@ msp_reset(msp_t *self)
         goto out;
     }
     /* Set up the initial segments and algorithm state */
+    self->time = self->start_time;
+    assert(self->time >= 0);
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = self->populations + population_id;
         /* Set the initial population parameters */
@@ -2003,8 +2005,6 @@ msp_reset(msp_t *self)
         pop->initial_size = initial_pop->initial_size;
         pop->start_time = self->time;
     }
-    self->time = self->start_time;
-    assert(self->time >= 0);
     if (self->from_ts == NULL) {
         ret = msp_reset_from_samples(self);
     } else {

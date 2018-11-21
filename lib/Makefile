@@ -39,7 +39,7 @@ simulation_tests: simulation_tests.c ${COMPILED} ${HEADERS}
 	${CC} ${CFLAGS} -Wall -o simulation_tests simulation_tests.c ${COMPILED} ${LDFLAGS} -lcunit 
 
 tags:
-	etags *
+	ctags *.c *.h
 
 clean:
 	rm -f main tests simulation_tests table_example table_example_cpp *.o *.gcda *.gcno

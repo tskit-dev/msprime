@@ -662,8 +662,8 @@ class Simulator(object):
         """
         if self.random_generator is None:
             raise ValueError("A random generator instance must be set")
-        # if self.ll_sim is None:
-        self.ll_sim = self.create_ll_instance()
+        if self.ll_sim is None:
+            self.ll_sim = self.create_ll_instance()
         for event in self.model_change_events:
             self.ll_sim.run(event.time)
             self.ll_sim.set_model(event.model.get_ll_representation())
@@ -677,7 +677,7 @@ class Simulator(object):
         # TODO it's a waste of time copying the tables from the simulation
         # into the local table here. We should just work directly with the
         # tables held in the simulator. To do this we need an interface
-        # to the simulators tables.
+        # to the simulator's tables.
         self.ll_sim.populate_tables(self.tables.ll_tables)
         if mutation_generator is not None:
             mutation_generator.generate(self.tables.ll_tables)
