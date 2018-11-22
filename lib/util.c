@@ -247,7 +247,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_TOO_MANY_ALLELES:
             ret = "Cannot have more than 255 alleles.";
             break;
-<<<<<<< HEAD
         case MSP_ERR_BAD_SWEEP_LOCUS:
             ret = "Sweep locus must be between 0 and num_loci.";
             break;
@@ -260,7 +259,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_EMPTY_TRAJECTORY:
             ret = "Trajectory must contain at least one time point.";
             break;
-=======
         case MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
             ret = "Individual ID out of bounds";
             break;
@@ -316,7 +314,6 @@ msp_strerror_internal(int err)
             ret = "GSL numerical integration failed. Please check the stderr for details.";
             break;
 
->>>>>>> upstream/master
         case MSP_ERR_IO:
             if (errno != 0) {
                 ret = strerror(errno);

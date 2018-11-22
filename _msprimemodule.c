@@ -8747,8 +8747,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
+    size_t num_labels = 1;
     sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
-            recombination_map->recomb_map, from_ts,
+            recombination_map->recomb_map, from_ts, num_labels,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);

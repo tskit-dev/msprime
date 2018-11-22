@@ -319,8 +319,7 @@ int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
-int msp_set_migration_matrix(msp_t *self, size_t size,
-        double *migration_matrix);
+int msp_set_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_set_population_configuration(msp_t *self, int population_id,
         double initial_size, double growth_rate);
 
