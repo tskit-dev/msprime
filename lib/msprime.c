@@ -147,7 +147,7 @@ int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     int ret = 0;
-    size_t j;
+    size_t j, k;
 
     if (num_populations < 1 || num_populations > UINT32_MAX) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -188,7 +188,9 @@ msp_set_num_populations(msp_t *self, size_t num_populations)
         goto out;
     }
     for (j = 0; j < num_populations; j++) {
-        avl_init_tree(&self->populations[j].ancestors, cmp_individual, NULL);
+        for (k = 0; k < self->num_labels; k++){
+            avl_init_tree(&self->populations[j].ancestors[k], cmp_individual, NULL);
+        }
         /* Set the default sizes and growth rates. */
         self->initial_populations[j].growth_rate = 0.0;
         self->initial_populations[j].initial_size = 1.0;
@@ -311,15 +313,15 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
 {
     segment_t *seg = NULL;
 
-    if (object_heap_empty(&self->segment_heap)) {
-        if (object_heap_expand(&self->segment_heap) != 0) {
+    if (object_heap_empty(&self->segment_heap[label])) {
+        if (object_heap_expand(&self->segment_heap[label]) != 0) {
             goto out;
         }
-        if (fenwick_expand(&self->links, self->segment_block_size) != 0) {
+        if (fenwick_expand(&self->links[label], self->segment_block_size) != 0) {
             goto out;
         }
     }
-    seg = (segment_t *) object_heap_alloc_object(&self->segment_heap);
+    seg = (segment_t *) object_heap_alloc_object(&self->segment_heap[label]);
     if (seg == NULL) {
         goto out;
     }
@@ -328,7 +330,7 @@ msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
     seg->left = left;
     seg->right = right;
     seg->value = value;
-    seg->population_id = population_id;
+    seg->population = population_id;
     seg->label = label;
 out:
     return seg;
@@ -534,6 +536,7 @@ msp_free(msp_t *self)
     for (j = 0; j < self->num_populations; j++) {
         msp_safe_free(self->populations[j].ancestors);
     }
+
     msp_safe_free(self->links);
     msp_safe_free(self->segment_heap);
     msp_safe_free(self->initial_migration_matrix);
@@ -548,7 +551,7 @@ msp_free(msp_t *self)
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->node_mapping_heap);
-    fenwick_free(&self->links);
+    //fenwick_free(&self->links);
     if (self->from_ts != NULL) {
         tree_sequence_free(self->from_ts);
         free(self->from_ts);
@@ -704,9 +707,9 @@ msp_verify_segments(msp_t *self)
         assert(label_segments == object_heap_get_num_allocated(
                     &self->segment_heap[k]));
     }
-    assert(total_links == fenwick_get_total(&self->links));
+    assert(total_links == fenwick_get_total(&self->links[k]));
     assert(total_links == alt_total_links);
-    assert(total_segments == object_heap_get_num_allocated(&self->segment_heap));
+    //assert(total_segments == object_heap_get_num_allocated(&self->segment_heap));
     total_avl_nodes = msp_get_num_ancestors(self)
             + avl_count(&self->breakpoints)
             + avl_count(&self->overlap_counts);
@@ -1875,6 +1878,7 @@ msp_allocate_root_segments(msp_t *self, sparse_tree_t *tree,
     population_id_t population;
     node_id_t root;
     segment_t *seg, *tail;
+    label_id_t label = 0;
 
     for (root = tree->left_root; root != MSP_NULL_NODE; root = tree->right_sib[root]) {
         population = node_population[root];
@@ -1886,7 +1890,7 @@ msp_allocate_root_segments(msp_t *self, sparse_tree_t *tree,
         }
         if (root_segments_head[root] == NULL) {
             seg = msp_alloc_segment(self, left, right, root, population,
-                    NULL, NULL);
+                    label, NULL, NULL);
             if (seg == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -1899,7 +1903,7 @@ msp_allocate_root_segments(msp_t *self, sparse_tree_t *tree,
                 tail->right = right;
             } else {
                 seg = msp_alloc_segment(self, left, right, root, population,
-                        tail, NULL);
+                        label, tail, NULL);
                 if (seg == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -1925,7 +1929,7 @@ msp_reset_from_ts(msp_t *self)
     size_t num_nodes = self->tables.nodes->num_rows;
     segment_t **root_segments_head = calloc(num_nodes, sizeof(*root_segments_head));
     segment_t **root_segments_tail = calloc(num_nodes, sizeof(*root_segments_tail));
-
+    label_id_t label = 0;
     ret = sparse_tree_alloc(&t, self->from_ts, 0);
     if (ret != 0) {
         goto out;
@@ -1991,9 +1995,9 @@ msp_reset_from_ts(msp_t *self)
             if (ret != 0) {
                 goto out;
             }
-            fenwick_set_value(&self->links, seg->id, seg->right - seg->left - 1);
+            fenwick_set_value(&self->links[label], seg->id, seg->right - seg->left - 1);
             for (seg = seg->next; seg != NULL; seg = seg->next) {
-                fenwick_set_value(&self->links, seg->id, seg->right - seg->prev->right);
+                fenwick_set_value(&self->links[label], seg->id, seg->right - seg->prev->right);
             }
         }
     }
@@ -2603,8 +2607,9 @@ msp_store_simultaneous_migration_events(msp_t *self, avl_tree_t *nodes,
     uint32_t j;
     avl_node_t *node;
     avl_tree_t *source;
+    label_id_t label = 0; //currently only working for label 0
 
-    source = &self->populations[source_pop].ancestors;
+    source = &self->populations[source_pop].ancestors[label];
 
     // Choose node to migrate
     j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
@@ -2625,6 +2630,7 @@ msp_simultaneous_migration_event(msp_t *self, avl_tree_t *nodes,
     int ret = 0;
     avl_node_t *node;
     size_t index;
+    label_id_t label = 0;
 
     index = ((size_t) source_pop) * self->num_populations + (size_t) dest_pop;
     self->num_migration_events[index]++;
@@ -2633,7 +2639,7 @@ msp_simultaneous_migration_event(msp_t *self, avl_tree_t *nodes,
     // -- removed from "nodes" in msp_move_individual()
     while (avl_count(nodes) > 0) {
         node = nodes->head;
-        ret = msp_move_individual(self, node, nodes, dest_pop);
+        ret = msp_move_individual(self, node, nodes, dest_pop, label);
         if (ret != 0) {
             goto out;
         }
@@ -2944,46 +2950,49 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     avl_node_t *a;
     segment_t *seg;
     node_id_t node;
+    label_id_t label;
     int64_t edge_start;
     node_table_t *nodes = tables->nodes;
     const double current_time = self->model.model_time_to_generations(&self->model,
             self->time);
 
     for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
-        for (a = self->populations[pop].ancestors.head; a != NULL; a = a->next) {
-            /* If there are any nodes in the segment chain with the current time,
-             * then we don't make any unary edges for them. This is because (a)
-             * we'd end up edges with the same parent and child time (if we didn't
-             * hack an extra epsilon onto the parent time) and (b), this node
-             * could only have arisen as the result of a coalescence and so this
-             * node really does represent the current ancestor */
-            node = MSP_NULL_NODE;
-            for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
-                if (nodes->time[seg->value] == current_time) {
-                    node = seg->value;
-                    break;
+        for (label = 0; label < (label_id_t) self->num_labels; label++){
+            for (a = self->populations[pop].ancestors[label].head; a != NULL; a = a->next) {
+                /* If there are any nodes in the segment chain with the current time,
+                 * then we don't make any unary edges for them. This is because (a)
+                 * we'd end up edges with the same parent and child time (if we didn't
+                 * hack an extra epsilon onto the parent time) and (b), this node
+                 * could only have arisen as the result of a coalescence and so this
+                 * node really does represent the current ancestor */
+                node = MSP_NULL_NODE;
+                for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
+                    if (nodes->time[seg->value] == current_time) {
+                        node = seg->value;
+                        break;
+                    }
                 }
-            }
-            if (node == MSP_NULL_NODE) {
-                /* Add a node for this ancestor */
-                node = node_table_add_row(nodes, 0, current_time, pop,
-                        MSP_NULL_INDIVIDUAL, NULL, 0);
-                if (node < 0) {
-                    ret = node;
-                    goto out;
-                }
-            }
-
-            /* For every segment add an edge pointing to this new node */
-            for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
-                if (seg->value != node) {
-                    assert(nodes->time[node] > nodes->time[seg->value]);
-                    ret = edge_table_add_row(tables->edges,
-                        msp_genetic_to_phys(self, seg->left),
-                        msp_genetic_to_phys(self, seg->right),
-                        node, seg->value);
-                    if (ret < 0) {
+                if (node == MSP_NULL_NODE) {
+                    /* Add a node for this ancestor */
+                    node = node_table_add_row(nodes, 0, current_time, pop,
+                            MSP_NULL_INDIVIDUAL, NULL, 0);
+                    if (node < 0) {
+                        ret = node;
                         goto out;
+                    }
+                }
+
+                /* For every segment add an edge pointing to this new node */
+                for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
+                    if (seg->value != node) {
+                        assert(nodes->time[node] > nodes->time[seg->value]);
+                        ret = edge_table_add_row(tables->edges,
+                            msp_genetic_to_phys(self, seg->left),
+                            msp_genetic_to_phys(self, seg->right),
+                            node, seg->value);
+                        if (ret < 0) {
+                            goto out;
+                        }
                     }
                 }
             }
@@ -4394,7 +4403,7 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id,
     max_pot_size = 0;
     for (j = 0; j < 5; j++){
         max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[j]));
-        ret = msp_merge_ancestors(self, &Q[j], 0);
+        ret = msp_merge_ancestors(self, &Q[j], 0, label);
         if (ret < 0) {
             goto out;
         }

@@ -256,23 +256,14 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY:
             ret = "Allele frequency values must be between 0 and 1.";
             break;
-        case MSP_ERR_EMPTY_TRAJECTORY:
-            ret = "Trajectory must contain at least one time point.";
-            break;
         case MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
             ret = "Individual ID out of bounds";
             break;
-        case MSP_ERR_GENERATE_UUID:
-            ret = "Error generating UUID";
-            break;
-        case MSP_ERR_DUPLICATE_SITE_POSITION:
-            ret = "Duplicate site positions.";
-            break;
+        //case MSP_ERR_DUPLICATE_SITE_POSITION:
+        //    ret = "Duplicate site positions.";
+        //    break;
         case MSP_ERR_BAD_TABLE_POSITION:
             ret = "Bad table position provided to truncate/reset.";
-            break;
-        case MSP_ERR_BAD_EDGE_INDEX:
-            ret = "Invalid edge index value.";
             break;
         case MSP_ERR_TABLES_NOT_INDEXED:
             ret = "Table collection must be indexed.";
