@@ -72,9 +72,12 @@ class WrightFisherSimulator(object):
             init_ts = msprime.simulate(
                 self.N, recombination_rate=1.0, length=L, random_seed=self.seed)
             init_tables = init_ts.dump_tables()
+            flags = init_tables.nodes.flags
+            if not self.initial_generation_samples:
+                flags = np.zeros_like(init_tables.nodes.flags)
             tables.nodes.set_columns(
                 time=init_tables.nodes.time + ngens,
-                flags=np.zeros_like(init_tables.nodes.flags))
+                flags=flags)
             tables.edges.set_columns(
                 left=init_tables.edges.left, right=init_tables.edges.right,
                 parent=init_tables.edges.parent, child=init_tables.edges.child)

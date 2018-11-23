@@ -611,3 +611,124 @@ class LinkedTree(object):
                 right = min(right, edges[out_order[k]].right)
             yield left, right
             left = right
+
+
+def mean_descendants(ts, reference_sets):
+    """
+    Returns the mean number of nodes from the specified reference sets
+    where the node is ancestral to at least one of the reference nodes. Returns a
+    ``(ts.num_nodes, len(reference_sets))`` dimensional numpy array.
+    """
+    # Check the inputs (could be done more efficiently here)
+    all_reference_nodes = set()
+    for reference_set in reference_sets:
+        U = set(reference_set)
+        if len(U) != len(reference_set):
+            raise ValueError("Cannot have duplicate values within set")
+        if len(all_reference_nodes & U) != 0:
+            raise ValueError("Sample sets must be disjoint")
+        all_reference_nodes |= U
+
+    K = len(reference_sets)
+    C = np.zeros((ts.num_nodes, K))
+    parent = np.zeros(ts.num_nodes, dtype=int) - 1
+    # The -1th element of ref_count is for all nodes in the reference set.
+    ref_count = np.zeros((ts.num_nodes, K + 1), dtype=int)
+    last_update = np.zeros(ts.num_nodes)
+    total_length = np.zeros(ts.num_nodes)
+
+    def update_counts(edge, sign):
+        # Update the counts and statistics for a given node. Before we change the
+        # node counts in the given direction, check to see if we need to update
+        # statistics for that node. When a node count changes, we add the
+        # accumulated statistic value for the span since that node was last updated.
+        v = edge.parent
+        while v != -1:
+            if last_update[v] != left:
+                if ref_count[v, K] > 0:
+                    length = left - last_update[v]
+                    C[v] += length * ref_count[v, :K]
+                    total_length[v] += length
+                last_update[v] = left
+            ref_count[v] += sign * ref_count[edge.child]
+            v = parent[v]
+
+    # Set the intitial conditions.
+    for j in range(K):
+        ref_count[reference_sets[j], j] = 1
+    ref_count[ts.samples(), K] = 1
+
+    for (left, right), edges_out, edges_in in ts.edge_diffs():
+        for edge in edges_out:
+            parent[edge.child] = -1
+            update_counts(edge, -1)
+        for edge in edges_in:
+            parent[edge.child] = edge.parent
+            update_counts(edge, +1)
+
+    # Finally, add the stats for the last tree and divide by the total
+    # length that each node was an ancestor to > 0 samples.
+    for v in range(ts.num_nodes):
+        if ref_count[v, K] > 0:
+            length = ts.sequence_length - last_update[v]
+            total_length[v] += length
+            C[v] += length * ref_count[v, :K]
+        if total_length[v] != 0:
+            C[v] /= total_length[v]
+    return C
+
+
+def genealogical_nearest_neighbours(ts, focal, reference_sets):
+
+    reference_set_map = np.zeros(ts.num_nodes, dtype=int) - 1
+    for k, reference_set in enumerate(reference_sets):
+        for u in reference_set:
+            if reference_set_map[u] != -1:
+                raise ValueError("Duplicate value in reference sets")
+            reference_set_map[u] = k
+
+    K = len(reference_sets)
+    A = np.zeros((len(focal), K))
+    L = np.zeros(len(focal))
+    parent = np.zeros(ts.num_nodes, dtype=int) - 1
+    sample_count = np.zeros((ts.num_nodes, K), dtype=int)
+
+    # Set the intitial conditions.
+    for j in range(K):
+        sample_count[reference_sets[j], j] = 1
+
+    for (left, right), edges_out, edges_in in ts.edge_diffs():
+        for edge in edges_out:
+            parent[edge.child] = -1
+            v = edge.parent
+            while v != -1:
+                sample_count[v] -= sample_count[edge.child]
+                v = parent[v]
+        for edge in edges_in:
+            parent[edge.child] = edge.parent
+            v = edge.parent
+            while v != -1:
+                sample_count[v] += sample_count[edge.child]
+                v = parent[v]
+
+        # Process this tree.
+        for j, u in enumerate(focal):
+            focal_reference_set = reference_set_map[u]
+            p = parent[u]
+            while p != msprime.NULL_NODE:
+                total = np.sum(sample_count[p])
+                if total > 1:
+                    break
+                p = parent[p]
+            if p != msprime.NULL_NODE:
+                length = right - left
+                L[j] += length
+                scale = length / (total - int(focal_reference_set != -1))
+                for k, reference_set in enumerate(reference_sets):
+                    n = sample_count[p, k] - int(focal_reference_set == k)
+                    A[j, k] += n * scale
+
+    # Avoid division by zero
+    L[L == 0] = 1
+    A /= L.reshape((len(focal), 1))
+    return A

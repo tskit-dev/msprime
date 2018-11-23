@@ -214,8 +214,17 @@ int tree_sequence_get_sample_index_map(tree_sequence_t *self,
 int tree_sequence_simplify(tree_sequence_t *self, node_id_t *samples,
         size_t num_samples, int flags, tree_sequence_t *output,
         node_id_t *node_map);
+/* TODO change get_pairwise_diversity to just pairwise_diversity */
 int tree_sequence_get_pairwise_diversity(tree_sequence_t *self,
     node_id_t *samples, size_t num_samples, double *pi);
+int tree_sequence_genealogical_nearest_neighbours(tree_sequence_t *self,
+        node_id_t *focal, size_t num_focal,
+        node_id_t **reference_sets, size_t *reference_set_size, size_t num_reference_sets,
+        int flags, double *ret_array);
+int tree_sequence_mean_descendants(tree_sequence_t *self,
+        node_id_t **reference_sets, size_t *reference_set_size, size_t num_reference_sets,
+        int flags, double *ret_array);
+
 int tree_diff_iterator_alloc(tree_diff_iterator_t *self,
         tree_sequence_t *tree_sequence);
 int tree_diff_iterator_free(tree_diff_iterator_t *self);
