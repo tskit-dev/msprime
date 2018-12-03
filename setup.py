@@ -91,6 +91,8 @@ class DefineMacros(object):
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
+        if not IS_WINDOWS:
+            defines += [("HAVE_INLINE", 1)]
         return defines[index]
 
 
