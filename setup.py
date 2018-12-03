@@ -19,53 +19,16 @@
 from __future__ import division
 from __future__ import print_function
 
-import subprocess
 import platform
 import os
 import os.path
-from warnings import warn
+import glob
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
 
 
-CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
-
-
-class PathConfigurator(object):
-    """
-    A class to attempt configuration of the compile search paths
-    on various platforms.
-    """
-    def __init__(self):
-        self.include_dirs = []
-        self.library_dirs = []
-        try:
-            self._configure_gsl()
-        except OSError as e:
-            warn("Error occured getting GSL path config: {}".format(e))
-        # If the conda prefix is defined, then we are compiling in a conda
-        # context. All include and lib paths should come from within this prefix.
-        if CONDA_PREFIX is not None:
-            prefix = CONDA_PREFIX
-            if IS_WINDOWS:
-                prefix = os.path.join(prefix, "Library")
-            self.library_dirs.append(os.path.join(prefix, "lib"))
-            self.include_dirs.append(os.path.join(prefix, "include"))
-
-    def _run_command(self, args):
-        return subprocess.check_output(args, universal_newlines=True)
-
-    def _configure_gsl(self):
-        output = self._run_command(["gsl-config", "--cflags"]).split()
-        if len(output) > 0:
-            token = output[0]
-            self.include_dirs.append(token[2:])
-        output = self._run_command(["gsl-config", "--libs"]).split()
-        for token in output:
-            if token.startswith("-L"):
-                self.library_dirs.append(token[2:])
 
 
 # Obscure magic required to allow numpy be used as an 'setup_requires'.
@@ -89,12 +52,22 @@ except ImportError:
     pass
 
 kastore_dir = os.path.join("kastore", "c")
-configurator = PathConfigurator()
-source_files = [
+gsl_dir = "gsl"
+
+source_files = glob.glob("lib/gsl/rng/*.c")
+source_files += glob.glob("lib/gsl/err/*.c")
+source_files += glob.glob("lib/gsl/randist/*.c")
+source_files += glob.glob("lib/gsl/sys/*.c")
+source_files += [os.path.join("lib", "gsl", "specfunc", f) for f in [
+    "gamma.c", "trig.c", "psi.c", "log.c", "zeta.c", "elementary.c", "exp.c"]]
+source_files += [os.path.join("lib", "gsl", "complex", f) for f in [
+    "math.c"]]
+
+source_files += [os.path.join("lib", f) for f in [
     "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
     "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
     "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c", "uuid.c",
-    os.path.join(kastore_dir, "kastore.c")]
+    os.path.join(kastore_dir, "kastore.c")]]
 
 
 # Now, setup the extension module. We have to do some quirky workarounds
@@ -118,30 +91,25 @@ class DefineMacros(object):
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
-        if IS_WINDOWS:
-            defines += [
-                # These two are required for GSL to compile and link against the
-                # conda-forge version.
-                ("GSL_DLL", None), ("WIN32", None)]
         return defines[index]
 
 
-libraries = ["gsl", "gslcblas"]
+libraries = []
 if IS_WINDOWS:
     # Needed for generating UUIDs
     libraries.append("Advapi32")
 
 _msprime_module = Extension(
     '_msprime',
-    sources=["_msprimemodule.c"] + [os.path.join(libdir, f) for f in source_files],
+    sources=["_msprimemodule.c"] + source_files,
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
     libraries=libraries,
     define_macros=DefineMacros(),
     include_dirs=includes + [
-        os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
-    library_dirs=configurator.library_dirs,
+        os.path.join(libdir, kastore_dir),
+        os.path.join(libdir, gsl_dir)]
 )
 
 with open("README.rst") as f:
