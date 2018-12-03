@@ -88,6 +88,7 @@ class DefineMacros(object):
                 self._msprime_version = '"{}"'.format(version)
 
         defines = [
+            ("GSL_MSPRIME", 1),
             # Define the library version
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]

@@ -1,17 +1,17 @@
 /* randist/multinomial.c
- * 
+ *
  * Copyright (C) 2002 Gavin E. Crooks <gec@compbio.berkeley.edu>
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -27,15 +27,15 @@
 
                                       N!           n_1  n_2      n_K
    prob(n_1, n_2, ... n_K) = -------------------- p_1  p_2  ... p_K
-                             (n_1! n_2! ... n_K!) 
+                             (n_1! n_2! ... n_K!)
 
    where n_1, n_2, ... n_K are nonnegative integers, sum_{k=1,K} n_k = N,
-   and p = (p_1, p_2, ..., p_K) is a probability distribution. 
+   and p = (p_1, p_2, ..., p_K) is a probability distribution.
 
    Random variates are generated using the conditional binomial method.
    This scales well with N and does not require a setup step.
 
-   Ref: 
+   Ref:
    C.S. David, The computer generation of multinomial random variates,
    Comp. Stat. Data Anal. 16 (1993) 205-217
 */
@@ -52,7 +52,7 @@ gsl_ran_multinomial (const gsl_rng * r, const size_t K,
 
   /* p[k] may contain non-negative weights that do not sum to 1.0.
    * Even a probability distribution will not exactly sum to 1.0
-   * due to rounding errors. 
+   * due to rounding errors.
    */
 
   for (k = 0; k < K; k++)
@@ -77,6 +77,7 @@ gsl_ran_multinomial (const gsl_rng * r, const size_t K,
 
 }
 
+#ifndef GSL_MSPRIME
 
 double
 gsl_ran_multinomial_pdf (const size_t K,
@@ -111,7 +112,7 @@ gsl_ran_multinomial_lnpdf (const size_t K,
     {
       /* Handle case where n[k]==0 and p[k]==0 */
 
-      if (n[k] > 0) 
+      if (n[k] > 0)
         {
           log_pdf += log (p[k] / norm) * n[k] - gsl_sf_lnfact (n[k]);
         }
@@ -119,3 +120,4 @@ gsl_ran_multinomial_lnpdf (const size_t K,
 
   return log_pdf;
 }
+#endif

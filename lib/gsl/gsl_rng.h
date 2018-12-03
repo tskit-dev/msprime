@@ -58,8 +58,7 @@ gsl_rng;
 
 /* These structs also need to appear in default.c so you can select
    them via the environment variable GSL_RNG_TYPE */
-#if 0
-/* JK: removed these as we're not using them */
+#ifndef GSL_MSPRIME
 GSL_VAR const gsl_rng_type *gsl_rng_borosh13;
 GSL_VAR const gsl_rng_type *gsl_rng_coveyou;
 GSL_VAR const gsl_rng_type *gsl_rng_cmrg;
