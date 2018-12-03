@@ -25,7 +25,7 @@
 #include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
-/* #include <gsl/gsl_integration.h> */
+#include <gsl/gsl_integration.h>
 
 #include "avl.h"
 #include "fenwick.h"
@@ -94,7 +94,7 @@ typedef struct {
     double integration_epsabs;
     double integration_epsrel;
     size_t integration_workspace_size;
-    /* gsl_integration_workspace *integration_workspace; */
+    gsl_integration_workspace *integration_workspace;
 } beta_coalescent_t;
 
 typedef struct {

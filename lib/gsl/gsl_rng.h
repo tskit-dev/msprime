@@ -58,7 +58,8 @@ gsl_rng;
 
 /* These structs also need to appear in default.c so you can select
    them via the environment variable GSL_RNG_TYPE */
-
+#if 0
+/* JK: removed these as we're not using them */
 GSL_VAR const gsl_rng_type *gsl_rng_borosh13;
 GSL_VAR const gsl_rng_type *gsl_rng_coveyou;
 GSL_VAR const gsl_rng_type *gsl_rng_cmrg;
@@ -123,7 +124,11 @@ GSL_VAR const gsl_rng_type *gsl_rng_waterman14;
 GSL_VAR const gsl_rng_type *gsl_rng_zuf;
 
 const gsl_rng_type ** gsl_rng_types_setup(void);
+#endif
 
+GSL_VAR const gsl_rng_type *gsl_rng_mt19937;
+GSL_VAR const gsl_rng_type *gsl_rng_mt19937_1999;
+GSL_VAR const gsl_rng_type *gsl_rng_mt19937_1998;
 GSL_VAR const gsl_rng_type *gsl_rng_default;
 GSL_VAR unsigned long int gsl_rng_default_seed;
 

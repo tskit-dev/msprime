@@ -24,7 +24,9 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
-/* #include <gsl/gsl_integration.h> */
+#include <gsl/gsl_integration.h>
+#include <gsl/gsl_sf_log.h>
+#include <gsl/gsl_sf_gamma.h>
 
 #include "util.h"
 #include "avl.h"

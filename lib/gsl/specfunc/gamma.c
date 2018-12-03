@@ -31,6 +31,7 @@
 #include "error.h"
 #include "check.h"
 
+#if 0
 #include "chebyshev.h"
 #include "cheb_eval.c"
 
@@ -1623,12 +1624,14 @@ int gsl_sf_choose_e(unsigned int n, unsigned int m, gsl_sf_result * result)
       }
   }
 }
+#endif
 
 
 /*-*-*-*-*-*-*-*-*-* Functions w/ Natural Prototypes *-*-*-*-*-*-*-*-*-*-*/
 
 #include "eval.h"
 
+#if 0
 double gsl_sf_fact(const unsigned int n)
 {
   EVAL_RESULT(gsl_sf_fact_e(n, &result));
@@ -1673,6 +1676,8 @@ double gsl_sf_taylorcoeff(const int n, const double x)
 {
   EVAL_RESULT(gsl_sf_taylorcoeff_e(n, x, &result));
 }
+
+#endif
 
 double gsl_sf_choose(unsigned int n, unsigned int m)
 {
