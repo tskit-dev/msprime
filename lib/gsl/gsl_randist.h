@@ -1,17 +1,17 @@
 /* randist/gsl_randist.h
- * 
+ *
  * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 James Theiler, Brian Gough
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -20,8 +20,8 @@
 #ifndef __GSL_RANDIST_H__
 #define __GSL_RANDIST_H__
 #include <gsl/gsl_rng.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_matrix.h>
+/* #include <gsl/gsl_vector.h> */
+/* #include <gsl/gsl_matrix.h> */
 
 #undef __BEGIN_DECLS
 #undef __END_DECLS
@@ -92,6 +92,7 @@ double gsl_ran_gaussian_tail_pdf (const double x, const double a, const double s
 double gsl_ran_ugaussian_tail (const gsl_rng * r, const double a);
 double gsl_ran_ugaussian_tail_pdf (const double x, const double a);
 
+#if 0
 void gsl_ran_bivariate_gaussian (const gsl_rng * r, double sigma_x, double sigma_y, double rho, double *x, double *y);
 double gsl_ran_bivariate_gaussian_pdf (const double x, const double y, const double sigma_x, const double sigma_y, const double rho);
 
@@ -129,6 +130,7 @@ int gsl_ran_wishart_pdf (const gsl_matrix * X,
 
 double gsl_ran_landau (const gsl_rng * r);
 double gsl_ran_landau_pdf (const double x);
+#endif
 
 unsigned int gsl_ran_geometric (const gsl_rng * r, const double p);
 double gsl_ran_geometric_pdf (const unsigned int k, const double p);

@@ -187,6 +187,7 @@ class TestParametricModels(unittest.TestCase):
                     "name": "dirac", "population_size": N, "psi": psi, "c": c})
 
 
+@unittest.skip("Missing bits of GSL")
 class TestMultipleMergerModels(unittest.TestCase):
     """
     Runs tests on the multiple merger coalescent models.
