@@ -55,13 +55,21 @@ kastore_dir = os.path.join("kastore", "c")
 gsl_dir = "gsl"
 
 source_files = glob.glob("lib/gsl/rng/*.c")
+source_files += glob.glob("lib/gsl/complex/*.c")
 source_files += glob.glob("lib/gsl/err/*.c")
 source_files += glob.glob("lib/gsl/randist/*.c")
 # source_files += glob.glob("lib/gsl/sys/*.c")
 
-source_files += [os.path.join("lib", "gsl", "specfunc", f) for f in [
-    "gamma.c", "exp.c", "log.c", "psi.c", "zeta.c", "beta.c", "beta_inc.c",
-    "hyperg.c", "hyperg_2F1.c", "hyperg_1F1.c"]]
+source_files += glob.glob("lib/gsl/specfunc/*.c")
+
+source_files.remove("lib/gsl/specfunc/legendre_source.c")
+source_files.remove("lib/gsl/specfunc/cheb_eval.c")
+source_files.remove("lib/gsl/specfunc/cheb_eval_mode.c")
+print(source_files)
+
+# source_files += [os.path.join("lib", "gsl", "specfunc", f) for f in [
+#     "gamma.c", "exp.c", "log.c", "psi.c", "zeta.c", "beta.c", "beta_inc.c",
+#     "hyperg.c", "hyperg_2F1.c", "hyperg_1F1.c"]]
 
     # , "trig.c", "psi.c", "log.c", "zeta.c", "elementary.c", "exp.c"]]
 # source_files += [os.path.join("lib", "gsl", "complex", f) for f in [

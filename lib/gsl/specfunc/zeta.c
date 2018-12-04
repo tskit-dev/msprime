@@ -1,17 +1,17 @@
 /* specfunc/zeta.c
- *
+ * 
  * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2004 Gerard Jungman
- *
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- *
+ * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- *
+ * 
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -34,8 +34,6 @@
 #include "cheb_eval.c"
 
 #define LogTwoPi_  1.8378770664093454835606594728111235279723
-
-#ifndef GSL_MSPRIME
 
 
 /*-*-*-*-*-*-*-*-*-*-*-* Private Section *-*-*-*-*-*-*-*-*-*-*-*/
@@ -140,7 +138,7 @@ static double zetam1_inter_data[24] = {
   -1.25597782748190416118082322061e-12,
    3.61280740072222650030134104162e-13,
   -9.66437239205745207188920348801e-14
-};
+}; 
 static cheb_series zetam1_inter_cs = {
   zetam1_inter_data,
   22,
@@ -525,7 +523,6 @@ static double zeta_neg_int_table[ZETA_NEG_TABLE_SIZE] = {
  -1.1549023923963519663954271692e+74,    /* zeta(-97)  */
   2.8382249570693706959264156336e+76     /* zeta(-99)  */
 };
-#endif
 
 
 /* coefficients for Maclaurin summation in hzeta()
@@ -548,8 +545,6 @@ static double hzeta_c[15] = {
   3.5347070396294674716932299778e-21,
  -8.9535174270375468504026113181e-23
 };
-
-#ifndef GSL_MSPRIME
 
 #define ETA_POS_TABLE_NMAX  100
 static double eta_pos_int_table[ETA_POS_TABLE_NMAX+1] = {
@@ -715,8 +710,6 @@ static double eta_neg_int_table[ETA_NEG_TABLE_SIZE] = {
 
 /*-*-*-*-*-*-*-*-*-*-*-* Functions with Error Codes *-*-*-*-*-*-*-*-*-*-*-*/
 
-#endif
-
 
 int gsl_sf_hzeta_e(const double s, const double q, gsl_sf_result * result)
 {
@@ -727,7 +720,7 @@ int gsl_sf_hzeta_e(const double s, const double q, gsl_sf_result * result)
   }
   else {
     const double max_bits = 54.0;
-    const double ln_term0 = -s * log(q);
+    const double ln_term0 = -s * log(q);  
 
     if(ln_term0 < GSL_LOG_DBL_MIN + 1.0) {
       UNDERFLOW_ERROR(result);
@@ -749,7 +742,7 @@ int gsl_sf_hzeta_e(const double s, const double q, gsl_sf_result * result)
       return GSL_SUCCESS;
     }
     else {
-      /* Euler-Maclaurin summation formula
+      /* Euler-Maclaurin summation formula 
        * [Moshier, p. 400, with several typo corrections]
        */
       const int jmax = 12;
@@ -779,7 +772,6 @@ int gsl_sf_hzeta_e(const double s, const double q, gsl_sf_result * result)
   }
 }
 
-#ifndef GSL_MSPRIME
 
 int gsl_sf_zeta_e(const double s, gsl_sf_result * result)
 {
@@ -928,7 +920,7 @@ int gsl_sf_zetam1_int_e(const int n, gsl_sf_result * result)
     else {
       /* could use gsl_sf_zetam1_e here but subtracting 1 makes no difference
          for such large values, so go straight to the result */
-      return gsl_sf_zeta_e((double)n, result);
+      return gsl_sf_zeta_e((double)n, result);  
     }
   }
   else if(n == 1){
@@ -1056,4 +1048,3 @@ double gsl_sf_eta(const double s)
 {
   EVAL_RESULT(gsl_sf_eta_e(s, &result));
 }
-#endif

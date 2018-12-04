@@ -1,17 +1,17 @@
 /* specfunc/gamma.c
- *
+ * 
  * Copyright (C) 1996, 1997, 1998, 1999, 2000 Gerard Jungman
- *
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- *
+ * 
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- *
+ * 
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -247,8 +247,6 @@ static struct {int n; double f; long i; } fact_table[GSL_SF_FACT_NMAX + 1] = {
     { 200, 7.88657867364790503552363213932e374,  0 }
     */
 };
-
-#ifndef GSL_MSPRIME
 
 static struct {int n; double f; long i; } doub_fact_table[GSL_SF_DOUBLEFACT_NMAX + 1] = {
   { 0,  1.000000000000000000000000000,    1L    },
@@ -556,8 +554,6 @@ static struct {int n; double f; long i; } doub_fact_table[GSL_SF_DOUBLEFACT_NMAX
   */
 };
 
-#endif
-
 
 /* Chebyshev coefficients for Gamma*(3/4(t+1)+1/2), -1<t<1
  */
@@ -599,7 +595,6 @@ static cheb_series gstar_a_cs = {
   -1, 1,
   17
 };
-
 
 
 /* Chebyshev coefficients for
@@ -658,8 +653,6 @@ static double lanczos_7_c[9] = {
   1.50563273514931155834e-7
 };
 
-#ifndef GSL_MSPRIME
-
 /* complex version of Lanczos method; this is not safe for export
  * since it becomes bad in the left half-plane
  */
@@ -700,10 +693,9 @@ lngamma_lanczos_complex(double zr, double zi, gsl_sf_result * yr, gsl_sf_result 
   return GSL_SUCCESS;
 }
 
-#endif
 
 /* Lanczos method for real x > 0;
- * gamma=7, truncated at 1/(z+8)
+ * gamma=7, truncated at 1/(z+8) 
  * [J. SIAM Numer. Anal, Ser. B, 1 (1964) 86]
  */
 static
@@ -759,6 +751,7 @@ lngamma_sgn_0(double eps, gsl_sf_result * lng, double * sgn)
 
   return GSL_SUCCESS;
 }
+
 
 /* x near a negative integer
  * Calculates sign as well as log(|gamma(x)|).
@@ -962,7 +955,7 @@ gammastar_ser(const double x, gsl_sf_result * result)
 {
   /* Use the Stirling series for the correction to Log(Gamma(x)),
    * which is better behaved and easier to compute than the
-   * regular Stirling series for Gamma(x).
+   * regular Stirling series for Gamma(x). 
    */
   const double y = 1.0/(x*x);
   const double c0 =  1.0/12.0;
@@ -1018,7 +1011,6 @@ static const cheb_series gamma_5_10_cs = {
 };
 
 
-
 /* gamma(x) for x >= 1/2
  * assumes x >= 1/2
  */
@@ -1037,7 +1029,7 @@ gamma_xgthalf(const double x, gsl_sf_result * result)
     result->val = fact_table[n - 1].f;
     result->err = GSL_DBL_EPSILON * result->val;
     return GSL_SUCCESS;
-  }
+  }    
   else if(fabs(x - 1.0) < 0.01) {
     /* Use series for Gamma[1+eps] - 1/(1+eps).
      */
@@ -1189,7 +1181,6 @@ int gsl_sf_lngamma_e(double x, gsl_sf_result * result)
   }
 }
 
-#ifndef GSL_MSPRIME
 
 int gsl_sf_lngamma_sgn_e(double x, gsl_sf_result * result_lg, double * sgn)
 {
@@ -1258,8 +1249,6 @@ int gsl_sf_lngamma_sgn_e(double x, gsl_sf_result * result_lg, double * sgn)
     GSL_ERROR ("x too large to extract fraction part", GSL_EROUND);
   }
 }
-
-#endif
 
 
 int
@@ -1354,8 +1343,6 @@ gsl_sf_gammastar_e(const double x, gsl_sf_result * result)
     return GSL_SUCCESS;
   }
 }
-
-#ifndef GSL_MSPRIME
 
 
 int
@@ -1479,7 +1466,7 @@ int gsl_sf_taylorcoeff_e(const int n, const double x, gsl_sf_result * result)
       result->err = n * GSL_DBL_EPSILON * product;
       CHECK_UNDERFLOW(result);
       return GSL_SUCCESS;
-    }
+    }    
   }
 }
 
@@ -1524,6 +1511,22 @@ int gsl_sf_doublefact_e(const unsigned int n, gsl_sf_result * result)
 }
 
 
+int gsl_sf_lnfact_e(const unsigned int n, gsl_sf_result * result)
+{
+  /* CHECK_POINTER(result) */
+
+  if(n <= GSL_SF_FACT_NMAX){
+    result->val = log(fact_table[n].f);
+    result->err = 2.0 * GSL_DBL_EPSILON * fabs(result->val);
+    return GSL_SUCCESS;
+  }
+  else {
+    gsl_sf_lngamma_e(n+1.0, result);
+    return GSL_SUCCESS;
+  }
+}
+
+
 int gsl_sf_lndoublefact_e(const unsigned int n, gsl_sf_result * result)
 {
   /* CHECK_POINTER(result) */
@@ -1545,23 +1548,6 @@ int gsl_sf_lndoublefact_e(const unsigned int n, gsl_sf_result * result)
     gsl_sf_lngamma_e(0.5*n+1.0, &lg);
     result->val = 0.5*n*M_LN2 + lg.val;
     result->err = 2.0 * GSL_DBL_EPSILON * fabs(result->val) + lg.err;
-    return GSL_SUCCESS;
-  }
-}
-
-#endif
-
-int gsl_sf_lnfact_e(const unsigned int n, gsl_sf_result * result)
-{
-  /* CHECK_POINTER(result) */
-
-  if(n <= GSL_SF_FACT_NMAX){
-    result->val = log(fact_table[n].f);
-    result->err = 2.0 * GSL_DBL_EPSILON * fabs(result->val);
-    return GSL_SUCCESS;
-  }
-  else {
-    gsl_sf_lngamma_e(n+1.0, result);
     return GSL_SUCCESS;
   }
 }
@@ -1616,7 +1602,7 @@ int gsl_sf_choose_e(unsigned int n, unsigned int m, gsl_sf_result * result)
       {
         double prod = 1.0;
         unsigned int k;
-
+        
         for(k=n; k>=m+1; k--) {
           double tk = (double)k / (double)(k-m);
           if(tk > GSL_DBL_MAX/prod) {
@@ -1643,7 +1629,6 @@ int gsl_sf_choose_e(unsigned int n, unsigned int m, gsl_sf_result * result)
 
 #include "eval.h"
 
-#ifndef GSL_MSPRIME
 double gsl_sf_fact(const unsigned int n)
 {
   EVAL_RESULT(gsl_sf_fact_e(n, &result));
@@ -1688,8 +1673,6 @@ double gsl_sf_taylorcoeff(const int n, const double x)
 {
   EVAL_RESULT(gsl_sf_taylorcoeff_e(n, x, &result));
 }
-
-#endif
 
 double gsl_sf_choose(unsigned int n, unsigned int m)
 {
