@@ -333,7 +333,7 @@ out:
 int
 msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
-        recomb_map_t *recomb_map, tree_sequence_t *from_ts, gsl_rng *rng) {
+        recomb_map_t *recomb_map, tsk_treeseq_t *from_ts, gsl_rng *rng) {
     int ret = -1;
     size_t j;
 
@@ -373,7 +373,7 @@ msp_alloc(msp_t *self,
     self->recombination_rate = self->model.generation_rate_to_model_rate(
             &self->model, self->recombination_rate);
 
-    ret = table_collection_alloc(&self->tables, MSP_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&self->tables, MSP_ALLOC_TABLES);
     if (ret != 0) {
         goto out;
     }
@@ -398,7 +398,7 @@ msp_alloc(msp_t *self,
         assert(from_ts != NULL);
 
         /* Make a copy of the from_ts */
-        ret = tree_sequence_dump_tables(from_ts, &self->tables, 0);
+        ret = tsk_treeseq_dump_tables(from_ts, &self->tables, 0);
         if (ret != 0) {
             goto out;
         }
@@ -407,11 +407,11 @@ msp_alloc(msp_t *self,
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        ret = tree_sequence_load_tables(self->from_ts, &self->tables, 0);
+        ret = tsk_treeseq_load_tables(self->from_ts, &self->tables, 0);
         if (ret != 0) {
             goto out;
         }
-        ret = table_collection_record_position(&self->tables, &self->from_position);
+        ret = tsk_tbl_collection_record_position(&self->tables, &self->from_position);
         if (ret != 0) {
             goto out;
         }
@@ -475,7 +475,7 @@ msp_alloc_memory_blocks(msp_t *self)
     /* Allocate the edge records */
     self->num_buffered_edges = 0;
     self->max_buffered_edges = 128;
-    self->buffered_edges = malloc(self->max_buffered_edges * sizeof(edge_t));
+    self->buffered_edges = malloc(self->max_buffered_edges * sizeof(tsk_edge_t));
     if (self->buffered_edges == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -516,14 +516,14 @@ msp_free(msp_t *self)
     msp_safe_free(self->samples);
     msp_safe_free(self->sampling_events);
     msp_safe_free(self->buffered_edges);
-    table_collection_free(&self->tables);
+    tsk_tbl_collection_free(&self->tables);
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->segment_heap);
     object_heap_free(&self->node_mapping_heap);
     fenwick_free(&self->links);
     if (self->from_ts != NULL) {
-        tree_sequence_free(self->from_ts);
+        tsk_treeseq_free(self->from_ts);
         free(self->from_ts);
     }
     if (self->model.free != NULL) {
@@ -751,7 +751,7 @@ msp_print_state(msp_t *self, FILE *out)
     avl_node_t *a;
     node_mapping_t *nm;
     segment_t *u;
-    edge_t *edge;
+    tsk_edge_t *edge;
     demographic_event_t *de;
     sampling_event_t *se;
     int64_t v;
@@ -848,7 +848,7 @@ msp_print_state(msp_t *self, FILE *out)
         fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
     }
     fprintf(out, "Tables = \n");
-    table_collection_print_state(&self->tables, out);
+    tsk_tbl_collection_print_state(&self->tables, out);
 
     fprintf(out, "Buffered Edges = %ld\n", (long) self->num_buffered_edges);
     for (j = 0; j < self->num_buffered_edges; j++) {
@@ -878,7 +878,7 @@ msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
     int ret = 0;
     double scaled_time = self->model.model_time_to_generations(&self->model, self->time);
 
-    ret = migration_table_add_row(self->tables.migrations,
+    ret = tsk_migration_tbl_add_row(self->tables.migrations,
             msp_genetic_to_phys(self, left),
             msp_genetic_to_phys(self, right),
             node, source_pop, dest_pop, scaled_time);
@@ -994,7 +994,7 @@ static int WARN_UNUSED
 msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
 {
     int ret = 0;
-    edge_t *edge;
+    tsk_edge_t *edge;
     const double *node_time = self->tables.nodes->time;
 
     assert(parent > child);
@@ -1002,7 +1002,7 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
     if (self->num_buffered_edges == self->max_buffered_edges - 1) {
         /* Grow the array */
         self->max_buffered_edges *= 2;
-        edge = realloc(self->buffered_edges, self->max_buffered_edges * sizeof(edge_t));
+        edge = realloc(self->buffered_edges, self->max_buffered_edges * sizeof(tsk_edge_t));
         if (edge == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -1028,16 +1028,16 @@ msp_flush_edges(msp_t *self)
 {
     int ret = 0;
     size_t j, num_edges;
-    edge_t edge;
+    tsk_edge_t edge;
 
     if (self->num_buffered_edges > 0) {
-        ret = squash_edges(self->buffered_edges, self->num_buffered_edges, &num_edges);
+        ret = tsk_squash_edges(self->buffered_edges, self->num_buffered_edges, &num_edges);
         if (ret != 0) {
             goto out;
         }
         for (j = 0; j < num_edges; j++) {
             edge = self->buffered_edges[j];
-            ret = edge_table_add_row(self->tables.edges,
+            ret = tsk_edge_tbl_add_row(self->tables.edges,
                     msp_genetic_to_phys(self, edge.left),
                     msp_genetic_to_phys(self, edge.right),
                     edge.parent, edge.child);
@@ -1059,7 +1059,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     int ret = 0;
     double scaled_time = self->model.model_time_to_generations(&self->model, time);
 
-    ret = node_table_add_row(self->tables.nodes, flags, scaled_time, population_id,
+    ret = tsk_node_tbl_add_row(self->tables.nodes, flags, scaled_time, population_id,
             MSP_NULL_INDIVIDUAL, NULL, 0);
     if (ret < 0) {
         goto out;
@@ -1764,13 +1764,13 @@ out:
 }
 
 static inline int
-msp_allocate_root_segments(msp_t *self, sparse_tree_t *tree,
+msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree,
         uint32_t left, uint32_t right,
         segment_t * restrict *root_segments_head,
         segment_t * restrict *root_segments_tail)
 {
     int ret = 0;
-    table_collection_t *tables = self->from_ts->tables;
+    tsk_tbl_collection_t *tables = self->from_ts->tables;
     const population_id_t *node_population = tables->nodes->population;
     population_id_t population;
     node_id_t root;
@@ -1818,7 +1818,7 @@ msp_reset_from_ts(msp_t *self)
 {
     int ret = 0;
     int t_iter;
-    sparse_tree_t t;
+    tsk_tree_t t;
     node_id_t root;
     segment_t *seg;
     uint32_t left, right, num_roots, overlap, last_overlap;
@@ -1826,7 +1826,7 @@ msp_reset_from_ts(msp_t *self)
     segment_t **root_segments_head = calloc(num_nodes, sizeof(*root_segments_head));
     segment_t **root_segments_tail = calloc(num_nodes, sizeof(*root_segments_tail));
 
-    ret = sparse_tree_alloc(&t, self->from_ts, 0);
+    ret = tsk_tree_alloc(&t, self->from_ts, 0);
     if (ret != 0) {
         goto out;
     }
@@ -1835,13 +1835,13 @@ msp_reset_from_ts(msp_t *self)
         goto out;
     }
     /* Reset the tables to their correct position for replication */
-    ret = table_collection_reset_position(&self->tables, &self->from_position);
+    ret = tsk_tbl_collection_reset_position(&self->tables, &self->from_position);
     if (ret != 0) {
         goto out;
     }
 
     last_overlap = UINT32_MAX;
-    for (t_iter = sparse_tree_first(&t); t_iter == 1; t_iter = sparse_tree_next(&t)) {
+    for (t_iter = tsk_tree_first(&t); t_iter == 1; t_iter = tsk_tree_next(&t)) {
         ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, t.left, &left);
         if (ret != 0) {
             goto out;
@@ -1856,7 +1856,7 @@ msp_reset_from_ts(msp_t *self)
         }
         assert(left < right);
 
-        num_roots = (uint32_t) sparse_tree_get_num_roots(&t);
+        num_roots = (uint32_t) tsk_tree_get_num_roots(&t);
         overlap = 0;
         if (num_roots > 1) {
             overlap = num_roots;
@@ -1899,7 +1899,7 @@ msp_reset_from_ts(msp_t *self)
     }
 
 out:
-    sparse_tree_free(&t);
+    tsk_tree_free(&t);
     msp_safe_free(root_segments_head);
     msp_safe_free(root_segments_tail);
     return ret;
@@ -1912,14 +1912,14 @@ msp_reset_from_samples(msp_t *self)
     size_t j;
     node_id_t u;
 
-    population_table_clear(self->tables.populations);
-    edge_table_clear(self->tables.edges);
-    node_table_clear(self->tables.nodes);
-    migration_table_clear(self->tables.migrations);
+    tsk_population_tbl_clear(self->tables.populations);
+    tsk_edge_tbl_clear(self->tables.edges);
+    tsk_node_tbl_clear(self->tables.nodes);
+    tsk_migration_tbl_clear(self->tables.migrations);
 
     self->tables.sequence_length = self->recomb_map->sequence_length;
     for (j = 0; j < self->num_populations; j++) {
-        ret = population_table_add_row(self->tables.populations, NULL, 0);
+        ret = tsk_population_tbl_add_row(self->tables.populations, NULL, 0);
         if (ret < 0) {
             goto out;
         }
@@ -2709,7 +2709,7 @@ out:
 
 /* Add in nodes and edges for the remaining segments to the output table. */
 static int WARN_UNUSED
-msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
+msp_insert_uncoalesced_edges(msp_t *self, tsk_tbl_collection_t *tables)
 {
     int ret = 0;
     population_id_t pop;
@@ -2717,7 +2717,7 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     segment_t *seg;
     node_id_t node;
     int64_t edge_start;
-    node_table_t *nodes = tables->nodes;
+    tsk_node_tbl_t *nodes = tables->nodes;
     const double current_time = self->model.model_time_to_generations(&self->model,
             self->time);
 
@@ -2738,7 +2738,7 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
             }
             if (node == MSP_NULL_NODE) {
                 /* Add a node for this ancestor */
-                node = node_table_add_row(nodes, 0, current_time, pop,
+                node = tsk_node_tbl_add_row(nodes, 0, current_time, pop,
                         MSP_NULL_INDIVIDUAL, NULL, 0);
                 if (node < 0) {
                     ret = node;
@@ -2750,7 +2750,7 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
             for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
                 if (seg->value != node) {
                     assert(nodes->time[node] > nodes->time[seg->value]);
-                    ret = edge_table_add_row(tables->edges,
+                    ret = tsk_edge_tbl_add_row(tables->edges,
                         msp_genetic_to_phys(self, seg->left),
                         msp_genetic_to_phys(self, seg->right),
                         node, seg->value);
@@ -2771,17 +2771,17 @@ msp_insert_uncoalesced_edges(msp_t *self, table_collection_t *tables)
     /* TODO This could be done more efficiently probably, but at least we only
      * end up sorting a handful of edges at the end, so it's probably not so
      * bad. */
-    ret = table_collection_sort(tables, (size_t) (edge_start + 1), 0);
+    ret = tsk_tbl_collection_sort(tables, (size_t) (edge_start + 1), 0);
 out:
     return ret;
 }
 
 int WARN_UNUSED
-msp_populate_tables(msp_t *self, table_collection_t *tables)
+msp_populate_tables(msp_t *self, tsk_tbl_collection_t *tables)
 {
     int ret = 0;
 
-    ret = table_collection_copy(&self->tables, tables);
+    ret = tsk_tbl_collection_copy(&self->tables, tables);
     if (ret != 0) {
         goto out;
     }

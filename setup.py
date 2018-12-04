@@ -81,20 +81,27 @@ class build_ext(_build_ext):
 # The above obscure magic doesn't seem to work on py2 and prevents the
 # extension from building at all, so here's a nasty workaround:
 libdir = "lib"
-includes = [libdir]
+# Temporary hackiness.
+includes = [libdir, libdir + "/kastore/c", libdir + "/tskit"]
 try:
     import numpy
     includes.append(numpy.get_include())
 except ImportError:
     pass
 
-kastore_dir = os.path.join("kastore", "c")
 configurator = PathConfigurator()
 source_files = [
-    "msprime.c", "fenwick.c", "avl.c", "tree_sequence.c",
-    "object_heap.c", "newick.c", "hapgen.c", "recomb_map.c", "mutgen.c",
-    "vargen.c", "vcf.c", "ld.c", "tables.c", "util.c", "uuid.c",
-    os.path.join(kastore_dir, "kastore.c")]
+    "msprime.c", "fenwick.c", "avl.c", "util.c",
+    "object_heap.c", "recomb_map.c", "mutgen.c",
+    # TODO this will be removed once we move the tskit code out.
+    "kastore/c/kastore.c",
+    "tskit/tsk_core.c",
+    "tskit/tsk_tables.c",
+    "tskit/tsk_trees.c",
+    "tskit/tsk_genotypes.c",
+    "tskit/tsk_stats.c",
+    "tskit/tsk_convert.c",
+]
 
 
 # Now, setup the extension module. We have to do some quirky workarounds
@@ -116,6 +123,10 @@ class DefineMacros(object):
 
         defines = [
             # Define the library version
+            # TODO: this is only used for the VCF converter to get the right version
+            # in the header. We'll need something smarter in the future.
+            ("TSK_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
+            # Keeping this for now for compiling the C module.
             ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
         ]
         if IS_WINDOWS:
@@ -139,8 +150,7 @@ _msprime_module = Extension(
     extra_compile_args=["-std=c99"],
     libraries=libraries,
     define_macros=DefineMacros(),
-    include_dirs=includes + [
-        os.path.join(libdir, kastore_dir)] + configurator.include_dirs,
+    include_dirs=includes + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
 
