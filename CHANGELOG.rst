@@ -1,4 +1,20 @@
 ********************
+[0.6.2] - 2018-12-04
+********************
+
+Minor bugfix release.
+
+**New features**:
+- Add provenance recording option to simplify (#601)
+- Minor performance improvement (#598)
+
+**Bug fixes**:
+
+- Fix performance regression in replication (#608)
+
+
+improvements and bugfixes.
+********************
 [0.6.1] - 2018-08-25
 ********************
 
