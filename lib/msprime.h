@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2017 University of Oxford
+** Copyright (C) 2015-2018 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -43,6 +43,7 @@
 #define MSP_MODEL_BETA 3
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
+#define MSP_MODEL_SINGLE_SWEEP 6
 
 /* Alphabets for mutation generator */
 #define MSP_ALPHABET_BINARY     0
@@ -58,8 +59,18 @@ typedef tsk_id_t node_id_t;
 typedef tsk_id_t mutation_id_t;
 typedef tsk_id_t site_id_t;
 
+/* TODO int16 is surely fine, but it won't make the segment struct any smaller
+ * because of alignment requirements. After tskit has been separarated,
+ * we will probably want to make both population_id_t and label_id_t
+ * int16_t, and then we'll reduce the size of the segment struct a
+ * fair bit. It's not worth doing until then though.
+ */
+typedef tsk_id_t label_id_t;
+
 typedef struct segment_t_t {
+    /* TODO change to population */
     population_id_t population_id;
+    label_id_t label;
     /* During simulation we use genetic coordinates */
     uint32_t left;
     uint32_t right;
@@ -84,7 +95,7 @@ typedef struct {
     double initial_size;
     double growth_rate;
     double start_time;
-    avl_tree_t ancestors;
+    avl_tree_t *ancestors;
 } population_t;
 
 typedef struct {
@@ -112,12 +123,22 @@ typedef struct {
     double c; // constant
 } dirac_coalescent_t;
 
+typedef struct {
+    uint32_t locus;
+    struct {
+        double *allele_frequency;
+        double *time;
+        size_t num_steps;
+    } trajectory;
+} single_sweep_t;
+
 typedef struct _simulation_model_t {
     int type;
     double population_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
+        single_sweep_t single_sweep;
     } params;
     /* If the model allocates memory this function should be non-null. */
     void (*free)(struct _simulation_model_t *model);
@@ -149,6 +170,7 @@ typedef struct _msp_t {
     double recombination_rate;
     recomb_map_t *recomb_map;
     uint32_t num_populations;
+    uint32_t num_labels;
     sample_t *samples;
     double start_time;
     tsk_treeseq_t *from_ts;
@@ -181,11 +203,13 @@ typedef struct _msp_t {
     population_t *populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
-    fenwick_t links;
+    /* We keep an independent Fenwick tree for each label */
+    fenwick_t *links;
     /* memory management */
     object_heap_t avl_node_heap;
-    object_heap_t segment_heap;
     object_heap_t node_mapping_heap;
+    /* We keep an independent segment heap for each label */
+    object_heap_t *segment_heap;
     /* The tables used to store the simulation state */
     tsk_tbl_collection_t tables;
     tsk_tbl_collection_position_t from_position;
@@ -195,8 +219,10 @@ typedef struct _msp_t {
     size_t max_buffered_edges;
     /* Methods for getting the waiting time until the next common ancestor
      * event and the event are defined by the simulation model */
-    double (*get_common_ancestor_waiting_time)(struct _msp_t *self, population_id_t pop);
-    int (*common_ancestor_event)(struct _msp_t *selt, population_id_t pop);
+    double (*get_common_ancestor_waiting_time)(
+            struct _msp_t *self, population_id_t pop, label_id_t label);
+    int (*common_ancestor_event)(struct _msp_t *selt,
+            population_id_t pop, label_id_t label);
 } msp_t;
 
 /* Demographic events */
@@ -270,8 +296,13 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
     double c);
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
+int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
+        uint32_t locus, size_t num_steps, double *time,
+        double *allele_frequency);
+
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
+int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
