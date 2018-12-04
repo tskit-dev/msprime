@@ -1602,9 +1602,6 @@ compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha)
 static void
 test_compute_beta_coalescence_rate(void)
 {
-    // compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha, double phi)
-    //printf("compute_beta_coalescence_rate(100, 1.5) = %f\n", compute_beta_coalescence_rate(100, 1.5));
-    //printf("compute_beta_coalescence_rate(100, 1.8) = %f\n", compute_beta_coalescence_rate(100, 1.8));
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.01), 225.6396, 0.001);
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.5), 1140.782, 1140.782*1e-3);
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.8), 2815.267, 0.1);
@@ -1613,6 +1610,52 @@ test_compute_beta_coalescence_rate(void)
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.1), 1.0, 0.000000);
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.5), 1.0, 0.000000);
     CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.9), 1.0, 0.000000);
+}
+
+static int
+compute_beta_coalescence_rate_fails(unsigned int num_ancestors, double alpha)
+{
+    int ret;
+    msp_t msp;
+    unsigned int n = 10;
+    double value;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_beta(&msp, 1, alpha, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_beta_compute_coalescence_rate(&msp, num_ancestors, &value);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTEGRATION_FAILED);
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    free(samples);
+    gsl_rng_free(rng);
+    return 0;
+}
+
+static void
+test_gsl_error_handling_beta_coalescent(void)
+{
+    FILE *old_stderr = stderr;
+    gsl_error_handler_t *old_handler;
+    old_handler = gsl_set_error_handler_off();
+    /* Redirect stderr to avoid spamming output */
+    stderr = _devnull;
+    compute_beta_coalescence_rate_fails(1000, 1e20);
+    gsl_set_error_handler(old_handler);
+    stderr = old_stderr;
 }
 
 static void
@@ -2322,6 +2365,7 @@ main(int argc, char **argv)
         {"test_compute_falling_factorial", test_compute_falling_factorial},
         {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
         {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
+        {"test_gsl_error_handling_beta_coalescent", test_gsl_error_handling_beta_coalescent},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_simple_recombination_map", test_simple_recomb_map},

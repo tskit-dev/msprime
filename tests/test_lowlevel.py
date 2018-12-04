@@ -411,6 +411,14 @@ class TestModule(tests.MsprimeTestCase):
         version_str = _msprime.get_library_version_str()
         self.assertEqual(version_str, _library_version)
 
+    def test_gsl_error_handler(self):
+        # Not a lot we can test here. Just make sure the error handler is unset when
+        # we finish.
+        _msprime.restore_gsl_error_handler()
+        _msprime.unset_gsl_error_handler()
+        _msprime.restore_gsl_error_handler()
+        _msprime.unset_gsl_error_handler()
+
 
 def get_random_population_models(n):
     """

@@ -28,6 +28,7 @@
 
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_errno.h>
 
 #include "msprime.h"
 
@@ -40,6 +41,9 @@
 
 #define SET_COLS 0
 #define APPEND_COLS 1
+
+/* We keep a reference to the gsl_error_handler so it can be restored if needed */
+static gsl_error_handler_t *old_gsl_error_handler;
 
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
@@ -10050,6 +10054,22 @@ msprime_get_gsl_version(PyObject *self)
 }
 
 static PyObject *
+msprime_restore_gsl_error_handler(PyObject *self)
+{
+    gsl_set_error_handler(old_gsl_error_handler);
+    return Py_BuildValue("");
+}
+
+static PyObject *
+msprime_unset_gsl_error_handler(PyObject *self)
+{
+    /* turn off GSL error handler so we don't abort on errors. Can be restored
+     * by calling restore_gsl_error_handler() */
+    old_gsl_error_handler = gsl_set_error_handler_off();
+    return Py_BuildValue("");
+}
+
+static PyObject *
 msprime_get_library_version_str(PyObject *self)
 {
     return Py_BuildValue("s", MSP_LIBRARY_VERSION_STR);
@@ -10058,6 +10078,10 @@ msprime_get_library_version_str(PyObject *self)
 static PyMethodDef msprime_methods[] = {
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
+    {"restore_gsl_error_handler", (PyCFunction) msprime_restore_gsl_error_handler,
+            METH_NOARGS, "Restores the GSL error handler to its value before module import." },
+    {"unset_gsl_error_handler", (PyCFunction) msprime_unset_gsl_error_handler,
+            METH_NOARGS, "Unsets the GSL error handler (and stores the current value)." },
     {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
             METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
@@ -10299,8 +10323,11 @@ init_msprime(void)
     PyModule_AddIntConstant(module, "FORWARD", MSP_DIR_FORWARD);
     PyModule_AddIntConstant(module, "REVERSE", MSP_DIR_REVERSE);
 
-    /* turn off GSL error handler so we don't abort on memory error */
-    gsl_set_error_handler_off();
+    /* The function unset_gsl_error_handler should be called at import time,
+     * ensuring we capture the value of the handler. However, just in case
+     * someone calls restore_gsl_error_handler before this is called, we
+     * set it to null. */
+    old_gsl_error_handler = NULL;
 
 #if PY_MAJOR_VERSION >= 3
     return module;
