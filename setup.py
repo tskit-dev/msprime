@@ -57,10 +57,13 @@ gsl_dir = "gsl"
 source_files = glob.glob("lib/gsl/rng/*.c")
 source_files += glob.glob("lib/gsl/err/*.c")
 source_files += glob.glob("lib/gsl/randist/*.c")
-source_files += glob.glob("lib/gsl/sys/*.c")
+# source_files += glob.glob("lib/gsl/sys/*.c")
 
-# source_files += [os.path.join("lib", "gsl", "specfunc", f) for f in [
-#     "gamma.c", "trig.c", "psi.c", "log.c", "zeta.c", "elementary.c", "exp.c"]]
+source_files += [os.path.join("lib", "gsl", "specfunc", f) for f in [
+    "gamma.c", "exp.c", "log.c", "psi.c", "zeta.c", "beta.c", "beta_inc.c",
+    "hyperg.c", "hyperg_2F1.c", "hyperg_1F1.c"]]
+
+    # , "trig.c", "psi.c", "log.c", "zeta.c", "elementary.c", "exp.c"]]
 # source_files += [os.path.join("lib", "gsl", "complex", f) for f in [
 #     "math.c"]]
 

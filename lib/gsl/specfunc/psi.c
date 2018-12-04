@@ -1,18 +1,18 @@
 /* specfunc/psi.c
- * 
+ *
  * Copyright (C) 2007 Brian Gough
  * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2004, 2005, 2006 Gerard Jungman
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -33,11 +33,13 @@
 
 #include "error.h"
 
+
 #include "chebyshev.h"
 #include "cheb_eval.c"
 
 /*-*-*-*-*-*-*-*-*-*-*-* Private Section *-*-*-*-*-*-*-*-*-*-*-*/
 
+#ifndef GSL_MSPRIME
 
 /* Chebyshev fit for f(y) = Re(Psi(1+Iy)) + M_EULER - y^2/(1+y^2) - y^2/(2(4+y^2))
  * 1 < y < 10
@@ -85,6 +87,7 @@ static cheb_series r1py_cs = {
   -1,1,
   18
 };
+#endif
 
 
 /* Chebyshev fits from SLATEC code for psi(x)
@@ -103,9 +106,10 @@ static cheb_series r1py_cs = {
 
 */
 
+
 static double psics_data[23] = {
   -.038057080835217922,
-   .491415393029387130, 
+   .491415393029387130,
   -.056815747821244730,
    .008357821225914313,
   -.001333232857994342,
@@ -135,7 +139,7 @@ static cheb_series psi_cs = {
   17
 };
 
-static double apsics_data[16] = {    
+static double apsics_data[16] = {
   -.0204749044678185,
   -.0101801271534859,
    .0000559718725387,
@@ -151,8 +155,8 @@ static double apsics_data[16] = {
    .0000000000000045,
   -.0000000000000009,
    .0000000000000002,
-  -.0000000000000000 
-};    
+  -.0000000000000000
+};
 static cheb_series apsi_cs = {
   apsics_data,
   15,
@@ -418,7 +422,7 @@ psi_x(const double x, gsl_sf_result * result)
       const double t2 = 1.0/(x+1.0);
       const double t3 = 1.0/v;
       cheb_eval_e(&psi_cs, 2.0*v-1.0, &result_c);
-      
+
       result->val  = -(t1 + t2 + t3) + result_c.val;
       result->err  = GSL_DBL_EPSILON * (fabs(t1) + fabs(x/(t2*t2)) + fabs(x/(t3*t3)));
       result->err += result_c.err;
@@ -430,7 +434,7 @@ psi_x(const double x, gsl_sf_result * result)
       const double t1 = 1.0/x;
       const double t2 = 1.0/v;
       cheb_eval_e(&psi_cs, 2.0*v-1.0, &result_c);
-      
+
       result->val  = -(t1 + t2) + result_c.val;
       result->err  = GSL_DBL_EPSILON * (fabs(t1) + fabs(x/(t2*t2)));
       result->err += result_c.err;
@@ -440,7 +444,7 @@ psi_x(const double x, gsl_sf_result * result)
     else if(x < 1.0) { /* x = v */
       const double t1 = 1.0/x;
       cheb_eval_e(&psi_cs, 2.0*x-1.0, &result_c);
-      
+
       result->val  = -t1 + result_c.val;
       result->err  = GSL_DBL_EPSILON * t1;
       result->err += result_c.err;
@@ -454,6 +458,7 @@ psi_x(const double x, gsl_sf_result * result)
   }
 }
 
+#ifndef GSL_MSPRIME
 
 /* psi(z) for large |z| in the right half-plane; [Abramowitz + Stegun, 6.3.18] */
 static
@@ -552,6 +557,7 @@ psi_complex_rhp(
 }
 
 
+#endif
 
 /* generic polygamma; assumes n >= 0 and x > 0
  */
@@ -613,6 +619,7 @@ int gsl_sf_psi_e(const double x, gsl_sf_result * result)
   return psi_x(x, result);
 }
 
+#ifndef GSL_MSPRIME
 
 int
 gsl_sf_psi_1piy_e(const double y, gsl_sf_result * result)
@@ -677,7 +684,7 @@ gsl_sf_psi_1piy_e(const double y, gsl_sf_result * result)
     const double p  = c0 + y2 *(-c2 + y2*(c4 - y2*c6));
     double sum = 0.0;
     double v;
-    
+
     int n;
     for(n=1; n<=M; n++) {
       sum += 1.0/(n * (n*n + y*y));
@@ -691,6 +698,8 @@ gsl_sf_psi_1piy_e(const double y, gsl_sf_result * result)
   }
 }
 
+
+#endif
 
 int gsl_sf_psi_1_int_e(const int n, gsl_sf_result * result)
 {
@@ -765,6 +774,7 @@ int gsl_sf_psi_1_e(const double x, gsl_sf_result * result)
 }
 
 
+
 int gsl_sf_psi_n_e(const int n, const double x, gsl_sf_result * result)
 {
   /* CHECK_POINTER(result) */
@@ -793,6 +803,7 @@ int gsl_sf_psi_n_e(const int n, const double x, gsl_sf_result * result)
   }
 }
 
+#ifndef GSL_MSPRIME
 
 int
 gsl_sf_complex_psi_e(
@@ -864,3 +875,5 @@ double gsl_sf_psi_n(const int n, const double x)
 {
   EVAL_RESULT(gsl_sf_psi_n_e(n, x, &result));
 }
+
+#endif

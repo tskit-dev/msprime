@@ -31,7 +31,6 @@
 #include "error.h"
 #include "check.h"
 
-#if 0
 #include "chebyshev.h"
 #include "cheb_eval.c"
 
@@ -248,6 +247,8 @@ static struct {int n; double f; long i; } fact_table[GSL_SF_FACT_NMAX + 1] = {
     { 200, 7.88657867364790503552363213932e374,  0 }
     */
 };
+
+#ifndef GSL_MSPRIME
 
 static struct {int n; double f; long i; } doub_fact_table[GSL_SF_DOUBLEFACT_NMAX + 1] = {
   { 0,  1.000000000000000000000000000,    1L    },
@@ -555,6 +556,8 @@ static struct {int n; double f; long i; } doub_fact_table[GSL_SF_DOUBLEFACT_NMAX
   */
 };
 
+#endif
+
 
 /* Chebyshev coefficients for Gamma*(3/4(t+1)+1/2), -1<t<1
  */
@@ -596,6 +599,7 @@ static cheb_series gstar_a_cs = {
   -1, 1,
   17
 };
+
 
 
 /* Chebyshev coefficients for
@@ -654,6 +658,8 @@ static double lanczos_7_c[9] = {
   1.50563273514931155834e-7
 };
 
+#ifndef GSL_MSPRIME
+
 /* complex version of Lanczos method; this is not safe for export
  * since it becomes bad in the left half-plane
  */
@@ -694,6 +700,7 @@ lngamma_lanczos_complex(double zr, double zi, gsl_sf_result * yr, gsl_sf_result 
   return GSL_SUCCESS;
 }
 
+#endif
 
 /* Lanczos method for real x > 0;
  * gamma=7, truncated at 1/(z+8)
@@ -752,7 +759,6 @@ lngamma_sgn_0(double eps, gsl_sf_result * lng, double * sgn)
 
   return GSL_SUCCESS;
 }
-
 
 /* x near a negative integer
  * Calculates sign as well as log(|gamma(x)|).
@@ -1012,6 +1018,7 @@ static const cheb_series gamma_5_10_cs = {
 };
 
 
+
 /* gamma(x) for x >= 1/2
  * assumes x >= 1/2
  */
@@ -1182,6 +1189,7 @@ int gsl_sf_lngamma_e(double x, gsl_sf_result * result)
   }
 }
 
+#ifndef GSL_MSPRIME
 
 int gsl_sf_lngamma_sgn_e(double x, gsl_sf_result * result_lg, double * sgn)
 {
@@ -1250,6 +1258,8 @@ int gsl_sf_lngamma_sgn_e(double x, gsl_sf_result * result_lg, double * sgn)
     GSL_ERROR ("x too large to extract fraction part", GSL_EROUND);
   }
 }
+
+#endif
 
 
 int
@@ -1344,6 +1354,8 @@ gsl_sf_gammastar_e(const double x, gsl_sf_result * result)
     return GSL_SUCCESS;
   }
 }
+
+#ifndef GSL_MSPRIME
 
 
 int
@@ -1512,22 +1524,6 @@ int gsl_sf_doublefact_e(const unsigned int n, gsl_sf_result * result)
 }
 
 
-int gsl_sf_lnfact_e(const unsigned int n, gsl_sf_result * result)
-{
-  /* CHECK_POINTER(result) */
-
-  if(n <= GSL_SF_FACT_NMAX){
-    result->val = log(fact_table[n].f);
-    result->err = 2.0 * GSL_DBL_EPSILON * fabs(result->val);
-    return GSL_SUCCESS;
-  }
-  else {
-    gsl_sf_lngamma_e(n+1.0, result);
-    return GSL_SUCCESS;
-  }
-}
-
-
 int gsl_sf_lndoublefact_e(const unsigned int n, gsl_sf_result * result)
 {
   /* CHECK_POINTER(result) */
@@ -1549,6 +1545,23 @@ int gsl_sf_lndoublefact_e(const unsigned int n, gsl_sf_result * result)
     gsl_sf_lngamma_e(0.5*n+1.0, &lg);
     result->val = 0.5*n*M_LN2 + lg.val;
     result->err = 2.0 * GSL_DBL_EPSILON * fabs(result->val) + lg.err;
+    return GSL_SUCCESS;
+  }
+}
+
+#endif
+
+int gsl_sf_lnfact_e(const unsigned int n, gsl_sf_result * result)
+{
+  /* CHECK_POINTER(result) */
+
+  if(n <= GSL_SF_FACT_NMAX){
+    result->val = log(fact_table[n].f);
+    result->err = 2.0 * GSL_DBL_EPSILON * fabs(result->val);
+    return GSL_SUCCESS;
+  }
+  else {
+    gsl_sf_lngamma_e(n+1.0, result);
     return GSL_SUCCESS;
   }
 }
@@ -1624,14 +1637,13 @@ int gsl_sf_choose_e(unsigned int n, unsigned int m, gsl_sf_result * result)
       }
   }
 }
-#endif
 
 
 /*-*-*-*-*-*-*-*-*-* Functions w/ Natural Prototypes *-*-*-*-*-*-*-*-*-*-*/
 
 #include "eval.h"
 
-#if 0
+#ifndef GSL_MSPRIME
 double gsl_sf_fact(const unsigned int n)
 {
   EVAL_RESULT(gsl_sf_fact_e(n, &result));
