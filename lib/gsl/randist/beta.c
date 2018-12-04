@@ -68,6 +68,8 @@ gsl_ran_beta (const gsl_rng * r, const double a, const double b)
     }
 }
 
+#ifndef GSL_MSPRIME
+
 double
 gsl_ran_beta_pdf (const double x, const double a, const double b)
 {
@@ -102,3 +104,4 @@ gsl_ran_beta_pdf (const double x, const double a, const double b)
       return p;
     }
 }
+#endif

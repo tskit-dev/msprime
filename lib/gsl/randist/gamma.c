@@ -1,17 +1,17 @@
 /* randist/gamma.c
- * 
+ *
  * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 James Theiler, Brian Gough
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -43,7 +43,7 @@ gsl_ran_gamma_knuth (const gsl_rng * r, const double a, const double b)
   /* assume a > 0 */
   unsigned int na = floor (a);
 
-  if(a >= UINT_MAX) 
+  if(a >= UINT_MAX)
     {
       return b * (gamma_large (r, floor (a)) + gamma_frac (r, a - floor (a)));
     }
@@ -147,6 +147,7 @@ gamma_frac (const gsl_rng * r, const double a)
   return x;
 }
 
+#ifndef GSL_MSPRIME
 double
 gsl_ran_gamma_pdf (const double x, const double a, const double b)
 {
@@ -165,7 +166,7 @@ gsl_ran_gamma_pdf (const double x, const double a, const double b)
     {
       return exp(-x/b)/b ;
     }
-  else 
+  else
     {
       double p;
       double lngamma = gsl_sf_lngamma (a);
@@ -174,6 +175,7 @@ gsl_ran_gamma_pdf (const double x, const double a, const double b)
     }
 }
 
+#endif
 
 /* New version based on Marsaglia and Tsang, "A Simple Method for
  * generating gamma variables", ACM Transactions on Mathematical
@@ -217,13 +219,13 @@ gsl_ran_gamma (const gsl_rng * r, const double a, const double b)
         v = v * v * v;
         u = gsl_rng_uniform_pos (r);
 
-        if (u < 1 - 0.0331 * x * x * x * x) 
+        if (u < 1 - 0.0331 * x * x * x * x)
           break;
 
         if (log (u) < 0.5 * x * x + d * (1 - v + log (v)))
           break;
       }
-    
+
     return b * d * v;
   }
 }

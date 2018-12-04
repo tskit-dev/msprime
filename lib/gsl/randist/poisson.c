@@ -1,17 +1,17 @@
 /* randist/poisson.c
- * 
+ *
  * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 James Theiler, Brian Gough
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -25,7 +25,7 @@
 
 /* The poisson distribution has the form
 
-   p(n) = (mu^n / n!) exp(-mu) 
+   p(n) = (mu^n / n!) exp(-mu)
 
    for n = 0, 1, 2, ... . The method used here is the one from Knuth. */
 
@@ -49,7 +49,7 @@ gsl_ran_poisson (const gsl_rng * r, double mu)
       else
         {
           k += m;
-          mu -= X; 
+          mu -= X;
         }
     }
 
@@ -82,12 +82,15 @@ gsl_ran_poisson_array (const gsl_rng * r, size_t n, unsigned int array[],
   return;
 }
 
+#ifndef GSL_MSPRIME
 double
 gsl_ran_poisson_pdf (const unsigned int k, const double mu)
 {
   double p;
-  double lf = gsl_sf_lnfact (k); 
+  double lf = gsl_sf_lnfact (k);
 
   p = exp (log (mu) * k - lf - mu);
   return p;
 }
+
+#endif
