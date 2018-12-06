@@ -120,6 +120,68 @@ out:
 }
 
 static int
+read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
+        double population_size)
+{
+    int ret = 0;
+    config_setting_t *s, *setting, *row;
+    int locus;
+    size_t num_steps, j;
+    double *allele_frequency = NULL;
+    double *time = NULL;
+
+    s = config_setting_get_member(model_setting, "locus");
+    if (s == NULL) {
+        fatal_error("single_sweep model locus not specified");
+    }
+    locus = config_setting_get_int(s);
+
+    setting = config_setting_get_member(model_setting, "trajectory");
+    if (setting == NULL) {
+        fatal_error("single_sweep model trajectory not specified");
+    }
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("trajectory must be a list");
+    }
+    num_steps = (size_t) config_setting_length(setting);
+    allele_frequency = malloc(num_steps * sizeof(double));
+    time = malloc(num_steps * sizeof(double));
+    if (allele_frequency == NULL || time == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (j = 0; j < num_steps; j++) {
+        row = config_setting_get_elem(setting, (unsigned int) j);
+        if (row == NULL) {
+            fatal_error("error reading trajectory[%d]", j);
+        }
+        if (config_setting_is_array(row) == CONFIG_FALSE) {
+            fatal_error("trajectory[%d] not an array", j);
+        }
+        if (config_setting_length(row) != 2) {
+            fatal_error(
+                "trajectory entries must be [coord, rate] pairs");
+        }
+        s = config_setting_get_elem(row, 0);
+        if (!config_setting_is_number(s)) {
+            fatal_error("trajectory entries must be numbers");
+        }
+        time[j] = config_setting_get_float(s);
+        s = config_setting_get_elem(row, 1);
+        if (!config_setting_is_number(s)) {
+            fatal_error("trajectory entries must be numbers");
+        }
+        allele_frequency[j] = config_setting_get_float(s);
+    }
+    ret = msp_set_simulation_model_single_sweep(msp, population_size,
+            (uint32_t) locus, num_steps, time, allele_frequency);
+out:
+    msp_safe_free(allele_frequency);
+    msp_safe_free(time);
+    return ret;
+}
+
+static int
 read_model_config(msp_t *msp, config_t *config)
 {
     int ret = 0;
@@ -178,6 +240,8 @@ read_model_config(msp_t *msp, config_t *config)
         }
         truncation_point = config_setting_get_float(s);
         ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
+    } else if (strcmp(name, "single_sweep") == 0) {
+        ret = read_single_sweep_model_config(msp, setting, population_size);
     } else {
         fatal_error("Unknown simulation model '%s'", name);
     }
@@ -195,7 +259,7 @@ read_population_configuration(msp_t *msp, config_t *config)
     int ret = 0;
     int j;
     double growth_rate, initial_size;
-    int num_populations;
+    int num_populations, num_labels;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "population_configuration");
 
@@ -206,7 +270,10 @@ read_population_configuration(msp_t *msp, config_t *config)
         fatal_error("population_configuration must be a list");
     }
     num_populations = config_setting_length(setting);
-    ret = msp_set_num_populations(msp, (size_t) num_populations);
+    if (config_lookup_int(config, "num_labels", &num_labels) == CONFIG_FALSE) {
+        fatal_error("num_labels is a required parameter");
+    }
+    ret = msp_set_dimensions(msp, (size_t) num_populations, (size_t) num_labels);
     if (ret != 0) {
         fatal_error("Error reading number of populations");
     }
