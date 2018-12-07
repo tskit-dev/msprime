@@ -90,9 +90,11 @@ libdir = "lib"
 includes = [libdir, libdir + "/tskit"]
 
 configurator = PathConfigurator()
-source_files = [
+msp_source_files = [
     "msprime.c", "fenwick.c", "avl.c", "util.c",
-    "object_heap.c", "recomb_map.c", "mutgen.c",
+    "object_heap.c", "recomb_map.c", "mutgen.c"
+]
+tsk_source_files = [
     # TODO this will be removed once we move the tskit code out.
     "tskit/tsk_core.c",
     "tskit/tsk_tables.c",
@@ -144,7 +146,20 @@ if IS_WINDOWS:
 
 _msprime_module = Extension(
     '_msprime',
-    sources=["_msprimemodule.c"] + [os.path.join(libdir, f) for f in source_files],
+    sources=["_msprimemodule.c"] + [
+        os.path.join(libdir, f) for f in msp_source_files + tsk_source_files],
+    # Enable asserts by default.
+    undef_macros=["NDEBUG"],
+    extra_compile_args=["-std=c99"],
+    libraries=libraries,
+    define_macros=DefineMacros(),
+    include_dirs=includes + configurator.include_dirs,
+    library_dirs=configurator.library_dirs,
+)
+
+_tskit_module = Extension(
+    '_tskit',
+    sources=["_tskitmodule.c"] + [os.path.join(libdir, f) for f in tsk_source_files],
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
@@ -176,7 +191,7 @@ setup(
     },
     include_package_data=True,
     install_requires=[numpy_ver, kastore_ver, "h5py", "svgwrite", "six", "jsonschema"],
-    ext_modules=[_msprime_module],
+    ext_modules=[_msprime_module, _tskit_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],

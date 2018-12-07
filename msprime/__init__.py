@@ -23,8 +23,9 @@ modern datasets.
 from __future__ import print_function
 from __future__ import division
 
-from _msprime import FORWARD  # NOQA
-from _msprime import REVERSE  # NOQA
+# Include these defines here backwards compability.
+FORWARD = 0
+BACKWARD = 1
 
 from msprime.provenance import __version__  # NOQA
 from msprime.provenance import validate_provenance  # NOQA
