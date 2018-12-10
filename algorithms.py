@@ -505,38 +505,38 @@ class Simulator(object):
         Evolves one generation of a Wright Fisher population
         """
         for pop_idx, pop in enumerate(self.P):
-            ## Cluster haploid inds by parent
+            # Cluster haploid inds by parent
             cur_inds = pop.get_ind_range(self.t)
             offspring = bintrees.AVLTree()
             for i in range(pop.get_num_ancestors()-1, -1, -1):
-                ## Popping every ancestor every generation is inefficient.
-                ## In the C implementation we store a pointer to the
-                ## ancestor so we can pop only if we need to merge
+                # Popping every ancestor every generation is inefficient.
+                # In the C implementation we store a pointer to the
+                # ancestor so we can pop only if we need to merge
                 anc = pop.remove(i)
                 parent = np.random.choice(cur_inds)
                 if parent not in offspring:
                     offspring[parent] = []
                 offspring[parent].append(anc)
 
-            ## Draw recombinations in children and sort segments by
-            ## inheritance direction
+            # Draw recombinations in children and sort segments by
+            # inheritance direction
             for children in offspring.values():
                 H = [[], []]
                 for child in children:
                     segs_pair = self.dtwf_recombine(child)
 
-                    ## Collect segments inherited from the same individual
+                    # Collect segments inherited from the same individual
                     for i, seg in enumerate(segs_pair):
                         if seg is None:
                             continue
                         assert seg.prev is None
                         heapq.heappush(H[i], (seg.left, seg))
 
-                ## Merge segments
+                # Merge segments
                 for h in H:
                     self.merge_ancestors(h, pop_idx)
 
-        ## Migration events happen at the rates in the matrix.
+        # Migration events happen at the rates in the matrix.
         for j in range(len(self.P)):
             source_size = self.P[j].get_num_ancestors()
             for k in range(len(self.P)):
@@ -632,7 +632,7 @@ class Simulator(object):
                 x = z
                 k = 1 + k + np.random.exponential(mu)
             elif x.right <= k and y is not None and y.left >= k:
-                ## Recombine between segment and the next
+                # Recombine between segment and the next
                 assert seg_tails[ix] == x
                 x.next = None
                 y.prev = None
@@ -645,11 +645,11 @@ class Simulator(object):
                 seg_tails[ix] = y
                 x = y
             else:
-                ## No recombination between x.right and y.left
+                # No recombination between x.right and y.left
                 x = y
 
-        ## Remove sentinal segments - this can be handled more simply
-        ## with pointers in C implemetation
+        # Remove sentinal segments - this can be handled more simply
+        # with pointers in C implemetation
         if u.next is not None:
             u.next.prev = None
         s = u
@@ -699,10 +699,10 @@ class Simulator(object):
             # print("LOOP HEAD")
             # self.print_heaps(H)
             alpha = None
-            l = H[0][0]
+            left = H[0][0]
             X = []
             r_max = self.m + 1
-            while len(H) > 0 and H[0][0] == l:
+            while len(H) > 0 and H[0][0] == left:
                 x = heapq.heappop(H)[1]
                 X.append(x)
                 r_max = min(r_max, x.right)
@@ -728,32 +728,32 @@ class Simulator(object):
                 u = len(self.tables.nodes) - 1
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
-                if l not in self.S:
-                    j = self.S.floor_key(l)
-                    self.S[l] = self.S[j]
+                if left not in self.S:
+                    j = self.S.floor_key(left)
+                    self.S[left] = self.S[j]
                 if r_max not in self.S:
                     j = self.S.floor_key(r_max)
                     self.S[r_max] = self.S[j]
                 # Update the number of extant segments.
-                if self.S[l] == len(X):
-                    self.S[l] = 0
-                    r = self.S.succ_key(l)
+                if self.S[left] == len(X):
+                    self.S[left] = 0
+                    right = self.S.succ_key(left)
                 else:
-                    r = l
-                    while r < r_max and self.S[r] != len(X):
-                        self.S[r] -= len(X) - 1
-                        r = self.S.succ_key(r)
-                    alpha = self.alloc_segment(l, r, u, pop_id)
+                    right = left
+                    while right < r_max and self.S[right] != len(X):
+                        self.S[right] -= len(X) - 1
+                        right = self.S.succ_key(right)
+                    alpha = self.alloc_segment(left, right, u, pop_id)
                 # Update the heaps and make the record.
                 for x in X:
-                    self.store_edge(l, r, u, x.node)
-                    if x.right == r:
+                    self.store_edge(left, right, u, x.node)
+                    if x.right == right:
                         self.free_segment(x)
                         if x.next is not None:
                             y = x.next
                             heapq.heappush(H, (y.left, y))
-                    elif x.right > r:
-                        x.left = r
+                    elif x.right > right:
+                        x.left = right
                         heapq.heappush(H, (x.left, x))
 
             # loop tail; update alpha and integrate it into the state.
@@ -841,37 +841,37 @@ class Simulator(object):
                     u = len(self.tables.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
-                    l = x.left
+                    left = x.left
                     r_max = min(x.right, y.right)
-                    if l not in self.S:
-                        j = self.S.floor_key(l)
-                        self.S[l] = self.S[j]
+                    if left not in self.S:
+                        j = self.S.floor_key(left)
+                        self.S[left] = self.S[j]
                     if r_max not in self.S:
                         j = self.S.floor_key(r_max)
                         self.S[r_max] = self.S[j]
                     # Update the number of extant segments.
-                    if self.S[l] == 2:
-                        self.S[l] = 0
-                        r = self.S.succ_key(l)
+                    if self.S[left] == 2:
+                        self.S[left] = 0
+                        right = self.S.succ_key(left)
                     else:
-                        r = l
-                        while r < r_max and self.S[r] != 2:
-                            self.S[r] -= 1
-                            r = self.S.succ_key(r)
-                        alpha = self.alloc_segment(l, r, u, population_index)
-                    self.store_edge(l, r, u, x.node)
-                    self.store_edge(l, r, u, y.node)
+                        right = left
+                        while right < r_max and self.S[right] != 2:
+                            self.S[right] -= 1
+                            right = self.S.succ_key(right)
+                        alpha = self.alloc_segment(left, right, u, population_index)
+                    self.store_edge(left, right, u, x.node)
+                    self.store_edge(left, right, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
-                    if x.right == r:
+                    if x.right == right:
                         self.free_segment(x)
                         x = x.next
                     else:
-                        x.left = r
-                    if y.right == r:
+                        x.left = right
+                    if y.right == right:
                         self.free_segment(y)
                         y = y.next
                     else:
-                        y.left = r
+                        y.left = right
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
