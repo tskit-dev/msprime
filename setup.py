@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -23,10 +23,11 @@ import subprocess
 import platform
 import os
 import os.path
+import sys
 from warnings import warn
 
 from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext as _build_ext
+from setuptools.command.build_ext import build_ext
 
 
 CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
@@ -69,32 +70,30 @@ class PathConfigurator(object):
 
 
 # Obscure magic required to allow numpy be used as an 'setup_requires'.
-class build_ext(_build_ext):
+# Based on https://stackoverflow.com/questions/19919905
+class local_build_ext(build_ext):
     def finalize_options(self):
-        super(build_ext, self).finalize_options()
+        build_ext.finalize_options(self)
+        if sys.version_info[0] >= 3:
+            import builtins
+        else:
+            import __builtin__ as builtins
         # Prevent numpy from thinking it is still in its setup process:
-        __builtins__.__NUMPY_SETUP__ = False
+        builtins.__NUMPY_SETUP__ = False
         import numpy
         self.include_dirs.append(numpy.get_include())
+        import kastore
+        self.include_dirs.append(kastore.get_include())
 
 
-# The above obscure magic doesn't seem to work on py2 and prevents the
-# extension from building at all, so here's a nasty workaround:
 libdir = "lib"
-# Temporary hackiness.
-includes = [libdir, libdir + "/kastore/c", libdir + "/tskit"]
-try:
-    import numpy
-    includes.append(numpy.get_include())
-except ImportError:
-    pass
+includes = [libdir, libdir + "/tskit"]
 
 configurator = PathConfigurator()
 source_files = [
     "msprime.c", "fenwick.c", "avl.c", "util.c",
     "object_heap.c", "recomb_map.c", "mutgen.c",
     # TODO this will be removed once we move the tskit code out.
-    "kastore/c/kastore.c",
     "tskit/tsk_core.c",
     "tskit/tsk_tables.c",
     "tskit/tsk_trees.c",
@@ -134,6 +133,7 @@ class DefineMacros(object):
                 # These two are required for GSL to compile and link against the
                 # conda-forge version.
                 ("GSL_DLL", None), ("WIN32", None)]
+        defines += [("KAS_DYNAMIC_API", None)]
         return defines[index]
 
 
@@ -154,6 +154,9 @@ _msprime_module = Extension(
     library_dirs=configurator.library_dirs,
 )
 
+numpy_ver = "numpy>=1.7"
+kastore_ver = "kastore>=0.2.2"
+
 with open("README.rst") as f:
     long_description = f.read()
 
@@ -172,7 +175,7 @@ setup(
         ]
     },
     include_package_data=True,
-    install_requires=["numpy>=1.7.0", "h5py", "svgwrite", "six", "jsonschema"],
+    install_requires=[numpy_ver, kastore_ver, "h5py", "svgwrite", "six", "jsonschema"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
@@ -197,6 +200,7 @@ setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    setup_requires=['numpy', 'setuptools_scm'],
+    setup_requires=[numpy_ver, kastore_ver, 'setuptools_scm'],
     use_scm_version={"write_to": "msprime/_version.py"},
+    cmdclass={"build_ext": local_build_ext},
 )

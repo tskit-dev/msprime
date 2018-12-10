@@ -1,12 +1,10 @@
 environment:
   matrix:
-    - PYTHON: "C:\\Miniconda35-x64"
-
-    - PYTHON: "C:\\Miniconda35"
-
-    - PYTHON: "C:\\Miniconda36-x64"
-
     - PYTHON: "C:\\Miniconda36"
+    - PYTHON: "C:\\Miniconda36-x64"
+    - PYTHON: "C:\\Miniconda37"
+    # Disabling Py37. See https://github.com/tskit-dev/msprime/issues/653
+    #- PYTHON: "C:\\Miniconda37-x64"
 
 install:
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
@@ -16,9 +14,10 @@ build: false
 
 test_script:
   - "conda config --add channels conda-forge"
-  - "conda install --yes --file=requirements/conda-minimal.txt"
-  - "pip install svgwrite"  # svgwrite isn't available in conda
-  - "pip install kastore"  
+  - "conda install -f --yes --file=requirements/conda-minimal.txt"
+  - "SET KASTORE_PKG=kastore>=0.2.2"
+  # Try to install kastore from conda first, but fall back on pip.
+  - "conda install --yes %KASTORE_PKG% || pip install %KASTORE_PKG%"
   - "pip install PyVCF"  
   - "pip install newick"  
   - "pip install python_jsonschema_objects"
@@ -27,6 +26,7 @@ test_script:
   # version of Python.
   - "SET MSP_CONDA_PREFIX=%PYTHON%"
   - "python setup.py build_ext --inplace"
+  - "python setup.py install"
   - "nosetests -vs"
 
 after_test:
