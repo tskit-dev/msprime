@@ -461,7 +461,7 @@ class TestDumpFormat(TestFileFormat):
         self.assertGreater(os.path.getsize(self.temp_file), 0)
         self.verify_keys(ts)
 
-        store = kastore.load(self.temp_file, use_mmap=False)
+        store = kastore.load(self.temp_file)
         # Check the basic root attributes
         format_name = store['format/name']
         self.assertTrue(np.array_equal(
@@ -615,7 +615,7 @@ class TestUuid(TestFileFormat):
         uuids = []
         for _ in range(10):
             ts.dump(self.temp_file)
-            with kastore.load(self.temp_file, use_mmap=False) as store:
+            with kastore.load(self.temp_file) as store:
                 uuids.append(store["uuid"].tobytes().decode())
         self.assertEqual(len(uuids), len(set(uuids)))
 
@@ -628,7 +628,7 @@ class TestFileFormatErrors(TestFileFormat):
 
     def verify_fields(self, ts):
         ts.dump(self.temp_file)
-        with kastore.load(self.temp_file, use_mmap=False) as store:
+        with kastore.load(self.temp_file) as store:
             all_data = dict(store)
         for key in all_data.keys():
             data = dict(all_data)
@@ -652,7 +652,7 @@ class TestFileFormatErrors(TestFileFormat):
         ts = msprime.simulate(10, random_seed=1)
         for bad_version in [(0, 1), (0, 8), (2, 0), (CURRENT_FILE_MAJOR - 1, 0)]:
             ts.dump(self.temp_file)
-            with kastore.load(self.temp_file, use_mmap=False) as store:
+            with kastore.load(self.temp_file) as store:
                 data = dict(store)
             data["format/version"] = np.array(bad_version, dtype=np.uint32)
             kastore.dump(data, self.temp_file)
@@ -662,7 +662,7 @@ class TestFileFormatErrors(TestFileFormat):
         ts = msprime.simulate(10, random_seed=1)
         for bad_version in [(CURRENT_FILE_MAJOR + j, 0) for j in range(1, 5)]:
             ts.dump(self.temp_file)
-            with kastore.load(self.temp_file, use_mmap=False) as store:
+            with kastore.load(self.temp_file) as store:
                 data = dict(store)
             data["format/version"] = np.array(bad_version, dtype=np.uint32)
             kastore.dump(data, self.temp_file)
@@ -672,7 +672,7 @@ class TestFileFormatErrors(TestFileFormat):
         ts = msprime.simulate(10)
         for bad_name in ["tskit.tree", "tskit.treesAndOther", "", "x"*100]:
             ts.dump(self.temp_file)
-            with kastore.load(self.temp_file, use_mmap=False) as store:
+            with kastore.load(self.temp_file) as store:
                 data = dict(store)
             data["format/name"] = np.array(bytearray(bad_name.encode()), dtype=np.int8)
             kastore.dump(data, self.temp_file)
