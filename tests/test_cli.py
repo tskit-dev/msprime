@@ -30,10 +30,11 @@ import sys
 import tempfile
 import unittest
 
+import newick
+import tskit
+
 import msprime
 import msprime.cli as cli
-
-import newick
 
 _h5py_available = True
 try:
@@ -1339,7 +1340,7 @@ class TestMspSimulateOutput(unittest.TestCase):
         self.assertEqual(len(stderr), 0)
         self.assertEqual(len(stdout), 0)
 
-        tree_sequence = msprime.load(self._tree_sequence)
+        tree_sequence = tskit.load(self._tree_sequence)
         self.assertEqual(tree_sequence.get_sample_size(), sample_size)
         self.assertEqual(tree_sequence.get_sequence_length(), 1)
         self.assertEqual(tree_sequence.get_num_mutations(), 0)
@@ -1348,7 +1349,7 @@ class TestMspSimulateOutput(unittest.TestCase):
         cmd = "simulate"
         stdout, stdearr = capture_output(cli.msp_main, [
             cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"])
-        tree_sequence = msprime.load(self._tree_sequence)
+        tree_sequence = tskit.load(self._tree_sequence)
         self.assertEqual(tree_sequence.get_sample_size(), 100)
         self.assertEqual(tree_sequence.get_sequence_length(), 100)
         self.assertGreater(tree_sequence.get_num_mutations(), 0)
@@ -1557,10 +1558,10 @@ class TestUpgrade(TestCli):
     def test_conversion(self):
         ts1 = msprime.simulate(10)
         for version in [2, 3]:
-            msprime.dump_legacy(ts1, self.legacy_file_name, version=version)
+            tskit.dump_legacy(ts1, self.legacy_file_name, version=version)
             stdout, stderr = capture_output(
                 cli.msp_main, ["upgrade", self.legacy_file_name, self.current_file_name])
-            ts2 = msprime.load(self.current_file_name)
+            ts2 = tskit.load(self.current_file_name)
             self.assertEqual(stdout, "")
             # We get some cruft on stderr that comes from h5py. This only happens
             # because we're mixing h5py and msprime for this test, so we can ignore
@@ -1575,7 +1576,7 @@ class TestUpgrade(TestCli):
     def test_duplicate_positions(self):
         ts = msprime.simulate(10, mutation_rate=10)
         for version in [2, 3]:
-            msprime.dump_legacy(ts, self.legacy_file_name, version=version)
+            tskit.dump_legacy(ts, self.legacy_file_name, version=version)
             root = h5py.File(self.legacy_file_name, "r+")
             root['mutations/position'][:] = 0
             root.close()
@@ -1583,7 +1584,7 @@ class TestUpgrade(TestCli):
                 cli.msp_main,
                 ["upgrade", "-d", self.legacy_file_name, self.current_file_name])
             self.assertEqual(stdout, "")
-            tsp = msprime.load(self.current_file_name)
+            tsp = tskit.load(self.current_file_name)
             self.assertEqual(tsp.sample_size, ts.sample_size)
             self.assertEqual(tsp.num_sites, 1)
 

@@ -34,9 +34,9 @@ jobs:
       - run:
           name: Run highlevel tests and upload coverage
           command: |
-            flake8 --max-line-length 89 setup.py msprime tests verification.py algorithms.py
+            flake8 --max-line-length 89 setup.py msprime tskit tests tskit_tests verification.py algorithms.py
             nosetests -v --with-coverage --cover-package msprime \
-              --cover-branches --cover-erase --cover-xml --cover-inclusive tests
+              --cover-branches --cover-erase --cover-xml --cover-inclusive tests tskit_tests
             codecov -X gcov -F python
             rm .coverage
       - run:

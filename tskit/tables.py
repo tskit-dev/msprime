@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Tree sequence IO via the tables API.
 """
@@ -35,7 +17,7 @@ import _tskit
 # and tree sequence depend on each other. Unless they're in the same module they
 # need to import each other. In Py3 at least we can import the modules but we
 # can't do this in Py3.
-import msprime
+import tskit
 
 
 IndividualTableRow = collections.namedtuple(
@@ -1571,7 +1553,7 @@ class TableCollection(object):
             defined in this set of tables.
         :rtype: .TreeSequence
         """
-        return msprime.TreeSequence.load_tables(self)
+        return tskit.TreeSequence.load_tables(self)
 
     def simplify(
             self, samples=None,
@@ -1813,7 +1795,7 @@ def sort_tables(
         for _ in range(max_pop + 1):
             populations.add_row()
         max_ind = np.max(nodes.individual)
-        if max_ind != msprime.NULL_INDIVIDUAL:
+        if max_ind != tskit.NULL_INDIVIDUAL:
             raise ValueError("Individuals not supported in this deprecated function")
     try:
         ll_tables = _tskit.TableCollection(
@@ -1884,7 +1866,7 @@ def simplify_tables(
         for _ in range(max_pop + 1):
             populations.add_row()
         max_ind = np.max(nodes.individual)
-        if max_ind != msprime.NULL_INDIVIDUAL:
+        if max_ind != tskit.NULL_INDIVIDUAL:
             raise ValueError("Individuals not supported in this deprecated function")
     try:
         ll_tables = _tskit.TableCollection(

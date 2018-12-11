@@ -357,7 +357,7 @@ out:
 int
 msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
-        recomb_map_t *recomb_map, tsk_treeseq_t *from_ts, gsl_rng *rng) {
+        recomb_map_t *recomb_map, tsk_tbl_collection_t *from_ts_tables, gsl_rng *rng) {
     int ret = -1;
     size_t j;
 
@@ -366,7 +366,7 @@ msp_alloc(msp_t *self,
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (from_ts == NULL) {
+    if (from_ts_tables == NULL) {
         if (samples == NULL) {
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
@@ -401,7 +401,7 @@ msp_alloc(msp_t *self,
     if (ret != 0) {
         goto out;
     }
-    if (from_ts == NULL) {
+    if (from_ts_tables == NULL) {
         assert(samples != NULL);
         assert(num_samples > 1);
         self->num_samples = (uint32_t) num_samples;
@@ -419,10 +419,8 @@ msp_alloc(msp_t *self,
             }
         }
     } else {
-        assert(from_ts != NULL);
-
         /* Make a copy of the from_ts */
-        ret = tsk_treeseq_dump_tables(from_ts, &self->tables, 0);
+        ret = tsk_tbl_collection_copy(from_ts_tables, &self->tables);
         if (ret != 0) {
             goto out;
         }

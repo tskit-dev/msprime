@@ -153,7 +153,7 @@ def mutate(
 
     mutation_generator = _msprime.MutationGenerator(
         rng, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
-    mutation_generator.generate(tables.ll_tables, keep=keep)
+    mutation_generator.generate(tables.ll_tables.get_pointer(), keep=keep)
 
     tables.provenances.add_row(json.dumps(provenance_dict))
     return tables.tree_sequence()

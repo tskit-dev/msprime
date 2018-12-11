@@ -1,24 +1,6 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright (C) 2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
-Test cases for visualisation in msprime.
+Test cases for visualisation in tskit.
 """
 from __future__ import print_function
 from __future__ import division
@@ -29,9 +11,10 @@ import tempfile
 import unittest
 import xml.etree
 
-import six
 import msprime
-import tests.tsutil as tsutil
+import six
+import tskit
+import tskit_tests.tsutil as tsutil
 
 IS_PY2 = sys.version_info[0] < 3
 
@@ -57,17 +40,17 @@ class TestTreeDraw(unittest.TestCase):
         assert False
 
     def get_zero_edge_tree(self):
-        tables = msprime.TableCollection(sequence_length=2)
+        tables = tskit.TableCollection(sequence_length=2)
         # These must be samples or we will have zero roots.
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0)
         tables.sites.add_row(position=0, ancestral_state="0")
         tables.mutations.add_row(site=0, node=0, derived_state="1")
         tables.mutations.add_row(site=0, node=1, derived_state="1")
         return tables.tree_sequence().first()
 
     def get_zero_roots_tree(self):
-        tables = msprime.TableCollection(sequence_length=2)
+        tables = tskit.TableCollection(sequence_length=2)
         # If we have no samples we have zero roots
         tables.nodes.add_row(time=0)
         tables.nodes.add_row(time=0)
@@ -106,7 +89,7 @@ class TestTreeDraw(unittest.TestCase):
         ts = tables.tree_sequence()
         tree = ts.first()
         assert any(
-            tree.parent(mut.node) == msprime.NULL_NODE
+            tree.parent(mut.node) == tskit.NULL_NODE
             for mut in tree.mutations())
         return tree
 
@@ -127,9 +110,9 @@ class TestTreeDraw(unittest.TestCase):
         assert False
 
     def get_empty_tree(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         return next(ts.trees())
 
 
@@ -251,7 +234,7 @@ class TestDrawText(TestTreeDraw):
         0       1       6       4
         0       1       6       5
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
@@ -274,7 +257,7 @@ class TestDrawText(TestTreeDraw):
         0       1       5       3
         0       1       5       4
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         text = t.draw(format=self.drawing_format)
         self.verify_basic_text(text)
@@ -335,7 +318,7 @@ class TestDrawUnicode(TestDrawText):
             " 2 \n"
             "┏┻┓\n"
             "0 1")
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         drawn = t.draw(format="unicode")
         self.verify_text_rendering(drawn, tree)
@@ -358,7 +341,7 @@ class TestDrawUnicode(TestDrawText):
             "  3  \n"
             "┏━╋━┓\n"
             "0 1 2\n")
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         drawn = t.draw(format="unicode")
         self.verify_text_rendering(drawn, tree)
@@ -383,7 +366,7 @@ class TestDrawUnicode(TestDrawText):
             "   4   \n"
             "┏━┳┻┳━┓\n"
             "0 1 2 3\n")
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         # No labels
         tree = (
@@ -418,7 +401,7 @@ class TestDrawUnicode(TestDrawText):
             "1\n"
             "┃\n"
             "0\n")
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         t = next(ts.trees())
         drawn = t.draw(format="unicode")
         self.verify_text_rendering(drawn, tree)
@@ -436,7 +419,7 @@ class TestDrawSvg(TestTreeDraw):
 
     def test_draw_file(self):
         t = self.get_binary_tree()
-        fd, filename = tempfile.mkstemp(prefix="msprime_viz_")
+        fd, filename = tempfile.mkstemp(prefix="tskit_viz_")
         try:
             os.close(fd)
             svg = t.draw(path=filename)

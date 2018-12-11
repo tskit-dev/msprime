@@ -22,3 +22,11 @@ If you use ``msprime`` in your work, please cite the [PLOS Computational
 Biology](http://dx.doi.org/10.1371/journal.pcbi.1004842) paper.
 See [here](https://msprime.readthedocs.org/en/latest/CITATION.html) for
 full citation details.
+
+
+## NOTE FOR DEVELOPERS
+
+The codebase is currently in a transitional phase, where ``tskit`` and ``msprime`` are being 
+separated. As a result, some documentation is inaccurate and there are a lot of rough edges.
+Everything will be cleaned up nicely for the next release of the packages. In the meantime,
+thanks for your patience!

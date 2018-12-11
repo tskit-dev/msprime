@@ -29,7 +29,7 @@ import numpy as np
 
 import msprime
 from tests import tsutil
-import tests.test_wright_fisher as wf
+import tests.wright_fisher as wf
 
 
 class TestMutateProvenance(unittest.TestCase):

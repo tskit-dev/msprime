@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2016 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Test cases for generalized statistic computation.
 """
@@ -30,9 +12,10 @@ import numpy as np
 import numpy.testing as nt
 
 import six
-
 import msprime
-import tests.tsutil as tsutil
+
+import tskit
+import tskit_tests.tsutil as tsutil
 
 
 def path_length(tr, x, y):
@@ -590,9 +573,9 @@ class TestStatsInterface(unittest.TestCase):
     """
 
     def test_interface(self):
-        self.assertRaises(TypeError, msprime.GeneralStatCalculator)
-        self.assertRaises(TypeError, msprime.SiteStatCalculator)
-        self.assertRaises(TypeError, msprime.BranchLengthStatCalculator)
+        self.assertRaises(TypeError, tskit.GeneralStatCalculator)
+        self.assertRaises(TypeError, tskit.SiteStatCalculator)
+        self.assertRaises(TypeError, tskit.BranchLengthStatCalculator)
 
 
 class GeneralStatsTestCase(unittest.TestCase):
@@ -876,11 +859,11 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         8       1       1
         9       2       1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
-        branch_tsc = msprime.BranchLengthStatCalculator(ts)
+        branch_tsc = tskit.BranchLengthStatCalculator(ts)
         py_branch_tsc = PythonBranchLengthStatCalculator(ts)
-        site_tsc = msprime.SiteStatCalculator(ts)
+        site_tsc = tskit.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
         # diversity between 0 and 1
@@ -963,9 +946,9 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         0       0       1               -1
         0       1       2               -1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
-        site_tsc = msprime.SiteStatCalculator(ts)
+        site_tsc = tskit.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
         # recall that divergence returns the upper triangle
@@ -1029,9 +1012,9 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         2       1       2               6
         2       2       3               6
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
-        site_tsc = msprime.SiteStatCalculator(ts)
+        site_tsc = tskit.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
         # Y3:
@@ -1145,11 +1128,11 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
         2       8       1               -1
         2       9       0               5
         """)
-        ts = msprime.load_text(nodes=nodes, edges=edges, sites=sites,
-                               mutations=mutations, strict=False)
-        branch_tsc = msprime.BranchLengthStatCalculator(ts)
+        ts = tskit.load_text(
+            nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
+        branch_tsc = tskit.BranchLengthStatCalculator(ts)
         py_branch_tsc = PythonBranchLengthStatCalculator(ts)
-        site_tsc = msprime.SiteStatCalculator(ts)
+        site_tsc = tskit.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
         # divergence between 0 and 1
@@ -1207,9 +1190,9 @@ class SpecificTreesTestCase(GeneralStatsTestCase):
                                    recombination_rate=3.0)
         ts = tsutil.jukes_cantor(orig_ts, num_sites=3, mu=3,
                                  multiple_per_node=True, seed=self.seed)
-        branch_tsc = msprime.BranchLengthStatCalculator(ts)
+        branch_tsc = tskit.BranchLengthStatCalculator(ts)
         py_branch_tsc = PythonBranchLengthStatCalculator(ts)
-        site_tsc = msprime.SiteStatCalculator(ts)
+        site_tsc = tskit.SiteStatCalculator(ts)
         py_site_tsc = PythonSiteStatCalculator(ts)
 
         A = [[0], [1], [2]]
@@ -1229,7 +1212,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
     """
     Tests of tree statistic computation.
     """
-    stat_class = msprime.BranchLengthStatCalculator
+    stat_class = tskit.BranchLengthStatCalculator
     py_stat_class = PythonBranchLengthStatCalculator
 
     def get_ts(self):
@@ -1239,7 +1222,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
 
     def check_pairwise_diversity(self, ts):
         samples = random.sample(list(ts.samples()), 2)
-        tsc = msprime.BranchLengthStatCalculator(ts)
+        tsc = tskit.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A_one = [[samples[0]], [samples[1]]]
         A_many = [random.sample(list(ts.samples()), 2),
@@ -1260,7 +1243,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
     def check_divergence_matrix(self, ts):
         # nonoverlapping samples
         samples = random.sample(list(ts.samples()), 6)
-        tsc = msprime.BranchLengthStatCalculator(ts)
+        tsc = tskit.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A = [samples[0:3], samples[3:5], samples[5:6]]
         windows = [0.0, ts.sequence_length/2, ts.sequence_length]
@@ -1294,7 +1277,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
 
     def test_errors(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=10)
-        tsc = msprime.BranchLengthStatCalculator(ts)
+        tsc = tskit.BranchLengthStatCalculator(ts)
         self.assertRaises(ValueError,
                           tsc.divergence, [[0], [11]], [0, ts.sequence_length])
         self.assertRaises(ValueError,
@@ -1329,7 +1312,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
     def test_windowization(self):
         ts = msprime.simulate(10, random_seed=self.random_seed, recombination_rate=100)
         samples = random.sample(list(ts.samples()), 2)
-        tsc = msprime.BranchLengthStatCalculator(ts)
+        tsc = tskit.BranchLengthStatCalculator(ts)
         py_tsc = PythonBranchLengthStatCalculator(ts)
         A_one = [[samples[0]], [samples[1]]]
         A_many = [random.sample(list(ts.samples()), 2),
@@ -1370,7 +1353,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
 
     def test_tree_stat_vector_interface(self):
         ts = msprime.simulate(10)
-        tsc = msprime.BranchLengthStatCalculator(ts)
+        tsc = tskit.BranchLengthStatCalculator(ts)
 
         def f(x):
             return [1.0]
@@ -1395,7 +1378,7 @@ class BranchLengthStatsTestCase(GeneralStatsTestCase):
 
     def test_sfs_interface(self):
         ts = msprime.simulate(10)
-        tsc = msprime.BranchLengthStatCalculator(ts)
+        tsc = tskit.BranchLengthStatCalculator(ts)
 
         # Duplicated samples raise an error
         self.assertRaises(ValueError, tsc.site_frequency_spectrum, [1, 1])
@@ -1440,7 +1423,7 @@ class SiteStatsTestCase(GeneralStatsTestCase):
     """
     Tests of site statistic computation.
     """
-    stat_class = msprime.SiteStatCalculator
+    stat_class = tskit.SiteStatCalculator
     py_stat_class = PythonSiteStatCalculator
     seed = 23
 

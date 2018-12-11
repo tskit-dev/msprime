@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2015-2018 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Python implementation of the simplify algorithm.
 """
@@ -27,7 +9,7 @@ import sys
 
 import numpy as np
 
-import msprime
+import tskit
 
 
 def overlapping_segments(segments):
@@ -110,7 +92,7 @@ class Simplifier(object):
         self.input_sites = list(ts.sites())
         self.A_head = [None for _ in range(ts.num_nodes)]
         self.A_tail = [None for _ in range(ts.num_nodes)]
-        self.tables = msprime.TableCollection(sequence_length=ts.sequence_length)
+        self.tables = tskit.TableCollection(sequence_length=ts.sequence_length)
         self.edge_buffer = {}
         self.node_id_map = np.zeros(ts.num_nodes, dtype=np.int32) - 1
         self.mutation_node_map = [-1 for _ in range(self.num_mutations)]
@@ -138,9 +120,9 @@ class Simplifier(object):
         node = self.ts.node(input_id)
         flags = node.flags
         # Need to zero out the sample flag
-        flags &= ~msprime.NODE_IS_SAMPLE
+        flags &= ~tskit.NODE_IS_SAMPLE
         if is_sample:
-            flags |= msprime.NODE_IS_SAMPLE
+            flags |= tskit.NODE_IS_SAMPLE
         output_id = self.tables.nodes.add_row(
             flags=flags, time=node.time, population=node.population,
             metadata=node.metadata, individual=node.individual)
@@ -191,13 +173,13 @@ class Simplifier(object):
             left = X[left_index]
             right = X[right_index]
         if child not in self.edge_buffer:
-            self.edge_buffer[child] = [msprime.Edge(left, right, parent, child)]
+            self.edge_buffer[child] = [tskit.Edge(left, right, parent, child)]
         else:
             last = self.edge_buffer[child][-1]
             if last.right == left:
                 last.right = right
             else:
-                self.edge_buffer[child].append(msprime.Edge(left, right, parent, child))
+                self.edge_buffer[child].append(tskit.Edge(left, right, parent, child))
 
     def print_state(self):
         print(".................")
@@ -371,9 +353,9 @@ class Simplifier(object):
             individual_id_map[:] = -1
 
         for node in self.tables.nodes:
-            if self.filter_populations and node.population != msprime.NULL_POPULATION:
+            if self.filter_populations and node.population != tskit.NULL_POPULATION:
                 population_ref_count[node.population] += 1
-            if self.filter_individuals and node.individual != msprime.NULL_POPULATION:
+            if self.filter_individuals and node.individual != tskit.NULL_POPULATION:
                 individual_ref_count[node.individual] += 1
 
         for input_id, count in enumerate(population_ref_count):
@@ -444,7 +426,7 @@ class Simplifier(object):
 
 if __name__ == "__main__":
     # Simple CLI for running simplifier above.
-    ts = msprime.load(sys.argv[1])
+    ts = tskit.load(sys.argv[1])
     samples = list(map(int, sys.argv[2:]))
     s = Simplifier(ts, samples)
     # s.print_state()

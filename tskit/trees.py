@@ -1,24 +1,6 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright (C) 2015-2018 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
-Module responsible to generating and reading tree files.
+Module responsible for managing trees and tree sequences.
 """
 from __future__ import division
 from __future__ import print_function
@@ -39,11 +21,11 @@ except ImportError:
 import numpy as np
 
 import _tskit
-import msprime.drawing as drawing
-import msprime.exceptions as exceptions
-import msprime.provenance as provenance
-import msprime.tables as tables
-import msprime.formats as formats
+import tskit.drawing as drawing
+import tskit.exceptions as exceptions
+import tskit.provenance as provenance
+import tskit.tables as tables
+import tskit.formats as formats
 
 from _tskit import NODE_IS_SAMPLE
 
@@ -660,7 +642,7 @@ class SparseTree(object):
 
             roots = set()
             for u in tree_sequence.samples():
-                while tree.parent(u) != msprime.NULL_NODE:
+                while tree.parent(u) != tskit.NULL_NODE:
                     u = tree.parent(u)
                 roots.add(u)
             # roots is now the set of all roots in this tree.
@@ -1189,7 +1171,7 @@ def load(path):
         tree sequence we wish to load.
     :return: The tree sequence object containing the information
         stored in the specified file path.
-    :rtype: :class:`msprime.TreeSequence`
+    :rtype: :class:`tskit.TreeSequence`
     """
     try:
         return TreeSequence.load(path)
@@ -1609,8 +1591,8 @@ def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
     and is produced by the :meth:`.TreeSequence.dump_text` method. Further
     properties required for an input tree sequence are described in the
     :ref:`sec_valid_tree_sequence_requirements` section. This method is intended as a
-    convenient interface for importing external data into msprime; the binary
-    file format using by :meth:`msprime.load` is many times more efficient than
+    convenient interface for importing external data into tskit; the binary
+    file format using by :meth:`tskit.load` is many times more efficient than
     this text format.
 
     The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
@@ -1665,7 +1647,7 @@ def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
         encoding; otherwise, as plain text.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
-    :rtype: :class:`msprime.TreeSequence`
+    :rtype: :class:`tskit.TreeSequence`
     """
     # We need to parse the edges so we can figure out the sequence length, and
     # TableCollection.sequence_length is immutable so we need to create a temporary
@@ -1962,7 +1944,7 @@ class TreeSequence(object):
         tree sequence with a sequence length :math:`L`, the constituent
         trees will be defined over the half-closed interval
         :math:`[0, L)`. Each tree then covers some subset of this
-        interval --- see :meth:`msprime.SparseTree.get_interval` for details.
+        interval --- see :meth:`tskit.SparseTree.get_interval` for details.
 
         :return: The length of the sequence in this tree sequence in bases.
         :rtype: float
@@ -2349,9 +2331,9 @@ class TreeSequence(object):
         and mutations in this tree sequence as a string.
         The iterator returns a total of :math:`n` strings, each of which
         contains :math:`s` characters (:math:`n` is the sample size
-        returned by :attr:`msprime.TreeSequence.num_samples` and
+        returned by :attr:`tskit.TreeSequence.num_samples` and
         :math:`s` is the number of sites returned by
-        :attr:`msprime.TreeSequence.num_sites`). The first
+        :attr:`tskit.TreeSequence.num_sites`). The first
         string returned is the haplotype for sample `0`, and so on.
         For a given haplotype ``h``, the value of ``h[j]`` is the observed
         allelic state at site ``j``.

@@ -1875,23 +1875,19 @@ test_recomb_map_examples(void)
 }
 
 static void
-verify_simulate_from(int model, recomb_map_t *recomb_map, tsk_treeseq_t *from,
-        size_t num_replicates)
+verify_simulate_from(int model, recomb_map_t *recomb_map,
+        tsk_tbl_collection_t *from_tables, size_t num_replicates)
 {
     int ret;
     size_t j;
     tsk_tbl_collection_position_t pos;
-    tsk_tbl_collection_t from_tables, final_tables;
+    tsk_tbl_collection_t final_tables;
     tsk_treeseq_t final;
     tsk_tree_t tree;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-    ret = tsk_tbl_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_treeseq_dump_tables(from, &from_tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, recomb_map, from, rng);
+    ret = msp_alloc(&msp, 0, NULL, recomb_map, from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     if (model == MSP_MODEL_DTWF) {
@@ -1921,11 +1917,11 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tsk_treeseq_t *from,
         }
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-        ret = tsk_tbl_collection_record_position(&from_tables, &pos);
+        ret = tsk_tbl_collection_record_position(from_tables, &pos);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_tbl_collection_reset_position(&final_tables, &pos);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_TRUE(tsk_tbl_collection_equals(&from_tables, &final_tables));
+        CU_ASSERT_TRUE(tsk_tbl_collection_equals(from_tables, &final_tables));
 
         tsk_tbl_collection_free(&final_tables);
         tsk_treeseq_free(&final);
@@ -1935,7 +1931,6 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tsk_treeseq_t *from,
         /* printf("ret = %s\n", msp_strerror(ret)); */
         CU_ASSERT_EQUAL(ret, 0);
     }
-    tsk_tbl_collection_free(&from_tables);
     msp_free(&msp);
     gsl_rng_free(rng);
 }
@@ -1944,14 +1939,14 @@ verify_simulate_from(int model, recomb_map_t *recomb_map, tsk_treeseq_t *from,
  * with from_ts is equivalent to the state in the original simulator */
 static void
 verify_initial_simulate_from_state(msp_t *msp_source, recomb_map_t *recomb_map,
-        tsk_treeseq_t *from_ts)
+        tsk_tbl_collection_t *from_tables)
 {
     int ret;
     msp_t msp_dest;
     size_t num_ancestors;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-    ret = msp_alloc(&msp_dest, 0, NULL, recomb_map, from_ts, rng);
+    ret = msp_alloc(&msp_dest, 0, NULL, recomb_map, from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp_dest);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1975,7 +1970,6 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
 {
     int ret;
     tsk_tbl_collection_t from_tables;
-    tsk_treeseq_t from;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
     recomb_map_t recomb_map;
@@ -2004,15 +1998,14 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
     /* Add some provenances */
     ret = tsk_provenance_tbl_add_row(from_tables.provenances, "time", 4, "record", 6);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_treeseq_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
+    ret = tsk_tbl_collection_build_indexes(&from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    verify_initial_simulate_from_state(&msp, &recomb_map, &from);
-    verify_simulate_from(model, &recomb_map, &from, num_replicates);
+    verify_initial_simulate_from_state(&msp, &recomb_map, &from_tables);
+    verify_simulate_from(model, &recomb_map, &from_tables, num_replicates);
 
     msp_free(&msp);
     gsl_rng_free(rng);
     tsk_tbl_collection_free(&from_tables);
-    tsk_treeseq_free(&from);
     recomb_map_free(&recomb_map);
     free(samples);
 }
@@ -2090,7 +2083,6 @@ test_simulate_from_completed(void)
 {
     int ret;
     tsk_tbl_collection_t from_tables;
-    tsk_treeseq_t from;
     uint32_t n = 25;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
@@ -2117,15 +2109,14 @@ test_simulate_from_completed(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_populate_tables(&msp, &from_tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_treeseq_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
+    ret = tsk_tbl_collection_build_indexes(&from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from, 1);
+    verify_simulate_from(MSP_MODEL_HUDSON, &recomb_map, &from_tables, 1);
 
     msp_free(&msp);
     gsl_rng_free(rng);
     tsk_tbl_collection_free(&from_tables);
-    tsk_treeseq_free(&from);
     recomb_map_free(&recomb_map);
     free(samples);
 }
@@ -2137,9 +2128,7 @@ test_simulate_from_incompatible(void)
     msp_t msp;
     recomb_map_t recomb_map;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    tsk_treeseq_t from;
     tsk_tbl_collection_t from_tables;
-    int load_flags = MSP_BUILD_INDEXES;
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = recomb_map_alloc_uniform(&recomb_map, 1, 10.0, 1);
@@ -2147,37 +2136,30 @@ test_simulate_from_incompatible(void)
     ret = tsk_tbl_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     from_tables.sequence_length = 1.0;
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
+    ret = tsk_tbl_collection_build_indexes(&from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Sequence length mismatch */
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
     msp_free(&msp);
-    tsk_treeseq_free(&from);
 
     /* Num populations should be 1 */
     from_tables.sequence_length = 10.0;
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
-    tsk_treeseq_free(&from);
     msp_free(&msp);
 
     /* zero samples */
     from_tables.sequence_length = 10.0;
     ret = tsk_population_tbl_add_row(from_tables.populations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
-    tsk_treeseq_free(&from);
     msp_free(&msp);
 
     /* older nodes */
@@ -2187,52 +2169,40 @@ test_simulate_from_incompatible(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_node_tbl_add_row(from_tables.nodes, MSP_NODE_IS_SAMPLE, 2.0, 0,
             MSP_NULL_INDIVIDUAL, NULL, 0);
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 1.999);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME_FROM_TS);
-    tsk_treeseq_free(&from);
     msp_free(&msp);
 
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 1.999);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME_FROM_TS);
-    tsk_treeseq_free(&from);
     msp_free(&msp);
 
     /* Must have legitimate population references */
     from_tables.nodes->population[0] = -1;
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    tsk_treeseq_free(&from);
     msp_free(&msp);
 
     /* Check to make sure we can run this correctly */
     from_tables.nodes->population[0] = 0;
-    ret = tsk_treeseq_load_tables(&from, &from_tables, load_flags);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    tsk_treeseq_free(&from);
     msp_free(&msp);
 
     gsl_rng_free(rng);
@@ -2249,7 +2219,6 @@ test_simulate_init_errors(void)
     msp_t msp;
     recomb_map_t recomb_map;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    tsk_treeseq_t from;
     tsk_tbl_collection_t from_tables;
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -2259,7 +2228,7 @@ test_simulate_init_errors(void)
     ret = tsk_tbl_collection_alloc(&from_tables, MSP_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     from_tables.sequence_length = 1.0;
-    ret = tsk_treeseq_load_tables(&from, &from_tables, MSP_BUILD_INDEXES);
+    ret = tsk_tbl_collection_build_indexes(&from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     memset(samples, 0, n * sizeof(sample_t));
@@ -2267,9 +2236,9 @@ test_simulate_init_errors(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     ret = msp_alloc(&msp, n, NULL, &recomb_map, NULL, rng);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = msp_alloc(&msp, n, NULL, &recomb_map, &from, rng);
+    ret = msp_alloc(&msp, n, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
@@ -2285,7 +2254,6 @@ test_simulate_init_errors(void)
     recomb_map_free(&recomb_map);
     free(samples);
     tsk_tbl_collection_free(&from_tables);
-    tsk_treeseq_free(&from);
 }
 
 static void

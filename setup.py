@@ -179,7 +179,7 @@ setup(
     name="msprime",
     description="A fast and accurate coalescent simulator.",
     long_description=long_description,
-    packages=["msprime"],
+    packages=["msprime", "tskit"],
     author="Jerome Kelleher",
     author_email="jerome.kelleher@well.ox.ac.uk",
     url="http://pypi.python.org/pypi/msprime",

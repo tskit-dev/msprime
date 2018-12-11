@@ -1,23 +1,5 @@
-#
-# Copyright (C) 2016-2018 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
-Test cases for the HDF5 format in msprime.
+Test cases for tskit's file format.
 """
 from __future__ import print_function
 from __future__ import division
@@ -31,10 +13,11 @@ import json
 import h5py
 import kastore
 import numpy as np
-
 import msprime
-import msprime.exceptions as exceptions
-import tests.tsutil as tsutil
+
+import tskit
+import tskit.exceptions as exceptions
+import tskit_tests.tsutil as tsutil
 
 
 CURRENT_FILE_MAJOR = 12
@@ -121,7 +104,7 @@ def no_provenance_example():
 def provenance_timestamp_only_example():
     ts = msprime.simulate(10, random_seed=1)
     tables = ts.dump_tables()
-    provenances = msprime.ProvenanceTable()
+    provenances = tskit.ProvenanceTable()
     provenances.add_row(timestamp="12345", record="")
     return tables.tree_sequence()
 
@@ -131,7 +114,7 @@ def node_metadata_example():
         sample_size=100, recombination_rate=0.1, length=10, random_seed=1)
     tables = ts.dump_tables()
     metadatas = ["n_{}".format(u) for u in range(ts.num_nodes)]
-    packed, offset = msprime.pack_strings(metadatas)
+    packed, offset = tskit.pack_strings(metadatas)
     tables.nodes.set_columns(
         metadata=packed, metadata_offset=offset,
         flags=tables.nodes.flags, time=tables.nodes.time)
@@ -193,18 +176,18 @@ class TestLoadLegacyExamples(TestFileFormat):
             "tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5",
             "tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5"]
         for filename in files:
-            self.assertRaises(exceptions.VersionTooOldError, msprime.load, filename)
+            self.assertRaises(exceptions.VersionTooOldError, tskit.load, filename)
 
     def test_msprime_v_0_5_0(self):
-        ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
+        ts = tskit.load_legacy("tests/data/hdf5-formats/msprime-0.5.0_v10.0.hdf5")
         self.verify_tree_sequence(ts)
 
     def test_msprime_v_0_4_0(self):
-        ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5")
+        ts = tskit.load_legacy("tests/data/hdf5-formats/msprime-0.4.0_v3.1.hdf5")
         self.verify_tree_sequence(ts)
 
     def test_msprime_v_0_3_0(self):
-        ts = msprime.load_legacy("tests/data/hdf5-formats/msprime-0.3.0_v2.0.hdf5")
+        ts = tskit.load_legacy("tests/data/hdf5-formats/msprime-0.3.0_v2.0.hdf5")
         self.verify_tree_sequence(ts)
 
 
@@ -229,24 +212,24 @@ class TestRoundTrip(TestFileFormat):
         self.assertEqual(t1.mutations, t2.mutations)
 
     def verify_round_trip(self, ts, version):
-        msprime.dump_legacy(ts, self.temp_file, version=version)
-        tsp = msprime.load_legacy(self.temp_file)
+        tskit.dump_legacy(ts, self.temp_file, version=version)
+        tsp = tskit.load_legacy(self.temp_file)
         simplify = version < 10
         self.verify_tree_sequences_equal(ts, tsp, simplify=simplify)
         tsp.dump(self.temp_file)
-        tsp = msprime.load(self.temp_file)
+        tsp = tskit.load(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp, simplify=simplify)
         for provenance in tsp.provenances():
-            msprime.validate_provenance(json.loads(provenance.record))
+            tskit.validate_provenance(json.loads(provenance.record))
 
     def verify_malformed_json_v2(self, ts, group_name, attr, bad_json):
-        msprime.dump_legacy(ts, self.temp_file, 2)
+        tskit.dump_legacy(ts, self.temp_file, 2)
         # Write some bad JSON to the provenance string.
         root = h5py.File(self.temp_file, "r+")
         group = root[group_name]
         group.attrs[attr] = bad_json
         root.close()
-        tsp = msprime.load_legacy(self.temp_file)
+        tsp = tskit.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def test_malformed_json_v2(self):
@@ -290,14 +273,14 @@ class TestRoundTrip(TestFileFormat):
         ts = recurrent_mutation_example()
         for version in [2, 3]:
             self.assertRaises(
-                ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+                ValueError, tskit.dump_legacy, ts, self.temp_file, version)
         self.verify_round_trip(ts, 10)
 
     def test_general_mutation_example(self):
         ts = general_mutation_example()
         for version in [2, 3]:
             self.assertRaises(
-                ValueError, msprime.dump_legacy, ts, self.temp_file, version)
+                ValueError, tskit.dump_legacy, ts, self.temp_file, version)
         self.verify_round_trip(ts, 10)
 
     def test_node_metadata_example(self):
@@ -313,33 +296,33 @@ class TestRoundTrip(TestFileFormat):
         self.verify_round_trip(multichar_mutation_example(), 10)
 
     def test_empty_file(self):
-        tables = msprime.TableCollection(sequence_length=3)
+        tables = tskit.TableCollection(sequence_length=3)
         self.verify_round_trip(tables.tree_sequence(), 10)
 
     def test_zero_edges(self):
-        tables = msprime.TableCollection(sequence_length=3)
+        tables = tskit.TableCollection(sequence_length=3)
         tables.nodes.add_row(time=0)
         self.verify_round_trip(tables.tree_sequence(), 10)
 
     def test_v2_no_samples(self):
         ts = multi_locus_with_mutation_example()
-        msprime.dump_legacy(ts, self.temp_file, version=2)
+        tskit.dump_legacy(ts, self.temp_file, version=2)
         root = h5py.File(self.temp_file, "r+")
         del root['samples']
         root.close()
-        tsp = msprime.load_legacy(self.temp_file)
+        tsp = tskit.load_legacy(self.temp_file)
         self.verify_tree_sequences_equal(ts, tsp)
 
     def test_duplicate_mutation_positions_single_value(self):
         ts = multi_locus_with_mutation_example()
         for version in [2, 3]:
-            msprime.dump_legacy(ts, self.temp_file, version=version)
+            tskit.dump_legacy(ts, self.temp_file, version=version)
             root = h5py.File(self.temp_file, "r+")
             root['mutations/position'][:] = 0
             root.close()
             self.assertRaises(
-                msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
-            tsp = msprime.load_legacy(
+                tskit.DuplicatePositionsError, tskit.load_legacy, self.temp_file)
+            tsp = tskit.load_legacy(
                 self.temp_file, remove_duplicate_positions=True)
             self.assertEqual(tsp.num_sites, 1)
             sites = list(tsp.sites())
@@ -348,15 +331,15 @@ class TestRoundTrip(TestFileFormat):
     def test_duplicate_mutation_positions(self):
         ts = multi_locus_with_mutation_example()
         for version in [2, 3]:
-            msprime.dump_legacy(ts, self.temp_file, version=version)
+            tskit.dump_legacy(ts, self.temp_file, version=version)
             root = h5py.File(self.temp_file, "r+")
             position = np.array(root['mutations/position'])
             position[0] = position[1]
             root['mutations/position'][:] = position
             root.close()
             self.assertRaises(
-                msprime.DuplicatePositionsError, msprime.load_legacy, self.temp_file)
-            tsp = msprime.load_legacy(
+                tskit.DuplicatePositionsError, tskit.load_legacy, self.temp_file)
+            tsp = tskit.load_legacy(
                 self.temp_file, remove_duplicate_positions=True)
             self.assertEqual(tsp.num_sites, position.shape[0] - 1)
             position_after = list(s.position for s in tsp.sites())
@@ -375,21 +358,21 @@ class TestErrors(TestFileFormat):
             sample_size=10,
             demographic_events=demographic_events,
             random_seed=1)
-        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, 2)
+        self.assertRaises(ValueError, tskit.dump_legacy, ts, self.temp_file, 2)
 
     def test_unsupported_version(self):
         ts = msprime.simulate(10)
-        self.assertRaises(ValueError, msprime.dump_legacy, ts, self.temp_file, version=4)
+        self.assertRaises(ValueError, tskit.dump_legacy, ts, self.temp_file, version=4)
         # Cannot read current files.
         ts.dump(self.temp_file)
         # Catch Exception here because h5py throws different exceptions on py2 and py3
-        self.assertRaises(Exception, msprime.load_legacy, self.temp_file)
+        self.assertRaises(Exception, tskit.load_legacy, self.temp_file)
 
     def test_no_version_number(self):
         root = h5py.File(self.temp_file, "w")
         root.attrs["x"] = 0
         root.close()
-        self.assertRaises(ValueError, msprime.load_legacy, self.temp_file)
+        self.assertRaises(ValueError, tskit.load_legacy, self.temp_file)
 
 
 class TestDumpFormat(TestFileFormat):
@@ -471,7 +454,7 @@ class TestDumpFormat(TestFileFormat):
         self.assertEqual(format_version[1], 0)
         self.assertEqual(ts.sequence_length, store['sequence_length'][0])
         # Load another copy from file so we can check the uuid.
-        other_ts = msprime.load(self.temp_file)
+        other_ts = tskit.load(self.temp_file)
         self.verify_uuid(other_ts, store["uuid"].tobytes().decode())
 
         tables = ts.tables
@@ -634,19 +617,19 @@ class TestFileFormatErrors(TestFileFormat):
             data = dict(all_data)
             del data[key]
             kastore.dump(data, self.temp_file)
-            self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+            self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)
 
     def test_missing_fields(self):
         self.verify_fields(migration_example())
 
     def test_load_empty_kastore(self):
         kastore.dump({}, self.temp_file)
-        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)
 
-    def test_load_non_msprime_hdf5(self):
+    def test_load_non_tskit_hdf5(self):
         with h5py.File(self.temp_file, "w") as root:
             root["x"] = np.zeros(10)
-        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)
 
     def test_old_version_load_error(self):
         ts = msprime.simulate(10, random_seed=1)
@@ -656,7 +639,7 @@ class TestFileFormatErrors(TestFileFormat):
                 data = dict(store)
             data["format/version"] = np.array(bad_version, dtype=np.uint32)
             kastore.dump(data, self.temp_file)
-            self.assertRaises(msprime.VersionTooOldError, msprime.load, self.temp_file)
+            self.assertRaises(tskit.VersionTooOldError, tskit.load, self.temp_file)
 
     def test_new_version_load_error(self):
         ts = msprime.simulate(10, random_seed=1)
@@ -666,7 +649,7 @@ class TestFileFormatErrors(TestFileFormat):
                 data = dict(store)
             data["format/version"] = np.array(bad_version, dtype=np.uint32)
             kastore.dump(data, self.temp_file)
-            self.assertRaises(msprime.VersionTooNewError, msprime.load, self.temp_file)
+            self.assertRaises(tskit.VersionTooNewError, tskit.load, self.temp_file)
 
     def test_format_name_error(self):
         ts = msprime.simulate(10)
@@ -676,17 +659,17 @@ class TestFileFormatErrors(TestFileFormat):
                 data = dict(store)
             data["format/name"] = np.array(bytearray(bad_name.encode()), dtype=np.int8)
             kastore.dump(data, self.temp_file)
-            self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+            self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)
 
     def test_load_bad_formats(self):
         # try loading a bunch of files in various formats.
         # First, check the emtpy file.
-        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)
         # Now some ascii text
         with open(self.temp_file, "wb") as f:
             f.write(b"Some ASCII text")
-        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)
         # Now write 8k of random bytes
         with open(self.temp_file, "wb") as f:
             f.write(os.urandom(8192))
-        self.assertRaises(exceptions.FileFormatError, msprime.load, self.temp_file)
+        self.assertRaises(exceptions.FileFormatError, tskit.load, self.temp_file)

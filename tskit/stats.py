@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2016 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Module responsible for computing various statistics on tree sequences.
 """
@@ -28,7 +10,7 @@ import sys
 
 import numpy as np
 
-import _msprime
+import _tskit
 
 
 class LdCalculator(object):
@@ -55,7 +37,7 @@ class LdCalculator(object):
 
     def __init__(self, tree_sequence):
         self._tree_sequence = tree_sequence
-        self._ll_ld_calculator = _msprime.LdCalculator(
+        self._ll_ld_calculator = _tskit.LdCalculator(
             tree_sequence.get_ll_tree_sequence())
         item_size = struct.calcsize('d')
         self._buffer = bytearray(
@@ -101,18 +83,18 @@ class LdCalculator(object):
         :math:`b` considered, we then insert the value of :math:`r^2` between
         :math:`a` and :math:`b` at the corresponding index in an array, and
         return the entire array. If the returned array is :math:`x` and
-        ``direction`` is :const:`msprime.FORWARD` then :math:`x[0]` is the
+        ``direction`` is :const:`tskit.FORWARD` then :math:`x[0]` is the
         value of the statistic for :math:`a` and :math:`a + 1`, :math:`x[1]`
         the value for :math:`a` and :math:`a + 2`, etc. Similarly, if
-        ``direction`` is :const:`msprime.REVERSE` then :math:`x[0]` is the
+        ``direction`` is :const:`tskit.REVERSE` then :math:`x[0]` is the
         value of the statistic for :math:`a` and :math:`a - 1`, :math:`x[1]`
         the value for :math:`a` and :math:`a - 2`, etc.
 
         :param int a: The index of the focal mutation.
         :param int direction: The direction in which to travel when
             examining other mutations. Must be either
-            :const:`msprime.FORWARD` or :const:`msprime.REVERSE`. Defaults
-            to :const:`msprime.FORWARD`.
+            :const:`tskit.FORWARD` or :const:`tskit.REVERSE`. Defaults
+            to :const:`tskit.FORWARD`.
         :param int max_mutations: The maximum number of mutations to return
             :math:`r^2` values for. Defaults to as many mutations as
             possible.

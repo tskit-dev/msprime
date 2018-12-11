@@ -226,5 +226,5 @@ This schema is formally defined using `JSON Schema <http://json-schema.org/>`_ a
 given in full here. Developers writing provenance information to ``.trees`` files
 should validate the output JSON against this schema.
 
-.. literalinclude:: ../msprime/provenance.schema.json
+.. literalinclude:: ../tskit/provenance.schema.json
     :language: json

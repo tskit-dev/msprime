@@ -286,7 +286,7 @@ typedef struct {
 
 int msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
-        recomb_map_t *recomb_map, tsk_treeseq_t *from, gsl_rng *rng);
+        recomb_map_t *recomb_map, tsk_tbl_collection_t *from_ts_tables, gsl_rng *rng);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);

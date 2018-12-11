@@ -30,7 +30,7 @@ import numpy as np
 import msprime
 import _msprime
 import tests.tsutil as tsutil
-import tests.test_wright_fisher as wf
+import tests.wright_fisher as wf
 
 
 def get_wf_base(N, ngens, survival=0.0, num_loci=10, seed=1):

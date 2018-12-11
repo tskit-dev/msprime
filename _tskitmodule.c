@@ -31,6 +31,7 @@
 kas_funcptr *kas_dynamic_api;
 
 #include "tskit.h"
+#include "tskit_python.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
@@ -4390,6 +4391,23 @@ static PyTypeObject ProvenanceTableType = {
     (initproc)ProvenanceTable_init,      /* tp_init */
 };
 
+/*===================================================================
+ * TableCollectionPointer
+ *===================================================================
+ */
+
+/* This is a special type that is exported as a C API. It exists only
+ * as a way of shipping pointers around in a safe manner. */
+
+PyTypeObject _tskit_TableCollectionPointerType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_tskit.TableCollectionPointer",
+    .tp_doc = "Shallow wrapper around tbl_collection_t pointer.",
+    .tp_basicsize = sizeof(_tskit_TableCollectionPointer),
+    .tp_itemsize = 0,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+};
 
 /*===================================================================
  * TableCollection
@@ -4720,6 +4738,20 @@ out:
     return ret;
 }
 
+static PyObject *
+TableCollection_get_pointer(TableCollection *self)
+{
+    PyObject *ret = NULL;
+
+    ret = PyObject_CallObject((PyObject *) &_tskit_TableCollectionPointerType, NULL);
+    if (ret == NULL) {
+        goto out;
+    }
+    ((_tskit_TableCollectionPointer *) ret)->table_collection = self->tables;
+out:
+    return ret;
+}
+
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4747,6 +4779,8 @@ static PyMethodDef TableCollection_methods[] = {
         METH_NOARGS, "Computes the mutation parents for a the tables." },
     {"deduplicate_sites", (PyCFunction) TableCollection_deduplicate_sites,
         METH_NOARGS, "Removes sites with duplicate positions." },
+    {"get_pointer", (PyCFunction) TableCollection_get_pointer,
+        METH_NOARGS, "Returns a shallow object wrapping a pointer to the underyling C struct" },
     {NULL}  /* Sentinel */
 };
 
@@ -7733,6 +7767,22 @@ init_tskit(void)
     }
     Py_INCREF(&LdCalculatorType);
     PyModule_AddObject(module, "LdCalculator", (PyObject *) &LdCalculatorType);
+
+    /* TableCollectionPointer type */
+    _tskit_TableCollectionPointerType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&_tskit_TableCollectionPointerType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&_tskit_TableCollectionPointerType);
+    PyModule_AddObject(module, "TableCollectionPointer",
+        (PyObject *) &_tskit_TableCollectionPointerType);
+
+    PyObject *c_api_object = PyCapsule_New((void *) &_tskit_TableCollectionPointerType,
+            "_tskit.TableCollectionPointerType", NULL);
+    if (c_api_object == NULL) {
+        INITERROR;
+    }
+    PyModule_AddObject(module, "TableCollectionPointerType", c_api_object);
 
     /* Errors and constants */
     TskitLibraryError = PyErr_NewException("_tskit.LibraryError", NULL, NULL);

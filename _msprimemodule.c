@@ -35,6 +35,8 @@ kas_funcptr *kas_dynamic_api;
 
 #include "msprime.h"
 
+#include "tskit_python.h"
+
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
 #endif
@@ -48,6 +50,9 @@ static gsl_error_handler_t *old_gsl_error_handler;
 
 static PyObject *MsprimeInputError;
 static PyObject *MsprimeLibraryError;
+
+/* Pointer to the externally defined object */
+static PyTypeObject *_tskit_TableCollectionPointerType_ptr;
 
 typedef struct {
     PyObject_HEAD
@@ -511,16 +516,15 @@ out:
 static PyObject *
 MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
-#if 0
     int err;
     PyObject *ret = NULL;
-    TableCollection *tables = NULL;
+    _tskit_TableCollectionPointer *tables = NULL;
     int flags = 0;
     int keep = 0;
     static char *kwlist[] = {"tables", "keep", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &TableCollectionType, &tables, &keep)) {
+            _tskit_TableCollectionPointerType_ptr, &tables, &keep)) {
         goto out;
     }
     if (MutationGenerator_check_state(self) != 0) {
@@ -529,7 +533,7 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     if (keep) {
         flags = MSP_KEEP_SITES;
     }
-    err = mutgen_generate(self->mutgen, tables->tables, flags);
+    err = mutgen_generate(self->mutgen, tables->table_collection, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -537,8 +541,6 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     ret = Py_BuildValue("");
 out:
     return ret;
-#endif
-    return NULL;
 }
 
 static PyMemberDef MutationGenerator_members[] = {
@@ -1456,14 +1458,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int sim_ret;
     static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "population_configuration", "migration_matrix", "demographic_events",
-        "model", "from_ts", "avl_node_block_size", "segment_block_size",
+        "model", "from_tables", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
     PyObject *py_model = NULL;
-    PyObject *py_from_ts = Py_None;
+    PyObject *py_from_ts_tables = Py_None;
     RandomGenerator *random_generator = NULL;
     RecombinationMap *recombination_map = NULL;
     sample_t *samples = NULL;
@@ -1472,7 +1474,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
-    tsk_treeseq_t *from_ts = NULL;
+    tsk_tbl_collection_t *from_tables = NULL;
     int store_migrations = 0;
     double start_time = -1;
 
@@ -1487,7 +1489,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
-            &py_from_ts, &avl_node_block_size, &segment_block_size,
+            &py_from_ts_tables, &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time)) {
         goto out;
     }
@@ -1504,20 +1506,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
         goto out;
     }
-    if (py_from_ts != Py_None) {
-        printf("MISSING FROM_TS\n");
-        goto out;
-#if 0
-        if (!PyObject_TypeCheck(py_from_ts, &TreeSequenceType)) {
+    if (py_from_ts_tables != Py_None) {
+        if (!PyObject_TypeCheck(py_from_ts_tables, _tskit_TableCollectionPointerType_ptr)) {
+            PyErr_SetString(PyExc_TypeError, "Must TableCollectionPointer");
             goto out;
         }
-        if (TreeSequence_check_tree_sequence((TreeSequence *) py_from_ts) != 0) {
-            goto out;
-        }
-        /* Note that we take a copy of the from_ts in simulate at the moment,
+        /* Note that we take a copy of the from_tables in simulate at the moment,
          * so we don't need to worry about INCREF'ing the Python object. */
-        from_ts = ((TreeSequence *) py_from_ts)->tree_sequence;
-#endif
+        from_tables = ((_tskit_TableCollectionPointer *) py_from_ts_tables)->table_collection;
     }
 
     self->sim = PyMem_Malloc(sizeof(msp_t));
@@ -1526,7 +1522,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
-            recombination_map->recomb_map, from_ts,
+            recombination_map->recomb_map, from_tables,
             self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -2383,20 +2379,19 @@ out:
 static PyObject *
 Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
 {
-#if 0
     int err;
     PyObject *ret = NULL;
-    TableCollection *tables = NULL;
+    _tskit_TableCollectionPointer *tables = NULL;
     static char *kwlist[] = {"tables", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &TableCollectionType, &tables)) {
+            _tskit_TableCollectionPointerType_ptr, &tables)) {
         goto out;
     }
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    err = msp_populate_tables(self->sim, tables->tables);
+    err = msp_populate_tables(self->sim, tables->table_collection);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2404,8 +2399,6 @@ Simulator_populate_tables(Simulator *self, PyObject *args, PyObject *kwds)
     ret = Py_BuildValue("");
 out:
     return ret;
-#endif
-    return NULL;
 }
 
 static PyObject *
@@ -2745,6 +2738,12 @@ init_msprime(void)
      * someone calls restore_gsl_error_handler before this is called, we
      * set it to null. */
     old_gsl_error_handler = NULL;
+
+    _tskit_TableCollectionPointerType_ptr = (void *) PyCapsule_Import(
+             "_tskit.TableCollectionPointerType", 0);
+    if (_tskit_TableCollectionPointerType_ptr == NULL) {
+        INITERROR;
+    }
 
 #if PY_MAJOR_VERSION >= 3
     return module;
