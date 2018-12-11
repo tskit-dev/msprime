@@ -2089,7 +2089,7 @@ def main():
     verifier.add_dtwf_vs_slim(
         'dtwf_vs_slim_2_pops_high_mig', [100, 100], [10, 1], 1e14, 1e-14,
         migration_matrix=migration_matrix, num_replicates=200)
-    migration_matrix = [[0, 0.7, 0.4], [0.9, 0, 0.6], [0.5, 0.9, 0]]
+    migration_matrix = [[0, 0.5, 0.4], [0.8, 0, 0.2], [0.3, 0.6, 0]]
     verifier.add_dtwf_vs_slim(
         'dtwf_vs_slim_3_pops_high_mig_3', [100, 100, 50], [10, 1, 1], 1e13, 1e-14,
         migration_matrix=migration_matrix, num_replicates=200)
