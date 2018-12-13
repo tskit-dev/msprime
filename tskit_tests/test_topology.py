@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2016-2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Test cases for the supported topological variations and operations.
 """
@@ -35,12 +17,13 @@ import random
 
 import six
 import numpy as np
-
 import msprime
-import _msprime
-import tests
-import tests.tsutil as tsutil
-import tests.test_wright_fisher as wf
+
+import tskit
+import _tskit
+import tskit_tests as tests
+import tskit_tests.tsutil as tsutil
+import tskit_tests.test_wright_fisher as wf
 
 
 def generate_segments(n, sequence_length=100, seed=None):
@@ -249,7 +232,7 @@ class TestZeroRoots(unittest.TestCase):
         self.assertEqual(ts.num_trees, no_root_ts.num_trees)
         for tree, no_root in zip(ts.trees(), no_root_ts.trees()):
             self.assertEqual(no_root.num_roots, 0)
-            self.assertEqual(no_root.left_root, msprime.NULL_NODE)
+            self.assertEqual(no_root.left_root, tskit.NULL_NODE)
             self.assertEqual(no_root.roots, [])
             self.assertEqual(tree.parent_dict, no_root.parent_dict)
 
@@ -271,22 +254,22 @@ class TestEmptyTreeSequences(TopologyTestCase):
     Tests covering tree sequences that have zero edges.
     """
     def test_zero_nodes(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
         # Without a sequence length this should fail.
         self.assertRaises(
-            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges)
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+            _tskit.LibraryError, tskit.load_tables, nodes=nodes, edges=edges)
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 0)
         self.assertEqual(ts.num_edges, 0)
         t = next(ts.trees())
         self.assertEqual(t.index, 0)
-        self.assertEqual(t.left_root, msprime.NULL_NODE)
+        self.assertEqual(t.left_root, tskit.NULL_NODE)
         self.assertEqual(t.interval, (0, 1))
         self.assertEqual(t.roots, [])
-        self.assertEqual(t.root, msprime.NULL_NODE)
+        self.assertEqual(t.root, tskit.NULL_NODE)
         self.assertEqual(t.parent_dict, {})
         self.assertEqual(list(t.nodes()), [])
         self.assertEqual(list(ts.haplotypes()), [])
@@ -300,13 +283,13 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_zero_samples(self):
-        nodes = msprime.NodeTable()
+        nodes = tskit.NodeTable()
         nodes.add_row(time=0, flags=0)
-        edges = msprime.EdgeTable()
+        edges = tskit.EdgeTable()
         # Without a sequence length this should fail.
         self.assertRaises(
-            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges)
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+            _tskit.LibraryError, tskit.load_tables, nodes=nodes, edges=edges)
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 1)
@@ -316,29 +299,29 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 0)
         t = next(ts.trees())
         self.assertEqual(t.index, 0)
-        self.assertEqual(t.left_root, msprime.NULL_NODE)
+        self.assertEqual(t.left_root, tskit.NULL_NODE)
         self.assertEqual(t.interval, (0, 1))
         self.assertEqual(t.roots, [])
-        self.assertEqual(t.root, msprime.NULL_NODE)
+        self.assertEqual(t.root, tskit.NULL_NODE)
         self.assertEqual(t.parent_dict, {})
         self.assertEqual(list(t.nodes()), [])
         self.assertEqual(list(ts.haplotypes()), [])
         self.assertEqual(list(ts.variants()), [])
         methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
         for method in methods:
-            self.assertEqual(method(0), msprime.NULL_NODE)
+            self.assertEqual(method(0), tskit.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
 
     def test_one_node_zero_samples_sites(self):
-        nodes = msprime.NodeTable()
+        nodes = tskit.NodeTable()
         nodes.add_row(time=0, flags=0)
-        edges = msprime.EdgeTable()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        edges = tskit.EdgeTable()
+        sites = tskit.SiteTable()
+        mutations = tskit.MutationTable()
         sites.add_row(position=0.5, ancestral_state='0')
         mutations.add_row(site=0, derived_state='1', node=0)
-        ts = msprime.load_tables(
+        ts = tskit.load_tables(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
@@ -350,10 +333,10 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 1)
         t = next(ts.trees())
         self.assertEqual(t.index, 0)
-        self.assertEqual(t.left_root, msprime.NULL_NODE)
+        self.assertEqual(t.left_root, tskit.NULL_NODE)
         self.assertEqual(t.interval, (0, 1))
         self.assertEqual(t.roots, [])
-        self.assertEqual(t.root, msprime.NULL_NODE)
+        self.assertEqual(t.root, tskit.NULL_NODE)
         self.assertEqual(t.parent_dict, {})
         self.assertEqual(len(list(t.sites())), 1)
         self.assertEqual(list(t.nodes()), [])
@@ -364,13 +347,13 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_one_sample(self):
-        nodes = msprime.NodeTable()
-        nodes.add_row(time=0, flags=msprime.NODE_IS_SAMPLE)
-        edges = msprime.EdgeTable()
+        nodes = tskit.NodeTable()
+        nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE)
+        edges = tskit.EdgeTable()
         # Without a sequence length this should fail.
         self.assertRaises(
-            _msprime.LibraryError, msprime.load_tables, nodes=nodes, edges=edges)
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+            _tskit.LibraryError, tskit.load_tables, nodes=nodes, edges=edges)
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 1)
@@ -388,7 +371,7 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(list(ts.variants()), [])
         methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
         for method in methods:
-            self.assertEqual(method(0), msprime.NULL_NODE)
+            self.assertEqual(method(0), tskit.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
         tsp = ts.simplify()
@@ -396,14 +379,14 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_one_sample_sites(self):
-        nodes = msprime.NodeTable()
-        nodes.add_row(time=0, flags=msprime.NODE_IS_SAMPLE)
-        edges = msprime.EdgeTable()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        nodes = tskit.NodeTable()
+        nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE)
+        edges = tskit.EdgeTable()
+        sites = tskit.SiteTable()
+        mutations = tskit.MutationTable()
         sites.add_row(position=0.5, ancestral_state='0')
         mutations.add_row(site=0, derived_state='1', node=0)
-        ts = msprime.load_tables(
+        ts = tskit.load_tables(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
@@ -425,7 +408,7 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(len(list(ts.variants())), 1)
         methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
         for method in methods:
-            self.assertEqual(method(0), msprime.NULL_NODE)
+            self.assertEqual(method(0), tskit.NULL_NODE)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
         tsp = ts.simplify(filter_sites=False)
@@ -454,7 +437,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
     def verify_zero_roots(self, ts):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 0)
-            self.assertEqual(tree.left_root, msprime.NULL_NODE)
+            self.assertEqual(tree.left_root, tskit.NULL_NODE)
             self.assertEqual(tree.roots, [])
 
     def test_simple_hole(self):
@@ -471,7 +454,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         0       1       2       1
         2       3       2       1
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         expected = [
             ((0, 1), {0: 2, 1: 2}),
             ((1, 2), {}),
@@ -492,7 +475,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         0       1       2       1
         2       3       2       1
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         expected = [
             ((0, 1), {0: 2, 1: 2}),
             ((1, 2), {}),
@@ -511,7 +494,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         left    right   parent  child
         1       2       2       0,1
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         expected = [
             ((0, 1), {}),
             ((1, 2), {0: 2, 1: 2})]
@@ -528,7 +511,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         left    right   parent  child
         1       2       2       0,1
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         expected = [
             ((0, 1), {}),
             ((1, 2), {0: 2, 1: 2})]
@@ -546,7 +529,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         left    right   parent  child
         0       2       2       0,1
         """)
-        ts = msprime.load_text(nodes, edges, sequence_length=3, strict=False)
+        ts = tskit.load_text(nodes, edges, sequence_length=3, strict=False)
         expected = [
             ((0, 2), {0: 2, 1: 2}),
             ((2, 3), {})]
@@ -563,7 +546,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         left    right   parent  child
         0       2       2       0,1
         """)
-        ts = msprime.load_text(nodes, edges, sequence_length=3, strict=False)
+        ts = tskit.load_text(nodes, edges, sequence_length=3, strict=False)
         expected = [
             ((0, 2), {0: 2, 1: 2}),
             ((2, 3), {})]
@@ -581,7 +564,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         left    right   parent  child
         1       2       2       0,1
         """)
-        ts = msprime.load_text(nodes, edges, sequence_length=3, strict=False)
+        ts = tskit.load_text(nodes, edges, sequence_length=3, strict=False)
         expected = [
             ((0, 1), {}),
             ((1, 2), {0: 2, 1: 2}),
@@ -599,7 +582,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
         left    right   parent  child
         1       2       2       0,1
         """)
-        ts = msprime.load_text(nodes, edges, sequence_length=3, strict=False)
+        ts = tskit.load_text(nodes, edges, sequence_length=3, strict=False)
         expected = [
             ((0, 1), {}),
             ((1, 2), {0: 2, 1: 2}),
@@ -661,7 +644,7 @@ class TestTsinferExamples(TopologyTestCase):
         27      0.00000000      200000.00000000 0       3
         28      0.00000000      200000.00000000 0       4
         """)
-        ts = msprime.load_text(nodes, edges, sequence_length=200000, strict=False)
+        ts = tskit.load_text(nodes, edges, sequence_length=200000, strict=False)
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         num_trees = 0
         for t in pts.trees():
@@ -698,7 +681,7 @@ class TestRecordSquashing(TopologyTestCase):
         0       1       1       0
         1       2       1       0
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         tss, node_map = ts.simplify(map_nodes=True)
         self.assertEqual(list(node_map), [0, 1])
         self.assertEqual(tss.dump_tables().nodes, ts.dump_tables().nodes)
@@ -789,7 +772,7 @@ class TestUnaryNodes(TopologyTestCase):
             position = j * 1 / 5
             sites += "{} 0\n".format(position)
             mutations += "{} {} 1\n".format(j, j)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=six.StringIO(sites),
             mutations=six.StringIO(mutations), strict=False)
 
@@ -831,12 +814,12 @@ class TestUnaryNodes(TopologyTestCase):
         root = num_unary_nodes + 3
         root_time = num_unary_nodes + 3
         edges += "0    1     {}      1,{}\n".format(root, num_unary_nodes + 2)
-        ts = msprime.load_text(six.StringIO(nodes), six.StringIO(edges), strict=False)
+        ts = tskit.load_text(six.StringIO(nodes), six.StringIO(edges), strict=False)
         t = next(ts.trees())
         self.assertEqual(t.mrca(0, 1), root)
         self.assertEqual(t.tmrca(0, 1), root_time)
         ts_simplified, node_map = ts.simplify(map_nodes=True)
-        test_map = [msprime.NULL_NODE for _ in range(ts.num_nodes)]
+        test_map = [tskit.NULL_NODE for _ in range(ts.num_nodes)]
         test_map[0] = 0
         test_map[1] = 1
         test_map[root] = 2
@@ -862,17 +845,17 @@ class TestUnaryNodes(TopologyTestCase):
             t = node.time - 1e-14  # Arbitrary small value.
             next_node = len(tables.nodes)
             tables.nodes.add_row(time=t, population=node.population)
-            edges.append(msprime.Edge(
+            edges.append(tskit.Edge(
                 left=e.left, right=e.right, parent=next_node, child=e.child))
             node_times[next_node] = t
-            edges.append(msprime.Edge(
+            edges.append(tskit.Edge(
                 left=e.left, right=e.right, parent=e.parent, child=next_node))
         edges.sort(key=lambda e: node_times[e.parent])
         tables.edges.reset()
         for e in edges:
             tables.edges.add_row(
                 left=e.left, right=e.right, child=e.child, parent=e.parent)
-        ts_new = msprime.load_tables(**tables.asdict())
+        ts_new = tskit.load_tables(**tables.asdict())
         self.assertGreater(ts_new.num_edges, ts.num_edges)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
@@ -935,7 +918,7 @@ class TestGeneralSamples(TopologyTestCase):
         2       4       1
         3       1       1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
 
         self.assertEqual(ts.sample_size, 3)
@@ -1075,7 +1058,7 @@ class TestSimplifyExamples(TopologyTestCase):
         Verifies that if we run simplify on the specified input we get the
         required output.
         """
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(nodes_before),
             edges=six.StringIO(edges_before),
             sites=six.StringIO(sites_before) if sites_before is not None else None,
@@ -1085,7 +1068,7 @@ class TestSimplifyExamples(TopologyTestCase):
             strict=False)
         before = ts.dump_tables()
 
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(nodes_after),
             edges=six.StringIO(edges_after),
             sites=six.StringIO(sites_after) if sites_after is not None else None,
@@ -1128,10 +1111,10 @@ class TestSimplifyExamples(TopologyTestCase):
         1       2       2       0,1
         1       2       3       0,1
         """
-        nodes = msprime.parse_nodes(six.StringIO(nodes_before), strict=False)
-        edges = msprime.parse_edges(six.StringIO(edges_before), strict=False)
+        nodes = tskit.parse_nodes(six.StringIO(nodes_before), strict=False)
+        edges = tskit.parse_edges(six.StringIO(edges_before), strict=False)
         self.assertRaises(
-            _msprime.LibraryError, msprime.simplify_tables,
+            _tskit.LibraryError, tskit.simplify_tables,
             samples=[0, 1], nodes=nodes, edges=edges)
 
     def test_single_binary_tree(self):
@@ -1435,7 +1418,7 @@ class TestNonSampleExternalNodes(TopologyTestCase):
         2       3       1
         3       4       1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_trees, 1)
@@ -1509,7 +1492,7 @@ class TestMultipleRoots(TopologyTestCase):
         0       0         1
         1       1         1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             sequence_length=1, strict=False)
         self.assertEqual(ts.num_nodes, 2)
@@ -1558,7 +1541,7 @@ class TestMultipleRoots(TopologyTestCase):
         2       2       1
         3       3       1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         self.assertEqual(ts.num_nodes, 6)
         self.assertEqual(ts.num_trees, 1)
@@ -1573,9 +1556,9 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), 4)
         self.assertEqual(t.mrca(0, 4), 4)
         self.assertEqual(t.mrca(2, 3), 5)
-        self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
-        self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
-        self.assertEqual(t.mrca(2, 4), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 2), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 3), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(2, 4), tskit.NULL_NODE)
         ts_simplified, node_map = ts.simplify(map_nodes=True)
         for j in range(4):
             self.assertEqual(node_map[j], j)
@@ -1623,7 +1606,7 @@ class TestMultipleRoots(TopologyTestCase):
         3       3       1
         4       8       1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         self.assertEqual(ts.num_nodes, 9)
         self.assertEqual(ts.num_trees, 1)
@@ -1638,9 +1621,9 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), 6)
         self.assertEqual(t.mrca(2, 3), 7)
         self.assertEqual(t.mrca(2, 8), 7)
-        self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
-        self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
-        self.assertEqual(t.mrca(0, 8), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 2), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 3), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 8), tskit.NULL_NODE)
         ts_simplified, node_map = ts.simplify(map_nodes=True)
         for j in range(4):
             self.assertEqual(node_map[j], j)
@@ -1679,7 +1662,7 @@ class TestMultipleRoots(TopologyTestCase):
         0       1      6         4,5
         0       1      7         2,3,8
         """)
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
         self.assertEqual(ts.num_nodes, 9)
         self.assertEqual(ts.num_trees, 1)
         t = next(ts.trees())
@@ -1687,9 +1670,9 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), 6)
         self.assertEqual(t.mrca(2, 3), 7)
         self.assertEqual(t.mrca(2, 8), 7)
-        self.assertEqual(t.mrca(0, 2), msprime.NULL_NODE)
-        self.assertEqual(t.mrca(0, 3), msprime.NULL_NODE)
-        self.assertEqual(t.mrca(0, 8), msprime.NULL_NODE)
+        self.assertEqual(t.mrca(0, 2), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 3), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 8), tskit.NULL_NODE)
         ts_simplified = ts.simplify()
         self.assertEqual(ts_simplified.num_nodes, 6)
         self.assertEqual(ts_simplified.num_trees, 1)
@@ -1733,7 +1716,7 @@ class TestMultipleRoots(TopologyTestCase):
         4       2       1
         5       5       1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         self.assertEqual(ts.num_nodes, 6)
         self.assertEqual(ts.num_trees, 1)
@@ -1751,7 +1734,7 @@ class TestMultipleRoots(TopologyTestCase):
             [v.genotypes for v in ts_simplified.variants(as_bytes=True)], variants)
 
     def test_break_single_tree(self):
-        # Take a single largish tree from msprime, and remove the oldest record.
+        # Take a single largish tree from tskit, and remove the oldest record.
         # This breaks it into two subtrees.
         ts = msprime.simulate(20, random_seed=self.random_seed, mutation_rate=4)
         self.assertGreater(ts.num_mutations, 5)
@@ -1761,7 +1744,7 @@ class TestMultipleRoots(TopologyTestCase):
             right=tables.edges.right[:-1],
             parent=tables.edges.parent[:-1],
             child=tables.edges.child[:-1])
-        ts_new = msprime.load_tables(**tables.asdict())
+        ts_new = tskit.load_tables(**tables.asdict())
         self.assertEqual(ts.sample_size, ts_new.sample_size)
         self.assertEqual(ts.num_edges, ts_new.num_edges + 1)
         self.assertEqual(ts.num_trees, ts_new.num_trees)
@@ -1770,7 +1753,7 @@ class TestMultipleRoots(TopologyTestCase):
         roots = set()
         t_new = next(ts_new.trees())
         for u in ts_new.samples():
-            while t_new.parent(u) != msprime.NULL_NODE:
+            while t_new.parent(u) != tskit.NULL_NODE:
                 u = t_new.parent(u)
             roots.add(u)
         self.assertEqual(len(roots), 2)
@@ -1852,7 +1835,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
             {0: 6, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: -1, 7: -1}]
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, 3)
@@ -1863,7 +1846,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [0, 1, 2])
 
@@ -1908,7 +1891,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 6, 1: 4, 2: 3, 3: 4, 4: 6, 5: -1, 6: -1, 7: 3},
             {0: 3, 1: 4, 2: 3, 3: 4, 4: -1, 5: -1, 6: -1, 7: -1},
             {0: 5, 1: 4, 2: 3, 3: 4, 4: 5, 5: -1, 6: -1, 7: 3}]
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         # sample size check works here since 7 > 3
         self.assertEqual(ts.sample_size, 3)
@@ -1920,7 +1903,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_single_offspring_records(self):
@@ -1960,7 +1943,7 @@ class TestWithVisuals(TopologyTestCase):
         0.0     0.2     6       5
         0.0     0.2     7       0,6
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 6, 6: 7, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: -1, 4: 5, 5: -1, 6: -1, 7: -1},
@@ -1975,7 +1958,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_many_single_offspring(self):
@@ -2089,7 +2072,7 @@ class TestWithVisuals(TopologyTestCase):
         2       2       1               7
         3       8       1               -1
         """)
-        ts = msprime.load_text(nodes, edges, sites, mutations, strict=False)
+        ts = tskit.load_text(nodes, edges, sites, mutations, strict=False)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, len(true_trees))
@@ -2101,7 +2084,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         for j, x in enumerate(ts.haplotypes()):
             self.assertEqual(x, true_haplotypes[j])
         self.verify_simplify_topology(ts, [0, 1, 2], haplotypes=True)
@@ -2172,7 +2155,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
                 7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
         ]
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         tree_dicts = [t.parent_dict for t in ts.trees()]
         self.assertEqual(ts.sample_size, 6)
         self.assertEqual(ts.num_trees, len(true_trees))
@@ -2184,7 +2167,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         self.verify_simplify_topology(ts, [0, 2])
         self.verify_simplify_topology(ts, [0, 4])
         self.verify_simplify_topology(ts, [2, 4])
@@ -2257,7 +2240,7 @@ class TestWithVisuals(TopologyTestCase):
             {0: 8, 1: 8, 2: 9, 3: 9, 4: 6, 5: 6, 6: 12,
                 7: -1, 8: 10, 9: 10, 10: 12, 11: -1, 12: -1}
         ]
-        big_ts = msprime.load_text(nodes, edges, strict=False)
+        big_ts = tskit.load_text(nodes, edges, strict=False)
         self.assertEqual(big_ts.num_trees, 1 + len(true_trees))
         self.assertEqual(big_ts.num_nodes, 16)
         ts, node_map = big_ts.simplify(map_nodes=True)
@@ -2318,7 +2301,7 @@ class TestWithVisuals(TopologyTestCase):
         0.2     0.8     8       3,5
         0.0     0.2     7       0,5
         """)
-        first_ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
+        first_ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
         ts, node_map = first_ts.simplify(map_nodes=True)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
@@ -2347,14 +2330,14 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         tree_simplified_dicts = [t.parent_dict for t in ts.trees()]
         for a, t in zip(true_simplified_trees, tree_simplified_dicts):
             for k in a.keys():
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(first_ts, [1, 2, 3])
 
@@ -2396,7 +2379,7 @@ class TestWithVisuals(TopologyTestCase):
         0.2     0.8     8       3,5
         0.0     0.2     7       0,5
         """)
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: 8, 4: 5, 5: 8, 6: -1, 7: -1},
@@ -2415,7 +2398,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
 
@@ -2454,7 +2437,7 @@ class TestWithVisuals(TopologyTestCase):
         0.2     0.8     8       3,5
         0.0     0.2     7       0,5
         """)
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
         true_trees = [
             {0: 7, 1: 5, 2: 4, 3: 4, 4: 5, 5: 7, 6: -1, 7: -1},
             {0: 4, 1: 5, 2: 4, 3: 8, 4: 5, 5: 8, 6: -1, 7: -1},
@@ -2473,7 +2456,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], msprime.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL_NODE)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
         self.check_num_samples(
@@ -2530,8 +2513,8 @@ class TestBadTrees(unittest.TestCase):
         0.0     1.0     2       0
         0.0     1.0     3       0
         """)
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
-        self.assertRaises(_msprime.LibraryError, list, ts.trees())
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
+        self.assertRaises(_tskit.LibraryError, list, ts.trees())
 
     def test_partial_overlap_contradictory_children(self):
         nodes = six.StringIO("""\
@@ -2546,8 +2529,8 @@ class TestBadTrees(unittest.TestCase):
         0.0     1.0     2       0,1
         0.5     1.0     3       0
         """)
-        ts = msprime.load_text(nodes=nodes, edges=edges, strict=False)
-        self.assertRaises(_msprime.LibraryError, list, ts.trees())
+        ts = tskit.load_text(nodes=nodes, edges=edges, strict=False)
+        self.assertRaises(_tskit.LibraryError, list, ts.trees())
 
 
 class TestSimplify(unittest.TestCase):
@@ -2645,7 +2628,7 @@ class TestSimplify(unittest.TestCase):
             self.assertEqual(u, node_map[u])
         # All introduced nodes should be mapped to null.
         for u in range(ts.num_samples, ts_single.num_samples):
-            self.assertEqual(node_map[u], msprime.NULL_NODE)
+            self.assertEqual(node_map[u], tskit.NULL_NODE)
         t1 = ts.dump_tables()
         t2 = tss.dump_tables()
         self.assertEqual(t1.nodes, t2.nodes)
@@ -2668,8 +2651,8 @@ class TestSimplify(unittest.TestCase):
                 mapped_pair = [node_map[u] for u in pair]
                 mrca1 = t1.get_mrca(*pair)
                 mrca2 = t2.get_mrca(*mapped_pair)
-                if mrca1 == msprime.NULL_NODE:
-                    assert mrca2 == msprime.NULL_NODE
+                if mrca1 == tskit.NULL_NODE:
+                    assert mrca2 == tskit.NULL_NODE
                 else:
                     self.assertEqual(node_map[mrca1], mrca2)
             if t2.interval[1] == t1.interval[1]:
@@ -2701,7 +2684,7 @@ class TestSimplify(unittest.TestCase):
         self.verify_multiroot_internal_samples(ts)
 
     def test_small_tree_internal_samples(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2711,9 +2694,9 @@ class TestSimplify(unittest.TestCase):
         # and set 0 and 1 to be unsampled.
         flags[0] = 0
         flags[1] = 0
-        flags[5] = msprime.NODE_IS_SAMPLE
+        flags[5] = tskit.NODE_IS_SAMPLE
         nodes.set_columns(flags=flags, time=nodes.time)
-        ts = msprime.load_tables(nodes=nodes, edges=tables.edges)
+        ts = tskit.load_tables(nodes=nodes, edges=tables.edges)
         self.assertEqual(ts.sample_size, 4)
         tss, node_map = self.do_simplify(ts, [3, 5])
         self.assertEqual(node_map[3], 0)
@@ -2722,7 +2705,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_edges, 2)
 
     def test_small_tree_linear_samples(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2730,10 +2713,10 @@ class TestSimplify(unittest.TestCase):
         flags = nodes.flags
         # 7 is above 0. These are the only two samples
         flags[:] = 0
-        flags[0] = msprime.NODE_IS_SAMPLE
-        flags[7] = msprime.NODE_IS_SAMPLE
+        flags[0] = tskit.NODE_IS_SAMPLE
+        flags[7] = tskit.NODE_IS_SAMPLE
         nodes.set_columns(flags=flags, time=nodes.time)
-        ts = msprime.load_tables(nodes=nodes, edges=tables.edges)
+        ts = tskit.load_tables(nodes=nodes, edges=tables.edges)
         self.assertEqual(ts.sample_size, 2)
         tss, node_map = self.do_simplify(ts, [0, 7])
         self.assertEqual(node_map[0], 0)
@@ -2744,7 +2727,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(t.parent_dict, {0: 1})
 
     def test_small_tree_internal_and_external_samples(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2752,11 +2735,11 @@ class TestSimplify(unittest.TestCase):
         flags = nodes.flags
         # 7 is above 0 and 1.
         flags[:] = 0
-        flags[0] = msprime.NODE_IS_SAMPLE
-        flags[1] = msprime.NODE_IS_SAMPLE
-        flags[7] = msprime.NODE_IS_SAMPLE
+        flags[0] = tskit.NODE_IS_SAMPLE
+        flags[1] = tskit.NODE_IS_SAMPLE
+        flags[7] = tskit.NODE_IS_SAMPLE
         nodes.set_columns(flags=flags, time=nodes.time)
-        ts = msprime.load_tables(nodes=nodes, edges=tables.edges)
+        ts = tskit.load_tables(nodes=nodes, edges=tables.edges)
         self.assertEqual(ts.sample_size, 3)
         tss, node_map = self.do_simplify(ts, [0, 1, 7])
         self.assertEqual(node_map[0], 0)
@@ -2768,7 +2751,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(t.parent_dict, {0: 3, 1: 3, 3: 2})
 
     def test_small_tree_mutations(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2790,7 +2773,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(list(tss.haplotypes()), ["1011", "0100"])
 
     def test_small_tree_filter_zero_mutations(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         ts = tsutil.insert_branch_sites(ts)
@@ -2804,7 +2787,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_mutations, 5)
 
     def test_small_tree_fixed_sites(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2824,7 +2807,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(list(tss.haplotypes()), ["", ""])
 
     def test_small_tree_mutations_over_root(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2839,7 +2822,7 @@ class TestSimplify(unittest.TestCase):
             self.assertEqual(tss.num_mutations, 1)
 
     def test_small_tree_recurrent_mutations(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2857,7 +2840,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(list(tss.haplotypes()), ["1", "1"])
 
     def best_small_tree_back_mutations(self):
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=six.StringIO(self.small_tree_ex_nodes),
             edges=six.StringIO(self.small_tree_ex_edges), strict=False)
         tables = ts.dump_tables()
@@ -2903,7 +2886,7 @@ class TestSimplify(unittest.TestCase):
         0       2       2       0
         1       3       2       1
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         self.assertEqual(ts.sample_size, 2)
         self.assertEqual(ts.num_trees, 3)
         self.assertEqual(ts.sequence_length, 3)
@@ -2925,7 +2908,7 @@ class TestSimplify(unittest.TestCase):
         0       2       2       0
         1       3       2       1
         """)
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         self.assertEqual(ts.sample_size, 3)
         self.assertEqual(ts.num_trees, 3)
         trees = [{0: 2}, {0: 2, 1: 2}, {1: 2}]
@@ -2944,7 +2927,7 @@ class TestSimplify(unittest.TestCase):
         edges = six.StringIO("""\
         left    right   parent  child
         """)
-        ts = msprime.load_text(nodes, edges, sequence_length=1, strict=False)
+        ts = tskit.load_text(nodes, edges, sequence_length=1, strict=False)
         self.assertEqual(ts.num_samples, 3)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 3)
@@ -2972,7 +2955,7 @@ class TestSimplify(unittest.TestCase):
         3       0.00000000      1.00000000      4       1,3
         """)
 
-        ts = msprime.load_text(nodes, edges, strict=False)
+        ts = tskit.load_text(nodes, edges, strict=False)
         tss, node_map = self.do_simplify(ts, [5, 2, 0], compare_lib=True)
         self.assertEqual(node_map[5], 0)
         self.assertEqual(node_map[2], 1)
@@ -3005,7 +2988,7 @@ class TestSimplify(unittest.TestCase):
         0       0       1               -1
         0       0       0               0
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes, edges, sites=sites, mutations=mutations, strict=False)
         self.assertEqual(ts.sample_size, 1)
         self.assertEqual(ts.num_trees, 1)
@@ -3036,7 +3019,7 @@ class TestSimplify(unittest.TestCase):
         0       0       0               0
         0       0       1               1
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes, edges, sites=sites, mutations=mutations, strict=False)
         self.assertEqual(ts.sample_size, 1)
         self.assertEqual(ts.num_trees, 1)
@@ -3106,7 +3089,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.num_populations, 4)
 
     def test_removed_node_population_filter(self):
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         tables.populations.add_row(metadata=bytes(0))
         tables.populations.add_row(metadata=bytes(1))
         tables.populations.add_row(metadata=bytes(2))
@@ -3128,7 +3111,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.tables.populations, tables.populations)
 
     def test_simple_individual_filter(self):
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         tables.individuals.add_row(flags=0)
         tables.individuals.add_row(flags=1)
         tables.nodes.add_row(flags=1, individual=0)
@@ -3142,7 +3125,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.tables.individuals, tables.individuals)
 
     def test_interleaved_individual_filter(self):
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         tables.individuals.add_row(flags=0)
         tables.individuals.add_row(flags=1)
         tables.individuals.add_row(flags=2)
@@ -3158,7 +3141,7 @@ class TestSimplify(unittest.TestCase):
         self.assertEqual(tss.tables.individuals, tables.individuals)
 
     def test_removed_node_individual_filter(self):
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         tables.individuals.add_row(flags=0)
         tables.individuals.add_row(flags=1)
         tables.individuals.add_row(flags=2)
@@ -3263,7 +3246,7 @@ class TestMutationParent(unittest.TestCase):
             site=mutations.site, node=mutations.node,
             derived_state=mutations.derived_state,
             derived_state_offset=mutations.derived_state_offset)
-        self.assertTrue(np.all(mutations.parent == msprime.NULL_MUTATION))
+        self.assertTrue(np.all(mutations.parent == tskit.NULL_MUTATION))
         tables.compute_mutation_parents()
         self.assertTrue(np.array_equal(parent, tables.mutations.parent))
 
@@ -3306,7 +3289,7 @@ class TestMutationParent(unittest.TestCase):
         2       2       1               8
         2       4       1               8
         """)
-        ts = msprime.load_text(
+        ts = tskit.load_text(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations, strict=False)
         self.verify_parents(ts)
 
@@ -3369,9 +3352,9 @@ class TestSimpleTreeAlgorithm(unittest.TestCase):
     See TestHoleyTreeSequences above for further tests on wacky topologies.
     """
     def test_zero_nodes(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         # Test the simple tree iterator.
@@ -3383,10 +3366,10 @@ class TestSimpleTreeAlgorithm(unittest.TestCase):
         self.assertEqual(parent, [])
 
     def test_one_node(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
         nodes.add_row()
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         # Test the simple tree iterator.
@@ -3445,7 +3428,7 @@ class TestSampleLists(unittest.TestCase):
                 samples2 = list(tree2.samples(u))
                 samples1 = []
                 index = tree1.left_sample[u]
-                if index != msprime.NULL:
+                if index != tskit.NULL:
                     self.assertEqual(
                         sample_index_map[tree1.left_sample[u]], samples2[0])
                     self.assertEqual(
@@ -3479,7 +3462,7 @@ class TestSampleLists(unittest.TestCase):
         self.assertGreater(ts.num_trees, 2)
         tables = ts.dump_tables()
         tables.nodes.set_columns(
-            flags=np.zeros_like(tables.nodes.flags) + msprime.NODE_IS_SAMPLE,
+            flags=np.zeros_like(tables.nodes.flags) + tskit.NODE_IS_SAMPLE,
             time=tables.nodes.time)
         self.verify(tables.tree_sequence())
 
@@ -3557,7 +3540,7 @@ def reduce_topology(ts):
     edge_map = {}
 
     def add_edge(left, right, parent, child):
-        new_edge = msprime.Edge(left, right, parent, child)
+        new_edge = tskit.Edge(left, right, parent, child)
         if child not in edge_map:
             edge_map[child] = new_edge
         else:

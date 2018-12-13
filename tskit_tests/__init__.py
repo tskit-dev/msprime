@@ -1,45 +1,14 @@
-#
-# Copyright (C) 2015-2018 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
-"""
-Common code for the msprime test cases.
-"""
 from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import random
-import unittest
+import base64
 
-import msprime
+# TODO remove this code and refactor elsewhere.
 
-NULL_NODE = -1
+from .simplify import *  # NOQA
 
-
-def setUp():
-    # Make random tests reproducible.
-    random.seed(210)
-
-
-class MsprimeTestCase(unittest.TestCase):
-    """
-    Superclass of all tests msprime simulator test cases.
-    """
+import tskit
 
 
 class PythonSparseTree(object):
@@ -50,11 +19,11 @@ class PythonSparseTree(object):
     """
     def __init__(self, num_nodes):
         self.num_nodes = num_nodes
-        self.parent = [msprime.NULL_NODE for _ in range(num_nodes)]
-        self.left_child = [msprime.NULL_NODE for _ in range(num_nodes)]
-        self.right_child = [msprime.NULL_NODE for _ in range(num_nodes)]
-        self.left_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
-        self.right_sib = [msprime.NULL_NODE for _ in range(num_nodes)]
+        self.parent = [tskit.NULL_NODE for _ in range(num_nodes)]
+        self.left_child = [tskit.NULL_NODE for _ in range(num_nodes)]
+        self.right_child = [tskit.NULL_NODE for _ in range(num_nodes)]
+        self.left_sib = [tskit.NULL_NODE for _ in range(num_nodes)]
+        self.right_sib = [tskit.NULL_NODE for _ in range(num_nodes)]
         self.above_sample = [False for _ in range(num_nodes)]
         self.is_sample = [False for _ in range(num_nodes)]
         self.left = 0
@@ -86,7 +55,7 @@ class PythonSparseTree(object):
     def roots(self):
         u = self.left_root
         roots = []
-        while u != msprime.NULL_NODE:
+        while u != tskit.NULL_NODE:
             roots.append(u)
             u = self.right_sib[u]
         return roots
@@ -94,7 +63,7 @@ class PythonSparseTree(object):
     def children(self, u):
         v = self.left_child[u]
         ret = []
-        while v != msprime.NULL_NODE:
+        while v != tskit.NULL_NODE:
             ret.append(v)
             v = self.right_sib[v]
         return ret
@@ -163,7 +132,7 @@ class PythonSparseTree(object):
     def get_parent_dict(self):
         d = {
             u: self.parent[u] for u in range(self.num_nodes)
-            if self.parent[u] != msprime.NULL_NODE}
+            if self.parent[u] != tskit.NULL_NODE}
         return d
 
     def sites(self):
@@ -189,7 +158,7 @@ class PythonSparseTree(object):
 
     def _build_newick(self, node, precision, node_labels):
         label = node_labels.get(node, "")
-        if self.left_child[node] == msprime.NULL_NODE:
+        if self.left_child[node] == tskit.NULL_NODE:
             s = label
         else:
             s = "("
@@ -213,12 +182,12 @@ class PythonTreeSequence(object):
 
         def make_mutation(id_):
             site, node, derived_state, parent, metadata = tree_sequence.get_mutation(id_)
-            return msprime.Mutation(
+            return tskit.Mutation(
                 id_=id_, site=site, node=node, derived_state=derived_state,
                 parent=parent, metadata=metadata)
         for j in range(tree_sequence.get_num_sites()):
             pos, ancestral_state, ll_mutations, id_, metadata = tree_sequence.get_site(j)
-            self._sites.append(msprime.Site(
+            self._sites.append(tskit.Site(
                 id_=id_, position=pos, ancestral_state=ancestral_state,
                 mutations=[make_mutation(ll_mut) for ll_mut in ll_mutations],
                 metadata=metadata))
@@ -226,7 +195,7 @@ class PythonTreeSequence(object):
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
         sequence_length = self._tree_sequence.get_sequence_length()
-        edges = [msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
+        edges = [tskit.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
         time = [self._tree_sequence.get_node(edge.parent)[1] for edge in edges]
         in_order = sorted(range(M), key=lambda j: (
             edges[j].left, time[j], edges[j].parent, edges[j].child))
@@ -258,7 +227,7 @@ class PythonTreeSequence(object):
         M = self._tree_sequence.get_num_edges()
         sequence_length = self._tree_sequence.get_sequence_length()
         edges = [
-            msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
+            tskit.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
         t = [
             self._tree_sequence.get_node(j)[1]
             for j in range(self._tree_sequence.get_num_nodes())]
@@ -282,7 +251,7 @@ class PythonTreeSequence(object):
             st.above_sample[samples[l]] = True
             st.is_sample[samples[l]] = True
 
-        st.left_root = msprime.NULL_NODE
+        st.left_root = tskit.NULL_NODE
         if len(samples) > 0:
             st.left_root = samples[0]
 
@@ -304,17 +273,17 @@ class PythonTreeSequence(object):
 
                 lsib = st.left_sib[c]
                 rsib = st.right_sib[c]
-                if lsib == msprime.NULL_NODE:
+                if lsib == tskit.NULL_NODE:
                     st.left_child[p] = rsib
                 else:
                     st.right_sib[lsib] = rsib
-                if rsib == msprime.NULL_NODE:
+                if rsib == tskit.NULL_NODE:
                     st.right_child[p] = lsib
                 else:
                     st.left_sib[rsib] = lsib
-                st.parent[c] = msprime.NULL_NODE
-                st.left_sib[c] = msprime.NULL_NODE
-                st.right_sib[c] = msprime.NULL_NODE
+                st.parent[c] = tskit.NULL_NODE
+                st.left_sib[c] = tskit.NULL_NODE
+                st.right_sib[c] = tskit.NULL_NODE
 
                 # If c is not above a sample then we have nothing to do as we
                 # cannot affect the status of any roots.
@@ -323,10 +292,10 @@ class PythonTreeSequence(object):
                     # p up to root.
                     v = p
                     above_sample = False
-                    while v != msprime.NULL_NODE and not above_sample:
+                    while v != tskit.NULL_NODE and not above_sample:
                         above_sample = st.is_sample[v]
                         u = st.left_child[v]
-                        while u != msprime.NULL_NODE:
+                        while u != tskit.NULL_NODE:
                             above_sample = above_sample or st.above_sample[u]
                             u = st.right_sib[u]
                         st.above_sample[v] = above_sample
@@ -337,21 +306,21 @@ class PythonTreeSequence(object):
                         # root is no longer above samples. Remove it from the root list.
                         lroot = st.left_sib[root]
                         rroot = st.right_sib[root]
-                        st.left_root = msprime.NULL_NODE
-                        if lroot != msprime.NULL_NODE:
+                        st.left_root = tskit.NULL_NODE
+                        if lroot != tskit.NULL_NODE:
                             st.right_sib[lroot] = rroot
                             st.left_root = lroot
-                        if rroot != msprime.NULL_NODE:
+                        if rroot != tskit.NULL_NODE:
                             st.left_sib[rroot] = lroot
                             st.left_root = rroot
-                        st.left_sib[root] = msprime.NULL_NODE
-                        st.right_sib[root] = msprime.NULL_NODE
+                        st.left_sib[root] = tskit.NULL_NODE
+                        st.right_sib[root] = tskit.NULL_NODE
 
                     # Add c to the root list.
                     # print("Insert ", c, "into root list")
-                    if st.left_root != msprime.NULL_NODE:
+                    if st.left_root != tskit.NULL_NODE:
                         lroot = st.left_sib[st.left_root]
-                        if lroot != msprime.NULL_NODE:
+                        if lroot != tskit.NULL_NODE:
                             st.right_sib[lroot] = c
                         st.left_sib[c] = lroot
                         st.left_sib[st.left_root] = c
@@ -368,20 +337,20 @@ class PythonTreeSequence(object):
                 u = st.right_child[p]
                 lsib = st.left_sib[c]
                 rsib = st.right_sib[c]
-                if u == msprime.NULL_NODE:
+                if u == tskit.NULL_NODE:
                     st.left_child[p] = c
-                    st.left_sib[c] = msprime.NULL_NODE
-                    st.right_sib[c] = msprime.NULL_NODE
+                    st.left_sib[c] = tskit.NULL_NODE
+                    st.right_sib[c] = tskit.NULL_NODE
                 else:
                     st.right_sib[u] = c
                     st.left_sib[c] = u
-                    st.right_sib[c] = msprime.NULL_NODE
+                    st.right_sib[c] = tskit.NULL_NODE
                 st.right_child[p] = c
 
                 if st.above_sample[c]:
                     v = p
                     above_sample = False
-                    while v != msprime.NULL_NODE and not above_sample:
+                    while v != tskit.NULL_NODE and not above_sample:
                         above_sample = st.above_sample[v]
                         st.above_sample[v] = st.above_sample[v] or st.above_sample[c]
                         root = v
@@ -391,9 +360,9 @@ class PythonTreeSequence(object):
                     if not above_sample:
                         # Replace c with root in root list.
                         # print("replacing", root, "with ", c ," in root list")
-                        if lsib != msprime.NULL_NODE:
+                        if lsib != tskit.NULL_NODE:
                             st.right_sib[lsib] = root
-                        if rsib != msprime.NULL_NODE:
+                        if rsib != tskit.NULL_NODE:
                             st.left_sib[rsib] = root
                         st.left_sib[root] = lsib
                         st.right_sib[root] = rsib
@@ -401,11 +370,11 @@ class PythonTreeSequence(object):
                     else:
                         # Remove c from root list.
                         # print("remove ", c ," from root list")
-                        st.left_root = msprime.NULL_NODE
-                        if lsib != msprime.NULL_NODE:
+                        st.left_root = tskit.NULL_NODE
+                        if lsib != tskit.NULL_NODE:
                             st.right_sib[lsib] = rsib
                             st.left_root = lsib
-                        if rsib != msprime.NULL_NODE:
+                        if rsib != tskit.NULL_NODE:
                             st.left_sib[rsib] = lsib
                             st.left_root = rsib
 
@@ -414,8 +383,8 @@ class PythonTreeSequence(object):
                 st.right = min(st.right, edges[in_order[j]].left)
             if k < M:
                 st.right = min(st.right, edges[out_order[k]].right)
-            assert st.left_root != msprime.NULL_NODE
-            while st.left_sib[st.left_root] != msprime.NULL_NODE:
+            assert st.left_root != tskit.NULL_NODE
+            while st.left_sib[st.left_root] != tskit.NULL_NODE:
                 st.left_root = st.left_sib[st.left_root]
             st.index += 1
             # Add in all the sites
@@ -555,3 +524,11 @@ class MRCACalculator(object):
         else:
             z = yhat
         return z
+
+
+def base64_encode(metadata):
+    """
+    Returns the specified metadata bytes object encoded as an ASCII-safe
+    string.
+    """
+    return base64.b64encode(metadata).decode('utf8')

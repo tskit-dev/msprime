@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2016-2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Module responsible for converting tree sequence files from older
 formats.
@@ -30,9 +12,9 @@ import logging
 import h5py
 import numpy as np
 
-import msprime
-import msprime.provenance as provenance
-import msprime.exceptions as exceptions
+import tskit
+import tskit.provenance as provenance
+import tskit.exceptions as exceptions
 
 
 def _get_v2_provenance(command, attrs):
@@ -113,7 +95,7 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     # Get the coalescence records
     trees_group = root["trees"]
     old_timestamp = datetime.datetime.min.isoformat()
-    provenances = msprime.ProvenanceTable()
+    provenances = tskit.ProvenanceTable()
     provenances.add_row(
         timestamp=old_timestamp,
         record=_get_v2_provenance("generate_trees", trees_group.attrs))
@@ -130,7 +112,7 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     right[2 * index + 1] = trees_group["right"]
     child = np.array(trees_group["children"], dtype=np.int32).flatten()
 
-    tables = msprime.TableCollection(np.max(right))
+    tables = tskit.TableCollection(np.max(right))
     tables.edges.set_columns(left=left, right=right, parent=parent, child=child)
 
     cr_node = np.array(trees_group["node"], dtype=np.int32)
@@ -139,7 +121,7 @@ def _load_legacy_hdf5_v2(root, remove_duplicate_positions):
     flags = np.zeros(num_nodes, dtype=np.uint32)
     population = np.zeros(num_nodes, dtype=np.int32)
     time = np.zeros(num_nodes, dtype=np.float64)
-    flags[:sample_size] = msprime.NODE_IS_SAMPLE
+    flags[:sample_size] = tskit.NODE_IS_SAMPLE
     cr_population = np.array(trees_group["population"], dtype=np.int32)
     cr_time = np.array(trees_group["time"])
     time[cr_node] = cr_time
@@ -178,7 +160,7 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
     num_nodes = time.shape[0]
     sample_size = np.min(record_node)
     flags = np.zeros(num_nodes, dtype=np.uint32)
-    flags[:sample_size] = msprime.NODE_IS_SAMPLE
+    flags[:sample_size] = tskit.NODE_IS_SAMPLE
 
     children_length = np.array(records_group["num_children"], dtype=np.uint32)
     total_rows = np.sum(children_length)
@@ -194,7 +176,7 @@ def _load_legacy_hdf5_v3(root, remove_duplicate_positions):
             right[k] = record_right[j]
             parent[k] = record_node[j]
             k += 1
-    tables = msprime.TableCollection(np.max(right))
+    tables = tskit.TableCollection(np.max(right))
     tables.nodes.set_columns(
         flags=flags,
         time=nodes_group["time"],
@@ -462,7 +444,7 @@ def _dump_legacy_hdf5_v10(tree_sequence, root):
 def _load_legacy_hdf5_v10(root, remove_duplicate_positions=False):
     # We cannot have duplicate positions in v10, so this parameter is ignored
     sequence_length = root.attrs["sequence_length"]
-    tables = msprime.TableCollection(sequence_length)
+    tables = tskit.TableCollection(sequence_length)
 
     nodes_group = root["nodes"]
     metadata = None

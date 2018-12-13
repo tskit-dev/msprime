@@ -1,24 +1,6 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright (C) 2015-2018 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
-Module responsible to generating and reading tree files.
+Module responsible for managing trees and tree sequences.
 """
 from __future__ import division
 from __future__ import print_function
@@ -38,14 +20,14 @@ except ImportError:
 
 import numpy as np
 
-import _msprime
-import msprime.drawing as drawing
-import msprime.exceptions as exceptions
-import msprime.provenance as provenance
-import msprime.tables as tables
-import msprime.formats as formats
+import _tskit
+import tskit.drawing as drawing
+import tskit.exceptions as exceptions
+import tskit.provenance as provenance
+import tskit.tables as tables
+import tskit.formats as formats
 
-from _msprime import NODE_IS_SAMPLE
+from _tskit import NODE_IS_SAMPLE
 
 NULL = -1
 
@@ -660,7 +642,7 @@ class SparseTree(object):
 
             roots = set()
             for u in tree_sequence.samples():
-                while tree.parent(u) != msprime.NULL_NODE:
+                while tree.parent(u) != tskit.NULL_NODE:
                     u = tree.parent(u)
                 roots.add(u)
             # roots is now the set of all roots in this tree.
@@ -927,7 +909,7 @@ class SparseTree(object):
                     yield v
 
     def _sample_generator(self, u):
-        if self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_LISTS:
+        if self._ll_sparse_tree.get_flags() & _tskit.SAMPLE_LISTS:
             samples = self.tree_sequence.samples()
             index = self.left_sample(u)
             if index != NULL:
@@ -1030,7 +1012,7 @@ class SparseTree(object):
         roots = [u]
         if u is None:
             roots = self.roots
-        if not (self._ll_sparse_tree.get_flags() & _msprime.SAMPLE_COUNTS):
+        if not (self._ll_sparse_tree.get_flags() & _tskit.SAMPLE_COUNTS):
             raise RuntimeError(
                 "The get_num_tracked_samples method is only supported "
                 "when sample_counts=True.")
@@ -1189,15 +1171,15 @@ def load(path):
         tree sequence we wish to load.
     :return: The tree sequence object containing the information
         stored in the specified file path.
-    :rtype: :class:`msprime.TreeSequence`
+    :rtype: :class:`tskit.TreeSequence`
     """
     try:
         return TreeSequence.load(path)
-    except _msprime.VersionTooNewError as e:
+    except _tskit.VersionTooNewError as e:
         raise exceptions.VersionTooNewError(str(e))
-    except _msprime.VersionTooOldError as e:
+    except _tskit.VersionTooOldError as e:
         raise exceptions.VersionTooOldError(str(e))
-    except _msprime.FileFormatError as e:
+    except _tskit.FileFormatError as e:
         formats.raise_hdf5_format_error(path, e)
 
 
@@ -1251,29 +1233,29 @@ def load_tables(
     if migrations is not None:
         kwargs["migrations"] = migrations.ll_table
     else:
-        kwargs["migrations"] = _msprime.MigrationTable()
+        kwargs["migrations"] = _tskit.MigrationTable()
     if sites is not None:
         kwargs["sites"] = sites.ll_table
     else:
-        kwargs["sites"] = _msprime.SiteTable()
+        kwargs["sites"] = _tskit.SiteTable()
     if mutations is not None:
         kwargs["mutations"] = mutations.ll_table
     else:
-        kwargs["mutations"] = _msprime.MutationTable()
+        kwargs["mutations"] = _tskit.MutationTable()
     if provenances is not None:
         kwargs["provenances"] = provenances.ll_table
     else:
-        kwargs["provenances"] = _msprime.ProvenanceTable()
+        kwargs["provenances"] = _tskit.ProvenanceTable()
     if individuals is not None:
         kwargs["individuals"] = individuals.ll_table
     else:
-        kwargs["individuals"] = _msprime.IndividualTable()
+        kwargs["individuals"] = _tskit.IndividualTable()
     if populations is not None:
         kwargs["populations"] = populations.ll_table
     else:
-        kwargs["populations"] = _msprime.PopulationTable()
+        kwargs["populations"] = _tskit.PopulationTable()
 
-    ll_tables = _msprime.TableCollection(**kwargs)
+    ll_tables = _tskit.TableCollection(**kwargs)
     return TreeSequence.load_tables(tables.TableCollection(ll_tables=ll_tables))
 
 
@@ -1609,8 +1591,8 @@ def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
     and is produced by the :meth:`.TreeSequence.dump_text` method. Further
     properties required for an input tree sequence are described in the
     :ref:`sec_valid_tree_sequence_requirements` section. This method is intended as a
-    convenient interface for importing external data into msprime; the binary
-    file format using by :meth:`msprime.load` is many times more efficient than
+    convenient interface for importing external data into tskit; the binary
+    file format using by :meth:`tskit.load` is many times more efficient than
     this text format.
 
     The ``nodes`` and ``edges`` parameters are mandatory and must be file-like
@@ -1665,7 +1647,7 @@ def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
         encoding; otherwise, as plain text.
     :return: The tree sequence object containing the information
         stored in the specified file paths.
-    :rtype: :class:`msprime.TreeSequence`
+    :rtype: :class:`tskit.TreeSequence`
     """
     # We need to parse the edges so we can figure out the sequence length, and
     # TableCollection.sequence_length is immutable so we need to create a temporary
@@ -1737,13 +1719,13 @@ class TreeSequence(object):
 
     @classmethod
     def load(cls, path):
-        ts = _msprime.TreeSequence()
+        ts = _tskit.TreeSequence()
         ts.load(path)
         return TreeSequence(ts)
 
     @classmethod
     def load_tables(cls, tables):
-        ts = _msprime.TreeSequence()
+        ts = _tskit.TreeSequence()
         ts.load_tables(tables.ll_tables)
         return TreeSequence(ts)
 
@@ -1962,7 +1944,7 @@ class TreeSequence(object):
         tree sequence with a sequence length :math:`L`, the constituent
         trees will be defined over the half-closed interval
         :math:`[0, L)`. Each tree then covers some subset of this
-        interval --- see :meth:`msprime.SparseTree.get_interval` for details.
+        interval --- see :meth:`tskit.SparseTree.get_interval` for details.
 
         :return: The length of the sequence in this tree sequence in bases.
         :rtype: float
@@ -2187,7 +2169,7 @@ class TreeSequence(object):
         :return: An iterator over the (interval, edges_out, edges_in) tuples.
         :rtype: iter(tuple, tuple, tuple)
         """
-        iterator = _msprime.TreeDiffIterator(self._ll_tree_sequence)
+        iterator = _tskit.TreeDiffIterator(self._ll_tree_sequence)
         for interval, edge_tuples_out, edge_tuples_in in iterator:
             edges_out = [Edge(*e) for e in edge_tuples_out]
             edges_in = [Edge(*e) for e in edge_tuples_in]
@@ -2328,17 +2310,17 @@ class TreeSequence(object):
             sample_lists = leaf_lists
         flags = 0
         if sample_counts:
-            flags |= _msprime.SAMPLE_COUNTS
+            flags |= _tskit.SAMPLE_COUNTS
         elif tracked_samples is not None:
             raise ValueError("Cannot set tracked_samples without sample_counts")
         if sample_lists:
-            flags |= _msprime.SAMPLE_LISTS
+            flags |= _tskit.SAMPLE_LISTS
         kwargs = {"flags": flags}
         if tracked_samples is not None:
             # TODO remove this when we allow numpy arrays in the low-level API.
             kwargs["tracked_samples"] = list(tracked_samples)
-        ll_sparse_tree = _msprime.SparseTree(self._ll_tree_sequence, **kwargs)
-        iterator = _msprime.SparseTreeIterator(ll_sparse_tree)
+        ll_sparse_tree = _tskit.SparseTree(self._ll_tree_sequence, **kwargs)
+        iterator = _tskit.SparseTreeIterator(ll_sparse_tree)
         sparse_tree = SparseTree(ll_sparse_tree, self)
         for _ in iterator:
             yield sparse_tree
@@ -2349,9 +2331,9 @@ class TreeSequence(object):
         and mutations in this tree sequence as a string.
         The iterator returns a total of :math:`n` strings, each of which
         contains :math:`s` characters (:math:`n` is the sample size
-        returned by :attr:`msprime.TreeSequence.num_samples` and
+        returned by :attr:`tskit.TreeSequence.num_samples` and
         :math:`s` is the number of sites returned by
-        :attr:`msprime.TreeSequence.num_sites`). The first
+        :attr:`tskit.TreeSequence.num_sites`). The first
         string returned is the haplotype for sample `0`, and so on.
         For a given haplotype ``h``, the value of ``h[j]`` is the observed
         allelic state at site ``j``.
@@ -2367,7 +2349,7 @@ class TreeSequence(object):
         :raises: LibraryError if called on a tree sequence containing
             multiletter alleles.
         """
-        hapgen = _msprime.HaplotypeGenerator(self._ll_tree_sequence)
+        hapgen = _tskit.HaplotypeGenerator(self._ll_tree_sequence)
         j = 0
         # Would use range here except for Python 2.
         while j < self.num_samples:
@@ -2401,7 +2383,7 @@ class TreeSequence(object):
         """
         # See comments for the Variant type for discussion on why the
         # present form was chosen.
-        iterator = _msprime.VariantGenerator(self._ll_tree_sequence, samples=samples)
+        iterator = _tskit.VariantGenerator(self._ll_tree_sequence, samples=samples)
         for site_id, genotypes, alleles in iterator:
             site = self.site(site_id)
             if as_bytes:
@@ -2612,7 +2594,7 @@ class TreeSequence(object):
             raise ValueError("Ploidy must be >= sample size")
         if self.get_sample_size() % ploidy != 0:
             raise ValueError("Sample size must be divisible by ploidy")
-        converter = _msprime.VcfConverter(
+        converter = _tskit.VcfConverter(
             self._ll_tree_sequence, ploidy=ploidy, contig_id=contig_id)
         output.write(converter.get_header())
         for record in converter:

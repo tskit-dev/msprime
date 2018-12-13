@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Test various functions using messy tables output by a forwards-time simulator.
 """
@@ -28,10 +10,11 @@ import unittest
 
 import numpy as np
 import numpy.testing as nt
-
 import msprime
-import tests
-import tests.tsutil as tsutil
+
+import tskit
+import tskit_tests as tests
+import tskit_tests.tsutil as tsutil
 
 
 class WrightFisherSimulator(object):
@@ -65,7 +48,7 @@ class WrightFisherSimulator(object):
         L = 1
         if self.num_loci is not None:
             L = self.num_loci
-        tables = msprime.TableCollection(sequence_length=L)
+        tables = tskit.TableCollection(sequence_length=L)
         tables.populations.add_row()
         if self.deep_history:
             # initial population
@@ -84,7 +67,7 @@ class WrightFisherSimulator(object):
         else:
             flags = 0
             if self.initial_generation_samples:
-                flags = msprime.NODE_IS_SAMPLE
+                flags = tskit.NODE_IS_SAMPLE
             for _ in range(self.N):
                 tables.nodes.add_row(flags=flags, time=ngens, population=0)
 
@@ -123,7 +106,7 @@ class WrightFisherSimulator(object):
             print("Done! Final pop:")
             print(pop)
         flags = tables.nodes.flags
-        flags[pop] = msprime.NODE_IS_SAMPLE
+        flags[pop] = tskit.NODE_IS_SAMPLE
         tables.nodes.set_columns(
             flags=flags,
             time=tables.nodes.time,
@@ -192,7 +175,7 @@ class TestSimulation(unittest.TestCase):
         ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tskit.load_tables(**tables.asdict())
         for tree in ts.trees():
             all_samples = set()
             for root in tree.roots:
@@ -215,7 +198,7 @@ class TestSimulation(unittest.TestCase):
         ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tskit.load_tables(**tables.asdict())
         # We are assuming that everything has coalesced and we have single-root trees
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
@@ -225,13 +208,13 @@ class TestSimulation(unittest.TestCase):
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
         tables.sort()
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tskit.load_tables(**tables.asdict())
         ts = tsutil.jukes_cantor(ts, 10, 0.1, seed=self.random_seed)
         tables = ts.tables
         self.assertGreater(tables.sites.num_rows, 0)
         self.assertGreater(tables.mutations.num_rows, 0)
         samples = np.where(
-            tables.nodes.flags == msprime.NODE_IS_SAMPLE)[0].astype(np.int32)
+            tables.nodes.flags == tskit.NODE_IS_SAMPLE)[0].astype(np.int32)
         tables.sort()
         tables.simplify(samples)
         self.assertGreater(tables.nodes.num_rows, 0)
@@ -240,7 +223,7 @@ class TestSimulation(unittest.TestCase):
         self.assertGreater(tables.edges.num_rows, 0)
         self.assertGreater(tables.sites.num_rows, 0)
         self.assertGreater(tables.mutations.num_rows, 0)
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tskit.load_tables(**tables.asdict())
         self.assertEqual(ts.sample_size, N)
         for hap in ts.haplotypes():
             self.assertEqual(len(hap), ts.num_sites)
@@ -251,7 +234,7 @@ class TestSimulation(unittest.TestCase):
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
         tables.sort()
-        ts = msprime.load_tables(**tables.asdict())
+        ts = tskit.load_tables(**tables.asdict())
         ts = tsutil.jukes_cantor(ts, 1, 10, seed=self.random_seed)
         tables = ts.tables
         self.assertEqual(tables.sites.num_rows, 1)
@@ -309,7 +292,7 @@ class TestSimplify(unittest.TestCase):
                     for nloci in [1, 2, 3]:
                         tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
                         tables.sort()
-                        ts = msprime.load_tables(**tables.asdict())
+                        ts = tskit.load_tables(**tables.asdict())
                         ts = tsutil.jukes_cantor(ts, num_sites=nloci, mu=mut, seed=seed)
                         self.verify_simulation(ts, ngens=N)
                         yield ts
@@ -369,9 +352,9 @@ class TestSimplify(unittest.TestCase):
             for pair in pairs:
                 mapped_pair = [node_map[u] for u in pair]
                 mrca1 = old_tree.get_mrca(*pair)
-                self.assertNotEqual(mrca1, msprime.NULL_NODE)
+                self.assertNotEqual(mrca1, tskit.NULL_NODE)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
-                self.assertNotEqual(mrca2, msprime.NULL_NODE)
+                self.assertNotEqual(mrca2, tskit.NULL_NODE)
                 self.assertEqual(node_map[mrca1], mrca2)
         mut_parent = tsutil.compute_mutation_parent(ts=ts)
         self.assertArrayEqual(mut_parent, ts.tables.mutations.parent)

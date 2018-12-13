@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -20,18 +20,35 @@
 Msprime is a reimplementation of Hudson's classical ms simulator for
 modern datasets.
 """
+# flake8: NOQA
 from __future__ import print_function
 from __future__ import division
 
-from _msprime import FORWARD  # NOQA
-from _msprime import REVERSE  # NOQA
+# Compatibility layer for old code using the tskit API exported by msprime.
 
-from msprime.provenance import __version__  # NOQA
-from msprime.provenance import validate_provenance  # NOQA
-from msprime.formats import *  # NOQA
-from msprime.trees import *  # NOQA
-from msprime.tables import *  # NOQA
-from msprime.simulations import *  # NOQA
-from msprime.stats import *  # NOQA
-from msprime.exceptions import *  # NOQA
-from msprime.mutations import *  # NOQA
+# These are deprecated in tskit now; should use tskit.NULL instead.
+NULL_NODE = -1
+NULL_POPULATION = -1
+NULL_INDIVIDUAL = -1
+NULL_MUTATION = -1
+
+from tskit import (
+    Individual, Node, Edge, Site, Mutation, Migration, Population,
+    Variant, Edgeset, Provenance)
+from tskit import SparseTree, TreeSequence
+from tskit import (
+    IndividualTable, NodeTable, EdgeTable, SiteTable, MutationTable,
+    MigrationTable, PopulationTable, ProvenanceTable, TableCollection)
+from tskit import LdCalculator
+from tskit import load, load_text, load_tables
+from tskit import (
+    parse_nodes, parse_edges, parse_individuals, parse_sites, parse_mutations)
+from tskit import pack_strings, pack_bytes, unpack_bytes, unpack_strings
+from tskit import validate_provenance
+
+from tskit import NODE_IS_SAMPLE, FORWARD, REVERSE
+
+from msprime.provenance import __version__
+from msprime.simulations import *
+from msprime.exceptions import *
+from msprime.mutations import *

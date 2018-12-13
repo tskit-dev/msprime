@@ -65,9 +65,9 @@ fatal_library_error(int err, const char *msg, ...)
 }
 
 static void
-load_tree_sequence(tsk_treeseq_t *ts, const char *filename)
+load_tables(tsk_tbl_collection_t *tables, const char *filename)
 {
-    int ret = tsk_treeseq_load(ts, filename, 0);
+    int ret = tsk_tbl_collection_load(tables, filename, 0);
     if (ret != 0) {
         fatal_library_error(ret, "Load error");
     }
@@ -533,8 +533,8 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     int int_tmp;
     uint32_t num_loci;
     size_t num_samples;
-    const char *from_ts_path;
-    tsk_treeseq_t *from_ts = NULL;
+    const char *from_ts_tables_path;
+    tsk_tbl_collection_t *from_ts_tables = NULL;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -557,12 +557,12 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
-    if (config_lookup_string(config, "from", &from_ts_path) == CONFIG_TRUE) {
-        from_ts = malloc(sizeof(*from_ts));
-        if (from_ts == NULL) {
+    if (config_lookup_string(config, "from", &from_ts_tables_path) == CONFIG_TRUE) {
+        from_ts_tables = malloc(sizeof(*from_ts_tables));
+        if (from_ts_tables == NULL) {
             fatal_error("alloc error");
         }
-        load_tree_sequence(from_ts, from_ts_path);
+        load_tables(from_ts_tables, from_ts_tables_path);
     }
 
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
@@ -574,7 +574,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
         fatal_error(msp_strerror(ret));
     }
 
-    ret = msp_alloc(msp, num_samples, samples, recomb_map, from_ts, rng);
+    ret = msp_alloc(msp, num_samples, samples, recomb_map, from_ts_tables, rng);
     if (ret != 0) {
         fatal_error(msp_strerror(ret));
     }
@@ -646,9 +646,9 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     config_destroy(config);
     free(config);
     free(samples);
-    if (from_ts != NULL) {
-        tsk_treeseq_free(from_ts);
-        free(from_ts);
+    if (from_ts_tables != NULL) {
+        tsk_tbl_collection_free(from_ts_tables);
+        free(from_ts_tables);
     }
     return ret;
 }

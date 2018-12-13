@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Tree sequence IO via the tables API.
 """
@@ -30,12 +12,12 @@ import warnings
 import numpy as np
 from six.moves import copyreg
 
-import _msprime
+import _tskit
 # This circular import is ugly but it seems hard to avoid it since table collection
 # and tree sequence depend on each other. Unless they're in the same module they
 # need to import each other. In Py3 at least we can import the modules but we
 # can't do this in Py3.
-import msprime
+import tskit
 
 
 IndividualTableRow = collections.namedtuple(
@@ -174,7 +156,7 @@ class IndividualTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.IndividualTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.IndividualTable(max_rows_increment=max_rows_increment)
         super(IndividualTable, self).__init__(ll_table, IndividualTableRow)
 
     @property
@@ -350,7 +332,7 @@ class NodeTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.NodeTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.NodeTable(max_rows_increment=max_rows_increment)
         super(NodeTable, self).__init__(ll_table, NodeTableRow)
 
     @property
@@ -536,7 +518,7 @@ class EdgeTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.EdgeTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.EdgeTable(max_rows_increment=max_rows_increment)
         super(EdgeTable, self).__init__(ll_table, EdgeTableRow)
 
     @property
@@ -670,7 +652,7 @@ class MigrationTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.MigrationTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.MigrationTable(max_rows_increment=max_rows_increment)
         super(MigrationTable, self).__init__(ll_table, MigrationTableRow)
 
     @property
@@ -829,7 +811,7 @@ class SiteTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.SiteTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.SiteTable(max_rows_increment=max_rows_increment)
         super(SiteTable, self).__init__(ll_table, SiteTableRow)
 
     @property
@@ -1015,7 +997,7 @@ class MutationTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.MutationTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.MutationTable(max_rows_increment=max_rows_increment)
         super(MutationTable, self).__init__(ll_table, MutationTableRow)
 
     @property
@@ -1213,7 +1195,7 @@ class PopulationTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.PopulationTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.PopulationTable(max_rows_increment=max_rows_increment)
         super(PopulationTable, self).__init__(ll_table, PopulationTableRow)
 
     @property
@@ -1297,7 +1279,7 @@ class ProvenanceTable(BaseTable):
     """
     def __init__(self, max_rows_increment=0, ll_table=None):
         if ll_table is None:
-            ll_table = _msprime.ProvenanceTable(max_rows_increment=max_rows_increment)
+            ll_table = _tskit.ProvenanceTable(max_rows_increment=max_rows_increment)
         super(ProvenanceTable, self).__init__(ll_table, ProvenanceTableRow)
 
     @property
@@ -1426,15 +1408,15 @@ class TableCollection(object):
     """
     def __init__(self, sequence_length=0, ll_tables=None):
         if ll_tables is None:
-            ll_tables = _msprime.TableCollection(
-                individuals=_msprime.IndividualTable(),
-                nodes=_msprime.NodeTable(),
-                edges=_msprime.EdgeTable(),
-                migrations=_msprime.MigrationTable(),
-                sites=_msprime.SiteTable(),
-                mutations=_msprime.MutationTable(),
-                populations=_msprime.PopulationTable(),
-                provenances=_msprime.ProvenanceTable(),
+            ll_tables = _tskit.TableCollection(
+                individuals=_tskit.IndividualTable(),
+                nodes=_tskit.NodeTable(),
+                edges=_tskit.EdgeTable(),
+                migrations=_tskit.MigrationTable(),
+                sites=_tskit.SiteTable(),
+                mutations=_tskit.MutationTable(),
+                populations=_tskit.PopulationTable(),
+                provenances=_tskit.ProvenanceTable(),
                 sequence_length=sequence_length)
         self.ll_tables = ll_tables
         self.__individuals = IndividualTable(ll_table=self.ll_tables.individuals)
@@ -1546,7 +1528,7 @@ class TableCollection(object):
 
     # Unpickle support
     def __setstate__(self, state):
-        ll_tables = _msprime.TableCollection(
+        ll_tables = _tskit.TableCollection(
             individuals=state["individuals"].ll_table,
             nodes=state["nodes"].ll_table,
             edges=state["edges"].ll_table,
@@ -1571,7 +1553,7 @@ class TableCollection(object):
             defined in this set of tables.
         :rtype: .TreeSequence
         """
-        return msprime.TreeSequence.load_tables(self)
+        return tskit.TreeSequence.load_tables(self)
 
     def simplify(
             self, samples=None,
@@ -1631,7 +1613,7 @@ class TableCollection(object):
         if samples is None:
             flags = self.nodes.flags
             samples = np.where(
-                np.bitwise_and(flags, _msprime.NODE_IS_SAMPLE) != 0)[0].astype(np.int32)
+                np.bitwise_and(flags, _tskit.NODE_IS_SAMPLE) != 0)[0].astype(np.int32)
         return self.ll_tables.simplify(
             samples, filter_sites=filter_sites,
             filter_individuals=filter_individuals,
@@ -1807,24 +1789,24 @@ def sort_tables(
     if len(edges) > 0:
         sequence_length = edges.right.max()
     # To make this work with the old semantics we need to create a populations
-    populations = _msprime.PopulationTable()
+    populations = _tskit.PopulationTable()
     if len(nodes) > 0:
         max_pop = np.max(nodes.population)
         for _ in range(max_pop + 1):
             populations.add_row()
         max_ind = np.max(nodes.individual)
-        if max_ind != msprime.NULL_INDIVIDUAL:
+        if max_ind != tskit.NULL_INDIVIDUAL:
             raise ValueError("Individuals not supported in this deprecated function")
     try:
-        ll_tables = _msprime.TableCollection(
-            individuals=_msprime.IndividualTable(),
+        ll_tables = _tskit.TableCollection(
+            individuals=_tskit.IndividualTable(),
             nodes=nodes.ll_table,
             edges=edges.ll_table,
             migrations=migrations.ll_table,
             sites=sites.ll_table,
             mutations=mutations.ll_table,
             populations=populations,
-            provenances=_msprime.ProvenanceTable(),
+            provenances=_tskit.ProvenanceTable(),
             sequence_length=sequence_length)
     except AttributeError as e:
         raise TypeError(str(e))
@@ -1879,23 +1861,23 @@ def simplify_tables(
         sequence_length = edges.right.max()
     # To make this work with the old semantics we need to create a populations
     max_pop = np.max(nodes.population)
-    populations = _msprime.PopulationTable()
+    populations = _tskit.PopulationTable()
     if len(nodes) > 0:
         for _ in range(max_pop + 1):
             populations.add_row()
         max_ind = np.max(nodes.individual)
-        if max_ind != msprime.NULL_INDIVIDUAL:
+        if max_ind != tskit.NULL_INDIVIDUAL:
             raise ValueError("Individuals not supported in this deprecated function")
     try:
-        ll_tables = _msprime.TableCollection(
-            individuals=_msprime.IndividualTable(),
+        ll_tables = _tskit.TableCollection(
+            individuals=_tskit.IndividualTable(),
             nodes=nodes.ll_table,
             edges=edges.ll_table,
             migrations=migrations.ll_table,
             sites=sites.ll_table,
             mutations=mutations.ll_table,
             populations=populations,
-            provenances=_msprime.ProvenanceTable(),
+            provenances=_tskit.ProvenanceTable(),
             sequence_length=sequence_length)
     except AttributeError as e:
         raise TypeError(str(e))

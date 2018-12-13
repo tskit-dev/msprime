@@ -31,6 +31,7 @@ import signal
 import sys
 
 import msprime
+import tskit
 
 
 def set_sigpipe_handler():
@@ -769,8 +770,8 @@ def exit(message):
 
 def run_upgrade(args):
     try:
-        tree_sequence = msprime.load_legacy(args.source, args.remove_duplicate_positions)
-    except msprime.DuplicatePositionsError:
+        tree_sequence = tskit.load_legacy(args.source, args.remove_duplicate_positions)
+    except tskit.DuplicatePositionsError:
         exit(
             "Error: Duplicate mutation positions in the source file detected.\n\n"
             "This is not supported in the current file format. Running \"upgrade -d\" "
@@ -780,47 +781,47 @@ def run_upgrade(args):
 
 
 def run_dump_newick(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     for tree in tree_sequence.trees():
         newick = tree.newick(precision=args.precision)
         print(newick)
 
 
 def run_dump_haplotypes(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     for h in tree_sequence.haplotypes():
         print(h)
 
 
 def run_dump_variants(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     for variant in tree_sequence.variants(as_bytes=True):
         print(variant.position, end="\t")
         print("{}".format(variant.genotypes.decode()))
 
 
 def run_dump_nodes(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     tree_sequence.dump_text(nodes=sys.stdout, precision=args.precision)
 
 
 def run_dump_edges(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     tree_sequence.dump_text(edges=sys.stdout, precision=args.precision)
 
 
 def run_dump_sites(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     tree_sequence.dump_text(sites=sys.stdout, precision=args.precision)
 
 
 def run_dump_mutations(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     tree_sequence.dump_text(mutations=sys.stdout, precision=args.precision)
 
 
 def run_dump_provenances(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     if args.human:
         for provenance in tree_sequence.provenances():
             d = json.loads(provenance.record)
@@ -831,7 +832,7 @@ def run_dump_provenances(args):
 
 
 def run_dump_vcf(args):
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     tree_sequence.write_vcf(sys.stdout, args.ploidy)
 
 
@@ -839,7 +840,7 @@ def run_dump_macs(args):
     """
     Write a macs formatted file so we can import into pbwt.
     """
-    tree_sequence = msprime.load(args.tree_sequence)
+    tree_sequence = tskit.load(args.tree_sequence)
     n = tree_sequence.get_sample_size()
     m = tree_sequence.get_sequence_length()
     print("COMMAND:\tnot_macs {} {}".format(n, m))

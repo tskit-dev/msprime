@@ -1,22 +1,4 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright (C) 2017 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 """
 Tests for metadata handling.
 """
@@ -32,8 +14,9 @@ import pickle
 import numpy as np
 import python_jsonschema_objects as pjs
 import six
-
 import msprime
+
+import tskit
 
 
 class TestMetadataHdf5RoundTrip(unittest.TestCase):
@@ -55,7 +38,7 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
         # For each node, we create some Python metadata that can be JSON encoded.
         metadata = [
             {"one": j, "two": 2 * j, "three": list(range(j))} for j in range(len(nodes))]
-        encoded, offset = msprime.pack_strings(map(json.dumps, metadata))
+        encoded, offset = tskit.pack_strings(map(json.dumps, metadata))
         nodes.set_columns(
             flags=nodes.flags, time=nodes.time, population=nodes.population,
             metadata_offset=offset, metadata=encoded)
@@ -66,7 +49,7 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
             decoded_metadata = json.loads(node.metadata.decode())
             self.assertEqual(decoded_metadata, metadata[j])
         ts1.dump(self.temp_file)
-        ts2 = msprime.load(self.temp_file)
+        ts2 = tskit.load(self.temp_file)
         self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
 
     def test_pickle(self):
@@ -76,7 +59,7 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
         metadata = [
             {"one": j, "two": 2 * j, "three": list(range(j))}
             for j in range(ts.num_nodes)]
-        encoded, offset = msprime.pack_bytes(list(map(pickle.dumps, metadata)))
+        encoded, offset = tskit.pack_bytes(list(map(pickle.dumps, metadata)))
         tables.nodes.set_columns(
             flags=tables.nodes.flags, time=tables.nodes.time,
             population=tables.nodes.population,
@@ -88,7 +71,7 @@ class TestMetadataHdf5RoundTrip(unittest.TestCase):
             decoded_metadata = pickle.loads(node.metadata)
             self.assertEqual(decoded_metadata, metadata[j])
         ts1.dump(self.temp_file)
-        ts2 = msprime.load(self.temp_file)
+        ts2 = tskit.load(self.temp_file)
         self.assertEqual(ts1.tables.nodes, ts2.tables.nodes)
 
 
@@ -107,12 +90,12 @@ class TestMetadataPickleDecoding(unittest.TestCase):
     """
 
     def test_nodes(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
         metadata = ExampleMetadata(one="node1", two="node2")
         pickled = pickle.dumps(metadata)
         nodes.add_row(time=0.125, metadata=pickled)
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         node = ts.node(0)
         self.assertEqual(node.time, 0.125)
         self.assertEqual(node.metadata, pickled)
@@ -121,14 +104,14 @@ class TestMetadataPickleDecoding(unittest.TestCase):
         self.assertEqual(unpickled.two, metadata.two)
 
     def test_sites(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
+        sites = tskit.SiteTable()
+        mutations = tskit.MutationTable()
         metadata = ExampleMetadata(one="node1", two="node2")
         pickled = pickle.dumps(metadata)
         sites.add_row(position=0.1, ancestral_state="A", metadata=pickled)
-        ts = msprime.load_tables(
+        ts = tskit.load_tables(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             sequence_length=1)
         site = ts.site(0)
@@ -140,16 +123,16 @@ class TestMetadataPickleDecoding(unittest.TestCase):
         self.assertEqual(unpickled.two, metadata.two)
 
     def test_mutations(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
-        sites = msprime.SiteTable()
-        mutations = msprime.MutationTable()
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
+        sites = tskit.SiteTable()
+        mutations = tskit.MutationTable()
         metadata = ExampleMetadata(one="node1", two="node2")
         pickled = pickle.dumps(metadata)
         nodes.add_row(time=0)
         sites.add_row(position=0.1, ancestral_state="A")
         mutations.add_row(site=0, node=0, derived_state="T", metadata=pickled)
-        ts = msprime.load_tables(
+        ts = tskit.load_tables(
             nodes=nodes, edges=edges, sites=sites, mutations=mutations,
             sequence_length=1)
         mutation = ts.site(0).mutations[0]
@@ -177,14 +160,14 @@ class TestJsonSchemaDecoding(unittest.TestCase):
     }"""
 
     def test_nodes(self):
-        nodes = msprime.NodeTable()
-        edges = msprime.EdgeTable()
+        nodes = tskit.NodeTable()
+        edges = tskit.EdgeTable()
         builder = pjs.ObjectBuilder(json.loads(self.schema))
         ns = builder.build_classes()
         metadata = ns.ExampleMetadata(one="node1", two="node2")
         encoded = json.dumps(metadata.as_dict()).encode()
         nodes.add_row(time=0.125, metadata=encoded)
-        ts = msprime.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
         node = ts.node(0)
         self.assertEqual(node.time, 0.125)
         self.assertEqual(node.metadata, encoded)
@@ -205,9 +188,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         1   1     1.0,2.0      XYZ+
         2   0     2.0,3.0,0.0  !@#$%^&*()
         """)
-        i = msprime.parse_individuals(individuals, strict=False,
-                                      encoding='utf8',
-                                      base64_metadata=False)
+        i = tskit.parse_individuals(
+            individuals, strict=False, encoding='utf8', base64_metadata=False)
         expected = [(1, [0.0, 1.0, 0.0], 'abc'),
                     (1, [1.0, 2.0], 'XYZ+'),
                     (0, [2.0, 3.0, 0.0], '!@#$%^&*()')]
@@ -226,8 +208,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         1   1           0   XYZ+
         2   0           1   !@#$%^&*()
         """)
-        n = msprime.parse_nodes(nodes, strict=False, encoding='utf8',
-                                base64_metadata=False)
+        n = tskit.parse_nodes(
+            nodes, strict=False, encoding='utf8', base64_metadata=False)
         expected = ['abc', 'XYZ+', '!@#$%^&*()']
         for a, b in zip(expected, n):
             self.assertEqual(a.encode('utf8'),
@@ -240,8 +222,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         0.5 C   XYZ+
         0.8 G   !@#$%^&*()
         """)
-        s = msprime.parse_sites(sites, strict=False, encoding='utf8',
-                                base64_metadata=False)
+        s = tskit.parse_sites(
+            sites, strict=False, encoding='utf8', base64_metadata=False)
         expected = ['abc', 'XYZ+', '!@#$%^&*()']
         for a, b in zip(expected, s):
             self.assertEqual(a.encode('utf8'),
@@ -253,8 +235,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         0   2   C   mno
         0   3   G   )(*&^%$#@!
         """)
-        m = msprime.parse_mutations(mutations, strict=False, encoding='utf8',
-                                    base64_metadata=False)
+        m = tskit.parse_mutations(
+            mutations, strict=False, encoding='utf8', base64_metadata=False)
         expected = ['mno', ')(*&^%$#@!']
         for a, b in zip(expected, m):
             self.assertEqual(a.encode('utf8'),
@@ -266,8 +248,8 @@ class TestLoadTextMetadata(unittest.TestCase):
         0     mno
         1     )(*&^%$#@!
         """)
-        p = msprime.parse_populations(populations, strict=False, encoding='utf8',
-                                      base64_metadata=False)
+        p = tskit.parse_populations(
+            populations, strict=False, encoding='utf8', base64_metadata=False)
         expected = ['mno', ')(*&^%$#@!']
         for a, b in zip(expected, p):
             self.assertEqual(a.encode('utf8'),

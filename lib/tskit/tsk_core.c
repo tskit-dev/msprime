@@ -96,10 +96,285 @@ static const char *
 tsk_strerror_internal(int err)
 {
     const char *ret = "Unknown error";
-    if (err == 0) {
-        ret = "FIXME";
-    }
 
+    switch (err) {
+        case 0:
+            ret = "Normal exit condition. This is not an error!";
+            goto out;
+        case TSK_ERR_NO_MEMORY:
+            ret = "Out of memory.";
+            break;
+        case TSK_ERR_GENERIC:
+            ret = "Generic error; please file a bug report";
+            break;
+        case TSK_ERR_FILE_FORMAT:
+            ret = "File format error";
+            break;
+        case TSK_ERR_BAD_STATE:
+            ret = "Bad simulator state. Initialise or reset must be called.";
+            break;
+        case TSK_ERR_BUFFER_OVERFLOW:
+            ret = "Supplied buffer if too small";
+            break;
+        case TSK_ERR_UNSORTED_DEMOGRAPHIC_EVENTS:
+            ret = "Demographic events must be time sorted.";
+            break;
+        case TSK_ERR_POPULATION_OVERFLOW:
+            ret = "Population Overflow occurred.";
+            break;
+        case TSK_ERR_LINKS_OVERFLOW:
+            ret = "Links Overflow occurred.";
+            break;
+        case TSK_ERR_OUT_OF_BOUNDS:
+            ret = "Object reference out of bounds";
+            break;
+        case TSK_ERR_BAD_ORDERING:
+            ret = "Bad record ordering requested";
+            break;
+        case TSK_ERR_BAD_MUTATION:
+            ret = "Bad mutation provided";
+            break;
+        case TSK_ERR_BAD_PARAM_VALUE:
+            ret = "Bad parameter value provided";
+            break;
+        case TSK_ERR_UNSUPPORTED_OPERATION:
+            ret = "Operation cannot be performed in current configuration";
+            break;
+        case TSK_ERR_BAD_POPULATION_CONFIGURATION:
+            ret = "Bad population configuration provided.";
+            break;
+        case TSK_ERR_BAD_POPULATION_SIZE:
+            ret = "Bad population size provided. Must be > 0.";
+            break;
+        case TSK_ERR_POPULATION_OUT_OF_BOUNDS:
+            ret = "Population ID out of bounds.";
+            break;
+        case TSK_ERR_BAD_MIGRATION_MATRIX:
+            ret = "Bad migration matrix provided.";
+            break;
+        case TSK_ERR_BAD_MIGRATION_MATRIX_INDEX:
+            ret = "Bad migration matrix index provided.";
+            break;
+        case TSK_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX:
+            ret = "Cannot set diagonal migration matrix elements.";
+            break;
+        case TSK_ERR_INFINITE_WAITING_TIME:
+            ret = "Infinite waiting time until next simulation event.";
+            break;
+        case TSK_ERR_ASSERTION_FAILED:
+            ret = "Internal error; please file a bug report.";
+            break;
+        case TSK_ERR_SOURCE_DEST_EQUAL:
+            ret = "Source and destination populations equal.";
+            break;
+        case TSK_ERR_BAD_RECOMBINATION_MAP:
+            ret = "Bad recombination map provided.";
+            break;
+        case TSK_ERR_INSUFFICIENT_SAMPLES:
+            ret = "At least two samples needed.";
+            break;
+        case TSK_ERR_ZERO_RECORDS:
+            ret = "At least one record must be supplied";
+            break;
+        case TSK_ERR_EDGES_NOT_SORTED_PARENT_TIME:
+            ret = "Edges must be listed in (time[parent], child, left) order;"
+                " time[parent] order violated";
+            break;
+        case TSK_ERR_EDGES_NONCONTIGUOUS_PARENTS:
+            ret = "All edges for a given parent must be contiguous";
+            break;
+        case TSK_ERR_EDGES_NOT_SORTED_CHILD:
+            ret = "Edges must be listed in (time[parent], child, left) order;"
+                " child order violated";
+            break;
+        case TSK_ERR_EDGES_NOT_SORTED_LEFT:
+            ret = "Edges must be listed in (time[parent], child, left) order;"
+                " left order violated";
+            break;
+        case TSK_ERR_NULL_PARENT:
+            ret = "Edge in parent is null.";
+            break;
+        case TSK_ERR_NULL_CHILD:
+            ret = "Edge in parent is null.";
+            break;
+        case TSK_ERR_BAD_NODE_TIME_ORDERING:
+            ret = "time[parent] must be greater than time[child]";
+            break;
+        case TSK_ERR_BAD_EDGE_INTERVAL:
+            ret = "Bad edge interval where right <= left";
+            break;
+        case TSK_ERR_DUPLICATE_EDGES:
+            ret = "Duplicate edges provided.";
+            break;
+        case TSK_ERR_CANNOT_SIMPLIFY:
+            ret = "Cannot simplify the tree sequence; no output records.";
+            break;
+        case TSK_ERR_BAD_SAMPLES:
+            ret = "Bad sample configuration provided.";
+            break;
+        case TSK_ERR_FILE_VERSION_TOO_OLD:
+            ret = "tskit file version too old. Please upgrade using the "
+                "'msp upgrade' command";
+            break;
+        case TSK_ERR_FILE_VERSION_TOO_NEW:
+            ret = "tskit file version is too new for this instance. "
+                "Please upgrade msprime to the latest version.";
+            break;
+        case TSK_ERR_DUPLICATE_SAMPLE:
+            ret = "Duplicate value provided in tracked leaf list.";
+            break;
+        case TSK_ERR_REFCOUNT_NONZERO:
+            ret = "Cannot change the state of the tree sequence when "
+                "other objects reference it. Make sure all trees are freed first.";
+            break;
+        case TSK_ERR_BAD_MODEL:
+            ret = "Model error. Either a bad model, or the requested operation "
+                "is not supported for the current model";
+            break;
+        case TSK_ERR_NOT_INITIALISED:
+            ret = "object not initialised. Please file a bug report.";
+            break;
+        case TSK_ERR_DUPLICATE_MUTATION_NODES:
+            ret = "Cannot have more than one mutation at a node for a given site.";
+            break;
+        case TSK_ERR_NONBINARY_MUTATIONS_UNSUPPORTED:
+            ret = "Only binary mutations are supported for this operation.";
+            break;
+        case TSK_ERR_INCONSISTENT_MUTATIONS:
+            ret = "Inconsistent mutations: state already equal to derived state.";
+            break;
+        case TSK_ERR_COORDINATE_NOT_FOUND:
+            ret = "Coordinate not found.";
+            break;
+        case TSK_ERR_BAD_NODES_ARRAY:
+            ret = "Malformed nodes array.";
+            break;
+        case TSK_ERR_BAD_CHILDREN_ARRAY:
+            ret = "Malformed array of children.";
+            break;
+        case TSK_ERR_SITE_OUT_OF_BOUNDS:
+            ret = "Site out of bounds";
+            break;
+        case TSK_ERR_NODE_OUT_OF_BOUNDS:
+            ret = "Node out of bounds";
+            break;
+        case TSK_ERR_LENGTH_MISMATCH:
+            ret = "Mismatch in stored total column length and sum of row lengths";
+            break;
+        case TSK_ERR_NON_SINGLE_CHAR_MUTATION:
+            ret = "Only single char mutations supported.";
+            break;
+        case TSK_ERR_UNSORTED_SITES:
+            ret = "Sites must be provided in strictly increasing position order.";
+            break;
+        case TSK_ERR_BAD_SITE_POSITION:
+            ret = "Sites positions must be between 0 and sequence_length";
+            break;
+        case TSK_ERR_UNSORTED_MUTATIONS:
+            ret = "Mutations must be provided in non-decreasing site order";
+            break;
+        case TSK_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
+            ret = "All edges for a given parent must be adjacent.";
+            break;
+        case TSK_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN:
+            ret = "Bad edges: contradictory children for a given parent over "
+                "an interval.";
+            break;
+        case TSK_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
+            ret = "Bad edges: multiple definitions of a given parent over an interval";
+            break;
+        case TSK_ERR_BAD_SEQUENCE_LENGTH:
+            ret = "Sequence length must be > 0.";
+            break;
+        case TSK_ERR_LEFT_LESS_ZERO:
+            ret = "Left coordinate must be >= 0";
+            break;
+        case TSK_ERR_RIGHT_GREATER_SEQ_LENGTH:
+            ret = "Right coordinate > sequence length.";
+            break;
+        case TSK_ERR_MUTATION_OUT_OF_BOUNDS:
+            ret = "mutation ID out of bounds";
+            break;
+        case TSK_ERR_MUTATION_PARENT_DIFFERENT_SITE:
+            ret = "Specified parent mutation is at a different site.";
+            break;
+        case TSK_ERR_MUTATION_PARENT_EQUAL:
+            ret = "Parent mutation refers to itself.";
+            break;
+        case TSK_ERR_MUTATION_PARENT_AFTER_CHILD:
+            ret = "Parent mutation ID must be < current ID.";
+            break;
+        case TSK_ERR_BAD_OFFSET:
+            ret = "Bad offset provided in input array.";
+            break;
+        case TSK_ERR_TOO_MANY_ALLELES:
+            ret = "Cannot have more than 255 alleles.";
+            break;
+        case TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
+            ret = "Individual ID out of bounds";
+            break;
+        case TSK_ERR_GENERATE_UUID:
+            ret = "Error generating UUID";
+            break;
+        case TSK_ERR_DUPLICATE_SITE_POSITION:
+            ret = "Duplicate site positions.";
+            break;
+        case TSK_ERR_BAD_TABLE_POSITION:
+            ret = "Bad table position provided to truncate/reset.";
+            break;
+        case TSK_ERR_BAD_EDGE_INDEX:
+            ret = "Invalid edge index value.";
+            break;
+        case TSK_ERR_TABLES_NOT_INDEXED:
+            ret = "Table collection must be indexed.";
+            break;
+        case TSK_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED:
+            ret = "Migrations currently not supported in simplify. Please open an "
+                "issue on GitHub if this operation is important to you.";
+            break;
+        case TSK_ERR_INCOMPATIBLE_FROM_TS:
+            ret = "The specified tree sequence is not a compatible starting point "
+                "for the current simulation";
+            break;
+        case TSK_ERR_BAD_START_TIME_FROM_TS:
+            ret = "The specified start_time and from_ts are not compatible. All "
+                "node times in the tree sequence must be <= start_time.";
+            break;
+        case TSK_ERR_BAD_START_TIME:
+            ret = "start_time must be >= 0.";
+            break;
+        case TSK_ERR_BAD_DEMOGRAPHIC_EVENT_TIME:
+            ret = "demographic event time must be >= start_time.";
+            break;
+        case TSK_ERR_RECOMB_MAP_TOO_COARSE:
+            ret = "The specified recombination map is cannot translate the coordinates"
+                "for the specified tree sequence. It is either too coarse (num_loci "
+                "is too small) or contains zero recombination rates. Please either "
+                "increase the number of loci or recombination rate";
+            break;
+        case TSK_ERR_TIME_TRAVEL:
+            ret = "The simulation model supplied resulted in a parent node having "
+                "a time value <= to its child. This can occur either as a result "
+                "of multiple bottlenecks happening at the same time or because of "
+                "numerical imprecision with very small population sizes.";
+            break;
+        case TSK_ERR_ONLY_INFINITE_SITES:
+            ret = "Only infinite sites mutations are supported for this operation.";
+            break;
+
+        case TSK_ERR_IO:
+            if (errno != 0) {
+                ret = strerror(errno);
+            } else {
+                ret = "Unspecified IO error";
+            }
+            break;
+        default:
+            ret = "Error occurred generating error string. Please file a bug "
+                "report!";
+            break;
+    }
+out:
     return ret;
 }
 

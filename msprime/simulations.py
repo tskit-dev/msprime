@@ -31,9 +31,9 @@ import sys
 import os
 
 import _msprime
-import msprime.tables as _tables
-import msprime.provenance as provenance
-import msprime.trees as trees
+import tskit.tables as _tables
+import tskit.provenance as provenance
+import tskit.trees as trees
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
@@ -642,14 +642,17 @@ class Simulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        ll_from_ts = None
+        ll_from_tables = None
         if self.from_ts is not None:
-            ll_from_ts = self.from_ts.get_ll_tree_sequence()
+            # Make sure we keep this lying around or else it can get garbage
+            # collected before we take a copy of the underlying tables.
+            self._from_tables = self.from_ts.tables.ll_tables
+            ll_from_tables = self._from_tables.get_pointer()
         start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             recombination_map=ll_recomb_map,
-            from_ts=ll_from_ts,
+            from_tables=ll_from_tables,
             start_time=start_time,
             random_generator=self.random_generator,
             model=ll_simulation_model,
@@ -684,9 +687,9 @@ class Simulator(object):
         # into the local table here. We should just work directly with the
         # tables held in the simulator. To do this we need an interface
         # to the simulator's tables.
-        self.ll_sim.populate_tables(self.tables.ll_tables)
+        self.ll_sim.populate_tables(self.tables.ll_tables.get_pointer())
         if mutation_generator is not None:
-            mutation_generator.generate(self.tables.ll_tables)
+            mutation_generator.generate(self.tables.ll_tables.get_pointer())
         self.tables.provenances.truncate(self.num_input_provenances)
         if provenance_record is not None:
             self.tables.provenances.add_row(provenance_record)
