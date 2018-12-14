@@ -40,7 +40,7 @@ from tskit import (
     IndividualTable, NodeTable, EdgeTable, SiteTable, MutationTable,
     MigrationTable, PopulationTable, ProvenanceTable, TableCollection)
 from tskit import LdCalculator
-from tskit import load, load_text, load_tables
+from tskit import load, load_text
 from tskit import (
     parse_nodes, parse_edges, parse_individuals, parse_sites, parse_mutations)
 from tskit import pack_strings, pack_bytes, unpack_bytes, unpack_strings

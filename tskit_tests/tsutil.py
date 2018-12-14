@@ -38,7 +38,7 @@ def subsample_sites(ts, num_sites):
                     site=site_id, derived_state=mutation.derived_state,
                     node=mutation.node, parent=mutation.parent)
     add_provenance(t.provenances, "subsample_sites")
-    return tskit.load_tables(**t.asdict())
+    return t.tree_sequence()
 
 
 def decapitate(ts, num_edges):
@@ -199,7 +199,7 @@ def insert_redundant_breakpoints(ts):
         tables.edges.add_row(left=r.left, right=x, child=r.child, parent=r.parent)
         tables.edges.add_row(left=x, right=r.right, child=r.child, parent=r.parent)
     add_provenance(tables.provenances, "insert_redundant_breakpoints")
-    new_ts = tskit.load_tables(**tables.asdict())
+    new_ts = tables.tree_sequence()
     assert new_ts.num_edges == 2 * ts.num_edges
     return new_ts
 
@@ -284,7 +284,7 @@ def add_random_metadata(ts, seed=1, max_length=10):
     populations.set_columns(metadata_offset=offset, metadata=metadata)
 
     add_provenance(tables.provenances, "add_random_metadata")
-    ts = tskit.load_tables(**tables.asdict())
+    ts = tables.tree_sequence()
     return ts
 
 
@@ -303,7 +303,7 @@ def jiggle_samples(ts):
     flags[oldest_parent - n // 2: oldest_parent] = 1
     nodes.set_columns(flags, nodes.time)
     add_provenance(tables.provenances, "jiggle_samples")
-    return tskit.load_tables(**tables.asdict())
+    return tables.tree_sequence()
 
 
 def generate_site_mutations(tree, position, mu, site_table, mutation_table,
@@ -361,7 +361,7 @@ def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
         generate_site_mutations(t, position, mu, tables.sites, tables.mutations,
                                 multiple_per_node=multiple_per_node)
     add_provenance(tables.provenances, "jukes_cantor")
-    new_ts = tskit.load_tables(**tables.asdict())
+    new_ts = tables.tree_sequence()
     return new_ts
 
 

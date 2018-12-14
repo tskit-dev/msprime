@@ -52,20 +52,9 @@ def get_table_collection_copy(tables, sequence_length):
     Returns a copy of the specified table collection with the specified
     sequence length.
     """
-    ll_tables = _tskit.TableCollection(
-        individuals=tables.individuals.ll_table,
-        nodes=tables.nodes.ll_table,
-        edges=tables.edges.ll_table,
-        migrations=tables.migrations.ll_table,
-        sites=tables.sites.ll_table,
-        mutations=tables.mutations.ll_table,
-        populations=tables.populations.ll_table,
-        provenances=tables.provenances.ll_table,
-        sequence_length=sequence_length)
-    assert ll_tables.sequence_length == sequence_length
-    tables = tskit.TableCollection(ll_tables=ll_tables)
-    assert tables.sequence_length == sequence_length
-    return tables
+    table_dict = tables.asdict()
+    table_dict["sequence_length"] = sequence_length
+    return tskit.TableCollection.fromdict(table_dict)
 
 
 def insert_gap(ts, position, length):
@@ -282,6 +271,79 @@ def simplify_tree_sequence(ts, samples, filter_sites=True):
     s = simplify.Simplifier(
         ts, samples, filter_sites=filter_sites)
     return s.simplify()
+
+
+def oriented_forests(n):
+    """
+    Implementation of Algorithm O from TAOCP section 7.2.1.6.
+    Generates all canonical n-node oriented forests.
+    """
+    p = [k - 1 for k in range(0, n + 1)]
+    k = 1
+    while k != 0:
+        yield p
+        if p[n] > 0:
+            p[n] = p[p[n]]
+            yield p
+        k = n
+        while k > 0 and p[k] == 0:
+            k -= 1
+        if k != 0:
+            j = p[k]
+            d = k - j
+            not_done = True
+            while not_done:
+                if p[k - d] == p[j]:
+                    p[k] = p[j]
+                else:
+                    p[k] = p[k - d] + d
+                if k == n:
+                    not_done = False
+                else:
+                    k += 1
+
+
+def get_mrca(pi, x, y):
+    """
+    Returns the most recent common ancestor of nodes x and y in the
+    oriented forest pi.
+    """
+    x_parents = [x]
+    j = x
+    while j != 0:
+        j = pi[j]
+        x_parents.append(j)
+    y_parents = {y: None}
+    j = y
+    while j != 0:
+        j = pi[j]
+        y_parents[j] = None
+    # We have the complete list of parents for x and y back to root.
+    mrca = 0
+    j = 0
+    while x_parents[j] not in y_parents:
+        j += 1
+    mrca = x_parents[j]
+    return mrca
+
+
+class TestMRCACalculator(unittest.TestCase):
+    """
+    Class to test the Schieber-Vishkin algorithm.
+
+    These tests are included here as we use the MRCA calculator below in
+    our tests.
+    """
+    def test_all_oriented_forests(self):
+        # Runs through all possible oriented forests and checks all possible
+        # node pairs using an inferior algorithm.
+        for n in range(2, 9):
+            for pi in oriented_forests(n):
+                sv = tests.MRCACalculator(pi)
+                for j in range(1, n + 1):
+                    for k in range(1, j + 1):
+                        mrca = get_mrca(pi, j, k)
+                        self.assertEqual(mrca, sv.get_mrca(j, k))
 
 
 class HighLevelTestCase(unittest.TestCase):
@@ -712,16 +774,15 @@ class TestHaplotypeGenerator(HighLevelTestCase):
             node=mutations.node,
             derived_state=np.zeros(ts.num_sites, dtype=np.int8) + ord("T"),
             derived_state_offset=np.arange(ts.num_sites + 1, dtype=np.uint32))
-        tsp = tskit.load_tables(**tables.asdict())
+        tsp = tables.tree_sequence()
         H = [h.replace("0", "A").replace("1", "T") for h in ts.haplotypes()]
         self.assertEqual(H, list(tsp.haplotypes()))
 
     def test_multiletter_mutations(self):
         ts = msprime.simulate(10)
         tables = ts.tables
-        sites = tables.sites
-        sites.add_row(0, "ACTG")
-        tsp = tskit.load_tables(**tables.asdict())
+        tables.sites.add_row(0, "ACTG")
+        tsp = tables.tree_sequence()
         self.assertRaises(_tskit.LibraryError, list, tsp.haplotypes())
 
     def test_recurrent_mutations_over_samples(self):
@@ -1328,20 +1389,6 @@ class TestTreeSequence(HighLevelTestCase):
             ts.get_pairwise_diversity(samples), ts.pairwise_diversity(samples))
         self.assertTrue(np.array_equal(ts.get_samples(), ts.samples()))
 
-    def test_generate_mutations_on_tree_sequence(self):
-        some_mutations = False
-        for ts in get_example_tree_sequences():
-            tables = ts.dump_tables()
-            mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 10)
-            tables.sites.clear()
-            tables.mutations.clear()
-            mutgen.generate(tables.ll_tables.get_pointer())
-            if tables.mutations.num_rows > 0:
-                some_mutations = True
-            tsp = tskit.load_tables(**tables.asdict())
-            self.assertEqual(tsp.num_mutations, tables.mutations.num_rows)
-        self.assertTrue(some_mutations)
-
     def test_sites(self):
         some_sites = False
         for ts in get_example_tree_sequences():
@@ -1640,9 +1687,6 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
             mutations_file = six.StringIO()
             individuals_file = six.StringIO()
             populations_file = six.StringIO()
-            tables = ts1.dump_tables()
-            ts1 = tskit.load_tables(
-                sequence_length=ts1.sequence_length, **tables.asdict())
             ts1.dump_text(
                 nodes=nodes_file, edges=edges_file, sites=sites_file,
                 mutations=mutations_file, individuals=individuals_file,

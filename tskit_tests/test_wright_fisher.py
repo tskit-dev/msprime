@@ -175,7 +175,7 @@ class TestSimulation(unittest.TestCase):
         ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
-        ts = tskit.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         for tree in ts.trees():
             all_samples = set()
             for root in tree.roots:
@@ -198,7 +198,7 @@ class TestSimulation(unittest.TestCase):
         ts = tables.tree_sequence()
         self.assertGreater(tables.nodes.num_rows, 0)
         self.assertGreater(tables.edges.num_rows, 0)
-        ts = tskit.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         # We are assuming that everything has coalesced and we have single-root trees
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
@@ -208,7 +208,7 @@ class TestSimulation(unittest.TestCase):
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
         tables.sort()
-        ts = tskit.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         ts = tsutil.jukes_cantor(ts, 10, 0.1, seed=self.random_seed)
         tables = ts.tables
         self.assertGreater(tables.sites.num_rows, 0)
@@ -223,7 +223,7 @@ class TestSimulation(unittest.TestCase):
         self.assertGreater(tables.edges.num_rows, 0)
         self.assertGreater(tables.sites.num_rows, 0)
         self.assertGreater(tables.mutations.num_rows, 0)
-        ts = tskit.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sample_size, N)
         for hap in ts.haplotypes():
             self.assertEqual(len(hap), ts.num_sites)
@@ -234,7 +234,7 @@ class TestSimulation(unittest.TestCase):
         ngens = 100
         tables = wf_sim(N=N, ngens=ngens, deep_history=False, seed=self.random_seed)
         tables.sort()
-        ts = tskit.load_tables(**tables.asdict())
+        ts = tables.tree_sequence()
         ts = tsutil.jukes_cantor(ts, 1, 10, seed=self.random_seed)
         tables = ts.tables
         self.assertEqual(tables.sites.num_rows, 1)
@@ -292,7 +292,7 @@ class TestSimplify(unittest.TestCase):
                     for nloci in [1, 2, 3]:
                         tables = wf_sim(N=N, ngens=N, survival=surv, seed=seed)
                         tables.sort()
-                        ts = tskit.load_tables(**tables.asdict())
+                        ts = tables.tree_sequence()
                         ts = tsutil.jukes_cantor(ts, num_sites=nloci, mu=mut, seed=seed)
                         self.verify_simulation(ts, ngens=N)
                         yield ts

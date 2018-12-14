@@ -110,9 +110,8 @@ class TestTreeDraw(unittest.TestCase):
         assert False
 
     def get_empty_tree(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables = tskit.TableCollection(sequence_length=1)
+        ts = tables.tree_sequence()
         return next(ts.trees())
 
 

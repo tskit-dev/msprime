@@ -102,18 +102,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def verify_sparse_tree_mrcas(self, st):
-        # Check the mrcas
-        oriented_forest = [st.get_parent(j) for j in range(st.num_nodes)]
-        mrca_calc = tests.MRCACalculator(oriented_forest)
-        # We've done exhaustive tests elsewhere, no need to go
-        # through the combinations.
-        for j in range(st.num_nodes):
-            mrca = st.get_mrca(0, j)
-            self.assertEqual(mrca, mrca_calc.get_mrca(0, j))
-            if mrca != msprime.NULL_NODE:
-                self.assertEqual(st.get_time(mrca), st.get_tmrca(0, j))
-
     def verify_sparse_tree_branch_lengths(self, st):
         for j in range(st.get_sample_size()):
             u = j
@@ -174,7 +162,6 @@ class HighLevelTestCase(tests.MsprimeTestCase):
         self.assertEqual(sorted(st.samples()), sorted(samples))
 
     def verify_sparse_tree(self, st):
-        self.verify_sparse_tree_mrcas(st)
         self.verify_sparse_tree_branch_lengths(st)
         self.verify_sparse_tree_structure(st)
 
@@ -369,6 +356,11 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertEqual(rng, sim.random_generator)
         self.assertEqual(rng.get_seed(), seed)
 
+    def test_length(self):
+        for bad_length in [-1, 0, -1e-6]:
+            with self.assertRaises(ValueError):
+                msprime.simulator_factory(10, length=bad_length)
+
     def test_sample_size(self):
         self.assertRaises(ValueError, msprime.simulator_factory)
         self.assertRaises(ValueError, msprime.simulator_factory, 1)
@@ -481,6 +473,10 @@ class TestSimulatorFactory(unittest.TestCase):
             np.fill_diagonal(hl_matrix, 0)
             sim = f(hl_matrix)
             self.assertTrue(np.array_equal(np.array(sim.migration_matrix), hl_matrix))
+            sim.run()
+            events = np.array(sim.num_migration_events)
+            self.assertEqual(events.shape, (N, N))
+            self.assertTrue(np.all(events >= 0))
 
     def test_default_migration_matrix(self):
         sim = msprime.simulator_factory(10)
@@ -496,8 +492,7 @@ class TestSimulatorFactory(unittest.TestCase):
 
     def test_recombination_rate(self):
         def f(recomb_rate):
-            return msprime.simulator_factory(
-                10, recombination_rate=recomb_rate)
+            return msprime.simulator_factory(10, recombination_rate=recomb_rate)
         for bad_type in ["", {}, []]:
             self.assertRaises(TypeError, f, bad_type)
         for bad_value in [-1, -1e15]:
@@ -507,8 +502,8 @@ class TestSimulatorFactory(unittest.TestCase):
             recomb_map = sim.recombination_map
             self.assertEqual(recomb_map.get_positions(), [0, 1], [rate, 0])
             self.assertEqual(
-                recomb_map.get_num_loci(),
-                msprime.RecombinationMap.DEFAULT_NUM_LOCI)
+                recomb_map.get_num_loci(), msprime.RecombinationMap.DEFAULT_NUM_LOCI)
+            self.assertEqual(sim.num_loci, recomb_map.get_num_loci())
 
     def test_recombination_rate_scaling(self):
         values = [
@@ -527,11 +522,13 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertGreater(per_locus_rate, 0)
             ll_sim = sim.create_ll_instance()
             self.assertAlmostEqual(per_locus_rate, ll_sim.get_recombination_rate())
+            self.assertAlmostEqual(
+                sim.recombination_map.get_per_locus_recombination_rate(),
+                per_locus_rate)
 
     def test_recombination_map(self):
         def f(recomb_map):
-            return msprime.simulator_factory(
-                10, recombination_map=recomb_map)
+            return msprime.simulator_factory(10, recombination_map=recomb_map)
         self.assertRaises(TypeError, f, "wrong type")
         for n in range(2, 10):
             positions = list(range(n))
@@ -541,6 +538,7 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(sim.recombination_map, recomb_map)
             self.assertEqual(recomb_map.get_positions(), positions)
             self.assertEqual(recomb_map.get_rates(), rates)
+            self.assertEqual(sim.num_loci, recomb_map.get_num_loci())
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_num_loci(), recomb_map.get_num_loci())
 

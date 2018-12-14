@@ -1183,7 +1183,7 @@ def load(path):
         formats.raise_hdf5_format_error(path, e)
 
 
-def load_tables(
+def __load_tables(
         nodes, edges, migrations=None, sites=None, mutations=None,
         provenances=None, individuals=None, populations=None, sequence_length=0):
     """

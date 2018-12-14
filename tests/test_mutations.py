@@ -438,7 +438,7 @@ class TestKeep(unittest.TestCase):
             for mutation in site.mutations:
                 tables.mutations.add_row(
                     site=site.id, node=mutation.node, derived_state="T" * site.id)
-        original = msprime.load_tables(**tables.asdict())
+        original = tables.tree_sequence()
         updated = msprime.mutate(original, rate=1, random_seed=1, keep=True)
         self.verify_sites(original, updated)
 

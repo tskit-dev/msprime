@@ -53,13 +53,9 @@ fatal_error(const char *msg, ...)
 }
 
 static void
-fatal_library_error(int err, const char *msg, ...)
+fatal_library_error(int err, int line)
 {
-    va_list argp;
-    fprintf(stderr, "error:");
-    va_start(argp, msg);
-    vfprintf(stderr, msg, argp);
-    va_end(argp);
+    fprintf(stderr, "error line %d::", line);
     fprintf(stderr, ":%d:'%s'\n", err, msp_strerror(err));
     exit(EXIT_FAILURE);
 }
@@ -67,10 +63,25 @@ fatal_library_error(int err, const char *msg, ...)
 static void
 load_tables(tsk_tbl_collection_t *tables, const char *filename)
 {
-    int ret = tsk_tbl_collection_load(tables, filename, 0);
+    int ret = 0;
+    tsk_tbl_collection_t tmp;
+
+    /* We need to allocate a temporary table here because tbl_collection_load
+     * requires an allocated set of tables, but writes pointers into the
+     * kastore for the actual columns. */
+    ret = tsk_tbl_collection_alloc(&tmp, 0);
     if (ret != 0) {
-        fatal_library_error(ret, "Load error");
+        fatal_library_error(ret, __LINE__);
     }
+    ret = tsk_tbl_collection_load(&tmp, filename, 0);
+    if (ret != 0) {
+        fatal_library_error(ret, __LINE__);
+    }
+    ret = tsk_tbl_collection_copy(&tmp, tables);
+    if (ret != 0) {
+        fatal_library_error(ret, __LINE__);
+    }
+    tsk_tbl_collection_free(&tmp);
 }
 
 static int
@@ -525,16 +536,16 @@ out:
 }
 
 static int
-get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
-        recomb_map_t *recomb_map, const char *filename)
+get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
+        mutation_params_t *mutation_params, recomb_map_t *recomb_map,
+        const char *filename)
 {
     int ret = 0;
     int err;
     int int_tmp;
     uint32_t num_loci;
     size_t num_samples;
-    const char *from_ts_tables_path;
-    tsk_tbl_collection_t *from_ts_tables = NULL;
+    const char *from_ts_path;
     sample_t *samples = NULL;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -555,14 +566,10 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     gsl_rng_set(rng,  (unsigned long) int_tmp);
     ret = read_samples(config, &num_samples, &samples);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
-    if (config_lookup_string(config, "from", &from_ts_tables_path) == CONFIG_TRUE) {
-        from_ts_tables = malloc(sizeof(*from_ts_tables));
-        if (from_ts_tables == NULL) {
-            fatal_error("alloc error");
-        }
-        load_tables(from_ts_tables, from_ts_tables_path);
+    if (config_lookup_string(config, "from", &from_ts_path) == CONFIG_TRUE) {
+        load_tables(tables, from_ts_path);
     }
 
     if (config_lookup_int(config, "num_loci", &int_tmp) == CONFIG_FALSE) {
@@ -571,12 +578,12 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     num_loci = (uint32_t) int_tmp;
     ret = read_recomb_map(num_loci, recomb_map, config);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
 
-    ret = msp_alloc(msp, num_samples, samples, recomb_map, from_ts_tables, rng);
+    ret = msp_alloc(msp, num_samples, samples, recomb_map, tables, rng);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     if (config_lookup_float(config,
             "mutation_rate", &mutation_params->mutation_rate)
@@ -594,7 +601,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     }
     ret = msp_set_avl_node_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     if (config_lookup_int(config, "segment_block_size", &int_tmp)
             == CONFIG_FALSE) {
@@ -602,7 +609,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     }
     ret = msp_set_segment_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     if (config_lookup_int(config, "node_mapping_block_size", &int_tmp)
             == CONFIG_FALSE) {
@@ -610,7 +617,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     }
     ret = msp_set_node_mapping_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     if (config_lookup_int(config, "max_memory", &int_tmp)
             == CONFIG_FALSE) {
@@ -621,7 +628,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     }
     ret = msp_set_store_migrations(msp, (bool) int_tmp);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     t = config_lookup(config, "model");
     if (t == NULL) {
@@ -629,27 +636,23 @@ get_configuration(gsl_rng *rng, msp_t *msp, mutation_params_t *mutation_params,
     }
     ret = read_model_config(msp, config);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     ret = read_population_configuration(msp, config);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     ret = read_migration_matrix(msp, config);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     ret = read_demographic_events(msp, config);
     if (ret != 0) {
-        fatal_error(msp_strerror(ret));
+        fatal_library_error(ret, __LINE__);
     }
     config_destroy(config);
     free(config);
     free(samples);
-    if (from_ts_tables != NULL) {
-        tsk_tbl_collection_free(from_ts_tables);
-        free(from_ts_tables);
-    }
     return ret;
 }
 
@@ -681,33 +684,32 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     int ret = -1;
     int j;
     mutation_params_t mutation_params;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    msp_t *msp = calloc(1, sizeof(msp_t));
-    recomb_map_t *recomb_map = calloc(1, sizeof(recomb_map_t));
-    mutgen_t *mutgen = calloc(1, sizeof(mutgen_t));
+    msp_t msp;
+    recomb_map_t recomb_map;
+    mutgen_t mutgen;
     tsk_tbl_collection_t tables;
     tsk_treeseq_t tree_seq;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
+    if (rng == NULL) {
+        fatal_error("No memory");
+    }
     ret = tsk_tbl_collection_alloc(&tables, MSP_ALLOC_TABLES);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, __LINE__);
     }
-    if (rng == NULL || msp == NULL || recomb_map == NULL || mutgen == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = get_configuration(rng, msp, &mutation_params, recomb_map, conf_file);
+    ret = get_configuration(rng, &msp, &tables, &mutation_params, &recomb_map, conf_file);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, __LINE__);
     }
-    ret = mutgen_alloc(mutgen, mutation_params.mutation_rate, rng,
+    ret = mutgen_alloc(&mutgen, mutation_params.mutation_rate, rng,
             mutation_params.alphabet, 1024);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, __LINE__);
     }
-    ret = msp_initialise(msp);
+    ret = msp_initialise(&msp);
     if (ret != 0) {
-        goto out;
+        fatal_library_error(ret, __LINE__);
     }
     record_provenance(tables.provenances);
 
@@ -717,70 +719,53 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             printf("replicate %d\n", j);
             printf("=====================\n");
         }
-        ret = msp_reset(msp);
+        ret = msp_reset(&msp);
         if (ret != 0) {
-            goto out;
+            fatal_library_error(ret, __LINE__);
         }
-        msp_verify(msp);
-        ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+        msp_verify(&msp);
+        ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
         if (ret < 0) {
-            goto out;
+            fatal_library_error(ret, __LINE__);
         }
         if (verbose >= 1) {
-            ret = msp_print_state(msp, stdout);
+            msp_print_state(&msp, stdout);
         }
-        msp_verify(msp);
+        msp_verify(&msp);
+        ret = msp_finalise_tables(&msp);
+
         if (ret != 0) {
-            goto out;
+            fatal_library_error(ret, __LINE__);
         }
-        /* Create the tree_sequence from the state of the simulator. */
-        ret = msp_populate_tables(msp, &tables);
+        ret = mutgen_generate(&mutgen, &tables, 0);
         if (ret != 0) {
-            goto out;
-        }
-        ret = mutgen_generate(mutgen, &tables, 0);
-        if (ret != 0) {
-            goto out;
+            fatal_library_error(ret, __LINE__);
         }
         ret = tsk_treeseq_load_tables(&tree_seq, &tables, MSP_BUILD_INDEXES);
         if (ret != 0) {
-            goto out;
+            fatal_library_error(ret, __LINE__);
         }
         if (output_file != NULL) {
             ret = tsk_treeseq_dump(&tree_seq, output_file, 0);
             if (ret != 0) {
-                goto out;
+                fatal_library_error(ret, __LINE__);
             }
         }
         if (verbose >= 1) {
             tsk_tbl_collection_print_state(&tables, stdout);
             printf("-----------------\n");
-            mutgen_print_state(mutgen, stdout);
+            mutgen_print_state(&mutgen, stdout);
             printf("-----------------\n");
             tsk_treeseq_print_state(&tree_seq, stdout);
         }
         tsk_treeseq_free(&tree_seq);
     }
-out:
-    if (msp != NULL) {
-        msp_free(msp);
-        free(msp);
-    }
-    if (recomb_map != NULL) {
-        recomb_map_free(recomb_map);
-        free(recomb_map);
-    }
-    if (mutgen != NULL) {
-        mutgen_free(mutgen);
-        free(mutgen);
-    }
-    if (rng != NULL) {
-        gsl_rng_free(rng);
-    }
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    mutgen_free(&mutgen);
+    gsl_rng_free(rng);
     tsk_tbl_collection_free(&tables);
-    if (ret != 0) {
-        printf("error occured:%d:%s\n", ret, msp_strerror(ret));
-    }
 }
 
 int

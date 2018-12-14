@@ -24,10 +24,10 @@ from __future__ import print_function
 
 import json
 import sys
+import tskit
 
 import _msprime
 import msprime.simulations as simulations
-import msprime.provenance as provenance
 
 
 # Alphabets for mutations.
@@ -112,7 +112,7 @@ def mutate(
     :rtype: :class:`.TreeSequence`
     """
     try:
-        tables = tree_sequence.dump_tables()
+        tables = tree_sequence.tables
     except AttributeError:
         raise ValueError("First argument must be a TreeSequence instance.")
     if random_seed is None:
@@ -146,14 +146,17 @@ def mutate(
         end_time = float(end_time)
         parameters["end_time"] = end_time
     # TODO Add a JSON representation of the model to the provenance.
-    provenance_dict = provenance.get_provenance_dict(parameters)
+    provenance_dict = tskit.provenance.get_provenance_dict(parameters)
 
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
 
     mutation_generator = _msprime.MutationGenerator(
         rng, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
-    mutation_generator.generate(tables.ll_tables.get_pointer(), keep=keep)
+    lwt = _msprime.LightweightTableCollection()
+    lwt.fromdict(tables.asdict())
+    mutation_generator.generate(lwt, keep=keep)
 
+    tables = tskit.TableCollection.fromdict(lwt.asdict())
     tables.provenances.add_row(json.dumps(provenance_dict))
     return tables.tree_sequence()

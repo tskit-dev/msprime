@@ -31,7 +31,6 @@
 kas_funcptr *kas_dynamic_api;
 
 #include "tskit.h"
-#include "tskit_python.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
@@ -48,6 +47,16 @@ static PyObject *TskitFileFormatError;
 static PyObject *TskitVersionTooOldError;
 static PyObject *TskitVersionTooNewError;
 
+
+/* A lightweight wrapper for a table collection. This serves only as a wrapper
+ * around a pointer and a way to data in-and-out of the low level structures
+ * via the canonical dictionary encoding.
+ */
+typedef struct {
+    PyObject_HEAD
+    tsk_tbl_collection_t *tables;
+} LightweightTableCollection;
+
 /* The XTable classes each have 'lock' attribute, which is used to
  * raise an error if a Python thread attempts to access a table
  * while another Python thread is operating on it. Because tables
@@ -56,66 +65,71 @@ static PyObject *TskitVersionTooNewError;
  * Because C code executed here represents atomic Python operations
  * (while the GIL is held), this should be safe */
 
+typedef struct _TableCollection {
+    PyObject_HEAD
+    tsk_tbl_collection_t *tables;
+} TableCollection;
+
+ /* The table pointer in each of the Table classes either points to locally
+  * allocated memory or to the table stored in a tbl_collection_t. If we're
+  * using the memory in a tbl_collection_t, we keep a reference to the
+  * TableCollection object to ensure that the memory isn't free'd while a
+  * reference to the table itself is live. */
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_individual_tbl_t *table;
+    TableCollection *tables;
 } IndividualTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_node_tbl_t *table;
+    TableCollection *tables;
 } NodeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_edge_tbl_t *table;
+    TableCollection *tables;
 } EdgeTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_site_tbl_t *table;
+    TableCollection *tables;
 } SiteTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_mutation_tbl_t *table;
+    TableCollection *tables;
 } MutationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_migration_tbl_t *table;
+    TableCollection *tables;
 } MigrationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_population_tbl_t *table;
+    TableCollection *tables;
 } PopulationTable;
 
 typedef struct {
     PyObject_HEAD
     bool locked;
     tsk_provenance_tbl_t *table;
+    TableCollection *tables;
 } ProvenanceTable;
-
-typedef struct {
-    PyObject_HEAD
-    tsk_tbl_collection_t *tables;
-    IndividualTable *individuals;
-    NodeTable *nodes;
-    EdgeTable *edges;
-    SiteTable *sites;
-    MutationTable *mutations;
-    MigrationTable *migrations;
-    PopulationTable *populations;
-    ProvenanceTable *provenances;
-} TableCollection;
 
 typedef struct {
     PyObject_HEAD
@@ -532,6 +546,29 @@ out:
  *===================================================================
  */
 
+/*
+ * Retrieves the PyObject* corresponding the specified key in the
+ * specified dictionary. If required is true, raise a TypeError if the
+ * value is None.
+ *
+ * NB This returns a *borrowed reference*, so don't DECREF it!
+ */
+static PyObject *
+get_table_dict_value(PyObject *dict, const char *key_str, bool required)
+{
+    PyObject *ret = NULL;
+
+    ret = PyDict_GetItemString(dict, key_str);
+    if (ret == NULL) {
+        PyErr_Format(PyExc_ValueError, "'%s' not specified", key_str);
+    }
+    if (required && ret == Py_None) {
+        PyErr_Format(PyExc_TypeError, "'%s' is required", key_str);
+        ret = NULL;
+    }
+    return ret;
+}
+
 static PyObject *
 table_get_column_array(size_t num_rows, void *data, int npy_type,
         size_t element_size)
@@ -571,10 +608,9 @@ table_read_column_array(PyObject *input, int npy_type, size_t *num_rows, bool ch
         *num_rows = (size_t) shape[0];
     }
     ret = array;
+    array = NULL;
 out:
-    if (ret == NULL) {
-        Py_XDECREF(array);
-    }
+    Py_XDECREF(array);
     return ret;
 }
 
@@ -584,6 +620,7 @@ table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool c
     PyArrayObject *ret = NULL;
     PyArrayObject *array = NULL;
     npy_intp *shape;
+    uint32_t *data;
 
     array = (PyArrayObject *) PyArray_FROMANY(input, NPY_UINT32, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (array == NULL) {
@@ -593,14 +630,18 @@ table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool c
     if (! check_num_rows) {
         *num_rows = shape[0];
         if (*num_rows == 0) {
-            PyErr_SetString(PyExc_ValueError,
-                    "Offset arrays must have at least one element");
+            PyErr_SetString(PyExc_ValueError, "Offset arrays must have at least one element");
             goto out;
         }
         *num_rows -= 1;
     }
     if (shape[0] != *num_rows + 1) {
         PyErr_SetString(PyExc_ValueError, "offset columns must have n + 1 rows.");
+        goto out;
+    }
+    data = PyArray_DATA(array);
+    if (data[*num_rows] != (uint32_t) length) {
+        PyErr_SetString(PyExc_ValueError, "Bad offset column encoding");
         goto out;
     }
     ret = array;
@@ -610,6 +651,1250 @@ out:
     }
     return ret;
 }
+
+static int
+parse_individual_table_dict(tsk_individual_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows, metadata_length, location_length;
+    char *metadata_data = NULL;
+    double *location_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
+    uint32_t *location_offset_data = NULL;
+    PyObject *flags_input = NULL;
+    PyArrayObject *flags_array = NULL;
+    PyObject *location_input = NULL;
+    PyArrayObject *location_array = NULL;
+    PyObject *location_offset_input = NULL;
+    PyArrayObject *location_offset_array = NULL;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+
+    /* Get the input values */
+    flags_input = get_table_dict_value(dict, "flags", true);
+    if (flags_input == NULL) {
+        goto out;
+    }
+    location_input = get_table_dict_value(dict, "location", false);
+    if (location_input == NULL) {
+        goto out;
+    }
+    location_offset_input = get_table_dict_value(dict, "location_offset", false);
+    if (location_offset_input == NULL) {
+        goto out;
+    }
+    metadata_input = get_table_dict_value(dict, "metadata", false);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+
+    /* Pull out the arrays */
+    flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
+    if (flags_array == NULL) {
+        goto out;
+    }
+    if ((location_input == Py_None) != (location_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "location and location_offset must be specified together");
+        goto out;
+    }
+    if (location_input != Py_None) {
+        location_array = table_read_column_array(location_input, NPY_FLOAT64,
+                &location_length, false);
+        if (location_array == NULL) {
+            goto out;
+        }
+        location_data = PyArray_DATA(location_array);
+        location_offset_array = table_read_offset_array(location_offset_input, &num_rows,
+                location_length, true);
+        if (location_offset_array == NULL) {
+            goto out;
+        }
+        location_offset_data = PyArray_DATA(location_offset_array);
+    }
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+
+    if (clear_table) {
+        err = tsk_individual_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_individual_tbl_append_columns(table, num_rows,
+            PyArray_DATA(flags_array),
+            location_data, location_offset_data,
+            metadata_data, metadata_offset_data);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(flags_array);
+    Py_XDECREF(location_array);
+    Py_XDECREF(location_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static int
+parse_node_table_dict(tsk_node_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows, metadata_length;
+    char *metadata_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
+    void *population_data = NULL;
+    void *individual_data = NULL;
+    PyObject *time_input = NULL;
+    PyArrayObject *time_array = NULL;
+    PyObject *flags_input = NULL;
+    PyArrayObject *flags_array = NULL;
+    PyObject *population_input = NULL;
+    PyArrayObject *population_array = NULL;
+    PyObject *individual_input = NULL;
+    PyArrayObject *individual_array = NULL;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+
+    /* Get the input values */
+    flags_input = get_table_dict_value(dict, "flags", true);
+    if (flags_input == NULL) {
+        goto out;
+    }
+    time_input = get_table_dict_value(dict, "time", true);
+    if (time_input == NULL) {
+        goto out;
+    }
+    population_input = get_table_dict_value(dict, "population", false);
+    if (population_input == NULL) {
+        goto out;
+    }
+    individual_input = get_table_dict_value(dict, "individual", false);
+    if (individual_input == NULL) {
+        goto out;
+    }
+    metadata_input = get_table_dict_value(dict, "metadata", false);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+
+    /* Create the arrays */
+    flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
+    if (flags_array == NULL) {
+        goto out;
+    }
+    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
+    if (time_array == NULL) {
+        goto out;
+    }
+    if (population_input != Py_None) {
+        population_array = table_read_column_array(population_input, NPY_INT32,
+                &num_rows, true);
+        if (population_array == NULL) {
+            goto out;
+        }
+        population_data = PyArray_DATA(population_array);
+    }
+    if (individual_input != Py_None) {
+        individual_array = table_read_column_array(individual_input, NPY_INT32,
+                &num_rows, true);
+        if (individual_array == NULL) {
+            goto out;
+        }
+        individual_data = PyArray_DATA(individual_array);
+    }
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+    if (clear_table) {
+        err = tsk_node_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_node_tbl_append_columns(table, num_rows,
+            PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
+            individual_data, metadata_data, metadata_offset_data);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(flags_array);
+    Py_XDECREF(time_array);
+    Py_XDECREF(population_array);
+    Py_XDECREF(individual_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static int
+parse_edge_table_dict(tsk_edge_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int ret = -1;
+    int err;
+    size_t num_rows = 0;
+    PyObject *left_input = NULL;
+    PyArrayObject *left_array = NULL;
+    PyObject *right_input = NULL;
+    PyArrayObject *right_array = NULL;
+    PyObject *parent_input = NULL;
+    PyArrayObject *parent_array = NULL;
+    PyObject *child_input = NULL;
+    PyArrayObject *child_array = NULL;
+
+    /* Get the input values */
+    left_input = get_table_dict_value(dict, "left", true);
+    if (left_input == NULL) {
+        goto out;
+    }
+    right_input = get_table_dict_value(dict, "right", true);
+    if (right_input == NULL) {
+        goto out;
+    }
+    parent_input = get_table_dict_value(dict, "parent", true);
+    if (parent_input == NULL) {
+        goto out;
+    }
+    child_input = get_table_dict_value(dict, "child", true);
+    if (child_input == NULL) {
+        goto out;
+    }
+
+    /* Create the arrays */
+    left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
+    if (left_array == NULL) {
+        goto out;
+    }
+    right_array = table_read_column_array(right_input, NPY_FLOAT64, &num_rows, true);
+    if (right_array == NULL) {
+        goto out;
+    }
+    parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
+    if (parent_array == NULL) {
+        goto out;
+    }
+    child_array = table_read_column_array(child_input, NPY_INT32, &num_rows, true);
+    if (child_array == NULL) {
+        goto out;
+    }
+
+    if (clear_table) {
+        err = tsk_edge_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_edge_tbl_append_columns(table, num_rows,
+            PyArray_DATA(left_array), PyArray_DATA(right_array),
+            PyArray_DATA(parent_array), PyArray_DATA(child_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(left_array);
+    Py_XDECREF(right_array);
+    Py_XDECREF(parent_array);
+    Py_XDECREF(child_array);
+    return ret;
+}
+
+static int
+parse_migration_table_dict(tsk_migration_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows;
+    PyObject *left_input = NULL;
+    PyArrayObject *left_array = NULL;
+    PyObject *right_input = NULL;
+    PyArrayObject *right_array = NULL;
+    PyObject *node_input = NULL;
+    PyArrayObject *node_array = NULL;
+    PyObject *source_input = NULL;
+    PyArrayObject *source_array = NULL;
+    PyObject *dest_input = NULL;
+    PyArrayObject *dest_array = NULL;
+    PyObject *time_input = NULL;
+    PyArrayObject *time_array = NULL;
+
+    /* Get the input values */
+    left_input = get_table_dict_value(dict, "left", true);
+    if (left_input == NULL) {
+        goto out;
+    }
+    right_input = get_table_dict_value(dict, "right", true);
+    if (right_input == NULL) {
+        goto out;
+    }
+    node_input = get_table_dict_value(dict, "node", true);
+    if (node_input == NULL) {
+        goto out;
+    }
+    source_input = get_table_dict_value(dict, "source", true);
+    if (source_input == NULL) {
+        goto out;
+    }
+    dest_input = get_table_dict_value(dict, "dest", true);
+    if (dest_input == NULL) {
+        goto out;
+    }
+    time_input = get_table_dict_value(dict, "time", true);
+    if (time_input == NULL) {
+        goto out;
+    }
+
+    /* Build the arrays */
+    left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
+    if (left_array == NULL) {
+        goto out;
+    }
+    right_array = table_read_column_array(right_input, NPY_FLOAT64, &num_rows, true);
+    if (right_array == NULL) {
+        goto out;
+    }
+    node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
+    if (node_array == NULL) {
+        goto out;
+    }
+    source_array = table_read_column_array(source_input, NPY_INT32, &num_rows, true);
+    if (source_array == NULL) {
+        goto out;
+    }
+    dest_array = table_read_column_array(dest_input, NPY_INT32, &num_rows, true);
+    if (dest_array == NULL) {
+        goto out;
+    }
+    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
+    if (time_array == NULL) {
+        goto out;
+    }
+
+    if (clear_table) {
+        err = tsk_migration_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_migration_tbl_append_columns(table, num_rows,
+        PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
+        PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(left_array);
+    Py_XDECREF(right_array);
+    Py_XDECREF(node_array);
+    Py_XDECREF(source_array);
+    Py_XDECREF(dest_array);
+    Py_XDECREF(time_array);
+    return ret;
+}
+
+static int
+parse_site_table_dict(tsk_site_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows = 0;
+    size_t ancestral_state_length, metadata_length;
+    PyObject *position_input = NULL;
+    PyArrayObject *position_array = NULL;
+    PyObject *ancestral_state_input = NULL;
+    PyArrayObject *ancestral_state_array = NULL;
+    PyObject *ancestral_state_offset_input = NULL;
+    PyArrayObject *ancestral_state_offset_array = NULL;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    char *metadata_data;
+    uint32_t *metadata_offset_data;
+
+    /* Get the input values */
+    position_input = get_table_dict_value(dict, "position", true);
+    if (position_input == NULL) {
+        goto out;
+    }
+    ancestral_state_input = get_table_dict_value(dict, "ancestral_state", true);
+    if (ancestral_state_input == NULL) {
+        goto out;
+    }
+    ancestral_state_offset_input = get_table_dict_value(dict, "ancestral_state_offset", true);
+    if (ancestral_state_offset_input == NULL) {
+        goto out;
+    }
+    metadata_input = get_table_dict_value(dict, "metadata", false);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+
+    /* Get the arrays */
+    position_array = table_read_column_array(position_input, NPY_FLOAT64, &num_rows, false);
+    if (position_array == NULL) {
+        goto out;
+    }
+    ancestral_state_array = table_read_column_array(ancestral_state_input, NPY_INT8,
+            &ancestral_state_length, false);
+    if (ancestral_state_array == NULL) {
+        goto out;
+    }
+    ancestral_state_offset_array = table_read_offset_array(ancestral_state_offset_input,
+            &num_rows, ancestral_state_length, true);
+    if (ancestral_state_offset_array == NULL) {
+        goto out;
+    }
+
+    metadata_data = NULL;
+    metadata_offset_data = NULL;
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, false);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+
+    if (clear_table) {
+        err = tsk_site_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_site_tbl_append_columns(table, num_rows,
+        PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
+        PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(position_array);
+    Py_XDECREF(ancestral_state_array);
+    Py_XDECREF(ancestral_state_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static int
+parse_mutation_table_dict(tsk_mutation_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows = 0;
+    size_t derived_state_length = 0;
+    size_t metadata_length = 0;
+    PyObject *site_input = NULL;
+    PyArrayObject *site_array = NULL;
+    PyObject *derived_state_input = NULL;
+    PyArrayObject *derived_state_array = NULL;
+    PyObject *derived_state_offset_input = NULL;
+    PyArrayObject *derived_state_offset_array = NULL;
+    PyObject *node_input = NULL;
+    PyArrayObject *node_array = NULL;
+    PyObject *parent_input = NULL;
+    PyArrayObject *parent_array = NULL;
+    tsk_id_t *parent_data;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    char *metadata_data;
+    uint32_t *metadata_offset_data;
+
+    /* Get the input values */
+    site_input = get_table_dict_value(dict, "site", true);
+    if (site_input == NULL) {
+        goto out;
+    }
+    node_input = get_table_dict_value(dict, "node", true);
+    if (node_input == NULL) {
+        goto out;
+    }
+    parent_input = get_table_dict_value(dict, "parent", false);
+    if (parent_input == NULL) {
+        goto out;
+    }
+    derived_state_input = get_table_dict_value(dict, "derived_state", true);
+    if (derived_state_input == NULL) {
+        goto out;
+    }
+    derived_state_offset_input = get_table_dict_value(dict, "derived_state_offset", true);
+    if (derived_state_offset_input == NULL) {
+        goto out;
+    }
+    metadata_input = get_table_dict_value(dict, "metadata", false);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+
+    /* Get the arrays */
+    site_array = table_read_column_array(site_input, NPY_INT32, &num_rows, false);
+    if (site_array == NULL) {
+        goto out;
+    }
+    derived_state_array = table_read_column_array(derived_state_input, NPY_INT8,
+            &derived_state_length, false);
+    if (derived_state_array == NULL) {
+        goto out;
+    }
+    derived_state_offset_array = table_read_offset_array(derived_state_offset_input,
+            &num_rows, derived_state_length, true);
+    if (derived_state_offset_array == NULL) {
+        goto out;
+    }
+    node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
+    if (node_array == NULL) {
+        goto out;
+    }
+
+    parent_data = NULL;
+    if (parent_input != Py_None) {
+        parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
+        if (parent_array == NULL) {
+            goto out;
+        }
+        parent_data = PyArray_DATA(parent_array);
+    }
+
+    metadata_data = NULL;
+    metadata_offset_data = NULL;
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, false);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+
+    if (clear_table) {
+        err = tsk_mutation_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_mutation_tbl_append_columns(table, num_rows,
+            PyArray_DATA(site_array), PyArray_DATA(node_array),
+            parent_data, PyArray_DATA(derived_state_array),
+            PyArray_DATA(derived_state_offset_array),
+            metadata_data, metadata_offset_data);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(site_array);
+    Py_XDECREF(derived_state_array);
+    Py_XDECREF(derived_state_offset_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    Py_XDECREF(node_array);
+    Py_XDECREF(parent_array);
+    return ret;
+}
+
+static int
+parse_population_table_dict(tsk_population_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows, metadata_length;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+
+    /* Get the inputs */
+    metadata_input = get_table_dict_value(dict, "metadata", true);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", true);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+
+    /* Get the arrays */
+    metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+            &metadata_length, false);
+    if (metadata_array == NULL) {
+        goto out;
+    }
+    metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+            metadata_length, false);
+    if (metadata_offset_array == NULL) {
+        goto out;
+    }
+
+    if (clear_table) {
+        err = tsk_population_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_population_tbl_append_columns(table, num_rows,
+            PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
+    return ret;
+}
+
+static int
+parse_provenance_table_dict(tsk_provenance_tbl_t *table, PyObject *dict, bool clear_table)
+{
+    int err;
+    int ret = -1;
+    size_t num_rows, timestamp_length, record_length;
+    PyObject *timestamp_input = NULL;
+    PyArrayObject *timestamp_array = NULL;
+    PyObject *timestamp_offset_input = NULL;
+    PyArrayObject *timestamp_offset_array = NULL;
+    PyObject *record_input = NULL;
+    PyArrayObject *record_array = NULL;
+    PyObject *record_offset_input = NULL;
+    PyArrayObject *record_offset_array = NULL;
+
+    /* Get the inputs */
+    timestamp_input = get_table_dict_value(dict, "timestamp", true);
+    if (timestamp_input == NULL) {
+        goto out;
+    }
+    timestamp_offset_input = get_table_dict_value(dict, "timestamp_offset", true);
+    if (timestamp_offset_input == NULL) {
+        goto out;
+    }
+    record_input = get_table_dict_value(dict, "record", true);
+    if (record_input == NULL) {
+        goto out;
+    }
+    record_offset_input = get_table_dict_value(dict, "record_offset", true);
+    if (record_offset_input == NULL) {
+        goto out;
+    }
+
+    timestamp_array = table_read_column_array(timestamp_input, NPY_INT8,
+            &timestamp_length, false);
+    if (timestamp_array == NULL) {
+        goto out;
+    }
+    timestamp_offset_array = table_read_offset_array(timestamp_offset_input, &num_rows,
+            timestamp_length, false);
+    if (timestamp_offset_array == NULL) {
+        goto out;
+    }
+    record_array = table_read_column_array(record_input, NPY_INT8,
+            &record_length, false);
+    if (record_array == NULL) {
+        goto out;
+    }
+    record_offset_array = table_read_offset_array(record_offset_input, &num_rows,
+            record_length, true);
+    if (record_offset_array == NULL) {
+        goto out;
+    }
+
+    if (clear_table) {
+        err = tsk_provenance_tbl_clear(table);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+    err = tsk_provenance_tbl_append_columns(table, num_rows,
+            PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
+            PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(timestamp_array);
+    Py_XDECREF(timestamp_offset_array);
+    Py_XDECREF(record_array);
+    Py_XDECREF(record_offset_array);
+    return ret;
+}
+
+static int
+parse_table_collection_dict(tsk_tbl_collection_t *tables, PyObject *tables_dict)
+{
+    int ret = -1;
+    PyObject *value = NULL;
+
+    value = get_table_dict_value(tables_dict, "sequence_length", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyNumber_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "'sequence_length' is not number");
+        goto out;
+    }
+    tables->sequence_length = PyFloat_AsDouble(value);
+
+    /* individuals */
+    value = get_table_dict_value(tables_dict, "individuals", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_individual_table_dict(tables->individuals, value, true) != 0) {
+        goto out;
+    }
+
+    /* nodes */
+    value = get_table_dict_value(tables_dict, "nodes", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_node_table_dict(tables->nodes, value, true) != 0) {
+        goto out;
+    }
+
+    /* edges */
+    value = get_table_dict_value(tables_dict, "edges", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_edge_table_dict(tables->edges, value, true) != 0) {
+        goto out;
+    }
+
+    /* migrations */
+    value = get_table_dict_value(tables_dict, "migrations", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_migration_table_dict(tables->migrations, value, true) != 0) {
+        goto out;
+    }
+
+    /* sites */
+    value = get_table_dict_value(tables_dict, "sites", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_site_table_dict(tables->sites, value, true) != 0) {
+        goto out;
+    }
+
+    /* mutations */
+    value = get_table_dict_value(tables_dict, "mutations", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_mutation_table_dict(tables->mutations, value, true) != 0) {
+        goto out;
+    }
+
+    /* populations */
+    value = get_table_dict_value(tables_dict, "populations", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_population_table_dict(tables->populations, value, true) != 0) {
+        goto out;
+    }
+
+    /* provenances */
+    value = get_table_dict_value(tables_dict, "provenances", true);
+    if (value == NULL) {
+        goto out;
+    }
+    if (!PyDict_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "not a dictionary");
+        goto out;
+    }
+    if (parse_provenance_table_dict(tables->provenances, value, true) != 0) {
+        goto out;
+    }
+
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
+write_table_arrays(tsk_tbl_collection_t *tables, PyObject *dict)
+{
+    struct table_col {
+        const char *name;
+        void *data;
+        npy_intp num_rows;
+        int type;
+    };
+    struct table_desc {
+        const char *name;
+        struct table_col *cols;
+    };
+    int ret = -1;
+    PyObject *array = NULL;
+    PyObject *table_dict = NULL;
+    size_t j;
+    struct table_col *col;
+
+    struct table_col individual_cols[] = {
+        {"flags",
+            (void *) tables->individuals->flags, tables->individuals->num_rows, NPY_UINT32},
+        {"location",
+            (void *) tables->individuals->location, tables->individuals->location_length,
+            NPY_FLOAT64},
+        {"location_offset",
+            (void *) tables->individuals->location_offset, tables->individuals->num_rows + 1,
+            NPY_UINT32},
+        {"metadata",
+            (void *) tables->individuals->metadata, tables->individuals->metadata_length,
+            NPY_INT8},
+        {"metadata_offset",
+            (void *) tables->individuals->metadata_offset, tables->individuals->num_rows + 1,
+            NPY_UINT32},
+        {NULL},
+    };
+
+    struct table_col node_cols[] = {
+        {"time",
+            (void *) tables->nodes->time, tables->nodes->num_rows, NPY_FLOAT64},
+        {"flags",
+            (void *) tables->nodes->flags, tables->nodes->num_rows, NPY_UINT32},
+        {"population",
+            (void *) tables->nodes->population, tables->nodes->num_rows, NPY_INT32},
+        {"individual",
+            (void *) tables->nodes->individual, tables->nodes->num_rows, NPY_INT32},
+        {"metadata",
+            (void *) tables->nodes->metadata, tables->nodes->metadata_length, NPY_INT8},
+        {"metadata_offset",
+            (void *) tables->nodes->metadata_offset, tables->nodes->num_rows + 1, NPY_UINT32},
+        {NULL},
+    };
+
+    struct table_col edge_cols[] = {
+        {"left", (void *) tables->edges->left, tables->edges->num_rows, NPY_FLOAT64},
+        {"right", (void *) tables->edges->right, tables->edges->num_rows, NPY_FLOAT64},
+        {"parent", (void *) tables->edges->parent, tables->edges->num_rows, NPY_INT32},
+        {"child", (void *) tables->edges->child, tables->edges->num_rows, NPY_INT32},
+        {NULL},
+    };
+
+    struct table_col migration_cols[] = {
+        {"left",
+            (void *) tables->migrations->left, tables->migrations->num_rows,  NPY_FLOAT64},
+        {"right",
+            (void *) tables->migrations->right, tables->migrations->num_rows,  NPY_FLOAT64},
+        {"node",
+            (void *) tables->migrations->node, tables->migrations->num_rows,  NPY_INT32},
+        {"source",
+            (void *) tables->migrations->source, tables->migrations->num_rows,  NPY_INT32},
+        {"dest",
+            (void *) tables->migrations->dest, tables->migrations->num_rows,  NPY_INT32},
+        {"time",
+            (void *) tables->migrations->time, tables->migrations->num_rows,  NPY_FLOAT64},
+        {NULL},
+    };
+
+    struct table_col site_cols[] = {
+        {"position",
+            (void *) tables->sites->position, tables->sites->num_rows, NPY_FLOAT64},
+        {"ancestral_state",
+            (void *) tables->sites->ancestral_state, tables->sites->ancestral_state_length,
+            NPY_INT8},
+        {"ancestral_state_offset",
+            (void *) tables->sites->ancestral_state_offset, tables->sites->num_rows + 1,
+            NPY_UINT32},
+        {"metadata",
+            (void *) tables->sites->metadata, tables->sites->metadata_length, NPY_INT8},
+        {"metadata_offset",
+            (void *) tables->sites->metadata_offset, tables->sites->num_rows + 1, NPY_UINT32},
+        {NULL},
+    };
+
+    struct table_col mutation_cols[] = {
+        {"site",
+            (void *) tables->mutations->site, tables->mutations->num_rows, NPY_INT32},
+        {"node",
+            (void *) tables->mutations->node, tables->mutations->num_rows, NPY_INT32},
+        {"parent",
+            (void *) tables->mutations->parent, tables->mutations->num_rows, NPY_INT32},
+        {"derived_state",
+            (void *) tables->mutations->derived_state,
+            tables->mutations->derived_state_length, NPY_INT8},
+        {"derived_state_offset",
+            (void *) tables->mutations->derived_state_offset,
+            tables->mutations->num_rows + 1, NPY_UINT32},
+        {"metadata",
+            (void *) tables->mutations->metadata,
+            tables->mutations->metadata_length, NPY_INT8},
+        {"metadata_offset",
+            (void *) tables->mutations->metadata_offset,
+            tables->mutations->num_rows + 1, NPY_UINT32},
+        {NULL},
+    };
+
+    struct table_col population_cols[] = {
+        {"metadata", (void *) tables->populations->metadata,
+            tables->populations->metadata_length, NPY_INT8},
+        {"metadata_offset", (void *) tables->populations->metadata_offset,
+            tables->populations->num_rows+ 1, NPY_UINT32},
+        {NULL},
+    };
+
+    struct table_col provenance_cols[] = {
+        {"timestamp", (void *) tables->provenances->timestamp,
+            tables->provenances->timestamp_length, NPY_INT8},
+        {"timestamp_offset", (void *) tables->provenances->timestamp_offset,
+            tables->provenances->num_rows+ 1, NPY_UINT32},
+        {"record", (void *) tables->provenances->record,
+            tables->provenances->record_length, NPY_INT8},
+        {"record_offset", (void *) tables->provenances->record_offset,
+            tables->provenances->num_rows + 1, NPY_UINT32},
+        {NULL},
+    };
+
+    struct table_desc table_descs[] = {
+        {"individuals", individual_cols},
+        {"nodes", node_cols},
+        {"edges", edge_cols},
+        {"migrations", migration_cols},
+        {"sites", site_cols},
+        {"mutations", mutation_cols},
+        {"populations", population_cols},
+        {"provenances", provenance_cols},
+    };
+
+    for (j = 0; j < sizeof(table_descs) / sizeof(*table_descs); j++) {
+        table_dict = PyDict_New();
+        if (table_dict == NULL) {
+            goto out;
+        }
+        col = table_descs[j].cols;
+        while (col->name != NULL) {
+            array = PyArray_SimpleNewFromData(1, &col->num_rows, col->type, col->data);
+            if (array == NULL) {
+                goto out;
+            }
+            if (PyDict_SetItemString(table_dict, col->name, array) != 0) {
+                goto out;
+            }
+            Py_DECREF(array);
+            array = NULL;
+            col++;
+        }
+        if (PyDict_SetItemString(dict, table_descs[j].name, table_dict) != 0) {
+            goto out;
+        }
+        Py_DECREF(table_dict);
+        table_dict = NULL;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(array);
+    Py_XDECREF(table_dict);
+    return ret;
+}
+
+/* Returns a dictionary encoding of the specified table collection */
+static PyObject*
+dump_tables_dict(tsk_tbl_collection_t *tables)
+{
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
+    PyObject *val = NULL;
+    int err;
+
+    dict = PyDict_New();
+    if (dict == NULL) {
+        goto out;
+    }
+    val = Py_BuildValue("d", tables->sequence_length);
+    if (val == NULL) {
+        goto out;
+    }
+    if (PyDict_SetItemString(dict, "sequence_length", val) != 0) {
+        goto out;
+    }
+    Py_DECREF(val);
+    val = NULL;
+
+    err = write_table_arrays(tables, dict);
+    if (err != 0) {
+        goto out;
+    }
+    ret = dict;
+    dict = NULL;
+out:
+    Py_XDECREF(dict);
+    Py_XDECREF(val);
+    return ret;
+}
+
+/*===================================================================
+ * LightweightTableCollection
+ *===================================================================
+ */
+
+static int
+LightweightTableCollection_check_state(LightweightTableCollection *self)
+{
+    int ret = 0;
+    if (self->tables == NULL) {
+        PyErr_SetString(PyExc_SystemError, "LightweightTableCollection not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+LightweightTableCollection_dealloc(LightweightTableCollection* self)
+{
+    if (self->tables != NULL) {
+        tsk_tbl_collection_free(self->tables);
+        PyMem_Free(self->tables);
+        self->tables = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+LightweightTableCollection_init(LightweightTableCollection *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"sequence_length", NULL};
+    double sequence_length = -1;
+
+    self->tables = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|d", kwlist, &sequence_length)) {
+        goto out;
+    }
+    self->tables = PyMem_Malloc(sizeof(*self->tables));
+    if (self->tables == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    self->tables->sequence_length = sequence_length;
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+LightweightTableCollection_asdict(LightweightTableCollection *self)
+{
+    PyObject *ret = NULL;
+
+    if (LightweightTableCollection_check_state(self) != 0) {
+        goto out;
+    }
+    ret = dump_tables_dict(self->tables);
+out:
+    return ret;
+}
+
+static PyObject *
+LightweightTableCollection_fromdict(LightweightTableCollection *self, PyObject *args)
+{
+    int err;
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
+
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
+        goto out;
+    }
+    err = parse_table_collection_dict(self->tables, dict);
+    if (err != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
+
+static PyMemberDef LightweightTableCollection_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef LightweightTableCollection_methods[] = {
+    {"asdict", (PyCFunction) LightweightTableCollection_asdict,
+        METH_NOARGS, "Returns the tables encoded as a dictionary."},
+    {"fromdict", (PyCFunction) LightweightTableCollection_fromdict,
+        METH_VARARGS, "Populates the internal tables using the specified dictionary."},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LightweightTableCollectionType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.LightweightTableCollection",             /* tp_name */
+    sizeof(LightweightTableCollection),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LightweightTableCollection_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LightweightTableCollection objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    LightweightTableCollection_methods,             /* tp_methods */
+    LightweightTableCollection_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LightweightTableCollection_init,      /* tp_init */
+};
 
 /*===================================================================
  * IndividualTable
@@ -636,7 +1921,9 @@ out:
 static void
 IndividualTable_dealloc(IndividualTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_individual_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -780,116 +2067,37 @@ out:
 }
 
 static PyObject *
-IndividualTable_set_or_append_columns(IndividualTable *self, PyObject *args, PyObject *kwds,
-        int method)
+IndividualTable_parse_dict_arg(IndividualTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows, metadata_length, location_length;
-    char *metadata_data = NULL;
-    double *location_data = NULL;
-    uint32_t *metadata_offset_data = NULL;
-    uint32_t *location_offset_data = NULL;
-    PyObject *flags_input = NULL;
-    PyArrayObject *flags_array = NULL;
-    PyObject *location_input = Py_None;
-    PyArrayObject *location_array = NULL;
-    PyObject *location_offset_input = Py_None;
-    PyArrayObject *location_offset_array = NULL;
-    PyObject *metadata_input = Py_None;
-    PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = Py_None;
-    PyArrayObject *metadata_offset_array = NULL;
-    static char *kwlist[] = {"flags", "location", "location_offset",
-        "metadata", "metadata_offset", NULL};
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|OOOO", kwlist,
-                &flags_input, &location_input, &location_offset_input,
-                &metadata_input, &metadata_offset_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
     if (IndividualTable_check_state(self) != 0) {
         goto out;
     }
-    flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
-    if (flags_array == NULL) {
-        goto out;
-    }
-    if ((location_input == Py_None) != (location_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError,
-                "location and location_offset must be specified together");
-        goto out;
-    }
-    if (location_input != Py_None) {
-        location_array = table_read_column_array(location_input, NPY_FLOAT64,
-                &location_length, false);
-        if (location_array == NULL) {
-            goto out;
-        }
-        location_data = PyArray_DATA(location_array);
-        location_offset_array = table_read_offset_array(location_offset_input, &num_rows,
-                location_length, true);
-        if (location_offset_array == NULL) {
-            goto out;
-        }
-        location_offset_data = PyArray_DATA(location_offset_array);
-    }
-    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError,
-                "metadata and metadata_offset must be specified together");
-        goto out;
-    }
-    if (metadata_input != Py_None) {
-        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
-                &metadata_length, false);
-        if (metadata_array == NULL) {
-            goto out;
-        }
-        metadata_data = PyArray_DATA(metadata_array);
-        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
-                metadata_length, true);
-        if (metadata_offset_array == NULL) {
-            goto out;
-        }
-        metadata_offset_data = PyArray_DATA(metadata_offset_array);
-    }
-    if (method == SET_COLS) {
-        err = tsk_individual_tbl_set_columns(self->table, num_rows,
-                PyArray_DATA(flags_array),
-                location_data, location_offset_data,
-                metadata_data, metadata_offset_data);
-    } else if (method == APPEND_COLS) {
-        err = tsk_individual_tbl_append_columns(self->table, num_rows,
-                PyArray_DATA(flags_array),
-                location_data, location_offset_data,
-                metadata_data, metadata_offset_data);
-    } else {
-        assert(0);
-    }
+    err = parse_individual_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(flags_array);
-    Py_XDECREF(location_array);
-    Py_XDECREF(location_offset_array);
-    Py_XDECREF(metadata_array);
-    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
 static PyObject *
-IndividualTable_append_columns(IndividualTable *self, PyObject *args, PyObject *kwds)
+IndividualTable_append_columns(IndividualTable *self, PyObject *args)
 {
-    return IndividualTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return IndividualTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-IndividualTable_set_columns(IndividualTable *self, PyObject *args, PyObject *kwds)
+IndividualTable_set_columns(IndividualTable *self, PyObject *args)
 {
-    return IndividualTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return IndividualTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -1146,7 +2354,9 @@ out:
 static void
 NodeTable_dealloc(NodeTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_node_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -1165,6 +2375,7 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
 
     self->table = NULL;
     self->locked = false;
+    self->tables = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|n", kwlist,
                 &max_rows_increment)) {
         goto out;
@@ -1271,118 +2482,37 @@ out:
 }
 
 static PyObject *
-NodeTable_set_or_append_columns(NodeTable *self, PyObject *args, PyObject *kwds,
-        int method)
+NodeTable_parse_dict_arg(NodeTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows, metadata_length;
-    char *metadata_data = NULL;
-    uint32_t *metadata_offset_data = NULL;
-    void *population_data = NULL;
-    void *individual_data = NULL;
-    PyObject *time_input = NULL;
-    PyArrayObject *time_array = NULL;
-    PyObject *flags_input = NULL;
-    PyArrayObject *flags_array = NULL;
-    PyObject *population_input = Py_None;
-    PyArrayObject *population_array = NULL;
-    PyObject *individual_input = Py_None;
-    PyArrayObject *individual_array = NULL;
-    PyObject *metadata_input = Py_None;
-    PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = Py_None;
-    PyArrayObject *metadata_offset_array = NULL;
-    static char *kwlist[] = {"flags", "time", "population", "individual",
-        "metadata", "metadata_offset", NULL};
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO|OOOO", kwlist,
-                &flags_input, &time_input, &population_input, &individual_input,
-                &metadata_input, &metadata_offset_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
     if (NodeTable_check_state(self) != 0) {
         goto out;
     }
-    flags_array = table_read_column_array(flags_input, NPY_UINT32, &num_rows, false);
-    if (flags_array == NULL) {
-        goto out;
-    }
-    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
-    if (time_array == NULL) {
-        goto out;
-    }
-    if (population_input != Py_None) {
-        population_array = table_read_column_array(population_input, NPY_INT32,
-                &num_rows, true);
-        if (population_array == NULL) {
-            goto out;
-        }
-        population_data = PyArray_DATA(population_array);
-    }
-    if (individual_input != Py_None) {
-        individual_array = table_read_column_array(individual_input, NPY_INT32,
-                &num_rows, true);
-        if (individual_array == NULL) {
-            goto out;
-        }
-        individual_data = PyArray_DATA(individual_array);
-    }
-    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError,
-                "metadata and metadata_offset must be specified together");
-        goto out;
-    }
-    if (metadata_input != Py_None) {
-        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
-                &metadata_length, false);
-        if (metadata_array == NULL) {
-            goto out;
-        }
-        metadata_data = PyArray_DATA(metadata_array);
-        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
-                metadata_length, true);
-        if (metadata_offset_array == NULL) {
-            goto out;
-        }
-        metadata_offset_data = PyArray_DATA(metadata_offset_array);
-    }
-    if (method == SET_COLS) {
-        err = tsk_node_tbl_set_columns(self->table, num_rows,
-                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-                individual_data, metadata_data, metadata_offset_data);
-    } else if (method == APPEND_COLS) {
-        err = tsk_node_tbl_append_columns(self->table, num_rows,
-                PyArray_DATA(flags_array), PyArray_DATA(time_array), population_data,
-                individual_data, metadata_data, metadata_offset_data);
-    } else {
-        assert(0);
-    }
+    err = parse_node_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(flags_array);
-    Py_XDECREF(time_array);
-    Py_XDECREF(population_array);
-    Py_XDECREF(individual_array);
-    Py_XDECREF(metadata_array);
-    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
 static PyObject *
-NodeTable_append_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+NodeTable_append_columns(NodeTable *self, PyObject *args)
 {
-    return NodeTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return NodeTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-NodeTable_set_columns(NodeTable *self, PyObject *args, PyObject *kwds)
+NodeTable_set_columns(NodeTable *self, PyObject *args)
 {
-    return NodeTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return NodeTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -1575,10 +2705,9 @@ static PyMethodDef NodeTable_methods[] = {
         "Returns True if the specified NodeTable is equal to this one."},
     {"get_row", (PyCFunction) NodeTable_get_row, METH_VARARGS,
         "Returns the kth row in this table."},
-    {"append_columns", (PyCFunction) NodeTable_append_columns,
-        METH_VARARGS|METH_KEYWORDS,
+    {"append_columns", (PyCFunction) NodeTable_append_columns, METH_VARARGS,
         "Appends the data in the specified arrays into the columns."},
-    {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS|METH_KEYWORDS,
+    {"set_columns", (PyCFunction) NodeTable_set_columns, METH_VARARGS,
         "Copies the data in the specified arrays into the columns."},
     {"clear", (PyCFunction) NodeTable_clear, METH_NOARGS,
         "Clears this table."},
@@ -1652,7 +2781,9 @@ out:
 static void
 EdgeTable_dealloc(EdgeTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_edge_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -1764,79 +2895,38 @@ out:
 }
 
 static PyObject *
-EdgeTable_set_or_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds,
-        int method)
+EdgeTable_parse_dict_arg(EdgeTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows = 0;
-    PyObject *left_input = NULL;
-    PyArrayObject *left_array = NULL;
-    PyObject *right_input = NULL;
-    PyArrayObject *right_array = NULL;
-    PyObject *parent_input = NULL;
-    PyArrayObject *parent_array = NULL;
-    PyObject *child_input = NULL;
-    PyArrayObject *child_array = NULL;
-    static char *kwlist[] = {"left", "right", "parent", "child", NULL};
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
-                &left_input, &right_input, &parent_input, &child_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
-
-    left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
-    if (left_array == NULL) {
+    if (EdgeTable_check_state(self) != 0) {
         goto out;
     }
-    right_array = table_read_column_array(right_input, NPY_FLOAT64, &num_rows, true);
-    if (right_array == NULL) {
-        goto out;
-    }
-    parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
-    if (parent_array == NULL) {
-        goto out;
-    }
-    child_array = table_read_column_array(child_input, NPY_INT32, &num_rows, true);
-    if (child_array == NULL) {
-        goto out;
-    }
-    if (method == SET_COLS) {
-        err = tsk_edge_tbl_set_columns(self->table, num_rows,
-                PyArray_DATA(left_array), PyArray_DATA(right_array),
-                PyArray_DATA(parent_array), PyArray_DATA(child_array));
-    } else if (method == APPEND_COLS) {
-        err = tsk_edge_tbl_append_columns(self->table, num_rows,
-                PyArray_DATA(left_array), PyArray_DATA(right_array),
-                PyArray_DATA(parent_array), PyArray_DATA(child_array));
-    } else {
-        assert(0);
-    }
+    err = parse_edge_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(left_array);
-    Py_XDECREF(right_array);
-    Py_XDECREF(parent_array);
-    Py_XDECREF(child_array);
     return ret;
 }
 
 static PyObject *
-EdgeTable_set_columns(EdgeTable *self, PyObject *args, PyObject *kwds)
+EdgeTable_append_columns(EdgeTable *self, PyObject *args)
 {
-    return EdgeTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return EdgeTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-EdgeTable_append_columns(EdgeTable *self, PyObject *args, PyObject *kwds)
+EdgeTable_set_columns(EdgeTable *self, PyObject *args)
 {
-    return EdgeTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return EdgeTable_parse_dict_arg(self, args, true);
 }
-
 
 static PyObject *
 EdgeTable_clear(EdgeTable *self)
@@ -2078,7 +3168,9 @@ out:
 static void
 MigrationTable_dealloc(MigrationTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_migration_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -2190,91 +3282,37 @@ out:
 }
 
 static PyObject *
-MigrationTable_set_or_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds,
-        int method)
+MigrationTable_parse_dict_arg(MigrationTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows;
-    PyObject *left_input = NULL;
-    PyArrayObject *left_array = NULL;
-    PyObject *right_input = NULL;
-    PyArrayObject *right_array = NULL;
-    PyObject *node_input = NULL;
-    PyArrayObject *node_array = NULL;
-    PyObject *source_input = NULL;
-    PyArrayObject *source_array = NULL;
-    PyObject *dest_input = NULL;
-    PyArrayObject *dest_array = NULL;
-    PyObject *time_input = NULL;
-    PyArrayObject *time_array = NULL;
-    static char *kwlist[] = {"left", "right", "node", "source", "dest", "time", NULL};
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOOOO", kwlist,
-                &left_input, &right_input, &node_input, &source_input, &dest_input,
-                &time_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
-    left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
-    if (left_array == NULL) {
+    if (MigrationTable_check_state(self) != 0) {
         goto out;
     }
-    right_array = table_read_column_array(right_input, NPY_FLOAT64, &num_rows, true);
-    if (right_array == NULL) {
-        goto out;
-    }
-    node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
-    if (node_array == NULL) {
-        goto out;
-    }
-    source_array = table_read_column_array(source_input, NPY_INT32, &num_rows, true);
-    if (source_array == NULL) {
-        goto out;
-    }
-    dest_array = table_read_column_array(dest_input, NPY_INT32, &num_rows, true);
-    if (dest_array == NULL) {
-        goto out;
-    }
-    time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
-    if (time_array == NULL) {
-        goto out;
-    }
-    if (method == SET_COLS) {
-        err = tsk_migration_tbl_set_columns(self->table, num_rows,
-            PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
-            PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
-    } else if (method == APPEND_COLS) {
-        err = tsk_migration_tbl_append_columns(self->table, num_rows,
-            PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
-            PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
-    } else {
-        assert(0);
-    }
+    err = parse_migration_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(left_array);
-    Py_XDECREF(right_array);
-    Py_XDECREF(node_array);
-    Py_XDECREF(source_array);
-    Py_XDECREF(dest_array);
-    Py_XDECREF(time_array);
     return ret;
 }
 
 static PyObject *
-MigrationTable_set_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+MigrationTable_append_columns(MigrationTable *self, PyObject *args)
 {
-    return MigrationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return MigrationTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-MigrationTable_append_columns(MigrationTable *self, PyObject *args, PyObject *kwds)
+MigrationTable_set_columns(MigrationTable *self, PyObject *args)
 {
-    return MigrationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return MigrationTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -2543,7 +3581,9 @@ out:
 static void
 SiteTable_dealloc(SiteTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_site_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -2663,108 +3703,37 @@ out:
 }
 
 static PyObject *
-SiteTable_set_or_append_columns(SiteTable *self, PyObject *args, PyObject *kwds,
-        int method)
+SiteTable_parse_dict_arg(SiteTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows = 0;
-    size_t ancestral_state_length, metadata_length;
-    PyObject *position_input = NULL;
-    PyArrayObject *position_array = NULL;
-    PyObject *ancestral_state_input = NULL;
-    PyArrayObject *ancestral_state_array = NULL;
-    PyObject *ancestral_state_offset_input = NULL;
-    PyArrayObject *ancestral_state_offset_array = NULL;
-    PyObject *metadata_input = Py_None;
-    PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = Py_None;
-    PyArrayObject *metadata_offset_array = NULL;
-    char *metadata_data;
-    uint32_t *metadata_offset_data;
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    static char *kwlist[] = {"position",
-        "ancestral_state", "ancestral_state_offset",
-        "metadata", "metadata_offset", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOO|OO", kwlist,
-                &position_input,
-                &ancestral_state_input, &ancestral_state_offset_input,
-                &metadata_input, &metadata_offset_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
-    position_array = table_read_column_array(position_input, NPY_FLOAT64, &num_rows, false);
-    if (position_array == NULL) {
+    if (SiteTable_check_state(self) != 0) {
         goto out;
     }
-    ancestral_state_array = table_read_column_array(ancestral_state_input, NPY_INT8,
-            &ancestral_state_length, false);
-    if (ancestral_state_array == NULL) {
-        goto out;
-    }
-    ancestral_state_offset_array = table_read_offset_array(ancestral_state_offset_input,
-            &num_rows, ancestral_state_length, true);
-    if (ancestral_state_offset_array == NULL) {
-        goto out;
-    }
-
-    metadata_data = NULL;
-    metadata_offset_data = NULL;
-    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError,
-                "metadata and metadata_offset must be specified together");
-        goto out;
-    }
-    if (metadata_input != Py_None) {
-        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
-                &metadata_length, false);
-        if (metadata_array == NULL) {
-            goto out;
-        }
-        metadata_data = PyArray_DATA(metadata_array);
-        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
-                metadata_length, false);
-        if (metadata_offset_array == NULL) {
-            goto out;
-        }
-        metadata_offset_data = PyArray_DATA(metadata_offset_array);
-    }
-
-    if (method == SET_COLS) {
-        err = tsk_site_tbl_set_columns(self->table, num_rows,
-            PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
-            PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
-    } else if (method == APPEND_COLS) {
-        err = tsk_site_tbl_append_columns(self->table, num_rows,
-            PyArray_DATA(position_array), PyArray_DATA(ancestral_state_array),
-            PyArray_DATA(ancestral_state_offset_array), metadata_data, metadata_offset_data);
-    } else {
-        assert(0);
-    }
+    err = parse_site_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(position_array);
-    Py_XDECREF(ancestral_state_array);
-    Py_XDECREF(ancestral_state_offset_array);
-    Py_XDECREF(metadata_array);
-    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
 static PyObject *
-SiteTable_set_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+SiteTable_append_columns(SiteTable *self, PyObject *args)
 {
-    return SiteTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return SiteTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-SiteTable_append_columns(SiteTable *self, PyObject *args, PyObject *kwds)
+SiteTable_set_columns(SiteTable *self, PyObject *args)
 {
-    return SiteTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return SiteTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -3031,7 +4000,9 @@ out:
 static void
 MutationTable_dealloc(MutationTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_mutation_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -3156,132 +4127,37 @@ out:
 }
 
 static PyObject *
-MutationTable_set_or_append_columns(MutationTable *self, PyObject *args, PyObject *kwds,
-        int method)
+MutationTable_parse_dict_arg(MutationTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows = 0;
-    size_t derived_state_length = 0;
-    size_t metadata_length = 0;
-    PyObject *site_input = NULL;
-    PyArrayObject *site_array = NULL;
-    PyObject *derived_state_input = NULL;
-    PyArrayObject *derived_state_array = NULL;
-    PyObject *derived_state_offset_input = NULL;
-    PyArrayObject *derived_state_offset_array = NULL;
-    PyObject *node_input = NULL;
-    PyArrayObject *node_array = NULL;
-    PyObject *parent_input = Py_None;
-    PyArrayObject *parent_array = NULL;
-    tsk_id_t *parent_data;
-    PyObject *metadata_input = Py_None;
-    PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = Py_None;
-    PyArrayObject *metadata_offset_array = NULL;
-    char *metadata_data;
-    uint32_t *metadata_offset_data;
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    static char *kwlist[] = {"site", "node", "derived_state",
-        "derived_state_offset", "parent", "metadata", "metadata_offset", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|OOO", kwlist,
-                &site_input, &node_input, &derived_state_input,
-                &derived_state_offset_input, &parent_input,
-                &metadata_input, &metadata_offset_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
-    site_array = table_read_column_array(site_input, NPY_INT32, &num_rows, false);
-    if (site_array == NULL) {
+    if (MutationTable_check_state(self) != 0) {
         goto out;
     }
-    derived_state_array = table_read_column_array(derived_state_input, NPY_INT8,
-            &derived_state_length, false);
-    if (derived_state_array == NULL) {
-        goto out;
-    }
-    derived_state_offset_array = table_read_offset_array(derived_state_offset_input,
-            &num_rows, derived_state_length, true);
-    if (derived_state_offset_array == NULL) {
-        goto out;
-    }
-    node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
-    if (node_array == NULL) {
-        goto out;
-    }
-
-    parent_data = NULL;
-    if (parent_input != Py_None) {
-        parent_array = table_read_column_array(parent_input, NPY_INT32, &num_rows, true);
-        if (parent_array == NULL) {
-            goto out;
-        }
-        parent_data = PyArray_DATA(parent_array);
-    }
-
-    metadata_data = NULL;
-    metadata_offset_data = NULL;
-    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError,
-                "metadata and metadata_offset must be specified together");
-        goto out;
-    }
-    if (metadata_input != Py_None) {
-        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
-                &metadata_length, false);
-        if (metadata_array == NULL) {
-            goto out;
-        }
-        metadata_data = PyArray_DATA(metadata_array);
-        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
-                metadata_length, false);
-        if (metadata_offset_array == NULL) {
-            goto out;
-        }
-        metadata_offset_data = PyArray_DATA(metadata_offset_array);
-    }
-
-    if (method == SET_COLS) {
-        err = tsk_mutation_tbl_set_columns(self->table, num_rows,
-                PyArray_DATA(site_array), PyArray_DATA(node_array),
-                parent_data, PyArray_DATA(derived_state_array),
-                PyArray_DATA(derived_state_offset_array),
-                metadata_data, metadata_offset_data);
-    } else if (method == APPEND_COLS) {
-        err = tsk_mutation_tbl_append_columns(self->table, num_rows,
-                PyArray_DATA(site_array), PyArray_DATA(node_array),
-                parent_data, PyArray_DATA(derived_state_array),
-                PyArray_DATA(derived_state_offset_array),
-                metadata_data, metadata_offset_data);
-    } else {
-        assert(0);
-    }
+    err = parse_mutation_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(site_array);
-    Py_XDECREF(derived_state_array);
-    Py_XDECREF(derived_state_offset_array);
-    Py_XDECREF(metadata_array);
-    Py_XDECREF(metadata_offset_array);
-    Py_XDECREF(node_array);
-    Py_XDECREF(parent_array);
     return ret;
 }
 
 static PyObject *
-MutationTable_set_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+MutationTable_append_columns(MutationTable *self, PyObject *args)
 {
-    return MutationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return MutationTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-MutationTable_append_columns(MutationTable *self, PyObject *args, PyObject *kwds)
+MutationTable_set_columns(MutationTable *self, PyObject *args)
 {
-    return MutationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return MutationTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -3578,7 +4454,9 @@ out:
 static void
 PopulationTable_dealloc(PopulationTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_population_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -3698,71 +4576,37 @@ out:
 }
 
 static PyObject *
-PopulationTable_set_or_append_columns(PopulationTable *self, PyObject *args, PyObject *kwds,
-        int method)
+PopulationTable_parse_dict_arg(PopulationTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows, metadata_length;
-    PyObject *metadata_input = NULL;
-    PyArrayObject *metadata_array = NULL;
-    PyObject *metadata_offset_input = NULL;
-    PyArrayObject *metadata_offset_array = NULL;
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    static char *kwlist[] = {"metadata", "metadata_offset", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", kwlist,
-                &metadata_input, &metadata_offset_input)) {
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
     if (PopulationTable_check_state(self) != 0) {
         goto out;
     }
-    if ((metadata_input == Py_None) || (metadata_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError,
-                "metadata and metadata_offset must be specified");
-        goto out;
-    }
-    metadata_array = table_read_column_array(metadata_input, NPY_INT8,
-            &metadata_length, false);
-    if (metadata_array == NULL) {
-        goto out;
-    }
-    metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
-            metadata_length, false);
-    if (metadata_offset_array == NULL) {
-        goto out;
-    }
-    if (method == SET_COLS) {
-        err = tsk_population_tbl_set_columns(self->table, num_rows,
-                PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
-    } else if (method == APPEND_COLS) {
-        err = tsk_population_tbl_append_columns(self->table, num_rows,
-                PyArray_DATA(metadata_array), PyArray_DATA(metadata_offset_array));
-    } else {
-        assert(0);
-    }
+    err = parse_population_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(metadata_array);
-    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
 static PyObject *
-PopulationTable_append_columns(PopulationTable *self, PyObject *args, PyObject *kwds)
+PopulationTable_append_columns(PopulationTable *self, PyObject *args)
 {
-    return PopulationTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return PopulationTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-PopulationTable_set_columns(PopulationTable *self, PyObject *args, PyObject *kwds)
+PopulationTable_set_columns(PopulationTable *self, PyObject *args)
 {
-    return PopulationTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return PopulationTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -3973,7 +4817,9 @@ out:
 static void
 ProvenanceTable_dealloc(ProvenanceTable* self)
 {
-    if (self->table != NULL) {
+    if (self->tables != NULL) {
+        Py_DECREF(self->tables);
+    } else if (self->table != NULL) {
         tsk_provenance_tbl_free(self->table);
         PyMem_Free(self->table);
         self->table = NULL;
@@ -4089,93 +4935,37 @@ out:
 }
 
 static PyObject *
-ProvenanceTable_set_or_append_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds,
-        int method)
+ProvenanceTable_parse_dict_arg(ProvenanceTable *self, PyObject *args, bool clear_table)
 {
-    PyObject *ret = NULL;
     int err;
-    size_t num_rows, timestamp_length, record_length;
-    PyObject *timestamp_input = NULL;
-    PyArrayObject *timestamp_array = NULL;
-    PyObject *timestamp_offset_input = NULL;
-    PyArrayObject *timestamp_offset_array = NULL;
-    PyObject *record_input = NULL;
-    PyArrayObject *record_array = NULL;
-    PyObject *record_offset_input = NULL;
-    PyArrayObject *record_offset_array = NULL;
+    PyObject *ret = NULL;
+    PyObject *dict = NULL;
 
-    static char *kwlist[] = {"timestamp", "timestamp_offset",
-        "record", "record_offset", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOOO", kwlist,
-                &timestamp_input, &timestamp_offset_input,
-                &record_input, &record_offset_input)) {
-        goto out;
-    }
-    if ((timestamp_input == Py_None)
-            || (timestamp_offset_input == Py_None)
-            || (record_input == Py_None)
-            || (record_offset_input == Py_None)) {
-        PyErr_SetString(PyExc_TypeError, "All arguments must be non None");
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         goto out;
     }
     if (ProvenanceTable_check_state(self) != 0) {
         goto out;
     }
-    timestamp_array = table_read_column_array(timestamp_input, NPY_INT8,
-            &timestamp_length, false);
-    if (timestamp_array == NULL) {
-        goto out;
-    }
-    timestamp_offset_array = table_read_offset_array(timestamp_offset_input, &num_rows,
-            timestamp_length, false);
-    if (timestamp_offset_array == NULL) {
-        goto out;
-    }
-    record_array = table_read_column_array(record_input, NPY_INT8,
-            &record_length, false);
-    if (record_array == NULL) {
-        goto out;
-    }
-    record_offset_array = table_read_offset_array(record_offset_input, &num_rows,
-            record_length, true);
-    if (record_offset_array == NULL) {
-        goto out;
-    }
-    if (method == SET_COLS) {
-        err = tsk_provenance_tbl_set_columns(self->table, num_rows,
-                PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
-    } else if (method == APPEND_COLS) {
-        err = tsk_provenance_tbl_append_columns(self->table, num_rows,
-                PyArray_DATA(timestamp_array), PyArray_DATA(timestamp_offset_array),
-                PyArray_DATA(record_array), PyArray_DATA(record_offset_array));
-    } else {
-        assert(0);
-    }
+    err = parse_provenance_table_dict(self->table, dict, clear_table);
     if (err != 0) {
-        handle_library_error(err);
         goto out;
     }
     ret = Py_BuildValue("");
 out:
-    Py_XDECREF(timestamp_array);
-    Py_XDECREF(timestamp_offset_array);
-    Py_XDECREF(record_array);
-    Py_XDECREF(record_offset_array);
     return ret;
 }
 
 static PyObject *
-ProvenanceTable_append_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds)
+ProvenanceTable_append_columns(ProvenanceTable *self, PyObject *args)
 {
-    return ProvenanceTable_set_or_append_columns(self, args, kwds, APPEND_COLS);
+    return ProvenanceTable_parse_dict_arg(self, args, false);
 }
 
 static PyObject *
-ProvenanceTable_set_columns(ProvenanceTable *self, PyObject *args, PyObject *kwds)
+ProvenanceTable_set_columns(ProvenanceTable *self, PyObject *args)
 {
-    return ProvenanceTable_set_or_append_columns(self, args, kwds, SET_COLS);
+    return ProvenanceTable_parse_dict_arg(self, args, true);
 }
 
 static PyObject *
@@ -4392,24 +5182,6 @@ static PyTypeObject ProvenanceTableType = {
 };
 
 /*===================================================================
- * TableCollectionPointer
- *===================================================================
- */
-
-/* This is a special type that is exported as a C API. It exists only
- * as a way of shipping pointers around in a safe manner. */
-
-PyTypeObject _tskit_TableCollectionPointerType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_tskit.TableCollectionPointer",
-    .tp_doc = "Shallow wrapper around tbl_collection_t pointer.",
-    .tp_basicsize = sizeof(_tskit_TableCollectionPointer),
-    .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_new = PyType_GenericNew,
-};
-
-/*===================================================================
  * TableCollection
  *===================================================================
  */
@@ -4418,19 +5190,10 @@ static void
 TableCollection_dealloc(TableCollection* self)
 {
     if (self->tables != NULL) {
-        self->tables->nodes = NULL;
         tsk_tbl_collection_free(self->tables);
         PyMem_Free(self->tables);
         self->tables = NULL;
     }
-    Py_XDECREF(self->individuals);
-    Py_XDECREF(self->nodes);
-    Py_XDECREF(self->edges);
-    Py_XDECREF(self->migrations);
-    Py_XDECREF(self->sites);
-    Py_XDECREF(self->mutations);
-    Py_XDECREF(self->populations);
-    Py_XDECREF(self->provenances);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -4439,42 +5202,11 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {
-        "individuals", "nodes", "edges", "migrations", "sites", "mutations",
-        "populations", "provenances", "sequence_length", NULL};
-    IndividualTable *individuals = NULL;
-    NodeTable *nodes = NULL;
-    EdgeTable *edges = NULL;
-    MigrationTable *migrations = NULL;
-    SiteTable *sites = NULL;
-    MutationTable *mutations = NULL;
-    PopulationTable *populations = NULL;
-    ProvenanceTable *provenances = NULL;
-    /* TODO make sequence_length a mandatory parameter which is set at
-     * initialisation time and cannot be modified. This way we can finally
-     * get rid of the infering sequence length rubbish */
-    double sequence_length = 0;
+    static char *kwlist[] = {"sequence_length", NULL};
+    double sequence_length = -1;
 
     self->tables = NULL;
-    self->individuals = NULL;
-    self->nodes = NULL;
-    self->edges = NULL;
-    self->sites = NULL;
-    self->mutations = NULL;
-    self->migrations = NULL;
-    self->populations = NULL;
-    self->provenances = NULL;
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!O!O!O!O!|d", kwlist,
-            &IndividualTableType, &individuals,
-            &NodeTableType, &nodes,
-            &EdgeTableType, &edges,
-            &MigrationTableType, &migrations,
-            &SiteTableType, &sites,
-            &MutationTableType, &mutations,
-            &PopulationTableType, &populations,
-            &ProvenanceTableType, &provenances,
-            &sequence_length)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|d", kwlist, &sequence_length)) {
         goto out;
     }
 
@@ -4482,111 +5214,160 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     if (self->tables == NULL) {
         PyErr_NoMemory();
     }
-    err = tsk_tbl_collection_alloc(self->tables, 0);
+    err = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     self->tables->sequence_length = sequence_length;
-    if (IndividualTable_check_state(individuals) != 0
-            || NodeTable_check_state(nodes) != 0
-            || EdgeTable_check_state(edges) != 0
-            || MigrationTable_check_state(migrations) != 0
-            || SiteTable_check_state(sites) != 0
-            || MutationTable_check_state(mutations) != 0
-            || PopulationTable_check_state(populations) != 0
-            || ProvenanceTable_check_state(provenances) != 0) {
-        goto out;
-    }
-    self->individuals = individuals;
-    Py_INCREF(individuals);
-    self->nodes = nodes;
-    Py_INCREF(nodes);
-    self->edges = edges;
-    Py_INCREF(edges);
-    self->migrations = migrations;
-    Py_INCREF(migrations);
-    self->sites = sites;
-    Py_INCREF(sites);
-    self->mutations = mutations;
-    Py_INCREF(mutations);
-    self->populations = populations;
-    Py_INCREF(populations);
-    self->provenances = provenances;
-    Py_INCREF(provenances);
-
-    err = tsk_tbl_collection_set_tables(self->tables,
-        individuals->table,
-        nodes->table,
-        edges->table,
-        migrations->table,
-        sites->table,
-        mutations->table,
-        populations->table,
-        provenances->table);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
     ret = 0;
 out:
     return ret;
 }
 
+/* The getters for each of the tables returns a new reference which we
+ * set up here. These references use a pointer to the table stored in
+ * the table collection, so to guard against this memory getting freed
+ * we the Python Table classes keep a reference to the TableCollection
+ * and INCREF it. We don't keep permanent references to the Table classes
+ * in the TableCollection as this gives a circular references which would
+ * require implementing support for cyclic garbage collection.
+ */
+
 static PyObject *
 TableCollection_get_individuals(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->individuals);
-    return (PyObject *) self->individuals;
+    IndividualTable *individuals = NULL;
+
+    individuals = PyObject_New(IndividualTable, &IndividualTableType);
+    if (individuals == NULL) {
+        goto out;
+    }
+    individuals->table = self->tables->individuals;
+    individuals->locked = false;
+    individuals->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) individuals;
 }
 
 static PyObject *
 TableCollection_get_nodes(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->nodes);
-    return (PyObject *) self->nodes;
+    NodeTable *nodes = NULL;
+
+    nodes = PyObject_New(NodeTable, &NodeTableType);
+    if (nodes == NULL) {
+        goto out;
+    }
+    nodes->table = self->tables->nodes;
+    nodes->locked = false;
+    nodes->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) nodes;
 }
 
 static PyObject *
 TableCollection_get_edges(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->edges);
-    return (PyObject *) self->edges;
+    EdgeTable *edges = NULL;
+
+    edges = PyObject_New(EdgeTable, &EdgeTableType);
+    if (edges == NULL) {
+        goto out;
+    }
+    edges->table = self->tables->edges;
+    edges->locked = false;
+    edges->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) edges;
 }
 
 static PyObject *
 TableCollection_get_migrations(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->migrations);
-    return (PyObject *) self->migrations;
+    MigrationTable *migrations = NULL;
+
+    migrations = PyObject_New(MigrationTable, &MigrationTableType);
+    if (migrations == NULL) {
+        goto out;
+    }
+    migrations->table = self->tables->migrations;
+    migrations->locked = false;
+    migrations->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) migrations;
 }
 
 static PyObject *
 TableCollection_get_sites(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->sites);
-    return (PyObject *) self->sites;
+    SiteTable *sites = NULL;
+
+    sites = PyObject_New(SiteTable, &SiteTableType);
+    if (sites == NULL) {
+        goto out;
+    }
+    sites->table = self->tables->sites;
+    sites->locked = false;
+    sites->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) sites;
 }
 
 static PyObject *
 TableCollection_get_mutations(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->mutations);
-    return (PyObject *) self->mutations;
+    MutationTable *mutations = NULL;
+
+    mutations = PyObject_New(MutationTable, &MutationTableType);
+    if (mutations == NULL) {
+        goto out;
+    }
+    mutations->table = self->tables->mutations;
+    mutations->locked = false;
+    mutations->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) mutations;
 }
 
 static PyObject *
 TableCollection_get_populations(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->populations);
-    return (PyObject *) self->populations;
+    PopulationTable *populations = NULL;
+
+    populations = PyObject_New(PopulationTable, &PopulationTableType);
+    if (populations == NULL) {
+        goto out;
+    }
+    populations->table = self->tables->populations;
+    populations->locked = false;
+    populations->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) populations;
 }
 
 static PyObject *
 TableCollection_get_provenances(TableCollection *self, void *closure)
 {
-    Py_INCREF(self->provenances);
-    return (PyObject *) self->provenances;
+    ProvenanceTable *provenances = NULL;
+
+    provenances = PyObject_New(ProvenanceTable, &ProvenanceTableType);
+    if (provenances == NULL) {
+        goto out;
+    }
+    provenances->table = self->tables->provenances;
+    provenances->locked = false;
+    provenances->tables = self;
+    Py_INCREF(self);
+out:
+    return (PyObject *) provenances;
 }
 
 static PyObject *
@@ -4646,7 +5427,7 @@ TableCollection_simplify(TableCollection *self, PyObject *args, PyObject *kwds)
     }
 
     /* Allocate a new array to hold the node map. */
-    dims = self->nodes->table->num_rows;
+    dims = self->tables->nodes->num_rows;
     node_map_array = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_INT32);
     if (node_map_array == NULL) {
         goto out;
@@ -4738,20 +5519,6 @@ out:
     return ret;
 }
 
-static PyObject *
-TableCollection_get_pointer(TableCollection *self)
-{
-    PyObject *ret = NULL;
-
-    ret = PyObject_CallObject((PyObject *) &_tskit_TableCollectionPointerType, NULL);
-    if (ret == NULL) {
-        goto out;
-    }
-    ((_tskit_TableCollectionPointer *) ret)->table_collection = self->tables;
-out:
-    return ret;
-}
-
 static PyGetSetDef TableCollection_getsetters[] = {
     {"individuals", (getter) TableCollection_get_individuals, NULL, "The individual table."},
     {"nodes", (getter) TableCollection_get_nodes, NULL, "The node table."},
@@ -4779,8 +5546,6 @@ static PyMethodDef TableCollection_methods[] = {
         METH_NOARGS, "Computes the mutation parents for a the tables." },
     {"deduplicate_sites", (PyCFunction) TableCollection_deduplicate_sites,
         METH_NOARGS, "Removes sites with duplicate positions." },
-    {"get_pointer", (PyCFunction) TableCollection_get_pointer,
-        METH_NOARGS, "Returns a shallow object wrapping a pointer to the underyling C struct" },
     {NULL}  /* Sentinel */
 };
 
@@ -7630,6 +8395,15 @@ init_tskit(void)
         INITERROR;
     }
 
+    /* LightweightTableCollection type */
+    LightweightTableCollectionType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&LightweightTableCollectionType) < 0) {
+        INITERROR;
+    }
+    Py_INCREF(&LightweightTableCollectionType);
+    PyModule_AddObject(module, "LightweightTableCollection",
+            (PyObject *) &LightweightTableCollectionType);
+
     /* IndividualTable type */
     IndividualTableType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&IndividualTableType) < 0) {
@@ -7767,22 +8541,6 @@ init_tskit(void)
     }
     Py_INCREF(&LdCalculatorType);
     PyModule_AddObject(module, "LdCalculator", (PyObject *) &LdCalculatorType);
-
-    /* TableCollectionPointer type */
-    _tskit_TableCollectionPointerType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&_tskit_TableCollectionPointerType) < 0) {
-        INITERROR;
-    }
-    Py_INCREF(&_tskit_TableCollectionPointerType);
-    PyModule_AddObject(module, "TableCollectionPointer",
-        (PyObject *) &_tskit_TableCollectionPointerType);
-
-    PyObject *c_api_object = PyCapsule_New((void *) &_tskit_TableCollectionPointerType,
-            "_tskit.TableCollectionPointerType", NULL);
-    if (c_api_object == NULL) {
-        INITERROR;
-    }
-    PyModule_AddObject(module, "TableCollectionPointerType", c_api_object);
 
     /* Errors and constants */
     TskitLibraryError = PyErr_NewException("_tskit.LibraryError", NULL, NULL);
