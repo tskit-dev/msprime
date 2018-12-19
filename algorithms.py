@@ -480,13 +480,13 @@ class Simulator(object):
             else:
                 self.t += min_time
                 if min_time == t_re:
-                    # print("RE EVENT")
+                    #print("RE EVENT")
                     self.hudson_recombination_event()
                 elif min_time == t_ca:
-                    # print("CA EVENT")
+                    #print("CA EVENT")
                     self.common_ancestor_event(ca_population)
                 else:
-                    # print("MIG EVENT")
+                    #print("MIG EVENT")
                     self.migration_event(mig_source, mig_dest)
         return self.finalise()
 
@@ -569,6 +569,7 @@ class Simulator(object):
         """
         Implements a recombination event.
         """
+        store_full_arg = 0
         self.num_re_events += 1
         h = random.randint(1, self.L.get_total())
         # Get the segment containing the h'th link
@@ -584,13 +585,37 @@ class Simulator(object):
             y.next = None
             y.right = k
             self.L.increment(y.index, k - z.right)
+            if store_full_arg == 1:
+                self.store_node(y.population)
+                u = len(self.tables.nodes) - 1
+                self.store_edge(y.left, y.right, u, y.node)
+                y.node = u
+                while y.prev is not None:
+                    y = y.prev
+                    y.node = u
         else:
             # split the link between x and y.
             x.next = None
             y.prev = None
             z = y
+            if store_full_arg == 1:
+                self.store_node(x.population)
+                u = len(self.tables.nodes) - 1
+                self.store_edge(x.left, x.right, u, x.node)
+                x.node = u
+                while x.prev is not None:
+                    x = x.prev
+                    x.node = u
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
+        if store_full_arg == 1:
+            self.store_node(z.population)
+            u = len(self.tables.nodes) - 1
+            self.store_edge(z.left, z.right, u, z.node)
+            z.node = u
+            while z.next is not None:
+                z = z.next
+                z.node = u
 
     def dtwf_recombine(self, x):
         """
@@ -801,6 +826,7 @@ class Simulator(object):
         """
         Implements a coancestry event.
         """
+        store_full_arg = 0
         pop = self.P[population_index]
         self.num_ca_events += 1
         # Choose two ancestors uniformly.
@@ -812,6 +838,21 @@ class Simulator(object):
         z = None
         coalescence = False
         defrag_required = False
+        if store_full_arg == 1:
+            self.store_node(population_index)
+            u = len(self.tables.nodes) - 1
+            self.store_edge(x.left, x.right, u, x.node)
+            self.store_edge(y.left, y.right, u, y.node)
+            x.node = u
+            tmp_x = x
+            while tmp_x.next is not None:
+                tmp_x = tmp_x.next
+                tmp_x.node = u
+            y.node = u
+            tmp_y = y
+            while tmp_y.next is not None:
+                tmp_y = tmp_y.next
+                tmp_y.node = u
         while x is not None or y is not None:
             alpha = None
             if x is None or y is None:
@@ -837,7 +878,8 @@ class Simulator(object):
                 else:
                     if not coalescence:
                         coalescence = True
-                        self.store_node(population_index)
+                        if store_full_arg == 0:
+                            self.store_node(population_index)
                     u = len(self.tables.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
@@ -859,8 +901,9 @@ class Simulator(object):
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(left, right, u, population_index)
-                    self.store_edge(left, right, u, x.node)
-                    self.store_edge(left, right, u, y.node)
+                    if store_full_arg == 0:
+                        self.store_edge(left, right, u, x.node)
+                        self.store_edge(left, right, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
                     if x.right == right:
                         self.free_segment(x)
