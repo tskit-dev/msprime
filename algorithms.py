@@ -569,7 +569,7 @@ class Simulator(object):
         """
         Implements a recombination event.
         """
-        store_full_arg = 0
+        store_full_arg = 1
         self.num_re_events += 1
         h = random.randint(1, self.L.get_total())
         # Get the segment containing the h'th link
@@ -826,7 +826,7 @@ class Simulator(object):
         """
         Implements a coancestry event.
         """
-        store_full_arg = 0
+        store_full_arg = 1
         pop = self.P[population_index]
         self.num_ca_events += 1
         # Choose two ancestors uniformly.
