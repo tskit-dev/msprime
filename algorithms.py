@@ -566,6 +566,22 @@ class Simulator(object):
             u = u.next
         # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
+    def store_edges_left(self, y, u):
+        self.store_edge(y.left, y.right, u, y.node)
+        y.node = u
+        while y.prev is not None:
+            y = y.prev
+            self.store_edge(y.left, y.right, u, y.node)
+            y.node = u
+            
+    def store_edges_right(self, y, u):
+        self.store_edge(y.left, y.right, u, y.node)
+        y.node = u
+        while y.next is not None:
+            y = y.next
+            self.store_edge(y.left, y.right, u, y.node)
+            y.node = u
+
     def hudson_recombination_event(self):
         """
         Implements a recombination event.
@@ -588,11 +604,7 @@ class Simulator(object):
             if self.full_arg:
                 self.store_node(y.population)
                 u = len(self.tables.nodes) - 1
-                self.store_edge(y.left, y.right, u, y.node)
-                y.node = u
-                while y.prev is not None:
-                    y = y.prev
-                    y.node = u
+                self.store_edges_left(y, u)
         else:
             # split the link between x and y.
             x.next = None
@@ -601,21 +613,13 @@ class Simulator(object):
             if self.full_arg:
                 self.store_node(x.population)
                 u = len(self.tables.nodes) - 1
-                self.store_edge(x.left, x.right, u, x.node)
-                x.node = u
-                while x.prev is not None:
-                    x = x.prev
-                    x.node = u
+                self.store_edges_left(x, u)
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
         if self.full_arg:
             self.store_node(z.population)
             u = len(self.tables.nodes) - 1
-            self.store_edge(z.left, z.right, u, z.node)
-            z.node = u
-            while z.next is not None:
-                z = z.next
-                z.node = u
+            self.store_edges_right(z, u)
 
     def dtwf_recombine(self, x):
         """
@@ -840,18 +844,8 @@ class Simulator(object):
         if self.full_arg:
             self.store_node(population_index)
             u = len(self.tables.nodes) - 1
-            self.store_edge(x.left, x.right, u, x.node)
-            self.store_edge(y.left, y.right, u, y.node)
-            x.node = u
-            tmp_x = x
-            while tmp_x.next is not None:
-                tmp_x = tmp_x.next
-                tmp_x.node = u
-            y.node = u
-            tmp_y = y
-            while tmp_y.next is not None:
-                tmp_y = tmp_y.next
-                tmp_y.node = u
+            self.store_edges_right(x, u)
+            self.store_edges_right(y, u)
         while x is not None or y is not None:
             alpha = None
             if x is None or y is None:
@@ -1070,7 +1064,7 @@ def add_simulator_arguments(parser):
     parser.add_argument(
         "--num-replicates", "-R", type=int, default=1000)
     parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0.1)
+        "--recombination-rate", "-r", type=float, default=0.01)
     parser.add_argument(
         "--num-populations", "-p", type=int, default=1)
     parser.add_argument(
