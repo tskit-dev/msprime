@@ -238,7 +238,7 @@ class Simulator(object):
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
             migration_matrix_element_changes, bottlenecks, model='hudson',
-            from_ts=None, max_segments=100):
+            from_ts=None, full_arg=False, max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -255,6 +255,7 @@ class Simulator(object):
         self.r = recombination_rate
         self.migration_matrix = migration_matrix
         self.max_segments = max_segments
+        self.full_arg = full_arg
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
         for j in range(self.max_segments):
@@ -480,13 +481,13 @@ class Simulator(object):
             else:
                 self.t += min_time
                 if min_time == t_re:
-                    #print("RE EVENT")
+                    # print("RE EVENT")
                     self.hudson_recombination_event()
                 elif min_time == t_ca:
-                    #print("CA EVENT")
+                    # print("CA EVENT")
                     self.common_ancestor_event(ca_population)
                 else:
-                    #print("MIG EVENT")
+                    # print("MIG EVENT")
                     self.migration_event(mig_source, mig_dest)
         return self.finalise()
 
@@ -569,7 +570,6 @@ class Simulator(object):
         """
         Implements a recombination event.
         """
-        store_full_arg = 1
         self.num_re_events += 1
         h = random.randint(1, self.L.get_total())
         # Get the segment containing the h'th link
@@ -585,7 +585,7 @@ class Simulator(object):
             y.next = None
             y.right = k
             self.L.increment(y.index, k - z.right)
-            if store_full_arg == 1:
+            if self.full_arg:
                 self.store_node(y.population)
                 u = len(self.tables.nodes) - 1
                 self.store_edge(y.left, y.right, u, y.node)
@@ -598,7 +598,7 @@ class Simulator(object):
             x.next = None
             y.prev = None
             z = y
-            if store_full_arg == 1:
+            if self.full_arg:
                 self.store_node(x.population)
                 u = len(self.tables.nodes) - 1
                 self.store_edge(x.left, x.right, u, x.node)
@@ -608,7 +608,7 @@ class Simulator(object):
                     x.node = u
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
-        if store_full_arg == 1:
+        if self.full_arg:
             self.store_node(z.population)
             u = len(self.tables.nodes) - 1
             self.store_edge(z.left, z.right, u, z.node)
@@ -826,7 +826,6 @@ class Simulator(object):
         """
         Implements a coancestry event.
         """
-        store_full_arg = 1
         pop = self.P[population_index]
         self.num_ca_events += 1
         # Choose two ancestors uniformly.
@@ -838,7 +837,7 @@ class Simulator(object):
         z = None
         coalescence = False
         defrag_required = False
-        if store_full_arg == 1:
+        if self.full_arg:
             self.store_node(population_index)
             u = len(self.tables.nodes) - 1
             self.store_edge(x.left, x.right, u, x.node)
@@ -878,7 +877,7 @@ class Simulator(object):
                 else:
                     if not coalescence:
                         coalescence = True
-                        if store_full_arg == 0:
+                        if not self.full_arg:
                             self.store_node(population_index)
                     u = len(self.tables.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
@@ -901,7 +900,7 @@ class Simulator(object):
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(left, right, u, population_index)
-                    if store_full_arg == 0:
+                    if not self.full_arg:
                         self.store_edge(left, right, u, x.node)
                         self.store_edge(left, right, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
@@ -1052,7 +1051,7 @@ def run_simulate(args):
         args.population_size_change,
         args.migration_matrix_element_change,
         args.bottleneck, args.model, from_ts=args.from_ts,
-        max_segments=10000)
+        full_arg=args.full_arg, max_segments=10000)
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -1093,6 +1092,9 @@ def add_simulator_arguments(parser):
         action="append", default=[])
     parser.add_argument(
         "--bottleneck", type=float, nargs=3, action="append", default=[])
+    parser.add_argument(
+        "--full-arg", action="store_true", default=False,
+        help="Store the full ARG with all recombination and common ancestor nodes")
     parser.add_argument(
         "--model", default='hudson')
     parser.add_argument(
