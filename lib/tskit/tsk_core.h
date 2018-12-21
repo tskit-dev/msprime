@@ -75,99 +75,75 @@
 #define TSK_FILE_FORMAT_VERSION_MAJOR 12
 #define TSK_FILE_FORMAT_VERSION_MINOR 0
 
-
-
 /* Error codes */
+
+/* General errrors */
 #define TSK_ERR_GENERIC                                             -1
 #define TSK_ERR_NO_MEMORY                                           -2
 #define TSK_ERR_IO                                                  -3
-#define TSK_ERR_FILE_FORMAT                                         -4
-#define TSK_ERR_REFCOUNT_NONZERO                                    -5
-#define TSK_ERR_BAD_STATE                                           -6
-#define TSK_ERR_BAD_PARAM_VALUE                                     -7
-#define TSK_ERR_OUT_OF_BOUNDS                                       -8
-#define TSK_ERR_BUFFER_OVERFLOW                                     -9
-#define TSK_ERR_UNSORTED_DEMOGRAPHIC_EVENTS                         -10
-#define TSK_ERR_POPULATION_OVERFLOW                                 -11
-#define TSK_ERR_LINKS_OVERFLOW                                      -12
-#define TSK_ERR_HDF5                                                -13
-#define TSK_ERR_POPULATION_OUT_OF_BOUNDS                            -14
-#define TSK_ERR_DUPLICATE_SAMPLE                                    -15
-#define TSK_ERR_BAD_ORDERING                                        -16
-#define TSK_ERR_BAD_MUTATION                                        -17
-#define TSK_ERR_UNSUPPORTED_OPERATION                               -18
-#define TSK_ERR_BAD_POPULATION_CONFIGURATION                        -19
-#define TSK_ERR_BAD_MIGRATION_MATRIX                                -20
-#define TSK_ERR_BAD_MIGRATION_MATRIX_INDEX                          -21
-#define TSK_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX                     -22
-#define TSK_ERR_INFINITE_WAITING_TIME                               -23
-#define TSK_ERR_ASSERTION_FAILED                                    -24
-#define TSK_ERR_SOURCE_DEST_EQUAL                                   -25
-#define TSK_ERR_BAD_RECOMBINATION_MAP                               -26
-#define TSK_ERR_BAD_POPULATION_SIZE                                 -27
-#define TSK_ERR_BAD_SAMPLES                                         -28
-#define TSK_ERR_BAD_TABLE_POSITION                                  -29
-#define TSK_ERR_FILE_VERSION_TOO_OLD                                -30
-#define TSK_ERR_FILE_VERSION_TOO_NEW                                -31
-#define TSK_ERR_CANNOT_SIMPLIFY                                     -32
-#define TSK_ERR_BAD_MODEL                                           -33
-#define TSK_ERR_NULL_PARENT                                         -34
-#define TSK_ERR_NULL_CHILD                                          -35
-#define TSK_ERR_EDGES_NOT_SORTED_PARENT_TIME                        -36
-#define TSK_ERR_EDGES_NONCONTIGUOUS_PARENTS                         -37
-#define TSK_ERR_EDGES_NOT_SORTED_CHILD                              -38
-#define TSK_ERR_EDGES_NOT_SORTED_LEFT                               -39
-#define TSK_ERR_BAD_NODE_TIME_ORDERING                              -40
-#define TSK_ERR_BAD_EDGE_INTERVAL                                   -41
-#define TSK_ERR_DUPLICATE_EDGES                                     -42
-#define TSK_ERR_NOT_INITIALISED                                     -43
-#define TSK_ERR_BAD_OFFSET                                          -44
-#define TSK_ERR_TOO_MANY_ALLELES                                    -45
-#define TSK_ERR_DUPLICATE_MUTATION_NODES                            -46
-#define TSK_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
-#define TSK_ERR_INCONSISTENT_MUTATIONS                              -48
-#define TSK_ERR_INSUFFICIENT_SAMPLES                                -49
-#define TSK_ERR_ZERO_RECORDS                                        -50
-#define TSK_ERR_COORDINATE_NOT_FOUND                                -51
-#define TSK_ERR_BAD_NODES_ARRAY                                     -52
-#define TSK_ERR_BAD_CHILDREN_ARRAY                                  -53
-#define TSK_ERR_SITE_OUT_OF_BOUNDS                                  -54
-#define TSK_ERR_NODE_OUT_OF_BOUNDS                                  -55
-#define TSK_ERR_LENGTH_MISMATCH                                     -56
-#define TSK_ERR_DUPLICATE_SITE_POSITION                             -57
-#define TSK_ERR_NON_SINGLE_CHAR_MUTATION                            -58
-#define TSK_ERR_UNSORTED_SITES                                      -59
-#define TSK_ERR_BAD_SITE_POSITION                                   -60
-#define TSK_ERR_UNSORTED_MUTATIONS                                  -61
-#define TSK_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -62
-#define TSK_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT                    -63
-#define TSK_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
-#define TSK_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
-#define TSK_ERR_BAD_SEQUENCE_LENGTH                                 -66
-#define TSK_ERR_RIGHT_GREATER_SEQ_LENGTH                            -67
-#define TSK_ERR_MUTATION_OUT_OF_BOUNDS                              -68
-#define TSK_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -69
-#define TSK_ERR_MUTATION_PARENT_EQUAL                               -70
-#define TSK_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
-#define TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS                            -72
-#define TSK_ERR_GENERATE_UUID                                       -73
-#define TSK_ERR_BAD_EDGE_INDEX                                      -74
-#define TSK_ERR_LEFT_LESS_ZERO                                      -75
-#define TSK_ERR_TABLES_NOT_INDEXED                                  -76
-#define TSK_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED                   -77
-#define TSK_ERR_INCOMPATIBLE_FROM_TS                                -78
-#define TSK_ERR_BAD_START_TIME_FROM_TS                              -79
-#define TSK_ERR_BAD_START_TIME                                      -80
-#define TSK_ERR_BAD_DEMOGRAPHIC_EVENT_TIME                          -81
-#define TSK_ERR_RECOMB_MAP_TOO_COARSE                               -82
-#define TSK_ERR_TIME_TRAVEL                                         -83
-#define TSK_ERR_ONLY_INFINITE_SITES                                 -84
+#define TSK_ERR_BAD_PARAM_VALUE                                     -4
+#define TSK_ERR_BUFFER_OVERFLOW                                     -5
+#define TSK_ERR_UNSUPPORTED_OPERATION                               -6
+#define TSK_ERR_GENERATE_UUID                                       -7
 
+/* File format errors */
+#define TSK_ERR_FILE_FORMAT                                         -100
+#define TSK_ERR_FILE_VERSION_TOO_OLD                                -101
+#define TSK_ERR_FILE_VERSION_TOO_NEW                                -102
 
-#define tsk_safe_free(pointer) __tsk_safe_free((void **) &(pointer))
-#define TSK_MAX(a,b) ((a) > (b) ? (a) : (b))
-#define TSK_MIN(a,b) ((a) < (b) ? (a) : (b))
+/* Out of bounds errors */
+#define TSK_ERR_BAD_OFFSET                                          -200
+#define TSK_ERR_OUT_OF_BOUNDS                                       -201
+#define TSK_ERR_NODE_OUT_OF_BOUNDS                                  -202
+#define TSK_ERR_EDGE_OUT_OF_BOUNDS                                  -203
+#define TSK_ERR_POPULATION_OUT_OF_BOUNDS                            -204
+#define TSK_ERR_SITE_OUT_OF_BOUNDS                                  -205
+#define TSK_ERR_MUTATION_OUT_OF_BOUNDS                              -206
+#define TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS                            -207
+#define TSK_ERR_MIGRATION_OUT_OF_BOUNDS                             -208
+#define TSK_ERR_PROVENANCE_OUT_OF_BOUNDS                            -209
 
+/* Edge errors */
+#define TSK_ERR_NULL_PARENT                                         -300
+#define TSK_ERR_NULL_CHILD                                          -301
+#define TSK_ERR_EDGES_NOT_SORTED_PARENT_TIME                        -302
+#define TSK_ERR_EDGES_NONCONTIGUOUS_PARENTS                         -303
+#define TSK_ERR_EDGES_NOT_SORTED_CHILD                              -304
+#define TSK_ERR_EDGES_NOT_SORTED_LEFT                               -305
+#define TSK_ERR_BAD_NODE_TIME_ORDERING                              -306
+#define TSK_ERR_BAD_EDGE_INTERVAL                                   -307
+#define TSK_ERR_DUPLICATE_EDGES                                     -308
+#define TSK_ERR_RIGHT_GREATER_SEQ_LENGTH                            -309
+#define TSK_ERR_LEFT_LESS_ZERO                                      -310
+#define TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN                    -311
+
+/* Site errors */
+#define TSK_ERR_UNSORTED_SITES                                      -400
+#define TSK_ERR_DUPLICATE_SITE_POSITION                             -401
+#define TSK_ERR_BAD_SITE_POSITION                                   -402
+
+/* Mutation errors */
+#define TSK_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -500
+#define TSK_ERR_MUTATION_PARENT_EQUAL                               -501
+#define TSK_ERR_MUTATION_PARENT_AFTER_CHILD                         -502
+#define TSK_ERR_TOO_MANY_ALLELES                                    -503
+#define TSK_ERR_INCONSISTENT_MUTATIONS                              -504
+#define TSK_ERR_NON_SINGLE_CHAR_MUTATION                            -505
+#define TSK_ERR_UNSORTED_MUTATIONS                                  -506
+
+/* Sample errors */
+#define TSK_ERR_DUPLICATE_SAMPLE                                    -600
+#define TSK_ERR_BAD_SAMPLES                                         -601
+
+/* Table errors */
+#define TSK_ERR_BAD_TABLE_POSITION                                  -700
+#define TSK_ERR_BAD_SEQUENCE_LENGTH                                 -701
+#define TSK_ERR_TABLES_NOT_INDEXED                                  -702
+
+/* Limitations */
+#define TSK_ERR_ONLY_INFINITE_SITES                                 -800
+#define TSK_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED                   -801
+#define TSK_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -802
 
 /* This bit is 0 for any errors originating from kastore */
 #define TSK_KAS_ERR_BIT 14
@@ -177,6 +153,9 @@ bool tsk_is_kas_error(int err);
 const char * tsk_strerror(int err);
 void __tsk_safe_free(void **ptr);
 
+#define tsk_safe_free(pointer) __tsk_safe_free((void **) &(pointer))
+#define TSK_MAX(a,b) ((a) > (b) ? (a) : (b))
+#define TSK_MIN(a,b) ((a) < (b) ? (a) : (b))
 
 /* This is a simple allocator that is optimised to efficiently allocate a
  * large number of small objects without large numbers of calls to malloc.

@@ -2542,7 +2542,7 @@ test_single_tree_mutgen_interval(void)
 
     /* End before start is an error */
     ret = mutgen_set_time_interval(&mutgen, 0, -1);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     /* Setting start and end == 0 should give 0 mutations */
     ret = mutgen_set_time_interval(&mutgen, 0, 0);

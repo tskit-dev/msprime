@@ -719,6 +719,7 @@ class TestSiteTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         self.assertEqual(t[0].metadata, b"2")
         self.assertEqual(t[0], t[-2])
         self.assertEqual(t[1], t[-1])
+        self.assertRaises(IndexError, t.__getitem__, 2)
         self.assertRaises(IndexError, t.__getitem__, -3)
 
 

@@ -546,7 +546,7 @@ test_node_table(void)
         CU_ASSERT_NSTRING_EQUAL(node.metadata, test_metadata, test_metadata_length);
     }
     CU_ASSERT_EQUAL(tsk_node_tbl_get_row(&table, num_rows, &node),
-            TSK_ERR_OUT_OF_BOUNDS);
+            TSK_ERR_NODE_OUT_OF_BOUNDS);
     tsk_node_tbl_print_state(&table, _devnull);
     tsk_node_tbl_dump_text(&table, _devnull);
 
@@ -725,7 +725,7 @@ test_edge_table(void)
         CU_ASSERT_EQUAL(edge.child, j);
     }
     ret = tsk_edge_tbl_get_row(&table, num_rows, &edge);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_EDGE_OUT_OF_BOUNDS);
     tsk_edge_tbl_print_state(&table, _devnull);
     tsk_edge_tbl_dump_text(&table, _devnull);
 
@@ -858,7 +858,7 @@ test_site_table(void)
     CU_ASSERT_EQUAL(table.num_rows, 3);
 
     ret = tsk_site_tbl_get_row(&table, 3, &site);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_SITE_OUT_OF_BOUNDS);
 
     tsk_site_tbl_print_state(&table, _devnull);
     tsk_site_tbl_dump_text(&table, _devnull);
@@ -1066,7 +1066,7 @@ test_mutation_table(void)
         CU_ASSERT_NSTRING_EQUAL(mutation.derived_state, c, k);
     }
     ret = tsk_mutation_tbl_get_row(&table, num_rows, &mutation);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_MUTATION_OUT_OF_BOUNDS);
     tsk_mutation_tbl_print_state(&table, _devnull);
     tsk_mutation_tbl_dump_text(&table, _devnull);
 
@@ -1294,7 +1294,7 @@ test_migration_table(void)
         CU_ASSERT_EQUAL(migration.time, j);
     }
     ret = tsk_migration_tbl_get_row(&table, num_rows, &migration);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_MIGRATION_OUT_OF_BOUNDS);
     tsk_migration_tbl_print_state(&table, _devnull);
     tsk_migration_tbl_dump_text(&table, _devnull);
 
@@ -1451,7 +1451,7 @@ test_individual_table(void)
         CU_ASSERT_NSTRING_EQUAL(individual.metadata, test_metadata, test_metadata_length);
     }
     ret = tsk_individual_tbl_get_row(&table, num_rows, &individual);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
     tsk_individual_tbl_print_state(&table, _devnull);
     tsk_individual_tbl_clear(&table);
     CU_ASSERT_EQUAL(table.num_rows, 0);
@@ -1659,7 +1659,7 @@ test_population_table(void)
         CU_ASSERT_NSTRING_EQUAL(population.metadata, c, k);
     }
     ret = tsk_population_tbl_get_row(&table, num_rows, &population);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_POPULATION_OUT_OF_BOUNDS);
     tsk_population_tbl_print_state(&table, _devnull);
     tsk_population_tbl_dump_text(&table, _devnull);
 
@@ -1780,7 +1780,7 @@ test_provenance_table(void)
                 test_record_length);
     }
     ret = tsk_provenance_tbl_get_row(&table, num_rows, &provenance);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_PROVENANCE_OUT_OF_BOUNDS);
     tsk_provenance_tbl_print_state(&table, _devnull);
     tsk_provenance_tbl_dump_text(&table, _devnull);
     tsk_provenance_tbl_clear(&table);
