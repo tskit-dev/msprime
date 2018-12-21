@@ -31,9 +31,7 @@ import sys
 import os
 
 import _msprime
-import tskit.tables as _tables
-import tskit.provenance as provenance
-import tskit.trees as trees
+import tskit
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
@@ -189,7 +187,7 @@ def simulator_factory(
         raise ValueError("start_time cannot be negative")
 
     if from_ts is not None:
-        if not isinstance(from_ts, trees.TreeSequence):
+        if not isinstance(from_ts, tskit.TreeSequence):
             raise TypeError("from_ts must be a TreeSequence instance.")
         population_mismatch_message = (
             "Mismatch in the number of populations in from_ts and simulation "
@@ -388,7 +386,7 @@ def simulate(
         "random_seed": seed,
         "TODO": "add other simulation parameters"
     }
-    provenance_dict = provenance.get_provenance_dict(parameters)
+    provenance_dict = tskit.provenance.get_provenance_dict(parameters)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
@@ -434,8 +432,6 @@ class Simulator(object):
         if from_ts is None:
             if len(samples) < 2:
                 raise ValueError("Sample size must be >= 2")
-            if len(samples) >= 2**32:
-                raise ValueError("sample_size must be < 2**32")
             self.samples = samples
         else:
             if samples is not None and len(samples) > 0:
@@ -463,10 +459,6 @@ class Simulator(object):
         self.segment_block_size = max(block_size, num_samples)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
-        self.tables = _tables.TableCollection()
-        self.num_input_provenances = 0
-        if self.from_ts is not None:
-            self.num_input_provenances = self.from_ts.num_provenances
         self.max_time = None
 
     @property
@@ -541,9 +533,6 @@ class Simulator(object):
     def num_multiple_recombination_events(self):
         return self.ll_sim.get_num_multiple_recombination_events()
 
-    def get_configuration(self):
-        return json.loads(self.ll_sim.get_configuration_json())
-
     def set_migration_matrix(self, migration_matrix):
         err = (
             "migration matrix must be a N x N square matrix encoded "
@@ -552,10 +541,6 @@ class Simulator(object):
             "elements of this matrix must be zero. For example, a "
             "valid matrix for a 3 population system is "
             "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]")
-        if self.population_configurations is None:
-            raise ValueError(
-                "Cannot specify a migration matrix without also providing a "
-                "population_configurations argument.")
         N = len(self.population_configurations)
         if not isinstance(migration_matrix, list):
             try:
@@ -642,17 +627,14 @@ class Simulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        ll_from_tables = None
+        self.ll_tables = _msprime.LightweightTableCollection()
         if self.from_ts is not None:
-            # Make sure we keep this lying around or else it can get garbage
-            # collected before we take a copy of the underlying tables.
-            self._from_tables = self.from_ts.tables.ll_tables
-            ll_from_tables = self._from_tables.get_pointer()
+            self.ll_tables.fromdict(self.from_ts.tables.asdict())
         start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
             recombination_map=ll_recomb_map,
-            from_tables=ll_from_tables,
+            tables=self.ll_tables,
             start_time=start_time,
             random_generator=self.random_generator,
             model=ll_simulation_model,
@@ -669,8 +651,6 @@ class Simulator(object):
         """
         Runs the simulation until complete coalescence has occurred.
         """
-        if self.random_generator is None:
-            raise ValueError("A random generator instance must be set")
         if self.ll_sim is None:
             self.ll_sim = self.create_ll_instance()
         for event in self.model_change_events:
@@ -678,22 +658,18 @@ class Simulator(object):
             self.ll_sim.set_model(event.model.get_ll_representation())
         max_time = sys.float_info.max if max_time is None else max_time
         self.ll_sim.run(max_time)
+        self.ll_sim.finalise_tables()
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
-        # TODO it's a waste of time copying the tables from the simulation
-        # into the local table here. We should just work directly with the
-        # tables held in the simulator. To do this we need an interface
-        # to the simulator's tables.
-        self.ll_sim.populate_tables(self.tables.ll_tables.get_pointer())
         if mutation_generator is not None:
-            mutation_generator.generate(self.tables.ll_tables.get_pointer())
-        self.tables.provenances.truncate(self.num_input_provenances)
+            mutation_generator.generate(self.ll_tables)
+        tables = tskit.TableCollection.fromdict(self.ll_tables.asdict())
         if provenance_record is not None:
-            self.tables.provenances.add_row(provenance_record)
-        return self.tables.tree_sequence()
+            tables.provenances.add_row(provenance_record)
+        return tables.tree_sequence()
 
     def reset(self):
         """
@@ -840,10 +816,12 @@ class RecombinationMap(object):
     def get_positions(self):
         return self._ll_recombination_map.get_positions()
 
+    def get_sequence_length(self):
+        return self._ll_recombination_map.get_sequence_length()
+
     def get_length(self):
-        # this is a wasteful creation of a list; push the method down
-        # into the low-level API.
-        return self._ll_recombination_map.get_positions()[-1]
+        # Deprecated: use sequence_length instread
+        return self.get_sequence_length()
 
     def get_rates(self):
         return self._ll_recombination_map.get_rates()

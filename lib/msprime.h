@@ -211,7 +211,7 @@ typedef struct _msp_t {
     /* We keep an independent segment heap for each label */
     object_heap_t *segment_heap;
     /* The tables used to store the simulation state */
-    tsk_tbl_collection_t tables;
+    tsk_tbl_collection_t *tables;
     tsk_tbl_collection_position_t from_position;
     /* edges are buffered in a flat array until they are squashed and flushed */
     tsk_edge_t *buffered_edges;
@@ -325,7 +325,7 @@ int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
-int msp_populate_tables(msp_t *self, tsk_tbl_collection_t *tables);
+int msp_finalise_tables(msp_t *self);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);

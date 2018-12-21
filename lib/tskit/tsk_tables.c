@@ -5481,6 +5481,11 @@ tsk_tbl_collection_load_indexes(tsk_tbl_collection_t *self)
     return read_table_cols(self->store, read_cols, sizeof(read_cols) / sizeof(*read_cols));
 }
 
+/* FIXME: the semantics of this function are very confusing. We need to have an alloced
+ * table collection, but without having allocated the actual columns (which would be
+ * leaked). The returned table should also be clearly marked as read-only. This should
+ * be fixed at the same time as alloc(), as the confusing semantics are spreading from
+ * there */
 int TSK_WARN_UNUSED
 tsk_tbl_collection_load(tsk_tbl_collection_t *self, const char *filename, int TSK_UNUSED(flags))
 {

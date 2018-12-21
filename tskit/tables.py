@@ -73,6 +73,11 @@ class BaseTable(object):
         self.ll_table = ll_table
         self.row_class = row_class
 
+    def _check_required_args(self, **kwargs):
+        for k, v in kwargs.items():
+            if v is None:
+                raise TypeError("{} is required".format(k))
+
     @property
     def num_rows(self):
         return self.ll_table.num_rows
@@ -123,6 +128,13 @@ class BaseTable(object):
     # Unpickle support
     def __setstate__(self, state):
         self.set_columns(**state)
+
+    def asdict(self):
+        """
+        Returns a dictionary mapping the names of the columns in this table
+        to the corresponding numpy arrays.
+        """
+        raise NotImplementedError()
 
 
 class IndividualTable(BaseTable):
@@ -220,7 +232,7 @@ class IndividualTable(BaseTable):
         return self.ll_table.add_row(flags=flags, location=location, metadata=metadata)
 
     def set_columns(
-            self, flags, location=None, location_offset=None,
+            self, flags=None, location=None, location_offset=None,
             metadata=None, metadata_offset=None):
         """
         Sets the values for each column in this :class:`.IndividualTable` using the
@@ -250,12 +262,13 @@ class IndividualTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.set_columns(
-            flags, location=location, location_offset=location_offset,
-            metadata=metadata, metadata_offset=metadata_offset)
+        self._check_required_args(flags=flags)
+        self.ll_table.set_columns(dict(
+            flags=flags, location=location, location_offset=location_offset,
+            metadata=metadata, metadata_offset=metadata_offset))
 
     def append_columns(
-            self, flags, location=None, location_offset=None, metadata=None,
+            self, flags=None, location=None, location_offset=None, metadata=None,
             metadata_offset=None):
         """
         Appends the specified arrays to the end of the columns in this
@@ -284,21 +297,24 @@ class IndividualTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.append_columns(
-            flags, location=location, location_offset=location_offset,
-            metadata=metadata, metadata_offset=metadata_offset)
+        self._check_required_args(flags=flags)
+        self.ll_table.append_columns(dict(
+            flags=flags, location=location, location_offset=location_offset,
+            metadata=metadata, metadata_offset=metadata_offset))
+
+    def asdict(self):
+        return {
+            "flags": self.flags,
+            "location": self.location,
+            "location_offset": self.location_offset,
+            "metadata": self.metadata,
+            "metadata_offset": self.metadata_offset,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _pickle_individual_table(table):
-    state = {
-        "flags": table.flags,
-        "location": table.location,
-        "location_offset": table.location_offset,
-        "metadata": table.metadata,
-        "metadata_offset": table.metadata_offset,
-    }
-    return IndividualTable, tuple(), state
+    return IndividualTable, tuple(), table.asdict()
 
 
 class NodeTable(BaseTable):
@@ -412,7 +428,7 @@ class NodeTable(BaseTable):
         return self.ll_table.add_row(flags, time, population, individual, metadata)
 
     def set_columns(
-            self, flags, time, population=None, individual=None, metadata=None,
+            self, flags=None, time=None, population=None, individual=None, metadata=None,
             metadata_offset=None):
         """
         Sets the values for each column in this :class:`.NodeTable` using the values in
@@ -441,12 +457,13 @@ class NodeTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.set_columns(
-            flags, time, population=population, individual=individual, metadata=metadata,
-            metadata_offset=metadata_offset)
+        self._check_required_args(flags=flags, time=time)
+        self.ll_table.set_columns(dict(
+            flags=flags, time=time, population=population, individual=individual,
+            metadata=metadata, metadata_offset=metadata_offset))
 
     def append_columns(
-            self, flags, time, population=None, individual=None, metadata=None,
+            self, flags=None, time=None, population=None, individual=None, metadata=None,
             metadata_offset=None):
         """
         Appends the specified arrays to the end of the columns in this
@@ -475,22 +492,25 @@ class NodeTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.append_columns(
-            flags, time, population=population, individual=individual,
-            metadata=metadata, metadata_offset=metadata_offset)
+        self._check_required_args(flags=flags, time=time)
+        self.ll_table.append_columns(dict(
+            flags=flags, time=time, population=population, individual=individual,
+            metadata=metadata, metadata_offset=metadata_offset))
+
+    def asdict(self):
+        return {
+            "time": self.time,
+            "flags": self.flags,
+            "population": self.population,
+            "individual": self.individual,
+            "metadata": self.metadata,
+            "metadata_offset": self.metadata_offset,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _pickle_node_table(table):
-    state = {
-        "time": table.time,
-        "flags": table.flags,
-        "population": table.population,
-        "individual": table.individual,
-        "metadata": table.metadata,
-        "metadata_offset": table.metadata_offset,
-    }
-    return NodeTable, tuple(), state
+    return NodeTable, tuple(), table.asdict()
 
 
 class EdgeTable(BaseTable):
@@ -571,7 +591,7 @@ class EdgeTable(BaseTable):
         """
         return self.ll_table.add_row(left, right, parent, child)
 
-    def set_columns(self, left, right, parent, child):
+    def set_columns(self, left=None, right=None, parent=None, child=None):
         """
         Sets the values for each column in this :class:`.EdgeTable` using the values
         in the specified arrays. Overwrites any data currently stored in the table.
@@ -588,7 +608,9 @@ class EdgeTable(BaseTable):
         :param child: The child node IDs.
         :type child: numpy.ndarray, dtype=np.int32
         """
-        self.ll_table.set_columns(left, right, parent, child)
+        self._check_required_args(left=left, right=right, parent=parent, child=child)
+        self.ll_table.set_columns(dict(
+            left=left, right=right, parent=parent, child=child))
 
     def append_columns(self, left, right, parent, child):
         """
@@ -608,18 +630,21 @@ class EdgeTable(BaseTable):
         :param child: The child node IDs.
         :type child: numpy.ndarray, dtype=np.int32
         """
-        self.ll_table.append_columns(left, right, parent, child)
+        self.ll_table.append_columns(dict(
+            left=left, right=right, parent=parent, child=child))
+
+    def asdict(self):
+        return {
+            "left": self.left,
+            "right": self.right,
+            "parent": self.parent,
+            "child": self.child,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _edge_table_pickle(table):
-    state = {
-        "left": table.left,
-        "right": table.right,
-        "parent": table.parent,
-        "child": table.child,
-    }
-    return EdgeTable, tuple(), state
+    return EdgeTable, tuple(), table.asdict()
 
 
 class MigrationTable(BaseTable):
@@ -718,7 +743,8 @@ class MigrationTable(BaseTable):
         """
         return self.ll_table.add_row(left, right, node, source, dest, time)
 
-    def set_columns(self, left, right, node, source, dest, time):
+    def set_columns(
+            self, left=None, right=None, node=None, source=None, dest=None, time=None):
         """
         Sets the values for each column in this :class:`.MigrationTable` using the values
         in the specified arrays. Overwrites any data currently stored in the table.
@@ -739,7 +765,10 @@ class MigrationTable(BaseTable):
         :param time: The time of each migration.
         :type time: numpy.ndarray, dtype=np.int64
         """
-        self.ll_table.set_columns(left, right, node, source, dest, time)
+        self._check_required_args(
+            left=left, right=right, node=node, source=source, dest=dest, time=time)
+        self.ll_table.set_columns(dict(
+            left=left, right=right, node=node, source=source, dest=dest, time=time))
 
     def append_columns(self, left, right, node, source, dest, time):
         """
@@ -763,20 +792,23 @@ class MigrationTable(BaseTable):
         :param time: The time of each migration.
         :type time: numpy.ndarray, dtype=np.int64
         """
-        self.ll_table.append_columns(left, right, node, source, dest, time)
+        self.ll_table.append_columns(dict(
+            left=left, right=right, node=node, source=source, dest=dest, time=time))
+
+    def asdict(self):
+        return {
+            "left": self.left,
+            "right": self.right,
+            "node": self.node,
+            "source": self.source,
+            "dest": self.dest,
+            "time": self.time,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _migration_table_pickle(table):
-    state = {
-        "left": table.left,
-        "right": table.right,
-        "node": table.node,
-        "source": table.source,
-        "dest": table.dest,
-        "time": table.time,
-    }
-    return MigrationTable, tuple(), state
+    return MigrationTable, tuple(), table.asdict()
 
 
 class SiteTable(BaseTable):
@@ -874,7 +906,7 @@ class SiteTable(BaseTable):
         return self.ll_table.add_row(position, ancestral_state, metadata)
 
     def set_columns(
-            self, position, ancestral_state, ancestral_state_offset,
+            self, position=None, ancestral_state=None, ancestral_state_offset=None,
             metadata=None, metadata_offset=None):
         """
         Sets the values for each column in this :class:`.SiteTable` using the values
@@ -905,10 +937,13 @@ class SiteTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.set_columns(
-            position, ancestral_state=ancestral_state,
+        self._check_required_args(
+            position=position, ancestral_state=ancestral_state,
+            ancestral_state_offset=ancestral_state_offset)
+        self.ll_table.set_columns(dict(
+            position=position, ancestral_state=ancestral_state,
             ancestral_state_offset=ancestral_state_offset,
-            metadata=metadata, metadata_offset=metadata_offset)
+            metadata=metadata, metadata_offset=metadata_offset))
 
     def append_columns(
             self, position, ancestral_state, ancestral_state_offset,
@@ -943,22 +978,24 @@ class SiteTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.append_columns(
-            position, ancestral_state=ancestral_state,
+        self.ll_table.append_columns(dict(
+            position=position, ancestral_state=ancestral_state,
             ancestral_state_offset=ancestral_state_offset,
-            metadata=metadata, metadata_offset=metadata_offset)
+            metadata=metadata, metadata_offset=metadata_offset))
+
+    def asdict(self):
+        return {
+            "position": self.position,
+            "ancestral_state": self.ancestral_state,
+            "ancestral_state_offset": self.ancestral_state_offset,
+            "metadata": self.metadata,
+            "metadata_offset": self.metadata_offset,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _site_table_pickle(table):
-    state = {
-        "position": table.position,
-        "ancestral_state": table.ancestral_state,
-        "ancestral_state_offset": table.ancestral_state_offset,
-        "metadata": table.metadata,
-        "metadata_offset": table.metadata_offset,
-    }
-    return SiteTable, tuple(), state
+    return SiteTable, tuple(), table.asdict()
 
 
 class MutationTable(BaseTable):
@@ -1072,7 +1109,7 @@ class MutationTable(BaseTable):
                 site, node, derived_state, parent, metadata)
 
     def set_columns(
-            self, site, node, derived_state, derived_state_offset,
+            self, site=None, node=None, derived_state=None, derived_state_offset=None,
             parent=None, metadata=None, metadata_offset=None):
         """
         Sets the values for each column in this :class:`.MutationTable` using the values
@@ -1108,10 +1145,13 @@ class MutationTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.set_columns(
+        self._check_required_args(
+            site=site, node=node, derived_state=derived_state,
+            derived_state_offset=derived_state_offset)
+        self.ll_table.set_columns(dict(
             site=site, node=node, parent=parent,
             derived_state=derived_state, derived_state_offset=derived_state_offset,
-            metadata=metadata, metadata_offset=metadata_offset)
+            metadata=metadata, metadata_offset=metadata_offset))
 
     def append_columns(
             self, site, node, derived_state, derived_state_offset,
@@ -1151,24 +1191,26 @@ class MutationTable(BaseTable):
         :param metadata_offset: The offsets into the ``metadata`` array.
         :type metadata_offset: numpy.ndarray, dtype=np.uint32.
         """
-        self.ll_table.append_columns(
+        self.ll_table.append_columns(dict(
             site=site, node=node, parent=parent,
             derived_state=derived_state, derived_state_offset=derived_state_offset,
-            metadata=metadata, metadata_offset=metadata_offset)
+            metadata=metadata, metadata_offset=metadata_offset))
+
+    def asdict(self):
+        return {
+            "site": self.site,
+            "node": self.node,
+            "parent": self.parent,
+            "derived_state": self.derived_state,
+            "derived_state_offset": self.derived_state_offset,
+            "metadata": self.metadata,
+            "metadata_offset": self.metadata_offset,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _mutation_table_pickle(table):
-    state = {
-        "site": table.site,
-        "node": table.node,
-        "parent": table.parent,
-        "derived_state": table.derived_state,
-        "derived_state_offset": table.derived_state_offset,
-        "metadata": table.metadata,
-        "metadata_offset": table.metadata_offset,
-    }
-    return MutationTable, tuple(), state
+    return MutationTable, tuple(), table.asdict()
 
 
 class PopulationTable(BaseTable):
@@ -1237,19 +1279,23 @@ class PopulationTable(BaseTable):
         return copy
 
     def set_columns(self, metadata=None, metadata_offset=None):
-        self.ll_table.set_columns(metadata=metadata, metadata_offset=metadata_offset)
+        self.ll_table.set_columns(
+            dict(metadata=metadata, metadata_offset=metadata_offset))
 
     def append_columns(self, metadata=None, metadata_offset=None):
-        self.ll_table.append_columns(metadata=metadata, metadata_offset=metadata_offset)
+        self.ll_table.append_columns(
+            dict(metadata=metadata, metadata_offset=metadata_offset))
+
+    def asdict(self):
+        return {
+            "metadata": self.metadata,
+            "metadata_offset": self.metadata_offset,
+        }
 
 
 # Pickle support. See copyreg registration for this function below.
 def _population_table_pickle(table):
-    state = {
-        "metadata": table.metadata,
-        "metadata_offset": table.metadata_offset,
-    }
-    return PopulationTable, tuple(), state
+    return PopulationTable, tuple(), table.asdict()
 
 
 class ProvenanceTable(BaseTable):
@@ -1319,16 +1365,16 @@ class ProvenanceTable(BaseTable):
     def set_columns(
             self, timestamp=None, timestamp_offset=None,
             record=None, record_offset=None):
-        self.ll_table.set_columns(
+        self.ll_table.set_columns(dict(
             timestamp=timestamp, timestamp_offset=timestamp_offset,
-            record=record, record_offset=record_offset)
+            record=record, record_offset=record_offset))
 
     def append_columns(
             self, timestamp=None, timestamp_offset=None,
             record=None, record_offset=None):
-        self.ll_table.append_columns(
+        self.ll_table.append_columns(dict(
             timestamp=timestamp, timestamp_offset=timestamp_offset,
-            record=record, record_offset=record_offset)
+            record=record, record_offset=record_offset))
 
     def __str__(self):
         timestamp = unpack_strings(self.timestamp, self.timestamp_offset)
@@ -1358,16 +1404,18 @@ class ProvenanceTable(BaseTable):
             record_offset=self.record_offset)
         return copy
 
+    def asdict(self):
+        return {
+            "timestamp": self.timestamp,
+            "timestamp_offset": self.timestamp_offset,
+            "record": self.record,
+            "record_offset": self.record_offset,
+        }
+
 
 # Pickle support. See copyreg registration for this function below.
 def _provenance_table_pickle(table):
-    state = {
-        "timestamp": table.timestamp,
-        "timestamp_offset": table.timestamp_offset,
-        "record": table.record,
-        "record_offset": table.record_offset,
-    }
-    return ProvenanceTable, tuple(), state
+    return ProvenanceTable, tuple(), table.asdict()
 
 
 class TableCollection(object):
@@ -1406,59 +1454,40 @@ class TableCollection(object):
         from, or None if not derived from a file.
     :vartype file_uuid: str
     """
-    def __init__(self, sequence_length=0, ll_tables=None):
-        if ll_tables is None:
-            ll_tables = _tskit.TableCollection(
-                individuals=_tskit.IndividualTable(),
-                nodes=_tskit.NodeTable(),
-                edges=_tskit.EdgeTable(),
-                migrations=_tskit.MigrationTable(),
-                sites=_tskit.SiteTable(),
-                mutations=_tskit.MutationTable(),
-                populations=_tskit.PopulationTable(),
-                provenances=_tskit.ProvenanceTable(),
-                sequence_length=sequence_length)
-        self.ll_tables = ll_tables
-        self.__individuals = IndividualTable(ll_table=self.ll_tables.individuals)
-        self.__nodes = NodeTable(ll_table=self.ll_tables.nodes)
-        self.__edges = EdgeTable(ll_table=self.ll_tables.edges)
-        self.__migrations = MigrationTable(ll_table=self.ll_tables.migrations)
-        self.__sites = SiteTable(ll_table=self.ll_tables.sites)
-        self.__mutations = MutationTable(ll_table=self.ll_tables.mutations)
-        self.__populations = PopulationTable(ll_table=self.ll_tables.populations)
-        self.__provenances = ProvenanceTable(ll_table=self.ll_tables.provenances)
+    def __init__(self, sequence_length=0):
+        self.ll_tables = _tskit.TableCollection(sequence_length)
 
     @property
     def individuals(self):
-        return self.__individuals
+        return IndividualTable(ll_table=self.ll_tables.individuals)
 
     @property
     def nodes(self):
-        return self.__nodes
+        return NodeTable(ll_table=self.ll_tables.nodes)
 
     @property
     def edges(self):
-        return self.__edges
+        return EdgeTable(ll_table=self.ll_tables.edges)
 
     @property
     def migrations(self):
-        return self.__migrations
+        return MigrationTable(ll_table=self.ll_tables.migrations)
 
     @property
     def sites(self):
-        return self.__sites
+        return SiteTable(ll_table=self.ll_tables.sites)
 
     @property
     def mutations(self):
-        return self.__mutations
+        return MutationTable(ll_table=self.ll_tables.mutations)
 
     @property
     def populations(self):
-        return self.__populations
+        return PopulationTable(ll_table=self.ll_tables.populations)
 
     @property
     def provenances(self):
-        return self.__provenances
+        return ProvenanceTable(ll_table=self.ll_tables.provenances)
 
     @property
     def sequence_length(self):
@@ -1469,25 +1498,22 @@ class TableCollection(object):
         return self.ll_tables.file_uuid
 
     def asdict(self):
-        # This function really only exists to support the older table functions
-        # like sort_tables etc, so we could say sort_tables(**tables.asdict()).
-        # This is why we don't have sequence_length in here, as we'd need to
-        # update all those functions too. However, when we get rid of them, we
-        # should update this function to include sequence_length or else remove
-        # it if it's not really useful any more.
         """
-        Returns this TableCollection as a dictionary mapping the keys "nodes",
-        "edges", etc to their respective table objects.
+        Returns a dictionary representation of this TableCollection.
+
+        Note: the semantics of this method changed at tskit 1.0.0. Previously a
+        map of table names to the tables themselves was returned.
         """
         return {
-            "individuals": self.individuals,
-            "nodes": self.nodes,
-            "edges": self.edges,
-            "migrations": self.migrations,
-            "sites": self.sites,
-            "mutations": self.mutations,
-            "populations": self.populations,
-            "provenances": self.provenances
+            "sequence_length": self.sequence_length,
+            "individuals": self.individuals.asdict(),
+            "nodes": self.nodes.asdict(),
+            "edges": self.edges.asdict(),
+            "migrations": self.migrations.asdict(),
+            "sites": self.sites.asdict(),
+            "mutations": self.mutations.asdict(),
+            "populations": self.populations.asdict(),
+            "provenances": self.provenances.asdict(),
         }
 
     def __banner(self, title):
@@ -1528,17 +1554,28 @@ class TableCollection(object):
 
     # Unpickle support
     def __setstate__(self, state):
-        ll_tables = _tskit.TableCollection(
-            individuals=state["individuals"].ll_table,
-            nodes=state["nodes"].ll_table,
-            edges=state["edges"].ll_table,
-            migrations=state["migrations"].ll_table,
-            sites=state["sites"].ll_table,
-            mutations=state["mutations"].ll_table,
-            populations=state["populations"].ll_table,
-            provenances=state["provenances"].ll_table,
-            sequence_length=state["sequence_length"])
-        self.__init__(ll_tables=ll_tables)
+        self.__init__(state["sequence_length"])
+        self.individuals.set_columns(**state["individuals"])
+        self.nodes.set_columns(**state["nodes"])
+        self.edges.set_columns(**state["edges"])
+        self.migrations.set_columns(**state["migrations"])
+        self.sites.set_columns(**state["sites"])
+        self.mutations.set_columns(**state["mutations"])
+        self.populations.set_columns(**state["populations"])
+        self.provenances.set_columns(**state["provenances"])
+
+    @classmethod
+    def fromdict(self, tables_dict):
+        tables = TableCollection(tables_dict["sequence_length"])
+        tables.individuals.set_columns(**tables_dict["individuals"])
+        tables.nodes.set_columns(**tables_dict["nodes"])
+        tables.edges.set_columns(**tables_dict["edges"])
+        tables.migrations.set_columns(**tables_dict["migrations"])
+        tables.sites.set_columns(**tables_dict["sites"])
+        tables.mutations.set_columns(**tables_dict["mutations"])
+        tables.populations.set_columns(**tables_dict["populations"])
+        tables.provenances.set_columns(**tables_dict["provenances"])
+        return tables
 
     def tree_sequence(self):
         """
@@ -1690,18 +1727,7 @@ class TableCollection(object):
 
 # Pickle support. See copyreg registration for this function below.
 def _table_collection_pickle(tables):
-    state = {
-        "sequence_length": tables.sequence_length,
-        "individuals": tables.individuals,
-        "populations": tables.populations,
-        "nodes": tables.nodes,
-        "edges": tables.edges,
-        "migrations": tables.migrations,
-        "sites": tables.sites,
-        "mutations": tables.mutations,
-        "provenances": tables.provenances,
-    }
-    return TableCollection, tuple(), state
+    return TableCollection, tuple(), tables.asdict()
 
 
 # Pickle support for the various tables. We are forced to use copyreg.pickle
@@ -1722,167 +1748,6 @@ copyreg.pickle(TableCollection, _table_collection_pickle)
 #############################################
 # Table functions.
 #############################################
-
-
-def sort_tables(
-        nodes, edges, migrations=None, sites=None, mutations=None,
-        provenances=None, individuals=None, populations=None, edge_start=0):
-    """
-    **This function is deprecated. Please use TableCollection.sort() instead**
-
-    Sorts the given tables **in place**, ensuring that all tree
-    sequence ordering requirements are met. See
-    the :ref:`sec_valid_tree_sequence_requirements` section for details on these
-    requirements.
-
-    If the ``edge_start`` parameter is provided, this specifies the index
-    in the edge table where sorting should start. Only rows with index
-    greater than or equal to ``edge_start`` are sorted; rows before this index
-    are not affected. This parameter is provided to allow for efficient sorting
-    when the user knows that the edges up to a given index are already sorted.
-
-    The input node table is not affected by this function.
-
-    Edges are sorted as follows:
-
-    - time of parent, then
-    - parent node ID, then
-    - child node ID, then
-    - left endpoint.
-
-    Note that this sorting order exceeds the
-    :ref:`edge sorting requirements <sec_edge_requirements>` for a valid
-    tree sequence. For a valid tree sequence, we require that all edges for a
-    given parent ID are adjacent, but we do not require that they be listed in
-    sorted order.
-
-    Sites are sorted by position.
-
-    Mutations are sorted by site ID.
-
-    Migrations and provenances are not currently affected by this function.
-    However, this behaviour is likely to change in the future.
-
-    :param NodeTable nodes: The nodes of the tree sequence (required).
-    :param EdgeTable edges: The edges of the tree sequence (required).
-    :param MigrationTable migrations: The tree sequence's migrations (optional).
-    :param SiteTable sites: The tree sequence's sites (optional, but required if
-         ``mutations`` is provided)
-    :param MutationTable mutations: The tree sequence's mutations (optional, but
-         required if ``sites`` is provided).
-    :param ProvenanceTable provenances: Ignored. This argument is provided to
-        support calling the function like ``sort_tables(**tables.asdict())``.
-    :param PopulationTable populations: Ignored. This argument is provided to
-        support calling the function like ``sort_tables(**tables.asdict())``.
-    :param IndividualTable individuals: Ignored. This argument is provided to
-        support calling the function like ``sort_tables(**tables.asdict())``.
-    :param int edge_start: The index in the edge table where sorting starts
-        (default=0; must be <= len(edges)).
-    """
-    if migrations is None:
-        migrations = MigrationTable()
-    if sites is None:
-        sites = SiteTable()
-    if mutations is None:
-        mutations = MutationTable()
-    sequence_length = 1
-    if len(edges) > 0:
-        sequence_length = edges.right.max()
-    # To make this work with the old semantics we need to create a populations
-    populations = _tskit.PopulationTable()
-    if len(nodes) > 0:
-        max_pop = np.max(nodes.population)
-        for _ in range(max_pop + 1):
-            populations.add_row()
-        max_ind = np.max(nodes.individual)
-        if max_ind != tskit.NULL_INDIVIDUAL:
-            raise ValueError("Individuals not supported in this deprecated function")
-    try:
-        ll_tables = _tskit.TableCollection(
-            individuals=_tskit.IndividualTable(),
-            nodes=nodes.ll_table,
-            edges=edges.ll_table,
-            migrations=migrations.ll_table,
-            sites=sites.ll_table,
-            mutations=mutations.ll_table,
-            populations=populations,
-            provenances=_tskit.ProvenanceTable(),
-            sequence_length=sequence_length)
-    except AttributeError as e:
-        raise TypeError(str(e))
-    return ll_tables.sort(edge_start)
-
-
-def simplify_tables(
-        samples, nodes, edges, migrations=None, sites=None, mutations=None,
-        sequence_length=0, filter_zero_mutation_sites=True):
-    """
-    **This function is deprecated. Please use TableCollection.simplify() instead**
-
-    Simplifies the tables, **in place**, to retain only the information necessary
-    to reconstruct the tree sequence describing the given ``samples``.  This
-    will change the ID of the nodes, so that the individual ``samples[k]]``
-    will have ID ``k`` in the result. The resulting NodeTable will have only
-    the first ``len(samples)`` individuals marked as samples. The
-    ``sequence_length`` can be provided but is otherwise inferred from the
-    largest right edge. The mapping from node IDs in the current set of tables
-    to their equivalent values in the simplified tables is returned as a numpy
-    array. If an array ``a`` is returned by this function and ``u`` is the ID of
-    a node in the input table, then ``a[u]`` is the ID of this node in the
-    output table. For any node ``u`` that is not mapped into the output tables,
-    this mapping will equal ``-1``.
-
-    Tables operated on by this function must: be sorted (see ``sort_tables``),
-    have children be born strictly after their parents, and the intervals on
-    which any individual is a child must be disjoint; but other than this the
-    tables need not satisfy remaining requirements to specify a valid tree
-    sequence (but the resulting tables will).
-
-    :param list[int] samples: A list of Node IDs of individuals to retain as samples.
-    :param NodeTable nodes: The NodeTable to be simplified.
-    :param EdgeTable edges: The EdgeTable to be simplified.
-    :param MigrationTable migrations: The MigrationTable to be simplified.
-    :param SiteTable sites: The SiteTable to be simplified.
-    :param MutationTable mutations: The MutationTable to be simplified.
-    :param bool filter_zero_mutation_sites: Whether to remove sites that have no
-        mutations from the output (default: True).
-    :param float sequence_length: The length of the sequence.
-    :return: A numpy array mapping node IDs in the input tables to their
-        corresponding node IDs in the output tables.
-    :rtype: numpy array (dtype=np.int32).
-    """
-    if migrations is None:
-        migrations = MigrationTable()
-    if sites is None:
-        sites = SiteTable()
-    if mutations is None:
-        mutations = MutationTable()
-    if sequence_length == 0 and len(edges) > 0:
-        sequence_length = edges.right.max()
-    # To make this work with the old semantics we need to create a populations
-    max_pop = np.max(nodes.population)
-    populations = _tskit.PopulationTable()
-    if len(nodes) > 0:
-        for _ in range(max_pop + 1):
-            populations.add_row()
-        max_ind = np.max(nodes.individual)
-        if max_ind != tskit.NULL_INDIVIDUAL:
-            raise ValueError("Individuals not supported in this deprecated function")
-    try:
-        ll_tables = _tskit.TableCollection(
-            individuals=_tskit.IndividualTable(),
-            nodes=nodes.ll_table,
-            edges=edges.ll_table,
-            migrations=migrations.ll_table,
-            sites=sites.ll_table,
-            mutations=mutations.ll_table,
-            populations=populations,
-            provenances=_tskit.ProvenanceTable(),
-            sequence_length=sequence_length)
-    except AttributeError as e:
-        raise TypeError(str(e))
-    return ll_tables.simplify(samples, filter_sites=filter_zero_mutation_sites)
-
 
 def pack_bytes(data):
     """

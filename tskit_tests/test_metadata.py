@@ -90,12 +90,11 @@ class TestMetadataPickleDecoding(unittest.TestCase):
     """
 
     def test_nodes(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
+        tables = tskit.TableCollection(sequence_length=1)
         metadata = ExampleMetadata(one="node1", two="node2")
         pickled = pickle.dumps(metadata)
-        nodes.add_row(time=0.125, metadata=pickled)
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables.nodes.add_row(time=0.125, metadata=pickled)
+        ts = tables.tree_sequence()
         node = ts.node(0)
         self.assertEqual(node.time, 0.125)
         self.assertEqual(node.metadata, pickled)
@@ -104,16 +103,11 @@ class TestMetadataPickleDecoding(unittest.TestCase):
         self.assertEqual(unpickled.two, metadata.two)
 
     def test_sites(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
-        sites = tskit.SiteTable()
-        mutations = tskit.MutationTable()
+        tables = tskit.TableCollection(sequence_length=1)
         metadata = ExampleMetadata(one="node1", two="node2")
         pickled = pickle.dumps(metadata)
-        sites.add_row(position=0.1, ancestral_state="A", metadata=pickled)
-        ts = tskit.load_tables(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+        tables.sites.add_row(position=0.1, ancestral_state="A", metadata=pickled)
+        ts = tables.tree_sequence()
         site = ts.site(0)
         self.assertEqual(site.position, 0.1)
         self.assertEqual(site.ancestral_state, "A")
@@ -123,18 +117,13 @@ class TestMetadataPickleDecoding(unittest.TestCase):
         self.assertEqual(unpickled.two, metadata.two)
 
     def test_mutations(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
-        sites = tskit.SiteTable()
-        mutations = tskit.MutationTable()
+        tables = tskit.TableCollection(sequence_length=1)
         metadata = ExampleMetadata(one="node1", two="node2")
         pickled = pickle.dumps(metadata)
-        nodes.add_row(time=0)
-        sites.add_row(position=0.1, ancestral_state="A")
-        mutations.add_row(site=0, node=0, derived_state="T", metadata=pickled)
-        ts = tskit.load_tables(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+        tables.nodes.add_row(time=0)
+        tables.sites.add_row(position=0.1, ancestral_state="A")
+        tables.mutations.add_row(site=0, node=0, derived_state="T", metadata=pickled)
+        ts = tables.tree_sequence()
         mutation = ts.site(0).mutations[0]
         self.assertEqual(mutation.site, 0)
         self.assertEqual(mutation.node, 0)
@@ -160,14 +149,13 @@ class TestJsonSchemaDecoding(unittest.TestCase):
     }"""
 
     def test_nodes(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
+        tables = tskit.TableCollection(sequence_length=1)
         builder = pjs.ObjectBuilder(json.loads(self.schema))
         ns = builder.build_classes()
         metadata = ns.ExampleMetadata(one="node1", two="node2")
         encoded = json.dumps(metadata.as_dict()).encode()
-        nodes.add_row(time=0.125, metadata=encoded)
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables.nodes.add_row(time=0.125, metadata=encoded)
+        ts = tables.tree_sequence()
         node = ts.node(0)
         self.assertEqual(node.time, 0.125)
         self.assertEqual(node.metadata, encoded)

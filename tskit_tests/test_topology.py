@@ -254,12 +254,8 @@ class TestEmptyTreeSequences(TopologyTestCase):
     Tests covering tree sequences that have zero edges.
     """
     def test_zero_nodes(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
-        # Without a sequence length this should fail.
-        self.assertRaises(
-            _tskit.LibraryError, tskit.load_tables, nodes=nodes, edges=edges)
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables = tskit.TableCollection(1)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 0)
@@ -283,13 +279,10 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_zero_samples(self):
-        nodes = tskit.NodeTable()
-        nodes.add_row(time=0, flags=0)
-        edges = tskit.EdgeTable()
+        tables = tskit.TableCollection(sequence_length=1)
+        tables.nodes.add_row(time=0, flags=0)
         # Without a sequence length this should fail.
-        self.assertRaises(
-            _tskit.LibraryError, tskit.load_tables, nodes=nodes, edges=edges)
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 1)
@@ -314,16 +307,11 @@ class TestEmptyTreeSequences(TopologyTestCase):
                 self.assertRaises(ValueError, method, u)
 
     def test_one_node_zero_samples_sites(self):
-        nodes = tskit.NodeTable()
-        nodes.add_row(time=0, flags=0)
-        edges = tskit.EdgeTable()
-        sites = tskit.SiteTable()
-        mutations = tskit.MutationTable()
-        sites.add_row(position=0.5, ancestral_state='0')
-        mutations.add_row(site=0, derived_state='1', node=0)
-        ts = tskit.load_tables(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+        tables = tskit.TableCollection(sequence_length=1)
+        tables.nodes.add_row(time=0, flags=0)
+        tables.sites.add_row(position=0.5, ancestral_state='0')
+        tables.mutations.add_row(site=0, derived_state='1', node=0)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 1)
@@ -347,13 +335,9 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_one_sample(self):
-        nodes = tskit.NodeTable()
-        nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE)
-        edges = tskit.EdgeTable()
-        # Without a sequence length this should fail.
-        self.assertRaises(
-            _tskit.LibraryError, tskit.load_tables, nodes=nodes, edges=edges)
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables = tskit.TableCollection(sequence_length=1)
+        tables.nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 1)
@@ -379,16 +363,11 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(tsp.num_edges, 0)
 
     def test_one_node_one_sample_sites(self):
-        nodes = tskit.NodeTable()
-        nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE)
-        edges = tskit.EdgeTable()
-        sites = tskit.SiteTable()
-        mutations = tskit.MutationTable()
-        sites.add_row(position=0.5, ancestral_state='0')
-        mutations.add_row(site=0, derived_state='1', node=0)
-        ts = tskit.load_tables(
-            nodes=nodes, edges=edges, sites=sites, mutations=mutations,
-            sequence_length=1)
+        tables = tskit.TableCollection(sequence_length=1)
+        tables.nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE)
+        tables.sites.add_row(position=0.5, ancestral_state='0')
+        tables.mutations.add_row(site=0, derived_state='1', node=0)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.num_nodes, 1)
@@ -855,7 +834,7 @@ class TestUnaryNodes(TopologyTestCase):
         for e in edges:
             tables.edges.add_row(
                 left=e.left, right=e.right, child=e.child, parent=e.parent)
-        ts_new = tskit.load_tables(**tables.asdict())
+        ts_new = tables.tree_sequence()
         self.assertGreater(ts_new.num_edges, ts.num_edges)
         self.assert_haplotypes_equal(ts, ts_new)
         self.assert_variants_equal(ts, ts_new)
@@ -1113,9 +1092,11 @@ class TestSimplifyExamples(TopologyTestCase):
         """
         nodes = tskit.parse_nodes(six.StringIO(nodes_before), strict=False)
         edges = tskit.parse_edges(six.StringIO(edges_before), strict=False)
-        self.assertRaises(
-            _tskit.LibraryError, tskit.simplify_tables,
-            samples=[0, 1], nodes=nodes, edges=edges)
+        # Cannot use load_text here because it calls sort()
+        tables = tskit.TableCollection(sequence_length=2)
+        tables.nodes.set_columns(**nodes.asdict())
+        tables.edges.set_columns(**edges.asdict())
+        self.assertRaises(_tskit.LibraryError, tables.simplify, samples=[0, 1])
 
     def test_single_binary_tree(self):
         #
@@ -1744,7 +1725,7 @@ class TestMultipleRoots(TopologyTestCase):
             right=tables.edges.right[:-1],
             parent=tables.edges.parent[:-1],
             child=tables.edges.child[:-1])
-        ts_new = tskit.load_tables(**tables.asdict())
+        ts_new = tables.tree_sequence()
         self.assertEqual(ts.sample_size, ts_new.sample_size)
         self.assertEqual(ts.num_edges, ts_new.num_edges + 1)
         self.assertEqual(ts.num_trees, ts_new.num_trees)
@@ -2695,8 +2676,8 @@ class TestSimplify(unittest.TestCase):
         flags[0] = 0
         flags[1] = 0
         flags[5] = tskit.NODE_IS_SAMPLE
-        nodes.set_columns(flags=flags, time=nodes.time)
-        ts = tskit.load_tables(nodes=nodes, edges=tables.edges)
+        tables.nodes.set_columns(flags=flags, time=nodes.time)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sample_size, 4)
         tss, node_map = self.do_simplify(ts, [3, 5])
         self.assertEqual(node_map[3], 0)
@@ -2716,7 +2697,7 @@ class TestSimplify(unittest.TestCase):
         flags[0] = tskit.NODE_IS_SAMPLE
         flags[7] = tskit.NODE_IS_SAMPLE
         nodes.set_columns(flags=flags, time=nodes.time)
-        ts = tskit.load_tables(nodes=nodes, edges=tables.edges)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sample_size, 2)
         tss, node_map = self.do_simplify(ts, [0, 7])
         self.assertEqual(node_map[0], 0)
@@ -2739,7 +2720,7 @@ class TestSimplify(unittest.TestCase):
         flags[1] = tskit.NODE_IS_SAMPLE
         flags[7] = tskit.NODE_IS_SAMPLE
         nodes.set_columns(flags=flags, time=nodes.time)
-        ts = tskit.load_tables(nodes=nodes, edges=tables.edges)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sample_size, 3)
         tss, node_map = self.do_simplify(ts, [0, 1, 7])
         self.assertEqual(node_map[0], 0)
@@ -3352,9 +3333,8 @@ class TestSimpleTreeAlgorithm(unittest.TestCase):
     See TestHoleyTreeSequences above for further tests on wacky topologies.
     """
     def test_zero_nodes(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables = tskit.TableCollection(1)
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         # Test the simple tree iterator.
@@ -3366,10 +3346,9 @@ class TestSimpleTreeAlgorithm(unittest.TestCase):
         self.assertEqual(parent, [])
 
     def test_one_node(self):
-        nodes = tskit.NodeTable()
-        edges = tskit.EdgeTable()
-        nodes.add_row()
-        ts = tskit.load_tables(nodes=nodes, edges=edges, sequence_length=1)
+        tables = tskit.TableCollection(1)
+        tables.nodes.add_row()
+        ts = tables.tree_sequence()
         self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(ts.num_trees, 1)
         # Test the simple tree iterator.

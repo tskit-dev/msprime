@@ -49,6 +49,7 @@ class TestProvenance(unittest.TestCase):
     # TODO more tests when we finalise the format of these dictionaries.
 
 
+@unittest.skip("TMP")
 class TestEnvironment(unittest.TestCase):
     """
     Basic tests for the provenance dict function.
