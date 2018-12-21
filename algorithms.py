@@ -567,20 +567,16 @@ class Simulator(object):
         # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
     def store_edges_left(self, y, u):
-        self.store_edge(y.left, y.right, u, y.node)
-        y.node = u
-        while y.prev is not None:
+        while y is not None:
+            self.store_edge(y.left, y.right, u, y.node)
+            y.node = u
             y = y.prev
-            self.store_edge(y.left, y.right, u, y.node)
-            y.node = u
-            
+
     def store_edges_right(self, y, u):
-        self.store_edge(y.left, y.right, u, y.node)
-        y.node = u
-        while y.next is not None:
-            y = y.next
+        while y is not None:
             self.store_edge(y.left, y.right, u, y.node)
             y.node = u
+            y = y.next
 
     def hudson_recombination_event(self):
         """
