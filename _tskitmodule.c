@@ -1943,8 +1943,6 @@ IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_position_length_increment = 0;
-    Py_ssize_t max_metadata_length_increment = 0;
 
     self->table = NULL;
     self->locked = false;
@@ -1961,14 +1959,12 @@ IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_individual_tbl_alloc(self->table,
-            (size_t) max_rows_increment,
-            (size_t) max_position_length_increment,
-            (size_t) max_metadata_length_increment);
+    err = tsk_individual_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_individual_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -2376,7 +2372,6 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_metadata_length_increment = 0;
 
     self->table = NULL;
     self->locked = false;
@@ -2394,12 +2389,12 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_node_tbl_alloc(self->table, (size_t) max_rows_increment,
-            (size_t) max_metadata_length_increment);
+    err = tsk_node_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_node_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -2817,11 +2812,12 @@ EdgeTable_init(EdgeTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_edge_tbl_alloc(self->table, (size_t) max_rows_increment);
+    err = tsk_edge_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_edge_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -3205,11 +3201,12 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_migration_tbl_alloc(self->table, (size_t) max_rows_increment);
+    err = tsk_migration_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_migration_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -3617,11 +3614,12 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_site_tbl_alloc(self->table, (size_t) max_rows_increment, 0, 0);
+    err = tsk_site_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_site_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -4036,11 +4034,12 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_mutation_tbl_alloc(self->table, (size_t) max_rows_increment, 0, 0);
+    err = tsk_mutation_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_mutation_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -4492,13 +4491,12 @@ PopulationTable_init(PopulationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    /* Take the default size increments for metadata and record */
-    err = tsk_population_tbl_alloc(self->table,
-            (size_t) max_rows_increment, 0);
+    err = tsk_population_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_population_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -4855,13 +4853,13 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    /* Take the default size increments for timestamp and record */
-    err = tsk_provenance_tbl_alloc(self->table,
-            (size_t) max_rows_increment, 0, 0);
+
+    err = tsk_provenance_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_provenance_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;

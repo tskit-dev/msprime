@@ -284,75 +284,6 @@ test_tbl_collection_dump_errors(void)
 
     tsk_tbl_collection_free(&tables);
 }
-
-static void
-test_tbl_collection_set_tables(void)
-{
-    int ret;
-    tsk_tbl_collection_t t1, t2;
-
-    ret = tsk_tbl_collection_alloc(&t1, TSK_ALLOC_TABLES);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_node_tbl_add_row(t1.nodes, 0, 0, 0, 0, NULL, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = tsk_tbl_collection_alloc(&t2, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, t1.edges, t1.migrations,
-            t1.sites, t1.mutations, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL_FATAL(t1.individuals, t2.individuals);
-    CU_ASSERT_EQUAL_FATAL(t1.nodes, t2.nodes);
-    CU_ASSERT_EQUAL_FATAL(t1.edges, t2.edges);
-    CU_ASSERT_EQUAL_FATAL(t1.migrations, t2.migrations);
-    CU_ASSERT_EQUAL_FATAL(t1.sites, t2.sites);
-    CU_ASSERT_EQUAL_FATAL(t1.mutations, t2.mutations);
-    CU_ASSERT_EQUAL_FATAL(t1.populations, t2.populations);
-    CU_ASSERT_EQUAL_FATAL(t1.provenances, t2.provenances);
-    CU_ASSERT_TRUE(tsk_tbl_collection_equals(&t1, &t2));
-    tsk_tbl_collection_print_state(&t2, _devnull);
-    tsk_tbl_collection_free(&t2);
-
-    /* Setting any of the tables to NULL is an error */
-    ret = tsk_tbl_collection_set_tables(&t2,
-            NULL, t1.nodes, t1.edges, t1.migrations,
-            t1.sites, t1.mutations, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, NULL, t1.edges, t1.migrations,
-            t1.sites, t1.mutations, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, NULL, t1.migrations,
-            t1.sites, t1.mutations, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, t1.edges, NULL,
-            t1.sites, t1.mutations, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, t1.edges, t1.migrations,
-            NULL, t1.mutations, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, t1.edges, t1.migrations,
-            t1.sites, NULL, t1.populations, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, t1.edges, t1.migrations,
-            t1.sites, t1.mutations, NULL, t1.provenances);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-    ret = tsk_tbl_collection_set_tables(&t2,
-            t1.individuals, t1.nodes, t1.edges, t1.migrations,
-            t1.sites, t1.mutations, t1.populations, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
-
-    CU_ASSERT_EQUAL_FATAL(t1.nodes->num_rows, 1);
-    tsk_tbl_collection_print_state(&t1, _devnull);
-    tsk_tbl_collection_free(&t1);
-}
-
 static void
 test_tbl_collection_simplify_errors(void)
 {
@@ -517,8 +448,10 @@ test_node_table(void)
     char metadata_copy[test_metadata_length + 1];
 
     metadata_copy[test_metadata_length] = '\0';
-    ret = tsk_node_tbl_alloc(&table, 1, 1);
+    ret = tsk_node_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_node_tbl_set_max_rows_increment(&table, 1);
+    tsk_node_tbl_set_max_metadata_length_increment(&table, 1);
     tsk_node_tbl_print_state(&table, _devnull);
     tsk_node_tbl_dump_text(&table, _devnull);
 
@@ -704,8 +637,9 @@ test_edge_table(void)
     tsk_id_t *parent, *child;
     double *left, *right;
 
-    ret = tsk_edge_tbl_alloc(&table, 1);
+    ret = tsk_edge_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_edge_tbl_set_max_rows_increment(&table, 1);
     tsk_edge_tbl_print_state(&table, _devnull);
     tsk_edge_tbl_dump_text(&table, _devnull);
 
@@ -809,8 +743,11 @@ test_site_table(void)
     tsk_tbl_size_t *ancestral_state_offset;
     tsk_tbl_size_t *metadata_offset;
 
-    ret = tsk_site_tbl_alloc(&table, 1, 1, 0);
+    ret = tsk_site_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_site_tbl_set_max_rows_increment(&table, 1);
+    tsk_site_tbl_set_max_metadata_length_increment(&table, 1);
+    tsk_site_tbl_set_max_ancestral_state_length_increment(&table, 1);
     tsk_site_tbl_print_state(&table, _devnull);
     tsk_site_tbl_dump_text(&table, _devnull);
 
@@ -1033,8 +970,11 @@ test_mutation_table(void)
         c[j] = (char) ('A' + j);
     }
 
-    ret = tsk_mutation_tbl_alloc(&table, 1, 1, 1);
+    ret = tsk_mutation_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_mutation_tbl_set_max_rows_increment(&table, 1);
+    tsk_mutation_tbl_set_max_metadata_length_increment(&table, 1);
+    tsk_mutation_tbl_set_max_derived_state_length_increment(&table, 1);
     tsk_mutation_tbl_print_state(&table, _devnull);
     tsk_mutation_tbl_dump_text(&table, _devnull);
 
@@ -1268,8 +1208,9 @@ test_migration_table(void)
     double *left, *right, *time;
     tsk_migration_t migration;
 
-    ret = tsk_migration_tbl_alloc(&table, 1);
+    ret = tsk_migration_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_migration_tbl_set_max_rows_increment(&table, 1);
     tsk_migration_tbl_print_state(&table, _devnull);
     tsk_migration_tbl_dump_text(&table, _devnull);
 
@@ -1420,8 +1361,12 @@ test_individual_table(void)
         test_location[k] = (double) k;
     }
     metadata_copy[test_metadata_length] = '\0';
-    ret = tsk_individual_tbl_alloc(&table, 1, 1, 1);
+    ret = tsk_individual_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_individual_tbl_set_max_rows_increment(&table, 1);
+    tsk_individual_tbl_set_max_metadata_length_increment(&table, 1);
+    tsk_individual_tbl_set_max_location_length_increment(&table, 1);
+
     tsk_individual_tbl_print_state(&table, _devnull);
 
     for (j = 0; j < (tsk_id_t) num_rows; j++) {
@@ -1626,8 +1571,10 @@ test_population_table(void)
         c[j] = (char) ('A' + j);
     }
 
-    ret = tsk_population_tbl_alloc(&table, 1, 1);
+    ret = tsk_population_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_population_tbl_set_max_rows_increment(&table, 1);
+    tsk_population_tbl_set_max_metadata_length_increment(&table, 1);
     tsk_population_tbl_print_state(&table, _devnull);
     tsk_population_tbl_dump_text(&table, _devnull);
     /* Adding zero length metadata with NULL should be fine */
@@ -1748,8 +1695,11 @@ test_provenance_table(void)
 
     timestamp_copy[test_timestamp_length] = '\0';
     record_copy[test_record_length] = '\0';
-    ret = tsk_provenance_tbl_alloc(&table, 1, 1, 1);
+    ret = tsk_provenance_tbl_alloc(&table, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_provenance_tbl_set_max_rows_increment(&table, 1);
+    tsk_provenance_tbl_set_max_timestamp_length_increment(&table, 1);
+    tsk_provenance_tbl_set_max_record_length_increment(&table, 1);
     tsk_provenance_tbl_print_state(&table, _devnull);
     tsk_provenance_tbl_dump_text(&table, _devnull);
 
@@ -1932,7 +1882,6 @@ main(int argc, char **argv)
         {"test_dump_unindexed", test_dump_unindexed},
         {"test_tbl_collection_load_errors", test_tbl_collection_load_errors},
         {"test_tbl_collection_dump_errors", test_tbl_collection_dump_errors},
-        {"test_tbl_collection_set_tables", test_tbl_collection_set_tables},
         {"test_tbl_collection_simplify_errors", test_tbl_collection_simplify_errors},
         {"test_load_tsk_node_tbl_errors", test_load_tsk_node_tbl_errors},
         {"test_simplify_tables_drops_indexes", test_simplify_tables_drops_indexes},

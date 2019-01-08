@@ -515,7 +515,7 @@ tsk_treeseq_from_text(tsk_treeseq_t *ts, double sequence_length,
 
     ret = tsk_treeseq_load_tables(ts, &tables, TSK_BUILD_INDEXES);
     /* tsk_treeseq_print_state(ts, stdout); */
-    /* printf("ret = %s\n", msp_strerror(ret)); */
+    /* printf("ret = %s\n", tsk_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_tbl_collection_free(&tables);
 }

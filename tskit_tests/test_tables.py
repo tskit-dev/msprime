@@ -382,8 +382,6 @@ class CommonTestsMixin(object):
                     self.assertEqual(table.num_rows, j * num_rows)
                     self.assertEqual(len(table), j * num_rows)
                     self.assertGreater(table.max_rows, table.num_rows)
-                    if table.num_rows < max_rows:
-                        self.assertEqual(table.max_rows, max_rows)
 
     def test_str(self):
         for num_rows in [0, 10]:

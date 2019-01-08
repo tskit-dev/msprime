@@ -1357,24 +1357,7 @@ test_simulation_replicates(void)
     ret = recomb_map_alloc_uniform(&recomb_map, m, 0.5, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    /* Set all the table block sizes to 1 to force reallocs */
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_node_tbl_alloc(tables.nodes, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_edge_tbl_alloc(tables.edges, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_site_tbl_alloc(tables.sites, 1, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_mutation_tbl_alloc(tables.mutations, 1, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_migration_tbl_alloc(tables.migrations, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_provenance_tbl_alloc(tables.provenances, 1, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_individual_tbl_alloc(tables.individuals, 1, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_population_tbl_alloc(tables.populations, 1, 1);
+    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     gsl_rng_set(rng, seed);

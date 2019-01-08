@@ -197,30 +197,48 @@ out:
 }
 
 int
-tsk_individual_tbl_alloc(tsk_individual_tbl_t *self, size_t max_rows_increment,
-        size_t max_location_length_increment, size_t max_metadata_length_increment)
+tsk_individual_tbl_set_max_rows_increment(tsk_individual_tbl_t *self, size_t max_rows_increment)
+{
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
+    return 0;
+}
+
+int
+tsk_individual_tbl_set_max_metadata_length_increment(tsk_individual_tbl_t *self,
+        size_t max_metadata_length_increment)
+{
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
+    return 0;
+}
+
+int
+tsk_individual_tbl_set_max_location_length_increment(tsk_individual_tbl_t *self,
+        size_t max_location_length_increment)
+{
+    if (max_location_length_increment == 0) {
+        max_location_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_location_length_increment = (tsk_tbl_size_t) max_location_length_increment;
+    return 0;
+}
+
+int
+tsk_individual_tbl_alloc(tsk_individual_tbl_t *self, int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(tsk_individual_tbl_t));
-    if (max_rows_increment == 0) {
-       max_rows_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_location_length_increment == 0) {
-        max_location_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_metadata_length_increment == 0) {
-        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_location_length_increment = (tsk_tbl_size_t) max_location_length_increment;
-    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_location_length = 0;
-    self->location_length = 0;
-    self->max_metadata_length = 0;
-    self->metadata_length = 0;
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
+    self->max_location_length_increment = 1;
+    self->max_metadata_length_increment = 1;
     ret = tsk_individual_tbl_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -235,6 +253,9 @@ tsk_individual_tbl_alloc(tsk_individual_tbl_t *self, size_t max_rows_increment,
         goto out;
     }
     self->metadata_offset[0] = 0;
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_location_length_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -628,24 +649,36 @@ out:
 }
 
 int
-tsk_node_tbl_alloc(tsk_node_tbl_t *self, size_t max_rows_increment,
+tsk_node_tbl_set_max_rows_increment(tsk_node_tbl_t *self, size_t max_rows_increment)
+{
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
+    return 0;
+}
+
+int
+tsk_node_tbl_set_max_metadata_length_increment(tsk_node_tbl_t *self,
         size_t max_metadata_length_increment)
+{
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
+    return 0;
+}
+
+int
+tsk_node_tbl_alloc(tsk_node_tbl_t *self, int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(tsk_node_tbl_t));
-    if (max_rows_increment == 0) {
-       max_rows_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_metadata_length_increment == 0) {
-        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_metadata_length = 0;
-    self->metadata_length = 0;
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
+    self->max_metadata_length_increment = 1;
     ret = tsk_node_tbl_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -655,6 +688,8 @@ tsk_node_tbl_alloc(tsk_node_tbl_t *self, size_t max_rows_increment,
         goto out;
     }
     self->metadata_offset[0] = 0;
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -991,21 +1026,30 @@ out:
 }
 
 int
-tsk_edge_tbl_alloc(tsk_edge_tbl_t *self, size_t max_rows_increment)
+tsk_edge_tbl_set_max_rows_increment(tsk_edge_tbl_t *self, size_t max_rows_increment)
 {
-    int ret = 0;
-
-    memset(self, 0, sizeof(tsk_edge_tbl_t));
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
     self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
+    return 0;
+}
+
+int
+tsk_edge_tbl_alloc(tsk_edge_tbl_t *self, int TSK_UNUSED(flags))
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(tsk_edge_tbl_t));
+
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
     ret = tsk_edge_tbl_expand_columns(self, 1);
     if (ret != 0) {
         goto out;
     }
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -1276,32 +1320,50 @@ out:
 }
 
 int
-tsk_site_tbl_alloc(tsk_site_tbl_t *self, size_t max_rows_increment,
-        size_t max_ancestral_state_length_increment,
+tsk_site_tbl_set_max_rows_increment(tsk_site_tbl_t *self, size_t max_rows_increment)
+{
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
+    return 0;
+}
+
+int
+tsk_site_tbl_set_max_metadata_length_increment(tsk_site_tbl_t *self,
         size_t max_metadata_length_increment)
+{
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
+    return 0;
+}
+
+int
+tsk_site_tbl_set_max_ancestral_state_length_increment(tsk_site_tbl_t *self,
+        size_t max_ancestral_state_length_increment)
+{
+    if (max_ancestral_state_length_increment == 0) {
+        max_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_ancestral_state_length_increment =
+        (tsk_tbl_size_t) max_ancestral_state_length_increment;
+    return 0;
+}
+
+int
+tsk_site_tbl_alloc(tsk_site_tbl_t *self, int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(tsk_site_tbl_t));
-    if (max_rows_increment == 0) {
-        max_rows_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_ancestral_state_length_increment == 0) {
-        max_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_metadata_length_increment == 0) {
-        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_ancestral_state_length_increment =
-        (tsk_tbl_size_t) max_ancestral_state_length_increment;
-    self->max_ancestral_state_length = 0;
-    self->ancestral_state_length = 0;
-    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
-    self->max_metadata_length = 0;
-    self->metadata_length = 0;
+
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
+    self->max_ancestral_state_length_increment = 1;
+    self->max_metadata_length_increment = 1;
     ret = tsk_site_tbl_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -1316,6 +1378,9 @@ tsk_site_tbl_alloc(tsk_site_tbl_t *self, size_t max_rows_increment,
     }
     self->ancestral_state_offset[0] = 0;
     self->metadata_offset[0] = 0;
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_ancestral_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -1708,33 +1773,50 @@ out:
 }
 
 int
-tsk_mutation_tbl_alloc(tsk_mutation_tbl_t *self, size_t max_rows_increment,
-        size_t max_derived_state_length_increment,
+tsk_mutation_tbl_set_max_rows_increment(tsk_mutation_tbl_t *self, size_t max_rows_increment)
+{
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
+    return 0;
+}
+
+int
+tsk_mutation_tbl_set_max_metadata_length_increment(tsk_mutation_tbl_t *self,
         size_t max_metadata_length_increment)
+{
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
+    return 0;
+}
+
+int
+tsk_mutation_tbl_set_max_derived_state_length_increment(tsk_mutation_tbl_t *self,
+        size_t max_derived_state_length_increment)
+{
+    if (max_derived_state_length_increment == 0) {
+        max_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_derived_state_length_increment =
+        (tsk_tbl_size_t) max_derived_state_length_increment;
+    return 0;
+}
+
+int
+tsk_mutation_tbl_alloc(tsk_mutation_tbl_t *self, int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(tsk_mutation_tbl_t));
-    if (max_rows_increment == 0) {
-        max_rows_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_derived_state_length_increment == 0) {
-        max_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_metadata_length_increment == 0) {
-        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_derived_state_length_increment =
-        (tsk_tbl_size_t) max_derived_state_length_increment;
-    self->max_derived_state_length = 0;
-    self->derived_state_length = 0;
-    self->max_metadata_length_increment =
-        (tsk_tbl_size_t) max_metadata_length_increment;
-    self->max_metadata_length = 0;
-    self->metadata_length = 0;
+
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
+    self->max_derived_state_length_increment = 1;
+    self->max_metadata_length_increment = 1;
     ret = tsk_mutation_tbl_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -1749,6 +1831,9 @@ tsk_mutation_tbl_alloc(tsk_mutation_tbl_t *self, size_t max_rows_increment,
     }
     self->derived_state_offset[0] = 0;
     self->metadata_offset[0] = 0;
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_derived_state_length_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -2128,21 +2213,30 @@ out:
 }
 
 int
-tsk_migration_tbl_alloc(tsk_migration_tbl_t *self, size_t max_rows_increment)
+tsk_migration_tbl_set_max_rows_increment(tsk_migration_tbl_t *self, size_t max_rows_increment)
 {
-    int ret = 0;
-
-    memset(self, 0, sizeof(tsk_migration_tbl_t));
     if (max_rows_increment == 0) {
         max_rows_increment = DEFAULT_SIZE_INCREMENT;
     }
     self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
+    return 0;
+}
+
+int
+tsk_migration_tbl_alloc(tsk_migration_tbl_t *self, int TSK_UNUSED(flags))
+{
+    int ret = 0;
+
+    memset(self, 0, sizeof(tsk_migration_tbl_t));
+
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
     ret = tsk_migration_tbl_expand(self, 1);
     if (ret != 0) {
         goto out;
     }
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -2405,24 +2499,36 @@ out:
 }
 
 int
-tsk_population_tbl_alloc(tsk_population_tbl_t *self, size_t max_rows_increment,
+tsk_population_tbl_set_max_rows_increment(tsk_population_tbl_t *self, size_t max_rows_increment)
+{
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
+    return 0;
+}
+
+int
+tsk_population_tbl_set_max_metadata_length_increment(tsk_population_tbl_t *self,
         size_t max_metadata_length_increment)
+{
+    if (max_metadata_length_increment == 0) {
+        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
+    return 0;
+}
+
+int
+tsk_population_tbl_alloc(tsk_population_tbl_t *self, int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(tsk_population_tbl_t));
-    if (max_rows_increment == 0) {
-       max_rows_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_metadata_length_increment == 0) {
-        max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_metadata_length_increment = (tsk_tbl_size_t) max_metadata_length_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_metadata_length = 0;
-    self->metadata_length = 0;
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
+    self->max_metadata_length_increment = 1;
     ret = tsk_population_tbl_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -2432,6 +2538,8 @@ tsk_population_tbl_alloc(tsk_population_tbl_t *self, size_t max_rows_increment,
         goto out;
     }
     self->metadata_offset[0] = 0;
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_metadata_length_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -2736,31 +2844,50 @@ out:
     return ret;
 }
 
+
 int
-tsk_provenance_tbl_alloc(tsk_provenance_tbl_t *self, size_t max_rows_increment,
-        size_t max_timestamp_length_increment, size_t max_record_length_increment)
+tsk_provenance_tbl_set_max_rows_increment(tsk_provenance_tbl_t *self, size_t max_rows_increment)
+{
+    if (max_rows_increment == 0) {
+        max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
+    return 0;
+}
+
+int
+tsk_provenance_tbl_set_max_timestamp_length_increment(tsk_provenance_tbl_t *self,
+        size_t max_timestamp_length_increment)
+{
+    if (max_timestamp_length_increment == 0) {
+        max_timestamp_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_timestamp_length_increment = (tsk_tbl_size_t) max_timestamp_length_increment;
+    return 0;
+}
+
+int
+tsk_provenance_tbl_set_max_record_length_increment(tsk_provenance_tbl_t *self,
+        size_t max_record_length_increment)
+{
+    if (max_record_length_increment == 0) {
+        max_record_length_increment = DEFAULT_SIZE_INCREMENT;
+    }
+    self->max_record_length_increment = (tsk_tbl_size_t) max_record_length_increment;
+    return 0;
+}
+
+int
+tsk_provenance_tbl_alloc(tsk_provenance_tbl_t *self, int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     memset(self, 0, sizeof(tsk_provenance_tbl_t));
-    if (max_rows_increment == 0) {
-       max_rows_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_timestamp_length_increment == 0) {
-        max_timestamp_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    if (max_record_length_increment == 0) {
-        max_record_length_increment = DEFAULT_SIZE_INCREMENT;
-    }
-    self->max_rows_increment = (tsk_tbl_size_t) max_rows_increment;
-    self->max_timestamp_length_increment = (tsk_tbl_size_t) max_timestamp_length_increment;
-    self->max_record_length_increment = (tsk_tbl_size_t) max_record_length_increment;
-    self->max_rows = 0;
-    self->num_rows = 0;
-    self->max_timestamp_length = 0;
-    self->timestamp_length = 0;
-    self->max_record_length = 0;
-    self->record_length = 0;
+    /* Allocate space for one row initially, ensuring we always have valid pointers
+     * even if the table is empty */
+    self->max_rows_increment = 1;
+    self->max_timestamp_length_increment = 1;
+    self->max_record_length_increment = 1;
     ret = tsk_provenance_tbl_expand_main_columns(self, 1);
     if (ret != 0) {
         goto out;
@@ -2775,6 +2902,9 @@ tsk_provenance_tbl_alloc(tsk_provenance_tbl_t *self, size_t max_rows_increment,
         goto out;
     }
     self->record_offset[0] = 0;
+    self->max_rows_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_timestamp_length_increment = DEFAULT_SIZE_INCREMENT;
+    self->max_record_length_increment = DEFAULT_SIZE_INCREMENT;
 out:
     return ret;
 }
@@ -3227,8 +3357,7 @@ table_sorter_sort_sites(table_sorter_t *self)
     tsk_tbl_size_t num_sites = self->sites->num_rows;
     tsk_site_t *sorted_sites = malloc(num_sites * sizeof(*sorted_sites));
 
-    ret = tsk_site_tbl_alloc(&copy, num_sites, self->sites->ancestral_state_length,
-            self->sites->metadata_length);
+    ret = tsk_site_tbl_alloc(&copy, 0);
     if (ret != 0) {
         goto out;
     }
@@ -3279,9 +3408,7 @@ table_sorter_sort_mutations(table_sorter_t *self)
     tsk_mutation_t *sorted_mutations = malloc(num_mutations * sizeof(*sorted_mutations));
     tsk_id_t *mutation_id_map = malloc(num_mutations * sizeof(*mutation_id_map));
 
-    ret = tsk_mutation_tbl_alloc(&copy, num_mutations,
-            self->mutations->derived_state_length,
-            self->mutations->metadata_length);
+    ret = tsk_mutation_tbl_alloc(&copy, 0);
     if (ret != 0) {
         goto out;
     }
@@ -5039,7 +5166,6 @@ tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags)
 {
     int ret = 0;
     memset(self, 0, sizeof(*self));
-    self->external_tables = false;
     self->individuals = calloc(1, sizeof(*self->individuals));
     self->nodes = calloc(1, sizeof(*self->nodes));
     self->edges = calloc(1, sizeof(*self->edges));
@@ -5058,7 +5184,7 @@ tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags)
     }
     if (flags & TSK_ALLOC_TABLES) {
         /* Allocate all the tables with their default increments */
-        ret = tsk_node_tbl_alloc(self->nodes, 0, 0);
+        ret = tsk_node_tbl_alloc(self->nodes, 0);
         if (ret != 0) {
             goto out;
         }
@@ -5070,23 +5196,23 @@ tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags)
         if (ret != 0) {
             goto out;
         }
-        ret = tsk_site_tbl_alloc(self->sites, 0, 0, 0);
+        ret = tsk_site_tbl_alloc(self->sites, 0);
         if (ret != 0) {
             goto out;
         }
-        ret = tsk_mutation_tbl_alloc(self->mutations, 0, 0, 0);
+        ret = tsk_mutation_tbl_alloc(self->mutations, 0);
         if (ret != 0) {
             goto out;
         }
-        ret = tsk_individual_tbl_alloc(self->individuals, 0, 0, 0);
+        ret = tsk_individual_tbl_alloc(self->individuals, 0);
         if (ret != 0) {
             goto out;
         }
-        ret = tsk_population_tbl_alloc(self->populations, 0, 0);
+        ret = tsk_population_tbl_alloc(self->populations, 0);
         if (ret != 0) {
             goto out;
         }
-        ret = tsk_provenance_tbl_alloc(self->provenances, 0, 0, 0);
+        ret = tsk_provenance_tbl_alloc(self->provenances, 0);
         if (ret != 0) {
             goto out;
         }
@@ -5142,42 +5268,10 @@ tsk_tbl_collection_free_tables(tsk_tbl_collection_t *self)
 }
 
 int
-tsk_tbl_collection_set_tables(tsk_tbl_collection_t *self,
-        tsk_individual_tbl_t *individuals, tsk_node_tbl_t *nodes, tsk_edge_tbl_t *edges,
-        tsk_migration_tbl_t *migrations, tsk_site_tbl_t *sites,
-        tsk_mutation_tbl_t *mutations, tsk_population_tbl_t *populations,
-        tsk_provenance_tbl_t *provenances)
-{
-    int ret = 0;
-
-    if (individuals == NULL || nodes == NULL || edges == NULL
-            || migrations == NULL || sites == NULL || mutations == NULL
-            || populations == NULL || provenances == NULL) {
-        ret = TSK_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    tsk_tbl_collection_free_tables(self);
-    self->external_tables = true;
-    self->individuals = individuals;
-    self->nodes = nodes;
-    self->edges = edges;
-    self->migrations = migrations;
-    self->sites = sites;
-    self->mutations = mutations;
-    self->mutations = mutations;
-    self->populations = populations;
-    self->provenances = provenances;
-out:
-    return ret;
-}
-
-int
 tsk_tbl_collection_free(tsk_tbl_collection_t *self)
 {
     int ret = 0;
-    if (! self->external_tables) {
-        tsk_tbl_collection_free_tables(self);
-    }
+    tsk_tbl_collection_free_tables(self);
     if (self->indexes.malloced_locally) {
         tsk_safe_free(self->indexes.edge_insertion_order);
         tsk_safe_free(self->indexes.edge_removal_order);
@@ -5694,7 +5788,7 @@ tsk_tbl_collection_deduplicate_sites(tsk_tbl_collection_t *self, int TSK_UNUSED(
     tsk_site_t row, last_row;
 
     /* Must allocate the site table first for tsk_site_tbl_free to be safe */
-    ret = tsk_site_tbl_alloc(&copy, 0, 0, 0);
+    ret = tsk_site_tbl_alloc(&copy, 0);
     if (ret != 0) {
         goto out;
     }
