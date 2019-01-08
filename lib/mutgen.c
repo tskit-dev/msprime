@@ -107,9 +107,10 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
         block_size = 8192;
     }
     /* In practice this is the minimum we can support */
-    block_size = MSP_MAX(block_size, 128);
+    block_size = GSL_MAX(block_size, 128);
     ret = tsk_blkalloc_alloc(&self->allocator, block_size);
     if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
 out:
@@ -294,7 +295,7 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t
         site_id = tsk_site_tbl_add_row(sites, site->position, site->ancestral_state,
                 site->ancestral_state_length, site->metadata, site->metadata_length);
         if (site_id < 0) {
-            ret = site_id;
+            ret = msp_set_tsk_error(site_id);
             goto out;
         }
         for (j = 0; j < site->mutations_length; j++) {
@@ -308,6 +309,7 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t
                     mutation->derived_state, mutation->derived_state_length,
                     mutation->metadata, mutation->metadata_length);
             if (ret < 0) {
+                ret = msp_set_tsk_error(ret);
                 goto out;
             }
             if (mutation->id == 0) {
@@ -352,10 +354,12 @@ mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
     }
     ret = tsk_site_tbl_clear(tables->sites);
     if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
     ret = tsk_mutation_tbl_clear(tables->mutations);
     if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
 
@@ -374,8 +378,8 @@ mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
         parent = edges->parent[j];
         child = edges->child[j];
         assert(child >= 0 && child < (node_id_t) nodes->num_rows);
-        branch_start = MSP_MAX(start_time, nodes->time[child]);
-        branch_end = MSP_MIN(end_time, nodes->time[parent]);
+        branch_start = GSL_MAX(start_time, nodes->time[child]);
+        branch_end = GSL_MIN(end_time, nodes->time[parent]);
         branch_length = branch_end - branch_start;
         mu = branch_length * distance * self->mutation_rate;
         branch_mutations = gsl_ran_poisson(self->rng, mu);

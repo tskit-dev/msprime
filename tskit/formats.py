@@ -227,13 +227,13 @@ def load_legacy(filename, remove_duplicate_positions=False):
 def raise_hdf5_format_error(filename, original_exception):
     """
     Tries to open the specified file as a legacy HDF5 file. If it looks like
-    an msprime format HDF5 file, raise an error advising to run msp upgrade.
+    an msprime format HDF5 file, raise an error advising to run tskit upgrade.
     """
     try:
         with h5py.File(filename, "r") as root:
             version = tuple(root.attrs["format_version"])
             raise exceptions.VersionTooOldError(
-                "File format {} is too old. Please use the ``msp upgrade`` command "
+                "File format {} is too old. Please use the ``tskit upgrade`` command "
                 "to upgrade this file to the latest version".format(version))
     except (IOError, OSError, KeyError):
         raise exceptions.FileFormatError(str(original_exception))

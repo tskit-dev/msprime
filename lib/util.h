@@ -101,135 +101,50 @@
 #define MSP_FILE_FORMAT_VERSION_MAJOR 12
 #define MSP_FILE_FORMAT_VERSION_MINOR 0
 
-
 /* Error codes */
 #define MSP_ERR_GENERIC                                             -1
 #define MSP_ERR_NO_MEMORY                                           -2
-#define MSP_ERR_IO                                                  -3
-#define MSP_ERR_FILE_FORMAT                                         -4
-#define MSP_ERR_REFCOUNT_NONZERO                                    -5
-#define MSP_ERR_BAD_STATE                                           -6
-#define MSP_ERR_BAD_PARAM_VALUE                                     -7
-#define MSP_ERR_OUT_OF_BOUNDS                                       -8
-#define MSP_ERR_BUFFER_OVERFLOW                                     -9
-#define MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS                         -10
-#define MSP_ERR_POPULATION_OVERFLOW                                 -11
-#define MSP_ERR_LINKS_OVERFLOW                                      -12
-#define MSP_ERR_HDF5                                                -13
-#define MSP_ERR_POPULATION_OUT_OF_BOUNDS                            -14
-#define MSP_ERR_DUPLICATE_SAMPLE                                    -15
-#define MSP_ERR_BAD_ORDERING                                        -16
-#define MSP_ERR_BAD_MUTATION                                        -17
-#define MSP_ERR_UNSUPPORTED_OPERATION                               -18
-#define MSP_ERR_BAD_POPULATION_CONFIGURATION                        -19
-#define MSP_ERR_BAD_MIGRATION_MATRIX                                -20
-#define MSP_ERR_BAD_MIGRATION_MATRIX_INDEX                          -21
-#define MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX                     -22
-#define MSP_ERR_INFINITE_WAITING_TIME                               -23
-#define MSP_ERR_ASSERTION_FAILED                                    -24
-#define MSP_ERR_SOURCE_DEST_EQUAL                                   -25
-#define MSP_ERR_BAD_RECOMBINATION_MAP                               -26
-#define MSP_ERR_BAD_POPULATION_SIZE                                 -27
-#define MSP_ERR_BAD_SAMPLES                                         -28
-#define MSP_ERR_BAD_TABLE_POSITION                                  -29
-#define MSP_ERR_FILE_VERSION_TOO_OLD                                -30
-#define MSP_ERR_FILE_VERSION_TOO_NEW                                -31
-#define MSP_ERR_CANNOT_SIMPLIFY                                     -32
-#define MSP_ERR_BAD_MODEL                                           -33
-#define MSP_ERR_NULL_PARENT                                         -34
-#define MSP_ERR_NULL_CHILD                                          -35
-#define MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME                        -36
-#define MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS                         -37
-#define MSP_ERR_EDGES_NOT_SORTED_CHILD                              -38
-#define MSP_ERR_EDGES_NOT_SORTED_LEFT                               -39
-#define MSP_ERR_BAD_NODE_TIME_ORDERING                              -40
-#define MSP_ERR_BAD_EDGE_INTERVAL                                   -41
-#define MSP_ERR_DUPLICATE_EDGES                                     -42
-#define MSP_ERR_NOT_INITIALISED                                     -43
-#define MSP_ERR_BAD_OFFSET                                          -44
-#define MSP_ERR_TOO_MANY_ALLELES                                    -45
-#define MSP_ERR_DUPLICATE_MUTATION_NODES                            -46
-#define MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED                     -47
-#define MSP_ERR_INCONSISTENT_MUTATIONS                              -48
-#define MSP_ERR_INSUFFICIENT_SAMPLES                                -49
-#define MSP_ERR_ZERO_RECORDS                                        -50
-#define MSP_ERR_COORDINATE_NOT_FOUND                                -51
-#define MSP_ERR_BAD_NODES_ARRAY                                     -52
-#define MSP_ERR_BAD_CHILDREN_ARRAY                                  -53
-#define MSP_ERR_SITE_OUT_OF_BOUNDS                                  -54
-#define MSP_ERR_NODE_OUT_OF_BOUNDS                                  -55
-#define MSP_ERR_LENGTH_MISMATCH                                     -56
-#define MSP_ERR_DUPLICATE_SITE_POSITION                             -57
-#define MSP_ERR_NON_SINGLE_CHAR_MUTATION                            -58
-#define MSP_ERR_UNSORTED_SITES                                      -59
-#define MSP_ERR_BAD_SITE_POSITION                                   -60
-#define MSP_ERR_UNSORTED_MUTATIONS                                  -61
-#define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -62
-#define MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT                    -63
-#define MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN                  -64
-#define MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT                      -65
-#define MSP_ERR_BAD_SEQUENCE_LENGTH                                 -66
-#define MSP_ERR_RIGHT_GREATER_SEQ_LENGTH                            -67
-#define MSP_ERR_MUTATION_OUT_OF_BOUNDS                              -68
-#define MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE                      -69
-#define MSP_ERR_MUTATION_PARENT_EQUAL                               -70
-#define MSP_ERR_MUTATION_PARENT_AFTER_CHILD                         -71
-#define MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS                            -72
-#define MSP_ERR_GENERATE_UUID                                       -73
-#define MSP_ERR_BAD_EDGE_INDEX                                      -74
-#define MSP_ERR_LEFT_LESS_ZERO                                      -75
-#define MSP_ERR_TABLES_NOT_INDEXED                                  -76
-#define MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED                   -77
-#define MSP_ERR_INCOMPATIBLE_FROM_TS                                -78
-#define MSP_ERR_BAD_START_TIME_FROM_TS                              -79
-#define MSP_ERR_BAD_START_TIME                                      -80
-#define MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME                          -81
-#define MSP_ERR_RECOMB_MAP_TOO_COARSE                               -82
-#define MSP_ERR_TIME_TRAVEL                                         -83
-#define MSP_ERR_ONLY_INFINITE_SITES                                 -84
-#define MSP_ERR_INTEGRATION_FAILED                                  -85
-#define MSP_ERR_BAD_SWEEP_LOCUS                                     -86
-#define MSP_ERR_BAD_TRAJECTORY_TIME                                 -87
-#define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -88
-#define MSP_ERR_EMPTY_TRAJECTORY                                    -89
+#define MSP_ERR_BAD_STATE                                           -3
+#define MSP_ERR_BAD_PARAM_VALUE                                     -4
+#define MSP_ERR_OUT_OF_BOUNDS                                       -5
+#define MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS                         -6
+#define MSP_ERR_POPULATION_OVERFLOW                                 -7
+#define MSP_ERR_LINKS_OVERFLOW                                      -8
+#define MSP_ERR_POPULATION_OUT_OF_BOUNDS                            -9
+#define MSP_ERR_BAD_POPULATION_CONFIGURATION                        -10
+#define MSP_ERR_BAD_MIGRATION_MATRIX                                -11
+#define MSP_ERR_BAD_MIGRATION_MATRIX_INDEX                          -12
+#define MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX                     -13
+#define MSP_ERR_INFINITE_WAITING_TIME                               -14
+#define MSP_ERR_ASSERTION_FAILED                                    -15
+#define MSP_ERR_SOURCE_DEST_EQUAL                                   -16
+#define MSP_ERR_BAD_RECOMBINATION_MAP                               -17
+#define MSP_ERR_BAD_POPULATION_SIZE                                 -18
+#define MSP_ERR_BAD_SAMPLES                                         -19
+#define MSP_ERR_BAD_MODEL                                           -20
+#define MSP_ERR_INSUFFICIENT_SAMPLES                                -21
+#define MSP_ERR_DUPLICATE_SITE_POSITION                             -22
+#define MSP_ERR_UNDEFINED_MULTIPLE_MERGER_COALESCENT                -23
+#define MSP_ERR_INCOMPATIBLE_FROM_TS                                -24
+#define MSP_ERR_BAD_START_TIME_FROM_TS                              -25
+#define MSP_ERR_BAD_START_TIME                                      -26
+#define MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME                          -27
+#define MSP_ERR_RECOMB_MAP_TOO_COARSE                               -28
+#define MSP_ERR_TIME_TRAVEL                                         -29
+#define MSP_ERR_INTEGRATION_FAILED                                  -30
+#define MSP_ERR_BAD_SWEEP_LOCUS                                     -31
+#define MSP_ERR_BAD_TRAJECTORY_TIME                                 -32
+#define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -33
+#define MSP_ERR_EMPTY_TRAJECTORY                                    -34
 
-/* This bit is 0 for any errors originating from kastore */
-#define MSP_KAS_ERR_BIT 14
+/* This bit is 0 for any errors originating from tskit */
+#define MSP_TSK_ERR_BIT 13
 
-int msp_set_kas_error(int err);
-bool msp_is_kas_error(int err);
+int msp_set_tsk_error(int err);
+bool msp_is_tsk_error(int err);
 const char * msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
-#define MSP_MAX(a,b) ((a) > (b) ? (a) : (b))
-#define MSP_MIN(a,b) ((a) < (b) ? (a) : (b))
-
-/* This is a simple allocator that is optimised to efficiently allocate a
- * large number of small objects without large numbers of calls to malloc.
- * The allocator mallocs memory in chunks of a configurable size. When
- * responding to calls to get(), it will return a chunk of this memory.
- * This memory cannot be subsequently handed back to the allocator. However,
- * all memory allocated by the allocator can be returned at once by calling
- * reset.
- */
-
-typedef struct {
-    size_t chunk_size;        /* number of bytes per chunk */
-    size_t top;               /* the offset of the next available byte in the current chunk */
-    size_t current_chunk;     /* the index of the chunk currently being used */
-    size_t total_size;        /* the total number of bytes allocated + overhead. */
-    size_t total_allocated;   /* the total number of bytes allocated. */
-    size_t num_chunks;        /* the number of memory chunks. */
-    char **mem_chunks;        /* the memory chunks */
-} block_allocator_t;
-
-extern void block_allocator_print_state(block_allocator_t *self, FILE *out);
-extern int block_allocator_reset(block_allocator_t *self);
-extern int block_allocator_alloc(block_allocator_t *self, size_t chunk_size);
-extern void * block_allocator_get(block_allocator_t *self, size_t size);
-extern void block_allocator_free(block_allocator_t *self);
-
-size_t msp_search_sorted(const double *array, size_t size, double value);
 
 #endif /*__UTIL_H__*/

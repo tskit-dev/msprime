@@ -34,9 +34,6 @@
 #include "tskit/tsk_tables.h"
 #include "tskit/tsk_trees.h"
 
-/* #include "tables.h" */
-/* #include "trees.h" */
-
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
 #define MSP_MODEL_SMC_PRIME 2

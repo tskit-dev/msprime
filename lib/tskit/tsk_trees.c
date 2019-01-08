@@ -646,7 +646,7 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
         for (j = 0; j < reference_set_size[k]; j++) {
             u = reference_sets[k][j];
             if (u < 0 || u >= (tsk_id_t) num_nodes) {
-                ret = TSK_ERR_OUT_OF_BOUNDS;
+                ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
                 goto out;
             }
             if (reference_set_map[u] != TSK_NULL_NODE) {
@@ -664,7 +664,7 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
     for (j = 0; j < num_focal; j++) {
         u = focal[j];
         if (u < 0 || u >= (tsk_id_t) num_nodes) {
-            ret = TSK_ERR_OUT_OF_BOUNDS;
+            ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
     }
@@ -821,7 +821,7 @@ tsk_treeseq_mean_descendants(tsk_treeseq_t *self,
         for (j = 0; j < reference_set_size[k]; j++) {
             u = reference_sets[k][j];
             if (u < 0 || u >= (tsk_id_t) num_nodes) {
-                ret = TSK_ERR_OUT_OF_BOUNDS;
+                ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
                 goto out;
             }
             row = GET_2D_ROW(ref_count, K, u);
@@ -1231,7 +1231,7 @@ tsk_tree_set_tracked_samples(tsk_tree_t *self, size_t num_tracked_samples,
     for (j = 0; j < num_tracked_samples; j++) {
         u = tracked_samples[j];
         if (u < 0 || u >= (tsk_id_t) self->num_nodes) {
-            ret = TSK_ERR_OUT_OF_BOUNDS;
+            ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
             goto out;
         }
         if (! tsk_treeseq_is_sample(self->tree_sequence, u)) {
@@ -1377,7 +1377,7 @@ tsk_tree_check_node(tsk_tree_t *self, tsk_id_t u)
 {
     int ret = 0;
     if (u < 0 || u >= (tsk_id_t) self->num_nodes) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
     }
     return ret;
 }
@@ -1859,7 +1859,7 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
         p = edge_parent[k];
         c = edge_child[k];
         if (self->parent[c] != TSK_NULL_NODE) {
-            ret = TSK_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN;
+            ret = TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN;
             goto out;
         }
         self->parent[c] = p;

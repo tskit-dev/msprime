@@ -105,6 +105,8 @@ class BaseTable(object):
     def __getitem__(self, index):
         if index < 0:
             index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError("Index out of bounds")
         return self.row_class(*self.ll_table.get_row(index))
 
     def clear(self):

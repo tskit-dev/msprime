@@ -457,7 +457,7 @@ tsk_individual_tbl_get_row(tsk_individual_tbl_t *self, size_t index,
     int ret = 0;
 
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -907,7 +907,7 @@ tsk_node_tbl_get_row(tsk_node_tbl_t *self, size_t index, tsk_node_t *row)
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -1167,7 +1167,7 @@ tsk_edge_tbl_get_row(tsk_edge_tbl_t *self, size_t index, tsk_edge_t *row)
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_EDGE_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -1547,7 +1547,7 @@ tsk_site_tbl_get_row(tsk_site_tbl_t *self, size_t index, tsk_site_t *row)
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_SITE_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -1999,7 +1999,7 @@ tsk_mutation_tbl_get_row(tsk_mutation_tbl_t *self, size_t index, tsk_mutation_t 
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_MUTATION_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -2275,7 +2275,7 @@ tsk_migration_tbl_get_row(tsk_migration_tbl_t *self, size_t index, tsk_migration
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_MIGRATION_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -2596,7 +2596,7 @@ tsk_population_tbl_get_row(tsk_population_tbl_t *self, size_t index, tsk_populat
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -2985,7 +2985,7 @@ tsk_provenance_tbl_get_row(tsk_provenance_tbl_t *self, size_t index, tsk_provena
 {
     int ret = 0;
     if (index >= self->num_rows) {
-        ret = TSK_ERR_OUT_OF_BOUNDS;
+        ret = TSK_ERR_PROVENANCE_OUT_OF_BOUNDS;
         goto out;
     }
     row->id = (tsk_id_t) index;
@@ -4979,12 +4979,12 @@ tsk_tbl_collection_check_integrity(tsk_tbl_collection_t *self, int flags)
         for (j = 0; j < self->edges->num_rows; j++) {
             if (self->indexes.edge_insertion_order[j] < 0 ||
                     self->indexes.edge_insertion_order[j] >= num_edges) {
-                ret = TSK_ERR_BAD_EDGE_INDEX;
+                ret = TSK_ERR_EDGE_OUT_OF_BOUNDS;
                 goto out;
             }
             if (self->indexes.edge_removal_order[j] < 0 ||
                     self->indexes.edge_removal_order[j] >= num_edges) {
-                ret = TSK_ERR_BAD_EDGE_INDEX;
+                ret = TSK_ERR_EDGE_OUT_OF_BOUNDS;
                 goto out;
             }
         }

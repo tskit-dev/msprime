@@ -53,7 +53,15 @@ fatal_error(const char *msg, ...)
 }
 
 static void
-fatal_library_error(int err, int line)
+fatal_tskit_error(int err, int line)
+{
+    fprintf(stderr, "error line %d::", line);
+    fprintf(stderr, ":%d:'%s'\n", err, tsk_strerror(err));
+    exit(EXIT_FAILURE);
+}
+
+static void
+fatal_msprime_error(int err, int line)
 {
     fprintf(stderr, "error line %d::", line);
     fprintf(stderr, ":%d:'%s'\n", err, msp_strerror(err));
@@ -71,23 +79,22 @@ load_tables(tsk_tbl_collection_t *tables, const char *filename)
      * kastore for the actual columns. */
     ret = tsk_tbl_collection_alloc(&tmp, 0);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_tskit_error(ret, __LINE__);
     }
     ret = tsk_tbl_collection_load(&tmp, filename, 0);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_tskit_error(ret, __LINE__);
     }
     ret = tsk_tbl_collection_copy(&tmp, tables);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_tskit_error(ret, __LINE__);
     }
     tsk_tbl_collection_free(&tmp);
 }
 
-static int
+static void
 read_samples(config_t *config, size_t *num_samples, sample_t **samples)
 {
-    int ret = 0;
     size_t j, n;
     sample_t *ret_samples = NULL;
     config_setting_t *s, *t;
@@ -102,8 +109,7 @@ read_samples(config_t *config, size_t *num_samples, sample_t **samples)
     n = (size_t) config_setting_length(setting);
     ret_samples = malloc(n * sizeof(sample_t));
     if (ret_samples == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        fatal_error("Out of memory");
     }
     for (j = 0; j < n; j++) {
         s = config_setting_get_elem(setting, (unsigned int) j);
@@ -126,11 +132,9 @@ read_samples(config_t *config, size_t *num_samples, sample_t **samples)
     }
     *samples = ret_samples;
     *num_samples = n;
-out:
-    return ret;
 }
 
-static int
+static void
 read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
         double population_size)
 {
@@ -158,8 +162,7 @@ read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
     allele_frequency = malloc(num_steps * sizeof(double));
     time = malloc(num_steps * sizeof(double));
     if (allele_frequency == NULL || time == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        fatal_error("Out of memory");
     }
     for (j = 0; j < num_steps; j++) {
         row = config_setting_get_elem(setting, (unsigned int) j);
@@ -170,8 +173,7 @@ read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
             fatal_error("trajectory[%d] not an array", j);
         }
         if (config_setting_length(row) != 2) {
-            fatal_error(
-                "trajectory entries must be [coord, rate] pairs");
+            fatal_error("trajectory entries must be [coord, rate] pairs");
         }
         s = config_setting_get_elem(row, 0);
         if (!config_setting_is_number(s)) {
@@ -186,13 +188,14 @@ read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
     }
     ret = msp_set_simulation_model_single_sweep(msp, population_size,
             (uint32_t) locus, num_steps, time, allele_frequency);
-out:
-    msp_safe_free(allele_frequency);
-    msp_safe_free(time);
-    return ret;
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    free(allele_frequency);
+    free(time);
 }
 
-static int
+static void
 read_model_config(msp_t *msp, config_t *config)
 {
     int ret = 0;
@@ -252,19 +255,16 @@ read_model_config(msp_t *msp, config_t *config)
         truncation_point = config_setting_get_float(s);
         ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
     } else if (strcmp(name, "single_sweep") == 0) {
-        ret = read_single_sweep_model_config(msp, setting, population_size);
+        read_single_sweep_model_config(msp, setting, population_size);
     } else {
         fatal_error("Unknown simulation model '%s'", name);
     }
     if (ret != 0) {
-        goto out;
+        fatal_msprime_error(ret, __LINE__);
     }
-
-out:
-    return ret;
 }
 
-static int
+static void
 read_population_configuration(msp_t *msp, config_t *config)
 {
     int ret = 0;
@@ -309,14 +309,12 @@ read_population_configuration(msp_t *msp, config_t *config)
         ret = msp_set_population_configuration(msp, j, initial_size,
                 growth_rate);
         if (ret != 0) {
-            goto out;
+            fatal_msprime_error(ret, __LINE__);
         }
     }
-out:
-    return ret;
 }
 
-static int
+static void
 read_demographic_events(msp_t *msp, config_t *config)
 {
     int ret = 0;
@@ -433,14 +431,12 @@ read_demographic_events(msp_t *msp, config_t *config)
             fatal_error("unknown demographic event type '%s'", type);
         }
         if (ret != 0) {
-            goto out;
+            fatal_msprime_error(ret, __LINE__);
         }
     }
-out:
-    return ret;
 }
 
-static int
+static void
 read_migration_matrix(msp_t *msp, config_t *config)
 {
     int ret = 0;
@@ -458,8 +454,7 @@ read_migration_matrix(msp_t *msp, config_t *config)
     size = (size_t) config_setting_length(setting);
     migration_matrix = malloc(size * sizeof(double));
     if (migration_matrix == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        fatal_error("Out of memory");
     }
     for (j = 0; j < size; j++) {
         s = config_setting_get_elem(setting, (unsigned int) j);
@@ -469,15 +464,13 @@ read_migration_matrix(msp_t *msp, config_t *config)
         migration_matrix[j] = (double) config_setting_get_float(s);
     }
     ret = msp_set_migration_matrix(msp, size, migration_matrix);
-out:
-    if (migration_matrix != NULL) {
-        free(migration_matrix);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
     }
-    return ret;
+    free(migration_matrix);
 }
 
-
-static int
+static void
 read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
 {
     int ret = 0;
@@ -497,8 +490,7 @@ read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
     rates = malloc(size * sizeof(double));
     coordinates = malloc(size * sizeof(double));
     if (rates == NULL || coordinates == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        fatal_error("Out of memory");
     }
     for (j = 0; j < size; j++) {
         row = config_setting_get_elem(setting, (unsigned int) j);
@@ -525,17 +517,14 @@ read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
     }
     ret = recomb_map_alloc(recomb_map, num_loci, coordinates[size - 1],
             coordinates, rates, size);
-out:
-    if (rates != NULL) {
-        free(rates);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
     }
-    if (coordinates != NULL) {
-        free(coordinates);
-    }
-    return ret;
+    free(rates);
+    free(coordinates);
 }
 
-static int
+static void
 get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
         mutation_params_t *mutation_params, recomb_map_t *recomb_map,
         const char *filename)
@@ -564,10 +553,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
         fatal_error("random_seed is a required parameter");
     }
     gsl_rng_set(rng,  (unsigned long) int_tmp);
-    ret = read_samples(config, &num_samples, &samples);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
+    read_samples(config, &num_samples, &samples);
     if (config_lookup_string(config, "from", &from_ts_path) == CONFIG_TRUE) {
         load_tables(tables, from_ts_path);
     }
@@ -576,14 +562,11 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
         fatal_error("num_loci is a required parameter");
     }
     num_loci = (uint32_t) int_tmp;
-    ret = read_recomb_map(num_loci, recomb_map, config);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
+    read_recomb_map(num_loci, recomb_map, config);
 
     ret = msp_alloc(msp, num_samples, samples, recomb_map, tables, rng);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     if (config_lookup_float(config,
             "mutation_rate", &mutation_params->mutation_rate)
@@ -601,7 +584,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
     }
     ret = msp_set_avl_node_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     if (config_lookup_int(config, "segment_block_size", &int_tmp)
             == CONFIG_FALSE) {
@@ -609,7 +592,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
     }
     ret = msp_set_segment_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     if (config_lookup_int(config, "node_mapping_block_size", &int_tmp)
             == CONFIG_FALSE) {
@@ -617,7 +600,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
     }
     ret = msp_set_node_mapping_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     if (config_lookup_int(config, "max_memory", &int_tmp)
             == CONFIG_FALSE) {
@@ -628,32 +611,19 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
     }
     ret = msp_set_store_migrations(msp, (bool) int_tmp);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     t = config_lookup(config, "model");
     if (t == NULL) {
         fatal_error("model not specified");
     }
-    ret = read_model_config(msp, config);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
-    ret = read_population_configuration(msp, config);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
-    ret = read_migration_matrix(msp, config);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
-    ret = read_demographic_events(msp, config);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
+    read_model_config(msp, config);
+    read_population_configuration(msp, config);
+    read_migration_matrix(msp, config);
+    read_demographic_events(msp, config);
     config_destroy(config);
     free(config);
     free(samples);
-    return ret;
 }
 
 static void
@@ -696,20 +666,17 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     }
     ret = tsk_tbl_collection_alloc(&tables, MSP_ALLOC_TABLES);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_tskit_error(ret, __LINE__);
     }
-    ret = get_configuration(rng, &msp, &tables, &mutation_params, &recomb_map, conf_file);
-    if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
-    }
+    get_configuration(rng, &msp, &tables, &mutation_params, &recomb_map, conf_file);
     ret = mutgen_alloc(&mutgen, mutation_params.mutation_rate, rng,
             mutation_params.alphabet, 1024);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     ret = msp_initialise(&msp);
     if (ret != 0) {
-        fatal_library_error(ret, __LINE__);
+        fatal_msprime_error(ret, __LINE__);
     }
     record_provenance(tables.provenances);
 
@@ -721,12 +688,12 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         }
         ret = msp_reset(&msp);
         if (ret != 0) {
-            fatal_library_error(ret, __LINE__);
+            fatal_msprime_error(ret, __LINE__);
         }
         msp_verify(&msp);
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
         if (ret < 0) {
-            fatal_library_error(ret, __LINE__);
+            fatal_msprime_error(ret, __LINE__);
         }
         if (verbose >= 1) {
             msp_print_state(&msp, stdout);
@@ -735,20 +702,20 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         ret = msp_finalise_tables(&msp);
 
         if (ret != 0) {
-            fatal_library_error(ret, __LINE__);
+            fatal_msprime_error(ret, __LINE__);
         }
         ret = mutgen_generate(&mutgen, &tables, 0);
         if (ret != 0) {
-            fatal_library_error(ret, __LINE__);
+            fatal_msprime_error(ret, __LINE__);
         }
         ret = tsk_treeseq_load_tables(&tree_seq, &tables, MSP_BUILD_INDEXES);
         if (ret != 0) {
-            fatal_library_error(ret, __LINE__);
+            fatal_tskit_error(ret, __LINE__);
         }
         if (output_file != NULL) {
             ret = tsk_treeseq_dump(&tree_seq, output_file, 0);
             if (ret != 0) {
-                fatal_library_error(ret, __LINE__);
+                fatal_tskit_error(ret, __LINE__);
             }
         }
         if (verbose >= 1) {

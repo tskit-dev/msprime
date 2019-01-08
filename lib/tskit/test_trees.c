@@ -1723,7 +1723,7 @@ test_simplest_individuals(void)
     CU_ASSERT_EQUAL_FATAL(individual.nodes[1], 4);
 
     ret = tsk_treeseq_get_individual(&ts, 3, &individual);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
 
     tsk_tbl_collection_free(&tables);
     tsk_treeseq_free(&ts);
@@ -2007,12 +2007,12 @@ test_simplest_bad_indexes(void)
     for (j = 0; j < sizeof(bad_indexes) / sizeof(*bad_indexes); j++) {
         tables.indexes.edge_insertion_order[0] = bad_indexes[j];
         ret = tsk_tbl_collection_check_integrity(&tables, TSK_CHECK_ALL);
-        CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_EDGE_INDEX);
+        CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_EDGE_OUT_OF_BOUNDS);
         tables.indexes.edge_insertion_order[0] = 0;
 
         tables.indexes.edge_removal_order[0] = bad_indexes[j];
         ret = tsk_tbl_collection_check_integrity(&tables, TSK_CHECK_ALL);
-        CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_EDGE_INDEX);
+        CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_EDGE_OUT_OF_BOUNDS);
         tables.indexes.edge_removal_order[0] = 0;
     }
 
@@ -2218,7 +2218,7 @@ test_simplest_contradictory_children(void)
     ret = tsk_tree_alloc(&tree, &ts, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_tree_first(&tree);
-    CU_ASSERT_EQUAL(ret, TSK_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN);
+    CU_ASSERT_EQUAL(ret, TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN);
 
     tsk_tree_free(&tree);
     tsk_treeseq_free(&ts);
@@ -3641,15 +3641,15 @@ test_genealogical_nearest_neighbours_errors(void)
     reference_set_0[0] = -1;
     ret = tsk_treeseq_genealogical_nearest_neighbours(&ts,
         focal, num_focal, reference_sets, reference_set_size, 2, 0, A);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
     reference_set_0[0] = (tsk_id_t) tsk_treeseq_get_num_nodes(&ts);
     ret = tsk_treeseq_genealogical_nearest_neighbours(&ts,
         focal, num_focal, reference_sets, reference_set_size, 2, 0, A);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
     reference_set_0[0] = (tsk_id_t) tsk_treeseq_get_num_nodes(&ts) + 1;
     ret = tsk_treeseq_genealogical_nearest_neighbours(&ts,
         focal, num_focal, reference_sets, reference_set_size, 2, 0, A);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
 
     /* Duplicate values in the focal sets */
     reference_set_0[0] = 1;
@@ -3669,15 +3669,15 @@ test_genealogical_nearest_neighbours_errors(void)
     focal[0] = -1;
     ret = tsk_treeseq_genealogical_nearest_neighbours(&ts,
         focal, num_focal, reference_sets, reference_set_size, 2, 0, A);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
     focal[0] = (tsk_id_t) tsk_treeseq_get_num_nodes(&ts);
     ret = tsk_treeseq_genealogical_nearest_neighbours(&ts,
         focal, num_focal, reference_sets, reference_set_size, 2, 0, A);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
     focal[0] = (tsk_id_t) tsk_treeseq_get_num_nodes(&ts) + 100;
     ret = tsk_treeseq_genealogical_nearest_neighbours(&ts,
         focal, num_focal, reference_sets, reference_set_size, 2, 0, A);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
 
     tsk_treeseq_free(&ts);
     free(A);
@@ -3710,20 +3710,20 @@ test_tree_errors(void)
     for (j = 0; j < sizeof(bad_nodes) / sizeof(tsk_id_t); j++) {
         u = bad_nodes[j];
         ret = tsk_tree_get_parent(&t, u, NULL);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         ret = tsk_tree_get_time(&t, u, NULL);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         ret = tsk_tree_get_mrca(&t, u, 0, NULL);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         ret = tsk_tree_get_mrca(&t, 0, u, NULL);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         ret = tsk_tree_get_num_samples(&t, u, NULL);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         ret = tsk_tree_get_num_tracked_samples(&t, u, NULL);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         /* Also check tree sequence methods */
         ret = tsk_treeseq_get_node(&ts, (tsk_tbl_size_t) u, &node);
-        CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
         CU_ASSERT(!tsk_treeseq_is_sample(&ts, u));
         CU_ASSERT(!tsk_tree_is_sample(&t, u));
     }
@@ -3734,7 +3734,7 @@ test_tree_errors(void)
     CU_ASSERT_EQUAL(ret, TSK_ERR_BAD_SAMPLES);
     tracked_samples[1] = (tsk_id_t) tsk_treeseq_get_num_nodes(&ts);
     ret = tsk_tree_set_tracked_samples(&t, 2, tracked_samples);
-    CU_ASSERT_EQUAL(ret, TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL(ret, TSK_ERR_NODE_OUT_OF_BOUNDS);
     tracked_samples[1] = 0;
     ret = tsk_tree_set_tracked_samples(&t, 2, tracked_samples);
     CU_ASSERT_EQUAL(ret, TSK_ERR_DUPLICATE_SAMPLE);
@@ -3983,7 +3983,7 @@ test_empty_tree_sequence(void)
     CU_ASSERT_EQUAL_FATAL(t.left_root, TSK_NULL_NODE);
     CU_ASSERT_EQUAL_FATAL(t.left, 0);
     CU_ASSERT_EQUAL_FATAL(t.right, 1);
-    CU_ASSERT_EQUAL_FATAL(tsk_tree_get_parent(&t, 0, &v), TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(tsk_tree_get_parent(&t, 0, &v), TSK_ERR_NODE_OUT_OF_BOUNDS);
     tsk_tree_free(&t);
 
     ret = tsk_tree_alloc(&t, &ts, 0);
@@ -3993,7 +3993,7 @@ test_empty_tree_sequence(void)
     CU_ASSERT_EQUAL_FATAL(t.left_root, TSK_NULL_NODE);
     CU_ASSERT_EQUAL_FATAL(t.left, 0);
     CU_ASSERT_EQUAL_FATAL(t.right, 1);
-    CU_ASSERT_EQUAL_FATAL(tsk_tree_get_parent(&t, 0, &v), TSK_ERR_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(tsk_tree_get_parent(&t, 0, &v), TSK_ERR_NODE_OUT_OF_BOUNDS);
     tsk_tree_free(&t);
 
     tsk_treeseq_free(&ts);

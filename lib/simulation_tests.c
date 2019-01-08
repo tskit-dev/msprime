@@ -2222,6 +2222,15 @@ test_simulate_from_incompatible(void)
             0, MSP_NULL_INDIVIDUAL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    /* Malformed tree sequence */
+    from_tables.nodes->individual[0] = 100;
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    CU_ASSERT_FATAL(msp_is_tsk_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_TSK_ERR_BIT), TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
+    CU_ASSERT_STRING_EQUAL(msp_strerror(ret), tsk_strerror(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
+    from_tables.nodes->individual[0] = -1;
+    msp_free(&msp);
+
     /* Sequence length mismatch */
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
@@ -2290,6 +2299,22 @@ test_simulate_from_incompatible(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
+    msp_free(&msp);
+
+    /* Make a tree sequence that we cannot recover trees from. This only happens
+     * at initialisation time. */
+    ret = tsk_edge_tbl_add_row(from_tables.edges, 0, 1, 1, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    tsk_edge_tbl_add_row(from_tables.edges, 0, 1, 2, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_FATAL(msp_is_tsk_error(ret));
+    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_TSK_ERR_BIT),
+            TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN);
+    CU_ASSERT_STRING_EQUAL(msp_strerror(ret),
+            tsk_strerror(TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN));
     msp_free(&msp);
 
     gsl_rng_free(rng);
@@ -2542,7 +2567,7 @@ test_single_tree_mutgen_interval(void)
 
     /* End before start is an error */
     ret = mutgen_set_time_interval(&mutgen, 0, -1);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     /* Setting start and end == 0 should give 0 mutations */
     ret = mutgen_set_time_interval(&mutgen, 0, 0);
@@ -2579,8 +2604,6 @@ test_single_tree_mutgen_interval(void)
     gsl_rng_free(rng);
 }
 
-
-
 static void
 test_strerror(void)
 {
@@ -2588,13 +2611,27 @@ test_strerror(void)
     const char *msg;
     int max_error_code = 1024; /* totally arbitrary */
 
-    for (j = 0; j < max_error_code; j++) {
+    for (j = 1; j > -max_error_code; j--) {
         msg = msp_strerror(-j);
         CU_ASSERT_FATAL(msg != NULL);
         CU_ASSERT(strlen(msg) > 0);
     }
 }
 
+static void
+test_strerror_tskit(void)
+{
+    int tskit_errors[] = {TSK_ERR_NO_MEMORY,
+        TSK_ERR_NODE_OUT_OF_BOUNDS, TSK_ERR_EDGE_OUT_OF_BOUNDS};
+    size_t j;
+    int err;
+
+    for (j = 0; j < sizeof(tskit_errors) / sizeof(*tskit_errors); j++) {
+        err = msp_set_tsk_error(tskit_errors[j]);
+        CU_ASSERT_TRUE(msp_is_tsk_error(err));
+        CU_ASSERT_STRING_EQUAL(msp_strerror(err), tsk_strerror(tskit_errors[j]));
+    }
+}
 
 static int
 msprime_suite_init(void)
@@ -2699,6 +2736,7 @@ main(int argc, char **argv)
         {"test_single_tree_mutgen_interval", test_single_tree_mutgen_interval},
 
         {"test_strerror", test_strerror},
+        {"test_strerror_tskit", test_strerror_tskit},
         CU_TEST_INFO_NULL,
     };
 

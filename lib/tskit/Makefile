@@ -9,11 +9,13 @@ CFLAGS=-g -O2 -std=c99 -pedantic -Werror -Wall -W \
 LDFLAGS=-lm
 OBJECTS=tsk_core.o tsk_tables.o tsk_trees.o tsk_genotypes.o \
 	tsk_convert.o tsk_stats.o kastore.o 
+HEADERS=tsk_core.h tsk_tables.h tsk_trees.h tsk_genotypes.h \
+	tsk_convert.h tsk_stats.h
 EXECUTABLES=main test_core test_tables test_trees test_genotypes
 
 all: old_tests ${EXECUTABLES} libtskit.a
 
-main: main.c ${OBJECTS} argtable3.o
+main: main.c ${OBJECTS} argtable3.o 
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS} 
 
 libtskit.a: ${OBJECTS}
@@ -21,6 +23,9 @@ libtskit.a: ${OBJECTS}
 
 test_%: test_%.c testlib.o ${OBJECTS}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS} -lcunit
+
+tsk_%.o: tsk_%.c tsk_%.h tsk_core.h
+	${CC} ${CFLAGS} $< -c 
 
 # We can't turn on all the usual compiler checks because of CUnit.
 testlib.o: testlib.c

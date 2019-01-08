@@ -42,6 +42,11 @@ kas_funcptr *kas_dynamic_api;
 #define SET_COLS 0
 #define APPEND_COLS 1
 
+/* TskitException is the superclass of all exceptions that can be thrown by
+ * tskit. We define it here in the low-level library so that exceptions defined
+ * here and in the high-level library can inherit from it.
+ */
+static PyObject *TskitException;
 static PyObject *TskitLibraryError;
 static PyObject *TskitFileFormatError;
 static PyObject *TskitVersionTooOldError;
@@ -8543,16 +8548,21 @@ init_tskit(void)
     PyModule_AddObject(module, "LdCalculator", (PyObject *) &LdCalculatorType);
 
     /* Errors and constants */
-    TskitLibraryError = PyErr_NewException("_tskit.LibraryError", NULL, NULL);
+    TskitException = PyErr_NewException("_tskit.TskitException", NULL, NULL);
+    Py_INCREF(TskitException);
+    PyModule_AddObject(module, "TskitException", TskitException);
+    TskitLibraryError = PyErr_NewException("_tskit.LibraryError", TskitException, NULL);
     Py_INCREF(TskitLibraryError);
     PyModule_AddObject(module, "LibraryError", TskitLibraryError);
     TskitFileFormatError = PyErr_NewException("_tskit.FileFormatError", NULL, NULL);
     Py_INCREF(TskitFileFormatError);
     PyModule_AddObject(module, "FileFormatError", TskitFileFormatError);
-    TskitVersionTooNewError = PyErr_NewException("_tskit.VersionTooNewError", NULL, NULL);
+    TskitVersionTooNewError = PyErr_NewException("_tskit.VersionTooNewError",
+            TskitException, NULL);
     Py_INCREF(TskitVersionTooNewError);
     PyModule_AddObject(module, "VersionTooNewError", TskitVersionTooNewError);
-    TskitVersionTooOldError = PyErr_NewException("_tskit.VersionTooOldError", NULL, NULL);
+    TskitVersionTooOldError = PyErr_NewException("_tskit.VersionTooOldError",
+            TskitException, NULL);
     Py_INCREF(TskitVersionTooOldError);
     PyModule_AddObject(module, "VersionTooOldError", TskitVersionTooOldError);
 
