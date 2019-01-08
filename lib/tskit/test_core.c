@@ -18,6 +18,20 @@ test_strerror(void)
 }
 
 static void
+test_strerror_kastore(void)
+{
+    int kastore_errors[] = {KAS_ERR_NO_MEMORY, KAS_ERR_IO, KAS_ERR_KEY_NOT_FOUND};
+    size_t j;
+    int err;
+
+    for (j = 0; j < sizeof(kastore_errors) / sizeof(*kastore_errors); j++) {
+        err = tsk_set_kas_error(kastore_errors[j]);
+        CU_ASSERT_TRUE(tsk_is_kas_error(err));
+        CU_ASSERT_STRING_EQUAL(tsk_strerror(err), kas_strerror(kastore_errors[j]));
+    }
+}
+
+static void
 test_generate_uuid(void)
 {
     size_t uuid_size = 36;
@@ -44,6 +58,7 @@ main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
         {"test_strerror", test_strerror},
+        {"test_strerror_kastore", test_strerror_kastore},
         {"test_generate_uuid", test_generate_uuid},
         {NULL},
     };

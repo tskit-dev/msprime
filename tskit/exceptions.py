@@ -2,6 +2,11 @@
 Exceptions defined in tskit.
 """
 
+# Duplicate the low-level library error so that at least client code doesn't need to
+# import _tskit. But, this means that we do have
+
+from _tskit import LibraryError
+
 
 class TskitException(Exception):
     """

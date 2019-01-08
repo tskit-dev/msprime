@@ -212,6 +212,7 @@ test_format_data_load_errors(void)
         ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
         CU_ASSERT_TRUE(tsk_is_kas_error(ret));
         CU_ASSERT_EQUAL_FATAL(ret ^ (1 << TSK_KAS_ERR_BIT), KAS_ERR_KEY_NOT_FOUND);
+        CU_ASSERT_STRING_EQUAL(tsk_strerror(ret), kas_strerror(KAS_ERR_KEY_NOT_FOUND));
         ret = tsk_tbl_collection_free(&tables);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }

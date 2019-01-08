@@ -413,10 +413,12 @@ msp_alloc(msp_t *self,
         }
         ret = tsk_treeseq_load_tables(self->from_ts, self->tables, TSK_BUILD_INDEXES);
         if (ret != 0) {
+            ret = msp_set_tsk_error(ret);
             goto out;
         }
         ret = tsk_tbl_collection_record_position(self->tables, &self->from_position);
         if (ret != 0) {
+            ret = msp_set_tsk_error(ret);
             goto out;
         }
         if (self->recomb_map->sequence_length != self->tables->sequence_length) {
@@ -928,6 +930,7 @@ msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
             msp_genetic_to_phys(self, right),
             node, source_pop, dest_pop, scaled_time);
     if (ret < 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
     ret = 0;
@@ -1098,6 +1101,7 @@ msp_flush_edges(msp_t *self)
     if (self->num_buffered_edges > 0) {
         ret = tsk_squash_edges(self->buffered_edges, self->num_buffered_edges, &num_edges);
         if (ret != 0) {
+            ret = msp_set_tsk_error(ret);
             goto out;
         }
         for (j = 0; j < num_edges; j++) {
@@ -1107,6 +1111,7 @@ msp_flush_edges(msp_t *self)
                     msp_genetic_to_phys(self, edge.right),
                     edge.parent, edge.child);
             if (ret < 0) {
+                ret = msp_set_tsk_error(ret);
                 goto out;
             }
 
@@ -1127,6 +1132,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     ret = tsk_node_tbl_add_row(self->tables->nodes, flags, scaled_time, population_id,
             MSP_NULL_INDIVIDUAL, NULL, 0);
     if (ret < 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
     ret = 0;
@@ -1915,6 +1921,7 @@ msp_reset_from_ts(msp_t *self)
 
     ret = tsk_tree_alloc(&t, self->from_ts, 0);
     if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
     if (root_segments_head == NULL || root_segments_tail == NULL) {
@@ -1924,6 +1931,7 @@ msp_reset_from_ts(msp_t *self)
     /* Reset the tables to their correct position for replication */
     ret = tsk_tbl_collection_reset_position(self->tables, &self->from_position);
     if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
         goto out;
     }
 
@@ -1961,7 +1969,7 @@ msp_reset_from_ts(msp_t *self)
         }
     }
     if (t_iter != 0) {
-        ret = t_iter;
+        ret = msp_set_tsk_error(t_iter);
         goto out;
     }
 
@@ -2009,6 +2017,7 @@ msp_reset_from_samples(msp_t *self)
     for (j = 0; j < self->num_populations; j++) {
         ret = tsk_population_tbl_add_row(self->tables->populations, NULL, 0);
         if (ret < 0) {
+            ret = msp_set_tsk_error(ret);
             goto out;
         }
     }
@@ -2952,7 +2961,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
                     node = tsk_node_tbl_add_row(nodes, 0, current_time, pop,
                             MSP_NULL_INDIVIDUAL, NULL, 0);
                     if (node < 0) {
-                        ret = node;
+                        ret = msp_set_tsk_error(node);
                         goto out;
                     }
                 }
@@ -2966,6 +2975,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
                             msp_genetic_to_phys(self, seg->right),
                             node, seg->value);
                         if (ret < 0) {
+                            ret = msp_set_tsk_error(ret);
                             goto out;
                         }
                     }
@@ -2984,10 +2994,13 @@ msp_insert_uncoalesced_edges(msp_t *self)
      * end up sorting a handful of edges at the end, so it's probably not so
      * bad. */
     ret = tsk_tbl_collection_sort(self->tables, (size_t) (edge_start + 1), 0);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
 out:
     return ret;
 }
-
 
 int WARN_UNUSED
 msp_finalise_tables(msp_t *self)

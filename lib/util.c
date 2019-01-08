@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2019 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <assert.h>
 
+#include "tskit/tsk_core.h"
 #include "util.h"
 
 static const char *
@@ -151,10 +152,29 @@ out:
     return ret;
 }
 
+
+int
+msp_set_tsk_error(int err)
+{
+    /* Flip this bit. As the error is negative, this sets the bit to 0 */
+    return err ^ (1 << MSP_TSK_ERR_BIT);
+}
+
+bool
+msp_is_tsk_error(int err)
+{
+    return !(err & (1 << MSP_TSK_ERR_BIT));
+}
+
 const char *
 msp_strerror(int err)
 {
-    return msp_strerror_internal(err);
+    if (msp_is_tsk_error(err)) {
+        err ^= (1 << MSP_TSK_ERR_BIT);
+        return tsk_strerror(err);
+    } else {
+        return msp_strerror_internal(err);
+    }
 }
 
 void

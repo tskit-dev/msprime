@@ -27,9 +27,6 @@ test_%: test_%.c testlib.o ${OBJECTS}
 tsk_%.o: tsk_%.c tsk_%.h tsk_core.h
 	${CC} ${CFLAGS} $< -c 
 
-# tsk_%.o: tsk_%$.c tsk_%$.h
-# 	${CC} ${CFLAGS} $^
-
 # We can't turn on all the usual compiler checks because of CUnit.
 testlib.o: testlib.c
 	${CC} -I../kastore/c -std=c99 -Wall -g -c $^ 
