@@ -75,12 +75,7 @@ load_tables(tsk_tbl_collection_t *tables, const char *filename)
     tsk_tbl_collection_t tmp;
 
     /* We need to allocate a temporary table here because tbl_collection_load
-     * requires an allocated set of tables, but writes pointers into the
-     * kastore for the actual columns. */
-    ret = tsk_tbl_collection_alloc(&tmp, 0);
-    if (ret != 0) {
-        fatal_tskit_error(ret, __LINE__);
-    }
+     * loads a read-only version of the tables. */
     ret = tsk_tbl_collection_load(&tmp, filename, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);

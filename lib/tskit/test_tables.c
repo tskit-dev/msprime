@@ -55,8 +55,6 @@ test_format_data_load_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     /* We've only defined the format headers, so we should fail immediately
      * after with key not found */
@@ -72,8 +70,6 @@ test_format_data_load_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_VERSION_TOO_OLD);
     ret = tsk_tbl_collection_free(&tables);
@@ -85,8 +81,6 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_VERSION_TOO_NEW);
@@ -101,8 +95,6 @@ test_format_data_load_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
     ret = tsk_tbl_collection_free(&tables);
@@ -115,8 +107,6 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
@@ -131,8 +121,6 @@ test_format_data_load_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
     ret = tsk_tbl_collection_free(&tables);
@@ -145,8 +133,6 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_TRUE(tsk_is_kas_error(ret));
@@ -162,8 +148,6 @@ test_format_data_load_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
     ret = tsk_tbl_collection_free(&tables);
@@ -176,8 +160,6 @@ test_format_data_load_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_SEQUENCE_LENGTH);
@@ -192,8 +174,6 @@ test_format_data_load_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
     ret = tsk_tbl_collection_free(&tables);
@@ -206,8 +186,6 @@ test_format_data_load_errors(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         write_table_cols(&store, write_cols, j);
         ret = kastore_close(&store);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tsk_tbl_collection_alloc(&tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
         CU_ASSERT_TRUE(tsk_is_kas_error(ret));
@@ -237,8 +215,6 @@ test_dump_unindexed(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_tbl_collection_is_indexed(&tables));
 
-    ret = tsk_tbl_collection_alloc(&loaded, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&loaded, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_tbl_collection_is_indexed(&loaded));
@@ -256,8 +232,6 @@ test_tbl_collection_load_errors(void)
     int ret;
     const char *str;
 
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, "/", 0);
     CU_ASSERT_TRUE(tsk_is_kas_error(ret));
     CU_ASSERT_EQUAL_FATAL(ret ^ (1 << TSK_KAS_ERR_BIT), KAS_ERR_IO);
@@ -358,8 +332,6 @@ test_load_tsk_node_tbl_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     /* We've only defined the format headers and nodes, so we should fail immediately
      * after with key not found */
@@ -375,8 +347,6 @@ test_load_tsk_node_tbl_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
     ret = tsk_tbl_collection_free(&tables);
@@ -390,8 +360,6 @@ test_load_tsk_node_tbl_errors(void)
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);
     ret = tsk_tbl_collection_free(&tables);
@@ -403,8 +371,6 @@ test_load_tsk_node_tbl_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols) - 1);
     ret = kastore_close(&store);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_TRUE(tsk_is_kas_error(ret));
@@ -418,8 +384,6 @@ test_load_tsk_node_tbl_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     write_table_cols(&store, write_cols, sizeof(write_cols) / sizeof(*write_cols));
     ret = kastore_close(&store);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tbl_collection_load(&tables, _tmp_file_name, 0);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_FILE_FORMAT);

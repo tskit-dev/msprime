@@ -424,10 +424,6 @@ tsk_treeseq_load(tsk_treeseq_t *self, const char *filename, int flags)
      * This avoids a copy in tsk_treeseq_load. However, we'd need to break
      * up the functionality in load_tables above a little bit */
 
-    ret = tsk_tbl_collection_alloc(&tables, 0);
-    if (ret != 0) {
-        goto out;
-    }
     ret = tsk_tbl_collection_load(&tables, filename, flags);
     if (ret != 0) {
         goto out;

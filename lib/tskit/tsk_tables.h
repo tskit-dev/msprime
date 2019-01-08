@@ -435,11 +435,11 @@ bool tsk_provenance_tbl_equals(tsk_provenance_tbl_t *self, tsk_provenance_tbl_t 
 int tsk_provenance_tbl_get_row(tsk_provenance_tbl_t *self, size_t index, tsk_provenance_t *row);
 
 int tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags);
+int tsk_tbl_collection_load(tsk_tbl_collection_t *self, const char *filename, int flags);
 int tsk_tbl_collection_print_state(tsk_tbl_collection_t *self, FILE *out);
 bool tsk_tbl_collection_is_indexed(tsk_tbl_collection_t *self);
 int tsk_tbl_collection_drop_indexes(tsk_tbl_collection_t *self);
 int tsk_tbl_collection_build_indexes(tsk_tbl_collection_t *self, int flags);
-int tsk_tbl_collection_load(tsk_tbl_collection_t *self, const char *filename, int flags);
 int tsk_tbl_collection_dump(tsk_tbl_collection_t *tables, const char *filename, int flags);
 int tsk_tbl_collection_copy(tsk_tbl_collection_t *self, tsk_tbl_collection_t *dest);
 int tsk_tbl_collection_free(tsk_tbl_collection_t *self);
