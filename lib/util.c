@@ -42,14 +42,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_GENERIC:
             ret = "Generic error; please file a bug report";
             break;
-        case MSP_ERR_FILE_FORMAT:
-            ret = "File format error";
-            break;
         case MSP_ERR_BAD_STATE:
             ret = "Bad simulator state. Initialise or reset must be called.";
-            break;
-        case MSP_ERR_BUFFER_OVERFLOW:
-            ret = "Supplied buffer if too small";
             break;
         case MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS:
             ret = "Demographic events must be time sorted.";
@@ -63,17 +57,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_OUT_OF_BOUNDS:
             ret = "Object reference out of bounds";
             break;
-        case MSP_ERR_BAD_ORDERING:
-            ret = "Bad record ordering requested";
-            break;
-        case MSP_ERR_BAD_MUTATION:
-            ret = "Bad mutation provided";
-            break;
         case MSP_ERR_BAD_PARAM_VALUE:
             ret = "Bad parameter value provided";
-            break;
-        case MSP_ERR_UNSUPPORTED_OPERATION:
-            ret = "Operation cannot be performed in current configuration";
             break;
         case MSP_ERR_BAD_POPULATION_CONFIGURATION:
             ret = "Bad population configuration provided.";
@@ -108,164 +93,12 @@ msp_strerror_internal(int err)
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
             break;
-        case MSP_ERR_ZERO_RECORDS:
-            ret = "At least one record must be supplied";
-            break;
-        case MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME:
-            ret = "Edges must be listed in (time[parent], child, left) order;"
-                " time[parent] order violated";
-            break;
-        case MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS:
-            ret = "All edges for a given parent must be contiguous";
-            break;
-        case MSP_ERR_EDGES_NOT_SORTED_CHILD:
-            ret = "Edges must be listed in (time[parent], child, left) order;"
-                " child order violated";
-            break;
-        case MSP_ERR_EDGES_NOT_SORTED_LEFT:
-            ret = "Edges must be listed in (time[parent], child, left) order;"
-                " left order violated";
-            break;
-        case MSP_ERR_NULL_PARENT:
-            ret = "Edge in parent is null.";
-            break;
-        case MSP_ERR_NULL_CHILD:
-            ret = "Edge in parent is null.";
-            break;
-        case MSP_ERR_BAD_NODE_TIME_ORDERING:
-            ret = "time[parent] must be greater than time[child]";
-            break;
-        case MSP_ERR_BAD_EDGE_INTERVAL:
-            ret = "Bad edge interval where right <= left";
-            break;
-        case MSP_ERR_DUPLICATE_EDGES:
-            ret = "Duplicate edges provided.";
-            break;
-        case MSP_ERR_CANNOT_SIMPLIFY:
-            ret = "Cannot simplify the tree sequence; no output records.";
-            break;
         case MSP_ERR_BAD_SAMPLES:
             ret = "Bad sample configuration provided.";
-            break;
-        case MSP_ERR_FILE_VERSION_TOO_OLD:
-            ret = "tskit file version too old. Please upgrade using the "
-                "'msp upgrade' command";
-            break;
-        case MSP_ERR_FILE_VERSION_TOO_NEW:
-            ret = "tskit file version is too new for this instance. "
-                "Please upgrade msprime to the latest version.";
-            break;
-        case MSP_ERR_DUPLICATE_SAMPLE:
-            ret = "Duplicate value provided in tracked leaf list.";
-            break;
-        case MSP_ERR_REFCOUNT_NONZERO:
-            ret = "Cannot change the state of the tree sequence when "
-                "other objects reference it. Make sure all trees are freed first.";
             break;
         case MSP_ERR_BAD_MODEL:
             ret = "Model error. Either a bad model, or the requested operation "
                 "is not supported for the current model";
-            break;
-        case MSP_ERR_NOT_INITIALISED:
-            ret = "object not initialised. Please file a bug report.";
-            break;
-        case MSP_ERR_DUPLICATE_MUTATION_NODES:
-            ret = "Cannot have more than one mutation at a node for a given site.";
-            break;
-        case MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED:
-            ret = "Only binary mutations are supported for this operation.";
-            break;
-        case MSP_ERR_INCONSISTENT_MUTATIONS:
-            ret = "Inconsistent mutations: state already equal to derived state.";
-            break;
-        case MSP_ERR_COORDINATE_NOT_FOUND:
-            ret = "Coordinate not found.";
-            break;
-        case MSP_ERR_BAD_NODES_ARRAY:
-            ret = "Malformed nodes array.";
-            break;
-        case MSP_ERR_BAD_CHILDREN_ARRAY:
-            ret = "Malformed array of children.";
-            break;
-        case MSP_ERR_SITE_OUT_OF_BOUNDS:
-            ret = "Site out of bounds";
-            break;
-        case MSP_ERR_NODE_OUT_OF_BOUNDS:
-            ret = "Node out of bounds";
-            break;
-        case MSP_ERR_LENGTH_MISMATCH:
-            ret = "Mismatch in stored total column length and sum of row lengths";
-            break;
-        case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
-            ret = "Only single char mutations supported.";
-            break;
-        case MSP_ERR_UNSORTED_SITES:
-            ret = "Sites must be provided in strictly increasing position order.";
-            break;
-        case MSP_ERR_BAD_SITE_POSITION:
-            ret = "Sites positions must be between 0 and sequence_length";
-            break;
-        case MSP_ERR_UNSORTED_MUTATIONS:
-            ret = "Mutations must be provided in non-decreasing site order";
-            break;
-        case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
-            ret = "All edges for a given parent must be adjacent.";
-            break;
-        case MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN:
-            ret = "Bad edges: contradictory children for a given parent over "
-                "an interval.";
-            break;
-        case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
-            ret = "Bad edges: multiple definitions of a given parent over an interval";
-            break;
-        case MSP_ERR_BAD_SEQUENCE_LENGTH:
-            ret = "Sequence length must be > 0.";
-            break;
-        case MSP_ERR_LEFT_LESS_ZERO:
-            ret = "Left coordinate must be >= 0";
-            break;
-        case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
-            ret = "Right coordinate > sequence length.";
-            break;
-        case MSP_ERR_MUTATION_OUT_OF_BOUNDS:
-            ret = "mutation ID out of bounds";
-            break;
-        case MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE:
-            ret = "Specified parent mutation is at a different site.";
-            break;
-        case MSP_ERR_MUTATION_PARENT_EQUAL:
-            ret = "Parent mutation refers to itself.";
-            break;
-        case MSP_ERR_MUTATION_PARENT_AFTER_CHILD:
-            ret = "Parent mutation ID must be < current ID.";
-            break;
-        case MSP_ERR_BAD_OFFSET:
-            ret = "Bad offset provided in input array.";
-            break;
-        case MSP_ERR_TOO_MANY_ALLELES:
-            ret = "Cannot have more than 255 alleles.";
-            break;
-        case MSP_ERR_INDIVIDUAL_OUT_OF_BOUNDS:
-            ret = "Individual ID out of bounds";
-            break;
-        case MSP_ERR_GENERATE_UUID:
-            ret = "Error generating UUID";
-            break;
-        case MSP_ERR_DUPLICATE_SITE_POSITION:
-            ret = "Duplicate site positions.";
-            break;
-        case MSP_ERR_BAD_TABLE_POSITION:
-            ret = "Bad table position provided to truncate/reset.";
-            break;
-        case MSP_ERR_BAD_EDGE_INDEX:
-            ret = "Invalid edge index value.";
-            break;
-        case MSP_ERR_TABLES_NOT_INDEXED:
-            ret = "Table collection must be indexed.";
-            break;
-        case MSP_ERR_SIMPLIFY_MIGRATIONS_NOT_SUPPORTED:
-            ret = "Migrations currently not supported in simplify. Please open an "
-                "issue on GitHub if this operation is important to you.";
             break;
         case MSP_ERR_INCOMPATIBLE_FROM_TS:
             ret = "The specified tree sequence is not a compatible starting point "
@@ -293,9 +126,6 @@ msp_strerror_internal(int err)
                 "of multiple bottlenecks happening at the same time or because of "
                 "numerical imprecision with very small population sizes.";
             break;
-        case MSP_ERR_ONLY_INFINITE_SITES:
-            ret = "Only infinite sites mutations are supported for this operation.";
-            break;
         case MSP_ERR_INTEGRATION_FAILED:
             ret = "GSL numerical integration failed. Please check the stderr for details.";
             break;
@@ -312,13 +142,6 @@ msp_strerror_internal(int err)
             ret = "Trajectory must contain at least one time point.";
             break;
 
-        case MSP_ERR_IO:
-            if (errno != 0) {
-                ret = strerror(errno);
-            } else {
-                ret = "Unspecified IO error";
-            }
-            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                 "report!";
