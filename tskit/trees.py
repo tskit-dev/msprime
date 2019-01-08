@@ -604,7 +604,9 @@ class Tree(object):
     @property
     def num_nodes(self):
         """
-        Returns the number of nodes in the sparse tree.
+        Returns the number of nodes in the :class:`.TreeSequence` this tree is in.
+        Equivalent to ``tree.tree_sequence.num_nodes``. To find the number of
+        nodes that are reachable from all roots use ``len(list(tree.nodes()))``.
 
         :rtype: int
         """
