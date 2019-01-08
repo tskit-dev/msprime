@@ -2611,12 +2611,11 @@ test_strerror(void)
     const char *msg;
     int max_error_code = 1024; /* totally arbitrary */
 
-    for (j = 0; j < max_error_code; j++) {
+    for (j = 1; j > -max_error_code; j--) {
         msg = msp_strerror(-j);
         CU_ASSERT_FATAL(msg != NULL);
         CU_ASSERT(strlen(msg) > 0);
     }
-
 }
 
 static void

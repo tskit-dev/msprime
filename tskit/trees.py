@@ -1175,11 +1175,7 @@ def load(path):
     """
     try:
         return TreeSequence.load(path)
-    except _tskit.VersionTooNewError as e:
-        raise exceptions.VersionTooNewError(str(e))
-    except _tskit.VersionTooOldError as e:
-        raise exceptions.VersionTooOldError(str(e))
-    except _tskit.FileFormatError as e:
+    except exceptions.FileFormatError as e:
         formats.raise_hdf5_format_error(path, e)
 
 
