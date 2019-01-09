@@ -2426,19 +2426,20 @@ class TreeSequence(object):
 
     def mean_descendants(self, reference_sets):
         """
-        Computes for every node the mean number of samples in each of the `reference_sets`
-        that descend from that node, averaged over the portions of the genome for which
-        the node is ancestral to *any* sample.  The output is an array, `C[node, j]`,
-        which reports the total length of all genomes in `reference_sets[j]` that
-        inherit from `node`, divided by the total length of the genome on which `node`
-        is an ancestor to any sample in the tree sequence.
+        Computes for every node the mean number of samples in each of the
+        `reference_sets` that descend from that node, averaged over the
+        portions of the genome for which the node is ancestral to *any* sample.
+        The output is an array, `C[node, j]`, which reports the total length of
+        all genomes in `reference_sets[j]` that inherit from `node`, divided by
+        the total length of the genome on which `node` is an ancestor to any
+        sample in the tree sequence.
 
-        .. note:: This interface *may change*, particularly the normalization by proportion
-            of the genome that `node` is an ancestor to anyone.
+        .. note:: This interface *may change*, particularly the normalization by
+            proportion of the genome that `node` is an ancestor to anyone.
 
         :param iterable reference sets: A list of lists of node IDs.
-        :return: An array with dimensions (number of nodes in the tree sequence, number of
-            reference sets)
+        :return: An array with dimensions (number of nodes in the tree sequence,
+            number of reference sets)
         """
         return self._ll_tree_sequence.mean_descendants(reference_sets)
 
