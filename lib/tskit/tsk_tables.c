@@ -8,6 +8,11 @@
 
 #include "tsk_tables.h"
 
+/* This is a flag for tsk_tbl_collection_alloc used by tsk_tbl_collection_load to
+ * avoid allocating the table columns. It's defined internally for now as it's
+ * not clear how this would be useful outside of tskit. */
+#define TSK_NO_ALLOC_TABLES (1 << 30)
+
 #define DEFAULT_SIZE_INCREMENT 1024
 #define TABLE_SEP "-----------------------------------------\n"
 
@@ -4224,7 +4229,7 @@ simplifier_alloc(simplifier_t *self, tsk_id_t *samples, size_t num_samples,
         goto out;
     }
 
-    ret = tsk_tbl_collection_alloc(&self->input_tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&self->input_tables, 0);
     if (ret != 0) {
         goto out;
     }
@@ -5150,17 +5155,6 @@ tsk_tbl_collection_print_state(tsk_tbl_collection_t *self, FILE *out)
     return 0;
 }
 
-/* TODO make sequence_length a parameter here, and only support setting it
- * through this interface. That way, sequence_length is set at the initialisation
- * time and can be assumed to be fixed for ever after that. This might
- * finally get rid of the inferring sequence length stuff that we've
- * been plagued with forever.
- *
- * HOWEVER this disagrees with the usage of calling tsk_tbl_collection_alloc
- * before tsk_tbl_collection_load. Perhaps this is a good reason for allowing
- * the user to call tsk_tbl_collection_load directly without calling alloc
- * first. This is certainly more user-friendly.
- * */
 int
 tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags)
 {
@@ -5182,7 +5176,7 @@ tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags)
         ret = TSK_ERR_NO_MEMORY;
         goto out;
     }
-    if (flags & TSK_ALLOC_TABLES) {
+    if (! (flags & TSK_NO_ALLOC_TABLES)) {
         /* Allocate all the tables with their default increments */
         ret = tsk_node_tbl_alloc(self->nodes, 0);
         if (ret != 0) {
@@ -5580,7 +5574,7 @@ tsk_tbl_collection_load(tsk_tbl_collection_t *self, const char *filename, int TS
 {
     int ret = 0;
 
-    ret = tsk_tbl_collection_alloc(self, 0);
+    ret = tsk_tbl_collection_alloc(self, TSK_NO_ALLOC_TABLES);
     if (ret != 0) {
         goto out;
     }

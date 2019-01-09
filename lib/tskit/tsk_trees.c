@@ -336,7 +336,7 @@ tsk_treeseq_load_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables,
         ret = TSK_ERR_NO_MEMORY;
         goto out;
     }
-    ret = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(self->tables, 0);
     if (ret != 0) {
         goto out;
     }
@@ -394,20 +394,16 @@ out:
     return ret;
 }
 
+/* TODO Rename to copy_tables? */
 int TSK_WARN_UNUSED
-tsk_treeseq_dump_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables, int flags)
+tsk_treeseq_dump_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables,
+        int TSK_UNUSED(flags))
 {
     int ret = 0;
 
     if (tables == NULL) {
         ret = TSK_ERR_BAD_PARAM_VALUE;
         goto out;
-    }
-    if (flags & TSK_ALLOC_TABLES) {
-        ret = tsk_tbl_collection_alloc(tables, flags);
-        if (ret != 0) {
-            goto out;
-        }
     }
     ret = tsk_tbl_collection_copy(self->tables, tables);
 out:
@@ -1019,7 +1015,11 @@ tsk_treeseq_simplify(tsk_treeseq_t *self, tsk_id_t *samples, size_t num_samples,
     int ret = 0;
     tsk_tbl_collection_t tables;
 
-    ret = tsk_treeseq_dump_tables(self, &tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tsk_treeseq_dump_tables(self, &tables, 0);
     if (ret != 0) {
         goto out;
     }

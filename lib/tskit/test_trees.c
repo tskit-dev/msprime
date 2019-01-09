@@ -19,7 +19,9 @@ verify_compute_mutation_parents(tsk_treeseq_t *ts)
     tsk_tbl_collection_t tables;
 
     CU_ASSERT_FATAL(parent != NULL);
-    ret = tsk_treeseq_dump_tables(ts, &tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_treeseq_dump_tables(ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     memcpy(parent, tables.mutations->parent, size);
     /* tsk_tbl_collection_print_state(&tables, stdout); */
@@ -1353,7 +1355,7 @@ test_simplest_holey_tsk_treeseq_mutation_parents(void)
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_mutations(&ts), 6);
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_trees(&ts), 3);
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1551,7 +1553,7 @@ test_simplest_initial_gap_tsk_treeseq_mutation_parents(void)
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_mutations(&ts), 6);
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_trees(&ts), 2);
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1648,7 +1650,7 @@ test_simplest_final_gap_tsk_treeseq_mutation_parents(void)
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_sites(&ts), 3);
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_mutations(&ts), 6);
     CU_ASSERT_EQUAL(tsk_treeseq_get_num_trees(&ts), 2);
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1682,7 +1684,7 @@ test_simplest_individuals(void)
     tsk_individual_t individual;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1.0;
@@ -1747,7 +1749,7 @@ test_simplest_bad_individuals(void)
     int load_flags = TSK_BUILD_INDEXES;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1.0;
@@ -1812,7 +1814,7 @@ test_simplest_bad_edges(void)
     int ret;
     int load_flags = TSK_BUILD_INDEXES;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1.0;
@@ -1982,7 +1984,7 @@ test_simplest_bad_indexes(void)
     size_t j;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1.0;
@@ -2030,7 +2032,7 @@ test_simplest_bad_migrations(void)
     tsk_tbl_collection_t tables;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
@@ -2114,7 +2116,7 @@ test_simplest_migration_simplify(void)
     int ret;
     tsk_id_t samples[] = {0, 1};
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
@@ -2155,7 +2157,7 @@ test_simplest_overlapping_parents(void)
     int ret;
     int load_flags = TSK_BUILD_INDEXES;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1;
@@ -2204,7 +2206,7 @@ test_simplest_contradictory_children(void)
     int ret;
     int load_flags = TSK_BUILD_INDEXES;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     parse_nodes(nodes, tables.nodes);
@@ -2241,7 +2243,7 @@ test_simplest_overlapping_edges_simplify(void)
     tsk_tbl_collection_t tables;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 3;
@@ -2291,7 +2293,7 @@ test_simplest_overlapping_unary_edges_simplify(void)
     tsk_tbl_collection_t tables;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 3;
@@ -2336,7 +2338,7 @@ test_simplest_overlapping_unary_edges_internal_samples_simplify(void)
     tsk_tbl_collection_t tables;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 3;
@@ -2387,7 +2389,7 @@ test_simplest_reduce_site_topology(void)
     tsk_tbl_collection_t tables;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 2;
@@ -2423,7 +2425,7 @@ test_simplest_population_filter(void)
     tsk_id_t samples[] = {0, 1};
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1;
@@ -2462,7 +2464,7 @@ test_simplest_individual_filter(void)
     tsk_id_t samples[] = {0, 1};
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1;
@@ -2551,7 +2553,7 @@ test_single_tree_bad_records(void)
     tsk_tbl_collection_t tables;
     int load_flags = TSK_BUILD_INDEXES;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1;
@@ -2660,7 +2662,7 @@ test_single_tree_bad_mutations(void)
     tsk_tbl_collection_t tables;
     int load_flags = TSK_BUILD_INDEXES;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1;
@@ -3071,7 +3073,9 @@ test_single_tree_simplify(void)
     tsk_treeseq_from_text(&ts, 1, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             single_tree_ex_sites, single_tree_ex_mutations, NULL, NULL);
     verify_simplify(&ts);
-    ret = tsk_treeseq_dump_tables(&ts, &tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tsk_tbl_collection_simplify(&tables, samples, 2, 0, NULL);
@@ -3135,7 +3139,7 @@ test_single_tree_compute_mutation_parents(void)
     tsk_treeseq_t ts;
     tsk_tbl_collection_t tables;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 1;
@@ -3440,7 +3444,7 @@ test_tsk_treeseq_bad_records(void)
     };
     int load_flags = TSK_BUILD_INDEXES;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 10;
@@ -3806,9 +3810,9 @@ test_deduplicate_sites(void)
         "11     0   4\n";
     tsk_tbl_collection_t tidy, messy;
 
-    ret = tsk_tbl_collection_alloc(&tidy, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tidy, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_tbl_collection_alloc(&messy, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&messy, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     messy.sequence_length = 10;
@@ -3850,7 +3854,7 @@ test_deduplicate_sites_errors(void)
     int ret;
     tsk_tbl_collection_t tables;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 10;
@@ -3925,7 +3929,7 @@ test_deduplicate_sites_multichar(void)
     int ret;
     tsk_tbl_collection_t tables;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     tables.sequence_length = 10;
@@ -3965,7 +3969,7 @@ test_empty_tree_sequence(void)
     tsk_id_t v;
     int ret;
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_treeseq_load_tables(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_BAD_SEQUENCE_LENGTH);

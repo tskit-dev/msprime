@@ -59,7 +59,7 @@
      TSK_CHECK_SITE_DUPLICATES | TSK_CHECK_MUTATION_ORDERING | TSK_CHECK_INDEXES)
 
 /* Flags for dump tables */
-#define TSK_ALLOC_TABLES 1
+/* #define TSK_ALLOC_TABLES 1 */
 
 /* Flags for load tables */
 #define TSK_BUILD_INDEXES 1

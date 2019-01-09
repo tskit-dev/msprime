@@ -1540,7 +1540,7 @@ LightweightTableCollection_init(LightweightTableCollection *self, PyObject *args
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
+    err = tsk_tbl_collection_alloc(self->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;

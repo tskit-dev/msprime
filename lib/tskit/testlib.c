@@ -487,7 +487,7 @@ tsk_treeseq_from_text(tsk_treeseq_t *ts, double sequence_length,
     /* Not supporting provenance here for now */
     CU_ASSERT_FATAL(provenance == NULL);
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = sequence_length;
     parse_nodes(nodes, tables.nodes);

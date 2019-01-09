@@ -398,7 +398,7 @@ test_single_tree_vargen_many_alleles(void)
 
     tsk_treeseq_from_text(&ts, 1, single_tree_ex_nodes, single_tree_ex_edges, NULL,
             NULL, NULL, NULL, NULL);
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_FATAL(ret == 0);
     ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
     CU_ASSERT_FATAL(ret == 0);
