@@ -318,11 +318,18 @@ out:
     return ret;
 }
 
-/* TODO add a flag that allows us to use the tables directly without
- * making a copy */
+/* TODO we need flags to be able to control how the input table is used.
+ * - The default behaviour is to take a copy. TSK_BUILD_INDEXES is allowed
+ *   in this case because we have an independent copy.
+ * - Need an option to take 'ownership' of the tables so that we keep the
+ *   tables and free them at the end of the treeseq's lifetime. This will be
+ *   used in tsk_treeseq_load below, where we can take advantage of the read-only
+ *   access directly into the store's memory and avoid copying the tree sequence.
+ * - We should also allow a read-only "borrowed reference" where we use the
+ *   tables directly, but don't free it at the end.
+ */
 int TSK_WARN_UNUSED
-tsk_treeseq_load_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables,
-        int flags)
+tsk_treeseq_alloc(tsk_treeseq_t *self, tsk_tbl_collection_t *tables, int flags)
 {
     int ret = 0;
 
@@ -344,8 +351,6 @@ tsk_treeseq_load_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables,
     if (ret != 0) {
         goto out;
     }
-    /* TODO This should be removed: the tables should be read only. We'll
-     * raise an error if the tables aren't indexed. */
     if (!!(flags & TSK_BUILD_INDEXES)) {
         ret = tsk_tbl_collection_build_indexes(self->tables, 0);
         if (ret != 0) {
@@ -394,37 +399,27 @@ out:
     return ret;
 }
 
-/* TODO Rename to copy_tables? */
 int TSK_WARN_UNUSED
-tsk_treeseq_dump_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables,
-        int TSK_UNUSED(flags))
+tsk_treeseq_copy_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables)
 {
-    int ret = 0;
-
-    if (tables == NULL) {
-        ret = TSK_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    ret = tsk_tbl_collection_copy(self->tables, tables);
-out:
-    return ret;
+    return tsk_tbl_collection_copy(self->tables, tables);
 }
 
 int TSK_WARN_UNUSED
-tsk_treeseq_load(tsk_treeseq_t *self, const char *filename, int flags)
+tsk_treeseq_load(tsk_treeseq_t *self, const char *filename, int TSK_UNUSED(flags))
 {
     int ret = 0;
     tsk_tbl_collection_t tables;
-    /* TODO the implementation is wasteful here, as we don't need to allocate
-     * a new table here but could load directly into the main table instead.
-     * This avoids a copy in tsk_treeseq_load. However, we'd need to break
-     * up the functionality in load_tables above a little bit */
 
-    ret = tsk_tbl_collection_load(&tables, filename, flags);
+    ret = tsk_tbl_collection_load(&tables, filename, 0);
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_treeseq_load_tables(self, &tables, 0);
+    /* TODO the implementation is wasteful here, as we don't need to allocate
+     * a new table here but could load directly into the main table instead.
+     * See notes on the owned reference for treeseq_alloc above.
+     */
+    ret = tsk_treeseq_alloc(self, &tables, 0);
     if (ret != 0) {
         goto out;
     }
@@ -1019,7 +1014,7 @@ tsk_treeseq_simplify(tsk_treeseq_t *self, tsk_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_treeseq_dump_tables(self, &tables, 0);
+    ret = tsk_treeseq_copy_tables(self, &tables);
     if (ret != 0) {
         goto out;
     }
@@ -1027,7 +1022,7 @@ tsk_treeseq_simplify(tsk_treeseq_t *self, tsk_id_t *samples, size_t num_samples,
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_treeseq_load_tables(output, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_alloc(output, &tables, TSK_BUILD_INDEXES);
 out:
     tsk_tbl_collection_free(&tables);
     return ret;

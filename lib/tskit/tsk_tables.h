@@ -434,15 +434,20 @@ void tsk_provenance_tbl_print_state(tsk_provenance_tbl_t *self, FILE *out);
 bool tsk_provenance_tbl_equals(tsk_provenance_tbl_t *self, tsk_provenance_tbl_t *other);
 int tsk_provenance_tbl_get_row(tsk_provenance_tbl_t *self, size_t index, tsk_provenance_t *row);
 
+/****************************************************************************/
+/* Table collection .*/
+/****************************************************************************/
+
 int tsk_tbl_collection_alloc(tsk_tbl_collection_t *self, int flags);
 int tsk_tbl_collection_load(tsk_tbl_collection_t *self, const char *filename, int flags);
+int tsk_tbl_collection_dump(tsk_tbl_collection_t *tables, const char *filename, int flags);
+int tsk_tbl_collection_copy(tsk_tbl_collection_t *self, tsk_tbl_collection_t *dest);
 int tsk_tbl_collection_print_state(tsk_tbl_collection_t *self, FILE *out);
+int tsk_tbl_collection_free(tsk_tbl_collection_t *self);
+
 bool tsk_tbl_collection_is_indexed(tsk_tbl_collection_t *self);
 int tsk_tbl_collection_drop_indexes(tsk_tbl_collection_t *self);
 int tsk_tbl_collection_build_indexes(tsk_tbl_collection_t *self, int flags);
-int tsk_tbl_collection_dump(tsk_tbl_collection_t *tables, const char *filename, int flags);
-int tsk_tbl_collection_copy(tsk_tbl_collection_t *self, tsk_tbl_collection_t *dest);
-int tsk_tbl_collection_free(tsk_tbl_collection_t *self);
 int tsk_tbl_collection_simplify(tsk_tbl_collection_t *self,
         tsk_id_t *samples, size_t num_samples, int flags, tsk_id_t *node_map);
 int tsk_tbl_collection_sort(tsk_tbl_collection_t *self, size_t edge_start, int flags);
@@ -456,9 +461,7 @@ int tsk_tbl_collection_reset_position(tsk_tbl_collection_t *self,
 int tsk_tbl_collection_clear(tsk_tbl_collection_t *self);
 int tsk_tbl_collection_check_integrity(tsk_tbl_collection_t *self, int flags);
 
-
-int TSK_WARN_UNUSED
-tsk_squash_edges(tsk_edge_t *edges, size_t num_edges, size_t *num_output_edges);
+int tsk_squash_edges(tsk_edge_t *edges, size_t num_edges, size_t *num_output_edges);
 
 #ifdef __cplusplus
 }

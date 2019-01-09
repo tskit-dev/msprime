@@ -400,7 +400,7 @@ test_single_tree_vargen_many_alleles(void)
             NULL, NULL, NULL, NULL);
     ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_FATAL(ret == 0);
-    ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
+    ret = tsk_treeseq_copy_tables(&ts, &tables);
     CU_ASSERT_FATAL(ret == 0);
     tsk_treeseq_free(&ts);
     memset(alleles, 'X', (size_t) num_alleles);
@@ -413,7 +413,7 @@ test_single_tree_vargen_many_alleles(void)
         ret = tsk_mutation_tbl_add_row(tables.mutations, 0, 0, j - 1, alleles,
                 (tsk_tbl_size_t) j, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
-        ret = tsk_treeseq_load_tables(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_alloc(&ts, &tables, TSK_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         for (l = 0; l < 2; l++) {
             flags = 0;

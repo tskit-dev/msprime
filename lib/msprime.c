@@ -411,7 +411,7 @@ msp_alloc(msp_t *self,
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        ret = tsk_treeseq_load_tables(self->from_ts, self->tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_alloc(self->from_ts, self->tables, TSK_BUILD_INDEXES);
         if (ret != 0) {
             ret = msp_set_tsk_error(ret);
             goto out;

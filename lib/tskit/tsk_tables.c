@@ -5303,6 +5303,10 @@ tsk_tbl_collection_copy(tsk_tbl_collection_t *self, tsk_tbl_collection_t *dest)
     int ret = 0;
     size_t index_size;
 
+    if (dest == NULL) {
+        ret = TSK_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     ret = tsk_node_tbl_copy(self->nodes, dest->nodes);
     if (ret != 0) {
         goto out;

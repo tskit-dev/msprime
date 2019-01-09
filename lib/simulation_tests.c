@@ -1003,7 +1003,7 @@ test_mixed_model_simulation(void)
     /* TODO remove this when populate tables takes table_collection as arg */
     tables.sequence_length = msp->num_loci;
     CU_ASSERT_EQUAL_FATAL(tables.sequence_length, msp->num_loci);
-    ret = tsk_treeseq_load_tables(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_alloc(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_treeseq_print_state(&ts, _devnull);
     tsk_treeseq_free(&ts);
@@ -1392,7 +1392,7 @@ test_simulation_replicates(void)
         ret = mutgen_generate(&mutgen, &tables, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         tables.sequence_length = m;
-        ret = tsk_treeseq_load_tables(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_alloc(&ts, &tables, TSK_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_simulator_tsk_treeseq_equality(&msp, &ts, &mutgen, 1.0);
         tsk_treeseq_print_state(&ts, _devnull);
@@ -1973,7 +1973,7 @@ verify_simulate_from(int model, recomb_map_t *recomb_map,
         CU_ASSERT_TRUE(msp_is_completed(&msp));
         ret = msp_finalise_tables(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tsk_treeseq_load_tables(&final, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_alloc(&final, &tables, TSK_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         ret = tsk_tree_alloc(&tree, &final, 0);

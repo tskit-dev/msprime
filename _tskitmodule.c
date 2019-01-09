@@ -5689,7 +5689,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (err != 0) {
         goto out;
     }
-    err = tsk_treeseq_load_tables(self->tree_sequence, tables->tables, flags);
+    err = tsk_treeseq_alloc(self->tree_sequence, tables->tables, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5714,7 +5714,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    err = tsk_treeseq_dump_tables(self->tree_sequence, tables->tables, 0);
+    err = tsk_treeseq_copy_tables(self->tree_sequence, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;

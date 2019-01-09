@@ -1795,7 +1795,7 @@ test_simplify_tables_drops_indexes(void)
             NULL, NULL, NULL, NULL, NULL);
     ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
+    ret = tsk_treeseq_copy_tables(&ts, &tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_TRUE(tsk_tbl_collection_is_indexed(&tables))
@@ -1818,7 +1818,7 @@ test_sort_tables_drops_indexes(void)
             NULL, NULL, NULL, NULL, NULL);
     ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_treeseq_dump_tables(&ts, &tables, 0);
+    ret = tsk_treeseq_copy_tables(&ts, &tables);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_TRUE(tsk_tbl_collection_is_indexed(&tables))
