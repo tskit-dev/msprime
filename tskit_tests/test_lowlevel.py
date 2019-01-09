@@ -59,7 +59,7 @@ class LowLevelTestCase(unittest.TestCase):
     """
     Superclass of tests for the low-level interface.
     """
-    def verify_sparse_tree_dict(self, n, pi):
+    def verify_tree_dict(self, n, pi):
         """
         Verifies that the specified sparse tree in dict format is a
         consistent coalescent history for a sample of size n.
@@ -376,24 +376,24 @@ class TestTreeDiffIterator(LowLevelTestCase):
         self.verify_iterator(_tskit.TreeDiffIterator(ts))
 
 
-class TestSparseTreeIterator(LowLevelTestCase):
+class TestTreeIterator(LowLevelTestCase):
     """
     Tests for the low-level sparse tree iterator.
     """
     def test_uninitialised_tree_sequence(self):
         ts = _tskit.TreeSequence()
-        self.assertRaises(ValueError, _tskit.SparseTree, ts)
+        self.assertRaises(ValueError, _tskit.Tree, ts)
 
     def test_constructor(self):
-        self.assertRaises(TypeError, _tskit.SparseTreeIterator)
-        self.assertRaises(TypeError, _tskit.SparseTreeIterator, None)
+        self.assertRaises(TypeError, _tskit.TreeIterator)
+        self.assertRaises(TypeError, _tskit.TreeIterator, None)
         ts = _tskit.TreeSequence()
-        self.assertRaises(TypeError, _tskit.SparseTreeIterator, ts)
+        self.assertRaises(TypeError, _tskit.TreeIterator, ts)
         ts = self.get_example_tree_sequence()
-        tree = _tskit.SparseTree(ts)
+        tree = _tskit.Tree(ts)
         n_before = 0
         parents_before = []
-        for t in _tskit.SparseTreeIterator(tree):
+        for t in _tskit.TreeIterator(tree):
             n_before += 1
             self.assertIs(t, tree)
             pi = {}
@@ -402,14 +402,14 @@ class TestSparseTreeIterator(LowLevelTestCase):
             parents_before.append(pi)
         self.assertEqual(n_before, len(list(_tskit.TreeDiffIterator(ts))))
         # If we remove the objects, we should get the same results.
-        iterator = _tskit.SparseTreeIterator(tree)
+        iterator = _tskit.TreeIterator(tree)
         del tree
         del ts
         n_after = 0
         parents_after = []
         for index, t in enumerate(iterator):
             n_after += 1
-            self.assertIsInstance(t, _tskit.SparseTree)
+            self.assertIsInstance(t, _tskit.Tree)
             pi = {}
             for j in range(t.get_num_nodes()):
                 pi[j] = t.get_parent(j)
@@ -419,18 +419,18 @@ class TestSparseTreeIterator(LowLevelTestCase):
 
     def test_iterator(self):
         ts = self.get_example_tree_sequence()
-        tree = _tskit.SparseTree(ts)
-        self.verify_iterator(_tskit.SparseTreeIterator(tree))
+        tree = _tskit.Tree(ts)
+        self.verify_iterator(_tskit.TreeIterator(tree))
 
 
-class TestSparseTree(LowLevelTestCase):
+class TestTree(LowLevelTestCase):
     """
     Tests on the low-level sparse tree interface.
     """
 
     def test_flags(self):
         ts = self.get_example_tree_sequence()
-        st = _tskit.SparseTree(ts)
+        st = _tskit.Tree(ts)
         self.assertEqual(st.get_flags(), 0)
         # We should still be able to count the samples, just inefficiently.
         self.assertEqual(st.get_num_samples(0), 1)
@@ -439,7 +439,7 @@ class TestSparseTree(LowLevelTestCase):
             0, _tskit.SAMPLE_COUNTS, _tskit.SAMPLE_LISTS,
             _tskit.SAMPLE_COUNTS | _tskit.SAMPLE_LISTS]
         for flags in all_flags:
-            st = _tskit.SparseTree(ts, flags=flags)
+            st = _tskit.Tree(ts, flags=flags)
             self.assertEqual(st.get_flags(), flags)
             self.assertEqual(st.get_num_samples(0), 1)
             if flags & _tskit.SAMPLE_COUNTS:
@@ -456,12 +456,12 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_sites(self):
         for ts in self.get_example_tree_sequences():
-            st = _tskit.SparseTree(ts)
+            st = _tskit.Tree(ts)
             all_sites = [ts.get_site(j) for j in range(ts.get_num_sites())]
             all_tree_sites = []
             j = 0
             mutation_id = 0
-            for st in _tskit.SparseTreeIterator(st):
+            for st in _tskit.TreeIterator(st):
                 tree_sites = st.get_sites()
                 self.assertEqual(st.get_num_sites(), len(tree_sites))
                 all_tree_sites.extend(tree_sites)
@@ -481,19 +481,19 @@ class TestSparseTree(LowLevelTestCase):
             self.assertEqual(all_tree_sites, all_sites)
 
     def test_constructor(self):
-        self.assertRaises(TypeError, _tskit.SparseTree)
+        self.assertRaises(TypeError, _tskit.Tree)
         for bad_type in ["", {}, [], None, 0]:
             self.assertRaises(
-                TypeError, _tskit.SparseTree, bad_type)
+                TypeError, _tskit.Tree, bad_type)
         ts = self.get_example_tree_sequence()
         for bad_type in ["", {}, True, 1, None]:
             self.assertRaises(
-                TypeError, _tskit.SparseTree, ts, tracked_samples=bad_type)
+                TypeError, _tskit.Tree, ts, tracked_samples=bad_type)
         for bad_type in ["", {}, None, []]:
             self.assertRaises(
-                TypeError, _tskit.SparseTree, ts, flags=bad_type)
+                TypeError, _tskit.Tree, ts, flags=bad_type)
         for ts in self.get_example_tree_sequences():
-            st = _tskit.SparseTree(ts)
+            st = _tskit.Tree(ts)
             self.assertEqual(st.get_num_nodes(), ts.get_num_nodes())
             # An uninitialised sparse tree should always be zero.
             self.assertEqual(st.get_left_root(), 0)
@@ -510,10 +510,10 @@ class TestSparseTree(LowLevelTestCase):
         # sparse tree was getting corrupted.
         for ts in self.get_example_tree_sequences():
             num_nodes = ts.get_num_nodes()
-            st = _tskit.SparseTree(ts)
+            st = _tskit.Tree(ts)
             # deleting the tree sequence should still give a well formed
             # sparse tree.
-            st_iter = _tskit.SparseTreeIterator(st)
+            st_iter = _tskit.TreeIterator(st)
             next(st_iter)
             del ts
             del st_iter
@@ -529,26 +529,26 @@ class TestSparseTree(LowLevelTestCase):
         flags = _tskit.SAMPLE_COUNTS
         for bad_type in ["", {}, [], None]:
             self.assertRaises(
-                TypeError, _tskit.SparseTree, ts, flags=flags,
+                TypeError, _tskit.Tree, ts, flags=flags,
                 tracked_samples=[bad_type])
             self.assertRaises(
-                TypeError, _tskit.SparseTree, ts, flags=flags,
+                TypeError, _tskit.Tree, ts, flags=flags,
                 tracked_samples=[1, bad_type])
         for bad_sample in [10**6, -1e6]:
             self.assertRaises(
-                ValueError, _tskit.SparseTree, ts, flags=flags,
+                ValueError, _tskit.Tree, ts, flags=flags,
                 tracked_samples=[bad_sample])
             self.assertRaises(
-                ValueError, _tskit.SparseTree, ts, flags=flags,
+                ValueError, _tskit.Tree, ts, flags=flags,
                 tracked_samples=[1, bad_sample])
             self.assertRaises(
-                ValueError, _tskit.SparseTree, ts,
+                ValueError, _tskit.Tree, ts,
                 tracked_samples=[1, bad_sample, 1])
 
     def test_count_all_samples(self):
         for ts in self.get_example_tree_sequences():
             self.verify_iterator(_tskit.TreeDiffIterator(ts))
-            st = _tskit.SparseTree(ts, flags=_tskit.SAMPLE_COUNTS)
+            st = _tskit.Tree(ts, flags=_tskit.SAMPLE_COUNTS)
             # Without initialisation we should be 0 samples for every node
             # that is not a sample.
             for j in range(st.get_num_nodes()):
@@ -556,7 +556,7 @@ class TestSparseTree(LowLevelTestCase):
                 self.assertEqual(st.get_num_samples(j), count)
                 self.assertEqual(st.get_num_tracked_samples(j), 0)
             # Now, try this for a tree sequence.
-            for st in _tskit.SparseTreeIterator(st):
+            for st in _tskit.TreeIterator(st):
                 nu = get_sample_counts(ts, st)
                 nu_prime = [
                     st.get_num_samples(j) for j in
@@ -572,8 +572,8 @@ class TestSparseTree(LowLevelTestCase):
         # Ensure that there are some non-binary nodes.
         non_binary = False
         for ts in self.get_example_tree_sequences():
-            st = _tskit.SparseTree(ts)
-            for st in _tskit.SparseTreeIterator(st):
+            st = _tskit.Tree(ts)
+            for st in _tskit.TreeIterator(st):
                 for u in range(ts.get_num_nodes()):
                     if len(st.get_children(u)) > 1:
                         non_binary = True
@@ -584,9 +584,9 @@ class TestSparseTree(LowLevelTestCase):
             for subset in map(list, powerset):
                 # Ordering shouldn't make any different.
                 random.shuffle(subset)
-                st = _tskit.SparseTree(
+                st = _tskit.Tree(
                     ts, flags=_tskit.SAMPLE_COUNTS, tracked_samples=subset)
-                for st in _tskit.SparseTreeIterator(st):
+                for st in _tskit.TreeIterator(st):
                     nu = get_tracked_sample_counts(st, subset)
                     nu_prime = [
                         st.get_num_tracked_samples(j) for j in
@@ -597,7 +597,7 @@ class TestSparseTree(LowLevelTestCase):
             for j in range(2, 20):
                 tracked_samples = [sample for _ in range(j)]
                 self.assertRaises(
-                    _tskit.LibraryError, _tskit.SparseTree,
+                    _tskit.LibraryError, _tskit.Tree,
                     ts, flags=_tskit.SAMPLE_COUNTS,
                     tracked_samples=tracked_samples)
         self.assertTrue(non_binary)
@@ -605,7 +605,7 @@ class TestSparseTree(LowLevelTestCase):
     def test_bounds_checking(self):
         for ts in self.get_example_tree_sequences():
             n = ts.get_num_nodes()
-            st = _tskit.SparseTree(
+            st = _tskit.Tree(
                 ts, flags=_tskit.SAMPLE_COUNTS | _tskit.SAMPLE_LISTS)
             for v in [-100, -1, n + 1, n + 100, n * 100]:
                 self.assertRaises(ValueError, st.get_parent, v)
@@ -620,7 +620,7 @@ class TestSparseTree(LowLevelTestCase):
     def test_mrca_interface(self):
         for ts in self.get_example_tree_sequences():
             num_nodes = ts.get_num_nodes()
-            st = _tskit.SparseTree(ts)
+            st = _tskit.Tree(ts)
             for v in [num_nodes, 10**6, NULL_NODE]:
                 self.assertRaises(ValueError, st.get_mrca, v, v)
                 self.assertRaises(ValueError, st.get_mrca, v, 1)
@@ -648,8 +648,8 @@ class TestSparseTree(LowLevelTestCase):
             return ret
 
         ts = self.get_example_tree_sequence()
-        st = _tskit.SparseTree(ts)
-        for st in _tskit.SparseTreeIterator(st):
+        st = _tskit.Tree(ts)
+        for st in _tskit.TreeIterator(st):
             self.assertRaises(ValueError, st.get_newick, root=0, precision=-1)
             self.assertRaises(ValueError, st.get_newick, root=0, precision=17)
             self.assertRaises(ValueError, st.get_newick, root=0, precision=100)
@@ -668,20 +668,20 @@ class TestSparseTree(LowLevelTestCase):
     @unittest.skip("Correct initialisation for sparse tree.")
     def test_newick_interface(self):
         ts = self.get_tree_sequence(num_loci=10, num_samples=10)
-        st = _tskit.SparseTree(ts)
+        st = _tskit.Tree(ts)
         # TODO this will break when we correctly handle multiple roots.
         self.assertEqual(st.get_newick(), b"1;")
         for bad_type in [None, "", [], {}]:
             self.assertRaises(TypeError, st.get_newick, precision=bad_type)
             self.assertRaises(TypeError, st.get_newick, ts, time_scale=bad_type)
-        for st in _tskit.SparseTreeIterator(st):
+        for st in _tskit.TreeIterator(st):
             newick = st.get_newick()
             self.assertTrue(newick.endswith(b";"))
 
     def test_index(self):
         for ts in self.get_example_tree_sequences():
-            st = _tskit.SparseTree(ts)
-            for index, st in enumerate(_tskit.SparseTreeIterator(st)):
+            st = _tskit.Tree(ts)
+            for index, st in enumerate(_tskit.TreeIterator(st)):
                 self.assertEqual(index, st.get_index())
 
     def test_bad_mutations(self):
@@ -725,7 +725,7 @@ class TestSparseTree(LowLevelTestCase):
 
     def test_free(self):
         ts = self.get_example_tree_sequence()
-        t = _tskit.SparseTree(
+        t = _tskit.Tree(
             ts, flags=_tskit.SAMPLE_COUNTS | _tskit.SAMPLE_LISTS)
         no_arg_methods = [
             t.get_left_root, t.get_index, t.get_left, t.get_right,
@@ -753,8 +753,8 @@ class TestSparseTree(LowLevelTestCase):
         flags = _tskit.SAMPLE_COUNTS | _tskit.SAMPLE_LISTS
         # Note: we're assuming that samples are 0-n here.
         for ts in self.get_example_tree_sequences():
-            st = _tskit.SparseTree(ts, flags=flags)
-            for t in _tskit.SparseTreeIterator(st):
+            st = _tskit.Tree(ts, flags=flags)
+            for t in _tskit.TreeIterator(st):
                 # All sample nodes should have themselves.
                 for j in range(ts.get_num_samples()):
                     self.assertEqual(t.get_left_sample(j), j)

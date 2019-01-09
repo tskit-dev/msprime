@@ -35,7 +35,8 @@ NULL_MUTATION = -1
 from tskit import (
     Individual, Node, Edge, Site, Mutation, Migration, Population,
     Variant, Edgeset, Provenance)
-from tskit import SparseTree, TreeSequence
+from tskit import Tree as SparseTree  # Rename SparseTree to Tree in tskit
+from tskit import TreeSequence
 from tskit import (
     IndividualTable, NodeTable, EdgeTable, SiteTable, MutationTable,
     MigrationTable, PopulationTable, ProvenanceTable, TableCollection)

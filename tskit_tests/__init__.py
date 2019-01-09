@@ -11,9 +11,9 @@ from .simplify import *  # NOQA
 import tskit
 
 
-class PythonSparseTree(object):
+class PythonTree(object):
     """
-    Presents the same interface as the SparseTree object for testing. This
+    Presents the same interface as the Tree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
     the internal structures during iteration.
     """
@@ -35,20 +35,20 @@ class PythonSparseTree(object):
         self.site_list = []
 
     @classmethod
-    def from_sparse_tree(cls, sparse_tree):
-        ret = PythonSparseTree(sparse_tree.num_nodes)
-        ret.left, ret.right = sparse_tree.get_interval()
-        ret.site_list = list(sparse_tree.sites())
-        ret.index = sparse_tree.get_index()
-        ret.left_root = sparse_tree.left_root
-        ret.sparse_tree = sparse_tree
+    def from_tree(cls, tree):
+        ret = PythonTree(tree.num_nodes)
+        ret.left, ret.right = tree.get_interval()
+        ret.site_list = list(tree.sites())
+        ret.index = tree.get_index()
+        ret.left_root = tree.left_root
+        ret.tree = tree
         for u in range(ret.num_nodes):
-            ret.parent[u] = sparse_tree.parent(u)
-            ret.left_child[u] = sparse_tree.left_child(u)
-            ret.right_child[u] = sparse_tree.right_child(u)
-            ret.left_sib[u] = sparse_tree.left_sib(u)
-            ret.right_sib[u] = sparse_tree.right_sib(u)
-        assert ret == sparse_tree
+            ret.parent[u] = tree.parent(u)
+            ret.left_child[u] = tree.left_child(u)
+            ret.right_child[u] = tree.right_child(u)
+            ret.left_sib[u] = tree.left_sib(u)
+            ret.right_sib[u] = tree.right_sib(u)
+        assert ret == tree
         return ret
 
     @property
@@ -151,7 +151,7 @@ class PythonSparseTree(object):
 
     def newick(self, root=None, precision=16, node_labels=None):
         if node_labels is None:
-            node_labels = {u: str(u + 1) for u in self.sparse_tree.leaves()}
+            node_labels = {u: str(u + 1) for u in self.tree.leaves()}
         if root is None:
             root = self.left_root
         return self._build_newick(root, precision, node_labels) + ";"
@@ -163,7 +163,7 @@ class PythonSparseTree(object):
         else:
             s = "("
             for child in self.children(node):
-                branch_length = self.sparse_tree.branch_length(child)
+                branch_length = self.tree.branch_length(child)
                 subtree = self._build_newick(child, precision, node_labels)
                 s += subtree + ":{0:.{1}f},".format(branch_length, precision)
             s = s[:-1] + label + ")"
@@ -240,7 +240,7 @@ class PythonTreeSequence(object):
         j = 0
         k = 0
         N = self._tree_sequence.get_num_nodes()
-        st = PythonSparseTree(N)
+        st = PythonTree(N)
 
         samples = list(self._tree_sequence.get_samples())
         for l in range(len(samples)):

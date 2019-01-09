@@ -357,7 +357,7 @@ class HighLevelTestCase(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def verify_sparse_tree_mrcas(self, st):
+    def verify_tree_mrcas(self, st):
         # Check the mrcas
         oriented_forest = [st.get_parent(j) for j in range(st.num_nodes)]
         mrca_calc = tests.MRCACalculator(oriented_forest)
@@ -369,7 +369,7 @@ class HighLevelTestCase(unittest.TestCase):
             if mrca != tskit.NULL_NODE:
                 self.assertEqual(st.get_time(mrca), st.get_tmrca(0, j))
 
-    def verify_sparse_tree_branch_lengths(self, st):
+    def verify_tree_branch_lengths(self, st):
         for j in range(st.get_sample_size()):
             u = j
             while st.get_parent(u) != tskit.NULL_NODE:
@@ -378,7 +378,7 @@ class HighLevelTestCase(unittest.TestCase):
                 self.assertEqual(st.get_branch_length(u), length)
                 u = st.get_parent(u)
 
-    def verify_sparse_tree_structure(self, st):
+    def verify_tree_structure(self, st):
         roots = set()
         for u in st.samples():
             # verify the path to root
@@ -428,12 +428,12 @@ class HighLevelTestCase(unittest.TestCase):
         self.assertEqual(st.num_samples(), len(samples))
         self.assertEqual(sorted(st.samples()), sorted(samples))
 
-    def verify_sparse_tree(self, st):
-        self.verify_sparse_tree_mrcas(st)
-        self.verify_sparse_tree_branch_lengths(st)
-        self.verify_sparse_tree_structure(st)
+    def verify_tree(self, st):
+        self.verify_tree_mrcas(st)
+        self.verify_tree_branch_lengths(st)
+        self.verify_tree_structure(st)
 
-    def verify_sparse_trees(self, ts):
+    def verify_trees(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         iter1 = ts.trees()
         iter2 = pts.trees()
@@ -463,7 +463,7 @@ class HighLevelTestCase(unittest.TestCase):
             self.assertGreater(r, l)
             self.assertLessEqual(r, ts.get_sequence_length())
             length += r - l
-            self.verify_sparse_tree(st1)
+            self.verify_tree(st1)
             num_trees += 1
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
@@ -906,9 +906,9 @@ class TestTreeSequence(HighLevelTestCase):
     Tests for the tree sequence object.
     """
 
-    def test_sparse_trees(self):
+    def test_trees(self):
         for ts in get_example_tree_sequences():
-            self.verify_sparse_trees(ts)
+            self.verify_trees(ts)
 
     def test_mutations(self):
         for ts in get_example_tree_sequences():
@@ -1730,7 +1730,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(ts.num_edges, 0)
 
 
-class TestSparseTree(HighLevelTestCase):
+class TestTree(HighLevelTestCase):
     """
     Some simple tests on the API for the sparse tree.
     """
@@ -1808,7 +1808,7 @@ class TestSparseTree(HighLevelTestCase):
         # times because Python and C float printing algorithms work slightly
         # differently. Seems to work OK now, so leaving alone.
         if tree.num_roots == 1:
-            py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+            py_tree = tests.PythonTree.from_tree(tree)
             newick1 = tree.newick(precision=16)
             newick2 = py_tree.newick()
             self.assertEqual(newick1, newick2)
@@ -1827,7 +1827,7 @@ class TestSparseTree(HighLevelTestCase):
         else:
             self.assertRaises(ValueError, tree.newick)
             for root in tree.roots:
-                py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+                py_tree = tests.PythonTree.from_tree(tree)
                 newick1 = tree.newick(precision=16, root=root)
                 newick2 = py_tree.newick(root=root)
                 self.assertEqual(newick1, newick2)
@@ -1844,7 +1844,7 @@ class TestSparseTree(HighLevelTestCase):
 
     def verify_traversals(self, tree):
         t1 = tree
-        t2 = tests.PythonSparseTree.from_sparse_tree(t1)
+        t2 = tests.PythonTree.from_tree(t1)
         self.assertEqual(list(t1.nodes()), list(t2.nodes()))
         orders = ["inorder", "postorder", "levelorder", "breadthfirst"]
         if tree.num_roots == 1:
