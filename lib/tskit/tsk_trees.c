@@ -162,7 +162,7 @@ tsk_treeseq_init_individuals(tsk_treeseq_t *self)
 
     for (node = 0; node < (tsk_id_t) num_nodes; node++) {
         ind = node_individual[node];
-        if (ind != TSK_NULL_INDIVIDUAL) {
+        if (ind != TSK_NULL) {
             self->individual_nodes_length[ind]++;
             total_node_refs++;
         }
@@ -182,7 +182,7 @@ tsk_treeseq_init_individuals(tsk_treeseq_t *self)
     }
     for (node = 0; node < (tsk_id_t) num_nodes; node++) {
         ind = node_individual[node];
-        if (ind != TSK_NULL_INDIVIDUAL) {
+        if (ind != TSK_NULL) {
             node_array = self->individual_nodes[ind];
             assert(node_array - self->individual_nodes_mem
                     < total_node_refs - node_count[ind]);
@@ -641,7 +641,7 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
                 ret = TSK_ERR_NODE_OUT_OF_BOUNDS;
                 goto out;
             }
-            if (reference_set_map[u] != TSK_NULL_NODE) {
+            if (reference_set_map[u] != TSK_NULL) {
                 /* FIXME Technically inaccurate here: duplicate focal not sample */
                 ret = TSK_ERR_DUPLICATE_SAMPLE;
                 goto out;
@@ -671,9 +671,9 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
             tk++;
             u = edge_child[h];
             v = edge_parent[h];
-            parent[u] = TSK_NULL_NODE;
+            parent[u] = TSK_NULL;
             child_row = GET_2D_ROW(ref_count, K, u);
-            while (v != TSK_NULL_NODE) {
+            while (v != TSK_NULL) {
                 row = GET_2D_ROW(ref_count, K, v);
                 for (k = 0; k < K; k++) {
                     row[k] -= child_row[k];
@@ -688,7 +688,7 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
             v = edge_parent[h];
             parent[u] = v;
             child_row = GET_2D_ROW(ref_count, K, u);
-            while (v != TSK_NULL_NODE) {
+            while (v != TSK_NULL) {
                 row = GET_2D_ROW(ref_count, K, v);
                 for (k = 0; k < K; k++) {
                     row[k] += child_row[k];
@@ -709,7 +709,7 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
         for (j = 0; j < num_focal; j++) {
             u = focal[j];
             p = parent[u];
-            while (p != TSK_NULL_NODE) {
+            while (p != TSK_NULL) {
                 row = GET_2D_ROW(ref_count, K, p);
                 total = row[K - 1];
                 if (total > 1) {
@@ -717,7 +717,7 @@ tsk_treeseq_genealogical_nearest_neighbours(tsk_treeseq_t *self,
                 }
                 p = parent[p];
             }
-            if (p != TSK_NULL_NODE) {
+            if (p != TSK_NULL) {
                 length[j] += tree_length;
                 focal_reference_set = reference_set_map[u];
                 scale = tree_length / (total - (focal_reference_set != -1));
@@ -833,9 +833,9 @@ tsk_treeseq_mean_descendants(tsk_treeseq_t *self,
             tk++;
             u = edge_child[h];
             v = edge_parent[h];
-            parent[u] = TSK_NULL_NODE;
+            parent[u] = TSK_NULL;
             child_row = GET_2D_ROW(ref_count, K, u);
-            while (v != TSK_NULL_NODE) {
+            while (v != TSK_NULL) {
                 row = GET_2D_ROW(ref_count, K, v);
                 if (last_update[v] != left) {
                     if (row[K - 1] > 0) {
@@ -861,7 +861,7 @@ tsk_treeseq_mean_descendants(tsk_treeseq_t *self,
             v = edge_parent[h];
             parent[u] = v;
             child_row = GET_2D_ROW(ref_count, K, u);
-            while (v != TSK_NULL_NODE) {
+            while (v != TSK_NULL) {
                 row = GET_2D_ROW(ref_count, K, v);
                 if (last_update[v] != left) {
                     if (row[K - 1] > 0) {
@@ -1078,7 +1078,7 @@ tsk_tree_clear(tsk_tree_t *self)
         memset(self->next_sample, 0xff, num_samples * sizeof(tsk_id_t));
     }
     /* Set the sample attributes */
-    self->left_root = TSK_NULL_NODE;
+    self->left_root = TSK_NULL;
     if (num_samples > 0) {
         self->left_root = self->samples[0];
     }
@@ -1239,7 +1239,7 @@ tsk_tree_set_tracked_samples(tsk_tree_t *self, size_t num_tracked_samples,
             goto out;
         }
         /* Propagate this upwards */
-        while (u != TSK_NULL_NODE) {
+        while (u != TSK_NULL) {
             self->num_tracked_samples[u] += 1;
             u = self->parent[u];
         }
@@ -1270,13 +1270,13 @@ tsk_tree_set_tracked_samples_from_sample_list(tsk_tree_t *self,
     }
 
     index = other->left_sample[node];
-    if (index != TSK_NULL_NODE) {
+    if (index != TSK_NULL) {
         stop = other->right_sample[node];
         while (true) {
             u = samples[index];
             assert(self->num_tracked_samples[u] == 0);
             /* Propagate this upwards */
-            while (u != TSK_NULL_NODE) {
+            while (u != TSK_NULL) {
                 self->num_tracked_samples[u] += 1;
                 u = self->parent[u];
             }
@@ -1399,22 +1399,22 @@ tsk_tree_get_mrca(tsk_tree_t *self, tsk_id_t u, tsk_id_t v,
     }
     j = u;
     l1 = 0;
-    while (j != TSK_NULL_NODE) {
+    while (j != TSK_NULL) {
         assert(l1 < (int) self->num_nodes);
         s1[l1] = j;
         l1++;
         j = self->parent[j];
     }
-    s1[l1] = TSK_NULL_NODE;
+    s1[l1] = TSK_NULL;
     j = v;
     l2 = 0;
-    while (j != TSK_NULL_NODE) {
+    while (j != TSK_NULL) {
         assert(l2 < (int) self->num_nodes);
         s2[l2] = j;
         l2++;
         j = self->parent[j];
     }
-    s2[l2] = TSK_NULL_NODE;
+    s2[l2] = TSK_NULL;
     do {
         w = s1[l1];
         l1--;
@@ -1444,7 +1444,7 @@ tsk_tree_get_num_samples_by_traversal(tsk_tree_t *self, tsk_id_t u,
             count++;
         }
         v = self->left_child[v];
-        while (v != TSK_NULL_NODE) {
+        while (v != TSK_NULL) {
             stack_top++;
             stack[stack_top] = v;
             v = self->right_sib[v];
@@ -1504,7 +1504,7 @@ tsk_tree_get_num_roots(tsk_tree_t *self)
     size_t num_roots = 0;
     tsk_id_t u = self->left_root;
 
-    while (u != TSK_NULL_NODE) {
+    while (u != TSK_NULL) {
         u = self->right_sib[u];
         num_roots++;
     }
@@ -1562,30 +1562,30 @@ tsk_tree_check_state(tsk_tree_t *self)
 
     for (j = 0; j < self->tree_sequence->num_samples; j++) {
         u = self->samples[j];
-        while (self->parent[u] != TSK_NULL_NODE) {
+        while (self->parent[u] != TSK_NULL) {
             u = self->parent[u];
         }
         is_root[u] = true;
     }
     if (self->tree_sequence->num_samples == 0) {
-        assert(self->left_root == TSK_NULL_NODE);
+        assert(self->left_root == TSK_NULL);
     } else {
-        assert(self->left_sib[self->left_root] == TSK_NULL_NODE);
+        assert(self->left_sib[self->left_root] == TSK_NULL);
     }
     /* Iterate over the roots and make sure they are set */
-    for (u = self->left_root; u != TSK_NULL_NODE; u = self->right_sib[u]) {
+    for (u = self->left_root; u != TSK_NULL; u = self->right_sib[u]) {
         assert(is_root[u]);
         is_root[u] = false;
     }
     for (u = 0; u < (tsk_id_t) self->num_nodes; u++) {
         assert(!is_root[u]);
         c = 0;
-        for (v = self->left_child[u]; v != TSK_NULL_NODE; v = self->right_sib[v]) {
+        for (v = self->left_child[u]; v != TSK_NULL; v = self->right_sib[v]) {
             assert(self->parent[v] == u);
             children[c] = v;
             c++;
         }
-        for (v = self->right_child[u]; v != TSK_NULL_NODE; v = self->left_sib[v]) {
+        for (v = self->right_child[u]; v != TSK_NULL; v = self->left_sib[v]) {
             assert(c > 0);
             c--;
             assert(v == children[c]);
@@ -1679,7 +1679,7 @@ tsk_tree_propagate_sample_count_loss(tsk_tree_t *self, tsk_id_t parent,
 
     /* propagate this loss up as far as we can */
     v = parent;
-    while (v != TSK_NULL_NODE) {
+    while (v != TSK_NULL) {
         num_samples[v] -= all_samples_diff;
         num_tracked_samples[v] -= tracked_samples_diff;
         marked[v] = mark;
@@ -1702,7 +1702,7 @@ tsk_tree_propagate_sample_count_gain(tsk_tree_t *self, tsk_id_t parent,
 
     /* propogate this gain up as far as we can */
     v = parent;
-    while (v != TSK_NULL_NODE) {
+    while (v != TSK_NULL) {
         num_samples[v] += all_samples_diff;
         num_tracked_samples[v] += tracked_samples_diff;
         marked[v] = mark;
@@ -1722,18 +1722,18 @@ tsk_tree_update_sample_lists(tsk_tree_t *self, tsk_id_t node)
     const tsk_id_t * restrict parent = self->parent;
     const tsk_id_t * restrict sample_index_map = self->tree_sequence->sample_index_map;
 
-    for (u = node; u != TSK_NULL_NODE; u = parent[u]) {
+    for (u = node; u != TSK_NULL; u = parent[u]) {
         sample_index = sample_index_map[u];
-        if (sample_index != TSK_NULL_NODE) {
+        if (sample_index != TSK_NULL) {
             right[u] = left[u];
         } else {
-            left[u] = TSK_NULL_NODE;
-            right[u] = TSK_NULL_NODE;
+            left[u] = TSK_NULL;
+            right[u] = TSK_NULL;
         }
-        for (v = left_child[u]; v != TSK_NULL_NODE; v = right_sib[v]) {
-            if (left[v] != TSK_NULL_NODE) {
-                assert(right[v] != TSK_NULL_NODE);
-                if (left[u] == TSK_NULL_NODE) {
+        for (v = left_child[u]; v != TSK_NULL; v = right_sib[v]) {
+            if (left[v] != TSK_NULL) {
+                assert(right[v] != TSK_NULL);
+                if (left[u] == TSK_NULL) {
                     left[u] = left[v];
                     right[u] = right[v];
                 } else {
@@ -1781,19 +1781,19 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
         c = edge_child[k];
         lsib = self->left_sib[c];
         rsib = self->right_sib[c];
-        if (lsib == TSK_NULL_NODE) {
+        if (lsib == TSK_NULL) {
             self->left_child[p] = rsib;
         } else {
             self->right_sib[lsib] = rsib;
         }
-        if (rsib == TSK_NULL_NODE) {
+        if (rsib == TSK_NULL) {
             self->right_child[p] = lsib;
         } else {
             self->left_sib[rsib] = lsib;
         }
-        self->parent[c] = TSK_NULL_NODE;
-        self->left_sib[c] = TSK_NULL_NODE;
-        self->right_sib[c] = TSK_NULL_NODE;
+        self->parent[c] = TSK_NULL;
+        self->left_sib[c] = TSK_NULL;
+        self->right_sib[c] = TSK_NULL;
         if (self->flags & TSK_SAMPLE_COUNTS) {
             tsk_tree_propagate_sample_count_loss(self, p, c);
         }
@@ -1808,10 +1808,10 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
             v = p;
             root = v;
             above_sample = false;
-            while (v != TSK_NULL_NODE && !above_sample) {
+            while (v != TSK_NULL && !above_sample) {
                 above_sample = !!(node_flags[v] & TSK_NODE_IS_SAMPLE);
                 u = self->left_child[v];
-                while (u != TSK_NULL_NODE && !above_sample) {
+                while (u != TSK_NULL && !above_sample) {
                     above_sample = above_sample || self->above_sample[u];
                     u = self->right_sib[u];
                 }
@@ -1823,22 +1823,22 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
                 /* root is no longer above samples. Remove it from the root list */
                 lroot = self->left_sib[root];
                 rroot = self->right_sib[root];
-                self->left_root = TSK_NULL_NODE;
-                if (lroot != TSK_NULL_NODE) {
+                self->left_root = TSK_NULL;
+                if (lroot != TSK_NULL) {
                     self->right_sib[lroot] = rroot;
                     self->left_root = lroot;
                 }
-                if (rroot != TSK_NULL_NODE) {
+                if (rroot != TSK_NULL) {
                     self->left_sib[rroot] = lroot;
                     self->left_root = rroot;
                 }
-                self->left_sib[root] = TSK_NULL_NODE;
-                self->right_sib[root] = TSK_NULL_NODE;
+                self->left_sib[root] = TSK_NULL;
+                self->right_sib[root] = TSK_NULL;
             }
             /* Add c to the root list */
-            if (self->left_root != TSK_NULL_NODE) {
+            if (self->left_root != TSK_NULL) {
                 lroot = self->left_sib[self->left_root];
-                if (lroot != TSK_NULL_NODE) {
+                if (lroot != TSK_NULL) {
                     self->right_sib[lroot] = c;
                 }
                 self->left_sib[c] = lroot;
@@ -1854,7 +1854,7 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
         in += direction;
         p = edge_parent[k];
         c = edge_child[k];
-        if (self->parent[c] != TSK_NULL_NODE) {
+        if (self->parent[c] != TSK_NULL) {
             ret = TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN;
             goto out;
         }
@@ -1862,14 +1862,14 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
         u = self->right_child[p];
         lsib = self->left_sib[c];
         rsib = self->right_sib[c];
-        if (u == TSK_NULL_NODE) {
+        if (u == TSK_NULL) {
             self->left_child[p] = c;
-            self->left_sib[c] = TSK_NULL_NODE;
-            self->right_sib[c] = TSK_NULL_NODE;
+            self->left_sib[c] = TSK_NULL;
+            self->right_sib[c] = TSK_NULL;
         } else {
             self->right_sib[u] = c;
             self->left_sib[c] = u;
-            self->right_sib[c] = TSK_NULL_NODE;
+            self->right_sib[c] = TSK_NULL;
         }
         self->right_child[p] = c;
         if (self->flags & TSK_SAMPLE_COUNTS) {
@@ -1884,7 +1884,7 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
             v = p;
             root = v;
             above_sample = false;
-            while (v != TSK_NULL_NODE && !above_sample) {
+            while (v != TSK_NULL && !above_sample) {
                 above_sample = self->above_sample[v];
                 self->above_sample[v] = self->above_sample[v] || self->above_sample[c];
                 root = v;
@@ -1892,10 +1892,10 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
             }
             if (! above_sample) {
                 /* Replace c with root in root list */
-                if (lsib != TSK_NULL_NODE) {
+                if (lsib != TSK_NULL) {
                     self->right_sib[lsib] = root;
                 }
-                if (rsib != TSK_NULL_NODE) {
+                if (rsib != TSK_NULL) {
                     self->left_sib[rsib] = root;
                 }
                 self->left_sib[root] = lsib;
@@ -1903,12 +1903,12 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
                 self->left_root = root;
             } else {
                 /* Remove c from root list */
-                self->left_root = TSK_NULL_NODE;
-                if (lsib != TSK_NULL_NODE) {
+                self->left_root = TSK_NULL;
+                if (lsib != TSK_NULL) {
                     self->right_sib[lsib] = rsib;
                     self->left_root = lsib;
                 }
-                if (rsib != TSK_NULL_NODE) {
+                if (rsib != TSK_NULL) {
                     self->left_sib[rsib] = lsib;
                     self->left_root = rsib;
                 }
@@ -1916,9 +1916,9 @@ tsk_tree_advance(tsk_tree_t *self, int direction,
         }
     }
 
-    if (self->left_root != TSK_NULL_NODE) {
+    if (self->left_root != TSK_NULL) {
         /* Ensure that left_root is the left-most root */
-        while (self->left_sib[self->left_root] != TSK_NULL_NODE) {
+        while (self->left_sib[self->left_root] != TSK_NULL) {
             self->left_root = self->left_sib[self->left_root];
         }
     }

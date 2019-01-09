@@ -70,7 +70,7 @@ tsk_hapgen_apply_tree_site(tsk_hapgen_t *self, tsk_site_t *site)
         derived_state = site->mutations[j].derived_state;
         node = site->mutations[j].node;
         index = list_left[node];
-        if (index != TSK_NULL_NODE) {
+        if (index != TSK_NULL) {
             stop = list_right[node];
             while (true) {
                 ret = tsk_hapgen_update_sample(self, (size_t) index, site->id, derived_state);
@@ -250,7 +250,7 @@ tsk_vargen_alloc(tsk_vargen_t *self, tsk_treeseq_t *tree_sequence,
                 ret = TSK_ERR_OUT_OF_BOUNDS;
                 goto out;
             }
-            if (self->sample_index_map[samples[j]] != TSK_NULL_NODE) {
+            if (self->sample_index_map[samples[j]] != TSK_NULL) {
                 ret = TSK_ERR_DUPLICATE_SAMPLE;
                 goto out;
             }
@@ -362,7 +362,7 @@ tsk_vargen_update_genotypes_u8_sample_list(tsk_vargen_t *self, tsk_id_t node, ts
     assert(derived < UINT8_MAX);
 
     index = list_left[node];
-    if (index != TSK_NULL_NODE) {
+    if (index != TSK_NULL) {
         stop = list_right[node];
         while (true) {
             if (genotypes[index] == derived) {
@@ -393,7 +393,7 @@ tsk_vargen_update_genotypes_u16_sample_list(tsk_vargen_t *self, tsk_id_t node, t
     assert(derived < UINT16_MAX);
 
     index = list_left[node];
-    if (index != TSK_NULL_NODE) {
+    if (index != TSK_NULL) {
         stop = list_right[node];
         while (true) {
             if (genotypes[index] == derived) {
@@ -435,14 +435,14 @@ tsk_vargen_traverse(tsk_vargen_t *self, tsk_id_t node, tsk_tbl_size_t derived, v
     while (stack_top >= 0) {
         u = stack[stack_top];
         sample_index = sample_index_map[u];
-        if (sample_index != TSK_NULL_NODE) {
+        if (sample_index != TSK_NULL) {
             ret = visit(self, sample_index, derived);
             if (ret != 0) {
                 goto out;
             }
         }
         stack_top--;
-        for (v = left_child[u]; v != TSK_NULL_NODE; v = right_sib[v]) {
+        for (v = left_child[u]; v != TSK_NULL; v = right_sib[v]) {
             stack_top++;
             stack[stack_top] = v;
         }

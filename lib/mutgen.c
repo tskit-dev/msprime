@@ -160,7 +160,7 @@ mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
     mutation->derived_state = derived_state;
     mutation->derived_state_length = 1;
     mutation->node = node;
-    mutation->parent = MSP_NULL_MUTATION;
+    mutation->parent = TSK_NULL;
     site->mutations = mutation;
     site->mutations_length = 1;
 
@@ -301,7 +301,7 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t
         for (j = 0; j < site->mutations_length; j++) {
             mutation = site->mutations + j;
             parent = mutation->parent;
-            if (parent != MSP_NULL_MUTATION) {
+            if (parent != TSK_NULL) {
                 parent += new_mutations;
             }
             ret = tsk_mutation_tbl_add_row(mutations, site_id,

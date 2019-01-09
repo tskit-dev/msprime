@@ -425,8 +425,8 @@ make_edge(tsk_edge_t *edge)
 static PyObject *
 make_migration(tsk_migration_t *r)
 {
-    int source = r->source == TSK_NULL_POPULATION ? -1: r->source;
-    int dest = r->dest == TSK_NULL_POPULATION ? -1: r->dest;
+    int source = r->source == TSK_NULL ? -1: r->source;
+    int dest = r->dest == TSK_NULL ? -1: r->dest;
     PyObject *ret = NULL;
 
     ret = Py_BuildValue("ddiiid",
@@ -4052,7 +4052,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     int err;
     int site;
     int node;
-    int parent = TSK_NULL_MUTATION;
+    int parent = TSK_NULL;
     char *derived_state;
     Py_ssize_t derived_state_length;
     PyObject *py_metadata = Py_None;
@@ -7014,8 +7014,7 @@ Tree_get_children(Tree *self, PyObject *args)
         goto out;
     }
     num_children = 0;
-    for (u = self->tree->left_child[node]; u != TSK_NULL_NODE;
-            u = self->tree->right_sib[u]) {
+    for (u = self->tree->left_child[node]; u != TSK_NULL; u = self->tree->right_sib[u]) {
         num_children++;
     }
     children = PyMem_Malloc(num_children * sizeof(tsk_id_t));
@@ -7024,8 +7023,7 @@ Tree_get_children(Tree *self, PyObject *args)
         goto out;
     }
     j = 0;
-    for (u = self->tree->left_child[node]; u != TSK_NULL_NODE;
-            u = self->tree->right_sib[u]) {
+    for (u = self->tree->left_child[node]; u != TSK_NULL; u = self->tree->right_sib[u]) {
         children[j] = u;
         j++;
     }

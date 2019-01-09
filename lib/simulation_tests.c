@@ -2202,7 +2202,7 @@ test_simulate_from_incompatible(void)
     ret = tsk_population_tbl_add_row(from_tables.populations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_node_tbl_add_row(from_tables.nodes, 0, 0.0,
-            0, MSP_NULL_INDIVIDUAL, NULL, 0);
+            0, TSK_NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Malformed tree sequence */
@@ -2230,10 +2230,10 @@ test_simulate_from_incompatible(void)
     /* older nodes */
     from_tables.sequence_length = 10.0;
     ret = tsk_node_tbl_add_row(from_tables.nodes, TSK_NODE_IS_SAMPLE, 1.0, 0,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_tbl_add_row(from_tables.nodes, TSK_NODE_IS_SAMPLE, 2.0, 0,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2369,22 +2369,22 @@ insert_single_tree(tsk_tbl_collection_t *tables)
     */
     int ret;
     ret = tsk_node_tbl_add_row(tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_node_tbl_add_row(tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_tbl_add_row(tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_tbl_add_row(tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_tbl_add_row(tables->nodes, 0, 1.0, 0, MSP_NULL_INDIVIDUAL, NULL, 0);
+    ret = tsk_node_tbl_add_row(tables->nodes, 0, 1.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_tbl_add_row(tables->nodes, 0, 2.0, 0, MSP_NULL_INDIVIDUAL, NULL, 0);
+    ret = tsk_node_tbl_add_row(tables->nodes, 0, 2.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_tbl_add_row(tables->nodes, 0, 3.0, 0, MSP_NULL_INDIVIDUAL, NULL, 0);
+    ret = tsk_node_tbl_add_row(tables->nodes, 0, 3.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_tbl_add_row(tables->edges, 0, 1, 4, 0);

@@ -394,7 +394,7 @@ parse_mutations(const char *text, tsk_mutation_tbl_t *mutation_table)
         p = strtok(NULL, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         strncpy(derived_state, p, MAX_LINE);
-        parent = TSK_NULL_MUTATION;
+        parent = TSK_NULL;
         p = strtok(NULL, whitespace);
         if (p != NULL) {
             parent = atoi(p);

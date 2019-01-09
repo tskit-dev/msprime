@@ -444,7 +444,7 @@ parse_mutations(const char *text, tsk_mutation_tbl_t *mutation_table)
         p = strtok(NULL, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         strncpy(derived_state, p, MAX_LINE);
-        parent = TSK_NULL_MUTATION;
+        parent = TSK_NULL;
         p = strtok(NULL, whitespace);
         if (p != NULL) {
             parent = atoi(p);
@@ -1294,7 +1294,7 @@ verify_simplify_properties(tsk_treeseq_t *ts, tsk_treeseq_t *subset,
     for (j = 0; j < tsk_treeseq_get_num_nodes(ts); j++) {
         ret = tsk_treeseq_get_node(ts, j, &n1);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        if (node_map[j] != TSK_NULL_NODE) {
+        if (node_map[j] != TSK_NULL) {
             ret = tsk_treeseq_get_node(subset, node_map[j], &n2);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             CU_ASSERT_EQUAL_FATAL(n1.population, n2.population);
@@ -1331,8 +1331,8 @@ verify_simplify_properties(tsk_treeseq_t *ts, tsk_treeseq_t *subset,
                     ret = tsk_tree_get_mrca(&subset_tree,
                             node_map[samples[j]], node_map[samples[k]], &mrca2);
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    if (mrca1 == TSK_NULL_NODE) {
-                        CU_ASSERT_EQUAL_FATAL(mrca2, TSK_NULL_NODE);
+                    if (mrca1 == TSK_NULL) {
+                        CU_ASSERT_EQUAL_FATAL(mrca2, TSK_NULL);
                     } else {
                         CU_ASSERT_EQUAL(node_map[mrca1], mrca2);
                     }
@@ -1912,9 +1912,9 @@ verify_sample_sets_for_tree(tsk_tree_t *tree)
     CU_ASSERT_FATAL(stack != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     for (u = 0; u < num_nodes; u++) {
-        if (tree->left_child[u] == TSK_NULL_NODE && !tsk_treeseq_is_sample(ts, u)) {
-            CU_ASSERT_EQUAL(list_left[u], TSK_NULL_NODE);
-            CU_ASSERT_EQUAL(list_right[u], TSK_NULL_NODE);
+        if (tree->left_child[u] == TSK_NULL && !tsk_treeseq_is_sample(ts, u)) {
+            CU_ASSERT_EQUAL(list_left[u], TSK_NULL);
+            CU_ASSERT_EQUAL(list_right[u], TSK_NULL);
         } else {
             stack_top = 0;
             num_samples = 0;
@@ -1926,7 +1926,7 @@ verify_sample_sets_for_tree(tsk_tree_t *tree)
                     samples[num_samples] = v;
                     num_samples++;
                 }
-                for (v = tree->right_child[v]; v != TSK_NULL_NODE; v = tree->left_sib[v]) {
+                for (v = tree->right_child[v]; v != TSK_NULL; v = tree->left_sib[v]) {
                     stack_top++;
                     stack[stack_top] = v;
                 }
@@ -1937,7 +1937,7 @@ verify_sample_sets_for_tree(tsk_tree_t *tree)
 
             j = 0;
             sample_index = list_left[u];
-            if (sample_index != TSK_NULL_NODE) {
+            if (sample_index != TSK_NULL) {
                 stop = list_right[u];
                 while (true) {
                     CU_ASSERT_TRUE_FATAL(j < n);
@@ -2314,7 +2314,7 @@ verify_newick(tsk_treeseq_t *ts)
     /* CU_ASSERT_EQUAL_FATAL(ret, 0); */
     /* ret = tsk_tree_first(&t); */
     /* CU_ASSERT_FATAL(ret == 1); */
-    /* for (root = t.left_root; root != TSK_NULL_NODE; root = t.right_sib[root]) { */
+    /* for (root = t.left_root; root != TSK_NULL; root = t.right_sib[root]) { */
     /*     err = tsk_tree_get_newick(&t, root, precision, 0, buffer_size, newick); */
     /*     CU_ASSERT_EQUAL_FATAL(err, 0); */
     /*     size = strlen(newick); */
@@ -2329,7 +2329,7 @@ verify_newick(tsk_treeseq_t *ts)
     /* } */
 
     /* for (ret = tsk_tree_first(&t); ret == 1; ret = tsk_tree_next(&t)) { */
-    /*     for (root = t.left_root; root != TSK_NULL_NODE; root = t.right_sib[root]) { */
+    /*     for (root = t.left_root; root != TSK_NULL; root = t.right_sib[root]) { */
     /*         err = tsk_tree_get_newick(&t, root, precision, 0, 0, NULL); */
     /*         CU_ASSERT_EQUAL_FATAL(err, TSK_ERR_BAD_PARAM_VALUE); */
     /*         err = tsk_tree_get_newick(&t, root, precision, 0, buffer_size, newick); */
@@ -2722,7 +2722,7 @@ test_sort_tables(void)
             tables.mutations->parent[0] = tables.mutations->num_rows;
             ret = tsk_tbl_collection_sort(&tables, 0, 0);
             CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_MUTATION_OUT_OF_BOUNDS);
-            tables.mutations->parent[0] = TSK_NULL_MUTATION;
+            tables.mutations->parent[0] = TSK_NULL;
             ret = tsk_tbl_collection_sort(&tables, 0, 0);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
         }

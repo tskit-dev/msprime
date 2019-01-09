@@ -59,21 +59,21 @@ tsk_newick_converter_run(tsk_newick_converter_t *self, tsk_id_t root,
     u = root_parent;
     while (stack_top >= 0) {
         v = stack[stack_top];
-        if (tree->left_child[v] != TSK_NULL_NODE && v != u) {
+        if (tree->left_child[v] != TSK_NULL && v != u) {
             if (s >= buffer_size) {
                 ret = TSK_ERR_BUFFER_OVERFLOW;
                 goto out;
             }
             buffer[s] = '(';
             s++;
-            for (w = tree->right_child[v]; w != TSK_NULL_NODE; w = tree->left_sib[w]) {
+            for (w = tree->right_child[v]; w != TSK_NULL; w = tree->left_sib[w]) {
                 stack_top++;
                 stack[stack_top] = w;
             }
         } else {
             u = tree->parent[v];
             stack_top--;
-            if (tree->left_child[v] == TSK_NULL_NODE) {
+            if (tree->left_child[v] == TSK_NULL) {
                 if (s >= buffer_size) {
                     ret = TSK_ERR_BUFFER_OVERFLOW;
                     goto out;

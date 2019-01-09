@@ -1130,7 +1130,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     double scaled_time = self->model.model_time_to_generations(&self->model, time);
 
     ret = tsk_node_tbl_add_row(self->tables->nodes, flags, scaled_time, population_id,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     if (ret < 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -1868,11 +1868,11 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree,
     segment_t *seg, *tail;
     label_id_t label = 0; /* For now only support label 0 */
 
-    for (root = tree->left_root; root != MSP_NULL_NODE; root = tree->right_sib[root]) {
+    for (root = tree->left_root; root != TSK_NULL; root = tree->right_sib[root]) {
         population = node_population[root];
         /* Reference integrity has alreay been checked, but the null population
          * is still possibile */
-        if (population == MSP_NULL_POPULATION) {
+        if (population == TSK_NULL) {
             ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
@@ -2949,17 +2949,17 @@ msp_insert_uncoalesced_edges(msp_t *self)
                  * hack an extra epsilon onto the parent time) and (b), this node
                  * could only have arisen as the result of a coalescence and so this
                  * node really does represent the current ancestor */
-                node = MSP_NULL_NODE;
+                node = TSK_NULL;
                 for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
                     if (nodes->time[seg->value] == current_time) {
                         node = seg->value;
                         break;
                     }
                 }
-                if (node == MSP_NULL_NODE) {
+                if (node == TSK_NULL) {
                     /* Add a node for this ancestor */
                     node = tsk_node_tbl_add_row(nodes, 0, current_time, pop,
-                            MSP_NULL_INDIVIDUAL, NULL, 0);
+                            TSK_NULL, NULL, 0);
                     if (node < 0) {
                         ret = msp_set_tsk_error(node);
                         goto out;
@@ -3746,7 +3746,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
         lineages[u] = u;
     }
     for (u = 0; u < (node_id_t) (2 * n); u++) {
-        pi[u] = MSP_NULL_NODE;
+        pi[u] = TSK_NULL;
     }
     j = 0;
     for (node = pop->head; node != NULL; node = node->next) {
@@ -3793,7 +3793,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
      */
     for (j = 0; j < n; j++) {
         u = (node_id_t) j;
-        while (pi[u] != MSP_NULL_NODE) {
+        while (pi[u] != TSK_NULL) {
             u = pi[u];
         }
         if (u >= (node_id_t) n) {

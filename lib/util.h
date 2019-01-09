@@ -34,15 +34,6 @@
 	#define MSP_UNUSED(x) MSP_UNUSED_ ## x
 #endif
 
-/* The root node indicator */
-#define MSP_NULL_NODE (-1)
-/* Indicates the that the population ID has not been set. */
-#define MSP_NULL_POPULATION (-1)
-/* There is no parent for a given mutation */
-#define MSP_NULL_MUTATION (-1)
-/* Indicates that no individual has been set */
-#define MSP_NULL_INDIVIDUAL (-1)
-
 /* Error codes */
 #define MSP_ERR_GENERIC                                             -1
 #define MSP_ERR_NO_MEMORY                                           -2
