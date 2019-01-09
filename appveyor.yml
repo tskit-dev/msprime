@@ -15,9 +15,7 @@ build: false
 test_script:
   - "conda config --add channels conda-forge"
   - "conda install -f --yes --file=requirements/conda-minimal.txt"
-  - "SET KASTORE_PKG=kastore>=0.2.2"
-  # Try to install kastore from conda first, but fall back on pip.
-  - "conda install --yes %KASTORE_PKG% || pip install %KASTORE_PKG%"
+  - "pip install kastore"  
   - "pip install PyVCF"  
   - "pip install newick"  
   - "pip install python_jsonschema_objects"

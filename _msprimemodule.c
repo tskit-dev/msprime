@@ -29,10 +29,6 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_errno.h>
 
-/* Need this for now until we can compile against a tskit dynamic API. */
-#include <kastore.h>
-kas_funcptr *kas_dynamic_api;
-
 #include "msprime.h"
 
 #if PY_MAJOR_VERSION >= 3
