@@ -636,8 +636,8 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         self.assertEqual(t.add_row(), 0)
         self.assertEqual(t.time[0], 0)
         self.assertEqual(t.flags[0], 0)
-        self.assertEqual(t.population[0], tskit.NULL_POPULATION)
-        self.assertEqual(t.individual[0], tskit.NULL_INDIVIDUAL)
+        self.assertEqual(t.population[0], tskit.NULL)
+        self.assertEqual(t.individual[0], tskit.NULL)
         self.assertEqual(len(t.metadata), 0)
         self.assertEqual(t.metadata_offset[0], 0)
 

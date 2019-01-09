@@ -8561,9 +8561,9 @@ init_tskit(void)
     Py_INCREF(TskitVersionTooOldError);
     PyModule_AddObject(module, "VersionTooOldError", TskitVersionTooOldError);
 
+    PyModule_AddIntConstant(module, "NULL", TSK_NULL);
     /* Node flags */
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", TSK_NODE_IS_SAMPLE);
-
     /* Tree flags */
     PyModule_AddIntConstant(module, "SAMPLE_COUNTS", TSK_SAMPLE_COUNTS);
     PyModule_AddIntConstant(module, "SAMPLE_LISTS", TSK_SAMPLE_LISTS);

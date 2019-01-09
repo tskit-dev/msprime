@@ -21,10 +21,6 @@ import _tskit
 IS_PY2 = sys.version_info[0] < 3
 IS_WINDOWS = platform.system() == "Windows"
 
-# Root node marker
-NULL_NODE = -1
-NULL_POPULATION = -1
-
 
 def get_tracked_sample_counts(st, tracked_samples):
     """
@@ -36,7 +32,7 @@ def get_tracked_sample_counts(st, tracked_samples):
         # Duplicates not permitted.
         assert nu[j] == 0
         u = j
-        while u != NULL_NODE:
+        while u != _tskit.NULL:
             nu[u] += 1
             u = st.get_parent(u)
     return nu
@@ -49,7 +45,7 @@ def get_sample_counts(tree_sequence, st):
     nu = [0 for j in range(st.get_num_nodes())]
     for j in range(tree_sequence.get_num_samples()):
         u = j
-        while u != NULL_NODE:
+        while u != _tskit.NULL:
             nu[u] += 1
             u = st.get_parent(u)
     return nu
@@ -65,15 +61,15 @@ class LowLevelTestCase(unittest.TestCase):
         consistent coalescent history for a sample of size n.
         """
         self.assertLessEqual(len(pi), 2 * n - 1)
-        # NULL_NODE should not be a node
-        self.assertNotIn(NULL_NODE, pi)
+        # _tskit.NULL should not be a node
+        self.assertNotIn(_tskit.NULL, pi)
         # verify the root is equal for all samples
         root = 0
-        while pi[root] != NULL_NODE:
+        while pi[root] != _tskit.NULL:
             root = pi[root]
         for j in range(n):
             k = j
-            while pi[k] != NULL_NODE:
+            while pi[k] != _tskit.NULL:
                 k = pi[k]
             self.assertEqual(k, root)
         # 0 to n - 1 inclusive should always be nodes
@@ -474,7 +470,7 @@ class TestTree(LowLevelTestCase):
                             ts.get_mutation(mut_id)
                         self.assertEqual(site, index)
                         self.assertEqual(mutation_id, mut_id)
-                        self.assertNotEqual(st.get_parent(node), NULL_NODE)
+                        self.assertNotEqual(st.get_parent(node), _tskit.NULL)
                         self.assertEqual(metadata, b"")
                         mutation_id += 1
                     j += 1
@@ -500,7 +496,7 @@ class TestTree(LowLevelTestCase):
             self.assertEqual(st.get_left(), 0)
             self.assertEqual(st.get_right(), 0)
             for j in range(ts.get_num_samples()):
-                self.assertEqual(st.get_parent(j), NULL_NODE)
+                self.assertEqual(st.get_parent(j), _tskit.NULL)
                 self.assertEqual(st.get_children(j), tuple())
                 self.assertEqual(st.get_time(j), 0)
 
@@ -621,13 +617,13 @@ class TestTree(LowLevelTestCase):
         for ts in self.get_example_tree_sequences():
             num_nodes = ts.get_num_nodes()
             st = _tskit.Tree(ts)
-            for v in [num_nodes, 10**6, NULL_NODE]:
+            for v in [num_nodes, 10**6, _tskit.NULL]:
                 self.assertRaises(ValueError, st.get_mrca, v, v)
                 self.assertRaises(ValueError, st.get_mrca, v, 1)
                 self.assertRaises(ValueError, st.get_mrca, 1, v)
-            # All the mrcas for an uninitialised tree should be NULL_NODE
+            # All the mrcas for an uninitialised tree should be _tskit.NULL
             for u, v in itertools.combinations(range(num_nodes), 2):
-                self.assertEqual(st.get_mrca(u, v), NULL_NODE)
+                self.assertEqual(st.get_mrca(u, v), _tskit.NULL)
 
     def test_newick_precision(self):
 
@@ -762,14 +758,14 @@ class TestTree(LowLevelTestCase):
 
                 # All non-tree nodes should have 0
                 for j in range(t.get_num_nodes()):
-                    if t.get_parent(j) == NULL_NODE \
-                            and t.get_left_child(j) == NULL_NODE:
-                        self.assertEqual(t.get_left_sample(j), NULL_NODE)
-                        self.assertEqual(t.get_right_sample(j), NULL_NODE)
+                    if t.get_parent(j) == _tskit.NULL \
+                            and t.get_left_child(j) == _tskit.NULL:
+                        self.assertEqual(t.get_left_sample(j), _tskit.NULL)
+                        self.assertEqual(t.get_right_sample(j), _tskit.NULL)
                 # The roots should have all samples.
                 u = t.get_left_root()
                 samples = []
-                while u != NULL_NODE:
+                while u != _tskit.NULL:
                     sample = t.get_left_sample(u)
                     end = t.get_right_sample(u)
                     while True:

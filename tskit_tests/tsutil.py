@@ -72,7 +72,7 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                 u = stack.pop()
                 stack.extend(tree.children(u))
                 v = tree.parent(u)
-                if v != tskit.NULL_NODE:
+                if v != tskit.NULL:
                     state[u] = state[v]
                     parent = mutation[v]
                     for j in range(mutations_per_branch):
@@ -98,7 +98,7 @@ def insert_branch_sites(ts):
         delta = (right - left) / len(list(tree.nodes()))
         x = left
         for u in tree.nodes():
-            if tree.parent(u) != tskit.NULL_NODE:
+            if tree.parent(u) != tskit.NULL:
                 site = tables.sites.add_row(position=x, ancestral_state='0')
                 tables.mutations.add_row(site=site, node=u, derived_state='1')
                 x += delta
@@ -142,7 +142,7 @@ def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
     tables = ts.dump_tables()
     tables.individuals.clear()
     individual = tables.nodes.individual[:]
-    individual[:] = tskit.NULL_INDIVIDUAL
+    individual[:] = tskit.NULL
     while j < len(samples):
         ploidy = rng.randint(0, max_ploidy)
         nodes = samples[j: min(j + ploidy, len(samples))]
@@ -319,7 +319,7 @@ def generate_site_mutations(tree, position, mu, site_table, mutation_table,
     state = random.choice(list(states))
     site_table.add_row(position, state)
     site = site_table.num_rows - 1
-    stack = [(tree.root, state, tskit.NULL_MUTATION)]
+    stack = [(tree.root, state, tskit.NULL)]
     while len(stack) != 0:
         u, state, parent = stack.pop()
         if u != tree.root:
@@ -385,23 +385,22 @@ def compute_mutation_parent(ts):
             # at a node, then these must be parents since we're assuming
             # they are in order.
             for mutation in site.mutations:
-                if bottom_mutation[mutation.node] != tskit.NULL_MUTATION:
+                if bottom_mutation[mutation.node] != tskit.NULL:
                     mutation_parent[mutation.id] = bottom_mutation[mutation.node]
                 bottom_mutation[mutation.node] = mutation.id
             # There's no point in checking the first mutation, since this cannot
             # have a parent.
             for mutation in site.mutations[1:]:
-                if mutation_parent[mutation.id] == tskit.NULL_MUTATION:
+                if mutation_parent[mutation.id] == tskit.NULL:
                     v = tree.parent(mutation.node)
                     # Traverse upwards until we find a another mutation or root.
-                    while v != tskit.NULL_NODE \
-                            and bottom_mutation[v] == tskit.NULL_MUTATION:
+                    while v != tskit.NULL and bottom_mutation[v] == tskit.NULL:
                         v = tree.parent(v)
-                    if v != tskit.NULL_NODE:
+                    if v != tskit.NULL:
                         mutation_parent[mutation.id] = bottom_mutation[v]
             # Reset the maps for the next site.
             for mutation in site.mutations:
-                bottom_mutation[mutation.node] = tskit.NULL_MUTATION
+                bottom_mutation[mutation.node] = tskit.NULL
             assert np.all(bottom_mutation == -1)
     return mutation_parent
 
@@ -697,12 +696,12 @@ def genealogical_nearest_neighbours(ts, focal, reference_sets):
         for j, u in enumerate(focal):
             focal_reference_set = reference_set_map[u]
             p = parent[u]
-            while p != tskit.NULL_NODE:
+            while p != tskit.NULL:
                 total = np.sum(sample_count[p])
                 if total > 1:
                     break
                 p = parent[p]
-            if p != tskit.NULL_NODE:
+            if p != tskit.NULL:
                 length = right - left
                 L[j] += length
                 scale = length / (total - int(focal_reference_set != -1))

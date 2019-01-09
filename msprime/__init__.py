@@ -24,13 +24,13 @@ modern datasets.
 from __future__ import print_function
 from __future__ import division
 
-# Compatibility layer for old code using the tskit API exported by msprime.
+import tskit
 
-# These are deprecated in tskit now; should use tskit.NULL instead.
-NULL_NODE = -1
-NULL_POPULATION = -1
-NULL_INDIVIDUAL = -1
-NULL_MUTATION = -1
+# Compatibility layer for old code using the tskit API exported by msprime.
+NULL_NODE = tskit.NULL
+NULL_POPULATION = tskit.NULL
+NULL_INDIVIDUAL = tskit.NULL
+NULL_MUTATION = tskit.NULL
 
 from tskit import (
     Individual, Node, Edge, Site, Mutation, Migration, Population,

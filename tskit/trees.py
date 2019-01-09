@@ -28,19 +28,8 @@ import tskit.tables as tables
 import tskit.formats as formats
 
 from _tskit import NODE_IS_SAMPLE
+from _tskit import NULL
 
-NULL = -1
-
-# TODO change to using NULL when porting to tskit. I.e., all of these
-# would be tskit.NULL.
-
-NULL_NODE = -1
-
-NULL_POPULATION = -1
-
-NULL_INDIVIDUAL = -1
-
-NULL_MUTATION = -1
 
 IS_PY2 = sys.version_info[0] < 3
 
@@ -130,8 +119,8 @@ class Node(SimpleContainer):
     :vartype metadata: bytes
     """
     def __init__(
-            self, id_=None, flags=0, time=0, population=NULL_POPULATION,
-            individual=NULL_INDIVIDUAL, metadata=""):
+            self, id_=None, flags=0, time=0, population=NULL,
+            individual=NULL, metadata=""):
         self.id = id_
         self.time = time
         self.population = population
@@ -237,7 +226,7 @@ class Mutation(SimpleContainer):
     :ivar parent: The integer ID of this mutation's parent mutation. When multiple
         mutations occur at a site along a path in the tree, mutations must
         record the mutation that is immediately above them. If the mutation does
-        not have a parent, this is equal to the :const:`NULL_MUTATION` (-1).
+        not have a parent, this is equal to the :const:`NULL` (-1).
         To obtain further information about a mutation with a given ID, use
         :meth:`.TreeSequence.mutation`.
     :vartype parent: int
@@ -388,7 +377,7 @@ class Tree(object):
     node IDs** to refer to nodes rather than objects. Thus, when we wish to
     find the parent of the node with ID '0', we use ``tree.parent(0)``, which
     returns another integer. If '0' does not have a parent in the current tree
-    (e.g., if it is a root), then the special value :const:`.NULL_NODE`
+    (e.g., if it is a root), then the special value :const:`.NULL`
     (:math:`-1`) is returned. The children of a node are found using the
     :meth:`.children` method. To obtain information about a particular node,
     one may either use ``tree.tree_sequence.node(u)`` to obtain the
@@ -495,7 +484,7 @@ class Tree(object):
     def parent(self, u):
         """
         Returns the parent of the specified node. Returns
-        the :const:`.NULL_NODE` if u is the root or is not a node in
+        the :const:`.NULL` if u is the root or is not a node in
         the current tree.
 
         :param int u: The node of interest.
@@ -642,7 +631,7 @@ class Tree(object):
 
             roots = set()
             for u in tree_sequence.samples():
-                while tree.parent(u) != tskit.NULL_NODE:
+                while tree.parent(u) != tskit.NULL:
                     u = tree.parent(u)
                 roots.add(u)
             # roots is now the set of all roots in this tree.
@@ -657,7 +646,7 @@ class Tree(object):
         """
         roots = []
         u = self.left_root
-        while u != NULL_NODE:
+        while u != NULL:
             roots.append(u)
             u = self.right_sib(u)
         return roots
@@ -677,7 +666,7 @@ class Tree(object):
         :raises: :class:`ValueError` if this tree contains more than one root.
         """
         root = self.left_root
-        if root != NULL_NODE and self.right_sib(root) != NULL_NODE:
+        if root != NULL and self.right_sib(root) != NULL:
             raise ValueError("More than one root exists. Use tree.roots instead")
         return root
 
@@ -1028,7 +1017,7 @@ class Tree(object):
 
     def _postorder_traversal(self, u):
         stack = [u]
-        k = NULL_NODE
+        k = NULL
         while stack:
             v = stack[-1]
             if self.is_internal(v) and v != k:
@@ -1154,7 +1143,7 @@ class Tree(object):
     def get_parent_dict(self):
         pi = {
             u: self.parent(u) for u in range(self.num_nodes)
-            if self.parent(u) != NULL_NODE}
+            if self.parent(u) != NULL}
         return pi
 
     def __str__(self):
@@ -1369,10 +1358,10 @@ def parse_nodes(
             flags = 0
             if is_sample != 0:
                 flags |= NODE_IS_SAMPLE
-            population = NULL_POPULATION
+            population = NULL
             if population_index is not None:
                 population = int(tokens[population_index])
-            individual = NULL_INDIVIDUAL
+            individual = NULL
             if individual_index is not None:
                 individual = int(tokens[individual_index])
             metadata = b''
@@ -1507,7 +1496,7 @@ def parse_mutations(
     node_index = header.index("node")
     derived_state_index = header.index("derived_state")
     parent_index = None
-    parent = NULL_MUTATION
+    parent = NULL
     try:
         parent_index = header.index("parent")
     except ValueError:
@@ -1661,7 +1650,7 @@ def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
     # We need to add populations any referenced in the node table.
     if len(tc.nodes) > 0:
         max_population = tc.nodes.population.max()
-        if max_population != NULL_POPULATION:
+        if max_population != NULL:
             for _ in range(max_population + 1):
                 tc.populations.add_row()
     if sites is not None:
@@ -2624,7 +2613,7 @@ class TreeSequence(object):
         also return a numpy array mapping the node IDs in this tree sequence to
         their node IDs in the simplified tree tree sequence. If a node ``u`` is not
         present in the new tree sequence, the value of this mapping will be
-        NULL_NODE (-1).
+        NULL (-1).
 
         In the returned tree sequence, the node with ID ``0`` corresponds to
         ``samples[0]``, node ``1`` corresponds to ``samples[1]``, and so on.
