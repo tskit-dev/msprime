@@ -322,12 +322,12 @@ def naive_genealogical_nearest_neighbours(ts, focal, reference_sets):
         length = trees[0].interval[1] - trees[0].interval[0]
         for j, u in enumerate(focal):
             v = trees[0].parent(u)
-            while v != tskit.NULL_NODE:
+            while v != tskit.NULL:
                 total = sum(tree.num_tracked_samples(v) for tree in trees)
                 if total > 1:
                     break
                 v = trees[0].parent(v)
-            if v != tskit.NULL_NODE:
+            if v != tskit.NULL:
                 focal_node_set = reference_set_map[u]
                 for k, tree in enumerate(trees):
                     # If the focal node is in the current set, we subtract its
@@ -383,7 +383,7 @@ class TestGenealogicalNearestNeighbours(unittest.TestCase):
                 coalescence_found = np.array([False for _ in all_refs])
                 for tree in ts.trees(tracked_samples=all_refs):
                     for j, u in enumerate(focal):
-                        while u != tskit.NULL_NODE:
+                        while u != tskit.NULL:
                             if tree.num_tracked_samples(u) > 1:
                                 coalescence_found[j] = True
                                 break
@@ -550,12 +550,12 @@ def exact_genealogical_nearest_neighbours(ts, focal, reference_sets):
     for _ in range(ts.num_trees):
         trees = list(map(next, tree_iters))
         v = trees[0].parent(u)
-        while v != tskit.NULL_NODE:
+        while v != tskit.NULL:
             total = sum(tree.num_tracked_samples(v) for tree in trees)
             if total > 1:
                 break
             v = trees[0].parent(v)
-        if v != tskit.NULL_NODE:
+        if v != tskit.NULL:
             # The length is only reported where the statistic is defined.
             L[trees[0].index] = trees[0].interval[1] - trees[0].interval[0]
             focal_node_set = reference_set_map[u]

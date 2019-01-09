@@ -151,7 +151,7 @@ tsk_ld_calc_overlap_within_tree(tsk_ld_calc_t *self, tsk_site_t sA, tsk_site_t s
         v = sA.mutations[0].node;
         u = sB.mutations[0].node;
     }
-    while (u != v && u != TSK_NULL_NODE) {
+    while (u != v && u != TSK_NULL) {
         u = t->parent[u];
     }
     nAB = 0;
@@ -418,7 +418,7 @@ tsk_ld_calc_get_r2(tsk_ld_calc_t *self, size_t a, size_t b, double *r2)
         goto out;
     }
     assert(sA.mutations_length == 1);
-    /* assert(tA->parent[sA.mutations[0].node] != TSK_NULL_NODE); */
+    /* assert(tA->parent[sA.mutations[0].node] != TSK_NULL); */
     fA = ((double) tA->num_samples[sA.mutations[0].node]) / n;
     assert(fA > 0);
     ret = tsk_ld_calc_set_tracked_samples(self, sA);
@@ -433,7 +433,7 @@ tsk_ld_calc_get_r2(tsk_ld_calc_t *self, size_t a, size_t b, double *r2)
         }
         assert(ret == 1);
     }
-    /* assert(tB->parent[sB.mutations[0].node] != TSK_NULL_NODE); */
+    /* assert(tB->parent[sB.mutations[0].node] != TSK_NULL); */
     fB = ((double) tB->num_samples[sB.mutations[0].node]) / n;
     assert(fB > 0);
     nAB = (double) tB->num_tracked_samples[sB.mutations[0].node];

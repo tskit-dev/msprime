@@ -89,7 +89,7 @@ class TestTreeDraw(unittest.TestCase):
         ts = tables.tree_sequence()
         tree = ts.first()
         assert any(
-            tree.parent(mut.node) == tskit.NULL_NODE
+            tree.parent(mut.node) == tskit.NULL
             for mut in tree.mutations())
         return tree
 

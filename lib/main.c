@@ -75,12 +75,7 @@ load_tables(tsk_tbl_collection_t *tables, const char *filename)
     tsk_tbl_collection_t tmp;
 
     /* We need to allocate a temporary table here because tbl_collection_load
-     * requires an allocated set of tables, but writes pointers into the
-     * kastore for the actual columns. */
-    ret = tsk_tbl_collection_alloc(&tmp, 0);
-    if (ret != 0) {
-        fatal_tskit_error(ret, __LINE__);
-    }
+     * loads a read-only version of the tables. */
     ret = tsk_tbl_collection_load(&tmp, filename, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);
@@ -664,7 +659,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (rng == NULL) {
         fatal_error("No memory");
     }
-    ret = tsk_tbl_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);
     }
@@ -708,7 +703,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }
-        ret = tsk_treeseq_load_tables(&tree_seq, &tables, MSP_BUILD_INDEXES);
+        ret = tsk_treeseq_alloc(&tree_seq, &tables, TSK_BUILD_INDEXES);
         if (ret != 0) {
             fatal_tskit_error(ret, __LINE__);
         }

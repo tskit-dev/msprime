@@ -1,7 +1,8 @@
 environment:
   matrix:
     - PYTHON: "C:\\Miniconda36"
-    - PYTHON: "C:\\Miniconda36-x64"
+    # Disabling Py36 x64. Some weird problem with h5py. See github.com/tskit-dev/msprime/issues/678
+    # - PYTHON: "C:\\Miniconda36-x64"
     - PYTHON: "C:\\Miniconda37"
     # Disabling Py37. See https://github.com/tskit-dev/msprime/issues/653
     #- PYTHON: "C:\\Miniconda37-x64"
@@ -15,9 +16,7 @@ build: false
 test_script:
   - "conda config --add channels conda-forge"
   - "conda install -f --yes --file=requirements/conda-minimal.txt"
-  - "SET KASTORE_PKG=kastore>=0.2.2"
-  # Try to install kastore from conda first, but fall back on pip.
-  - "conda install --yes %KASTORE_PKG% || pip install %KASTORE_PKG%"
+  - "pip install kastore"  
   - "pip install PyVCF"  
   - "pip install newick"  
   - "pip install python_jsonschema_objects"

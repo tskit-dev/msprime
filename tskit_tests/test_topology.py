@@ -232,7 +232,7 @@ class TestZeroRoots(unittest.TestCase):
         self.assertEqual(ts.num_trees, no_root_ts.num_trees)
         for tree, no_root in zip(ts.trees(), no_root_ts.trees()):
             self.assertEqual(no_root.num_roots, 0)
-            self.assertEqual(no_root.left_root, tskit.NULL_NODE)
+            self.assertEqual(no_root.left_root, tskit.NULL)
             self.assertEqual(no_root.roots, [])
             self.assertEqual(tree.parent_dict, no_root.parent_dict)
 
@@ -262,10 +262,10 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(ts.num_edges, 0)
         t = next(ts.trees())
         self.assertEqual(t.index, 0)
-        self.assertEqual(t.left_root, tskit.NULL_NODE)
+        self.assertEqual(t.left_root, tskit.NULL)
         self.assertEqual(t.interval, (0, 1))
         self.assertEqual(t.roots, [])
-        self.assertEqual(t.root, tskit.NULL_NODE)
+        self.assertEqual(t.root, tskit.NULL)
         self.assertEqual(t.parent_dict, {})
         self.assertEqual(list(t.nodes()), [])
         self.assertEqual(list(ts.haplotypes()), [])
@@ -292,17 +292,17 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 0)
         t = next(ts.trees())
         self.assertEqual(t.index, 0)
-        self.assertEqual(t.left_root, tskit.NULL_NODE)
+        self.assertEqual(t.left_root, tskit.NULL)
         self.assertEqual(t.interval, (0, 1))
         self.assertEqual(t.roots, [])
-        self.assertEqual(t.root, tskit.NULL_NODE)
+        self.assertEqual(t.root, tskit.NULL)
         self.assertEqual(t.parent_dict, {})
         self.assertEqual(list(t.nodes()), [])
         self.assertEqual(list(ts.haplotypes()), [])
         self.assertEqual(list(ts.variants()), [])
         methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
         for method in methods:
-            self.assertEqual(method(0), tskit.NULL_NODE)
+            self.assertEqual(method(0), tskit.NULL)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
 
@@ -321,10 +321,10 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(ts.num_mutations, 1)
         t = next(ts.trees())
         self.assertEqual(t.index, 0)
-        self.assertEqual(t.left_root, tskit.NULL_NODE)
+        self.assertEqual(t.left_root, tskit.NULL)
         self.assertEqual(t.interval, (0, 1))
         self.assertEqual(t.roots, [])
-        self.assertEqual(t.root, tskit.NULL_NODE)
+        self.assertEqual(t.root, tskit.NULL)
         self.assertEqual(t.parent_dict, {})
         self.assertEqual(len(list(t.sites())), 1)
         self.assertEqual(list(t.nodes()), [])
@@ -355,7 +355,7 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(list(ts.variants()), [])
         methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
         for method in methods:
-            self.assertEqual(method(0), tskit.NULL_NODE)
+            self.assertEqual(method(0), tskit.NULL)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
         tsp = ts.simplify()
@@ -387,7 +387,7 @@ class TestEmptyTreeSequences(TopologyTestCase):
         self.assertEqual(len(list(ts.variants())), 1)
         methods = [t.parent, t.left_child, t.right_child, t.left_sib, t.right_sib]
         for method in methods:
-            self.assertEqual(method(0), tskit.NULL_NODE)
+            self.assertEqual(method(0), tskit.NULL)
             for u in [-1, 1, 100]:
                 self.assertRaises(ValueError, method, u)
         tsp = ts.simplify(filter_sites=False)
@@ -416,7 +416,7 @@ class TestHoleyTreeSequences(TopologyTestCase):
     def verify_zero_roots(self, ts):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 0)
-            self.assertEqual(tree.left_root, tskit.NULL_NODE)
+            self.assertEqual(tree.left_root, tskit.NULL)
             self.assertEqual(tree.roots, [])
 
     def test_simple_hole(self):
@@ -798,7 +798,7 @@ class TestUnaryNodes(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), root)
         self.assertEqual(t.tmrca(0, 1), root_time)
         ts_simplified, node_map = ts.simplify(map_nodes=True)
-        test_map = [tskit.NULL_NODE for _ in range(ts.num_nodes)]
+        test_map = [tskit.NULL for _ in range(ts.num_nodes)]
         test_map[0] = 0
         test_map[1] = 1
         test_map[root] = 2
@@ -1537,9 +1537,9 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), 4)
         self.assertEqual(t.mrca(0, 4), 4)
         self.assertEqual(t.mrca(2, 3), 5)
-        self.assertEqual(t.mrca(0, 2), tskit.NULL_NODE)
-        self.assertEqual(t.mrca(0, 3), tskit.NULL_NODE)
-        self.assertEqual(t.mrca(2, 4), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 2), tskit.NULL)
+        self.assertEqual(t.mrca(0, 3), tskit.NULL)
+        self.assertEqual(t.mrca(2, 4), tskit.NULL)
         ts_simplified, node_map = ts.simplify(map_nodes=True)
         for j in range(4):
             self.assertEqual(node_map[j], j)
@@ -1602,9 +1602,9 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), 6)
         self.assertEqual(t.mrca(2, 3), 7)
         self.assertEqual(t.mrca(2, 8), 7)
-        self.assertEqual(t.mrca(0, 2), tskit.NULL_NODE)
-        self.assertEqual(t.mrca(0, 3), tskit.NULL_NODE)
-        self.assertEqual(t.mrca(0, 8), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 2), tskit.NULL)
+        self.assertEqual(t.mrca(0, 3), tskit.NULL)
+        self.assertEqual(t.mrca(0, 8), tskit.NULL)
         ts_simplified, node_map = ts.simplify(map_nodes=True)
         for j in range(4):
             self.assertEqual(node_map[j], j)
@@ -1651,9 +1651,9 @@ class TestMultipleRoots(TopologyTestCase):
         self.assertEqual(t.mrca(0, 1), 6)
         self.assertEqual(t.mrca(2, 3), 7)
         self.assertEqual(t.mrca(2, 8), 7)
-        self.assertEqual(t.mrca(0, 2), tskit.NULL_NODE)
-        self.assertEqual(t.mrca(0, 3), tskit.NULL_NODE)
-        self.assertEqual(t.mrca(0, 8), tskit.NULL_NODE)
+        self.assertEqual(t.mrca(0, 2), tskit.NULL)
+        self.assertEqual(t.mrca(0, 3), tskit.NULL)
+        self.assertEqual(t.mrca(0, 8), tskit.NULL)
         ts_simplified = ts.simplify()
         self.assertEqual(ts_simplified.num_nodes, 6)
         self.assertEqual(ts_simplified.num_trees, 1)
@@ -1734,7 +1734,7 @@ class TestMultipleRoots(TopologyTestCase):
         roots = set()
         t_new = next(ts_new.trees())
         for u in ts_new.samples():
-            while t_new.parent(u) != tskit.NULL_NODE:
+            while t_new.parent(u) != tskit.NULL:
                 u = t_new.parent(u)
             roots.add(u)
         self.assertEqual(len(roots), 2)
@@ -1827,7 +1827,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [0, 1, 2])
 
@@ -1884,7 +1884,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_single_offspring_records(self):
@@ -1939,7 +1939,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         self.verify_simplify_topology(ts, [0, 1, 2])
 
     def test_many_single_offspring(self):
@@ -2065,7 +2065,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         for j, x in enumerate(ts.haplotypes()):
             self.assertEqual(x, true_haplotypes[j])
         self.verify_simplify_topology(ts, [0, 1, 2], haplotypes=True)
@@ -2148,7 +2148,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         self.verify_simplify_topology(ts, [0, 2])
         self.verify_simplify_topology(ts, [0, 4])
         self.verify_simplify_topology(ts, [2, 4])
@@ -2311,14 +2311,14 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         tree_simplified_dicts = [t.parent_dict for t in ts.trees()]
         for a, t in zip(true_simplified_trees, tree_simplified_dicts):
             for k in a.keys():
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         # check .simplify() works here
         self.verify_simplify_topology(first_ts, [1, 2, 3])
 
@@ -2379,7 +2379,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
 
@@ -2437,7 +2437,7 @@ class TestWithVisuals(TopologyTestCase):
                 if k in t.keys():
                     self.assertEqual(t[k], a[k])
                 else:
-                    self.assertEqual(a[k], tskit.NULL_NODE)
+                    self.assertEqual(a[k], tskit.NULL)
         # check .simplify() works here
         self.verify_simplify_topology(ts, [1, 2, 3])
         self.check_num_samples(
@@ -2609,7 +2609,7 @@ class TestSimplify(unittest.TestCase):
             self.assertEqual(u, node_map[u])
         # All introduced nodes should be mapped to null.
         for u in range(ts.num_samples, ts_single.num_samples):
-            self.assertEqual(node_map[u], tskit.NULL_NODE)
+            self.assertEqual(node_map[u], tskit.NULL)
         t1 = ts.dump_tables()
         t2 = tss.dump_tables()
         self.assertEqual(t1.nodes, t2.nodes)
@@ -2632,8 +2632,8 @@ class TestSimplify(unittest.TestCase):
                 mapped_pair = [node_map[u] for u in pair]
                 mrca1 = t1.get_mrca(*pair)
                 mrca2 = t2.get_mrca(*mapped_pair)
-                if mrca1 == tskit.NULL_NODE:
-                    assert mrca2 == tskit.NULL_NODE
+                if mrca1 == tskit.NULL:
+                    assert mrca2 == tskit.NULL
                 else:
                     self.assertEqual(node_map[mrca1], mrca2)
             if t2.interval[1] == t1.interval[1]:
@@ -3227,7 +3227,7 @@ class TestMutationParent(unittest.TestCase):
             site=mutations.site, node=mutations.node,
             derived_state=mutations.derived_state,
             derived_state_offset=mutations.derived_state_offset)
-        self.assertTrue(np.all(mutations.parent == tskit.NULL_MUTATION))
+        self.assertTrue(np.all(mutations.parent == tskit.NULL))
         tables.compute_mutation_parents()
         self.assertTrue(np.array_equal(parent, tables.mutations.parent))
 

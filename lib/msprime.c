@@ -322,7 +322,7 @@ msp_genetic_to_phys(msp_t *self, double x)
     return recomb_map_genetic_to_phys(self->recomb_map, x);
 }
 
-static segment_t * WARN_UNUSED
+static segment_t * MSP_WARN_UNUSED
 msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
         population_id_t population, label_id_t label,
         segment_t *prev, segment_t *next)
@@ -411,7 +411,7 @@ msp_alloc(msp_t *self,
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        ret = tsk_treeseq_load_tables(self->from_ts, self->tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_alloc(self->from_ts, self->tables, TSK_BUILD_INDEXES);
         if (ret != 0) {
             ret = msp_set_tsk_error(ret);
             goto out;
@@ -550,7 +550,7 @@ msp_free(msp_t *self)
     return ret;
 }
 
-static inline avl_node_t * WARN_UNUSED
+static inline avl_node_t * MSP_WARN_UNUSED
 msp_alloc_avl_node(msp_t *self)
 {
     avl_node_t *ret = NULL;
@@ -612,7 +612,7 @@ msp_free_segment(msp_t *self, segment_t *seg)
     fenwick_set_value(&self->links[seg->label], seg->id, 0);
 }
 
-static inline int WARN_UNUSED
+static inline int MSP_WARN_UNUSED
 msp_insert_individual(msp_t *self, segment_t *u)
 {
     int ret = 0;
@@ -918,7 +918,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
         node_id_t node, population_id_t source_pop, population_id_t dest_pop)
 {
@@ -938,7 +938,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         population_id_t dest_pop, label_id_t dest_label)
 {
@@ -989,7 +989,7 @@ out:
 /*
  * Inserts a new breakpoint at the specified locus left.
  */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_insert_breakpoint(msp_t *self, uint32_t left)
 {
     int ret = 0;
@@ -1014,7 +1014,7 @@ out:
  * Inserts a new overlap_count at the specified locus left, mapping to the
  * specified number of overlapping segments b.
  */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_insert_overlap_count(msp_t *self, uint32_t left, uint32_t v)
 {
     int ret = 0;
@@ -1038,7 +1038,7 @@ out:
  * Inserts a new overlap_count at the specified locus, and copies its
  * node mapping from the containing overlap_count.
  */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_copy_overlap_count(msp_t *self, uint32_t k)
 {
     int ret;
@@ -1058,7 +1058,7 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
 {
     int ret = 0;
@@ -1091,7 +1091,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_flush_edges(msp_t *self)
 {
     int ret = 0;
@@ -1123,14 +1123,14 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id)
 {
     int ret = 0;
     double scaled_time = self->model.model_time_to_generations(&self->model, time);
 
     ret = tsk_node_tbl_add_row(self->tables->nodes, flags, scaled_time, population_id,
-            MSP_NULL_INDIVIDUAL, NULL, 0);
+            TSK_NULL, NULL, 0);
     if (ret < 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -1170,7 +1170,7 @@ msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_conditional_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
 {
     int ret = 0;
@@ -1193,7 +1193,7 @@ out:
 
 /* Defragment the segment chain ending in z by squashing any redundant
  * segments together */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_defrag_segment_chain(msp_t *self, segment_t *z)
 {
     segment_t *y, *x;
@@ -1215,7 +1215,7 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
     return 0;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
@@ -1294,7 +1294,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_t **rhs)
 {
     int ret = 0;
@@ -1370,7 +1370,7 @@ out:
 /* If we're implementing the SMC or SMC', discard this CA event if
  * there aren't any overlapping segments.
  */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
 {
     int ret = 0;
@@ -1399,7 +1399,7 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t label,
         segment_t *a, segment_t *b)
 {
@@ -1569,7 +1569,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_priority_queue_insert(msp_t *self, avl_tree_t *Q, segment_t *u)
 {
     int ret = 0;
@@ -1593,7 +1593,7 @@ out:
  * any number of ancestors to merge. The AVL tree is a priority queue in
  * sorted by left coordinate.
  */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         label_id_t label)
 {
@@ -1775,7 +1775,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
@@ -1793,7 +1793,7 @@ msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t des
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_reset_memory_state(msp_t *self)
 {
     int ret = 0;
@@ -1834,7 +1834,7 @@ msp_reset_memory_state(msp_t *self)
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
 {
     int ret = MSP_ERR_GENERIC;
@@ -1868,11 +1868,11 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree,
     segment_t *seg, *tail;
     label_id_t label = 0; /* For now only support label 0 */
 
-    for (root = tree->left_root; root != MSP_NULL_NODE; root = tree->right_sib[root]) {
+    for (root = tree->left_root; root != TSK_NULL; root = tree->right_sib[root]) {
         population = node_population[root];
         /* Reference integrity has alreay been checked, but the null population
          * is still possibile */
-        if (population == MSP_NULL_POPULATION) {
+        if (population == TSK_NULL) {
             ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
@@ -2029,7 +2029,7 @@ msp_reset_from_samples(msp_t *self)
                 goto out;
             }
         }
-        ret = msp_store_node(self, MSP_NODE_IS_SAMPLE,
+        ret = msp_store_node(self, TSK_NODE_IS_SAMPLE,
                 self->samples[u].time,
                 self->samples[u].population_id);
         if (ret != 0) {
@@ -2048,7 +2048,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_apply_demographic_events(msp_t *self)
 {
     int ret = 0;
@@ -2122,7 +2122,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_initialise_from_samples(msp_t *self)
 {
     int ret = 0;
@@ -2177,7 +2177,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_initialise_from_ts(msp_t *self)
 {
     int ret = 0;
@@ -2200,7 +2200,7 @@ msp_initialise_from_ts(msp_t *self)
         root_time = GSL_MAX(model_time, root_time);
         /* TODO we can catch ancient samples here and insert them as sampling
          * events, if we wish to support this. */
-        if (self->tables->nodes->flags[j] & MSP_NODE_IS_SAMPLE) {
+        if (self->tables->nodes->flags[j] & TSK_NODE_IS_SAMPLE) {
             num_samples++;
         }
         pop = self->tables->nodes->population[j];
@@ -2228,7 +2228,7 @@ out:
 /*
  * Sets up the memory heaps and rescales times and rates into simulation units.
  */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_initialise(msp_t *self)
 {
     int ret = -1;
@@ -2311,7 +2311,7 @@ msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, d
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_sanity_check(msp_t *self, int64_t num_links)
 {
     int ret = 0;
@@ -2337,7 +2337,7 @@ out:
 }
 
 /* The main event loop for continuous time coalescent models. */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
@@ -2459,7 +2459,7 @@ typedef struct _segment_list_t {
 } segment_list_t;
 
 /* Performs a single generation under the Wright Fisher model */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_dtwf_generation(msp_t *self)
 {
     int ret = 0;
@@ -2582,7 +2582,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_store_simultaneous_migration_events(msp_t *self, avl_tree_t *nodes,
        population_id_t source_pop, label_id_t label) {
     int ret = 0;
@@ -2605,7 +2605,7 @@ msp_store_simultaneous_migration_events(msp_t *self, avl_tree_t *nodes,
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_simultaneous_migration_event(msp_t *self, avl_tree_t *nodes,
         population_id_t source_pop, population_id_t dest_pop) {
     int ret = 0;
@@ -2630,7 +2630,7 @@ out:
 }
 
 /* The main event loop for the Wright Fisher model. */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
@@ -2883,7 +2883,7 @@ out:
  * or specified maximum simulation time has been reached or the specified maximum
  * number of events has been reached.
  */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
@@ -2926,7 +2926,7 @@ out:
 }
 
 /* Add in nodes and edges for the remaining segments to the output table. */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_insert_uncoalesced_edges(msp_t *self)
 {
     int ret = 0;
@@ -2949,17 +2949,17 @@ msp_insert_uncoalesced_edges(msp_t *self)
                  * hack an extra epsilon onto the parent time) and (b), this node
                  * could only have arisen as the result of a coalescence and so this
                  * node really does represent the current ancestor */
-                node = MSP_NULL_NODE;
+                node = TSK_NULL;
                 for (seg = (segment_t *) a->item; seg != NULL; seg = seg->next) {
                     if (nodes->time[seg->value] == current_time) {
                         node = seg->value;
                         break;
                     }
                 }
-                if (node == MSP_NULL_NODE) {
+                if (node == TSK_NULL) {
                     /* Add a node for this ancestor */
                     node = tsk_node_tbl_add_row(nodes, 0, current_time, pop,
-                            MSP_NULL_INDIVIDUAL, NULL, 0);
+                            TSK_NULL, NULL, 0);
                     if (node < 0) {
                         ret = msp_set_tsk_error(node);
                         goto out;
@@ -3002,7 +3002,7 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_finalise_tables(msp_t *self)
 {
     int ret = 0;
@@ -3048,7 +3048,7 @@ out:
 }
 
 /* Used for high-level debugging. */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_compute_population_size(msp_t *self, size_t population_id, double time,
         double *pop_size)
 {
@@ -3177,7 +3177,7 @@ msp_get_num_migrations(msp_t *self)
 }
 
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_get_ancestors(msp_t *self, segment_t **ancestors)
 {
     int ret = -1;
@@ -3201,7 +3201,7 @@ msp_get_ancestors(msp_t *self, segment_t **ancestors)
     return ret;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_get_breakpoints(msp_t *self, size_t *breakpoints)
 {
     int ret = -1;
@@ -3218,7 +3218,7 @@ msp_get_breakpoints(msp_t *self, size_t *breakpoints)
     return ret;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_get_migration_matrix(msp_t *self, double *migration_matrix)
 {
     size_t N = self->num_populations;
@@ -3232,7 +3232,7 @@ msp_get_migration_matrix(msp_t *self, double *migration_matrix)
     return 0;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 {
     size_t N = self->num_populations;
@@ -3241,14 +3241,14 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
     return 0;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_get_samples(msp_t *self, sample_t **samples)
 {
     *samples = self->samples;
     return 0;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_get_population_configuration(msp_t *self, size_t population_id, double *initial_size,
         double *growth_rate)
 {
@@ -3284,7 +3284,7 @@ msp_get_recombination_rate(msp_t *self)
 /* Demographic events. All times and input parameters are specified in units
  * of generations. When we store these values, we must rescale them into
  * model time, as appropriate. */
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
 {
     int ret = MSP_ERR_GENERIC;
@@ -3434,7 +3434,7 @@ out:
 
 /* Migration rate change */
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_change_migration_matrix_entry(msp_t *self, size_t index, double rate)
 {
     int ret = 0;
@@ -3495,7 +3495,7 @@ msp_print_migration_rate_change(msp_t * MSP_UNUSED(self),
 
 /* Add a migration rate change event. Time and migration rate are measured in
  * units of generations. */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_add_migration_rate_change(msp_t *self, double time, int matrix_index,
         double migration_rate)
 {
@@ -3578,7 +3578,7 @@ msp_print_mass_migration(msp_t * MSP_UNUSED(self), demographic_event_t *event, F
 }
 
 /* Adds a mass migration event. Time is measured in units of generations */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_add_mass_migration(msp_t *self, double time, int source, int destination,
         double proportion)
 {
@@ -3671,7 +3671,7 @@ msp_print_simple_bottleneck(msp_t * MSP_UNUSED(self), demographic_event_t *event
 }
 
 /* Add a simple bottleneck event. Time is measured in generations */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double proportion)
 {
     int ret = 0;
@@ -3746,7 +3746,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
         lineages[u] = u;
     }
     for (u = 0; u < (node_id_t) (2 * n); u++) {
-        pi[u] = MSP_NULL_NODE;
+        pi[u] = TSK_NULL;
     }
     j = 0;
     for (node = pop->head; node != NULL; node = node->next) {
@@ -3793,7 +3793,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
      */
     for (j = 0; j < n; j++) {
         u = (node_id_t) j;
-        while (pi[u] != MSP_NULL_NODE) {
+        while (pi[u] != TSK_NULL) {
             u = pi[u];
         }
         if (u >= (node_id_t) n) {
@@ -3848,7 +3848,7 @@ msp_print_instantaneous_bottleneck(msp_t *MSP_UNUSED(self),
 
 /* Add an instantaneous bottleneck event. Time and strength are measured in generations
  */
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
         double strength)
 {
@@ -3931,7 +3931,7 @@ msp_std_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id,
     return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_std_common_ancestor_event(msp_t *self, population_id_t population_id,
         label_id_t label)
 {
@@ -4082,7 +4082,7 @@ msp_dirac_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id,
     return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t label)
 {
     int ret = 0;
@@ -4293,7 +4293,7 @@ msp_beta_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id,
     return result;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 msp_multi_merger_common_ancestor_event(msp_t *self, double x,
     avl_tree_t *ancestors, avl_tree_t *Q)
 {
@@ -4332,7 +4332,7 @@ out:
 }
 
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t label)
 {
     int ret = 0;

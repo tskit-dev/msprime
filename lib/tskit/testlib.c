@@ -394,7 +394,7 @@ parse_mutations(const char *text, tsk_mutation_tbl_t *mutation_table)
         p = strtok(NULL, whitespace);
         CU_ASSERT_FATAL(p != NULL);
         strncpy(derived_state, p, MAX_LINE);
-        parent = TSK_NULL_MUTATION;
+        parent = TSK_NULL;
         p = strtok(NULL, whitespace);
         if (p != NULL) {
             parent = atoi(p);
@@ -487,7 +487,7 @@ tsk_treeseq_from_text(tsk_treeseq_t *ts, double sequence_length,
     /* Not supporting provenance here for now */
     CU_ASSERT_FATAL(provenance == NULL);
 
-    ret = tsk_tbl_collection_alloc(&tables, TSK_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = sequence_length;
     parse_nodes(nodes, tables.nodes);
@@ -513,9 +513,9 @@ tsk_treeseq_from_text(tsk_treeseq_t *ts, double sequence_length,
         }
     }
 
-    ret = tsk_treeseq_load_tables(ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_alloc(ts, &tables, TSK_BUILD_INDEXES);
     /* tsk_treeseq_print_state(ts, stdout); */
-    /* printf("ret = %s\n", msp_strerror(ret)); */
+    /* printf("ret = %s\n", tsk_strerror(ret)); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_tbl_collection_free(&tables);
 }

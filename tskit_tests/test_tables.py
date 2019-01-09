@@ -382,8 +382,6 @@ class CommonTestsMixin(object):
                     self.assertEqual(table.num_rows, j * num_rows)
                     self.assertEqual(len(table), j * num_rows)
                     self.assertGreater(table.max_rows, table.num_rows)
-                    if table.num_rows < max_rows:
-                        self.assertEqual(table.max_rows, max_rows)
 
     def test_str(self):
         for num_rows in [0, 10]:
@@ -638,8 +636,8 @@ class TestNodeTable(unittest.TestCase, CommonTestsMixin, MetadataTestsMixin):
         self.assertEqual(t.add_row(), 0)
         self.assertEqual(t.time[0], 0)
         self.assertEqual(t.flags[0], 0)
-        self.assertEqual(t.population[0], tskit.NULL_POPULATION)
-        self.assertEqual(t.individual[0], tskit.NULL_INDIVIDUAL)
+        self.assertEqual(t.population[0], tskit.NULL)
+        self.assertEqual(t.individual[0], tskit.NULL)
         self.assertEqual(len(t.metadata), 0)
         self.assertEqual(t.metadata_offset[0], 0)
 

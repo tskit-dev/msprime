@@ -353,9 +353,9 @@ class Simplifier(object):
             individual_id_map[:] = -1
 
         for node in self.tables.nodes:
-            if self.filter_populations and node.population != tskit.NULL_POPULATION:
+            if self.filter_populations and node.population != tskit.NULL:
                 population_ref_count[node.population] += 1
-            if self.filter_individuals and node.individual != tskit.NULL_POPULATION:
+            if self.filter_individuals and node.individual != tskit.NULL:
                 individual_ref_count[node.individual] += 1
 
         for input_id, count in enumerate(population_ref_count):

@@ -352,9 +352,9 @@ class TestSimplify(unittest.TestCase):
             for pair in pairs:
                 mapped_pair = [node_map[u] for u in pair]
                 mrca1 = old_tree.get_mrca(*pair)
-                self.assertNotEqual(mrca1, tskit.NULL_NODE)
+                self.assertNotEqual(mrca1, tskit.NULL)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
-                self.assertNotEqual(mrca2, tskit.NULL_NODE)
+                self.assertNotEqual(mrca2, tskit.NULL)
                 self.assertEqual(node_map[mrca1], mrca2)
         mut_parent = tsutil.compute_mutation_parent(ts=ts)
         self.assertArrayEqual(mut_parent, ts.tables.mutations.parent)

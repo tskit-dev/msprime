@@ -104,12 +104,12 @@ typedef struct {
 /* Tree sequence.*/
 /****************************************************************************/
 
-void tsk_treeseq_print_state(tsk_treeseq_t *self, FILE *out);
-int tsk_treeseq_load_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables, int flags);
-int tsk_treeseq_dump_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables, int flags);
+int tsk_treeseq_alloc(tsk_treeseq_t *self, tsk_tbl_collection_t *tables, int flags);
 int tsk_treeseq_load(tsk_treeseq_t *self, const char *filename, int flags);
 int tsk_treeseq_dump(tsk_treeseq_t *self, const char *filename, int flags);
+int tsk_treeseq_copy_tables(tsk_treeseq_t *self, tsk_tbl_collection_t *tables);
 int tsk_treeseq_free(tsk_treeseq_t *self);
+void tsk_treeseq_print_state(tsk_treeseq_t *self, FILE *out);
 
 size_t tsk_treeseq_get_num_nodes(tsk_treeseq_t *self);
 size_t tsk_treeseq_get_num_edges(tsk_treeseq_t *self);

@@ -28,19 +28,8 @@ import tskit.tables as tables
 import tskit.formats as formats
 
 from _tskit import NODE_IS_SAMPLE
+from _tskit import NULL
 
-NULL = -1
-
-# TODO change to using NULL when porting to tskit. I.e., all of these
-# would be tskit.NULL.
-
-NULL_NODE = -1
-
-NULL_POPULATION = -1
-
-NULL_INDIVIDUAL = -1
-
-NULL_MUTATION = -1
 
 IS_PY2 = sys.version_info[0] < 3
 
@@ -130,8 +119,8 @@ class Node(SimpleContainer):
     :vartype metadata: bytes
     """
     def __init__(
-            self, id_=None, flags=0, time=0, population=NULL_POPULATION,
-            individual=NULL_INDIVIDUAL, metadata=""):
+            self, id_=None, flags=0, time=0, population=NULL,
+            individual=NULL, metadata=""):
         self.id = id_
         self.time = time
         self.population = population
@@ -237,7 +226,7 @@ class Mutation(SimpleContainer):
     :ivar parent: The integer ID of this mutation's parent mutation. When multiple
         mutations occur at a site along a path in the tree, mutations must
         record the mutation that is immediately above them. If the mutation does
-        not have a parent, this is equal to the :const:`NULL_MUTATION` (-1).
+        not have a parent, this is equal to the :const:`NULL` (-1).
         To obtain further information about a mutation with a given ID, use
         :meth:`.TreeSequence.mutation`.
     :vartype parent: int
@@ -381,27 +370,27 @@ def add_deprecated_mutation_attrs(site, mutation):
     return mutation
 
 
-class SparseTree(object):
+class Tree(object):
     """
-    A SparseTree is a single tree in a :class:`.TreeSequence`. The SparseTree
+    A Tree is a single tree in a :class:`.TreeSequence`. The Tree
     implementation differs from most tree implementations by using **integer
     node IDs** to refer to nodes rather than objects. Thus, when we wish to
     find the parent of the node with ID '0', we use ``tree.parent(0)``, which
     returns another integer. If '0' does not have a parent in the current tree
-    (e.g., if it is a root), then the special value :const:`.NULL_NODE`
+    (e.g., if it is a root), then the special value :const:`.NULL`
     (:math:`-1`) is returned. The children of a node are found using the
     :meth:`.children` method. To obtain information about a particular node,
     one may either use ``tree.tree_sequence.node(u)`` to obtain the
     corresponding :class:`Node` instance, or use the :meth:`.time` or
     :meth:`.population` shorthands. Tree traversals in various orders
-    is possible using the :meth:`.SparseTree.nodes` iterator.
+    is possible using the :meth:`.Tree.nodes` iterator.
 
-    Sparse trees are not intended to be instantiated directly, and are
+    Trees are not intended to be instantiated directly, and are
     obtained as part of a :class:`.TreeSequence` using the
     :meth:`.trees` method.
     """
-    def __init__(self, ll_sparse_tree, tree_sequence):
-        self._ll_sparse_tree = ll_sparse_tree
+    def __init__(self, ll_tree, tree_sequence):
+        self._ll_tree = ll_tree
         self._tree_sequence = tree_sequence
 
     @property
@@ -468,7 +457,7 @@ class SparseTree(object):
         :return: The most recent common ancestor of u and v.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_mrca(u, v)
+        return self._ll_tree.get_mrca(u, v)
 
     def get_tmrca(self, u, v):
         # Deprecated alias for tmrca
@@ -495,44 +484,44 @@ class SparseTree(object):
     def parent(self, u):
         """
         Returns the parent of the specified node. Returns
-        the :const:`.NULL_NODE` if u is the root or is not a node in
+        the :const:`.NULL` if u is the root or is not a node in
         the current tree.
 
         :param int u: The node of interest.
         :return: The parent of u.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_parent(u)
+        return self._ll_tree.get_parent(u)
 
     # Quintuply linked tree structure.
 
     def left_child(self, u):
-        return self._ll_sparse_tree.get_left_child(u)
+        return self._ll_tree.get_left_child(u)
 
     def right_child(self, u):
-        return self._ll_sparse_tree.get_right_child(u)
+        return self._ll_tree.get_right_child(u)
 
     def left_sib(self, u):
-        return self._ll_sparse_tree.get_left_sib(u)
+        return self._ll_tree.get_left_sib(u)
 
     def right_sib(self, u):
-        return self._ll_sparse_tree.get_right_sib(u)
+        return self._ll_tree.get_right_sib(u)
 
     # Sample list.
 
     def left_sample(self, u):
-        return self._ll_sparse_tree.get_left_sample(u)
+        return self._ll_tree.get_left_sample(u)
 
     def right_sample(self, u):
-        return self._ll_sparse_tree.get_right_sample(u)
+        return self._ll_tree.get_right_sample(u)
 
     def next_sample(self, u):
-        return self._ll_sparse_tree.get_next_sample(u)
+        return self._ll_tree.get_next_sample(u)
 
     # TODO do we also have right_root?
     @property
     def left_root(self):
-        return self._ll_sparse_tree.get_left_root()
+        return self._ll_tree.get_left_root()
 
     def get_children(self, u):
         # Deprecated alias for self.children
@@ -547,7 +536,7 @@ class SparseTree(object):
         :return: The children of ``u`` as a tuple of integers
         :rtype: tuple(int)
         """
-        return self._ll_sparse_tree.get_children(u)
+        return self._ll_tree.get_children(u)
 
     def get_time(self, u):
         # Deprecated alias for self.time
@@ -562,7 +551,7 @@ class SparseTree(object):
         :return: The time of u.
         :rtype: float
         """
-        return self._ll_sparse_tree.get_time(u)
+        return self._ll_tree.get_time(u)
 
     def get_population(self, u):
         # Deprecated alias for self.population
@@ -577,7 +566,7 @@ class SparseTree(object):
         :return: The ID of the population associated with node u.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_population(u)
+        return self._ll_tree.get_population(u)
 
     def is_internal(self, u):
         """
@@ -610,7 +599,7 @@ class SparseTree(object):
         :return: True if u is a sample.
         :rtype: bool
         """
-        return bool(self._ll_sparse_tree.is_sample(u))
+        return bool(self._ll_tree.is_sample(u))
 
     @property
     def num_nodes(self):
@@ -619,7 +608,7 @@ class SparseTree(object):
 
         :rtype: int
         """
-        return self._ll_sparse_tree.get_num_nodes()
+        return self._ll_tree.get_num_nodes()
 
     @property
     def num_roots(self):
@@ -630,7 +619,7 @@ class SparseTree(object):
 
         :rtype: int
         """
-        return self._ll_sparse_tree.get_num_roots()
+        return self._ll_tree.get_num_roots()
 
     @property
     def roots(self):
@@ -642,7 +631,7 @@ class SparseTree(object):
 
             roots = set()
             for u in tree_sequence.samples():
-                while tree.parent(u) != tskit.NULL_NODE:
+                while tree.parent(u) != tskit.NULL:
                     u = tree.parent(u)
                 roots.add(u)
             # roots is now the set of all roots in this tree.
@@ -657,7 +646,7 @@ class SparseTree(object):
         """
         roots = []
         u = self.left_root
-        while u != NULL_NODE:
+        while u != NULL:
             roots.append(u)
             u = self.right_sib(u)
         return roots
@@ -677,7 +666,7 @@ class SparseTree(object):
         :raises: :class:`ValueError` if this tree contains more than one root.
         """
         root = self.left_root
-        if root != NULL_NODE and self.right_sib(root) != NULL_NODE:
+        if root != NULL and self.right_sib(root) != NULL:
             raise ValueError("More than one root exists. Use tree.roots instead")
         return root
 
@@ -694,7 +683,7 @@ class SparseTree(object):
         :return: The index of this tree.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_index()
+        return self._ll_tree.get_index()
 
     def get_interval(self):
         # Deprecated alias for self.interval
@@ -715,7 +704,7 @@ class SparseTree(object):
             covered by this tree.
         :rtype: tuple
         """
-        return self._ll_sparse_tree.get_left(), self._ll_sparse_tree.get_right()
+        return self._ll_tree.get_left(), self._ll_tree.get_right()
 
     def get_length(self):
         # Deprecated alias for self.length
@@ -756,7 +745,7 @@ class SparseTree(object):
         :return: The number of sample nodes in the tree.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_sample_size()
+        return self._ll_tree.get_sample_size()
 
     def draw(
             self, path=None, width=None, height=None,
@@ -844,7 +833,7 @@ class SparseTree(object):
         :return: The number of sites on this tree.
         :rtype: int
         """
-        return self._ll_sparse_tree.get_num_sites()
+        return self._ll_tree.get_num_sites()
 
     def sites(self):
         """
@@ -857,7 +846,7 @@ class SparseTree(object):
         :rtype: iter(:class:`.Site`)
         """
         # TODO change the low-level API to just return the IDs of the sites.
-        for ll_site in self._ll_sparse_tree.get_sites():
+        for ll_site in self._ll_tree.get_sites():
             _, _, _, id_, _ = ll_site
             yield self.tree_sequence.site(id_)
 
@@ -909,7 +898,7 @@ class SparseTree(object):
                     yield v
 
     def _sample_generator(self, u):
-        if self._ll_sparse_tree.get_flags() & _tskit.SAMPLE_LISTS:
+        if self._ll_tree.get_flags() & _tskit.SAMPLE_LISTS:
             samples = self.tree_sequence.samples()
             index = self.left_sample(u)
             if index != NULL:
@@ -979,9 +968,9 @@ class SparseTree(object):
         :rtype: int
         """
         if u is None:
-            return sum(self._ll_sparse_tree.get_num_samples(u) for u in self.roots)
+            return sum(self._ll_tree.get_num_samples(u) for u in self.roots)
         else:
-            return self._ll_sparse_tree.get_num_samples(u)
+            return self._ll_tree.get_num_samples(u)
 
     def get_num_tracked_leaves(self, u):
         # Deprecated alias for num_tracked_samples. The method name is inaccurate
@@ -1012,11 +1001,11 @@ class SparseTree(object):
         roots = [u]
         if u is None:
             roots = self.roots
-        if not (self._ll_sparse_tree.get_flags() & _tskit.SAMPLE_COUNTS):
+        if not (self._ll_tree.get_flags() & _tskit.SAMPLE_COUNTS):
             raise RuntimeError(
                 "The get_num_tracked_samples method is only supported "
                 "when sample_counts=True.")
-        return sum(self._ll_sparse_tree.get_num_tracked_samples(root) for root in roots)
+        return sum(self._ll_tree.get_num_tracked_samples(root) for root in roots)
 
     def _preorder_traversal(self, u):
         stack = [u]
@@ -1028,7 +1017,7 @@ class SparseTree(object):
 
     def _postorder_traversal(self, u):
         stack = [u]
-        k = NULL_NODE
+        k = NULL
         while stack:
             v = stack[-1]
             if self.is_internal(v) and v != k:
@@ -1140,7 +1129,7 @@ class SparseTree(object):
                     "newick trees, one for each root.")
             root = self.root
         if node_labels is None:
-            s = self._ll_sparse_tree.get_newick(precision=precision, root=root)
+            s = self._ll_tree.get_newick(precision=precision, root=root)
             if not IS_PY2:
                 s = s.decode()
         else:
@@ -1154,7 +1143,7 @@ class SparseTree(object):
     def get_parent_dict(self):
         pi = {
             u: self.parent(u) for u in range(self.num_nodes)
-            if self.parent(u) != NULL_NODE}
+            if self.parent(u) != NULL}
         return pi
 
     def __str__(self):
@@ -1369,10 +1358,10 @@ def parse_nodes(
             flags = 0
             if is_sample != 0:
                 flags |= NODE_IS_SAMPLE
-            population = NULL_POPULATION
+            population = NULL
             if population_index is not None:
                 population = int(tokens[population_index])
-            individual = NULL_INDIVIDUAL
+            individual = NULL
             if individual_index is not None:
                 individual = int(tokens[individual_index])
             metadata = b''
@@ -1507,7 +1496,7 @@ def parse_mutations(
     node_index = header.index("node")
     derived_state_index = header.index("derived_state")
     parent_index = None
-    parent = NULL_MUTATION
+    parent = NULL
     try:
         parent_index = header.index("parent")
     except ValueError:
@@ -1661,7 +1650,7 @@ def load_text(nodes, edges, sites=None, mutations=None, individuals=None,
     # We need to add populations any referenced in the node table.
     if len(tc.nodes) > 0:
         max_population = tc.nodes.population.max()
-        if max_population != NULL_POPULATION:
+        if max_population != NULL:
             for _ in range(max_population + 1):
                 tc.populations.add_row()
     if sites is not None:
@@ -1940,7 +1929,7 @@ class TreeSequence(object):
         tree sequence with a sequence length :math:`L`, the constituent
         trees will be defined over the half-closed interval
         :math:`[0, L)`. Each tree then covers some subset of this
-        interval --- see :meth:`tskit.SparseTree.get_interval` for details.
+        interval --- see :meth:`tskit.Tree.get_interval` for details.
 
         :return: The length of the sequence in this tree sequence in bases.
         :rtype: float
@@ -2155,7 +2144,7 @@ class TreeSequence(object):
         build the trees as we move from left-to-right along the tree sequence.
         The iterator yields a sequence of 3-tuples, ``(interval, edges_out,
         edges_in)``. The ``interval`` is a pair ``(left, right)`` representing
-        the genomic interval (see :attr:`SparseTree.interval`). The
+        the genomic interval (see :attr:`Tree.interval`). The
         ``edges_out`` value is a tuple of the edges that were just-removed to
         create the tree covering the interval (hence, ``edges_out`` will always
         be empty for the first tree). The ``edges_in`` value is a tuple of
@@ -2253,7 +2242,7 @@ class TreeSequence(object):
         Currently does not support the extra options for the :meth:`.trees` method.
 
         :return: The first tree in this tree sequence.
-        :rtype: :class:`.SparseTree`.
+        :rtype: :class:`.Tree`.
         """
         return next(self.trees())
 
@@ -2262,18 +2251,18 @@ class TreeSequence(object):
             tracked_leaves=None, leaf_counts=None, leaf_lists=None):
         """
         Returns an iterator over the trees in this tree sequence. Each value
-        returned in this iterator is an instance of :class:`.SparseTree`.
+        returned in this iterator is an instance of :class:`.Tree`.
 
         The ``sample_counts`` and ``sample_lists`` parameters control the
         features that are enabled for the resulting trees. If ``sample_counts``
         is True, then it is possible to count the number of samples underneath
         a particular node in constant time using the :meth:`.num_samples`
         method. If ``sample_lists`` is True a more efficient algorithm is
-        used in the :meth:`.SparseTree.samples` method.
+        used in the :meth:`.Tree.samples` method.
 
         The ``tracked_samples`` parameter can be used to efficiently count the
         number of samples in a given set that exist in a particular subtree
-        using the :meth:`.SparseTree.get_num_tracked_samples` method. It is an
+        using the :meth:`.Tree.get_num_tracked_samples` method. It is an
         error to use the ``tracked_samples`` parameter when the ``sample_counts``
         flag is False.
 
@@ -2283,14 +2272,14 @@ class TreeSequence(object):
            behaviour.
 
         :param list tracked_samples: The list of samples to be tracked and
-            counted using the :meth:`.SparseTree.get_num_tracked_samples`
+            counted using the :meth:`.Tree.get_num_tracked_samples`
             method.
         :param bool sample_counts: If True, support constant time sample counts
-            via the :meth:`.SparseTree.num_samples` and
-            :meth:`.SparseTree.get_num_tracked_samples` methods.
+            via the :meth:`.Tree.num_samples` and
+            :meth:`.Tree.get_num_tracked_samples` methods.
         :param bool sample_lists: If True, provide more efficient access
             to the samples beneath a give node using the
-            :meth:`.SparseTree.samples` method.
+            :meth:`.Tree.samples` method.
         :return: An iterator over the sparse trees in this tree sequence.
         :rtype: iter
         """
@@ -2315,11 +2304,11 @@ class TreeSequence(object):
         if tracked_samples is not None:
             # TODO remove this when we allow numpy arrays in the low-level API.
             kwargs["tracked_samples"] = list(tracked_samples)
-        ll_sparse_tree = _tskit.SparseTree(self._ll_tree_sequence, **kwargs)
-        iterator = _tskit.SparseTreeIterator(ll_sparse_tree)
-        sparse_tree = SparseTree(ll_sparse_tree, self)
+        ll_tree = _tskit.Tree(self._ll_tree_sequence, **kwargs)
+        iterator = _tskit.TreeIterator(ll_tree)
+        tree = Tree(ll_tree, self)
         for _ in iterator:
-            yield sparse_tree
+            yield tree
 
     def haplotypes(self):
         """
@@ -2437,19 +2426,20 @@ class TreeSequence(object):
 
     def mean_descendants(self, reference_sets):
         """
-        Computes for every node the mean number of samples in each of the `reference_sets`
-        that descend from that node, averaged over the portions of the genome for which
-        the node is ancestral to *any* sample.  The output is an array, `C[node, j]`,
-        which reports the total length of all genomes in `reference_sets[j]` that
-        inherit from `node`, divided by the total length of the genome on which `node`
-        is an ancestor to any sample in the tree sequence.
+        Computes for every node the mean number of samples in each of the
+        `reference_sets` that descend from that node, averaged over the
+        portions of the genome for which the node is ancestral to *any* sample.
+        The output is an array, `C[node, j]`, which reports the total length of
+        all genomes in `reference_sets[j]` that inherit from `node`, divided by
+        the total length of the genome on which `node` is an ancestor to any
+        sample in the tree sequence.
 
-        .. note:: This interface *may change*, particularly the normalization by proportion
-            of the genome that `node` is an ancestor to anyone.
+        .. note:: This interface *may change*, particularly the normalization by
+            proportion of the genome that `node` is an ancestor to anyone.
 
         :param iterable reference sets: A list of lists of node IDs.
-        :return: An array with dimensions (number of nodes in the tree sequence, number of
-            reference sets)
+        :return: An array with dimensions (number of nodes in the tree sequence,
+            number of reference sets)
         """
         return self._ll_tree_sequence.mean_descendants(reference_sets)
 
@@ -2624,7 +2614,7 @@ class TreeSequence(object):
         also return a numpy array mapping the node IDs in this tree sequence to
         their node IDs in the simplified tree tree sequence. If a node ``u`` is not
         present in the new tree sequence, the value of this mapping will be
-        NULL_NODE (-1).
+        NULL (-1).
 
         In the returned tree sequence, the node with ID ``0`` corresponds to
         ``samples[0]``, node ``1`` corresponds to ``samples[1]``, and so on.
@@ -2757,5 +2747,5 @@ class TreeSequence(object):
 
     def newick_trees(self, precision=3, breakpoints=None, Ne=1):
         raise NotImplementedError(
-            "This method is no longer supported. Please use the SparseTree.newick"
+            "This method is no longer supported. Please use the Tree.newick"
             " method instead")

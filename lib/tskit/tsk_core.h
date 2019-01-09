@@ -32,14 +32,8 @@
 /* Node flags */
 #define TSK_NODE_IS_SAMPLE 1u
 
-/* The root node indicator */
-#define TSK_NULL_NODE (-1)
-/* Indicates the that the population ID has not been set. */
-#define TSK_NULL_POPULATION (-1)
-/* There is no parent for a given mutation */
-#define TSK_NULL_MUTATION (-1)
-/* Indicates that no individual has been set */
-#define TSK_NULL_INDIVIDUAL (-1)
+/* The null ID */
+#define TSK_NULL (-1)
 
 /* Flags for simplify() */
 #define TSK_FILTER_SITES                 (1 << 0)
@@ -59,7 +53,7 @@
      TSK_CHECK_SITE_DUPLICATES | TSK_CHECK_MUTATION_ORDERING | TSK_CHECK_INDEXES)
 
 /* Flags for dump tables */
-#define TSK_ALLOC_TABLES 1
+/* #define TSK_ALLOC_TABLES 1 */
 
 /* Flags for load tables */
 #define TSK_BUILD_INDEXES 1

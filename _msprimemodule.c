@@ -29,10 +29,6 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_errno.h>
 
-/* Need this for now until we can compile against a tskit dynamic API. */
-#include <kastore.h>
-kas_funcptr *kas_dynamic_api;
-
 #include "msprime.h"
 
 #if PY_MAJOR_VERSION >= 3
@@ -279,8 +275,8 @@ make_edge(tsk_edge_t *edge)
 static PyObject *
 make_migration(tsk_migration_t *r)
 {
-    int source = r->source == TSK_NULL_POPULATION ? -1: r->source;
-    int dest = r->dest == TSK_NULL_POPULATION ? -1: r->dest;
+    int source = r->source == TSK_NULL ? -1: r->source;
+    int dest = r->dest == TSK_NULL ? -1: r->dest;
     PyObject *ret = NULL;
 
     ret = Py_BuildValue("ddiiid",
@@ -1540,7 +1536,7 @@ LightweightTableCollection_init(LightweightTableCollection *self, PyObject *args
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
+    err = tsk_tbl_collection_alloc(self->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3656,7 +3652,7 @@ Simulator_get_samples(Simulator *self)
         goto out;
     }
     for (j = 0; j < num_samples; j++) {
-        population = samples[j].population_id == TSK_NULL_POPULATION? -1:
+        population = samples[j].population_id == TSK_NULL? -1:
             samples[j].population_id;
         t = Py_BuildValue("id", population, samples[j].time);
         if (t == NULL) {

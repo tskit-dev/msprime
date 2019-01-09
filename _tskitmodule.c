@@ -25,11 +25,6 @@
 #include <numpy/arrayobject.h>
 #include <float.h>
 
-/* Allow C code to use kastore's dynamic API. This MUST be compiled with
- * -DKASTORE_DYNAMIC_API */
-#include <kastore.h>
-kas_funcptr *kas_dynamic_api;
-
 #include "tskit.h"
 
 #if PY_MAJOR_VERSION >= 3
@@ -144,14 +139,14 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     TreeSequence *tree_sequence;
-    tsk_tree_t *sparse_tree;
-} SparseTree;
+    tsk_tree_t *tree;
+} Tree;
 
 typedef struct {
     PyObject_HEAD
-    SparseTree *sparse_tree;
+    Tree *tree;
     int first;
-} SparseTreeIterator;
+} TreeIterator;
 
 typedef struct {
     PyObject_HEAD
@@ -425,8 +420,8 @@ make_edge(tsk_edge_t *edge)
 static PyObject *
 make_migration(tsk_migration_t *r)
 {
-    int source = r->source == TSK_NULL_POPULATION ? -1: r->source;
-    int dest = r->dest == TSK_NULL_POPULATION ? -1: r->dest;
+    int source = r->source == TSK_NULL ? -1: r->source;
+    int dest = r->dest == TSK_NULL ? -1: r->dest;
     PyObject *ret = NULL;
 
     ret = Py_BuildValue("ddiiid",
@@ -1807,7 +1802,7 @@ LightweightTableCollection_init(LightweightTableCollection *self, PyObject *args
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
+    err = tsk_tbl_collection_alloc(self->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1943,8 +1938,6 @@ IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_position_length_increment = 0;
-    Py_ssize_t max_metadata_length_increment = 0;
 
     self->table = NULL;
     self->locked = false;
@@ -1961,14 +1954,12 @@ IndividualTable_init(IndividualTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_individual_tbl_alloc(self->table,
-            (size_t) max_rows_increment,
-            (size_t) max_position_length_increment,
-            (size_t) max_metadata_length_increment);
+    err = tsk_individual_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_individual_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -2376,7 +2367,6 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
     int err;
     static char *kwlist[] = {"max_rows_increment", NULL};
     Py_ssize_t max_rows_increment = 0;
-    Py_ssize_t max_metadata_length_increment = 0;
 
     self->table = NULL;
     self->locked = false;
@@ -2394,12 +2384,12 @@ NodeTable_init(NodeTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_node_tbl_alloc(self->table, (size_t) max_rows_increment,
-            (size_t) max_metadata_length_increment);
+    err = tsk_node_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_node_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -2817,11 +2807,12 @@ EdgeTable_init(EdgeTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_edge_tbl_alloc(self->table, (size_t) max_rows_increment);
+    err = tsk_edge_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_edge_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -3205,11 +3196,12 @@ MigrationTable_init(MigrationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_migration_tbl_alloc(self->table, (size_t) max_rows_increment);
+    err = tsk_migration_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_migration_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -3617,11 +3609,12 @@ SiteTable_init(SiteTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_site_tbl_alloc(self->table, (size_t) max_rows_increment, 0, 0);
+    err = tsk_site_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_site_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -4036,11 +4029,12 @@ MutationTable_init(MutationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_mutation_tbl_alloc(self->table, (size_t) max_rows_increment, 0, 0);
+    err = tsk_mutation_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_mutation_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -4053,7 +4047,7 @@ MutationTable_add_row(MutationTable *self, PyObject *args, PyObject *kwds)
     int err;
     int site;
     int node;
-    int parent = TSK_NULL_MUTATION;
+    int parent = TSK_NULL;
     char *derived_state;
     Py_ssize_t derived_state_length;
     PyObject *py_metadata = Py_None;
@@ -4492,13 +4486,12 @@ PopulationTable_init(PopulationTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    /* Take the default size increments for metadata and record */
-    err = tsk_population_tbl_alloc(self->table,
-            (size_t) max_rows_increment, 0);
+    err = tsk_population_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_population_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -4855,13 +4848,13 @@ ProvenanceTable_init(ProvenanceTable *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    /* Take the default size increments for timestamp and record */
-    err = tsk_provenance_tbl_alloc(self->table,
-            (size_t) max_rows_increment, 0, 0);
+
+    err = tsk_provenance_tbl_alloc(self->table, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
+    tsk_provenance_tbl_set_max_rows_increment(self->table, max_rows_increment);
     ret = 0;
 out:
     return ret;
@@ -5219,7 +5212,7 @@ TableCollection_init(TableCollection *self, PyObject *args, PyObject *kwds)
     if (self->tables == NULL) {
         PyErr_NoMemory();
     }
-    err = tsk_tbl_collection_alloc(self->tables, TSK_ALLOC_TABLES);
+    err = tsk_tbl_collection_alloc(self->tables, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5691,7 +5684,7 @@ TreeSequence_load_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (err != 0) {
         goto out;
     }
-    err = tsk_treeseq_load_tables(self->tree_sequence, tables->tables, flags);
+    err = tsk_treeseq_alloc(self->tree_sequence, tables->tables, flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -5716,7 +5709,7 @@ TreeSequence_dump_tables(TreeSequence *self, PyObject *args, PyObject *kwds)
     if (TreeSequence_check_tree_sequence(self) != 0) {
         goto out;
     }
-    err = tsk_treeseq_dump_tables(self->tree_sequence, tables->tables, 0);
+    err = tsk_treeseq_copy_tables(self->tree_sequence, tables->tables);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -6602,26 +6595,26 @@ static PyTypeObject TreeSequenceType = {
 };
 
 /*===================================================================
- * SparseTree
+ * Tree
  *===================================================================
  */
 
 static int
-SparseTree_check_sparse_tree(SparseTree *self)
+Tree_check_tree(Tree *self)
 {
     int ret = 0;
-    if (self->sparse_tree == NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "sparse_tree not initialised");
+    if (self->tree == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "tree not initialised");
         ret = -1;
     }
     return ret;
 }
 
 static int
-SparseTree_check_bounds(SparseTree *self, int node)
+Tree_check_bounds(Tree *self, int node)
 {
     int ret = 0;
-    if (node < 0 || node >= self->sparse_tree->num_nodes) {
+    if (node < 0 || node >= self->tree->num_nodes) {
         PyErr_SetString(PyExc_ValueError, "Node index out of bounds");
         ret = -1;
     }
@@ -6629,18 +6622,18 @@ SparseTree_check_bounds(SparseTree *self, int node)
 }
 
 static void
-SparseTree_dealloc(SparseTree* self)
+Tree_dealloc(Tree* self)
 {
-    if (self->sparse_tree != NULL) {
-        tsk_tree_free(self->sparse_tree);
-        PyMem_Free(self->sparse_tree);
-        self->sparse_tree = NULL;
+    if (self->tree != NULL) {
+        tsk_tree_free(self->tree);
+        PyMem_Free(self->tree);
+        self->tree = NULL;
     }
     Py_XDECREF(self->tree_sequence);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-/* TODO this API should be updated to remove the SparseTreeIterator object
+/* TODO this API should be updated to remove the TreeIterator object
  * and instead support the first(), last() etc methods. Until some seeking
  * function has been called, we should be in a state that errors if any
  * methods are called.
@@ -6649,7 +6642,7 @@ SparseTree_dealloc(SparseTree* self)
  * removed.
  */
 static int
-SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
+Tree_init(Tree *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
@@ -6662,7 +6655,7 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
     uint32_t j, num_tracked_samples, num_nodes;
     PyObject *item;
 
-    self->sparse_tree = NULL;
+    self->tree = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iO!", kwlist,
             &TreeSequenceType, &tree_sequence,
             &flags, &PyList_Type, &py_tracked_samples)) {
@@ -6700,19 +6693,19 @@ SparseTree_init(SparseTree *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    self->sparse_tree = PyMem_Malloc(sizeof(tsk_tree_t));
-    if (self->sparse_tree == NULL) {
+    self->tree = PyMem_Malloc(sizeof(tsk_tree_t));
+    if (self->tree == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    err = tsk_tree_alloc(self->sparse_tree, tree_sequence->tree_sequence,
+    err = tsk_tree_alloc(self->tree, tree_sequence->tree_sequence,
            flags);
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     if (!!(flags & TSK_SAMPLE_COUNTS)) {
-        err = tsk_tree_set_tracked_samples(self->sparse_tree, num_tracked_samples,
+        err = tsk_tree_set_tracked_samples(self->tree, num_tracked_samples,
                 tracked_samples);
         if (err != 0) {
             handle_library_error(err);
@@ -6729,139 +6722,139 @@ out:
 
 /* TODO this should be redundant; remove */
 static PyObject *
-SparseTree_free(SparseTree *self)
+Tree_free(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
     /* This method is need because we have dangling references to
      * trees after a for loop and we can't run set_sites.
      */
-    tsk_tree_free(self->sparse_tree);
-    PyMem_Free(self->sparse_tree);
-    self->sparse_tree = NULL;
+    tsk_tree_free(self->tree);
+    PyMem_Free(self->tree);
+    self->tree = NULL;
     ret = Py_BuildValue("");
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_sample_size(SparseTree *self)
+Tree_get_sample_size(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->tree_sequence->num_samples);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->tree->tree_sequence->num_samples);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_num_nodes(SparseTree *self)
+Tree_get_num_nodes(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->num_nodes);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->tree->num_nodes);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_num_roots(SparseTree *self)
+Tree_get_num_roots(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) tsk_tree_get_num_roots(self->sparse_tree));
+    ret = Py_BuildValue("n", (Py_ssize_t) tsk_tree_get_num_roots(self->tree));
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_index(SparseTree *self)
+Tree_get_index(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->index);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->tree->index);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_left_root(SparseTree *self)
+Tree_get_left_root(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("i", (int) self->sparse_tree->left_root);
+    ret = Py_BuildValue("i", (int) self->tree->left_root);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_left(SparseTree *self)
+Tree_get_left(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sparse_tree->left);
+    ret = Py_BuildValue("d", self->tree->left);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_right(SparseTree *self)
+Tree_get_right(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sparse_tree->right);
+    ret = Py_BuildValue("d", self->tree->right);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_flags(SparseTree *self)
+Tree_get_flags(Tree *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("i", self->sparse_tree->flags);
+    ret = Py_BuildValue("i", self->tree->flags);
 out:
     return ret;
 }
 
 static int
-SparseTree_get_node_argument(SparseTree *self, PyObject *args, int *node)
+Tree_get_node_argument(Tree *self, PyObject *args, int *node)
 {
     int ret = -1;
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTuple(args, "I", node)) {
         goto out;
     }
-    if (SparseTree_check_bounds(self, *node)) {
+    if (Tree_check_bounds(self, *node)) {
         goto out;
     }
     ret = 0;
@@ -6870,46 +6863,46 @@ out:
 }
 
 static PyObject *
-SparseTree_is_sample(SparseTree *self, PyObject *args)
+Tree_is_sample(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("i", tsk_tree_is_sample(self->sparse_tree, (tsk_id_t) node));
+    ret = Py_BuildValue("i", tsk_tree_is_sample(self->tree, (tsk_id_t) node));
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_parent(SparseTree *self, PyObject *args)
+Tree_get_parent(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t parent;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    parent = self->sparse_tree->parent[node];
+    parent = self->tree->parent[node];
     ret = Py_BuildValue("i", (int) parent);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_population(SparseTree *self, PyObject *args)
+Tree_get_population(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_node_t node;
     int node_id, err;
 
-    if (SparseTree_get_node_argument(self, args, &node_id) != 0) {
+    if (Tree_get_node_argument(self, args, &node_id) != 0) {
         goto out;
     }
-    err = tsk_treeseq_get_node(self->sparse_tree->tree_sequence, node_id, &node);
+    err = tsk_treeseq_get_node(self->tree->tree_sequence, node_id, &node);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -6920,16 +6913,16 @@ out:
 }
 
 static PyObject *
-SparseTree_get_time(SparseTree *self, PyObject *args)
+Tree_get_time(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double time;
     int node, err;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    err = tsk_tree_get_time(self->sparse_tree, node, &time);
+    err = tsk_tree_get_time(self->tree, node, &time);
     if (ret != 0) {
         handle_library_error(err);
         goto out;
@@ -6940,71 +6933,71 @@ out:
 }
 
 static PyObject *
-SparseTree_get_left_child(SparseTree *self, PyObject *args)
+Tree_get_left_child(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t child;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    child = self->sparse_tree->left_child[node];
+    child = self->tree->left_child[node];
     ret = Py_BuildValue("i", (int) child);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_right_child(SparseTree *self, PyObject *args)
+Tree_get_right_child(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t child;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    child = self->sparse_tree->right_child[node];
+    child = self->tree->right_child[node];
     ret = Py_BuildValue("i", (int) child);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_left_sib(SparseTree *self, PyObject *args)
+Tree_get_left_sib(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t sib;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    sib = self->sparse_tree->left_sib[node];
+    sib = self->tree->left_sib[node];
     ret = Py_BuildValue("i", (int) sib);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_right_sib(SparseTree *self, PyObject *args)
+Tree_get_right_sib(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t sib;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    sib = self->sparse_tree->right_sib[node];
+    sib = self->tree->right_sib[node];
     ret = Py_BuildValue("i", (int) sib);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_children(SparseTree *self, PyObject *args)
+Tree_get_children(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     int node;
@@ -7012,12 +7005,11 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
     size_t j, num_children;
     tsk_id_t *children = NULL;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
     num_children = 0;
-    for (u = self->sparse_tree->left_child[node]; u != TSK_NULL_NODE;
-            u = self->sparse_tree->right_sib[u]) {
+    for (u = self->tree->left_child[node]; u != TSK_NULL; u = self->tree->right_sib[u]) {
         num_children++;
     }
     children = PyMem_Malloc(num_children * sizeof(tsk_id_t));
@@ -7026,8 +7018,7 @@ SparseTree_get_children(SparseTree *self, PyObject *args)
         goto out;
     }
     j = 0;
-    for (u = self->sparse_tree->left_child[node]; u != TSK_NULL_NODE;
-            u = self->sparse_tree->right_sib[u]) {
+    for (u = self->tree->left_child[node]; u != TSK_NULL; u = self->tree->right_sib[u]) {
         children[j] = u;
         j++;
     }
@@ -7040,9 +7031,9 @@ out:
 }
 
 static bool
-SparseTree_check_sample_list(SparseTree *self)
+Tree_check_sample_list(Tree *self)
 {
-    bool ret = tsk_tree_has_sample_lists(self->sparse_tree);
+    bool ret = tsk_tree_has_sample_lists(self->tree);
     if (! ret) {
         PyErr_SetString(PyExc_ValueError,
             "Sample lists not supported. Please set sample_lists=True.");
@@ -7051,91 +7042,91 @@ SparseTree_check_sample_list(SparseTree *self)
 }
 
 static PyObject *
-SparseTree_get_right_sample(SparseTree *self, PyObject *args)
+Tree_get_right_sample(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t sample_index;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    if (!SparseTree_check_sample_list(self)) {
+    if (!Tree_check_sample_list(self)) {
         goto out;
     }
-    sample_index = self->sparse_tree->right_sample[node];
+    sample_index = self->tree->right_sample[node];
     ret = Py_BuildValue("i", (int) sample_index);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_left_sample(SparseTree *self, PyObject *args)
+Tree_get_left_sample(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t sample_index;
     int node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    if (!SparseTree_check_sample_list(self)) {
+    if (!Tree_check_sample_list(self)) {
         goto out;
     }
-    sample_index = self->sparse_tree->left_sample[node];
+    sample_index = self->tree->left_sample[node];
     ret = Py_BuildValue("i", (int) sample_index);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_next_sample(SparseTree *self, PyObject *args)
+Tree_get_next_sample(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     tsk_id_t out_index;
     int in_index, num_samples;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTuple(args, "I", &in_index)) {
         goto out;
     }
-    num_samples = (int) tsk_treeseq_get_num_samples(self->sparse_tree->tree_sequence);
+    num_samples = (int) tsk_treeseq_get_num_samples(self->tree->tree_sequence);
     if (in_index < 0 || in_index >= num_samples) {
         PyErr_SetString(PyExc_ValueError, "Sample index out of bounds");
         goto out;
     }
-    if (!SparseTree_check_sample_list(self)) {
+    if (!Tree_check_sample_list(self)) {
         goto out;
     }
-    out_index = self->sparse_tree->next_sample[in_index];
+    out_index = self->tree->next_sample[in_index];
     ret = Py_BuildValue("i", (int) out_index);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_mrca(SparseTree *self, PyObject *args)
+Tree_get_mrca(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     int err;
     tsk_id_t mrca;
     int u, v;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTuple(args, "ii", &u, &v)) {
         goto out;
     }
-    if (SparseTree_check_bounds(self, u)) {
+    if (Tree_check_bounds(self, u)) {
         goto out;
     }
-    if (SparseTree_check_bounds(self, v)) {
+    if (Tree_check_bounds(self, v)) {
         goto out;
     }
-    err = tsk_tree_get_mrca(self->sparse_tree, (tsk_id_t) u,
+    err = tsk_tree_get_mrca(self->tree, (tsk_id_t) u,
             (tsk_id_t) v, &mrca);
     if (err != 0) {
         handle_library_error(err);
@@ -7147,16 +7138,16 @@ out:
 }
 
 static PyObject *
-SparseTree_get_num_samples(SparseTree *self, PyObject *args)
+Tree_get_num_samples(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     size_t num_samples;
     int err, node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    err = tsk_tree_get_num_samples(self->sparse_tree, (tsk_id_t) node,
+    err = tsk_tree_get_num_samples(self->tree, (tsk_id_t) node,
             &num_samples);
     if (err != 0) {
         handle_library_error(err);
@@ -7168,16 +7159,16 @@ out:
 }
 
 static PyObject *
-SparseTree_get_num_tracked_samples(SparseTree *self, PyObject *args)
+Tree_get_num_tracked_samples(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
     size_t num_tracked_samples;
     int err, node;
 
-    if (SparseTree_get_node_argument(self, args, &node) != 0) {
+    if (Tree_get_node_argument(self, args, &node) != 0) {
         goto out;
     }
-    err = tsk_tree_get_num_tracked_samples(self->sparse_tree, (tsk_id_t) node,
+    err = tsk_tree_get_num_tracked_samples(self->tree, (tsk_id_t) node,
             &num_tracked_samples);
     if (err != 0) {
         handle_library_error(err);
@@ -7189,33 +7180,33 @@ out:
 }
 
 static PyObject *
-SparseTree_get_sites(SparseTree *self, PyObject *args)
+Tree_get_sites(Tree *self, PyObject *args)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = convert_sites(self->sparse_tree->sites, self->sparse_tree->sites_length);
+    ret = convert_sites(self->tree->sites, self->tree->sites_length);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_num_sites(SparseTree  *self)
+Tree_get_num_sites(Tree  *self)
 {
     PyObject *ret = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n", (Py_ssize_t) self->sparse_tree->sites_length);
+    ret = Py_BuildValue("n", (Py_ssize_t) self->tree->sites_length);
 out:
     return ret;
 }
 
 static PyObject *
-SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
+Tree_get_newick(Tree *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
     static char *kwlist[] = {"root", "precision", NULL};
@@ -7224,7 +7215,7 @@ SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
     size_t buffer_size;
     char *buffer = NULL;
 
-    if (SparseTree_check_sparse_tree(self) != 0) {
+    if (Tree_check_tree(self) != 0) {
         goto out;
     }
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "i|i", kwlist, &root, &precision)) {
@@ -7234,7 +7225,7 @@ SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
         PyErr_SetString(PyExc_ValueError, "Precision must be between 0 and 16, inclusive");
         goto out;
     }
-    buffer_size = tsk_treeseq_get_num_nodes(self->sparse_tree->tree_sequence);
+    buffer_size = tsk_treeseq_get_num_nodes(self->tree->tree_sequence);
     /* For every node, we have roughly precision bytes, plus bracketing and leading values.
      * This is a rough guess, so add 10 just to be on the safe side. We might need
      * to be more precise with this though if we have large time values.
@@ -7244,7 +7235,7 @@ SparseTree_get_newick(SparseTree *self, PyObject *args, PyObject *kwds)
     if (buffer == NULL) {
         PyErr_NoMemory();
     }
-    err = tsk_convert_newick(self->sparse_tree, (tsk_id_t) root, precision, 0,
+    err = tsk_convert_newick(self->tree, (tsk_id_t) root, precision, 0,
             buffer_size, buffer);
     if (err != 0) {
         handle_library_error(err);
@@ -7258,76 +7249,76 @@ out:
     return ret;
 }
 
-static PyMemberDef SparseTree_members[] = {
+static PyMemberDef Tree_members[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMethodDef SparseTree_methods[] = {
-    {"free", (PyCFunction) SparseTree_free, METH_NOARGS,
+static PyMethodDef Tree_methods[] = {
+    {"free", (PyCFunction) Tree_free, METH_NOARGS,
             "Frees the underlying tree object." },
-    {"get_sample_size", (PyCFunction) SparseTree_get_sample_size, METH_NOARGS,
+    {"get_sample_size", (PyCFunction) Tree_get_sample_size, METH_NOARGS,
             "Returns the number of samples in this tree." },
-    {"get_num_nodes", (PyCFunction) SparseTree_get_num_nodes, METH_NOARGS,
+    {"get_num_nodes", (PyCFunction) Tree_get_num_nodes, METH_NOARGS,
             "Returns the number of nodes in the sparse tree." },
-    {"get_num_roots", (PyCFunction) SparseTree_get_num_roots, METH_NOARGS,
+    {"get_num_roots", (PyCFunction) Tree_get_num_roots, METH_NOARGS,
             "Returns the number of roots in the sparse tree." },
-    {"get_index", (PyCFunction) SparseTree_get_index, METH_NOARGS,
+    {"get_index", (PyCFunction) Tree_get_index, METH_NOARGS,
             "Returns the index this tree occupies within the tree sequence." },
-    {"get_left_root", (PyCFunction) SparseTree_get_left_root, METH_NOARGS,
+    {"get_left_root", (PyCFunction) Tree_get_left_root, METH_NOARGS,
             "Returns the root of the tree." },
-    {"get_left", (PyCFunction) SparseTree_get_left, METH_NOARGS,
+    {"get_left", (PyCFunction) Tree_get_left, METH_NOARGS,
             "Returns the left-most coordinate (inclusive)." },
-    {"get_right", (PyCFunction) SparseTree_get_right, METH_NOARGS,
+    {"get_right", (PyCFunction) Tree_get_right, METH_NOARGS,
             "Returns the right-most coordinate (exclusive)." },
-    {"get_sites", (PyCFunction) SparseTree_get_sites, METH_NOARGS,
+    {"get_sites", (PyCFunction) Tree_get_sites, METH_NOARGS,
             "Returns the list of sites on this tree." },
-    {"get_flags", (PyCFunction) SparseTree_get_flags, METH_NOARGS,
+    {"get_flags", (PyCFunction) Tree_get_flags, METH_NOARGS,
             "Returns the value of the flags variable." },
-    {"get_num_sites", (PyCFunction) SparseTree_get_num_sites, METH_NOARGS,
+    {"get_num_sites", (PyCFunction) Tree_get_num_sites, METH_NOARGS,
             "Returns the number of sites on this tree." },
-    {"is_sample", (PyCFunction) SparseTree_is_sample, METH_VARARGS,
+    {"is_sample", (PyCFunction) Tree_is_sample, METH_VARARGS,
             "Returns True if the specified node is a sample." },
-    {"get_parent", (PyCFunction) SparseTree_get_parent, METH_VARARGS,
+    {"get_parent", (PyCFunction) Tree_get_parent, METH_VARARGS,
             "Returns the parent of node u" },
-    {"get_time", (PyCFunction) SparseTree_get_time, METH_VARARGS,
+    {"get_time", (PyCFunction) Tree_get_time, METH_VARARGS,
             "Returns the time of node u" },
-    {"get_population", (PyCFunction) SparseTree_get_population, METH_VARARGS,
+    {"get_population", (PyCFunction) Tree_get_population, METH_VARARGS,
             "Returns the population of node u" },
-    {"get_left_child", (PyCFunction) SparseTree_get_left_child, METH_VARARGS,
+    {"get_left_child", (PyCFunction) Tree_get_left_child, METH_VARARGS,
             "Returns the left-most child of node u" },
-    {"get_right_child", (PyCFunction) SparseTree_get_right_child, METH_VARARGS,
+    {"get_right_child", (PyCFunction) Tree_get_right_child, METH_VARARGS,
             "Returns the right-most child of node u" },
-    {"get_left_sib", (PyCFunction) SparseTree_get_left_sib, METH_VARARGS,
+    {"get_left_sib", (PyCFunction) Tree_get_left_sib, METH_VARARGS,
             "Returns the left-most sib of node u" },
-    {"get_right_sib", (PyCFunction) SparseTree_get_right_sib, METH_VARARGS,
+    {"get_right_sib", (PyCFunction) Tree_get_right_sib, METH_VARARGS,
             "Returns the right-most sib of node u" },
-    {"get_children", (PyCFunction) SparseTree_get_children, METH_VARARGS,
+    {"get_children", (PyCFunction) Tree_get_children, METH_VARARGS,
             "Returns the children of u in left-right order." },
-    {"get_left_sample", (PyCFunction) SparseTree_get_left_sample, METH_VARARGS,
+    {"get_left_sample", (PyCFunction) Tree_get_left_sample, METH_VARARGS,
             "Returns the index of the left-most sample descending from u." },
-    {"get_right_sample", (PyCFunction) SparseTree_get_right_sample, METH_VARARGS,
+    {"get_right_sample", (PyCFunction) Tree_get_right_sample, METH_VARARGS,
             "Returns the index of the right-most sample descending from u." },
-    {"get_next_sample", (PyCFunction) SparseTree_get_next_sample, METH_VARARGS,
+    {"get_next_sample", (PyCFunction) Tree_get_next_sample, METH_VARARGS,
             "Returns the index of the next sample after the specified sample index." },
-    {"get_mrca", (PyCFunction) SparseTree_get_mrca, METH_VARARGS,
+    {"get_mrca", (PyCFunction) Tree_get_mrca, METH_VARARGS,
             "Returns the MRCA of nodes u and v" },
-    {"get_num_samples", (PyCFunction) SparseTree_get_num_samples, METH_VARARGS,
+    {"get_num_samples", (PyCFunction) Tree_get_num_samples, METH_VARARGS,
             "Returns the number of samples below node u." },
-    {"get_num_tracked_samples", (PyCFunction) SparseTree_get_num_tracked_samples,
+    {"get_num_tracked_samples", (PyCFunction) Tree_get_num_tracked_samples,
             METH_VARARGS,
             "Returns the number of tracked samples below node u." },
-    {"get_newick", (PyCFunction) SparseTree_get_newick,
+    {"get_newick", (PyCFunction) Tree_get_newick,
             METH_VARARGS|METH_KEYWORDS,
             "Returns the newick representation of this tree." },
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject SparseTreeType = {
+static PyTypeObject TreeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_tskit.SparseTree",             /* tp_name */
-    sizeof(SparseTree),             /* tp_basicsize */
+    "_tskit.Tree",             /* tp_name */
+    sizeof(Tree),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    (destructor)SparseTree_dealloc, /* tp_dealloc */
+    (destructor)Tree_dealloc, /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -7343,22 +7334,22 @@ static PyTypeObject SparseTreeType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "SparseTree objects",           /* tp_doc */
+    "Tree objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
     0,                     /* tp_iternext */
-    SparseTree_methods,             /* tp_methods */
-    SparseTree_members,             /* tp_members */
+    Tree_methods,             /* tp_methods */
+    Tree_members,             /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)SparseTree_init,      /* tp_init */
+    (initproc)Tree_init,      /* tp_init */
 };
 
 
@@ -7551,40 +7542,40 @@ static PyTypeObject TreeDiffIteratorType = {
 };
 
 /*===================================================================
- * SparseTreeIterator
+ * TreeIterator
  *===================================================================
  */
 
 static int
-SparseTreeIterator_check_state(SparseTreeIterator *self)
+TreeIterator_check_state(TreeIterator *self)
 {
     int ret = 0;
     return ret;
 }
 
 static void
-SparseTreeIterator_dealloc(SparseTreeIterator* self)
+TreeIterator_dealloc(TreeIterator* self)
 {
-    Py_XDECREF(self->sparse_tree);
+    Py_XDECREF(self->tree);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static int
-SparseTreeIterator_init(SparseTreeIterator *self, PyObject *args, PyObject *kwds)
+TreeIterator_init(TreeIterator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
-    static char *kwlist[] = {"sparse_tree", NULL};
-    SparseTree *sparse_tree;
+    static char *kwlist[] = {"tree", NULL};
+    Tree *tree;
 
     self->first = 1;
-    self->sparse_tree = NULL;
+    self->tree = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!", kwlist,
-            &SparseTreeType, &sparse_tree)) {
+            &TreeType, &tree)) {
         goto out;
     }
-    self->sparse_tree = sparse_tree;
-    Py_INCREF(self->sparse_tree);
-    if (SparseTree_check_sparse_tree(self->sparse_tree) != 0) {
+    self->tree = tree;
+    Py_INCREF(self->tree);
+    if (Tree_check_tree(self->tree) != 0) {
         goto out;
     }
     ret = 0;
@@ -7593,47 +7584,47 @@ out:
 }
 
 static PyObject *
-SparseTreeIterator_next(SparseTreeIterator  *self)
+TreeIterator_next(TreeIterator  *self)
 {
     PyObject *ret = NULL;
     int err;
 
-    if (SparseTreeIterator_check_state(self) != 0) {
+    if (TreeIterator_check_state(self) != 0) {
         goto out;
     }
 
     if (self->first) {
-        err = tsk_tree_first(self->sparse_tree->sparse_tree);
+        err = tsk_tree_first(self->tree->tree);
         self->first = 0;
     } else {
-        err = tsk_tree_next(self->sparse_tree->sparse_tree);
+        err = tsk_tree_next(self->tree->tree);
     }
     if (err < 0) {
         handle_library_error(err);
         goto out;
     }
     if (err == 1) {
-        ret = (PyObject *) self->sparse_tree;
+        ret = (PyObject *) self->tree;
         Py_INCREF(ret);
     }
 out:
     return ret;
 }
 
-static PyMemberDef SparseTreeIterator_members[] = {
+static PyMemberDef TreeIterator_members[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMethodDef SparseTreeIterator_methods[] = {
+static PyMethodDef TreeIterator_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject SparseTreeIteratorType = {
+static PyTypeObject TreeIteratorType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_tskit.SparseTreeIterator",             /* tp_name */
-    sizeof(SparseTreeIterator),             /* tp_basicsize */
+    "_tskit.TreeIterator",             /* tp_name */
+    sizeof(TreeIterator),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    (destructor)SparseTreeIterator_dealloc, /* tp_dealloc */
+    (destructor)TreeIterator_dealloc, /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -7649,22 +7640,22 @@ static PyTypeObject SparseTreeIteratorType = {
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "SparseTreeIterator objects",           /* tp_doc */
+    "TreeIterator objects",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     PyObject_SelfIter,                    /* tp_iter */
-    (iternextfunc) SparseTreeIterator_next, /* tp_iternext */
-    SparseTreeIterator_methods,             /* tp_methods */
-    SparseTreeIterator_members,             /* tp_members */
+    (iternextfunc) TreeIterator_next, /* tp_iternext */
+    TreeIterator_methods,             /* tp_methods */
+    TreeIterator_members,             /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)SparseTreeIterator_init,      /* tp_init */
+    (initproc)TreeIterator_init,      /* tp_init */
 };
 
 /*===================================================================
@@ -8370,7 +8361,6 @@ void
 init_tskit(void)
 #endif
 {
-    kas_version_t kastore_version;
 #if PY_MAJOR_VERSION >= 3
     PyObject *module = PyModule_Create(&tskitmodule);
 #else
@@ -8380,25 +8370,6 @@ init_tskit(void)
         INITERROR;
     }
     import_array();
-
-    /* Set up the dynamic API for kastore. */
-    kas_dynamic_api = (kas_funcptr *) PyCapsule_Import("_kastore._C_API", 0);
-    if (kas_dynamic_api == NULL) {
-        INITERROR;
-    }
-    kastore_version = kas_version();
-    if (kastore_version.major != KAS_VERSION_MAJOR) {
-        PyErr_SetString(PyExc_RuntimeError, "kastore C API major version mismatch");
-        INITERROR;
-    }
-    /* If the minor version of kastore we compiled against is older than
-     * the one we've just loaded it's OK. But it's not safe to run when we've
-     * compiled against a newer version.
-     */
-    if (kastore_version.minor > KAS_VERSION_MINOR) {
-        PyErr_SetString(PyExc_RuntimeError, "kastore C API minor version mismatch");
-        INITERROR;
-    }
 
     /* LightweightTableCollection type */
     LightweightTableCollectionType.tp_new = PyType_GenericNew;
@@ -8489,22 +8460,21 @@ init_tskit(void)
     Py_INCREF(&TreeSequenceType);
     PyModule_AddObject(module, "TreeSequence", (PyObject *) &TreeSequenceType);
 
-    /* SparseTree type */
-    SparseTreeType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&SparseTreeType) < 0) {
+    /* Tree type */
+    TreeType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&SparseTreeType);
-    PyModule_AddObject(module, "SparseTree", (PyObject *) &SparseTreeType);
+    Py_INCREF(&TreeType);
+    PyModule_AddObject(module, "Tree", (PyObject *) &TreeType);
 
-    /* SparseTreeIterator type */
-    SparseTreeIteratorType.tp_new = PyType_GenericNew;
-    if (PyType_Ready(&SparseTreeIteratorType) < 0) {
+    /* TreeIterator type */
+    TreeIteratorType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&TreeIteratorType) < 0) {
         INITERROR;
     }
-    Py_INCREF(&SparseTreeIteratorType);
-    PyModule_AddObject(module, "SparseTreeIterator",
-            (PyObject *) &SparseTreeIteratorType);
+    Py_INCREF(&TreeIteratorType);
+    PyModule_AddObject(module, "TreeIterator", (PyObject *) &TreeIteratorType);
 
     /* TreeDiffIterator type */
     TreeDiffIteratorType.tp_new = PyType_GenericNew;
@@ -8566,9 +8536,9 @@ init_tskit(void)
     Py_INCREF(TskitVersionTooOldError);
     PyModule_AddObject(module, "VersionTooOldError", TskitVersionTooOldError);
 
+    PyModule_AddIntConstant(module, "NULL", TSK_NULL);
     /* Node flags */
     PyModule_AddIntConstant(module, "NODE_IS_SAMPLE", TSK_NODE_IS_SAMPLE);
-
     /* Tree flags */
     PyModule_AddIntConstant(module, "SAMPLE_COUNTS", TSK_SAMPLE_COUNTS);
     PyModule_AddIntConstant(module, "SAMPLE_LISTS", TSK_SAMPLE_LISTS);

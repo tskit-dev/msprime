@@ -11,19 +11,19 @@ from .simplify import *  # NOQA
 import tskit
 
 
-class PythonSparseTree(object):
+class PythonTree(object):
     """
-    Presents the same interface as the SparseTree object for testing. This
+    Presents the same interface as the Tree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
     the internal structures during iteration.
     """
     def __init__(self, num_nodes):
         self.num_nodes = num_nodes
-        self.parent = [tskit.NULL_NODE for _ in range(num_nodes)]
-        self.left_child = [tskit.NULL_NODE for _ in range(num_nodes)]
-        self.right_child = [tskit.NULL_NODE for _ in range(num_nodes)]
-        self.left_sib = [tskit.NULL_NODE for _ in range(num_nodes)]
-        self.right_sib = [tskit.NULL_NODE for _ in range(num_nodes)]
+        self.parent = [tskit.NULL for _ in range(num_nodes)]
+        self.left_child = [tskit.NULL for _ in range(num_nodes)]
+        self.right_child = [tskit.NULL for _ in range(num_nodes)]
+        self.left_sib = [tskit.NULL for _ in range(num_nodes)]
+        self.right_sib = [tskit.NULL for _ in range(num_nodes)]
         self.above_sample = [False for _ in range(num_nodes)]
         self.is_sample = [False for _ in range(num_nodes)]
         self.left = 0
@@ -35,27 +35,27 @@ class PythonSparseTree(object):
         self.site_list = []
 
     @classmethod
-    def from_sparse_tree(cls, sparse_tree):
-        ret = PythonSparseTree(sparse_tree.num_nodes)
-        ret.left, ret.right = sparse_tree.get_interval()
-        ret.site_list = list(sparse_tree.sites())
-        ret.index = sparse_tree.get_index()
-        ret.left_root = sparse_tree.left_root
-        ret.sparse_tree = sparse_tree
+    def from_tree(cls, tree):
+        ret = PythonTree(tree.num_nodes)
+        ret.left, ret.right = tree.get_interval()
+        ret.site_list = list(tree.sites())
+        ret.index = tree.get_index()
+        ret.left_root = tree.left_root
+        ret.tree = tree
         for u in range(ret.num_nodes):
-            ret.parent[u] = sparse_tree.parent(u)
-            ret.left_child[u] = sparse_tree.left_child(u)
-            ret.right_child[u] = sparse_tree.right_child(u)
-            ret.left_sib[u] = sparse_tree.left_sib(u)
-            ret.right_sib[u] = sparse_tree.right_sib(u)
-        assert ret == sparse_tree
+            ret.parent[u] = tree.parent(u)
+            ret.left_child[u] = tree.left_child(u)
+            ret.right_child[u] = tree.right_child(u)
+            ret.left_sib[u] = tree.left_sib(u)
+            ret.right_sib[u] = tree.right_sib(u)
+        assert ret == tree
         return ret
 
     @property
     def roots(self):
         u = self.left_root
         roots = []
-        while u != tskit.NULL_NODE:
+        while u != tskit.NULL:
             roots.append(u)
             u = self.right_sib[u]
         return roots
@@ -63,7 +63,7 @@ class PythonSparseTree(object):
     def children(self, u):
         v = self.left_child[u]
         ret = []
-        while v != tskit.NULL_NODE:
+        while v != tskit.NULL:
             ret.append(v)
             v = self.right_sib[v]
         return ret
@@ -132,7 +132,7 @@ class PythonSparseTree(object):
     def get_parent_dict(self):
         d = {
             u: self.parent[u] for u in range(self.num_nodes)
-            if self.parent[u] != tskit.NULL_NODE}
+            if self.parent[u] != tskit.NULL}
         return d
 
     def sites(self):
@@ -151,19 +151,19 @@ class PythonSparseTree(object):
 
     def newick(self, root=None, precision=16, node_labels=None):
         if node_labels is None:
-            node_labels = {u: str(u + 1) for u in self.sparse_tree.leaves()}
+            node_labels = {u: str(u + 1) for u in self.tree.leaves()}
         if root is None:
             root = self.left_root
         return self._build_newick(root, precision, node_labels) + ";"
 
     def _build_newick(self, node, precision, node_labels):
         label = node_labels.get(node, "")
-        if self.left_child[node] == tskit.NULL_NODE:
+        if self.left_child[node] == tskit.NULL:
             s = label
         else:
             s = "("
             for child in self.children(node):
-                branch_length = self.sparse_tree.branch_length(child)
+                branch_length = self.tree.branch_length(child)
                 subtree = self._build_newick(child, precision, node_labels)
                 s += subtree + ":{0:.{1}f},".format(branch_length, precision)
             s = s[:-1] + label + ")"
@@ -240,7 +240,7 @@ class PythonTreeSequence(object):
         j = 0
         k = 0
         N = self._tree_sequence.get_num_nodes()
-        st = PythonSparseTree(N)
+        st = PythonTree(N)
 
         samples = list(self._tree_sequence.get_samples())
         for l in range(len(samples)):
@@ -251,7 +251,7 @@ class PythonTreeSequence(object):
             st.above_sample[samples[l]] = True
             st.is_sample[samples[l]] = True
 
-        st.left_root = tskit.NULL_NODE
+        st.left_root = tskit.NULL
         if len(samples) > 0:
             st.left_root = samples[0]
 
@@ -273,17 +273,17 @@ class PythonTreeSequence(object):
 
                 lsib = st.left_sib[c]
                 rsib = st.right_sib[c]
-                if lsib == tskit.NULL_NODE:
+                if lsib == tskit.NULL:
                     st.left_child[p] = rsib
                 else:
                     st.right_sib[lsib] = rsib
-                if rsib == tskit.NULL_NODE:
+                if rsib == tskit.NULL:
                     st.right_child[p] = lsib
                 else:
                     st.left_sib[rsib] = lsib
-                st.parent[c] = tskit.NULL_NODE
-                st.left_sib[c] = tskit.NULL_NODE
-                st.right_sib[c] = tskit.NULL_NODE
+                st.parent[c] = tskit.NULL
+                st.left_sib[c] = tskit.NULL
+                st.right_sib[c] = tskit.NULL
 
                 # If c is not above a sample then we have nothing to do as we
                 # cannot affect the status of any roots.
@@ -292,10 +292,10 @@ class PythonTreeSequence(object):
                     # p up to root.
                     v = p
                     above_sample = False
-                    while v != tskit.NULL_NODE and not above_sample:
+                    while v != tskit.NULL and not above_sample:
                         above_sample = st.is_sample[v]
                         u = st.left_child[v]
-                        while u != tskit.NULL_NODE:
+                        while u != tskit.NULL:
                             above_sample = above_sample or st.above_sample[u]
                             u = st.right_sib[u]
                         st.above_sample[v] = above_sample
@@ -306,21 +306,21 @@ class PythonTreeSequence(object):
                         # root is no longer above samples. Remove it from the root list.
                         lroot = st.left_sib[root]
                         rroot = st.right_sib[root]
-                        st.left_root = tskit.NULL_NODE
-                        if lroot != tskit.NULL_NODE:
+                        st.left_root = tskit.NULL
+                        if lroot != tskit.NULL:
                             st.right_sib[lroot] = rroot
                             st.left_root = lroot
-                        if rroot != tskit.NULL_NODE:
+                        if rroot != tskit.NULL:
                             st.left_sib[rroot] = lroot
                             st.left_root = rroot
-                        st.left_sib[root] = tskit.NULL_NODE
-                        st.right_sib[root] = tskit.NULL_NODE
+                        st.left_sib[root] = tskit.NULL
+                        st.right_sib[root] = tskit.NULL
 
                     # Add c to the root list.
                     # print("Insert ", c, "into root list")
-                    if st.left_root != tskit.NULL_NODE:
+                    if st.left_root != tskit.NULL:
                         lroot = st.left_sib[st.left_root]
-                        if lroot != tskit.NULL_NODE:
+                        if lroot != tskit.NULL:
                             st.right_sib[lroot] = c
                         st.left_sib[c] = lroot
                         st.left_sib[st.left_root] = c
@@ -337,20 +337,20 @@ class PythonTreeSequence(object):
                 u = st.right_child[p]
                 lsib = st.left_sib[c]
                 rsib = st.right_sib[c]
-                if u == tskit.NULL_NODE:
+                if u == tskit.NULL:
                     st.left_child[p] = c
-                    st.left_sib[c] = tskit.NULL_NODE
-                    st.right_sib[c] = tskit.NULL_NODE
+                    st.left_sib[c] = tskit.NULL
+                    st.right_sib[c] = tskit.NULL
                 else:
                     st.right_sib[u] = c
                     st.left_sib[c] = u
-                    st.right_sib[c] = tskit.NULL_NODE
+                    st.right_sib[c] = tskit.NULL
                 st.right_child[p] = c
 
                 if st.above_sample[c]:
                     v = p
                     above_sample = False
-                    while v != tskit.NULL_NODE and not above_sample:
+                    while v != tskit.NULL and not above_sample:
                         above_sample = st.above_sample[v]
                         st.above_sample[v] = st.above_sample[v] or st.above_sample[c]
                         root = v
@@ -360,9 +360,9 @@ class PythonTreeSequence(object):
                     if not above_sample:
                         # Replace c with root in root list.
                         # print("replacing", root, "with ", c ," in root list")
-                        if lsib != tskit.NULL_NODE:
+                        if lsib != tskit.NULL:
                             st.right_sib[lsib] = root
-                        if rsib != tskit.NULL_NODE:
+                        if rsib != tskit.NULL:
                             st.left_sib[rsib] = root
                         st.left_sib[root] = lsib
                         st.right_sib[root] = rsib
@@ -370,11 +370,11 @@ class PythonTreeSequence(object):
                     else:
                         # Remove c from root list.
                         # print("remove ", c ," from root list")
-                        st.left_root = tskit.NULL_NODE
-                        if lsib != tskit.NULL_NODE:
+                        st.left_root = tskit.NULL
+                        if lsib != tskit.NULL:
                             st.right_sib[lsib] = rsib
                             st.left_root = lsib
-                        if rsib != tskit.NULL_NODE:
+                        if rsib != tskit.NULL:
                             st.left_sib[rsib] = lsib
                             st.left_root = rsib
 
@@ -383,8 +383,8 @@ class PythonTreeSequence(object):
                 st.right = min(st.right, edges[in_order[j]].left)
             if k < M:
                 st.right = min(st.right, edges[out_order[k]].right)
-            assert st.left_root != tskit.NULL_NODE
-            while st.left_sib[st.left_root] != tskit.NULL_NODE:
+            assert st.left_root != tskit.NULL
+            while st.left_sib[st.left_root] != tskit.NULL:
                 st.left_root = st.left_sib[st.left_root]
             st.index += 1
             # Add in all the sites

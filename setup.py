@@ -82,12 +82,10 @@ class local_build_ext(build_ext):
         builtins.__NUMPY_SETUP__ = False
         import numpy
         self.include_dirs.append(numpy.get_include())
-        import kastore
-        self.include_dirs.append(kastore.get_include())
 
 
 libdir = "lib"
-includes = [libdir, libdir + "/tskit"]
+includes = [libdir, libdir + "/tskit", libdir + "/kastore/c"]
 
 configurator = PathConfigurator()
 msp_source_files = [
@@ -95,13 +93,13 @@ msp_source_files = [
     "object_heap.c", "recomb_map.c", "mutgen.c"
 ]
 tsk_source_files = [
-    # TODO this will be removed once we move the tskit code out.
     "tskit/tsk_core.c",
     "tskit/tsk_tables.c",
     "tskit/tsk_trees.c",
     "tskit/tsk_genotypes.c",
     "tskit/tsk_stats.c",
     "tskit/tsk_convert.c",
+    "kastore/c/kastore.c",
 ]
 
 
@@ -135,7 +133,6 @@ class DefineMacros(object):
                 # These two are required for GSL to compile and link against the
                 # conda-forge version.
                 ("GSL_DLL", None), ("WIN32", None)]
-        defines += [("KAS_DYNAMIC_API", None)]
         return defines[index]
 
 
@@ -170,7 +167,6 @@ _tskit_module = Extension(
 )
 
 numpy_ver = "numpy>=1.7"
-kastore_ver = "kastore>=0.2.2"
 
 with open("README.rst") as f:
     long_description = f.read()
@@ -190,7 +186,7 @@ setup(
         ]
     },
     include_package_data=True,
-    install_requires=[numpy_ver, kastore_ver, "h5py", "svgwrite", "six", "jsonschema"],
+    install_requires=[numpy_ver, "h5py", "svgwrite", "six", "jsonschema"],
     ext_modules=[_msprime_module, _tskit_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
@@ -215,7 +211,7 @@ setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    setup_requires=[numpy_ver, kastore_ver, 'setuptools_scm'],
+    setup_requires=[numpy_ver, 'setuptools_scm'],
     use_scm_version={"write_to": "msprime/_version.py"},
     cmdclass={"build_ext": local_build_ext},
 )

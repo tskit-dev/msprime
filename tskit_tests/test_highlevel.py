@@ -357,7 +357,7 @@ class HighLevelTestCase(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def verify_sparse_tree_mrcas(self, st):
+    def verify_tree_mrcas(self, st):
         # Check the mrcas
         oriented_forest = [st.get_parent(j) for j in range(st.num_nodes)]
         mrca_calc = tests.MRCACalculator(oriented_forest)
@@ -366,25 +366,25 @@ class HighLevelTestCase(unittest.TestCase):
         for j in range(st.num_nodes):
             mrca = st.get_mrca(0, j)
             self.assertEqual(mrca, mrca_calc.get_mrca(0, j))
-            if mrca != tskit.NULL_NODE:
+            if mrca != tskit.NULL:
                 self.assertEqual(st.get_time(mrca), st.get_tmrca(0, j))
 
-    def verify_sparse_tree_branch_lengths(self, st):
+    def verify_tree_branch_lengths(self, st):
         for j in range(st.get_sample_size()):
             u = j
-            while st.get_parent(u) != tskit.NULL_NODE:
+            while st.get_parent(u) != tskit.NULL:
                 length = st.get_time(st.get_parent(u)) - st.get_time(u)
                 self.assertGreater(length, 0.0)
                 self.assertEqual(st.get_branch_length(u), length)
                 u = st.get_parent(u)
 
-    def verify_sparse_tree_structure(self, st):
+    def verify_tree_structure(self, st):
         roots = set()
         for u in st.samples():
             # verify the path to root
             self.assertTrue(st.is_sample(u))
             times = []
-            while st.get_parent(u) != tskit.NULL_NODE:
+            while st.get_parent(u) != tskit.NULL:
                 v = st.get_parent(u)
                 times.append(st.get_time(v))
                 self.assertGreaterEqual(st.get_time(v), 0.0)
@@ -396,7 +396,7 @@ class HighLevelTestCase(unittest.TestCase):
         self.assertEqual(len(st.roots), st.num_roots)
         u = st.left_root
         roots = []
-        while u != tskit.NULL_NODE:
+        while u != tskit.NULL:
             roots.append(u)
             u = st.right_sib(u)
         self.assertEqual(roots, st.roots)
@@ -406,7 +406,7 @@ class HighLevelTestCase(unittest.TestCase):
             stack = [root]
             while len(stack) > 0:
                 u = stack.pop()
-                self.assertNotEqual(u, tskit.NULL_NODE)
+                self.assertNotEqual(u, tskit.NULL)
                 if st.is_sample(u):
                     samples.append(u)
                 if st.is_leaf(u):
@@ -428,12 +428,12 @@ class HighLevelTestCase(unittest.TestCase):
         self.assertEqual(st.num_samples(), len(samples))
         self.assertEqual(sorted(st.samples()), sorted(samples))
 
-    def verify_sparse_tree(self, st):
-        self.verify_sparse_tree_mrcas(st)
-        self.verify_sparse_tree_branch_lengths(st)
-        self.verify_sparse_tree_structure(st)
+    def verify_tree(self, st):
+        self.verify_tree_mrcas(st)
+        self.verify_tree_branch_lengths(st)
+        self.verify_tree_structure(st)
 
-    def verify_sparse_trees(self, ts):
+    def verify_trees(self, ts):
         pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
         iter1 = ts.trees()
         iter2 = pts.trees()
@@ -445,7 +445,7 @@ class HighLevelTestCase(unittest.TestCase):
             roots = set()
             for u in ts.samples():
                 root = u
-                while st1.get_parent(root) != tskit.NULL_NODE:
+                while st1.get_parent(root) != tskit.NULL:
                     root = st1.get_parent(root)
                 roots.add(root)
             self.assertEqual(sorted(list(roots)), sorted(st1.roots))
@@ -463,7 +463,7 @@ class HighLevelTestCase(unittest.TestCase):
             self.assertGreater(r, l)
             self.assertLessEqual(r, ts.get_sequence_length())
             length += r - l
-            self.verify_sparse_tree(st1)
+            self.verify_tree(st1)
             num_trees += 1
         self.assertRaises(StopIteration, next, iter1)
         self.assertRaises(StopIteration, next, iter2)
@@ -906,9 +906,9 @@ class TestTreeSequence(HighLevelTestCase):
     Tests for the tree sequence object.
     """
 
-    def test_sparse_trees(self):
+    def test_trees(self):
         for ts in get_example_tree_sequences():
-            self.verify_sparse_trees(ts)
+            self.verify_trees(ts)
 
     def test_mutations(self):
         for ts in get_example_tree_sequences():
@@ -1027,7 +1027,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(tree.get_num_tracked_samples(), len(tracked_samples))
             for j in tracked_samples:
                 u = j
-                while u != msprime.NULL_NODE:
+                while u != tskit.NULL:
                     nu[u] += 1
                     u = tree.get_parent(u)
             for u, count in enumerate(nu):
@@ -1176,7 +1176,7 @@ class TestTreeSequence(HighLevelTestCase):
         for ts in get_example_tree_sequences():
             ind_node_map = collections.defaultdict(list)
             for node in ts.nodes():
-                if node.individual != msprime.NULL_INDIVIDUAL:
+                if node.individual != tskit.NULL:
                     ind_node_map[node.individual].append(node.id)
             if len(ind_node_map) > 0:
                 mapped_to_nodes = True
@@ -1252,7 +1252,7 @@ class TestTreeSequence(HighLevelTestCase):
             self.assertEqual(node_map[sample[j]], j)
         for u in range(ts.num_nodes):
             old_node = ts.node(u)
-            if node_map[u] != msprime.NULL_NODE:
+            if node_map[u] != tskit.NULL:
                 new_node = new_ts.node(node_map[u])
                 self.assertEqual(old_node.time, new_node.time)
                 self.assertEqual(old_node.population, new_node.population)
@@ -1281,7 +1281,7 @@ class TestTreeSequence(HighLevelTestCase):
                 mapped_pair = [node_map[u] for u in pair]
                 mrca1 = old_tree.get_mrca(*pair)
                 mrca2 = new_tree.get_mrca(*mapped_pair)
-                if mrca1 == msprime.NULL_NODE:
+                if mrca1 == tskit.NULL:
                     self.assertEqual(mrca2, mrca1)
                 else:
                     self.assertEqual(mrca2, node_map[mrca1])
@@ -1730,7 +1730,7 @@ class TestTreeSequenceTextIO(HighLevelTestCase):
         self.assertEqual(ts.num_edges, 0)
 
 
-class TestSparseTree(HighLevelTestCase):
+class TestTree(HighLevelTestCase):
     """
     Some simple tests on the API for the sparse tree.
     """
@@ -1808,7 +1808,7 @@ class TestSparseTree(HighLevelTestCase):
         # times because Python and C float printing algorithms work slightly
         # differently. Seems to work OK now, so leaving alone.
         if tree.num_roots == 1:
-            py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+            py_tree = tests.PythonTree.from_tree(tree)
             newick1 = tree.newick(precision=16)
             newick2 = py_tree.newick()
             self.assertEqual(newick1, newick2)
@@ -1827,7 +1827,7 @@ class TestSparseTree(HighLevelTestCase):
         else:
             self.assertRaises(ValueError, tree.newick)
             for root in tree.roots:
-                py_tree = tests.PythonSparseTree.from_sparse_tree(tree)
+                py_tree = tests.PythonTree.from_tree(tree)
                 newick1 = tree.newick(precision=16, root=root)
                 newick2 = py_tree.newick(root=root)
                 self.assertEqual(newick1, newick2)
@@ -1844,7 +1844,7 @@ class TestSparseTree(HighLevelTestCase):
 
     def verify_traversals(self, tree):
         t1 = tree
-        t2 = tests.PythonSparseTree.from_sparse_tree(t1)
+        t2 = tests.PythonTree.from_tree(t1)
         self.assertEqual(list(t1.nodes()), list(t2.nodes()))
         orders = ["inorder", "postorder", "levelorder", "breadthfirst"]
         if tree.num_roots == 1:
@@ -1993,15 +1993,15 @@ class TestNodeOrdering(HighLevelTestCase):
             for u in range(n):
                 v_orig = u
                 v_map = u
-                while v_orig != msprime.NULL_NODE:
+                while v_orig != tskit.NULL:
                     self.assertEqual(node_map[v_orig], v_map)
                     self.assertEqual(
                         t1.get_time(v_orig),
                         t2.get_time(v_map))
                     v_orig = t1.get_parent(v_orig)
                     v_map = t2.get_parent(v_map)
-                self.assertEqual(v_orig, msprime.NULL_NODE)
-                self.assertEqual(v_map, msprime.NULL_NODE)
+                self.assertEqual(v_orig, tskit.NULL)
+                self.assertEqual(v_map, tskit.NULL)
             j += 1
         self.assertEqual(j, ts.get_num_trees())
         # Verify we can dump this new tree sequence OK.
