@@ -84,7 +84,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     }
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
         size_t block_size)
 {
@@ -139,7 +139,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 mutgen_add_mutation(mutgen_t *self, node_id_t node, double position,
         const char *ancestral_state, const char *derived_state)
 {
@@ -171,7 +171,7 @@ out:
     return ret;
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 mutget_initialise_sites(mutgen_t *self, tsk_tbl_collection_t *tables)
 {
     int ret = 0;
@@ -325,7 +325,7 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
 {
     int ret = 0;

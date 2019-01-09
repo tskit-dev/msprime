@@ -42,7 +42,7 @@ fenwick_set_log_size(fenwick_t *self)
     }
 }
 
-static int WARN_UNUSED
+static int MSP_WARN_UNUSED
 fenwick_alloc_buffers(fenwick_t *self)
 {
     int ret = -1;
@@ -65,14 +65,14 @@ out:
     return ret;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 fenwick_alloc(fenwick_t *self, size_t initial_size)
 {
     self->size = initial_size;
     return fenwick_alloc_buffers(self);
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 fenwick_expand(fenwick_t *self, size_t increment)
 {
     int ret = MSP_ERR_NO_MEMORY;

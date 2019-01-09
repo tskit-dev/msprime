@@ -659,7 +659,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (rng == NULL) {
         fatal_error("No memory");
     }
-    ret = tsk_tbl_collection_alloc(&tables, MSP_ALLOC_TABLES);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);
     }
@@ -703,7 +703,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }
-        ret = tsk_treeseq_load_tables(&tree_seq, &tables, MSP_BUILD_INDEXES);
+        ret = tsk_treeseq_load_tables(&tree_seq, &tables, TSK_BUILD_INDEXES);
         if (ret != 0) {
             fatal_tskit_error(ret, __LINE__);
         }
