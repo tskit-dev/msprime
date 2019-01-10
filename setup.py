@@ -154,18 +154,6 @@ _msprime_module = Extension(
     library_dirs=configurator.library_dirs,
 )
 
-_tskit_module = Extension(
-    '_tskit',
-    sources=["_tskitmodule.c"] + [os.path.join(libdir, f) for f in tsk_source_files],
-    # Enable asserts by default.
-    undef_macros=["NDEBUG"],
-    extra_compile_args=["-std=c99"],
-    libraries=libraries,
-    define_macros=DefineMacros(),
-    include_dirs=includes + configurator.include_dirs,
-    library_dirs=configurator.library_dirs,
-)
-
 numpy_ver = "numpy>=1.7"
 
 with open("README.rst") as f:
@@ -175,7 +163,7 @@ setup(
     name="msprime",
     description="A fast and accurate coalescent simulator.",
     long_description=long_description,
-    packages=["msprime", "tskit"],
+    packages=["msprime"],
     author="Jerome Kelleher",
     author_email="jerome.kelleher@well.ox.ac.uk",
     url="http://pypi.python.org/pypi/msprime",
@@ -186,8 +174,8 @@ setup(
         ]
     },
     include_package_data=True,
-    install_requires=[numpy_ver, "h5py", "svgwrite", "six", "jsonschema"],
-    ext_modules=[_msprime_module, _tskit_module],
+    install_requires=[numpy_ver, "tskit", "h5py", "svgwrite", "six", "jsonschema"],
+    ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],
