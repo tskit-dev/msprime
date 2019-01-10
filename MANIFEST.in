@@ -1,5 +1,6 @@
 include lib/*.h
-include lib/kastore/c/kastore.h
+include lib/tskit/c/tsk_*.h
+include lib/tskit/c/kastore/c/*.h
 include msprime/provenance.schema.json
 include README.txt
 include ez_setup.py

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2019 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -85,83 +85,41 @@ class local_build_ext(build_ext):
 
 
 libdir = "lib"
-includes = [libdir, libdir + "/tskit", libdir + "/kastore/c"]
+tskdir = os.path.join(libdir, "tskit/c")
+kasdir = os.path.join(tskdir, "kastore/c")
+includes = [libdir, tskdir, kasdir]
 
 configurator = PathConfigurator()
 msp_source_files = [
     "msprime.c", "fenwick.c", "avl.c", "util.c",
     "object_heap.c", "recomb_map.c", "mutgen.c"
 ]
-tsk_source_files = [
-    "tskit/tsk_core.c",
-    "tskit/tsk_tables.c",
-    "tskit/tsk_trees.c",
-    "tskit/tsk_genotypes.c",
-    "tskit/tsk_stats.c",
-    "tskit/tsk_convert.c",
-    "kastore/c/kastore.c",
-]
+tsk_source_files = ["tsk_core.c", "tsk_tables.c", "tsk_trees.c"]
+kas_source_files = ["kastore.c"]
 
-
-# Now, setup the extension module. We have to do some quirky workarounds
-# here so that we can get the current version number from setuptools_scm
-# and also get this version provided as a compile time parameter to the
-# extension module.
-class DefineMacros(object):
-    def __init__(self):
-        self._msprime_version = None
-
-    def __getitem__(self, index):
-        if self._msprime_version is None:
-            import setuptools_scm
-            version = setuptools_scm.get_version()
-            if IS_WINDOWS:
-                self._msprime_version = '\\"{}\\"'.format(version)
-            else:
-                self._msprime_version = '"{}"'.format(version)
-
-        defines = [
-            # Define the library version
-            # TODO: this is only used for the VCF converter to get the right version
-            # in the header. We'll need something smarter in the future.
-            ("TSK_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
-            # Keeping this for now for compiling the C module.
-            ("MSP_LIBRARY_VERSION_STR", '{}'.format(self._msprime_version)),
-        ]
-        if IS_WINDOWS:
-            defines += [
-                # These two are required for GSL to compile and link against the
-                # conda-forge version.
-                ("GSL_DLL", None), ("WIN32", None)]
-        return defines[index]
-
+sources = ["_msprimemodule.c"] + [
+    os.path.join(libdir, f) for f in msp_source_files] + [
+    os.path.join(tskdir, f) for f in tsk_source_files] + [
+    os.path.join(kasdir, f) for f in kas_source_files]
 
 libraries = ["gsl", "gslcblas"]
+defines = []
 if IS_WINDOWS:
     # Needed for generating UUIDs
     libraries.append("Advapi32")
+    defines += [
+        # These two are required for GSL to compile and link against the
+        # conda-forge version.
+        ("GSL_DLL", None), ("WIN32", None)]
 
 _msprime_module = Extension(
     '_msprime',
-    sources=["_msprimemodule.c"] + [
-        os.path.join(libdir, f) for f in msp_source_files + tsk_source_files],
+    sources=sources,
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
     libraries=libraries,
-    define_macros=DefineMacros(),
-    include_dirs=includes + configurator.include_dirs,
-    library_dirs=configurator.library_dirs,
-)
-
-_tskit_module = Extension(
-    '_tskit',
-    sources=["_tskitmodule.c"] + [os.path.join(libdir, f) for f in tsk_source_files],
-    # Enable asserts by default.
-    undef_macros=["NDEBUG"],
-    extra_compile_args=["-std=c99"],
-    libraries=libraries,
-    define_macros=DefineMacros(),
+    define_macros=defines,
     include_dirs=includes + configurator.include_dirs,
     library_dirs=configurator.library_dirs,
 )
@@ -175,7 +133,7 @@ setup(
     name="msprime",
     description="A fast and accurate coalescent simulator.",
     long_description=long_description,
-    packages=["msprime", "tskit"],
+    packages=["msprime"],
     author="Jerome Kelleher",
     author_email="jerome.kelleher@well.ox.ac.uk",
     url="http://pypi.python.org/pypi/msprime",
@@ -186,8 +144,8 @@ setup(
         ]
     },
     include_package_data=True,
-    install_requires=[numpy_ver, "h5py", "svgwrite", "six", "jsonschema"],
-    ext_modules=[_msprime_module, _tskit_module],
+    install_requires=[numpy_ver, "tskit"],
+    ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],

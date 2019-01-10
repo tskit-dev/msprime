@@ -35,10 +35,6 @@ import tests
 import _msprime
 import _tskit
 
-# We don't want to import all of the high-level library
-# here. All we need is the version.
-from msprime import __version__ as _library_version
-
 # Root node marker
 NULL_NODE = -1
 
@@ -265,8 +261,6 @@ class TestModule(tests.MsprimeTestCase):
         self.assertIsInstance(major, int)
         self.assertGreater(major, 0)
         self.assertIsInstance(minor, int)
-        version_str = _msprime.get_library_version_str()
-        self.assertEqual(version_str, _library_version)
 
     def test_gsl_error_handler(self):
         # Not a lot we can test here. Just make sure the error handler is unset when

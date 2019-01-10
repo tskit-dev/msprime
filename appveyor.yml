@@ -16,7 +16,8 @@ build: false
 test_script:
   - "conda config --add channels conda-forge"
   - "conda install -f --yes --file=requirements/conda-minimal.txt"
-  - "pip install kastore"  
+  # FIXME adding this while we have a pre-release version of tskit.
+  - "pip install --pre tskit"  
   - "pip install PyVCF"  
   - "pip install newick"  
   - "pip install python_jsonschema_objects"

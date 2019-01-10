@@ -39,6 +39,8 @@ install:
   - export MSP_CONDA_PREFIX="$HOME/miniconda/envs/test-environment"
   - conda install --yes --file=requirements/conda-minimal.txt
   - pip install -r requirements/tests-pypi.txt
+  # FIXME adding this while we have a pre-release version of tskit.
+  - "pip install --pre tskit"  
   # We need to run build_ext here first as odd things happen with the tests on
   # version numbers otherwise.
   - python setup.py build_ext
