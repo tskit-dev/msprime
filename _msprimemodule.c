@@ -3978,12 +3978,6 @@ msprime_unset_gsl_error_handler(PyObject *self)
     return Py_BuildValue("");
 }
 
-static PyObject *
-msprime_get_library_version_str(PyObject *self)
-{
-    return Py_BuildValue("s", MSP_LIBRARY_VERSION_STR);
-}
-
 static PyMethodDef msprime_methods[] = {
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
@@ -3991,8 +3985,6 @@ static PyMethodDef msprime_methods[] = {
             METH_NOARGS, "Restores the GSL error handler to its value before module import." },
     {"unset_gsl_error_handler", (PyCFunction) msprime_unset_gsl_error_handler,
             METH_NOARGS, "Unsets the GSL error handler (and stores the current value)." },
-    {"get_library_version_str", (PyCFunction) msprime_get_library_version_str,
-            METH_NOARGS, "Returns the version of the msp C library." },
     {NULL}        /* Sentinel */
 };
 
