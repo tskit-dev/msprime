@@ -31,8 +31,8 @@
 #include "avl.h"
 #include "fenwick.h"
 #include "object_heap.h"
-#include "tskit/tsk_tables.h"
-#include "tskit/tsk_trees.h"
+#include "tsk_tables.h"
+#include "tsk_trees.h"
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1

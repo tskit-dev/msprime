@@ -5,12 +5,16 @@ EXTRA_CFLAGS=-std=c99 -pedantic -Werror -Wall -W \
   -Wcast-align -Wcast-qual \
   -Wwrite-strings -Wnested-externs \
   -fshort-enums -fno-common -Dinline= 
-CFLAGS=-g -O2 -Ikastore/c
-LDFLAGS=-lgsl -lgslcblas -lm -Ltskit -ltskit
+CFLAGS=-g -O2 -Itskit/c -Itskit/c/kastore/c
+LDFLAGS=-lgsl -lgslcblas -lm 
 
 HEADERS=msprime.h util.h 
 COMPILED=msprime.o fenwick.o object_heap.o \
-    recomb_map.o mutgen.o avl.o util.o 
+    recomb_map.o mutgen.o avl.o util.o \
+    tskit/c/tsk_core.o\
+    tskit/c/tsk_tables.o\
+    tskit/c/tsk_trees.o\
+    tskit/c/kastore/c/kastore.o
 
 all: main simulation_tests 
 
@@ -37,7 +41,7 @@ tags:
 clean:
 	rm -f main tests simulation_tests table_example table_example_cpp *.o *.gcda *.gcno
 
-debian-tests: CFLAGS=--coverage -Ikastore/c
+debian-tests: CFLAGS=--coverage 
 debian-tests: simulation_tests
 
 coverity-tests: CC=gcc 

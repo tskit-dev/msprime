@@ -25,7 +25,7 @@
 #include <errno.h>
 #include <assert.h>
 
-#include "tskit/tsk_core.h"
+#include "tsk_core.h"
 #include "util.h"
 
 static const char *
