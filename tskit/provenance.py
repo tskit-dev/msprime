@@ -12,6 +12,7 @@ import os.path
 import jsonschema
 
 import tskit.exceptions as exceptions
+import _tskit
 
 __version__ = "undefined"
 try:
@@ -21,21 +22,20 @@ except ImportError:
     pass
 
 
-_environment = None
+# NOTE: the APIs here are all preliminary. We should have a class that encapsulates
+# all of the required functionality, including parsing and printing out provenance
+# records. This will replace the current functions.
 
 
-def _get_environment():
+def get_environment(extra_libs=None, include_tskit=True):
+    """
+    Returns a dictionary describing the environment in which tskit
+    is currently running.
+
+    This API is tentative and will change in the future when a more
+    comprehensive provenance API is implemented.
+    """
     env = {
-        "libraries": {
-            "kastore": {
-                # Hard coding this for now as there is no way to get version
-                # information from the kastore C API. See
-                # https://github.com/tskit-dev/kastore/issues/41
-                # We could import the kastore module here and use its version,
-                # but this is not the same as the C code we have compiler against.
-                "version": "0.1.0",
-            }
-        },
         "os": {
             "system": platform.system(),
             "node": platform.node(),
@@ -48,19 +48,17 @@ def _get_environment():
             "version": platform.python_version(),
         }
     }
+    libs = {
+        "kastore": {
+            "version": ".".join(map(str, _tskit.get_kastore_version()))
+        }
+    }
+    if include_tskit:
+        libs["tskit"] = {"version": __version__}
+    if extra_libs is not None:
+        libs.update(extra_libs)
+    env["libraries"] = libs
     return env
-
-
-def get_environment():
-    """
-    Returns a dictionary describing the environment in which tskit
-    is currently running.
-    """
-    # Everything here is fixed so we cache it
-    global _environment
-    if _environment is None:
-        _environment = _get_environment()
-    return _environment
 
 
 def get_provenance_dict(parameters=None):
@@ -72,12 +70,34 @@ def get_provenance_dict(parameters=None):
         "schema_version": "1.0.0",
         "software": {
             "name": "tskit",
-            "version": __version__,
+            "version": __version__
         },
         "parameters": parameters,
-        "environment": get_environment()
+        "environment": get_environment(include_tskit=False)
     }
     return document
+
+
+# Cache the schema
+_schema = None
+
+
+def get_schema():
+    """
+    Returns the tskit provenance :ref:`provenance schema <sec_provenance>` as
+    a dict.
+
+    :return: The provenance schema.
+    :rtype: dict
+    """
+    global _schema
+    if _schema is None:
+        base = os.path.dirname(__file__)
+        schema_file = os.path.join(base, "provenance.schema.json")
+        with open(schema_file) as f:
+            _schema = json.load(f)
+    # Return a copy to avoid issues with modifying the cached schema
+    return dict(_schema)
 
 
 def validate_provenance(provenance):
@@ -91,10 +111,7 @@ def validate_provenance(provenance):
         to be validated against the schema.
     :raises: :class:`.ProvenanceValidationError`
     """
-    base = os.path.dirname(__file__)
-    schema_file = os.path.join(base, "provenance.schema.json")
-    with open(schema_file) as f:
-        schema = json.load(f)
+    schema = get_schema()
     try:
         jsonschema.validate(provenance, schema)
     except jsonschema.exceptions.ValidationError as ve:

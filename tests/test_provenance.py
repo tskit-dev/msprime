@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2018-2019 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -27,52 +27,24 @@ import unittest
 import json
 
 import tskit
+import numpy as np
+import python_jsonschema_objects as pjs
 
 import _msprime
 import msprime
-import msprime.provenance as provenance
 
 
 class TestProvenance(unittest.TestCase):
     """
     Basic tests for the provenance dict function.
     """
-
-    @unittest.skip("FIX gsl version")
     def test_libraries(self):
-        d = provenance.get_provenance_dict()
-        libs = d["environment"]["libraries"]
+        ts = msprime.simulate(5, random_seed=1)
+        prov = json.loads(ts.provenance(0).record)
+        libs = prov["environment"]["libraries"]
         self.assertEqual(libs["gsl"], {
             "version": ".".join(map(str, _msprime.get_gsl_version()))})
-        self.assertEqual(libs["kastore"], {"version": "0.1.0"})
-
-    # TODO more tests when we finalise the format of these dictionaries.
-
-
-@unittest.skip("TMP")
-class TestEnvironment(unittest.TestCase):
-    """
-    Basic tests for the provenance dict function.
-    """
-    def test_cache(self):
-        d = provenance.get_environment()
-        self.assertIn("os", d)
-        self.assertIs(d, provenance.get_environment())
-
-
-def get_provenance(
-        software_name="x", software_version="y", schema_version="1", environment=None,
-        parameters=None):
-    document = {
-        "schema_version": schema_version,
-        "software": {
-            "name": software_name,
-            "version": software_version,
-        },
-        "environment": {} if environment is None else environment,
-        "parameters": {} if parameters is None else parameters,
-    }
-    return document
+        self.assertEqual(libs["tskit"], {"version": tskit.__version__})
 
 
 class ValidateSchemas(unittest.TestCase):
@@ -98,3 +70,61 @@ class ValidateSchemas(unittest.TestCase):
         prov = json.loads(ts.provenance(1).record)
         tskit.validate_provenance(prov)
         self.assertEqual(prov["parameters"]["command"], "simplify")
+
+
+class TestBuildObjects(unittest.TestCase):
+    """
+    Check that we can build objects from the json schema as we'd expect.
+    """
+    def decode(self, prov):
+        builder = pjs.ObjectBuilder(tskit.provenance.get_schema())
+        ns = builder.build_classes()
+        return ns.TskitProvenance.from_json(prov)
+
+    def test_simulation(self):
+        ts = msprime.simulate(5, random_seed=1)
+        prov = ts.provenance(0).record
+        decoded = self.decode(prov)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "simulate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+
+    def test_simulation_numpy(self):
+        seeds = np.ones(1, dtype=int)
+        ts = msprime.simulate(5, random_seed=seeds[0])
+        prov = ts.provenance(0).record
+        decoded = self.decode(prov)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "simulate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+
+    def test_mutate(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(
+            ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False)
+        decoded = self.decode(ts.provenance(1).record)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "mutate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+        self.assertEqual(decoded.parameters.rate, 2)
+        self.assertEqual(decoded.parameters.start_time, 0)
+        self.assertEqual(decoded.parameters.end_time, 100)
+        self.assertEqual(decoded.parameters.keep, False)
+
+    def test_mutate_numpy(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(
+            ts,
+            rate=np.array([2])[0],
+            random_seed=np.array([1])[0],
+            start_time=np.array([0])[0],
+            end_time=np.array([100][0]),
+            keep=np.array([False][0]))
+        decoded = self.decode(ts.provenance(1).record)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "mutate")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+        self.assertEqual(decoded.parameters.rate, 2)
+        self.assertEqual(decoded.parameters.start_time, 0)
+        self.assertEqual(decoded.parameters.end_time, 100)
+        self.assertEqual(decoded.parameters.keep, False)
