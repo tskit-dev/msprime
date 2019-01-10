@@ -25,6 +25,7 @@
 #include <numpy/arrayobject.h>
 #include <float.h>
 
+#include "kastore.h"
 #include "tskit.h"
 
 #if PY_MAJOR_VERSION >= 3
@@ -8328,7 +8329,17 @@ static PyTypeObject LdCalculatorType = {
  *===================================================================
  */
 
+static PyObject *
+tskit_get_kastore_version(PyObject *self)
+{
+    /* TODO if we provide the option of linking against kastore separately, we
+     * should return the link time version using kas_get_version */
+    return Py_BuildValue("iii", KAS_VERSION_MAJOR, KAS_VERSION_MINOR, KAS_VERSION_PATCH);
+}
+
 static PyMethodDef tskit_methods[] = {
+    {"get_kastore_version", (PyCFunction) tskit_get_kastore_version, METH_NOARGS,
+            "Returns the version of kastore we have built in." },
     {NULL}        /* Sentinel */
 };
 

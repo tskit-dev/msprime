@@ -7,28 +7,22 @@ from __future__ import division
 
 import unittest
 import json
+import platform
+import os
 
-import python_jsonschema_objects as pjs
-import numpy as np
 import msprime
 
+import _tskit
 import tskit
 import tskit.provenance as provenance
-
-
-class TestEnvironment(unittest.TestCase):
-    """
-    Basic tests for the provenance dict function.
-    """
-    def test_cache(self):
-        d = provenance.get_environment()
-        self.assertIn("os", d)
-        self.assertIs(d, provenance.get_environment())
 
 
 def get_provenance(
         software_name="x", software_version="y", schema_version="1", environment=None,
         parameters=None):
+    """
+    Utility function to return a provenance document for testing.
+    """
     document = {
         "schema_version": schema_version,
         "software": {
@@ -115,88 +109,84 @@ class TestSchema(unittest.TestCase):
         tskit.validate_provenance(extra)
 
 
-class ValidateSchemas(unittest.TestCase):
+class TestOutputProvenance(unittest.TestCase):
     """
     Check that the schemas we produce in tskit are valid.
     """
-    def test_simulation(self):
-        ts = msprime.simulate(5, random_seed=1)
-        prov = json.loads(ts.provenance(0).record)
-        tskit.validate_provenance(prov)
-        self.assertEqual(prov["parameters"]["command"], "simulate")
-
-    def test_mutate(self):
-        ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(ts, rate=1, random_seed=1)
-        prov = json.loads(ts.provenance(1).record)
-        tskit.validate_provenance(prov)
-        self.assertEqual(prov["parameters"]["command"], "mutate")
-
     def test_simplify(self):
         ts = msprime.simulate(5, random_seed=1)
         ts = ts.simplify()
         prov = json.loads(ts.provenance(1).record)
         tskit.validate_provenance(prov)
         self.assertEqual(prov["parameters"]["command"], "simplify")
+        self.assertEqual(
+            prov["environment"], provenance.get_environment(include_tskit=False))
+        self.assertEqual(
+            prov["software"],
+            {"name": "tskit", "version": tskit.__version__})
 
 
-@unittest.skip("testing provenance schema")
-class TestBuildObjects(unittest.TestCase):
+class TestEnvironment(unittest.TestCase):
     """
-    Check that we can build objects from the json schema as we'd expect.
+    Tests for the environment provenance.
     """
-    def decode(self, prov):
-        schema_file = "tskit/provenance.schema.json"
-        with open(schema_file) as f:
-            schema = f.read()
-        builder = pjs.ObjectBuilder(json.loads(schema))
-        ns = builder.build_classes()
-        return ns.TskitProvenance.from_json(prov)
+    def test_os(self):
+        env = provenance.get_environment()
+        os = {
+            "system": platform.system(),
+            "node": platform.node(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "machine": platform.machine()
+        }
+        self.assertEqual(env["os"], os)
 
-    def test_simulation(self):
-        ts = msprime.simulate(5, random_seed=1)
-        prov = ts.provenance(0).record
-        decoded = self.decode(prov)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "simulate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
+    def test_python(self):
+        env = provenance.get_environment()
+        python = {
+            "implementation": platform.python_implementation(),
+            "version": platform.python_version(),
+        }
+        self.assertEqual(env["python"], python)
 
-    def test_simulation_numpy(self):
-        seeds = np.ones(1, dtype=int)
-        ts = msprime.simulate(5, random_seed=seeds[0])
-        prov = ts.provenance(0).record
-        decoded = self.decode(prov)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "simulate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
+    def test_libraries(self):
+        kastore_lib = {"version": ".".join(map(str, _tskit.get_kastore_version()))}
+        env = provenance.get_environment()
+        self.assertEqual({
+                "kastore": kastore_lib,
+                "tskit": {"version": tskit.__version__}},
+            env["libraries"])
 
-    def test_mutate(self):
-        ts = msprime.simulate(5, random_seed=1)
-        ts = tskit.mutate(
-            ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False)
-        decoded = self.decode(ts.provenance(1).record)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "mutate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
-        self.assertEqual(decoded.parameters.rate, 2)
-        self.assertEqual(decoded.parameters.start_time, 0)
-        self.assertEqual(decoded.parameters.end_time, 100)
-        self.assertEqual(decoded.parameters.keep, False)
+        env = provenance.get_environment(include_tskit=False)
+        self.assertEqual({"kastore": kastore_lib}, env["libraries"])
 
-    def test_mutate_numpy(self):
-        ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(
-            ts,
-            rate=np.array([2])[0],
-            random_seed=np.array([1])[0],
-            start_time=np.array([0])[0],
-            end_time=np.array([100][0]),
-            keep=np.array([False][0]))
-        decoded = self.decode(ts.provenance(1).record)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "mutate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
-        self.assertEqual(decoded.parameters.rate, 2)
-        self.assertEqual(decoded.parameters.start_time, 0)
-        self.assertEqual(decoded.parameters.end_time, 100)
-        self.assertEqual(decoded.parameters.keep, False)
+        extra_libs = {"abc": [], "xyz": {"one": 1}}
+        env = provenance.get_environment(include_tskit=False, extra_libs=extra_libs)
+        libs = {"kastore": kastore_lib}
+        libs.update(extra_libs)
+        self.assertEqual(libs, env["libraries"])
+
+
+class TestGetSchema(unittest.TestCase):
+    """
+    Ensure we return the correct JSON schema.
+    """
+    def test_file_equal(self):
+        s1 = provenance.get_schema()
+        with open(os.path.join("tskit", "provenance.schema.json")) as f:
+            s2 = json.load(f)
+        self.assertEqual(s1, s2)
+
+    def test_caching(self):
+        n = 10
+        schemas = [provenance.get_schema() for _ in range(n)]
+        # Ensure all the schemas are different objects.
+        self.assertEqual(len(set(map(id, schemas))), n)
+        # Ensure the schemas are all equal
+        for j in range(n):
+            self.assertEqual(schemas[0], schemas[j])
+
+    def test_form(self):
+        s = provenance.get_schema()
+        self.assertEqual(s["schema"], "http://json-schema.org/draft-07/schema#")
+        self.assertEqual(s["version"], "1.0.0")

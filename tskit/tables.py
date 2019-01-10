@@ -419,9 +419,9 @@ class NodeTable(BaseTable):
         :param int flags: The bitwise flags for the new node.
         :param float time: The birth time for the new node.
         :param int population: The ID of the population in which the new node was born.
-            Defaults to the :const:`.NULL_POPULATION`.
+            Defaults to :const:`.NULL`.
         :param int individual: The ID of the individual in which the new node was born.
-            Defaults to the :const:`.NULL_INDIVIDUAL`.
+            Defaults to :const:`.NULL`.
         :param bytes metadata: The binary-encoded metadata for the new node. If not
             specified or None, a zero-length byte string is stored.
         :return: The ID of the newly added node.
@@ -447,10 +447,10 @@ class NodeTable(BaseTable):
         :param time: The time values for each node. Required.
         :type time: numpy.ndarray, dtype=np.float64
         :param population: The population values for each node. If not specified
-            or None, the :const:`.NULL_POPULATION` value is stored for each node.
+            or None, the :const:`.NULL` value is stored for each node.
         :type population: numpy.ndarray, dtype=np.int32
         :param individual: The individual values for each node. If not specified
-            or None, the :const:`.NULL_INDIVIDUAL` value is stored for each node.
+            or None, the :const:`.NULL` value is stored for each node.
         :type individual: numpy.ndarray, dtype=np.int32
         :param metadata: The flattened metadata array. Must be specified along
             with ``metadata_offset``. If not specified or None, an empty metadata
@@ -482,10 +482,10 @@ class NodeTable(BaseTable):
         :param time: The time values for each node. Required.
         :type time: numpy.ndarray, dtype=np.float64
         :param population: The population values for each node. If not specified
-            or None, the :const:`.NULL_POPULATION` value is stored for each node.
+            or None, the :const:`.NULL` value is stored for each node.
         :type population: numpy.ndarray, dtype=np.int32
         :param individual: The individual values for each node. If not specified
-            or None, the :const:`.NULL_INDIVIDUAL` value is stored for each node.
+            or None, the :const:`.NULL` value is stored for each node.
         :type individual: numpy.ndarray, dtype=np.int32
         :param metadata: The flattened metadata array. Must be specified along
             with ``metadata_offset``. If not specified or None, an empty metadata
@@ -1101,7 +1101,7 @@ class MutationTable(BaseTable):
         :param int node: The ID of the first node inheriting this mutation.
         :param str derived_state: The state of the site at this mutation's node.
         :param int parent: The ID of the parent mutation. If not specified,
-            defaults to the :attr:`NULL_MUTATION`.
+            defaults to :attr:`NULL`.
         :param bytes metadata: The binary-encoded metadata for the new node. If not
             specified or None, a zero-length byte string is stored.
         :return: The ID of the newly added mutation.
@@ -1700,6 +1700,7 @@ class TableCollection(object):
             (default=0; must be <= len(edges)).
         """
         self.ll_tables.sort(edge_start)
+        # TODO add provenance
 
     def compute_mutation_parents(self):
         """
@@ -1713,9 +1714,10 @@ class TableCollection(object):
 
         The ``parent`` of a given mutation is the ID of the next mutation
         encountered traversing the tree upwards from that mutation, or
-        ``NULL_MUTATION`` if there is no such mutation.
+        ``NULL`` if there is no such mutation.
         """
         self.ll_tables.compute_mutation_parents()
+        # TODO add provenance
 
     def deduplicate_sites(self):
         """
@@ -1725,6 +1727,7 @@ class TableCollection(object):
         appropriately.  This requires the site table to be sorted by position.
         """
         self.ll_tables.deduplicate_sites()
+        # TODO add provenance
 
 
 # Pickle support. See copyreg registration for this function below.

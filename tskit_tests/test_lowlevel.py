@@ -775,3 +775,12 @@ class TestTree(LowLevelTestCase):
                         sample = t.get_next_sample(sample)
                     u = t.get_right_sib(u)
                 self.assertEqual(sorted(samples), list(range(ts.get_num_samples())))
+
+
+class TestModuleFunctions(unittest.TestCase):
+    """
+    Tests for the module level functions.
+    """
+    def test_kastore_version(self):
+        version = _tskit.get_kastore_version()
+        self.assertEqual(version, (0, 1, 0))

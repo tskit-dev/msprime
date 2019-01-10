@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2017 University of Oxford
+# Copyright (C) 2015-2018 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -30,8 +30,10 @@ import random
 import sys
 import os
 
-import _msprime
 import tskit
+
+from . import provenance
+import _msprime
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
@@ -386,7 +388,7 @@ def simulate(
         "random_seed": seed,
         "TODO": "add other simulation parameters"
     }
-    provenance_dict = tskit.provenance.get_provenance_dict(parameters)
+    provenance_dict = provenance.get_provenance_dict(parameters)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.

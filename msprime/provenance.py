@@ -23,8 +23,7 @@ of various dependencies and the OS.
 from __future__ import print_function
 from __future__ import division
 
-import platform
-
+import tskit
 
 import _msprime
 
@@ -36,37 +35,39 @@ except ImportError:
     pass
 
 
-_environment = None
-
-# TODO hook into tskit's provenance somehow
+def get_provenance_dict(parameters=None):
+    """
+    Returns a dictionary encoding an execution of msprime conforming to the
+    tskit provenance schema.
+    """
+    document = {
+        "schema_version": "1.0.0",
+        "software": {
+            "name": "msprime",
+            "version": __version__,
+        },
+        "parameters": parameters,
+        "environment": get_environment()
+    }
+    return document
 
 
 def _get_environment():
     gsl_version = ".".join(map(str, _msprime.get_gsl_version()))
-    env = {
-        "libraries": {
-            "gsl": {
-                "version": gsl_version
-            },
-            "kastore": {
-                # Hard coding this for now as there is no way to get version
-                # information from the kastore C API. See
-                # https://github.com/tskit-dev/kastore/issues/41
-                # We could import the kastore module here and use its version,
-                # but this is not the same as the C code we have compiler against.
-                "version": "0.1.0",
-            }
-        },
-        "os": {
-            "system": platform.system(),
-            "node": platform.node(),
-            "release": platform.release(),
-            "version": platform.version(),
-            "machine": platform.machine(),
-        },
-        "python": {
-            "implementation": platform.python_implementation(),
-            "version": platform.python_version(),
-        }
-    }
-    return env
+    libraries = {"gsl": {"version": gsl_version}}
+    return tskit.provenance.get_environment(extra_libs=libraries)
+
+
+_environment = None
+
+
+def get_environment():
+    """
+    Returns a dictionary describing the environment in which tskit
+    is currently running.
+    """
+    # Everything here is fixed so we cache it
+    global _environment
+    if _environment is None:
+        _environment = _get_environment()
+    return _environment

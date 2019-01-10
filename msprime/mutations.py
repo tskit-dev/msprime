@@ -28,6 +28,7 @@ import tskit
 
 import _msprime
 import msprime.simulations as simulations
+import msprime.provenance as provenance
 
 
 # Alphabets for mutations.
@@ -146,7 +147,7 @@ def mutate(
         end_time = float(end_time)
         parameters["end_time"] = end_time
     # TODO Add a JSON representation of the model to the provenance.
-    provenance_dict = tskit.provenance.get_provenance_dict(parameters)
+    provenance_dict = provenance.get_provenance_dict(parameters)
 
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
