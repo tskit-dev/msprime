@@ -1,3 +1,0 @@
-[submodule "lib/kastore"]
-	path = lib/kastore
-	url = https://github.com/tskit-dev/kastore
