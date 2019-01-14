@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2019 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -596,10 +596,6 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
     ret = msp_set_node_mapping_block_size(msp, (size_t) int_tmp);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
-    }
-    if (config_lookup_int(config, "max_memory", &int_tmp)
-            == CONFIG_FALSE) {
-        fatal_error("max_memory is a required parameter");
     }
     if (config_lookup_int(config, "store_migrations", &int_tmp) == CONFIG_FALSE) {
         fatal_error("store_migrations is a required parameter");
