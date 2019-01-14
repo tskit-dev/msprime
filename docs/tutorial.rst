@@ -9,7 +9,10 @@ library. Detailed :ref:`sec_api` is also available for this
 library. An :program:`ms` compatible :ref:`command line interface <sec_cli>`
 is also available if you wish to use ``msprime`` directly within
 an existing work flow.
-
+Please see the `tskit documentation <https://tskit.readthedocs.io/en/stable>`_ for
+more information on how to use the
+`tskit Python API <https://tskit.readthedocs.io/en/stable/python-api.html>`_
+to analyse simulation results.
 
 ****************
 Simulating trees
@@ -39,27 +42,31 @@ Running simulations is very straightforward in ``msprime``::
 Here, we simulate the coalescent for a sample of size six
 with an effective population size of 1000 diploids,
 and then print out a depiction of the resulting tree.
-The :func:`.simulate` function returns a
-:class:`.TreeSequence` object, which provides a very
+The ``msprime`` library uses
+`tskit <https://tskit.readthedocs.io/en/stable>`_
+to represent simulation results and
+the :func:`.simulate` function returns a
+:class:`tskit.TreeSequence` object, which provides a very
 efficient way to access the correlated trees in simulations
 involving recombination. In this example we know that
 there can only be one tree because we have not provided
 a value for ``recombination_rate``, and it
 defaults to zero.
 Therefore, we access the only tree in the
-sequence using the call ``tree_sequence.first()``.
+sequence using the :meth:`~tskit.TreeSequence.first` method.
 Finally, we draw a simple depiction of the tree to the terminal
-using the :meth:`~.SparseTree.draw` method.
+using the :meth:`tskit.Tree.draw` method.
 
 Genealogical trees record the lines of descent along which genomes
 have been inherited. Since diploids have two copies of each autosomal
 chromosome, diploid individuals contain two such lines of descent:
 the simulation above provides the genealogical history of only three diploids.
 
-Trees are represented within ``msprime`` in a slightly unusual way. In
+Trees are represented within ``tskit`` (and therefore ``msprime``)
+in a slightly unusual way. In
 the majority of libraries dealing with trees, each node is
 represented as an object in memory and the relationship
-between nodes as pointers between these objects. In ``msprime``,
+between nodes as pointers between these objects. In ``tskit``,
 however, nodes are *integers*.
 In the tree above, we can see that the leaves of the tree
 are labelled with 0 to 5, and all the internal nodes of the tree
@@ -67,10 +74,10 @@ are also integers with the root of the tree being 10.
 
 We can easily trace our path
 back to the root for a particular sample using the
-:meth:`~.SparseTree.parent` method::
+:meth:`~tskit.Tree.parent` method::
 
     >>> u = 2
-    >>> while u != msprime.NULL_NODE:
+    >>> while u != tskit.NULL:
     >>>     print("node {}: time = {}".format(u, tree.time(u)))
     >>>     u = tree.parent(u)
     node 2: time = 0.0
@@ -82,14 +89,14 @@ back to the root for a particular sample using the
 
 In this code chunk we iterate up the tree starting at node 0 and
 stop when we get to the root. We know that a node is a root
-if its parent is :const:`msprime.NULL_NODE`, which is a special
+if its parent is :const:`tskit.NULL`, which is a special
 reserved node. (The value of the null node is -1, but we recommend
 using the symbolic constant to make code more readable.) We also use
-the :meth:`~.SparseTree.time` method to get the time
+the :meth:`~tskit.Tree.time` method to get the time
 for each node, which corresponds to the time in generations
 at which the coalescence event happened during the simulation.
 We can also obtain the length of a branch joining a node to
-its parent using the :meth:`~.SparseTree.branch_length`
+its parent using the :meth:`~tskit.Tree.branch_length`
 method::
 
     >>> print(tree.branch_length(6))
@@ -161,12 +168,12 @@ effective population size of 1000::
     ┃ ┏┻┓ ┃ ┃ ┃
     2 4 5 3 0 1
 
-In this example, we use the :meth:`~.TreeSequence.trees`
+In this example, we use the :meth:`tskit.TreeSequence.trees`
 method to iterate over the trees in the sequence. For each tree
 we print out its index (i.e., its position in the sequence) and
 the interval the tree covers (i.e., the genomic
 coordinates which all share precisely this tree) using the
-:attr:`~.SparseTree.index` and :attr:`~.SparseTree.interval` attributes.
+:attr:`tskit.Tree.index` and :attr:`tskit.Tree.interval` attributes.
 Thus, the first tree covers the
 first 6kb of sequence and the second tree covers the remaining 4kb.
 We can see
@@ -174,9 +181,9 @@ that these trees share a great deal of their structure, but that there are
 also important differences between the trees.
 
 .. warning:: Do not store the values returned from the
-    :meth:`~.TreeSequence.trees` iterator in a list and operate
-    on them afterwards! For efficiency reasons ``msprime`` uses the same
-    instance of :class:`.SparseTree` for each tree in the sequence
+    :meth:`~tskit.TreeSequence.trees` iterator in a list and operate
+    on them afterwards! For efficiency reasons ``tskit`` uses the same
+    instance of :class:`tskit.Tree` for each tree in the sequence
     and updates the internal state for each new tree. Therefore, if you store
     the trees returned from the iterator in a list, they will all refer
     to the same tree.
@@ -227,14 +234,18 @@ per base per generation::
     0 4 2 5 1 3
 
 
+It is also possible to add mutations to an existing tree sequence
+using the :func:`msprime.mutate` function.
+
+
 ********
 Variants
 ********
 
 We are often interesting in accessing the sequence data that results from
 simulations directly. The most efficient way to do this is by using
-the :meth:`.TreeSequence.variants` method, which returns an iterator
-over all the :class:`.Variant` objects arising from the trees and mutations.
+the :meth:`tskit.TreeSequence.variants` method, which returns an iterator
+over all the :class:`tskit.Variant` objects arising from the trees and mutations.
 Each variant contains a reference to the site object, as well as the
 alleles and the observed sequences for each sample in the ``genotypes``
 field::
@@ -860,7 +871,7 @@ Why record the initial generation?
 
 We can now see why it is essential that the forwards simulator records the
 *initial* generation in a tree sequence that will later be used as a
-``from_ts`` argument to ``msprime.simulate()``. In the example above, if node
+``from_ts`` argument to :func:`.simulate`. In the example above, if node
 ``7`` was not in the tree sequence, we would not know that the segment that
 node ``20`` inherits from on ``[0.0, 1.0)`` and the segment that node ``12``
 inherits from on ``[1.0, 2.0)`` both exist in the same node (here, node ``7``).
@@ -869,11 +880,11 @@ However, note that although the intial generation (above, nodes ``0``, ``4``,
 ``7``, and ``8``) must be in the tree sequence, they do *not* have to be
 samples. The easiest way to do this is to
 (a) retain the initial generation as samples throughout the forwards simulation
-(so they persist through ``simplify()``), but then (b) before we output
+(so they persist through :meth:`~tskit.TableCollection.simplify`), but then (b) before we output
 the final tree sequence, we remove the flags that mark them as samples,
-so that ``simulate()`` does not simulate their entire history as well. This
+so that :func:`.simulate` does not simulate their entire history as well. This
 is the approach taken in the toy simulator provided above (although we skip
-the periodic ``simplify()`` steps which are essential in any practical simulation
+the periodic :meth:`~tskit.TableCollection.simplify` steps which are essential in any practical simulation
 for simplicity).
 
 -------------------------------------
@@ -899,7 +910,7 @@ they may cause problems:
 
 For these reasons it is usually better to remove this redundancy from your
 computed tree sequence which is easily done using the
-:meth:`.TreeSequence.simplify` method:
+:meth:`tskit.TreeSequence.simplify` method:
 
 .. code-block:: python
 

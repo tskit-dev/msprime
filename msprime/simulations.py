@@ -272,7 +272,7 @@ def simulate(
         __tmp_max_time=None):
     """
     Simulates the coalescent with recombination under the specified model
-    parameters and returns the resulting :class:`.TreeSequence`. Note that
+    parameters and returns the resulting :class:`tskit.TreeSequence`. Note that
     Ne is the effective diploid population size (so the effective number
     of genomes in the population is 2*Ne), but ``sample_size`` is the
     number of (monoploid) genomes sampled.
@@ -334,11 +334,11 @@ def simulate(
         seeds must be between 1 and :math:`2^{32} - 1`.
     :param int num_replicates: The number of replicates of the specified
         parameters to simulate. If this is not specified or None,
-        no replication is performed and a :class:`.TreeSequence` object
+        no replication is performed and a :class:`tskit.TreeSequence` object
         returned. If :obj:`num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
-        resulting :class:`.TreeSequence` objects returned.
-    :param .TreeSequence from_ts: If specified, initialise the simulation
+        resulting :class:`tskit.TreeSequence` objects returned.
+    :param tskit.TreeSequence from_ts: If specified, initialise the simulation
         from the root segments of this tree sequence and return the
         completed tree sequence. Please see :ref:`here
         <sec_api_simulate_from>` for details on the required properties
@@ -349,12 +349,12 @@ def simulate(
         time is zero if performing a simulation of a set of samples,
         or is the time of the oldest node if simulating from an
         existing tree sequence (see the ``from_ts`` parameter).
-    :return: The :class:`.TreeSequence` object representing the results
+    :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
         :obj:`num_replicates` parameter has been used.
-    :rtype: :class:`.TreeSequence` or an iterator over
-        :class:`.TreeSequence` replicates.
+    :rtype: :class:`tskit.TreeSequence` or an iterator over
+        :class:`tskit.TreeSequence` replicates.
     :warning: If using replication, do not store the results of the
         iterator in a list! For performance reasons, the same
         underlying object may be used for every TreeSequence

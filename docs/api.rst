@@ -6,7 +6,11 @@ API Documentation
 
 This is the API documentation for ``msprime``, and provides detailed information
 on the Python programming interface. See the :ref:`sec_tutorial` for an
-introduction to using this API to run simulations and analyse the results.
+introduction to using this API to run simulations.
+See the `tskit documentation <https://tskit.readthedocs.io/en/stable>`_ for
+information on how to use the
+`tskit Python API <https://tskit.readthedocs.io/en/stable/python-api.html>`_
+to analyse simulation results.
 
 ****************
 Simulation model
@@ -45,7 +49,7 @@ generation in ``msprime``. Thus, given the per generation crossover rate
 in coalescent time units is :math:`\rho = 4 N_e r L`. Although breakpoints do
 not necessarily occur at integer locations, the underlying recombination model
 is finite, and the behaviour of a small number of loci can be modelled using
-the :class:`RecombinationMap` class. However, this is considered an advanced
+the :class:`.RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
