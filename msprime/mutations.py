@@ -64,7 +64,7 @@ def mutate(
         start_time=None, end_time=None):
     """
     Simulates mutations on the specified ancestry and returns the resulting
-    :class:`.TreeSequence`. Mutations are generated at the specified rate in
+    :class:`tskit.TreeSequence`. Mutations are generated at the specified rate in
     measured generations. Mutations are generated under the infinite sites
     model, and so the rate of new mutations is per unit of sequence length per
     generation.
@@ -94,7 +94,7 @@ def mutate(
     nodes with time <= ``start_time`` since mutations store the node at the
     bottom (i.e., towards the leaves) of the branch that they occur on.
 
-    :param TreeSequence tree_sequence: The tree sequence onto which we
+    :param tskit.TreeSequence tree_sequence: The tree sequence onto which we
         wish to throw mutations.
     :param float rate: The rate of mutation per generation. (Default: 0).
     :param int random_seed: The random seed. If this is `None`, a
@@ -108,9 +108,9 @@ def mutate(
         occur. (Default: no restriction.)
     :param float end_time: The maximum time at which a mutation can occur
         (Default: no restriction).
-    :return: The :class:`.TreeSequence` object  resulting from overlaying
+    :return: The :class:`tskit.TreeSequence` object  resulting from overlaying
         mutations on the input tree sequence.
-    :rtype: :class:`.TreeSequence`
+    :rtype: :class:`tskit.TreeSequence`
     """
     try:
         tables = tree_sequence.tables

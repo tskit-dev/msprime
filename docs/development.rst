@@ -14,7 +14,15 @@ Quickstart
 **********
 
 - Make a fork of the msprime repo on `GitHub <github.com/tskit-dev/msprime>`_
-- Clone your fork into a local directory.
+- Clone your fork into a local directory, making sure that the **submodules
+  are correctly initialised**::
+
+  $ git clone git@github.com:tskit-dev/msprime.git --recurse-submodules
+
+  For an already checked out repo, the submodules can be initialised using::
+
+  $ git submodule update --init --recursive
+
 - Install the :ref:`basic requirements <sec_installation_system_requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root. If you
@@ -95,7 +103,7 @@ High-level Python
 *****************
 
 Throughout this document, we assume that the ``msprime`` package is built and
-run locally _within_ the project directory. That is, ``msprime`` is _not_ installed
+run locally *within* the project directory. That is, ``msprime`` is *not* installed
 into the Python installation using ``pip install -e`` or setuptools `development
 mode <http://setuptools.readthedocs.io/en/latest/setuptools.html#id23>`_. Please
 ensure that you build the low-level module using (e.g.) ``make ext3`` and that
@@ -131,7 +139,7 @@ distribution is though `PyPI <http://pypi.python.org/pypi/msprime>`_, which prov
 canonical source for each release.
 
 A package for `conda <http://conda.io/docs/>`_ is also available on
-`BioConda <bioconda.github.io/recipes/msprime/README.html>`_.
+`conda-forge <https://github.com/conda-forge/msprime-feedstock>`_.
 
 +++++
 Tests
@@ -151,10 +159,10 @@ Interfacing with low-level module
 +++++++++++++++++++++++++++++++++
 
 Much of the high-level Python code only exists to provide a simpler interface to
-the low-level ``_msprime`` module. As such, many objects (such as ``TreeSequence``)
+the low-level ``_msprime`` module. As such, many objects (such as ``RecombinationMap``)
 are really just a shallow layer on top of the corresponding low-level object.
 The convention here is to keep a reference to the low-level object via
-a private instance variable such as ``self._ll_tree_sequence``.
+a private instance variable such as ``self._ll_recombination_map``.
 
 +++++++++++++++++++++++
 Command line interfaces
@@ -404,8 +412,8 @@ not intended to be used directly and may change arbitrarily over time.
 
 The usual pattern in the low-level Python API is to define a Python class
 which corresponds to a given "class" in the C API. For example, we define
-a ``TreeSequence`` class, which is essentially a thin wrapper around the
-``tree_sequence_t`` type from the C library.
+a ``RecombinationMap`` class, which is essentially a thin wrapper around the
+``recomb_map_t`` type from the C library.
 
 The ``_msprimemodule.c`` file follows the standard conventions given in the
 `Python documentation <https://docs.python.org/3.6/extending/index.html>`_.

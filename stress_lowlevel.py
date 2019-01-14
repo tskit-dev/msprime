@@ -17,13 +17,7 @@ import logging
 import tests.test_demography as test_demography
 import tests.test_highlevel as test_highlevel
 import tests.test_lowlevel as test_lowlevel
-import tskit_tests.test_vcf as test_vcf
-import tskit_tests.test_threads as test_threads
-import tskit_tests.test_stats as test_stats
-import tskit_tests.test_tables as test_tables
-import tskit_tests.test_topology as test_topology
-import tskit_tests.test_file_format as test_file_format
-import tskit_tests.test_dict_encoding as test_dict_encoding
+import tests.test_dict_encoding as test_dict_encoding
 
 
 def main():
@@ -31,12 +25,6 @@ def main():
         "demography": test_demography,
         "highlevel": test_highlevel,
         "lowlevel": test_lowlevel,
-        "vcf": test_vcf,
-        "threads": test_threads,
-        "stats": test_stats,
-        "tables": test_tables,
-        "file_format": test_file_format,
-        "topology": test_topology,
         "dict_encoding": test_dict_encoding,
     }
     parser = argparse.ArgumentParser(

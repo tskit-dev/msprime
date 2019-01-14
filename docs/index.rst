@@ -26,8 +26,6 @@ Contents:
    tutorial
    api
    cli
-   interchange
-   provenance
    development
    CITATION
 
