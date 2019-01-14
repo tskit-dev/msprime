@@ -1,3 +1,9 @@
+**********************
+[0.7.0a1] - 2019-01-14
+**********************
+
+Alpha release for testing the tskit/msprime split.
+
 ********************
 [0.6.2] - 2018-12-04
 ********************
@@ -13,7 +19,6 @@ Minor bugfix release.
 - Fix performance regression in replication (#608)
 
 
-improvements and bugfixes.
 ********************
 [0.6.1] - 2018-08-25
 ********************
