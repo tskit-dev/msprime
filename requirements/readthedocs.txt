@@ -1,5 +1,3 @@
 six
 setuptools_scm 
 sphinx-argparse
-h5py
-jsonschema

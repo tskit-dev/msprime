@@ -17,8 +17,7 @@ test_script:
   - "conda config --add channels conda-forge"
   - "conda install -f --yes --file=requirements/conda-minimal.txt"
   - "pip install tskit"  
-  - "pip install PyVCF"  
-  - "pip install newick"  
+  - "pip install newick"
   - "pip install python_jsonschema_objects"
 
   # There seems to be an issue here, where we're not using the correct 
