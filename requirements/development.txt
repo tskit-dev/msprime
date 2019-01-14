@@ -8,6 +8,7 @@ nose
 numpy
 six
 kastore>=0.2.2
+tskit
 jsonschema
 # TODO we're pinning the version here because of problems on Travis.
 # versions weren't correctly being set for v1.12.1

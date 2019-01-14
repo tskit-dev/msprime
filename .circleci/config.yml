@@ -19,8 +19,6 @@ jobs:
             sudo apt-get update
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev
             pip install --user -r requirements/development.txt
-            # FIXME adding this while we have a pre-release version of tskit.
-            pip install --user --pre tskit
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
@@ -32,7 +30,6 @@ jobs:
           command: |
             CFLAGS=--coverage python setup.py build_ext --inplace
             cd lib && make
-            # make -C lib debian-tests
       - run:
           name: Run highlevel tests and upload coverage
           command: |
@@ -44,7 +41,6 @@ jobs:
       - run:
           name: Run the low-level tests.
           command: |
-            # ./lib/tests
             ./lib/simulation_tests
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
@@ -52,10 +48,9 @@ jobs:
             gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
             find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
             codecov -X gcov -F C
-      # FIXME disabling docs build while we're sorting out the tskit split.
-      # - run:
-      #     name: Make sure the docs build.
-      #     command: make -C docs
+      - run:
+          name: Make sure the docs build.
+          command: make -C docs
       - run:
           name: Make sure we can build a distribution tarball.
           command: python setup.py sdist
