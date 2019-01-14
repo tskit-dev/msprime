@@ -30,19 +30,7 @@ scenarios. The library is a reimplementation of Hudson's seminal
 
 3. ``msprime`` does not use Newick trees for interchange as they
    are extremely inefficient in terms of storage space and the
-   time needed to generate and parse them. Instead, we use an efficient
-
-   .. :ref:`columnar binary file format <sec_tree_sequence_file_format>`
-   .. using the `kastore <https://pypi.org/project/kastore/>`_ library.
-   .. This format allows us to store genealogical data very concisely,
-   .. particularly for large sample sizes.
-
-
-.. The ``msprime`` library has also evolved to support data
-.. from external sources, and can work with data conforming to
-.. the :ref:`sec_interchange` definitions. In the near future, the
-.. efficient algorithms and data structures used to process tree
-.. sequence data will be moved into a new library, provisiononally
-.. called ``tskit``. Once this transition is complete, ``msprime``
-.. will depend on this library, and will become primarily concerned
-.. with simulating backwards-in-time population processes.
+   time needed to generate and parse them. Instead, we use the
+   `tskit library <https://tskit.readthedocs.io/en/stable/index.html>`_
+   which allows us to store and process very large scale simulation
+   results efficiently.
