@@ -5,10 +5,8 @@ msprime
 Msprime is a coalescent simulator and library for processing
 tree-based genetic data. Msprime can simulate the coalescent with
 recombination over whole chromosomes for hundreds of thousands of
-samples, and very efficiently process the resulting genealogies.
-It is also possible to efficiently read data from external
-sources via a well defined and efficient `interchange API
-<https://msprime.readthedocs.org/en/stable/interchange.html>`_.
+samples, and very efficiently process the resulting genealogies
+using `tskit <https://tskit.readthedocs.org/en/stable>`_.
 
 If you use ``msprime`` in your work, please cite the `PLOS Computational
 Biology <http://dx.doi.org/10.1371/journal.pcbi.1004842>`_ paper.
