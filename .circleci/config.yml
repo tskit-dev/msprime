@@ -17,37 +17,52 @@ jobs:
           name: Install dependencies and set path
           command: |
             sudo apt-get update
-            sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev
+            sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
             pip install --user -r requirements/development.txt
+            pip install --user meson
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
           key: msprime-{{ .Branch }}
           paths:
             - "/home/circleci/.local"
+
       - run:
-          name: Compile
+          name: Lint Python
+          command: |
+            flake8 --max-line-length 89 setup.py msprime tests verification.py algorithms.py
+
+      - run:
+          name: Compile Python
           command: |
             CFLAGS=--coverage python setup.py build_ext --inplace
-            cd lib && make
+
       - run:
           name: Run highlevel tests and upload coverage
           command: |
-            flake8 --max-line-length 89 setup.py msprime tests verification.py algorithms.py
             nosetests -v --with-coverage --cover-package msprime \
               --cover-branches --cover-erase --cover-xml --cover-inclusive tests 
             codecov -X gcov -F python
             rm .coverage
+
+      - run:
+          name: Compile C with gcc
+          command: |
+            CFLAGS=--coverage meson lib/ build-gcc && cd build-gcc && ninja
+
       - run:
           name: Run the low-level tests.
           command: |
-            ./lib/simulation_tests
+            ./build-gcc/tests
+
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
           command: |
             gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-            find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
+            # find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
+            gcov -pb -o ./build-gcc/msprime@sta/object_heap.c.gcno lib/object_heap.c
             codecov -X gcov -F C
+
       - run:
           name: Make sure the docs build.
           command: make -C docs
