@@ -12,7 +12,9 @@ jobs:
       - run:
           name: Checkout submodules
           command: |
-            git submodule update --init --recursive --remote
+            git submodule update --init --recursive 
+            # Write out the status for debugging purposes. Are we checked out at tags?
+            git submodule status --recursive
       - run:
           name: Install dependencies and set path
           command: |
@@ -53,14 +55,22 @@ jobs:
       - run:
           name: Run the low-level tests.
           command: |
-            ./build-gcc/tests
+            cd build-gcc
+            ./tests
 
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
           command: |
             gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-            # find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
-            gcov -pb -o ./build-gcc/msprime@sta/object_heap.c.gcno lib/object_heap.c
+            cd build-gcc
+            # TODO should be able to do this with 'find', but it's tricky and opaque.
+            gcov -pb ./msprime@sta/fenwick.c.gcno ../lib/fenwick.c 
+            gcov -pb ./msprime@sta/msprime.c.gcno ../lib/msprime.c 
+            gcov -pb ./msprime@sta/mutgen.c.gcno ../lib/mutgen.c 
+            gcov -pb ./msprime@sta/object_heap.c.gcno ../lib/object_heap.c 
+            gcov -pb ./msprime@sta/recomb_map.c.gcno ../lib/recomb_map.c 
+            gcov -pb ./msprime@sta/util.c.gcno ../lib/util.c 
+            cd ..
             codecov -X gcov -F C
 
       - run:
