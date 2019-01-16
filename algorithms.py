@@ -550,22 +550,6 @@ class Simulator(object):
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
 
-    def migration_event(self, j, k):
-        """
-        Migrates an individual from population j to population k.
-        """
-        # print("Migrating ind from ", j, " to ", k)
-        # print("Population sizes:", [len(pop) for pop in self.P])
-        index = random.randint(0, self.P[j].get_num_ancestors() - 1)
-        x = self.P[j].remove(index)
-        self.P[k].add(x)
-        # Set the population id for each segment also.
-        u = x
-        while u is not None:
-            u.population = k
-            u = u.next
-        # print("AFTER Population sizes:", [len(pop) for pop in self.P])
-
     def store_edges_left(self, y, u):
         while y is not None:
             self.store_edge(y.left, y.right, u, y.node)
@@ -577,6 +561,26 @@ class Simulator(object):
             self.store_edge(y.left, y.right, u, y.node)
             y.node = u
             y = y.next
+
+    def migration_event(self, j, k):
+        """
+        Migrates an individual from population j to population k.
+        """
+        # print("Migrating ind from ", j, " to ", k)
+        # print("Population sizes:", [len(pop) for pop in self.P])
+        index = random.randint(0, self.P[j].get_num_ancestors() - 1)
+        x = self.P[j].remove(index)
+        self.P[k].add(x)
+        if self.full_arg:
+            self.store_node(k)
+            y = len(self.tables.nodes) - 1
+            self.store_edges_right(x, y)
+        # Set the population id for each segment also.
+        u = x
+        while u is not None:
+            u.population = k
+            u = u.next
+        # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
     def hudson_recombination_event(self):
         """

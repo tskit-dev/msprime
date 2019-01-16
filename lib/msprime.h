@@ -162,6 +162,7 @@ typedef struct _msp_t {
     /* input parameters */
     simulation_model_t model;
     bool store_migrations;
+    bool store_full_arg;
     uint32_t num_samples;
     uint32_t num_loci;
     double recombination_rate;
@@ -298,6 +299,7 @@ int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
         double *allele_frequency);
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
+int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
