@@ -194,15 +194,41 @@ Basics
 
 To compile and develop the C code, a few extra development libraries are needed.
 `Libconfig <http://www.hyperrealm.com/libconfig/>`_ is used for the development CLI
-and `CUnit <http://cunit.sourceforge.net>`_ for unit tests. On Debian/Ubuntu, these
-can be installed using
+and `CUnit <http://cunit.sourceforge.net>`_ for unit tests. We use the
+`meson <https://mesonbuild.com>`_ build system in conjunction with `ninja-build
+<ninja-build.org>`_ to to compile the unit tests and
+development CLI. On Debian/Ubuntu, these can be installed using
 
 .. code-block:: bash
 
-    $ sudo apt-get install libcunit1-dev libconfig-dev
+    $ sudo apt-get install libcunit1-dev libconfig-dev ninja-build
 
-Compile the code locally run ``make`` in the ``lib`` directory.
+Meson is best installed via ``pip``:
 
+.. code-block:: bash
+
+    $ python3 -m pip install meson --user
+
+Meson keeps all compiled binaries in a build directory (this has many advantages
+such as allowing multiple builds with different options to coexist). To set up
+the initial build directory, run
+
+.. code-block:: bash
+
+    $ meson build
+
+To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
+compiled binaries are then in the ``build`` directory:
+
+.. code-block:: bash
+
+    $ cd build
+    $ ninja
+    $ ./tests
+
+The `mesonic <www.vim.org/scripts/script.php?script_id=5378>`_ plugin for vim
+simplifies this process and allows code to be compiled seamlessly within the
+editor.
 
 +++++++++++++++
 Development CLI
@@ -220,15 +246,15 @@ The development CLI is written using `libconfig
 file, and `argtable3 <https://github.com/argtable/argtable3>`_ to parse the
 command line arguments. The ``argtable3`` code is included in the source (but
 not used in the distributed binaries, since this is strictly a development
-tool).
+tool). The source code is in ``dev-tools/dev-cli.c``.
 
-The CLI is run as follows:
+After building, the CLI is run as follows:
 
 .. code-block:: bash
 
-    $ ./main <command> <arguments>
+    $ ./build/dev-cli <command> <arguments>
 
-Running the ``main`` program without arguments will print out a summary of the
+Running the ``dev-cli`` program without arguments will print out a summary of the
 options.
 
 .. warning
@@ -245,12 +271,12 @@ simulation to an output file in the native ``.trees`` format. For example,
 
 .. code-block:: bash
 
-    $ ./main simulate dev.cfg -o out.trees
+    $ ./build/dev-cli simulate dev-tools/example.cfg -o out.trees
 
 The development configuration file describes the simulation that we want to
 run, and uses the
 `libconfig syntax <http://www.hyperrealm.com/libconfig/libconfig_manual.html#Configuration-Files>`_.
-An example is given in the file ``dev.cfg`` which should have sufficient documentation
+An example is given in the file ``dev-tools/example.cfg`` which should have sufficient documentation
 to be self-explanatory.
 
 .. warning
@@ -269,16 +295,13 @@ low-level APIs work correctly over a variety of inputs, and particularly, that
 the tests don't result in leaked memory or illegal memory accesses. The tests should be
 periodically run under valgrind to make sure of this.
 
-Tests are split into ``simulation_tests`` which covers functionality specific to the
-simulation logic, and ``tests`` which covers everything else. To run all the tests
-in a given suite, type ``./tests`` or ``./simulation_tests``.
-To run a specific test, provide this test name as a command line argument,
-e.g.:
+Tests are defined in the ``tests/tests.c`` file. To run all the tests
+in a given suite, type ``./build/tests``. To run a specific test, provide
+this test name as a command line argument, e.g.:
 
 .. code-block:: bash
 
-    $ ./simulation_tests fenwick_tree
-
+    $ ./build/tests test_fenwick
 
 While 100% test coverage is not feasible for C code, we aim to cover all code
 that can be reached. (Some classes of error such as malloc failures
