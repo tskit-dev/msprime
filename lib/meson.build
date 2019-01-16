@@ -29,7 +29,6 @@ msprime_sources =[
     'msprime.c', 'fenwick.c', 'util.c', 'mutgen.c', 'object_heap.c',
     'recomb_map.c']
 
-
 avl_lib = static_library('avl', sources: ['avl.c'])
 tskit_lib = static_library('tskit', 
     sources: tskit_sources, dependencies: m_dep, c_args: extra_c_args)
@@ -37,9 +36,10 @@ msprime_lib = static_library('msprime',
     sources: msprime_sources, dependencies: [m_dep, gsl_dep], 
     c_args: extra_c_args, link_with:[avl_lib, tskit_lib])
 
-executable('tests', 
+unit_tests = executable('tests', 
     sources: ['tests/tests.c'], 
     link_with: [msprime_lib], dependencies:[cunit_dep])
+test('Unit tests', unit_tests)
 
 # The development CLI. Don't use extra C args because argtable code won't pass
 executable('dev-cli', 
