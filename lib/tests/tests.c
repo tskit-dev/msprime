@@ -445,6 +445,9 @@ test_simulator_getters_setters(void)
 
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp_get_num_loci(&msp), m);
+    CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 0, 1), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 1, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0),
             MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0),
@@ -1475,6 +1478,7 @@ test_bottleneck_simulation(void)
         if (msp->time == 0.1) {
             t1_found = 1;
         }
+        CU_ASSERT_EQUAL(msp_get_time(msp), msp->time);
     }
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(t1_found);
@@ -2595,7 +2599,7 @@ test_strerror(void)
     int max_error_code = 1024; /* totally arbitrary */
 
     for (j = 1; j > -max_error_code; j--) {
-        msg = msp_strerror(-j);
+        msg = msp_strerror(j);
         CU_ASSERT_FATAL(msg != NULL);
         CU_ASSERT(strlen(msg) > 0);
     }

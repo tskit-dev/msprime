@@ -2132,10 +2132,6 @@ msp_initialise_from_samples(msp_t *self)
     if (self->start_time < 0) {
         self->start_time = 0;
     }
-    if (self->num_samples < 2) {
-        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
-        goto out;
-    }
     initial_samples = 0;
     for (j = 0; j < self->num_samples; j++) {
         /* Check that the sample configuration makes sense */
