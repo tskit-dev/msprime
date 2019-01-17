@@ -266,9 +266,26 @@ class TestFullArg(unittest.TestCase):
     def verify(self, sim):
         sim.run()
         tree_sequence = sim.get_tree_sequence()
-        self.assertEqual(
-            tree_sequence.num_nodes - tree_sequence.num_samples,
-            sim.num_recombination_events + sim.num_common_ancestor_events)
+        flags = tree_sequence.tables.nodes.flags
+        time = tree_sequence.tables.nodes.time
+        # TODO add definitions of these flags to the Python module.
+        re_nodes = np.where(flags == (1 << 17))[0]
+        ca_nodes = np.where(flags == (1 << 18))[0]
+        # There should be two recombination nodes for every event
+        self.assertTrue(np.array_equal(
+            time[re_nodes[::2]],  # Even indexes
+            time[re_nodes[1::2]]))  # Odd indexes
+        self.assertEqual(re_nodes.shape[0] / 2,  sim.num_recombination_events)
+        self.assertEqual(ca_nodes.shape[0],  sim.num_common_ancestor_events)
+        # After simplification, all the RE nodes should be gone.
+        ts_simplified = tree_sequence.simplify()
+        flags = ts_simplified.tables.nodes
+        self.assertEqual(np.sum(flags == (1 << 17)), 0)
+        # If the CA nodes pointed to those in which no coalescence happened
+        # these would also be gone.
+
+        self.assertLessEqual(ts_simplified.num_nodes, tree_sequence.num_nodes)
+        self.assertLessEqual(ts_simplified.num_edges, tree_sequence.num_edges)
         return tree_sequence
 
     def test_no_recombination(self):
@@ -281,14 +298,29 @@ class TestFullArg(unittest.TestCase):
         self.assertEqual(t1.nodes, t2.nodes)
         self.assertEqual(t1.edges, t2.edges)
 
-    def test_recombination(self):
+    def test_recombination_n25(self):
         rng = msprime.RandomGenerator(10)
         sim = msprime.simulator_factory(
-            5, recombination_rate=1, record_full_arg=True, random_generator=rng)
-        ts = self.verify(sim)
-        ts_simplified = ts.simplify()
-        self.assertLess(ts_simplified.num_nodes, ts.num_nodes)
-        self.assertLess(ts_simplified.num_edges, ts.num_edges)
+            25, recombination_rate=1, record_full_arg=True, random_generator=rng)
+        self.verify(sim)
+
+    def test_recombination_n5(self):
+        rng = msprime.RandomGenerator(10)
+        sim = msprime.simulator_factory(
+            5, recombination_rate=10, record_full_arg=True, random_generator=rng)
+        self.verify(sim)
+
+    def test_recombination_n50(self):
+        rng = msprime.RandomGenerator(100)
+        sim = msprime.simulator_factory(
+            50, recombination_rate=2, record_full_arg=True, random_generator=rng)
+        self.verify(sim)
+
+    def test_recombination_n100(self):
+        rng = msprime.RandomGenerator(100)
+        sim = msprime.simulator_factory(
+            100, recombination_rate=0.2, record_full_arg=True, random_generator=rng)
+        self.verify(sim)
 
 
 class TestSimulator(HighLevelTestCase):

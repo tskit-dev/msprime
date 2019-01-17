@@ -1395,7 +1395,8 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
             if (ret != 0) {
                 goto out;
             }
-            ret = msp_store_node(self, 0, self->time, y->population_id);
+            ret = msp_store_node(self, MSP_NODE_IS_RE_ARG_EVENT, self->time,
+                    y->population_id);
             if (ret != 0) {
                 goto out;
             }
@@ -1424,7 +1425,8 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
             if (ret != 0) {
                 goto out;
             }
-            ret = msp_store_node(self, 0, self->time, x->population_id);
+            ret = msp_store_node(self, MSP_NODE_IS_RE_ARG_EVENT, self->time,
+                    x->population_id);
             if (ret != 0) {
                 goto out;
             }
@@ -1446,7 +1448,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         if (ret != 0) {
             goto out;
         }
-        ret = msp_store_node(self, 0, self->time, z->population_id);
+        ret = msp_store_node(self, MSP_NODE_IS_RE_ARG_EVENT, self->time, z->population_id);
         if (ret != 0) {
             goto out;
         }
@@ -1524,7 +1526,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
         if (ret != 0) {
             goto out;
         }
-        ret = msp_store_node(self, 0, self->time, population_id);
+        ret = msp_store_node(self, MSP_NODE_IS_CA_ARG_EVENT, self->time, population_id);
         if (ret != 0) {
             goto out;
         }

@@ -42,6 +42,9 @@
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SINGLE_SWEEP 6
 
+#define MSP_NODE_IS_RE_ARG_EVENT    (1u << 17)
+#define MSP_NODE_IS_CA_ARG_EVENT    (1u << 18)
+
 /* Alphabets for mutation generator */
 #define MSP_ALPHABET_BINARY     0
 #define MSP_ALPHABET_NUCLEOTIDE 1
