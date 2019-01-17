@@ -259,6 +259,38 @@ class TestMultiLocusSimulation(HighLevelTestCase):
             self.assertRaises(TypeError, f, n, 1, 1.0)
 
 
+class TestFullArg(unittest.TestCase):
+    """
+    Tests for recording the full ARG.
+    """
+    def verify(self, sim):
+        sim.run()
+        tree_sequence = sim.get_tree_sequence()
+        self.assertEqual(
+            tree_sequence.num_nodes - tree_sequence.num_samples,
+            sim.num_recombination_events + sim.num_common_ancestor_events)
+        return tree_sequence
+
+    def test_no_recombination(self):
+        rng = msprime.RandomGenerator(1)
+        sim = msprime.simulator_factory(10, random_generator=rng, record_full_arg=True)
+        ts = self.verify(sim)
+        ts_simplified = ts.simplify()
+        t1 = ts.tables
+        t2 = ts_simplified.tables
+        self.assertEqual(t1.nodes, t2.nodes)
+        self.assertEqual(t1.edges, t2.edges)
+
+    def test_recombination(self):
+        rng = msprime.RandomGenerator(10)
+        sim = msprime.simulator_factory(
+            5, recombination_rate=1, record_full_arg=True, random_generator=rng)
+        ts = self.verify(sim)
+        ts_simplified = ts.simplify()
+        self.assertLess(ts_simplified.num_nodes, ts.num_nodes)
+        self.assertLess(ts_simplified.num_edges, ts.num_edges)
+
+
 class TestSimulator(HighLevelTestCase):
     """
     Runs tests on the underlying Simulator object.
