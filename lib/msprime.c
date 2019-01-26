@@ -1747,6 +1747,27 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     r_max = 0; /* keep compiler happy */
     l_min = 0;
     z = NULL;
+    if (self->store_full_arg) {
+        ret = msp_flush_edges(self);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_store_node(self, MSP_NODE_IS_CA_ARG_EVENT, self->time, population_id);
+        if (ret != 0) {
+            goto out;
+        }
+        v = (node_id_t) msp_get_num_nodes(self) - 1;
+        node = Q->head;
+        while (node != NULL) {
+            x = node->item;
+            assert(v != x->value);
+            ret = msp_store_edges_right(self, x, v);
+            if (ret != 0) {
+                goto out;
+            }
+            node = node->next;
+        }
+    }
     while (avl_count(Q) > 0) {
         h = 0;
         node = Q->head;
@@ -1795,9 +1816,11 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 if (ret != 0) {
                     goto out;
                 }
-                ret = msp_store_node(self, 0, self->time, population_id);
-                if (ret != 0) {
-                    goto out;
+                if (!self->store_full_arg) {
+                    ret = msp_store_node(self, 0, self->time, population_id);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
             }
             v = (node_id_t) msp_get_num_nodes(self) - 1;
@@ -1849,9 +1872,12 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             /* Store the edges and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
-                ret = msp_store_edge(self, l, r, v, x->value);
-                if (ret != 0) {
-                    goto out;
+                if (!self->store_full_arg) {
+                    assert(v != x->value);
+                    ret = msp_store_edge(self, l, r, v, x->value);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
                 if (x->right == r) {
                     msp_free_segment(self, x);
