@@ -1225,7 +1225,7 @@ test_multi_locus_simulation(void)
     int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
     double migration_matrix[] = {0, 1, 1, 0};
     size_t migration_events[4];
-    const char *model_names[] = {"hudson", "smc", "smc_prime"};
+    const char *model_names[] = {"hudson", "smc", "smc_prime", "hudson"};
     const char *model_name;
     size_t j;
     recomb_map_t recomb_map;
@@ -1272,6 +1272,11 @@ test_multi_locus_simulation(void)
                 break;
             case 2:
                 ret = msp_set_simulation_model_smc_prime(msp, 0.25);
+                break;
+            case 3:
+                ret = msp_set_simulation_model_hudson(msp, 0.25);
+                CU_ASSERT_EQUAL(ret, 0);
+                ret = msp_set_store_full_arg(msp, 1);
                 break;
         }
         CU_ASSERT_EQUAL(ret, 0);
