@@ -392,9 +392,9 @@ class Simulator(object):
         self.L.set_value(u.index, 0)
         self.segment_stack.append(u)
 
-    def store_node(self, population):
+    def store_node(self, population, flags=0):
         self.flush_edges()
-        self.tables.nodes.add_row(time=self.t, population=population)
+        self.tables.nodes.add_row(time=self.t, flags=flags, population=population)
 
     def flush_edges(self):
         """
@@ -550,17 +550,22 @@ class Simulator(object):
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
 
-    def store_edges_left(self, y, u):
-        while y is not None:
-            self.store_edge(y.left, y.right, u, y.node)
-            y.node = u
-            y = y.prev
-
-    def store_edges_right(self, y, u):
-        while y is not None:
-            self.store_edge(y.left, y.right, u, y.node)
-            y.node = u
-            y = y.next
+    def store_arg_edges(self, segment):
+        u = len(self.tables.nodes) - 1
+        # Store edges pointing to current node to the left
+        x = segment
+        while x is not None:
+            if x.node != u:
+                self.store_edge(x.left, x.right, u, x.node)
+            x.node = u
+            x = x.prev
+        # Store edges pointing to current node to the right
+        x = segment
+        while x is not None:
+            if x.node != u:
+                self.store_edge(x.left, x.right, u, x.node)
+            x.node = u
+            x = x.next
 
     def migration_event(self, j, k):
         """
@@ -572,9 +577,8 @@ class Simulator(object):
         x = self.P[j].remove(index)
         self.P[k].add(x)
         if self.full_arg:
-            self.store_node(k)
-            y = len(self.tables.nodes) - 1
-            self.store_edges_right(x, y)
+            self.store_node(k, flags=msprime.NODE_IS_MIG_EVENT)
+            self.store_arg_edges(x)
         # Set the population id for each segment also.
         u = x
         while u is not None:
@@ -601,25 +605,20 @@ class Simulator(object):
             y.next = None
             y.right = k
             self.L.increment(y.index, k - z.right)
-            if self.full_arg:
-                self.store_node(y.population)
-                u = len(self.tables.nodes) - 1
-                self.store_edges_left(y, u)
+            lhs_tail = y
         else:
             # split the link between x and y.
             x.next = None
             y.prev = None
             z = y
-            if self.full_arg:
-                self.store_node(x.population)
-                u = len(self.tables.nodes) - 1
-                self.store_edges_left(x, u)
+            lhs_tail = x
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
         if self.full_arg:
-            self.store_node(z.population)
-            u = len(self.tables.nodes) - 1
-            self.store_edges_right(z, u)
+            self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
+            self.store_arg_edges(lhs_tail)
+            self.store_node(z.population, flags=msprime.NODE_IS_RE_EVENT)
+            self.store_arg_edges(z)
 
     def dtwf_recombine(self, x):
         """
@@ -797,6 +796,10 @@ class Simulator(object):
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
+        if self.full_arg:
+            if not coalescence:
+                self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
+            self.store_arg_edges(z)
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
@@ -841,11 +844,6 @@ class Simulator(object):
         z = None
         coalescence = False
         defrag_required = False
-        if self.full_arg:
-            self.store_node(population_index)
-            u = len(self.tables.nodes) - 1
-            self.store_edges_right(x, u)
-            self.store_edges_right(y, u)
         while x is not None or y is not None:
             alpha = None
             if x is None or y is None:
@@ -871,8 +869,7 @@ class Simulator(object):
                 else:
                     if not coalescence:
                         coalescence = True
-                        if not self.full_arg:
-                            self.store_node(population_index)
+                        self.store_node(population_index)
                     u = len(self.tables.nodes) - 1
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
@@ -894,9 +891,8 @@ class Simulator(object):
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(left, right, u, population_index)
-                    if not self.full_arg:
-                        self.store_edge(left, right, u, x.node)
-                        self.store_edge(left, right, u, y.node)
+                    self.store_edge(left, right, u, x.node)
+                    self.store_edge(left, right, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
                     if x.right == right:
                         self.free_segment(x)
@@ -921,6 +917,11 @@ class Simulator(object):
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
+
+        if self.full_arg:
+            if not coalescence:
+                self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
+            self.store_arg_edges(z)
 
         if defrag_required:
             self.defrag_segment_chain(z)

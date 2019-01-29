@@ -263,27 +263,39 @@ class TestFullArg(unittest.TestCase):
     """
     Tests for recording the full ARG.
     """
-    def verify(self, sim):
+    def verify(self, sim, multiple_mergers=False):
         sim.run()
         tree_sequence = sim.get_tree_sequence()
+        # Check if we have multiple merger somewhere.
+        found = False
+        for edgeset in tree_sequence.edgesets():
+            if len(edgeset.children) > 2:
+                found = True
+                break
+        self.assertEqual(multiple_mergers, found)
+
         flags = tree_sequence.tables.nodes.flags
         time = tree_sequence.tables.nodes.time
-        # TODO add definitions of these flags to the Python module.
-        re_nodes = np.where(flags == (1 << 17))[0]
-        ca_nodes = np.where(flags == (1 << 18))[0]
+        # TODO add checks for migrations.
+        re_nodes = np.where(flags == msprime.NODE_IS_RE_EVENT)[0]
+        ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
+        coal_nodes = np.where(flags == 0)[0]
         # There should be two recombination nodes for every event
         self.assertTrue(np.array_equal(
             time[re_nodes[::2]],  # Even indexes
             time[re_nodes[1::2]]))  # Odd indexes
         self.assertEqual(re_nodes.shape[0] / 2,  sim.num_recombination_events)
-        self.assertEqual(ca_nodes.shape[0],  sim.num_common_ancestor_events)
-        # After simplification, all the RE nodes should be gone.
+        if not multiple_mergers:
+            self.assertEqual(
+                ca_nodes.shape[0] + coal_nodes.shape[0], sim.num_common_ancestor_events)
+        # After simplification, all the RE and CA nodes should be gone.
         ts_simplified = tree_sequence.simplify()
-        flags = ts_simplified.tables.nodes
-        self.assertEqual(np.sum(flags == (1 << 17)), 0)
-        # If the CA nodes pointed to those in which no coalescence happened
-        # these would also be gone.
-
+        new_flags = ts_simplified.tables.nodes.flags
+        new_time = ts_simplified.tables.nodes.time
+        self.assertEqual(np.sum(new_flags == msprime.NODE_IS_RE_EVENT), 0)
+        self.assertEqual(np.sum(new_flags == msprime.NODE_IS_CA_EVENT), 0)
+        # All coal nodes from the original should be identical to the originals
+        self.assertTrue(np.array_equal(time[coal_nodes], new_time[new_flags == 0]))
         self.assertLessEqual(ts_simplified.num_nodes, tree_sequence.num_nodes)
         self.assertLessEqual(ts_simplified.num_edges, tree_sequence.num_edges)
         return tree_sequence
@@ -321,6 +333,14 @@ class TestFullArg(unittest.TestCase):
         sim = msprime.simulator_factory(
             100, recombination_rate=0.2, record_full_arg=True, random_generator=rng)
         self.verify(sim)
+
+    def test_multimerger(self):
+        rng = msprime.RandomGenerator(1234)
+        sim = msprime.simulator_factory(
+            100, recombination_rate=0.1, record_full_arg=True,
+            random_generator=rng, demographic_events=[
+                msprime.InstantaneousBottleneck(time=0.1, population=0, strength=5)])
+        self.verify(sim, multiple_mergers=True)
 
 
 class TestSimulator(HighLevelTestCase):

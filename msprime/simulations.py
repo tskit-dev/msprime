@@ -35,6 +35,10 @@ import tskit
 from . import provenance
 import _msprime
 
+from _msprime import NODE_IS_CA_EVENT  # NOQA
+from _msprime import NODE_IS_RE_EVENT  # NOQA
+from _msprime import NODE_IS_MIG_EVENT  # NOQA
+
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
 # and may be removed in future versions.

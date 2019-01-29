@@ -1222,12 +1222,13 @@ test_multi_locus_simulation(void)
     uint32_t m = 100;
     long seed = 10;
     int model;
-    int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
     double migration_matrix[] = {0, 1, 1, 0};
     size_t migration_events[4];
-    const char *model_names[] = {"hudson", "smc", "smc_prime", "hudson"};
+    int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
+    const char *model_names[] = {"hudson", "smc", "smc_prime"};
     const char *model_name;
-    size_t j;
+    bool store_full_arg[] = {true, false};
+    size_t j, k;
     recomb_map_t recomb_map;
     tsk_tbl_collection_t tables;
 
@@ -1237,101 +1238,99 @@ test_multi_locus_simulation(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < sizeof(models) / sizeof(int); j++) {
-        sample_t *samples = malloc(n * sizeof(sample_t));
-        msp_t *msp = malloc(sizeof(msp_t));
-        gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+        for (k = 0; k < sizeof(store_full_arg) / sizeof(bool); k++) {
+            sample_t *samples = malloc(n * sizeof(sample_t));
+            msp_t *msp = malloc(sizeof(msp_t));
+            gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-        CU_ASSERT_FATAL(msp != NULL);
-        CU_ASSERT_FATAL(samples != NULL);
-        CU_ASSERT_FATAL(rng != NULL);
-        gsl_rng_set(rng, seed);
-        tsk_tbl_collection_clear(&tables);
-        memset(samples, 0, n * sizeof(sample_t));
-        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_num_populations(msp, 2);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_migration_matrix(msp, 4, migration_matrix);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_store_migrations(msp, true);
-        CU_ASSERT_EQUAL(ret, 0);
-        /* set all the block sizes to something small to provoke the memory
-         * expansions. */
-        ret = msp_set_avl_node_block_size(msp, 1);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_node_mapping_block_size(msp, 1);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_segment_block_size(msp, 1);
-        CU_ASSERT_EQUAL(ret, 0);
-        switch (j) {
-            case 0:
-                ret = msp_set_simulation_model_hudson(msp, 0.25);
-                break;
-            case 1:
-                ret = msp_set_simulation_model_smc(msp, 0.25);
-                break;
-            case 2:
-                ret = msp_set_simulation_model_smc_prime(msp, 0.25);
-                break;
-            case 3:
-                ret = msp_set_simulation_model_hudson(msp, 0.25);
-                CU_ASSERT_EQUAL(ret, 0);
-                ret = msp_set_store_full_arg(msp, 1);
-                break;
-        }
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_initialise(msp);
-        CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_FATAL(msp != NULL);
+            CU_ASSERT_FATAL(samples != NULL);
+            CU_ASSERT_FATAL(rng != NULL);
+            gsl_rng_set(rng, seed);
+            tsk_tbl_collection_clear(&tables);
+            memset(samples, 0, n * sizeof(sample_t));
+            ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_num_populations(msp, 2);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_migration_matrix(msp, 4, migration_matrix);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_store_migrations(msp, true);
+            CU_ASSERT_EQUAL(ret, 0);
+            /* set all the block sizes to something small to provoke the memory
+             * expansions. */
+            ret = msp_set_avl_node_block_size(msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_node_mapping_block_size(msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_segment_block_size(msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+            switch (j) {
+                case 0:
+                    ret = msp_set_simulation_model_hudson(msp, 0.25);
+                    break;
+                case 1:
+                    ret = msp_set_simulation_model_smc(msp, 0.25);
+                    break;
+                case 2:
+                    ret = msp_set_simulation_model_smc_prime(msp, 0.25);
+                    break;
+            }
+            ret = msp_set_store_full_arg(msp, store_full_arg[k]);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_initialise(msp);
+            CU_ASSERT_EQUAL(ret, 0);
 
-        num_events = 0;
-        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            num_events = 0;
+            while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                msp_verify(msp);
+                num_events++;
+            }
+            CU_ASSERT_EQUAL(ret, 0);
             msp_verify(msp);
-            num_events++;
-        }
-        CU_ASSERT_EQUAL(ret, 0);
-        msp_verify(msp);
-        ret = msp_get_num_migration_events(msp, migration_events);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT(num_events > n - 1);
-        CU_ASSERT_EQUAL(1 + num_events,
-                /* diagonals must be zero here */
-                migration_events[1] + migration_events[2] +
-                msp_get_num_recombination_events(msp) +
-                msp_get_num_common_ancestor_events(msp) +
-                msp_get_num_rejected_common_ancestor_events(msp));
-        if (models[j] == MSP_MODEL_HUDSON) {
-            CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
-        }
+            ret = msp_get_num_migration_events(msp, migration_events);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT(num_events > n - 1);
+            CU_ASSERT_EQUAL(1 + num_events,
+                    /* diagonals must be zero here */
+                    migration_events[1] + migration_events[2] +
+                    msp_get_num_recombination_events(msp) +
+                    msp_get_num_common_ancestor_events(msp) +
+                    msp_get_num_rejected_common_ancestor_events(msp));
+            if (models[j] == MSP_MODEL_HUDSON) {
+                CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
+            }
 
-        gsl_rng_set(rng, seed);
-        ret = msp_reset(msp);
-        num_events = 0;
-        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-            msp_verify(msp);
-            num_events++;
-        }
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_get_num_migration_events(msp, migration_events);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(1 + num_events,
-                migration_events[1] + migration_events[2] +
-                msp_get_num_recombination_events(msp) +
-                msp_get_num_common_ancestor_events(msp) +
-                msp_get_num_rejected_common_ancestor_events(msp));
-        if (models[j] == MSP_MODEL_HUDSON) {
-            CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
-        }
+            gsl_rng_set(rng, seed);
+            ret = msp_reset(msp);
+            num_events = 0;
+            while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                msp_verify(msp);
+                num_events++;
+            }
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_get_num_migration_events(msp, migration_events);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(1 + num_events,
+                    migration_events[1] + migration_events[2] +
+                    msp_get_num_recombination_events(msp) +
+                    msp_get_num_common_ancestor_events(msp) +
+                    msp_get_num_rejected_common_ancestor_events(msp));
+            if (models[j] == MSP_MODEL_HUDSON) {
+                CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
+            }
 
-        model = msp_get_model(msp)->type;
-        CU_ASSERT_EQUAL(model, models[j]);
-        model_name = msp_get_model_name(msp);
-        CU_ASSERT_STRING_EQUAL(model_name, model_names[j]);
+            model = msp_get_model(msp)->type;
+            CU_ASSERT_EQUAL(model, models[j]);
+            model_name = msp_get_model_name(msp);
+            CU_ASSERT_STRING_EQUAL(model_name, model_names[j]);
 
-        ret = msp_free(msp);
-        CU_ASSERT_EQUAL(ret, 0);
-        gsl_rng_free(rng);
-        free(msp);
-        free(samples);
+            ret = msp_free(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+            gsl_rng_free(rng);
+            free(msp);
+            free(samples);
+        }
     }
     recomb_map_free(&recomb_map);
     tsk_tbl_collection_free(&tables);
@@ -1726,10 +1725,11 @@ static void
 test_multiple_mergers_simulation(void)
 {
     int ret;
-    size_t j;
+    size_t j, k;
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
+    bool store_full_arg[] = {true, false};
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -1745,42 +1745,46 @@ test_multiple_mergers_simulation(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < 2; j++) {
-        gsl_rng_set(rng, seed);
-        /* TODO check non-zero sample times here to make sure they fail. */
-        memset(samples, 0, n * sizeof(sample_t));
-        tsk_tbl_collection_clear(&tables);
-        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-        CU_ASSERT_EQUAL(ret, 0);
-        /* TODO what are good parameters here?? */
-        if (j == 0) {
-            // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
-            ret = msp_set_simulation_model_dirac(msp, 1, 0.5, 1);
-        } else {
-            ret = msp_set_simulation_model_beta(msp, 1, 1.5, 10.0);
-        }
-        CU_ASSERT_EQUAL(ret, 0);
-        /* TODO check for adding various complications like multiple populations etc
-         * to ensure they fail.
-         */
-        ret = msp_initialise(msp);
-        CU_ASSERT_EQUAL(ret, 0);
-        msp_print_state(msp, _devnull);
+        for (k = 0; k < sizeof(store_full_arg) / sizeof(bool); k++) {
+            gsl_rng_set(rng, seed);
+            /* TODO check non-zero sample times here to make sure they fail. */
+            memset(samples, 0, n * sizeof(sample_t));
+            tsk_tbl_collection_clear(&tables);
+            ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+            CU_ASSERT_EQUAL(ret, 0);
+            /* TODO what are good parameters here?? */
+            if (j == 0) {
+                // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
+                ret = msp_set_simulation_model_dirac(msp, 1, 0.5, 1);
+            } else {
+                ret = msp_set_simulation_model_beta(msp, 1, 1.5, 10.0);
+            }
+            CU_ASSERT_EQUAL(ret, 0);
+            /* TODO check for adding various complications like multiple populations etc
+             * to ensure they fail.
+             */
+            ret = msp_set_store_full_arg(msp, store_full_arg[k]);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_initialise(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+            msp_print_state(msp, _devnull);
 
-        ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_TRUE(msp_is_completed(msp));
-        CU_ASSERT_TRUE(msp->time > 0);
-        msp_verify(msp);
-
-        msp_reset(msp);
-        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_TRUE(msp_is_completed(msp));
+            CU_ASSERT_TRUE(msp->time > 0);
             msp_verify(msp);
-        }
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_TRUE(msp_is_completed(msp));
 
-        ret = msp_free(msp);
-        CU_ASSERT_EQUAL(ret, 0);
+            msp_reset(msp);
+            while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                msp_verify(msp);
+            }
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_TRUE(msp_is_completed(msp));
+
+            ret = msp_free(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
     }
     gsl_rng_free(rng);
     free(msp);
