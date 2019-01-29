@@ -28,7 +28,6 @@ import dendropy
 import tqdm
 
 import msprime.cli as cli
-
 import msprime
 
 
@@ -278,6 +277,59 @@ class SimulationVerifier(object):
                 T[j] = a[-1]
                 j += 1
         return T
+
+    def run_arg_recording(self):
+        basedir = "tmp__NOBACKUP__/arg_recording"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        ts_node_counts = np.array([])
+        arg_node_counts = np.array([])
+        ts_tree_counts = np.array([])
+        arg_tree_counts = np.array([])
+        ts_edge_counts = np.array([])
+        arg_edge_counts = np.array([])
+
+        reps = 10000
+        leaves = 1000
+        rho = 0.2
+
+        for i in range(reps):
+            ts = msprime.simulate(
+                sample_size=leaves,
+                recombination_rate=rho,
+                random_seed=i+1)
+            ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
+            ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
+            ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
+            arg = msprime.simulate(
+                sample_size=leaves,
+                recombination_rate=rho,
+                random_seed=i + 1,
+                record_full_arg=True)
+            arg = arg.simplify()
+            arg_node_counts = np.append(arg_node_counts, arg.num_nodes)
+            arg_tree_counts = np.append(arg_tree_counts, arg.num_trees)
+            arg_edge_counts = np.append(arg_edge_counts, arg.num_edges)
+
+        pp_ts = sm.ProbPlot(ts_node_counts)
+        pp_arg = sm.ProbPlot(arg_node_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "nodes.png")
+        pyplot.savefig(f, dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_tree_counts)
+        pp_arg = sm.ProbPlot(arg_tree_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "trees.png")
+        pyplot.savefig(f, dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_edge_counts)
+        pp_arg = sm.ProbPlot(arg_edge_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "edges.png")
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
 
     def run_pairwise_island_model(self):
         """
@@ -1658,6 +1710,13 @@ class SimulationVerifier(object):
         """
         self._instances["analytical_pairwise_island"] = self.run_pairwise_island_model
 
+    def add_arg_recording_check(self):
+        """
+        Adds a check that we get the right number of objects when we simplify
+        a full arg.
+        """
+        self._instances["arg_recording"] = self.run_arg_recording
+
     def add_smc_num_trees_analytical_check(self):
         """
         Adds a check for the analytical number of trees under the SMC
@@ -1921,6 +1980,9 @@ def main():
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()
     verifier.add_cli_num_trees_analytical_check()
+
+    # ARG recording
+    verifier.add_arg_recording_check()
 
     # Simulate-from checks.
     verifier.add_simulate_from_single_locus_check()
