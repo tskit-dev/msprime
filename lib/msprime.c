@@ -699,8 +699,7 @@ msp_verify_segments(msp_t *self)
         }
         assert(total_links == fenwick_get_total(&self->links[k]));
         assert(total_links == alt_total_links);
-        assert(label_segments == object_heap_get_num_allocated(
-                    &self->segment_heap[k]));
+        assert(label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
     total_avl_nodes = msp_get_num_ancestors(self)
             + avl_count(&self->breakpoints)
@@ -1018,6 +1017,7 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
         self->buffered_edges = edge;
     }
     if (node_time[child] >= node_time[parent]) {
+        printf("Storing %d %d time = %f %f\n", child, parent, node_time[child], node_time[parent]);
         ret = MSP_ERR_TIME_TRAVEL;
         goto out;
     }
@@ -1835,18 +1835,19 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             z = alpha;
         }
     }
-    /* if (self->store_full_arg) { */
-    /*     if (! coalescence) { */
-    /*         ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id); */
-    /*         if (ret != 0) { */
-    /*             goto out; */
-    /*         } */
-    /*     } */
-    /*     ret = msp_store_arg_edges(self, z); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
+    if (self->store_full_arg) {
+        if (! coalescence) {
+            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id);
+            if (ret != 0) {
+                goto out;
+            }
+            printf("Made new node at time %f\n", self->time);
+        }
+        ret = msp_store_arg_edges(self, z);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     if (defrag_required) {
         ret = msp_defrag_segment_chain(self, z);
         if (ret != 0) {
@@ -2529,6 +2530,10 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 ret = self->common_ancestor_event(self, ca_pop_id, label);
                 if (ret == 1) {
                     /* The CA event has signalled that this event should be rejected */
+                    /* TODO things are more complicated in the store_full_arg case
+                     * because we will have stored a node and bunch of edges recording the
+                     * ARG. For now we disallow ARG recording for multiple merger
+                     * coalescents */
                     self->time -= t_wait;
                     ret = 0;
                 }
@@ -4183,6 +4188,13 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
     avl_node_t *x_node, *y_node;
     segment_t *x, *y;
 
+    /* We need to be able to rewind the ARG events to be able to support
+     * full ARG recording. */
+    if (self->store_full_arg) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+
     ancestors = &self->populations[pop_id].ancestors[label];
     if (gsl_rng_uniform(self->rng) < (1 / (1.0 + self->model.params.dirac_coalescent.c))) {
         /* Choose x and y */
@@ -4433,6 +4445,13 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     avl_node_t *x_node, *y_node, *q_node;
     segment_t *x, *y;
     double beta_x;
+
+    /* We need to be able to rewind the ARG events to be able to support
+     * full ARG recording. */
+    if (self->store_full_arg) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
 
     for (j = 0; j < 5; j++){
         avl_init_tree(&Q[j], cmp_segment_queue, NULL);

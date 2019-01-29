@@ -69,6 +69,7 @@
 #define MSP_ERR_BAD_TRAJECTORY_TIME                                 -32
 #define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -33
 #define MSP_ERR_EMPTY_TRAJECTORY                                    -34
+#define MSP_ERR_UNSUPPORTED_OPERATION                               -35
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

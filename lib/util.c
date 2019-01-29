@@ -142,6 +142,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_EMPTY_TRAJECTORY:
             ret = "Trajectory must contain at least one time point.";
             break;
+        case MSP_ERR_UNSUPPORTED_OPERATION:
+            ret = "Current simulation configuration is not supported.";
+            break;
 
         default:
             ret = "Error occurred generating error string. Please file a bug "

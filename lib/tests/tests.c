@@ -1127,6 +1127,48 @@ test_single_locus_simulation(void)
 }
 
 static void
+test_multi_locus_bottleneck_arg(void)
+{
+    int ret;
+    uint32_t n = 100;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_tbl_collection_t tables;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 100, 10.0, 10.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_tbl_collection_alloc(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_instantaneous_bottleneck(msp, 1.0, 0, 10);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_full_arg(msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_tbl_collection_free(&tables);
+}
+
+static void
 test_dtwf_multi_locus_simulation(void)
 {
     int ret;
@@ -1729,7 +1771,7 @@ test_multiple_mergers_simulation(void)
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
-    bool store_full_arg[] = {true, false};
+    bool store_full_arg[] = {true, true};
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -1770,18 +1812,22 @@ test_multiple_mergers_simulation(void)
             msp_print_state(msp, _devnull);
 
             ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_TRUE(msp_is_completed(msp));
-            CU_ASSERT_TRUE(msp->time > 0);
-            msp_verify(msp);
-
-            msp_reset(msp);
-            while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            if (store_full_arg[k]) {
+                /* Can't support this for now. */
+                CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+            } else {
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                CU_ASSERT_TRUE(msp_is_completed(msp));
+                CU_ASSERT_TRUE(msp->time > 0);
                 msp_verify(msp);
-            }
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_TRUE(msp_is_completed(msp));
 
+                msp_reset(msp);
+                while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                    msp_verify(msp);
+                }
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                CU_ASSERT_TRUE(msp_is_completed(msp));
+            }
             ret = msp_free(msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
@@ -2692,6 +2738,7 @@ main(int argc, char **argv)
         {"test_demographic_events_start_time", test_demographic_events_start_time},
         {"test_time_travel_error", test_time_travel_error},
         {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg},
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
