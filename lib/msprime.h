@@ -42,6 +42,10 @@
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SINGLE_SWEEP 6
 
+#define MSP_NODE_IS_RE_EVENT    (1u << 17)
+#define MSP_NODE_IS_CA_EVENT    (1u << 18)
+#define MSP_NODE_IS_MIG_EVENT   (1u << 19)
+
 /* Alphabets for mutation generator */
 #define MSP_ALPHABET_BINARY     0
 #define MSP_ALPHABET_NUCLEOTIDE 1
@@ -162,6 +166,7 @@ typedef struct _msp_t {
     /* input parameters */
     simulation_model_t model;
     bool store_migrations;
+    bool store_full_arg;
     uint32_t num_samples;
     uint32_t num_loci;
     double recombination_rate;
@@ -298,6 +303,7 @@ int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
         double *allele_frequency);
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
+int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);

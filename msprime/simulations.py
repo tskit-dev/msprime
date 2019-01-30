@@ -35,6 +35,10 @@ import tskit
 from . import provenance
 import _msprime
 
+from _msprime import NODE_IS_CA_EVENT  # NOQA
+from _msprime import NODE_IS_RE_EVENT  # NOQA
+from _msprime import NODE_IS_MIG_EVENT  # NOQA
+
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
 # and may be removed in future versions.
@@ -141,7 +145,8 @@ def simulator_factory(
         model=None,
         record_migrations=False,
         from_ts=None,
-        start_time=None):
+        start_time=None,
+        record_full_arg=False):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -230,6 +235,7 @@ def simulator_factory(
 
     sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
+    sim.store_full_arg = record_full_arg
     sim.start_time = start_time
     rng = random_generator
     if rng is None:
@@ -262,6 +268,7 @@ def simulate(
         num_replicates=None,
         from_ts=None,
         start_time=None,
+        record_full_arg=False,
         # Note max_time is not documented here because it does not currently have
         # exactly the semantics that we want as it doesn't guarantee that the
         # times of nodes returned are < max_time. However, it's useful for
@@ -349,6 +356,10 @@ def simulate(
         time is zero if performing a simulation of a set of samples,
         or is the time of the oldest node if simulating from an
         existing tree sequence (see the ``from_ts`` parameter).
+    :param bool record_full_arg: If True, record all intermediate nodes
+        arising from common ancestor and recombination events in the output
+        tree sequence. This will result in unary nodes (i.e., nodes in marginal
+        trees that have only one child). Defaults to False.
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -381,7 +392,8 @@ def simulate(
         model=model,
         record_migrations=record_migrations,
         from_ts=from_ts,
-        start_time=start_time)
+        start_time=start_time,
+        record_full_arg=record_full_arg)
 
     parameters = {
         "command": "simulate",
@@ -453,6 +465,7 @@ class Simulator(object):
         self.demographic_events = []
         self.model_change_events = []
         self.store_migrations = False
+        self.store_full_arg = False
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
         num_samples = (
@@ -644,6 +657,7 @@ class Simulator(object):
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             store_migrations=self.store_migrations,
+            store_full_arg=self.store_full_arg,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
             node_mapping_block_size=self.node_mapping_block_size)

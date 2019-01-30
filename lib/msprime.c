@@ -144,6 +144,13 @@ msp_set_store_migrations(msp_t *self, bool store_migrations)
 }
 
 int
+msp_set_store_full_arg(msp_t *self, bool store_full_arg)
+{
+    self->store_full_arg = store_full_arg;
+    return 0;
+}
+
+int
 msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
 {
     int ret = 0;
@@ -437,6 +444,7 @@ msp_alloc(msp_t *self,
     self->initial_migration_matrix[0] = 0.0;
     /* Set the memory defaults */
     self->store_migrations = false;
+    self->store_full_arg = false;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -691,8 +699,7 @@ msp_verify_segments(msp_t *self)
         }
         assert(total_links == fenwick_get_total(&self->links[k]));
         assert(total_links == alt_total_links);
-        assert(label_segments == object_heap_get_num_allocated(
-                    &self->segment_heap[k]));
+        assert(label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
     total_avl_nodes = msp_get_num_ancestors(self)
             + avl_count(&self->breakpoints)
@@ -939,6 +946,128 @@ out:
 }
 
 static int MSP_WARN_UNUSED
+msp_flush_edges(msp_t *self)
+{
+    int ret = 0;
+    size_t j, num_edges;
+    tsk_edge_t edge;
+
+    if (self->num_buffered_edges > 0) {
+        ret = tsk_squash_edges(self->buffered_edges, self->num_buffered_edges, &num_edges);
+        if (ret != 0) {
+            ret = msp_set_tsk_error(ret);
+            goto out;
+        }
+        for (j = 0; j < num_edges; j++) {
+            edge = self->buffered_edges[j];
+            ret = tsk_edge_tbl_add_row(self->tables->edges,
+                    msp_genetic_to_phys(self, edge.left),
+                    msp_genetic_to_phys(self, edge.right),
+                    edge.parent, edge.child);
+            if (ret < 0) {
+                ret = msp_set_tsk_error(ret);
+                goto out;
+            }
+
+        }
+        self->num_buffered_edges = 0;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id)
+{
+    int ret = 0;
+    double scaled_time = self->model.model_time_to_generations(&self->model, time);
+
+    ret = msp_flush_edges(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = tsk_node_tbl_add_row(self->tables->nodes, flags, scaled_time, population_id,
+            TSK_NULL, NULL, 0);
+    if (ret < 0) {
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
+{
+    int ret = 0;
+    tsk_edge_t *edge;
+    const double *node_time = self->tables->nodes->time;
+
+    assert(parent > child);
+    assert(parent < (node_id_t) self->tables->nodes->num_rows);
+    if (self->num_buffered_edges == self->max_buffered_edges - 1) {
+        /* Grow the array */
+        self->max_buffered_edges *= 2;
+        edge = realloc(self->buffered_edges, self->max_buffered_edges * sizeof(tsk_edge_t));
+        if (edge == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        self->buffered_edges = edge;
+    }
+    if (node_time[child] >= node_time[parent]) {
+        printf("Storing %d %d time = %f %f\n", child, parent, node_time[child], node_time[parent]);
+        ret = MSP_ERR_TIME_TRAVEL;
+        goto out;
+    }
+    edge = self->buffered_edges + self->num_buffered_edges;
+    edge->left = left;
+    edge->right = right;
+    edge->parent = parent;
+    edge->child = child;
+    self->num_buffered_edges++;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_store_arg_edges(msp_t *self, segment_t *z)
+{
+    int ret = 0;
+    node_id_t u = (node_id_t) msp_get_num_nodes(self) - 1;
+    segment_t *x;
+
+    /* Store edges to the left */
+    x = z;
+    while (x != NULL) {
+        if (x->value != u) {
+            ret = msp_store_edge(self, x->left, x->right, u, x->value);
+            if (ret != 0) {
+                goto out;
+            }
+            x->value = u;
+        }
+        x = x->prev;
+    }
+
+    /* Store edges to the right */
+    x = z;
+    while (x != NULL) {
+        if (x->value != u) {
+            ret = msp_store_edge(self, x->left, x->right, u, x->value);
+            if (ret != 0) {
+                goto out;
+            }
+            x->value = u;
+        }
+        x = x->next;
+    }
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         population_id_t dest_pop, label_id_t dest_label)
 {
@@ -950,6 +1079,16 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     avl_unlink_node(source, node);
     msp_free_avl_node(self, node);
 
+    if (self->store_full_arg) {
+        ret = msp_store_node(self, 0, self->time, dest_pop);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_store_arg_edges(self, ind);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     if (ind->label == dest_label) {
         /* Need to set the population and label for each segment. */
         new_ind = ind;
@@ -1057,89 +1196,6 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
     ret = msp_insert_overlap_count(self, k, nm->value);
     return ret;
 }
-
-static int MSP_WARN_UNUSED
-msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
-{
-    int ret = 0;
-    tsk_edge_t *edge;
-    const double *node_time = self->tables->nodes->time;
-
-    assert(parent > child);
-    assert(parent < (node_id_t) self->tables->nodes->num_rows);
-    if (self->num_buffered_edges == self->max_buffered_edges - 1) {
-        /* Grow the array */
-        self->max_buffered_edges *= 2;
-        edge = realloc(self->buffered_edges, self->max_buffered_edges * sizeof(tsk_edge_t));
-        if (edge == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        self->buffered_edges = edge;
-    }
-    if (node_time[child] >= node_time[parent]) {
-        ret = MSP_ERR_TIME_TRAVEL;
-        goto out;
-    }
-    edge = self->buffered_edges + self->num_buffered_edges;
-    edge->left = left;
-    edge->right = right;
-    edge->parent = parent;
-    edge->child = child;
-    self->num_buffered_edges++;
-out:
-    return ret;
-}
-
-static int MSP_WARN_UNUSED
-msp_flush_edges(msp_t *self)
-{
-    int ret = 0;
-    size_t j, num_edges;
-    tsk_edge_t edge;
-
-    if (self->num_buffered_edges > 0) {
-        ret = tsk_squash_edges(self->buffered_edges, self->num_buffered_edges, &num_edges);
-        if (ret != 0) {
-            ret = msp_set_tsk_error(ret);
-            goto out;
-        }
-        for (j = 0; j < num_edges; j++) {
-            edge = self->buffered_edges[j];
-            ret = tsk_edge_tbl_add_row(self->tables->edges,
-                    msp_genetic_to_phys(self, edge.left),
-                    msp_genetic_to_phys(self, edge.right),
-                    edge.parent, edge.child);
-            if (ret < 0) {
-                ret = msp_set_tsk_error(ret);
-                goto out;
-            }
-
-        }
-        self->num_buffered_edges = 0;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-static int MSP_WARN_UNUSED
-msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id)
-{
-    int ret = 0;
-    double scaled_time = self->model.model_time_to_generations(&self->model, time);
-
-    ret = tsk_node_tbl_add_row(self->tables->nodes, flags, scaled_time, population_id,
-            TSK_NULL, NULL, 0);
-    if (ret < 0) {
-        ret = msp_set_tsk_error(ret);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
 static int
 msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
 {
@@ -1301,7 +1357,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     int64_t l, t, gap, k;
     size_t segment_id;
     node_mapping_t search;
-    segment_t *x, *y, *z;
+    segment_t *x, *y, *z, *lhs_tail;
     int64_t num_links = fenwick_get_total(&self->links[label]);
 
     self->num_re_events++;
@@ -1339,23 +1395,42 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         } else {
             self->num_multiple_re_events++;
         }
+        lhs_tail = y;
     } else {
         assert(x != NULL);
         x->next = NULL;
         y->prev = NULL;
         z = y;
         self->num_trapped_re_events++;
+        lhs_tail = x;
     }
     fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
     ret = msp_insert_individual(self, z);
     if (ret != 0) {
         goto out;
     }
-    if (lhs != NULL) {
-        assert(rhs != NULL);
-        if (x == NULL) {
-            x = y;
+    if (self->store_full_arg) {
+        /* Store the edges for the LHS */
+        ret = msp_store_node(self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population_id);
+        if (ret != 0) {
+            goto out;
         }
+        ret = msp_store_arg_edges(self, lhs_tail);
+        if (ret != 0) {
+            goto out;
+        }
+        /* Store the edges for the RHS */
+        ret = msp_store_node(self, MSP_NODE_IS_RE_EVENT, self->time, z->population_id);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_store_arg_edges(self, z);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    if (lhs != NULL) {
+        x = lhs_tail;
         /* Seek back to the head of the x chain */
         while (x->prev != NULL) {
             x = x->prev;
@@ -1404,8 +1479,8 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
         segment_t *a, segment_t *b)
 {
     int ret = 0;
-    int coalescence = 0;
-    int defrag_required = 0;
+    bool coalescence = false;
+    bool defrag_required = false;
     node_id_t v;
     uint32_t l, r, l_min, r_max;
     avl_node_t *node;
@@ -1453,12 +1528,8 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 l = x->left;
                 r_max = GSL_MIN(x->right, y->right);
                 if (!coalescence) {
-                    coalescence = 1;
+                    coalescence = true;
                     l_min = l;
-                    ret = msp_flush_edges(self);
-                    if (ret != 0) {
-                        goto out;
-                    }
                     ret = msp_store_node(self, 0, self->time, population_id);
                     if (ret != 0) {
                         goto out;
@@ -1552,6 +1623,18 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
             z = alpha;
         }
     }
+    if (self->store_full_arg) {
+        if (! coalescence) {
+            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        ret = msp_store_arg_edges(self, z);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     if (defrag_required) {
         ret = msp_defrag_segment_chain(self, z);
         if (ret != 0) {
@@ -1598,8 +1681,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         label_id_t label)
 {
     int ret = MSP_ERR_GENERIC;
-    int coalescence = 0;
-    int defrag_required = 0;
+    bool coalescence = false;
+    bool defrag_required = false;
     node_id_t v;
     uint32_t j, l, r, h, r_max, next_l, l_min;
     avl_node_t *node;
@@ -1657,12 +1740,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             }
         } else {
             if (!coalescence) {
-                coalescence = 1;
+                coalescence = true;
                 l_min = l;
-                ret = msp_flush_edges(self);
-                if (ret != 0) {
-                    goto out;
-                }
                 ret = msp_store_node(self, 0, self->time, population_id);
                 if (ret != 0) {
                     goto out;
@@ -1717,6 +1796,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             /* Store the edges and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
+                assert(v != x->value);
                 ret = msp_store_edge(self, l, r, v, x->value);
                 if (ret != 0) {
                     goto out;
@@ -1753,6 +1833,18 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             }
             alpha->prev = z;
             z = alpha;
+        }
+    }
+    if (self->store_full_arg) {
+        if (! coalescence) {
+            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        ret = msp_store_arg_edges(self, z);
+        if (ret != 0) {
+            goto out;
         }
     }
     if (defrag_required) {
@@ -2433,6 +2525,10 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 ret = self->common_ancestor_event(self, ca_pop_id, label);
                 if (ret == 1) {
                     /* The CA event has signalled that this event should be rejected */
+                    /* TODO things are more complicated in the store_full_arg case
+                     * because we will have stored a node and bunch of edges recording the
+                     * ARG. For now we disallow ARG recording for multiple merger
+                     * coalescents */
                     self->time -= t_wait;
                     ret = 0;
                 }
@@ -4087,6 +4183,13 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
     avl_node_t *x_node, *y_node;
     segment_t *x, *y;
 
+    /* We need to be able to rewind the ARG events to be able to support
+     * full ARG recording. */
+    if (self->store_full_arg) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+
     ancestors = &self->populations[pop_id].ancestors[label];
     if (gsl_rng_uniform(self->rng) < (1 / (1.0 + self->model.params.dirac_coalescent.c))) {
         /* Choose x and y */
@@ -4337,6 +4440,13 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     avl_node_t *x_node, *y_node, *q_node;
     segment_t *x, *y;
     double beta_x;
+
+    /* We need to be able to rewind the ARG events to be able to support
+     * full ARG recording. */
+    if (self->store_full_arg) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
 
     for (j = 0; j < 5; j++){
         avl_init_tree(&Q[j], cmp_segment_queue, NULL);

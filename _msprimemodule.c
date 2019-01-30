@@ -2816,7 +2816,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {"samples", "recombination_map", "random_generator",
         "tables", "population_configuration", "migration_matrix", "demographic_events",
         "model", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "store_migrations", "start_time", NULL};
+        "node_mapping_block_size", "store_migrations", "start_time",
+        "store_full_arg", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -2832,12 +2833,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
     int store_migrations = 0;
+    int store_full_arg = 0;
     double start_time = -1;
 
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnid", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidi", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -2847,7 +2849,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &store_migrations, &start_time)) {
+            &node_mapping_block_size, &store_migrations, &start_time,
+            &store_full_arg)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -2939,6 +2942,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
+    msp_set_store_full_arg(self->sim, store_full_arg);
+
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
         handle_input_error(sim_ret);
@@ -4075,6 +4080,10 @@ init_msprime(void)
     MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
+
+    PyModule_AddIntConstant(module, "NODE_IS_CA_EVENT", MSP_NODE_IS_CA_EVENT);
+    PyModule_AddIntConstant(module, "NODE_IS_RE_EVENT", MSP_NODE_IS_RE_EVENT);
+    PyModule_AddIntConstant(module, "NODE_IS_MIG_EVENT", MSP_NODE_IS_MIG_EVENT);
 
     /* The function unset_gsl_error_handler should be called at import time,
      * ensuring we capture the value of the handler. However, just in case

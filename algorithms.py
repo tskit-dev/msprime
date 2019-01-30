@@ -238,7 +238,7 @@ class Simulator(object):
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
             migration_matrix_element_changes, bottlenecks, model='hudson',
-            from_ts=None, max_segments=100):
+            from_ts=None, full_arg=False, max_segments=100):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -255,6 +255,7 @@ class Simulator(object):
         self.r = recombination_rate
         self.migration_matrix = migration_matrix
         self.max_segments = max_segments
+        self.full_arg = full_arg
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
         for j in range(self.max_segments):
@@ -391,9 +392,9 @@ class Simulator(object):
         self.L.set_value(u.index, 0)
         self.segment_stack.append(u)
 
-    def store_node(self, population):
+    def store_node(self, population, flags=0):
         self.flush_edges()
-        self.tables.nodes.add_row(time=self.t, population=population)
+        self.tables.nodes.add_row(time=self.t, flags=flags, population=population)
 
     def flush_edges(self):
         """
@@ -549,6 +550,23 @@ class Simulator(object):
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
 
+    def store_arg_edges(self, segment):
+        u = len(self.tables.nodes) - 1
+        # Store edges pointing to current node to the left
+        x = segment
+        while x is not None:
+            if x.node != u:
+                self.store_edge(x.left, x.right, u, x.node)
+            x.node = u
+            x = x.prev
+        # Store edges pointing to current node to the right
+        x = segment
+        while x is not None:
+            if x.node != u:
+                self.store_edge(x.left, x.right, u, x.node)
+            x.node = u
+            x = x.next
+
     def migration_event(self, j, k):
         """
         Migrates an individual from population j to population k.
@@ -558,6 +576,9 @@ class Simulator(object):
         index = random.randint(0, self.P[j].get_num_ancestors() - 1)
         x = self.P[j].remove(index)
         self.P[k].add(x)
+        if self.full_arg:
+            self.store_node(k, flags=msprime.NODE_IS_MIG_EVENT)
+            self.store_arg_edges(x)
         # Set the population id for each segment also.
         u = x
         while u is not None:
@@ -584,13 +605,20 @@ class Simulator(object):
             y.next = None
             y.right = k
             self.L.increment(y.index, k - z.right)
+            lhs_tail = y
         else:
             # split the link between x and y.
             x.next = None
             y.prev = None
             z = y
+            lhs_tail = x
         self.L.set_value(z.index, z.right - z.left - 1)
         self.P[z.population].add(z)
+        if self.full_arg:
+            self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
+            self.store_arg_edges(lhs_tail)
+            self.store_node(z.population, flags=msprime.NODE_IS_RE_EVENT)
+            self.store_arg_edges(z)
 
     def dtwf_recombine(self, x):
         """
@@ -768,6 +796,10 @@ class Simulator(object):
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
+        if self.full_arg:
+            if not coalescence:
+                self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
+            self.store_arg_edges(z)
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
@@ -885,6 +917,11 @@ class Simulator(object):
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
                 z = alpha
+
+        if self.full_arg:
+            if not coalescence:
+                self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
+            self.store_arg_edges(z)
 
         if defrag_required:
             self.defrag_segment_chain(z)
@@ -1009,7 +1046,7 @@ def run_simulate(args):
         args.population_size_change,
         args.migration_matrix_element_change,
         args.bottleneck, args.model, from_ts=args.from_ts,
-        max_segments=10000)
+        full_arg=args.full_arg, max_segments=10000)
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -1028,7 +1065,7 @@ def add_simulator_arguments(parser):
     parser.add_argument(
         "--num-replicates", "-R", type=int, default=1000)
     parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0.1)
+        "--recombination-rate", "-r", type=float, default=0.01)
     parser.add_argument(
         "--num-populations", "-p", type=int, default=1)
     parser.add_argument(
@@ -1050,6 +1087,9 @@ def add_simulator_arguments(parser):
         action="append", default=[])
     parser.add_argument(
         "--bottleneck", type=float, nargs=3, action="append", default=[])
+    parser.add_argument(
+        "--full-arg", action="store_true", default=False,
+        help="Store the full ARG with all recombination and common ancestor nodes")
     parser.add_argument(
         "--model", default='hudson')
     parser.add_argument(

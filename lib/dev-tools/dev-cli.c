@@ -604,6 +604,13 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
+    if (config_lookup_int(config, "store_full_arg", &int_tmp) == CONFIG_FALSE) {
+        fatal_error("store_ful_arg is a required parameter");
+    }
+    ret = msp_set_store_full_arg(msp, (bool) int_tmp);
+    if (ret != 0) {
+        fatal_error(msp_strerror(ret));
+    }
     t = config_lookup(config, "model");
     if (t == NULL) {
         fatal_error("model not specified");
