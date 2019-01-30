@@ -1841,7 +1841,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             if (ret != 0) {
                 goto out;
             }
-            printf("Made new node at time %f\n", self->time);
         }
         ret = msp_store_arg_edges(self, z);
         if (ret != 0) {
