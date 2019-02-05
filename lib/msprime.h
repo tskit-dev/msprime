@@ -26,13 +26,12 @@
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_integration.h>
+#include <tskit.h>
 
 #include "util.h"
 #include "avl.h"
 #include "fenwick.h"
 #include "object_heap.h"
-#include "tsk_tables.h"
-#include "tsk_trees.h"
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -213,8 +212,8 @@ typedef struct _msp_t {
     /* We keep an independent segment heap for each label */
     object_heap_t *segment_heap;
     /* The tables used to store the simulation state */
-    tsk_tbl_collection_t *tables;
-    tsk_tbl_collection_position_t from_position;
+    tsk_table_collection_t *tables;
+    tsk_bookmark_t from_position;
     /* edges are buffered in a flat array until they are squashed and flushed */
     tsk_edge_t *buffered_edges;
     size_t num_buffered_edges;
@@ -288,7 +287,7 @@ typedef struct {
 
 int msp_alloc(msp_t *self,
         size_t num_samples, sample_t *samples,
-        recomb_map_t *recomb_map, tsk_tbl_collection_t *from_ts_tables, gsl_rng *rng);
+        recomb_map_t *recomb_map, tsk_table_collection_t *from_ts_tables, gsl_rng *rng);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);
@@ -390,7 +389,7 @@ int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
         int alphabet, size_t mutation_block_size);
 int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
 int mutgen_free(mutgen_t *self);
-int mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags);
+int mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Functions exposed here for unit testing. Not part of public API. */

@@ -62,7 +62,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     avl_node_t *a;
     tsk_site_t *site;
     tsk_mutation_t *mutation;
-    tsk_tbl_size_t j;
+    tsk_size_t j;
 
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\tmutation_rate = %f\n", self->mutation_rate);
@@ -108,7 +108,7 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
     }
     /* In practice this is the minimum we can support */
     block_size = GSL_MAX(block_size, 128);
-    ret = tsk_blkalloc_alloc(&self->allocator, block_size);
+    ret = tsk_blkalloc_init(&self->allocator, block_size);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -172,26 +172,26 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutget_initialise_sites(mutgen_t *self, tsk_tbl_collection_t *tables)
+mutget_initialise_sites(mutgen_t *self, tsk_table_collection_t *tables)
 {
     int ret = 0;
-    tsk_site_tbl_t *sites = tables->sites;
-    tsk_mutation_tbl_t *mutations = tables->mutations;
+    tsk_site_table_t *sites = &tables->sites;
+    tsk_mutation_table_t *mutations = &tables->mutations;
     mutation_id_t mutation_id;
     site_id_t site_id;
     tsk_site_t *site;
     avl_node_t *avl_node;
     tsk_mutation_t *site_mutations;
-    tsk_tbl_size_t j, num_mutations, length;
+    tsk_size_t j, num_mutations, length;
     char *buff;
 
     mutation_id = 0;
     for (site_id = 0; site_id < (site_id_t) sites->num_rows; site_id++) {
-        j = (tsk_tbl_size_t) mutation_id;
+        j = (tsk_size_t) mutation_id;
         while (j < mutations->num_rows && mutations->site[j] == site_id) {
             j++;
         }
-        num_mutations = j - (tsk_tbl_size_t) mutation_id;
+        num_mutations = j - (tsk_size_t) mutation_id;
 
         site = tsk_blkalloc_get(&self->allocator, sizeof(*site));
         avl_node = tsk_blkalloc_get(&self->allocator, sizeof(*avl_node));
@@ -279,7 +279,7 @@ out:
 }
 
 static int
-mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t *mutations)
+mutgen_populate_tables(mutgen_t *self, tsk_site_table_t *sites, tsk_mutation_table_t *mutations)
 {
     int ret = 0;
     size_t j;
@@ -292,7 +292,7 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t
 
     for (a = self->sites.head; a != NULL; a = a->next) {
         site = (tsk_site_t *) a->item;
-        site_id = tsk_site_tbl_add_row(sites, site->position, site->ancestral_state,
+        site_id = tsk_site_table_add_row(sites, site->position, site->ancestral_state,
                 site->ancestral_state_length, site->metadata, site->metadata_length);
         if (site_id < 0) {
             ret = msp_set_tsk_error(site_id);
@@ -304,7 +304,7 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_tbl_t *sites, tsk_mutation_tbl_t
             if (parent != TSK_NULL) {
                 parent += new_mutations;
             }
-            ret = tsk_mutation_tbl_add_row(mutations, site_id,
+            ret = tsk_mutation_table_add_row(mutations, site_id,
                     mutation->node, parent,
                     mutation->derived_state, mutation->derived_state_length,
                     mutation->metadata, mutation->metadata_length);
@@ -326,11 +326,11 @@ out:
 }
 
 int MSP_WARN_UNUSED
-mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
+mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
 {
     int ret = 0;
-    tsk_node_tbl_t *nodes = tables->nodes;
-    tsk_edge_tbl_t *edges = tables->edges;
+    tsk_node_table_t *nodes = &tables->nodes;
+    tsk_edge_table_t *edges = &tables->edges;
     size_t j, l, branch_mutations;
     double left, right, branch_length, distance, mu, position;
     node_id_t parent, child;
@@ -352,12 +352,12 @@ mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
             goto out;
         }
     }
-    ret = tsk_site_tbl_clear(tables->sites);
+    ret = tsk_site_table_clear(&tables->sites);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-    ret = tsk_mutation_tbl_clear(tables->mutations);
+    ret = tsk_mutation_table_clear(&tables->mutations);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -401,7 +401,7 @@ mutgen_generate(mutgen_t *self, tsk_tbl_collection_t *tables, int flags)
             }
         }
     }
-    ret = mutgen_populate_tables(self, tables->sites, tables->mutations);
+    ret = mutgen_populate_tables(self, &tables->sites, &tables->mutations);
     if (ret != 0) {
         goto out;
     }

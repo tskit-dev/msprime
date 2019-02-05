@@ -85,16 +85,17 @@ class local_build_ext(build_ext):
 
 
 libdir = "lib"
-tskdir = os.path.join(libdir, "tskit/c")
-kasdir = os.path.join(tskdir, "kastore/c")
-includes = [libdir, tskdir, kasdir]
+tskroot = os.path.join(libdir, "subprojects", "tskit")
+tskdir = os.path.join(tskroot, "tskit")
+kasdir = os.path.join(libdir, "subprojects", "kastore")
+includes = [libdir, tskroot, tskdir, kasdir]
 
 configurator = PathConfigurator()
 msp_source_files = [
     "msprime.c", "fenwick.c", "avl.c", "util.c",
     "object_heap.c", "recomb_map.c", "mutgen.c"
 ]
-tsk_source_files = ["tsk_core.c", "tsk_tables.c", "tsk_trees.c"]
+tsk_source_files = ["core.c", "tables.c", "trees.c"]
 kas_source_files = ["kastore.c"]
 
 sources = ["_msprimemodule.c"] + [

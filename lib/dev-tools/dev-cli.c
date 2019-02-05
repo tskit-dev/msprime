@@ -69,22 +69,22 @@ fatal_msprime_error(int err, int line)
 }
 
 static void
-load_tables(tsk_tbl_collection_t *tables, const char *filename)
+load_tables(tsk_table_collection_t *tables, const char *filename)
 {
     int ret = 0;
-    tsk_tbl_collection_t tmp;
+    tsk_table_collection_t tmp;
 
     /* We need to allocate a temporary table here because tbl_collection_load
      * loads a read-only version of the tables. */
-    ret = tsk_tbl_collection_load(&tmp, filename, 0);
+    ret = tsk_table_collection_load(&tmp, filename, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);
     }
-    ret = tsk_tbl_collection_copy(&tmp, tables);
+    ret = tsk_table_collection_copy(&tmp, tables, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);
     }
-    tsk_tbl_collection_free(&tmp);
+    tsk_table_collection_free(&tmp);
 }
 
 static void
@@ -520,7 +520,7 @@ read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
 }
 
 static void
-get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
+get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
         mutation_params_t *mutation_params, recomb_map_t *recomb_map,
         const char *filename)
 {
@@ -625,7 +625,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_tbl_collection_t *tables,
 }
 
 static void
-record_provenance(tsk_provenance_tbl_t *provenance)
+record_provenance(tsk_provenance_table_t *provenance)
 {
     time_t timer;
     size_t timestamp_size = 64;
@@ -638,7 +638,7 @@ record_provenance(tsk_provenance_tbl_t *provenance)
     tm_info = localtime(&timer);
     strftime(buffer, timestamp_size, "%Y-%m-%dT%H:%M:%S", tm_info);
 
-    ret = tsk_provenance_tbl_add_row(provenance, buffer, strlen(buffer), provenance_str,
+    ret = tsk_provenance_table_add_row(provenance, buffer, strlen(buffer), provenance_str,
             strlen(provenance_str));
     if (ret != 0) {
         fatal_error("Error recording provenance");
@@ -655,14 +655,14 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     msp_t msp;
     recomb_map_t recomb_map;
     mutgen_t mutgen;
-    tsk_tbl_collection_t tables;
+    tsk_table_collection_t tables;
     tsk_treeseq_t tree_seq;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
     if (rng == NULL) {
         fatal_error("No memory");
     }
-    ret = tsk_tbl_collection_alloc(&tables, 0);
+    ret = tsk_table_collection_init(&tables, 0);
     if (ret != 0) {
         fatal_tskit_error(ret, __LINE__);
     }
@@ -676,7 +676,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
-    record_provenance(tables.provenances);
+    record_provenance(&tables.provenances);
 
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
@@ -706,7 +706,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }
-        ret = tsk_treeseq_alloc(&tree_seq, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&tree_seq, &tables, TSK_BUILD_INDEXES);
         if (ret != 0) {
             fatal_tskit_error(ret, __LINE__);
         }
@@ -717,7 +717,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
             }
         }
         if (verbose >= 1) {
-            tsk_tbl_collection_print_state(&tables, stdout);
+            tsk_table_collection_print_state(&tables, stdout);
             printf("-----------------\n");
             mutgen_print_state(&mutgen, stdout);
             printf("-----------------\n");
@@ -730,7 +730,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     recomb_map_free(&recomb_map);
     mutgen_free(&mutgen);
     gsl_rng_free(rng);
-    tsk_tbl_collection_free(&tables);
+    tsk_table_collection_free(&tables);
 }
 
 int
