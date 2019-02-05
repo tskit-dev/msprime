@@ -1017,7 +1017,6 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
         self->buffered_edges = edge;
     }
     if (node_time[child] >= node_time[parent]) {
-        printf("Storing %d %d time = %f %f\n", child, parent, node_time[child], node_time[parent]);
         ret = MSP_ERR_TIME_TRAVEL;
         goto out;
     }
