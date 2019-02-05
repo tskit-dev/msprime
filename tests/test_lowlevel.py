@@ -1115,12 +1115,12 @@ class TestSimulator(LowLevelTestCase):
                 self.assertRaises(ValueError, f, [d, d])
         self.assertRaises(ValueError, f, [{"start_time": 1, "type": -1000}])
         for bad_number in ["", None, [], {}]:
-                self.assertRaises(
-                    TypeError, f,
-                    [get_population_configuration(initial_size=bad_number)])
-                self.assertRaises(
-                    TypeError, f,
-                    [get_population_configuration(growth_rate=bad_number)])
+            self.assertRaises(
+                TypeError, f,
+                [get_population_configuration(initial_size=bad_number)])
+            self.assertRaises(
+                TypeError, f,
+                [get_population_configuration(growth_rate=bad_number)])
         # Cannot have negative for initial_size
         for bad_size in [-1, 0]:
             self.assertRaises(
