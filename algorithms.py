@@ -790,8 +790,11 @@ class Simulator(object):
                     pop.add(alpha)
                     self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
                 else:
-                    defrag_required |= (
-                        z.right == alpha.left and z.node == alpha.node)
+                    if self.full_arg:
+                        defrag_required |= z.right == alpha.left
+                    else:
+                        defrag_required |= (
+                            z.right == alpha.left and z.node == alpha.node)
                     z.next = alpha
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
@@ -911,8 +914,11 @@ class Simulator(object):
                     pop.add(alpha)
                     self.L.set_value(alpha.index, alpha.right - alpha.left - 1)
                 else:
-                    defrag_required |= (
-                        z.right == alpha.left and z.node == alpha.node)
+                    if self.full_arg:
+                        defrag_required |= z.right == alpha.left
+                    else:
+                        defrag_required |= (
+                            z.right == alpha.left and z.node == alpha.node)
                     z.next = alpha
                     self.L.set_value(alpha.index, alpha.right - z.right)
                 alpha.prev = z
