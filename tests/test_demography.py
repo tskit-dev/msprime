@@ -1015,14 +1015,13 @@ class TestMigrationRecords(unittest.TestCase):
             record_migrations=True,
             random_seed=1)
         self.verify_two_pops_single_sample(ts, t)
-        
+
     def verify_two_pops_full_arg(self, ts):
-        migration_flag = 524288
         migrations = ts.tables.migrations
         edges = ts.tables.edges
         nodes = ts.tables.nodes
         for mig in migrations:
-            self.assertEqual(nodes[mig.node].flags, migration_flag)
+            self.assertEqual(nodes[mig.node].flags, msprime.NODE_IS_MIG_EVENT)
             self.assertEqual(nodes[mig.node].time, mig.time)
             self.assertEqual(nodes[mig.node].population, mig.dest)
             e1 = np.where(edges.parent == mig.node)
@@ -1033,7 +1032,7 @@ class TestMigrationRecords(unittest.TestCase):
             self.assertEqual(edges[e].right, mig.right)
             self.assertEqual(nodes[edges[e].child].population, mig.source)
         for edge in edges:
-            if nodes[edge.parent].flags == migration_flag:
+            if nodes[edge.parent].flags == msprime.NODE_IS_MIG_EVENT:
                 m1 = np.where(migrations.node == edge.parent)
                 m2 = np.where(migrations.left == edge.left)
                 m = np.intersect1d(m1[0], m2[0])
@@ -1043,7 +1042,7 @@ class TestMigrationRecords(unittest.TestCase):
                 self.assertEqual(migrations[m].time, nodes[edge.parent].time)
                 self.assertEqual(migrations[m].source, nodes[edge.child].population)
                 self.assertEqual(migrations[m].dest, nodes[edge.parent].population)
-        
+
     def test_full_arg_migration(self):
         population_configurations = [
             msprime.PopulationConfiguration(10),
@@ -1054,7 +1053,7 @@ class TestMigrationRecords(unittest.TestCase):
             migration_matrix=[
                 [0, 1],
                 [1, 0]],
-            random_seed=1, recombination_rate = 0.1, 
+            random_seed=1, recombination_rate=0.1,
             record_migrations=True, record_full_arg=True)
         self.verify_two_pops_full_arg(ts)
 
