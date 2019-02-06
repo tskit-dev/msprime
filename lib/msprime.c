@@ -1079,7 +1079,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     msp_free_avl_node(self, node);
 
     if (self->store_full_arg) {
-        ret = msp_store_node(self, 0, self->time, dest_pop);
+        ret = msp_store_node(self, MSP_NODE_IS_MIG_EVENT, self->time, dest_pop);
         if (ret != 0) {
             goto out;
         }
@@ -1614,7 +1614,12 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 fenwick_set_value(&self->links[label], alpha->id,
                         alpha->right - alpha->left - 1);
             } else {
-                defrag_required |= z->right == alpha->left && z->value == alpha->value;
+                if (self->store_full_arg) {
+                    // we pre-empt the fact that values will be set equal later
+                    defrag_required |= z->right == alpha->left;
+                } else {
+                    defrag_required |= z->right == alpha->left && z->value == alpha->value;
+                }
                 z->next = alpha;
                 fenwick_set_value(&self->links[label], alpha->id, alpha->right - z->right);
             }
@@ -1824,8 +1829,13 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 fenwick_set_value(&self->links[label], alpha->id,
                         alpha->right - alpha->left - 1);
             } else {
-                defrag_required |=
-                    z->right == alpha->left && z->value == alpha->value;
+                if (self->store_full_arg) {
+                    // we pre-empt the fact that values will be set equal later
+                    defrag_required |= z->right == alpha->left;
+                } else {
+                    defrag_required |=
+                        z->right == alpha->left && z->value == alpha->value;
+                }
                 z->next = alpha;
                 fenwick_set_value(&self->links[label], alpha->id,
                         alpha->right - z->right);
