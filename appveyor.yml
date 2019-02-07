@@ -1,13 +1,13 @@
 environment:
   matrix:
-    - PYTHON: "C:\\Miniconda36"
-    # Disabling Py36 x64. Some weird problem with h5py. See github.com/tskit-dev/msprime/issues/678
-    # - PYTHON: "C:\\Miniconda36-x64"
-    - PYTHON: "C:\\Miniconda37"
+    - PYTHON: "C:\\Miniconda36-x64"
     # Disabling Py37. See https://github.com/tskit-dev/msprime/issues/653
     #- PYTHON: "C:\\Miniconda37-x64"
-
 install:
+  - "git submodule update --init --recursive"
+  # We have symlinks in the repo, which need to be treated specially on Windows.
+  - "git config core.symlinks true"
+  - "git reset --hard"
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
   - "git submodule update --init --recursive"
 
@@ -16,7 +16,6 @@ build: false
 test_script:
   - "conda config --add channels conda-forge"
   - "conda install -f --yes --file=requirements/conda-minimal.txt"
-  - "pip install tskit"  
   - "pip install newick"
   - "pip install python_jsonschema_objects"
 
