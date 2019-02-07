@@ -846,7 +846,6 @@ class TestErrors(unittest.TestCase):
             with self.assertRaises(ValueError):
                 msprime.simulate(from_ts=base_ts, start_time=start_time)
 
-    @unittest.skip("FIXME C_0.99.1")
     def test_malformed_tree_sequence(self):
         tables = tskit.TableCollection(1)
         tables.populations.add_row()
