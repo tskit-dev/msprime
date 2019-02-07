@@ -2,3 +2,4 @@ numpy
 nose
 gsl
 six
+tskit
