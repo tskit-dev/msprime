@@ -34,6 +34,8 @@ Quickstart
   are ready. Please make sure that (a) the tests pass before you open the PR; and
   (b) your code passes PEP8 checks (see below for a git commit hook to ensure this
   happens automatically) before opening the PR.
+- See the `tskit documentation <https://tskit.readthedocs.io/en/latest/development.html#github-workflow>`_
+  for more details on the recommended GitHub workflow.
 
 ****************************
 Continuous integration tests
@@ -51,8 +53,7 @@ combinations of tests on different platforms:
    are run, coverage statistics calculated using `CodeCov <https://codecov.io/gh>`__,
    and the documentation built.
 
-3. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on 32 and 64 bit
-   Windows using conda.
+3. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on Windows using conda.
 
 +++++++++++++++++++++++++++++++++++++++++++++++++
 Running tests on multiple Python versions locally
