@@ -215,6 +215,36 @@ rate. In this case, to have a uniform recombination rate ``r`` use::
     final_ts = mpsrime.simulate(from_ts=from_ts, recomb_map=recomb_map)
 
 
+.. _sec_api_node_flags:
+
+**********
+Node flags
+**********
+
+For standard coalescent simulations, all samples are marked with the
+:data:`tskit.NODE_IS_SAMPLE` flag; internal nodes all have a flags value of 0.
+When using the ``record_full_arg`` argument to :func:`.simulate`, the following
+flags values are defined:
+
+.. data:: msprime.NODE_IS_RE_EVENT
+
+    The node is an ARG recombination event. Each recombination event is marked
+    with two nodes, one identifying the individual providing the genetic
+    material to the left of the breakpoint and the other providing the genetic
+    material the right.
+
+.. data:: msprime.NODE_IS_CA_EVENT
+
+    The node is an ARG common ancestor event that did not result in
+    marginal coalescence.
+
+.. data:: msprime.NODE_IS_MIG_EVENT
+
+    The node is an ARG migration event identifying the individual that migrated.
+    Can be used in combination with the ``record_migrations`` argument to
+    :func:`.simulate`.
+
+
 ********************
 Simulating mutations
 ********************
