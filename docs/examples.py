@@ -414,6 +414,15 @@ def simulate_from_example():
         print(tree.draw(format="unicode"))
 
 
+def full_arg_example():
+    ts = msprime.simulate(
+        sample_size=5, recombination_rate=0.1, record_full_arg=True,
+        random_seed=42)
+    print(ts.tables.nodes)
+    print()
+    for tree in ts.trees():
+        print("interval:", tree.interval)
+        print(tree.draw(format="unicode"))
 
 
 
@@ -431,4 +440,5 @@ if __name__ == "__main__":
     # variable_recomb_example()
     # ld_matrix_example()
     # threads_example()
-    simulate_from_example()
+    # simulate_from_example()
+    full_arg_example()
