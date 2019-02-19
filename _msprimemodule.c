@@ -28,6 +28,7 @@
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_errno.h>
+#include <gsl/gsl_randist.h>
 
 #include "msprime.h"
 #include "likelihood.h"
@@ -1644,6 +1645,57 @@ out:
     return ret;
 }
 
+static PyObject *
+RandomGenerator_flat(RandomGenerator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double a, b;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "dd", &a, &b)) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", gsl_ran_flat(self->rng, a, b));
+out:
+    return ret;
+}
+
+static PyObject *
+RandomGenerator_poisson(RandomGenerator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double mu;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &mu)) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", gsl_ran_poisson(self->rng, mu));
+out:
+    return ret;
+}
+
+static PyObject *
+RandomGenerator_uniform_int(RandomGenerator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned long n;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "k", &n)) {
+        goto out;
+    }
+    ret = Py_BuildValue("k", gsl_rng_uniform_int(self->rng, n));
+out:
+    return ret;
+}
+
 static PyMemberDef RandomGenerator_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -1651,6 +1703,12 @@ static PyMemberDef RandomGenerator_members[] = {
 static PyMethodDef RandomGenerator_methods[] = {
     {"get_seed", (PyCFunction) RandomGenerator_get_seed,
         METH_NOARGS, "Returns the random seed for this generator."},
+    {"flat", (PyCFunction) RandomGenerator_flat,
+        METH_VARARGS, "Interface for gsl_ran_flat"},
+    {"poisson", (PyCFunction) RandomGenerator_poisson,
+        METH_VARARGS, "Interface for gsl_ran_poisson"},
+    {"uniform_int", (PyCFunction) RandomGenerator_uniform_int,
+        METH_VARARGS, "Interface for gsl_rng_uniform_int"},
     {NULL}  /* Sentinel */
 };
 

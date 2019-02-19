@@ -1979,6 +1979,30 @@ class TestRandomGenerator(unittest.TestCase):
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
 
+    def test_flat(self):
+        for seed in [1, 2, 2**32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            values = [0, 1, 10, -10, 1e200, -1e200]
+            for a, b in itertools.product(values, repeat=2):
+                self.assertEqual(rng1.flat(a, b), rng2.flat(a, b))
+
+    def test_poisson(self):
+        for seed in [1, 2, 2**32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            values = [0.001, 1e-6, 0, 1, 10, -10, 100]
+            for mu in values:
+                self.assertEqual(rng1.poisson(mu), rng2.poisson(mu))
+
+    def test_uniform_int(self):
+        for seed in [1, 2, 2**32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            values = [-1, 0, 1, 2, 10, 100, 2**31]
+            for n in values:
+                self.assertEqual(rng1.uniform_int(n), rng2.uniform_int(n))
+
 
 class TestMutationGenerator(unittest.TestCase):
     """
