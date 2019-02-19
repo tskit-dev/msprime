@@ -467,3 +467,57 @@ class TestKeep(unittest.TestCase):
         t1.provenances.clear()
         t2.provenances.clear()
         self.assertEqual(t1, t2)
+
+
+def mutate_map(tables, mutation_map, seed):
+    """
+    Parallel implementation of the C code which should produce precisely the same
+    results.
+    """
+    rng = msprime.RandomGenerator(seed)
+    time = tables.nodes.time
+    for edge in tables.edges:
+        branch_length = time[edge.parent] - time[edge.child]
+        index = np.searchsorted(mutation_map.position, edge.left)
+        if mutation_map.position[index] > edge.left:
+            index -= 1
+        left = edge.left
+        right = 0
+        while right != edge.right:
+            right = min(edge.right, mutation_map.position[index + 1])
+            assert left < right
+            assert mutation_map.position[index] <= left
+            assert right <= mutation_map.position[index + 1]
+            assert right <= edge.right
+            # Generate the mutations.
+            mu = mutation_map.rate[index] * (right - left) * branch_length
+            for _ in range(rng.poisson(mu)):
+                position = rng.flat(left, right)
+                site_id = tables.sites.add_row(position, ancestral_state="0")
+                tables.mutations.add_row(site_id, node=edge.child, derived_state="1")
+                # Sample from this to duplicate the behaviour in the C implementation.
+                rng.uniform_int(1)
+            index += 1
+            left = right
+    tables.sort()
+    return tables.tree_sequence()
+
+
+class TestMap(unittest.TestCase):
+    """
+    Tests for the mutation map.
+    """
+
+    def test_single_rate(self):
+        random_seed = 2
+        rate = 0.5
+        for random_seed in range(1, 5):
+            for rate in [0, 0.1, 0.5, 1.0]:
+                ts = msprime.simulate(10, recombination_rate=2, random_seed=random_seed)
+                mutmap = msprime.MutationMap([0, 1.0], [rate])
+                tables1 = ts.dump_tables()
+                mutate_map(tables1, mutmap, random_seed)
+                ts = msprime.mutate(ts, rate=rate, random_seed=random_seed)
+                tables2 = ts.dump_tables()
+                self.assertEqual(tables1.sites, tables2.sites)
+                self.assertEqual(tables1.mutations, tables2.mutations)
