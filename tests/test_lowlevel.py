@@ -27,6 +27,7 @@ import unittest
 import numpy as np
 
 import tskit
+import numpy as np
 
 import tests
 import _msprime
@@ -2010,50 +2011,76 @@ class TestMutationGenerator(unittest.TestCase):
     """
     def test_basic_constructor(self):
         self.assertRaises(TypeError, _msprime.MutationGenerator)
-        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), 0)
-        self.assertEqual(mg.get_mutation_rate(), 0)
+        self.assertRaises(TypeError, _msprime.MutationGenerator, [])
+        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), [0], [0])
+        self.assertTrue(np.array_equal(mg.position, [0]))
+        self.assertTrue(np.array_equal(mg.rate, [0]))
+        self.assertEqual(mg.alphabet, 0)
 
     def test_rng(self):
         for bad_type in ["x", {}, None]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, random_generator=bad_type)
+                TypeError, _msprime.MutationGenerator, random_generator=bad_type,
+                rate=[0], position=[0])
 
-    def test_mutation_rate(self):
+    def test_mutation_map(self):
         rng = _msprime.RandomGenerator(1)
-        for bad_type in ["x", {}, None]:
-            self.assertRaises(TypeError, _msprime.MutationGenerator, rng, bad_type)
+        for bad_type in ["x", {}, None, [[], []]]:
+            self.assertRaises(
+                ValueError, _msprime.MutationGenerator, rng, position=bad_type, rate=[0])
+            self.assertRaises(
+                ValueError, _msprime.MutationGenerator, rng, position=[0], rate=bad_type)
         for bad_value in [-1, -1e-3]:
-            self.assertRaises(ValueError, _msprime.MutationGenerator, rng, bad_value)
-        for rate in [0, 1e-12, 1e12, 1000, 0.01]:
-            mutgen = _msprime.MutationGenerator(rng, rate)
-            self.assertEqual(mutgen.get_mutation_rate(), rate)
+            self.assertRaises(
+                _msprime.LibraryError, _msprime.MutationGenerator, rng, [0], [bad_value])
+        for bad_value in [-1, 1, 0.001]:
+            self.assertRaises(
+                _msprime.LibraryError, _msprime.MutationGenerator, rng, [bad_value], [0])
+        with self.assertRaises(ValueError):
+            _msprime.MutationGenerator(rng, [], [])
+        with self.assertRaises(ValueError):
+            _msprime.MutationGenerator(rng, [0], [1, 2])
+        with self.assertRaises(ValueError):
+            _msprime.MutationGenerator(rng, [0, 1], [1])
+        for bad_value in [0, -1, 2, 3]:
+            with self.assertRaises(_msprime.LibraryError):
+                _msprime.MutationGenerator(rng, [0, bad_value, 2], [1, 1, 1])
+
+        good_values = [
+            ([0], [0]), ([0, 1], [0, 2]), ([0, 0.1, 10], [0, 2, 0]),
+            (np.arange(10), np.arange(10)),
+            (np.arange(100), np.zeros(100))]
+        for pos, rate in good_values:
+            mg = _msprime.MutationGenerator(rng, pos, rate)
+            self.assertTrue(np.array_equal(pos, mg.position))
+            self.assertTrue(np.array_equal(rate, mg.rate))
 
     def test_time_interval(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None]:
             with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, 0, start_time=bad_type)
+                _msprime.MutationGenerator(rng, [0], [0], start_time=bad_type)
             with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, 0, end_time=bad_type)
+                _msprime.MutationGenerator(rng, [0], [0], end_time=bad_type)
         for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
             with self.assertRaises(_msprime.LibraryError):
                 _msprime.MutationGenerator(
-                    rng, 0, start_time=start_time, end_time=end_time)
+                    rng, [0], [0], start_time=start_time, end_time=end_time)
 
     def test_alphabet(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None]:
             self.assertRaises(
                 TypeError, _msprime.MutationGenerator, random_generator=rng,
-                mutation_rate=0, alphabet=bad_type)
+                position=[0], rate=[0], alphabet=bad_type)
         for bad_value in [-1, 2, 10**6]:
             self.assertRaises(
                 ValueError, _msprime.MutationGenerator, random_generator=rng,
-                mutation_rate=0, alphabet=bad_value)
+                position=[0], rate=[0], alphabet=bad_value)
         for alphabet in [0, 1]:
             mg = _msprime.MutationGenerator(
-                random_generator=rng, mutation_rate=0, alphabet=alphabet)
-            self.assertEqual(alphabet, mg.get_alphabet())
+                random_generator=rng, position=[0], rate=[0], alphabet=alphabet)
+            self.assertEqual(alphabet, mg.alphabet)
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)

@@ -775,8 +775,11 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         fatal_tskit_error(ret, __LINE__);
     }
     get_configuration(rng, &msp, &tables, &mutation_params, &recomb_map, conf_file);
-    ret = mutgen_alloc(&mutgen, mutation_params.mutation_rate, rng,
-            mutation_params.alphabet, 0);
+    ret = mutgen_alloc(&mutgen, rng, mutation_params.alphabet, 0);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    ret = mutgen_set_rate(&mutgen, mutation_params.mutation_rate);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

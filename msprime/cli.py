@@ -214,7 +214,7 @@ class SimulationRunner(object):
         self._ms_random_seeds = ms_seeds
         self._simulator.random_generator = self._random_generator
         self._mutation_generator = msprime.MutationGenerator(
-            self._random_generator, self._mutation_rate)
+            self._random_generator, position=[0], rate=[self._mutation_rate])
 
     def get_num_replicates(self):
         """

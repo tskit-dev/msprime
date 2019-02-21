@@ -549,7 +549,7 @@ def simulate(
                 "Cannot specify mutation rate combined with a non-zero "
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
-        mutation_generator = MutationGenerator(rng, mutation_rate)
+        mutation_generator = MutationGenerator(rng, position=[0], rate=[mutation_rate])
 
     if replicate_index is not None and random_seed is None:
         raise ValueError("Cannot specify replicate_index without random_seed as this "

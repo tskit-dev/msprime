@@ -1788,18 +1788,23 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     int alphabet = 0;
-    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet",
-        "start_time", "end_time", NULL};
-    double mutation_rate = 0;
+    PyObject *position = NULL;
+    PyObject *rate = NULL;
+    PyArrayObject *position_array = NULL;
+    PyArrayObject *rate_array= NULL;
+    static char *kwlist[] = {"random_generator", "position", "rate",
+        "alphabet", "start_time", "end_time", NULL};
     double start_time = -DBL_MAX;
     double end_time = DBL_MAX;
     RandomGenerator *random_generator = NULL;
+    npy_intp *shape;
+    size_t map_size;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|idd", kwlist,
-            &RandomGeneratorType, &random_generator, &mutation_rate,
-            &alphabet, &start_time, &end_time)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!OO|idd", kwlist,
+            &RandomGeneratorType, &random_generator,
+            &position, &rate, &alphabet, &start_time, &end_time)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -1811,8 +1816,26 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
         goto out;
     }
-    if (mutation_rate < 0) {
-        PyErr_Format(PyExc_ValueError, "mutation_rate must be >= 0");
+    position_array = (PyArrayObject *) PyArray_FROMANY(position, NPY_FLOAT64, 1, 1,
+            NPY_ARRAY_IN_ARRAY);
+    if (position_array == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(position_array);
+    map_size = shape[0];
+    if (map_size == 0) {
+        PyErr_Format(PyExc_ValueError, "Mutation map must have size > 0");
+        goto out;
+    }
+    rate_array = (PyArrayObject *) PyArray_FROMANY(rate, NPY_FLOAT64, 1, 1,
+            NPY_ARRAY_IN_ARRAY);
+    if (rate_array == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(rate_array);
+    if (shape[0] != map_size) {
+        PyErr_Format(PyExc_ValueError,
+                "Mutation map rate and position arrays must be same size.");
         goto out;
     }
     self->mutgen = PyMem_Malloc(sizeof(mutgen_t));
@@ -1820,8 +1843,13 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            alphabet, 0);
+    err = mutgen_alloc(self->mutgen, random_generator->rng, alphabet, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    err = mutgen_set_map(self->mutgen, map_size,
+            PyArray_DATA(position_array), PyArray_DATA(rate_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1833,32 +1861,8 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
-    return ret;
-}
-
-static PyObject *
-MutationGenerator_get_mutation_rate(MutationGenerator *self)
-{
-    PyObject *ret = NULL;
-
-    if (MutationGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->mutgen->mutation_rate);
-out:
-    return ret;
-}
-
-static PyObject *
-MutationGenerator_get_alphabet(MutationGenerator *self)
-{
-    PyObject *ret = NULL;
-
-    if (MutationGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("i", self->mutgen->alphabet);
-out:
+    Py_XDECREF(position_array);
+    Py_XDECREF(rate_array);
     return ret;
 }
 
@@ -1892,15 +1896,71 @@ out:
     return ret;
 }
 
-static PyMemberDef MutationGenerator_members[] = {
+static PyObject *
+MutationGenerator_get_alphabet(MutationGenerator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->mutgen->alphabet);
+out:
+    return ret;
+}
+
+static PyObject *
+MutationGenerator_get_position(MutationGenerator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    npy_intp dims;
+
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    dims = (npy_intp) self->mutgen->map.size;
+    array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->mutgen->map.position,
+            self->mutgen->map.size * sizeof(*self->mutgen->map.position));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyObject *
+MutationGenerator_get_rate(MutationGenerator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    npy_intp dims;
+
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    dims = (npy_intp) self->mutgen->map.size;
+    array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->mutgen->map.rate,
+            self->mutgen->map.size * sizeof(*self->mutgen->map.rate));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyGetSetDef MutationGenerator_getsetters[] = {
+    {"alphabet", (getter) MutationGenerator_get_alphabet, NULL,
+        "The alphabet for this generator"},
+    {"position", (getter) MutationGenerator_get_position, NULL, "The position array"},
+    {"rate", (getter) MutationGenerator_get_rate, NULL, "The rate array"},
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef MutationGenerator_methods[] = {
-    {"get_mutation_rate", (PyCFunction) MutationGenerator_get_mutation_rate,
-        METH_NOARGS, "Returns the mutation rate for this mutation generator."},
-    {"get_alphabet", (PyCFunction) MutationGenerator_get_alphabet,
-        METH_NOARGS, "Returns the alphabet for this mutation generator."},
     {"generate", (PyCFunction) MutationGenerator_generate,
         METH_VARARGS|METH_KEYWORDS,
         "Generate mutations and write to the specified table."},
@@ -1936,8 +1996,8 @@ static PyTypeObject MutationGeneratorType = {
     0,                     /* tp_iter */
     0,                     /* tp_iternext */
     MutationGenerator_methods,             /* tp_methods */
-    MutationGenerator_members,             /* tp_members */
-    0,                         /* tp_getset */
+    0,                         /* tp_members */
+    MutationGenerator_getsetters,          /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */

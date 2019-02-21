@@ -169,8 +169,10 @@ def mutate(
     encoded_provenance = provenance.json_encode_provenance(
         provenance.get_provenance_dict(parameters))
 
+    position = [0]
+    rate = [rate]
     mutation_generator = _msprime.MutationGenerator(
-        rng, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
+        rng, position, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
     mutation_generator.generate(lwt, keep=keep)

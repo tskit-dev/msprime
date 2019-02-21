@@ -78,6 +78,10 @@
 #define MSP_ERR_BAD_PEDIGREE_ID                                     -40
 #define MSP_ERR_BAD_ALPHA                                           -41
 #define MSP_ERR_BAD_TRUNCATION_POINT                                -42
+#define MSP_ERR_BAD_MUTATION_MAP_SIZE                               -43
+#define MSP_ERR_BAD_MUTATION_MAP_POSITION                           -44
+#define MSP_ERR_BAD_MUTATION_MAP_RATE                               -45
+#define MSP_ERR_INCOMPATIBLE_MUTATION_MAP                           -46
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13
