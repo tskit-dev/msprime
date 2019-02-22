@@ -102,8 +102,6 @@ def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
 def _check_population_configurations(population_configurations):
     err = (
         "Population configurations must be a list of PopulationConfiguration instances")
-    if not isinstance(population_configurations, collections.Iterable):
-        raise TypeError(err)
     for config in population_configurations:
         if not isinstance(config, PopulationConfiguration):
             raise TypeError(err)
@@ -587,8 +585,6 @@ class Simulator(object):
         err = (
             "Demographic events must be a list of DemographicEvent instances "
             "sorted in non-decreasing order of time.")
-        if not isinstance(demographic_events, collections.Iterable):
-            raise TypeError(err)
         self.demographic_events = []
         self.model_change_events = []
         for event in demographic_events:

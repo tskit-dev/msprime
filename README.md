@@ -7,7 +7,6 @@ coalescent with recombination based on [tskit](https://tskit.readthedocs.org/en/
 Please see the [documentation](https://msprime.readthedocs.org/en/latest/)
 for further information and 
 [installation instructions](https://msprime.readthedocs.org/en/latest/installation.html).
-``msprime`` is 
 
 If you would like to help make ``msprime`` better, please see the 
 [developer documentation](https://msprime.readthedocs.org/en/latest/development.html)
