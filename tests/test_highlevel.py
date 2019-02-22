@@ -474,8 +474,7 @@ class TestSimulatorFactory(unittest.TestCase):
 
     def test_population_configurations(self):
         def f(configs):
-            return msprime.simulator_factory(
-                population_configurations=configs)
+            return msprime.simulator_factory(population_configurations=configs)
         for bad_type in [10, ["sdf"], "sdfsd"]:
             self.assertRaises(TypeError, f, bad_type)
         # Just test the basic equalities here. The actual
@@ -570,8 +569,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_demographic_events(self):
         for bad_type in ["sdf", 234, [12], [None]]:
             self.assertRaises(
-                TypeError, msprime.simulator_factory, 2,
-                demographic_events=bad_type)
+                TypeError, msprime.simulator_factory, 2, demographic_events=bad_type)
         # TODO test for bad values.
 
     def test_recombination_rate(self):
