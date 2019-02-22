@@ -1,10 +1,20 @@
 ********************
-[0.7.0] - 2019-XX-XX
+[0.7.0] - 2019-02-19
 ********************
+
+Separation of tskit from msprime. Msprime is now solely dedicated to simulating
+the coalescent, and all infrastucture for working with succinct tree sequences
+is now provided by tskit. To ensure compatability, msprime now imports code
+from tskit under the old names, which should ensure that all code continues
+to work without changes.
 
 **New features**
 
 - Ability to record the full ARG (Jere Koskela; #665)
+
+**Bug fixes**:
+
+- Fix deprecation warning (#695).
 
 
 **********************
