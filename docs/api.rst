@@ -33,8 +33,8 @@ scaled by ``Ne``. All migration rates and growth rates are also per generation.
 When running simulations we define the length :math:`L` of the sequence in
 question using the ``length`` parameter. This defines the coordinate space
 within which trees and mutations are defined. :math:`L` is a continuous value,
-so units are arbitrary, and coordinates can take any value from :math:`0` to
-:math:`L`. (So, although we recommend setting the units of length to be
+so units are arbitrary, and coordinates can take any continuous value from :math:`0` up to
+(but not including) :math:`L`. (So, although we recommend setting the units of length to be
 analogous to "bases", events can occur at fractional positions.)
 Mutations occur in an infinite sites process along this sequence,
 and mutation rates are specified per generation, per unit of sequence length.
