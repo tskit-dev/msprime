@@ -221,6 +221,10 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
         if (self->sequence_length != num_loci) {
             ret = (genetic_x / num_loci) * self->sequence_length;
         }
+    } else if (genetic_x == num_loci) {
+        /* Map the right end of the chromosome to the right end of the
+         * chromosome, even if there are zero-recomb regions on the end. */
+        ret = self->sequence_length;
     } else {
         /* genetic_x is in the range [0,num_loci], and so we rescale
          * this into [0,total_recombination_rate] so that we can

@@ -101,22 +101,27 @@ class PythonRecombinationMap(object):
     def genetic_to_physical(self, v):
         if self.get_total_recombination_rate() == 0:
             return self._genetic_to_physical_zero_rate(v)
-        # v is expressed in [0, m]. Rescale it back into the range
-        # (0, total_mass).
-        u = (v / self._num_loci) * self.get_total_recombination_rate()
-        s = 0
-        last_phys_x = 0
-        rate = self._rates[0]
-        j = 1
-        while j < len(self._positions) and s < u:
-            phys_x = self._positions[j]
-            rate = self._rates[j - 1]
-            s += (phys_x - last_phys_x) * rate
-            j += 1
-            last_phys_x = phys_x
-        y = last_phys_x
-        if rate != 0:
-            y = last_phys_x - (s - u) / rate
+        if v == self._num_loci:
+            # the code before will not map right ends to right end
+            # if the last segments have rate zero.
+            y = self._sequence_length
+        else:
+            # v is expressed in [0, m]. Rescale it back into the range
+            # (0, total_mass).
+            u = (v / self._num_loci) * self.get_total_recombination_rate()
+            s = 0
+            last_phys_x = 0
+            rate = self._rates[0]
+            j = 1
+            while j < len(self._positions) and s < u:
+                phys_x = self._positions[j]
+                rate = self._rates[j - 1]
+                s += (phys_x - last_phys_x) * rate
+                j += 1
+                last_phys_x = phys_x
+            y = last_phys_x
+            if rate != 0:
+                y = last_phys_x - (s - u) / rate
         return y
 
 
@@ -189,7 +194,7 @@ class TestCoordinateConversion(unittest.TestCase):
             self.assertEqual(0.5, rm.get_total_recombination_rate())
             # Between 0 and 0.25 and 0.5 and 0.75 we should be able to map 1-1
             # in physical coordinates.
-            for x in [0, 0.125, 0.25, 0.50001, 0.66, 0.75]:
+            for x in [0, 0.125, 0.25, 0.50001, 0.66, 0.74999]:
                 y = rm.physical_to_genetic(x)
                 self.assertTrue(0 <= y <= num_loci)
                 z = rm.genetic_to_physical(y)
@@ -211,17 +216,18 @@ class TestCoordinateConversion(unittest.TestCase):
             self.assertEqual(100, rm.physical_to_discrete_genetic(0.999))
             self.assertEqual(100, rm.physical_to_discrete_genetic(1.0))
 
-            # All physical coordinates within the 0 region should map down to
-            # the first point.
-            for start, end in [(0.25, 0.5), (0.75, 1)]:
+            # All physical coordinates within the first 0 region should map
+            # down to the first point, but in the last interval should map
+            # to the last point:
+            for start, end, point in [(0.25, 0.5, 0.25), (0.75, 1, 1)]:
                 for x in [start + delta for delta in [0, 0.01, 0.1]] + [end]:
                     y = rm.physical_to_genetic(x)
                     self.assertTrue(0 <= y <= num_loci)
                     z = rm.genetic_to_physical(y)
-                    self.assertEqual(z, start)
+                    self.assertEqual(z, point)
                     # We should map exactly in discrete space.
                     k = rm.physical_to_discrete_genetic(x)
-                    self.assertEqual(start, rm.genetic_to_physical(k))
+                    self.assertEqual(rm.genetic_to_physical(k), point)
 
     def test_zero_rate_start(self):
         positions = [0, 50, 100]
@@ -249,14 +255,14 @@ class TestCoordinateConversion(unittest.TestCase):
             msprime.RecombinationMap(positions, rates, num_loci),
             PythonRecombinationMap(positions, rates, num_loci)]
         for rm in maps:
-            # Anything <= 50 maps to x
-            for x in [0, 10, 49, 50]:
+            # Anything < 50 maps to x
+            for x in [0, 10, 49]:
                 self.assertEqual(x, rm.physical_to_genetic(x))
                 self.assertEqual(x, rm.genetic_to_physical(x))
-            # values > 50 should map to 50
-            for x in [51, 55, 99, 100]:
+            # values >= 50 should map to 50
+            for x in [50, 51, 55, 99, 100]:
                 self.assertEqual(50, rm.physical_to_genetic(x))
-            self.assertEqual(50, rm.genetic_to_physical(50))
+            self.assertEqual(100, rm.genetic_to_physical(50))
 
     def test_one_rate(self):
         for num_loci in [1, 10, 1024, 2**31 - 1]:
