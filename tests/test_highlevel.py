@@ -624,6 +624,18 @@ class TestSimulatorFactory(unittest.TestCase):
             ll_sim = sim.create_ll_instance()
             self.assertEqual(ll_sim.get_num_loci(), recomb_map.get_num_loci())
 
+    def test_zero_recombination_map(self):
+        # test that beginning and trailing zero recombination regions in the
+        # recomb map are included in the sequence
+        for n in range(3, 10):
+            positions = list(range(n))
+            rates = [0.0, 0.2] + [0.0] * (n - 2)
+            recomb_map = msprime.RecombinationMap(positions, rates)
+            ts = msprime.simulate(10, recombination_map=recomb_map)
+            self.assertEqual(ts.sequence_length, n - 1)
+            self.assertEqual(min(ts.tables.edges.left), 0.0)
+            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
+
     def test_combining_recomb_map_and_rate_length(self):
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
         self.assertRaises(

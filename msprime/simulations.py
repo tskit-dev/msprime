@@ -758,19 +758,29 @@ class RecombinationMap(object):
     @classmethod
     def read_hapmap(cls, filename):
         """
-        Parses the specified file in HapMap format. These files must contain
-        a single header line (which is ignored), and then each subsequent
-        line denotes a position/rate pair. Positions are in units of bases,
-        and recombination rates in centimorgans/Megabase. The first column
-        in this file is ignored, as are subsequence columns after the
-        Position and Rate. A sample of this format is as follows::
+        Parses the specified file in HapMap format. These files must be
+        white-space-delimited, and contain a single header line (which is
+        ignored), and then each subsequent line contains the starting position
+        and recombination rate for the segment from that position (inclusive)
+        to the starting position on the next line (exclusive). Starting
+        positions of each segment are given in units of bases, and
+        recombination rates in centimorgans/Megabase. The first column in this
+        file is ignored, as are additional columns after the third (Position is
+        assumed to be the second column, and Rate is assumed to be the third).
+        If the first starting position is not equal to zero, then a
+        zero-recombination region is inserted at the start of the chromosome.
+
+        A sample of this format is as follows::
 
             Chromosome	Position(bp)	Rate(cM/Mb)	Map(cM)
-            chr1	55550	2.981822	0.000000
-            chr1	82571	2.082414	0.080572
-            chr1	88169	2.081358	0.092229
-            chr1	254996	3.354927	0.439456
-            chr1	564598	2.887498	1.478148
+            chr1	55550	        2.981822	0.000000
+            chr1	82571	        2.082414	0.080572
+            chr1	88169	        2.081358	0.092229
+            chr1	254996	        3.354927	0.439456
+            chr1	564598	        2.887498	1.478148
+            ...
+            chr1	182973428	1.036438	122.832331
+            chr1	183030013	0.000000	124.482178
 
         :param str filename: The name of the file to be parsed. This may be
             in plain text or gzipped plain text.
