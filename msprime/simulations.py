@@ -779,8 +779,8 @@ class RecombinationMap(object):
             chr1	254996	        3.354927	0.439456
             chr1	564598	        2.887498	1.478148
             ...
-            chr1	182973428	1.036438	122.832331
-            chr1	183030013	0.000000	124.482178
+            chr1	182973428	2.512769	122.832331
+            chr1	183630013	0.000000	124.482178
 
         :param str filename: The name of the file to be parsed. This may be
             in plain text or gzipped plain text.

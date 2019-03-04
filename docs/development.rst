@@ -523,3 +523,16 @@ and contained in the ``docs`` directory. It is written in the
 is deployed automatically to `readthedocs <https://readthedocs.org/>`_. To
 build the documentation locally run ``make`` in the ``docs`` directory.
 This should build the HTML documentation in ``docs/_build/html/``.
+
+
+***************
+Troubleshooting
+***************
+
+- If ``make`` is giving you strange errors, or if tests are failing for
+  strange reasons, try running ``make clean`` in the project root
+  and then rebuilding.
+- Beware of multiple versions of the python library installed by different
+  programs (e.g., pip versus installing locally from source)! In python,
+  ``msprime.__file__`` will tell you the location of the package that is being
+  used.
