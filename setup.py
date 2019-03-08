@@ -143,6 +143,7 @@ setup(
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],
+    python_requires=">=3.4",
     classifiers=[
         "Programming Language :: C",
         "Programming Language :: Python",
