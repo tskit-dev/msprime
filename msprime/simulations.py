@@ -19,9 +19,6 @@
 """
 Module responsible for running simulations.
 """
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import gzip
 import json

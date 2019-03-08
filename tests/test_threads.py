@@ -19,9 +19,6 @@
 """
 Test cases for threading enabled aspects of the API.
 """
-from __future__ import print_function
-from __future__ import division
-
 import threading
 import unittest
 import platform

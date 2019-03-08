@@ -19,9 +19,6 @@
 """
 Module responsible for generating mutations on a given tree sequence.
 """
-from __future__ import division
-from __future__ import print_function
-
 import json
 import sys
 import tskit

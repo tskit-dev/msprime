@@ -3,9 +3,6 @@ Example in which we reproduce the simulations in the GQT paper,
 "Efficient compression and analysis of large genetic variation datasets"
 by Layer et al.
 """
-from __future__ import print_function
-from __future__ import division
-
 import time
 
 import msprime

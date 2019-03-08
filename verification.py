@@ -2,9 +2,6 @@
 Script to automate verification of the msprime simulator against
 known statistical results and benchmark programs such as Hudson's ms.
 """
-from __future__ import print_function
-from __future__ import division
-
 import collections
 import math
 import os

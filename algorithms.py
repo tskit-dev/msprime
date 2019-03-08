@@ -1,9 +1,6 @@
 """
 Python version of the simulation algorithm.
 """
-from __future__ import print_function
-from __future__ import division
-
 import sys
 import random
 import argparse

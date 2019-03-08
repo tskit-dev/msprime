@@ -19,9 +19,6 @@
 """
 Test cases for the command line interfaces to msprime
 """
-from __future__ import print_function
-from __future__ import division
-
 import io
 import itertools
 import os

@@ -18,10 +18,6 @@
 """
 Test cases for the low level C interface to msprime.
 """
-from __future__ import print_function
-from __future__ import division
-from __future__ import unicode_literals
-
 import collections
 import heapq
 import itertools

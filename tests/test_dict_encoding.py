@@ -6,9 +6,6 @@ The code for doing this was copied from the the _tskitmodule.c file
 into the msprime C module. These tests were also copied in to ensure
 that no errors are introduced into the code over time.
 """
-from __future__ import print_function
-from __future__ import division
-
 import unittest
 
 import msprime

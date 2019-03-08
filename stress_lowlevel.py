@@ -2,9 +2,6 @@
 Code to stress the low-level API as much as possible to expose
 any memory leaks or error handling issues.
 """
-from __future__ import print_function
-from __future__ import division
-
 import argparse
 import unittest
 import random

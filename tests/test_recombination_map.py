@@ -20,9 +20,6 @@
 Tests for the recombination map functionality, mapping continuous physical
 coordinates to discrete genetic loci and vice versa.
 """
-from __future__ import print_function
-from __future__ import division
-
 import unittest
 import random
 import tempfile

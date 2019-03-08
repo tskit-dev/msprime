@@ -19,10 +19,6 @@
 """
 Tests for the provenance information attached to tree sequences.
 """
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-
 import unittest
 import json
 

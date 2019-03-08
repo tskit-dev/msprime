@@ -21,9 +21,6 @@ Msprime is a reimplementation of Hudson's classical ms simulator for
 modern datasets.
 """
 # flake8: NOQA
-from __future__ import print_function
-from __future__ import division
-
 import tskit
 
 # Compatibility layer for old code using the tskit API exported by msprime.
