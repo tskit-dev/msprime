@@ -22,14 +22,12 @@ Test cases for threading enabled aspects of the API.
 from __future__ import print_function
 from __future__ import division
 
-import sys
 import threading
 import unittest
 import platform
 
 import msprime
 
-IS_PY2 = sys.version_info[0] < 3
 IS_WINDOWS = platform.system() == "Windows"
 
 

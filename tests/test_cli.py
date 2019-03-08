@@ -48,9 +48,7 @@ def capture_output(func, *args, **kwargs):
     Runs the specified function and arguments, and returns the
     tuple (stdout, stderr) as strings.
     """
-    buffer_class = io.BytesIO
-    if sys.version_info[0] == 3:
-        buffer_class = io.StringIO
+    buffer_class = io.StringIO
     stdout = sys.stdout
     sys.stdout = buffer_class()
     stderr = sys.stderr
