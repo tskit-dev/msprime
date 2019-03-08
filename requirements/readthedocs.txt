@@ -1,4 +1,3 @@
-six
-setuptools_scm 
+setuptools_scm
 sphinx-argparse
 tskit

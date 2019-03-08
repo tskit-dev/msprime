@@ -123,7 +123,6 @@ commands slightly).
         python:          3.6.4-0               conda-forge
         readline:        7.0-0                 conda-forge
         setuptools:      38.5.1-py36_0         conda-forge
-        six:             1.11.0-py36_1         conda-forge
         sqlite:          3.20.1-2              conda-forge
         svgwrite:        1.1.12-py_0           conda-forge
         tk:              8.6.7-0               conda-forge
