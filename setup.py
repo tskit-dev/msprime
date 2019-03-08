@@ -33,7 +33,7 @@ CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
 
 
-class PathConfigurator(object):
+class PathConfigurator:
     """
     A class to attempt configuration of the compile search paths
     on various platforms.

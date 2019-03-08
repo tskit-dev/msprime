@@ -23,7 +23,7 @@ def main():
         random_seed=1  # Arbitrary - make this reproducible.
     )
     duration = time.clock() - before
-    print("Simulated 100k genomes in {0:.3f} seconds.".format(duration))
+    print("Simulated 100k genomes in {:.3f} seconds.".format(duration))
 
     # Write the results to file, which is small and can be quickly reloaded
     # to avoid the cost of re-running the simulation. We can reload the

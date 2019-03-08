@@ -15,7 +15,7 @@ import bintrees
 import msprime
 
 
-class FenwickTree(object):
+class FenwickTree:
     """
     A Fenwick Tree to represent cumulative frequency tables over
     integers. Each index from 1 to max_index initially has a
@@ -110,7 +110,7 @@ class FenwickTree(object):
         return j + 1
 
 
-class Segment(object):
+class Segment:
     """
     A class representing a single segment. Each segment has a left
     and right, denoting the loci over which it spans, a node and a
@@ -127,7 +127,7 @@ class Segment(object):
         self.index = index
 
     def __str__(self):
-        s = "({0}:{1}-{2}->{3}: prev={4} next={5})".format(
+        s = "({}:{}-{}->{}: prev={} next={})".format(
             self.index, self.left, self.right, self.node, repr(self.prev),
             repr(self.next))
         return s
@@ -137,7 +137,7 @@ class Segment(object):
                 < (other.left, other.right, other.population, self.node))
 
 
-class Population(object):
+class Population:
     """
     Class representing a population in the simulation.
     """
@@ -162,7 +162,7 @@ class Population(object):
             for u in ancestors:
                 s = ""
                 while u is not None:
-                    s += "({0}-{1}->{2}({3});lab:{4})".format(
+                    s += "({}-{}->{}({});lab:{})".format(
                         u.left, u.right, u.node, u.index, u.label)
                     u = u.next
                 print("\t\t" + s)
@@ -250,7 +250,7 @@ class Population(object):
         return self._ancestors[indv.label].index(indv)
 
 
-class TrajectorySimulator(object):
+class TrajectorySimulator:
     """
     Class to simulate an allele frequency trajectory on which to condition
     the coalescent simulation.
@@ -300,7 +300,7 @@ class TrajectorySimulator(object):
         return self._allele_freqs, self._times
 
 
-class Simulator(object):
+class Simulator:
     """
     A reference implementation of the multi locus simulation algorithm.
     """
@@ -939,7 +939,7 @@ class Simulator(object):
             u = x
             s = ""
             while u is not None:
-                s += "({0}-{1}->{2}({3}))".format(
+                s += "({}-{}->{}({}))".format(
                     u.left, u.right, u.node, u.index)
                 u = u.next
             print(s)

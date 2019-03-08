@@ -1159,7 +1159,7 @@ class TestMigrationRecords(unittest.TestCase):
             self.assertLessEqual(mig.right, 1)
 
 
-class TimeUnitsMixin(object):
+class TimeUnitsMixin:
     """
     Tests for time conversion between generations and coalescent
     units.
@@ -1449,7 +1449,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 self.assertEqual(d, dp)
 
 
-class HistoricalSamplingMixin(object):
+class HistoricalSamplingMixin:
     """
     Tests to make sure historical sampling works correctly.
     """
@@ -1635,7 +1635,7 @@ class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMi
     model = "dtwf"
 
 
-class SimulateUntilMixin(object):
+class SimulateUntilMixin:
     """
     Tests for the max_time parameter.
     """

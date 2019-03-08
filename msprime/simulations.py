@@ -435,7 +435,7 @@ def simulate(
             sim, mutation_generator, num_replicates, provenance_dict, __tmp_max_time)
 
 
-class Simulator(object):
+class Simulator:
     """
     Class to simulate trees under a variety of population models.
     """
@@ -691,7 +691,7 @@ class Simulator(object):
             self.ll_sim.reset()
 
 
-class RecombinationMap(object):
+class RecombinationMap:
     """
     A RecombinationMap represents the changing rates of recombination
     along a chromosome. This is defined via two lists of numbers:
@@ -849,7 +849,7 @@ class RecombinationMap(object):
         return self._ll_recombination_map.get_rates()
 
 
-class PopulationConfiguration(object):
+class PopulationConfiguration:
     """
     The initial configuration of a population (or deme) in a simulation.
 
@@ -881,7 +881,7 @@ class PopulationConfiguration(object):
         }
 
 
-class DemographicEvent(object):
+class DemographicEvent:
     """
     Superclass of demographic events that occur during simulations.
     """
@@ -916,7 +916,7 @@ class PopulationParametersChange(DemographicEvent):
     def __init__(
             self, time, initial_size=None, growth_rate=None, population=None,
             population_id=None):
-        super(PopulationParametersChange, self).__init__(
+        super().__init__(
             "population_parameters_change", time)
         if population_id is not None and population is not None:
             raise ValueError(
@@ -965,7 +965,7 @@ class MigrationRateChange(DemographicEvent):
         simultaneously.
     """
     def __init__(self, time, rate, matrix_index=None):
-        super(MigrationRateChange, self).__init__(
+        super().__init__(
             "migration_rate_change", time)
         self.rate = rate
         self.matrix_index = matrix_index
@@ -1009,7 +1009,7 @@ class MassMigration(DemographicEvent):
         the source population migrates to the destination population.
     """
     def __init__(self, time, source, dest=None, proportion=1.0, destination=None):
-        super(MassMigration, self).__init__("mass_migration", time)
+        super().__init__("mass_migration", time)
         if dest is not None and destination is not None:
             raise ValueError(
                 "dest and destination are aliases; cannot supply both")
@@ -1044,7 +1044,7 @@ class SimulationModelChange(DemographicEvent):
     # detect these events at the high level, and insert calls to set_model
     # as appropriate.
     def __init__(self, time, model):
-        super(SimulationModelChange, self).__init__("simulation_model_change", time)
+        super().__init__("simulation_model_change", time)
         if not isinstance(model, SimulationModel):
             raise TypeError(
                 "Simulation model must be an instance of SimulationModel")
@@ -1064,7 +1064,7 @@ class SimulationModelChange(DemographicEvent):
 class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
     def __init__(self, time, population=None, proportion=1.0, population_id=None):
-        super(SimpleBottleneck, self).__init__("simple_bottleneck", time)
+        super().__init__("simple_bottleneck", time)
         if population_id is not None and population is not None:
             raise ValueError(
                 "population_id and population are aliases; cannot supply both.")
@@ -1091,7 +1091,7 @@ class InstantaneousBottleneck(DemographicEvent):
     # TODO document
 
     def __init__(self, time, population=None, strength=1.0, population_id=None):
-        super(InstantaneousBottleneck, self).__init__("instantaneous_bottleneck", time)
+        super().__init__("instantaneous_bottleneck", time)
         if population_id is not None and population is not None:
             raise ValueError(
                 "population_id and population are aliases; cannot supply both.")
@@ -1115,7 +1115,7 @@ class InstantaneousBottleneck(DemographicEvent):
                 self.population, self.strength))
 
 
-class SimulationModel(object):
+class SimulationModel:
     """
     Superclass of all simulation models.
     """
@@ -1158,7 +1158,7 @@ class ParametricSimulationModel(SimulationModel):
     The superclass of simulation models that require extra parameters.
     """
     def get_ll_representation(self):
-        d = super(ParametricSimulationModel, self).get_ll_representation()
+        d = super().get_ll_representation()
         d.update(self.__dict__)
         return d
 
@@ -1188,7 +1188,7 @@ class DiracCoalescent(ParametricSimulationModel):
         self.c = c
 
 
-class PopulationParameters(object):
+class PopulationParameters:
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
@@ -1202,7 +1202,7 @@ class PopulationParameters(object):
         return repr(self.__dict__)
 
 
-class Epoch(object):
+class Epoch:
     """
     Represents a single epoch in the simulation within which the state
     of the demographic parameters are constant.
@@ -1220,7 +1220,7 @@ class Epoch(object):
         return repr(self.__dict__)
 
 
-class DemographyDebugger(object):
+class DemographyDebugger:
     """
     A class to facilitate debugging of population parameters and migration
     rates in the past.

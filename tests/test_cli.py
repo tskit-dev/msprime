@@ -300,7 +300,7 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
     """
 
     def setUp(self):
-        super(TestMspmsCreateSimulationRunnerErrors, self).setUp()
+        super().setUp()
 
         def error_handler(message):
             raise CustomExceptionForTesting()
