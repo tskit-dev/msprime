@@ -38,7 +38,7 @@ class MsprimeTestCase(unittest.TestCase):
     """
 
 
-class PythonSparseTree:
+class PythonSparseTree(object):
     """
     Presents the same interface as the SparseTree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
@@ -197,7 +197,7 @@ class PythonSparseTree:
         return s
 
 
-class PythonTreeSequence:
+class PythonTreeSequence(object):
     """
     A python implementation of the TreeSequence object.
     """

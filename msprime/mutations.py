@@ -33,7 +33,7 @@ BINARY = 0
 NUCLEOTIDES = 1
 
 
-class InfiniteSites:
+class InfiniteSites(object):
     """
     The "infinitely many sites" mutation model. In this model each mutation
     corresponds to a unique site, which has a floating-point position chosen

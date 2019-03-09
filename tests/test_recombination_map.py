@@ -31,7 +31,7 @@ import numpy as np
 import msprime
 
 
-class PythonRecombinationMap:
+class PythonRecombinationMap(object):
     """
     A Python implementation of the RecombinationMap interface.
     """

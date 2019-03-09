@@ -12,7 +12,7 @@ import bintrees
 import msprime
 
 
-class FenwickTree:
+class FenwickTree(object):
     """
     A Fenwick Tree to represent cumulative frequency tables over
     integers. Each index from 1 to max_index initially has a
@@ -107,7 +107,7 @@ class FenwickTree:
         return j + 1
 
 
-class Segment:
+class Segment(object):
     """
     A class representing a single segment. Each segment has a left
     and right, denoting the loci over which it spans, a node and a
@@ -134,7 +134,7 @@ class Segment:
                 < (other.left, other.right, other.population, self.node))
 
 
-class Population:
+class Population(object):
     """
     Class representing a population in the simulation.
     """
@@ -247,7 +247,7 @@ class Population:
         return self._ancestors[indv.label].index(indv)
 
 
-class TrajectorySimulator:
+class TrajectorySimulator(object):
     """
     Class to simulate an allele frequency trajectory on which to condition
     the coalescent simulation.
@@ -297,7 +297,7 @@ class TrajectorySimulator:
         return self._allele_freqs, self._times
 
 
-class Simulator:
+class Simulator(object):
     """
     A reference implementation of the multi locus simulation algorithm.
     """

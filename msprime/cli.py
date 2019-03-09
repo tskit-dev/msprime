@@ -109,7 +109,7 @@ def get_single_seed(seeds):
     return int(m.hexdigest(), 16) % (2**32)
 
 
-class SimulationRunner:
+class SimulationRunner(object):
     """
     Class to run msprime simulation and output the results.
     """

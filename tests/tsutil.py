@@ -455,7 +455,7 @@ def algorithm_T(ts):
         left = right
 
 
-class LinkedTree:
+class LinkedTree(object):
     """
     Straightforward implementation of the quintuply linked tree for developing
     and testing the sample lists feature.

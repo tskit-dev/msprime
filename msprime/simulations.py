@@ -432,7 +432,7 @@ def simulate(
             sim, mutation_generator, num_replicates, provenance_dict, __tmp_max_time)
 
 
-class Simulator:
+class Simulator(object):
     """
     Class to simulate trees under a variety of population models.
     """
@@ -688,7 +688,7 @@ class Simulator:
             self.ll_sim.reset()
 
 
-class RecombinationMap:
+class RecombinationMap(object):
     """
     A RecombinationMap represents the changing rates of recombination
     along a chromosome. This is defined via two lists of numbers:
@@ -846,7 +846,7 @@ class RecombinationMap:
         return self._ll_recombination_map.get_rates()
 
 
-class PopulationConfiguration:
+class PopulationConfiguration(object):
     """
     The initial configuration of a population (or deme) in a simulation.
 
@@ -878,7 +878,7 @@ class PopulationConfiguration:
         }
 
 
-class DemographicEvent:
+class DemographicEvent(object):
     """
     Superclass of demographic events that occur during simulations.
     """
@@ -1112,7 +1112,7 @@ class InstantaneousBottleneck(DemographicEvent):
                 self.population, self.strength))
 
 
-class SimulationModel:
+class SimulationModel(object):
     """
     Superclass of all simulation models.
     """
@@ -1185,7 +1185,7 @@ class DiracCoalescent(ParametricSimulationModel):
         self.c = c
 
 
-class PopulationParameters:
+class PopulationParameters(object):
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
@@ -1199,7 +1199,7 @@ class PopulationParameters:
         return repr(self.__dict__)
 
 
-class Epoch:
+class Epoch(object):
     """
     Represents a single epoch in the simulation within which the state
     of the demographic parameters are constant.
@@ -1217,7 +1217,7 @@ class Epoch:
         return repr(self.__dict__)
 
 
-class DemographyDebugger:
+class DemographyDebugger(object):
     """
     A class to facilitate debugging of population parameters and migration
     rates in the past.

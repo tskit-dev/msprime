@@ -122,7 +122,7 @@ def subsample_simplify_slim_treesequence(ts, sample_sizes):
     return ts
 
 
-class SimulationVerifier:
+class SimulationVerifier(object):
     """
     Class to compare msprime against ms to ensure that the same distributions
     of values are output under the same parameters.
