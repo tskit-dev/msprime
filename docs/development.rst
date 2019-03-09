@@ -25,10 +25,8 @@ Quickstart
 
 - Install the :ref:`basic requirements <sec_installation_system_requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
-- Build the low level module by running ``make`` in the project root. If you
-  are using Python 2.7, run ``make ext2`` and if you are using Python 3.x,
-  run ``make ext3``. Python 3.x is the default if no arguments are provided.
-- Run the tests to ensure everything has worked: ``python -m nose -vs``. These should
+- Build the low level module by running ``make`` in the project root.
+- Run the tests to ensure everything has worked: ``python3 -m nose -vs``. These should
   all pass.
 - Make your changes in a local branch, and open a pull request on GitHub when you
   are ready. Please make sure that (a) the tests pass before you open the PR; and
@@ -177,7 +175,7 @@ first-class executable programs in a cross-platform manner.
 
 There are simple scripts in the root of the project (currently: ``msp_dev.py``,
 ``mspms_dev.py``) which are used for development. For example, to run the
-development version of ``mspms`` use ``python mspms_dev.py``.
+development version of ``mspms`` use ``python3 mspms_dev.py``.
 
 *********
 C Library
@@ -453,11 +451,10 @@ for use in the current working directory, run
 
 .. code-block:: bash
 
-    $ python setup.py build_ext --inplace
+    $ python3 setup.py build_ext --inplace
 
 A development Makefile is also provided in the project root, so that running
-``make ext2`` or ``make ext3`` should build the extension module for either
-Python 2 or Python 3.
+``make`` should build the extension module.
 
 ++++++++++++++++++++++++
 Testing for memory leaks
@@ -486,7 +483,7 @@ this script using:
 
 .. code-block:: bash
 
-    $ python verification.py
+    $ python3 verification.py
 
 
 The statistical tests depend on compiled programs in the ``data`` directory.

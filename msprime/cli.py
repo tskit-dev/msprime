@@ -866,7 +866,6 @@ def get_msp_parser():
     top_parser.add_argument(
         "-V", "--version", action='version',
         version='%(prog)s {}'.format(msprime.__version__))
-    # This is required to get uniform behaviour in Python2 and Python3
     subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 

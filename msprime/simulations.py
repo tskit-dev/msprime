@@ -115,11 +115,7 @@ def _replicate_generator(
     # simulation if necessary. Much simpler than encoding the details of
     # the random number generator.
     provenance_record = json.dumps(provenance_dict)
-
-    # Should use range here, but Python 2 makes this awkward...
-    j = 0
-    while j < num_replicates:
-        j += 1
+    for j in range(num_replicates):
         sim.run(max_time)
         tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
         yield tree_sequence

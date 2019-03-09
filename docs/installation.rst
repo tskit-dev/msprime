@@ -16,7 +16,7 @@ for most users, although ``pip`` can be more convenient in certain cases.
 Requirements
 ============
 
-Msprime requires Python 2.7 or Python 3.3+
+Msprime requires Python 3.4+
 and the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_.
 GSL can either be installed automatically as part of a
 :ref:`sec_installation_conda` installation **or** via system packages
@@ -36,10 +36,7 @@ conda
 
 Pre-built binary packages for ``msprime`` are available through
 `conda <https://conda.io/docs/>`_, and built using `conda-forge <https://conda-forge.org/>`_.
-Packages for Python 2.7, 3.5 and 3.6 are available for Linux and OSX.
-For Windows, only Python 3.5 and 3.6 are supported.
-
-We strongly recommend using Python 3.
+Packages for Python 3.6 and 3.7 are available for Linux, OSX and Windows.
 
 ***********
 Quick Start
@@ -123,6 +120,7 @@ commands slightly).
         python:          3.6.4-0               conda-forge
         readline:        7.0-0                 conda-forge
         setuptools:      38.5.1-py36_0         conda-forge
+        six:             1.11.0-py36_1         conda-forge
         sqlite:          3.20.1-2              conda-forge
         svgwrite:        1.1.12-py_0           conda-forge
         tk:              8.6.7-0               conda-forge
@@ -204,9 +202,9 @@ Installation
 
 We can install ``msprime`` easily using pip::
 
-    $ python -m pip install msprime
+    $ python3 -m pip install msprime
 
-(It is generally better to use ``python -m pip`` rather than call ``pip``
+(It is generally better to use ``python3 -m pip`` rather than call ``pip``
 directly since this allows you to control which installation of Python the
 package is installed to.) This will work in most cases, once the GSL has been
 installed. See below for platform specific build instructions when this fails.
@@ -214,7 +212,7 @@ installed. See below for platform specific build instructions when this fails.
 If you do not have root access to your machine, you can install
 ``msprime`` into your local Python installation as follows::
 
-    $ python -m pip install msprime --user
+    $ python3 -m pip install msprime --user
 
 To use the ``mspms`` program you must ensure
 that the ``~/.local/bin`` directory is in your ``PATH``, or
@@ -224,7 +222,7 @@ simply run it using::
 
 To uninstall ``msprime``, simply run::
 
-    $ python -m pip uninstall msprime
+    $ python3 -m pip uninstall msprime
 
 
 .. _sec_pip_platform_specific_installation:
