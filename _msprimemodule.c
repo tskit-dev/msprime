@@ -31,14 +31,6 @@
 
 #include "msprime.h"
 
-#if PY_MAJOR_VERSION >= 3
-#define IS_PY3K
-#endif
-
-#define MODULE_DOC \
-"Low level interface for msprime"
-
-
 /* We keep a reference to the gsl_error_handler so it can be restored if needed */
 static gsl_error_handler_t *old_gsl_error_handler;
 
@@ -3993,49 +3985,28 @@ static PyMethodDef msprime_methods[] = {
     {NULL}        /* Sentinel */
 };
 
-/* Initialisation code supports Python 2.x and 3.x. The framework uses the
- * recommended structure from http://docs.python.org/howto/cporting.html.
- * I've ignored the point about storing state in globals, as the examples
- * from the Python documentation still use this idiom.
- */
-
-#if PY_MAJOR_VERSION >= 3
-
 static struct PyModuleDef msprimemodule = {
     PyModuleDef_HEAD_INIT,
-    "_msprime",   /* name of module */
-    MODULE_DOC, /* module documentation, may be NULL */
+    "_msprime",
+    "Low level interface for msprime",
     -1,
     msprime_methods,
     NULL, NULL, NULL, NULL
 };
 
-#define INITERROR return NULL
-
 PyObject *
 PyInit__msprime(void)
-
-#else
-#define INITERROR return
-
-void
-init_msprime(void)
-#endif
 {
-#if PY_MAJOR_VERSION >= 3
     PyObject *module = PyModule_Create(&msprimemodule);
-#else
-    PyObject *module = Py_InitModule3("_msprime", msprime_methods, MODULE_DOC);
-#endif
     if (module == NULL) {
-        INITERROR;
+        return NULL;;
     }
     import_array();
 
     /* LightweightTableCollection type */
     LightweightTableCollectionType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&LightweightTableCollectionType) < 0) {
-        INITERROR;
+        return NULL;;
     }
     Py_INCREF(&LightweightTableCollectionType);
     PyModule_AddObject(module, "LightweightTableCollection",
@@ -4044,7 +4015,7 @@ init_msprime(void)
     /* RandomGenerator type */
     RandomGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&RandomGeneratorType) < 0) {
-        INITERROR;
+        return NULL;;
     }
     Py_INCREF(&RandomGeneratorType);
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
@@ -4052,7 +4023,7 @@ init_msprime(void)
     /* MutationGenerator type */
     MutationGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&MutationGeneratorType) < 0) {
-        INITERROR;
+        return NULL;;
     }
     Py_INCREF(&MutationGeneratorType);
     PyModule_AddObject(module, "MutationGenerator", (PyObject *) &MutationGeneratorType);
@@ -4060,7 +4031,7 @@ init_msprime(void)
     /* Simulator type */
     SimulatorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&SimulatorType) < 0) {
-        INITERROR;
+        return NULL;;
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
@@ -4068,7 +4039,7 @@ init_msprime(void)
     /* RecombinationMap type */
     RecombinationMapType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&RecombinationMapType) < 0) {
-        INITERROR;
+        return NULL;;
     }
     Py_INCREF(&RecombinationMapType);
     PyModule_AddObject(module, "RecombinationMap", (PyObject *) &RecombinationMapType);
@@ -4091,7 +4062,5 @@ init_msprime(void)
      * set it to null. */
     old_gsl_error_handler = NULL;
 
-#if PY_MAJOR_VERSION >= 3
     return module;
-#endif
 }
