@@ -6,9 +6,6 @@ The code for doing this was copied from the the _tskitmodule.c file
 into the msprime C module. These tests were also copied in to ensure
 that no errors are introduced into the code over time.
 """
-from __future__ import print_function
-from __future__ import division
-
 import unittest
 
 import msprime
@@ -121,7 +118,7 @@ class TestMissingData(unittest.TestCase):
     def test_missing_tables(self):
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - set(["sequence_length"])
+        table_names = set(d.keys()) - {"sequence_length"}
         for table_name in table_names:
             d = tables.asdict()
             del d[table_name]
@@ -132,7 +129,7 @@ class TestMissingData(unittest.TestCase):
     def test_missing_columns(self):
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - set(["sequence_length"])
+        table_names = set(d.keys()) - {"sequence_length"}
         for table_name in table_names:
             table_dict = d[table_name]
             for colname in table_dict.keys():
@@ -153,7 +150,7 @@ class TestBadTypes(unittest.TestCase):
     def verify_columns(self, value):
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - set(["sequence_length"])
+        table_names = set(d.keys()) - {"sequence_length"}
         for table_name in table_names:
             table_dict = d[table_name]
             for colname in table_dict.keys():
@@ -191,7 +188,7 @@ class TestBadLengths(unittest.TestCase):
 
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - set(["sequence_length"])
+        table_names = set(d.keys()) - {"sequence_length"}
         for table_name in sorted(table_names):
             table_dict = d[table_name]
             for colname in sorted(table_dict.keys()):

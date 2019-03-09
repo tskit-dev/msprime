@@ -4,7 +4,6 @@ flake8
 mock
 nose
 numpy
-six
 tskit
 # TODO we're pinning the version here because of problems on Travis.
 # versions weren't correctly being set for v1.12.1

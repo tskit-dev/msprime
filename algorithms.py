@@ -1,9 +1,6 @@
 """
 Python version of the simulation algorithm.
 """
-from __future__ import print_function
-from __future__ import division
-
 import sys
 import random
 import argparse
@@ -127,7 +124,7 @@ class Segment(object):
         self.index = index
 
     def __str__(self):
-        s = "({0}:{1}-{2}->{3}: prev={4} next={5})".format(
+        s = "({}:{}-{}->{}: prev={} next={})".format(
             self.index, self.left, self.right, self.node, repr(self.prev),
             repr(self.next))
         return s
@@ -162,7 +159,7 @@ class Population(object):
             for u in ancestors:
                 s = ""
                 while u is not None:
-                    s += "({0}-{1}->{2}({3});lab:{4})".format(
+                    s += "({}-{}->{}({});lab:{})".format(
                         u.left, u.right, u.node, u.index, u.label)
                     u = u.next
                 print("\t\t" + s)
@@ -939,7 +936,7 @@ class Simulator(object):
             u = x
             s = ""
             while u is not None:
-                s += "({0}-{1}->{2}({3}))".format(
+                s += "({}-{}->{}({}))".format(
                     u.left, u.right, u.node, u.index)
                 u = u.next
             print(s)

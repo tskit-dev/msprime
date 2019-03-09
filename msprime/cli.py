@@ -19,9 +19,6 @@
 """
 Command line interfaces to the msprime library.
 """
-from __future__ import division
-from __future__ import print_function
-
 import argparse
 import hashlib
 import json
@@ -65,7 +62,7 @@ PLoS Comput Biol 12(5): e1004842. doi: 10.1371/journal.pcbi.1004842
 def positive_int(value):
     int_value = int(float(value))
     if int_value <= 0:
-        msg = "{0} in an invalid postive integer value".format(value)
+        msg = "{} in an invalid postive integer value".format(value)
         raise argparse.ArgumentTypeError(msg)
     return int_value
 
@@ -199,7 +196,7 @@ class SimulationRunner(object):
                     j += 1
                     # Print these seperately to avoid the cost of creating
                     # another string.
-                    print("[{0}]".format(int(length)), end="", file=output)
+                    print("[{}]".format(int(length)), end="", file=output)
                     print(newick, file=output)
 
     def run(self, output):
@@ -556,7 +553,7 @@ class IndexedAction(argparse._AppendAction):
     index = 0
 
     def __call__(self, parser, namespace, values, option_string=None):
-        super(IndexedAction, self).__call__(
+        super().__call__(
             parser, namespace, (IndexedAction.index, values), option_string)
         IndexedAction.index += 1
 
@@ -869,7 +866,6 @@ def get_msp_parser():
     top_parser.add_argument(
         "-V", "--version", action='version',
         version='%(prog)s {}'.format(msprime.__version__))
-    # This is required to get uniform behaviour in Python2 and Python3
     subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 

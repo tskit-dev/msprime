@@ -20,9 +20,6 @@
 Test cases for simulation models to see if they have the correct
 basic properties.
 """
-from __future__ import print_function
-from __future__ import division
-
 import sys
 import unittest
 

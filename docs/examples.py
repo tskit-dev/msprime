@@ -1,9 +1,6 @@
 """
 The examples used in the tutorial section.
 """
-from __future__ import print_function
-from __future__ import division
-
 import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))

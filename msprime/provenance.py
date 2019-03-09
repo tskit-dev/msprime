@@ -20,9 +20,6 @@
 Common provenance methods used to determine the state and versions
 of various dependencies and the OS.
 """
-from __future__ import print_function
-from __future__ import division
-
 import tskit
 
 import _msprime

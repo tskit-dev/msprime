@@ -19,9 +19,6 @@
 """
 Test cases for the high level interface to msprime.
 """
-from __future__ import print_function
-from __future__ import division
-
 import unittest
 import json
 
@@ -344,9 +341,9 @@ class TestKeep(unittest.TestCase):
         self.assertEqual(ts.num_sites + no_keep.num_sites, keep.num_sites)
         # Mutations are all infinite sites, so must be equal
         self.assertEqual(ts.num_mutations + no_keep.num_mutations, keep.num_mutations)
-        old = set(site.position for site in ts.sites())
-        new = set(site.position for site in no_keep.sites())
-        both = set(site.position for site in keep.sites())
+        old = {site.position for site in ts.sites()}
+        new = {site.position for site in no_keep.sites()}
+        both = {site.position for site in keep.sites()}
         self.assertEqual(old | new, both)
         self.verify_sites(ts, keep)
 

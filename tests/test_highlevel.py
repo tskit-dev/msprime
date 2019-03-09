@@ -19,9 +19,6 @@
 """
 Test cases for the high level interface to msprime.
 """
-from __future__ import print_function
-from __future__ import division
-
 import datetime
 import json
 import os
@@ -31,13 +28,6 @@ import sys
 import tempfile
 import unittest
 import multiprocessing
-
-try:
-    # We use the zip as iterator functionality here.
-    from future_builtins import zip
-except ImportError:
-    # This fails for Python 3.x, but that's fine.
-    pass
 
 import numpy as np
 

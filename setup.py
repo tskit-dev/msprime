@@ -16,14 +16,10 @@
 # You should have received a copy of the GNU General Public License
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
-from __future__ import division
-from __future__ import print_function
-
 import subprocess
 import platform
 import os
 import os.path
-import sys
 from warnings import warn
 
 from setuptools import setup, Extension
@@ -74,10 +70,7 @@ class PathConfigurator(object):
 class local_build_ext(build_ext):
     def finalize_options(self):
         build_ext.finalize_options(self)
-        if sys.version_info[0] >= 3:
-            import builtins
-        else:
-            import __builtin__ as builtins
+        import builtins
         # Prevent numpy from thinking it is still in its setup process:
         builtins.__NUMPY_SETUP__ = False
         import numpy
@@ -137,7 +130,7 @@ setup(
     packages=["msprime"],
     author="Jerome Kelleher",
     author_email="jerome.kelleher@well.ox.ac.uk",
-    url="http://pypi.python.org/pypi/msprime",
+    url="https://pypi.org/project/msprime/",
     entry_points={
         'console_scripts': [
             'mspms=msprime.cli:mspms_main',
@@ -150,16 +143,16 @@ setup(
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],
+    python_requires=">=3.4",
     classifiers=[
         "Programming Language :: C",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3 :: Only",
         "Development Status :: 4 - Beta",
         "Environment :: Other Environment",
         "Intended Audience :: Science/Research",

@@ -19,9 +19,6 @@
 """
 Module responsible for running simulations.
 """
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import gzip
 import json
@@ -118,11 +115,7 @@ def _replicate_generator(
     # simulation if necessary. Much simpler than encoding the details of
     # the random number generator.
     provenance_record = json.dumps(provenance_dict)
-
-    # Should use range here, but Python 2 makes this awkward...
-    j = 0
-    while j < num_replicates:
-        j += 1
+    for j in range(num_replicates):
         sim.run(max_time)
         tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
         yield tree_sequence
@@ -916,7 +909,7 @@ class PopulationParametersChange(DemographicEvent):
     def __init__(
             self, time, initial_size=None, growth_rate=None, population=None,
             population_id=None):
-        super(PopulationParametersChange, self).__init__(
+        super().__init__(
             "population_parameters_change", time)
         if population_id is not None and population is not None:
             raise ValueError(
@@ -965,7 +958,7 @@ class MigrationRateChange(DemographicEvent):
         simultaneously.
     """
     def __init__(self, time, rate, matrix_index=None):
-        super(MigrationRateChange, self).__init__(
+        super().__init__(
             "migration_rate_change", time)
         self.rate = rate
         self.matrix_index = matrix_index
@@ -1009,7 +1002,7 @@ class MassMigration(DemographicEvent):
         the source population migrates to the destination population.
     """
     def __init__(self, time, source, dest=None, proportion=1.0, destination=None):
-        super(MassMigration, self).__init__("mass_migration", time)
+        super().__init__("mass_migration", time)
         if dest is not None and destination is not None:
             raise ValueError(
                 "dest and destination are aliases; cannot supply both")
@@ -1044,7 +1037,7 @@ class SimulationModelChange(DemographicEvent):
     # detect these events at the high level, and insert calls to set_model
     # as appropriate.
     def __init__(self, time, model):
-        super(SimulationModelChange, self).__init__("simulation_model_change", time)
+        super().__init__("simulation_model_change", time)
         if not isinstance(model, SimulationModel):
             raise TypeError(
                 "Simulation model must be an instance of SimulationModel")
@@ -1064,7 +1057,7 @@ class SimulationModelChange(DemographicEvent):
 class SimpleBottleneck(DemographicEvent):
     # This is an unsupported/undocumented demographic event.
     def __init__(self, time, population=None, proportion=1.0, population_id=None):
-        super(SimpleBottleneck, self).__init__("simple_bottleneck", time)
+        super().__init__("simple_bottleneck", time)
         if population_id is not None and population is not None:
             raise ValueError(
                 "population_id and population are aliases; cannot supply both.")
@@ -1091,7 +1084,7 @@ class InstantaneousBottleneck(DemographicEvent):
     # TODO document
 
     def __init__(self, time, population=None, strength=1.0, population_id=None):
-        super(InstantaneousBottleneck, self).__init__("instantaneous_bottleneck", time)
+        super().__init__("instantaneous_bottleneck", time)
         if population_id is not None and population is not None:
             raise ValueError(
                 "population_id and population are aliases; cannot supply both.")
@@ -1158,7 +1151,7 @@ class ParametricSimulationModel(SimulationModel):
     The superclass of simulation models that require extra parameters.
     """
     def get_ll_representation(self):
-        d = super(ParametricSimulationModel, self).get_ll_representation()
+        d = super().get_ll_representation()
         d.update(self.__dict__)
         return d
 
