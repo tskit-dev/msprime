@@ -13,7 +13,7 @@ please open an `issue <http://github.com/tskit-dev/msprime/issues>`_ or
 Quickstart
 **********
 
-- Make a fork of the msprime repo on `GitHub <github.com/tskit-dev/msprime>`_
+- Make a fork of the msprime repo on `GitHub <http://github.com/tskit-dev/msprime>`_
 - Clone your fork into a local directory, making sure that the **submodules
   are correctly initialised**::
 
