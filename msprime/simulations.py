@@ -26,6 +26,7 @@ import math
 import random
 import sys
 import os
+import numpy
 
 import tskit
 
@@ -1343,3 +1344,25 @@ class DemographyDebugger(object):
             print("=" * len(s), file=output)
             self._print_populations(epoch, output)
             print(file=output)
+
+    @property
+    def population_size_history(self):
+        """
+        Returns a matrix of population sizes seen
+        by samples from each population at each
+        time defined by the epochs.
+        """
+        num_pops = len(self.epochs[0].populations)
+        pop_size = numpy.zeros((num_pops, len(self.epochs)))
+        for j, epoch in enumerate(self.epochs):
+            for k, pop in enumerate(epoch.populations):
+                pop_size[k, j] = epoch.populations[k].start_size
+        return pop_size
+
+    @property
+    def epoch_times(self):
+        """
+        Returns array of epoch times defined by
+        the demographic model
+        """
+        return numpy.array([x.start_time for x in self.epochs])

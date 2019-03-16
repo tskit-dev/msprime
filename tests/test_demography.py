@@ -348,6 +348,8 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertEqual(len(dd.epochs), 1)
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
+        self.assertEqual(dd.epoch_times[0], 0)
+        self.assertEqual(dd.population_size_history.shape[0], 1)
         self.assertTrue(math.isinf(e.end_time))
         self.assertEqual(len(e.demographic_events), 0)
         self.assertEqual(len(e.populations), 1)
@@ -365,6 +367,9 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertEqual(len(dd.epochs), 1)
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
+        self.assertEqual(dd.population_size_history.shape[0], 2)
+        self.assertEqual(dd.population_size_history[0][0], 10)
+        self.assertEqual(dd.population_size_history[1][0], 20)
         self.assertTrue(math.isinf(e.end_time))
         self.assertEqual(len(e.demographic_events), 0)
         self.assertEqual(len(e.populations), 2)
@@ -492,6 +497,8 @@ class TestDemographyDebugger(unittest.TestCase):
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
         self.assertEqual(e.end_time, t1)
+        self.assertEqual(dd.epoch_times[0], 0)
+        self.assertEqual(dd.epoch_times[1], t1)
         self.assertEqual(len(e.demographic_events), 0)
         self.assertEqual(len(e.populations), 2)
         self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
