@@ -639,6 +639,20 @@ class TestSimulatorFactory(unittest.TestCase):
             recombination_map=recomb_map, length=1,
             recombination_rate=1)
 
+    def test_mean_recombination_rate(self):
+        # Some quick sanity checks.
+        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 1.0)
+
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 0.5)
+
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 0.0)
+
     def test_sample_combination_errors(self):
         # Make sure that the various ways we can specify the samples
         # operate correctly.
