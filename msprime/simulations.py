@@ -26,6 +26,7 @@ import math
 import random
 import sys
 import os
+import numpy as np
 
 import tskit
 
@@ -803,6 +804,25 @@ class RecombinationMap(object):
         finally:
             f.close()
         return cls(positions, rates)
+
+    @property
+    def mean_recombination_rate(self):
+        """
+        Return the weighted mean recombination rate
+        across all windows of the entire recombination map.
+        """
+        chrom_length = self._ll_recombination_map.get_sequence_length()
+
+        positions = np.array(self._ll_recombination_map.get_positions())
+        positions_diff = self._ll_recombination_map.get_positions()[1:]
+        positions_diff.append(chrom_length)
+        positions_diff = np.array(positions_diff)
+        window_sizes = positions_diff - positions
+
+        weights = window_sizes / chrom_length
+        rates = self._ll_recombination_map.get_rates()
+
+        return np.average(rates, weights=weights)
 
     def get_ll_recombination_map(self):
         return self._ll_recombination_map
