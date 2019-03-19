@@ -332,6 +332,19 @@ class TestDemographyDebugger(unittest.TestCase):
     Tests for the demography debugger. Ensure that we compute the correct
     population sizes etc.
     """
+    def verify_arrays(self, dd):
+        """
+        Check that the array properties that we genereate are computed correctly.
+        """
+        pop_size = dd.population_size_history
+        times = dd.epoch_times
+        self.assertEqual(dd.num_epochs, times.shape[0])
+        self.assertEqual(dd.num_epochs, pop_size.shape[1])
+        self.assertEqual(dd.num_populations, pop_size.shape[0])
+        for j in range(dd.num_epochs):
+            self.assertEqual(dd.epochs[j].start_time, times[j])
+            for k in range(dd.num_populations):
+                self.assertEqual(dd.epochs[j].populations[k].start_size, pop_size[k, j])
 
     def test_equal_after(self):
         population_configurations = [
@@ -346,6 +359,7 @@ class TestDemographyDebugger(unittest.TestCase):
         dd = msprime.DemographyDebugger(
             population_configurations=[msprime.PopulationConfiguration()])
         self.assertEqual(len(dd.epochs), 1)
+        self.verify_arrays(dd)
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
         self.assertEqual(dd.epoch_times[0], 0)
@@ -364,6 +378,7 @@ class TestDemographyDebugger(unittest.TestCase):
             population_configurations=[
                 msprime.PopulationConfiguration(initial_size=10),
                 msprime.PopulationConfiguration(initial_size=20)])
+        self.verify_arrays(dd)
         self.assertEqual(len(dd.epochs), 1)
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
@@ -391,6 +406,7 @@ class TestDemographyDebugger(unittest.TestCase):
                 msprime.PopulationConfiguration(initial_size=20, growth_rate=g2)],
             demographic_events=[
                 msprime.PopulationParametersChange(time=10, growth_rate=0)])
+        self.verify_arrays(dd)
         # Make sure we're testing the __repr__ paths.
         s = repr(dd)
         self.assertGreater(len(s), 0)
@@ -432,6 +448,7 @@ class TestDemographyDebugger(unittest.TestCase):
                 msprime.MigrationRateChange(time=20, rate=1),
                 msprime.MigrationRateChange(time=22, rate=1.7, matrix_index=(0, 1))],
             migration_matrix=[[0, 0.25], [0, 0]])
+        self.verify_arrays(dd)
         self.assertEqual(len(dd.epochs), 3)
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
@@ -492,6 +509,7 @@ class TestDemographyDebugger(unittest.TestCase):
                     population=0, time=t2, growth_rate=-alpha),
                 # Both change growth_rate to 0 at t3.
                 msprime.PopulationParametersChange(time=t3, growth_rate=0)])
+        self.verify_arrays(dd)
 
         self.assertEqual(len(dd.epochs), 4)
         e = dd.epochs[0]

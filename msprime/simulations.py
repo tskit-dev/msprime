@@ -26,9 +26,9 @@ import math
 import random
 import sys
 import os
-import numpy
 
 import tskit
+import numpy as np
 
 from . import provenance
 import _msprime
@@ -1251,6 +1251,7 @@ class DemographyDebugger(object):
 
     def _make_epochs(self, simulator, demographic_events):
         self.epochs = []
+        self.num_populations = simulator.num_populations
         ll_sim = simulator.create_ll_instance()
         N = simulator.num_populations
         start_time = 0
@@ -1348,12 +1349,11 @@ class DemographyDebugger(object):
     @property
     def population_size_history(self):
         """
-        Returns a matrix of population sizes seen
-        by samples from each population at each
-        time defined by the epochs.
+        Returns a (num_pops, num_epochs) numpy array giving the starting population size
+        for each population in each epoch.
         """
         num_pops = len(self.epochs[0].populations)
-        pop_size = numpy.zeros((num_pops, len(self.epochs)))
+        pop_size = np.zeros((num_pops, len(self.epochs)))
         for j, epoch in enumerate(self.epochs):
             for k, pop in enumerate(epoch.populations):
                 pop_size[k, j] = epoch.populations[k].start_size
@@ -1362,7 +1362,13 @@ class DemographyDebugger(object):
     @property
     def epoch_times(self):
         """
-        Returns array of epoch times defined by
-        the demographic model
+        Returns array of epoch times defined by the demographic model
         """
-        return numpy.array([x.start_time for x in self.epochs])
+        return np.array([x.start_time for x in self.epochs])
+
+    @property
+    def num_epochs(self):
+        """
+        Returns the number of epochs defined by the demographic model.
+        """
+        return len(self.epochs)
