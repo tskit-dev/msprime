@@ -26,7 +26,6 @@ import math
 import random
 import sys
 import os
-import numpy as np
 
 import tskit
 import numpy as np
