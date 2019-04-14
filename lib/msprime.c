@@ -2588,7 +2588,6 @@ msp_dtwf_generation(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    msp_verify_segments(self);
 
     for (j = 0; j < self->num_populations; j++) {
 
@@ -2632,7 +2631,6 @@ msp_dtwf_generation(msp_t *self)
             parents[p] = s;
         }
 
-        msp_verify_segments(self);
         // Iterate through offspring of parent k, adding to avl_tree
         for (k = 0; k < N; k++) {
             for (s = parents[k]; s != NULL; s = s->next) {
@@ -2671,7 +2669,6 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
         }
-        msp_verify_segments(self);
         free(parents);
         free(segment_mem);
         segment_mem = NULL;
