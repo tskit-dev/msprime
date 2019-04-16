@@ -285,7 +285,9 @@ we do want the full genotype matrix it is simple to obtain::
 In this example, we run the same simulation but this time
 store the entire variant matrix in a two-dimensional numpy array.
 This is useful for integrating with tools such as
-`scikit allel <https://scikit-allel.readthedocs.io/en/latest/>`_.
+`scikit allel <https://scikit-allel.readthedocs.io/en/latest/>`_, 
+but note that what we call genotype matrix corresponds to a 
+scikit-allel haplotype array.
 
 ******************
 Historical samples
