@@ -278,7 +278,7 @@ test_single_locus_many_populations(void)
 static void
 test_single_locus_historical_sample(void)
 {
-    int ret;
+    int ret, j;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = {{0, 0.0}, {0, 10.0}};
@@ -294,35 +294,46 @@ test_single_locus_historical_sample(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    for (j = 0; j < 2; j++) {
+        tsk_table_collection_clear(&tables);
+        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
 
-    msp_print_state(&msp, _devnull);
-    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(&msp);
-    msp_print_state(&msp, _devnull);
+        if (j == 0) {
+            ret = msp_set_simulation_model_hudson(&msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            ret = msp_set_simulation_model_dtwf(&msp, 100);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
 
-    CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
-    nodes = &msp.tables->nodes;
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(nodes->time[0], 0);
-    CU_ASSERT_EQUAL(nodes->time[1], 10);
-    CU_ASSERT_TRUE(nodes->time[2] > 10);
+        msp_print_state(&msp, _devnull);
+        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_verify(&msp);
+        msp_print_state(&msp, _devnull);
 
-    CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
-    edges = &msp.tables->edges;
-    CU_ASSERT_EQUAL(edges->left[0], 0);
-    CU_ASSERT_EQUAL(edges->right[0], 1);
-    CU_ASSERT_EQUAL(edges->parent[0], 2);
-    CU_ASSERT_EQUAL(edges->left[1], 0);
-    CU_ASSERT_EQUAL(edges->right[1], 1);
-    CU_ASSERT_EQUAL(edges->parent[1], 2);
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
+        nodes = &msp.tables->nodes;
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(nodes->time[0], 0);
+        CU_ASSERT_EQUAL(nodes->time[1], 10);
+        CU_ASSERT_TRUE(nodes->time[2] > 10);
 
-    ret = msp_free(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
+        edges = &msp.tables->edges;
+        CU_ASSERT_EQUAL(edges->left[0], 0);
+        CU_ASSERT_EQUAL(edges->right[0], 1);
+        CU_ASSERT_EQUAL(edges->parent[0], 2);
+        CU_ASSERT_EQUAL(edges->left[1], 0);
+        CU_ASSERT_EQUAL(edges->right[1], 1);
+        CU_ASSERT_EQUAL(edges->parent[1], 2);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
     recomb_map_free(&recomb_map);
@@ -338,7 +349,7 @@ test_single_locus_historical_sample_start_time(void)
     tsk_edge_table_t *edges;
     tsk_node_table_t *nodes;
     uint32_t n = 2;
-    size_t j;
+    size_t j, model;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     double start_times[] = {0, 2, 10, 10.0001, 1000};
@@ -351,44 +362,53 @@ test_single_locus_historical_sample_start_time(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 0; j < sizeof(start_times) / sizeof(double); j++) {
+    for (model = 0; model < 2; model++) {
+        for (j = 0; j < sizeof(start_times) / sizeof(double); j++) {
 
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_start_time(&msp, start_times[j]);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_initialise(&msp);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(msp.time, start_times[j]);
+            ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+            CU_ASSERT_EQUAL(ret, 0);
+            if (model == 0) {
+                ret = msp_set_simulation_model_hudson(&msp, 0.25);
+                CU_ASSERT_EQUAL(ret, 0);
+            } else {
+                ret = msp_set_simulation_model_dtwf(&msp, 100);
+                CU_ASSERT_EQUAL(ret, 0);
+            }
+            ret = msp_set_start_time(&msp, start_times[j]);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_initialise(&msp);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(msp.time, start_times[j]);
 
-        msp_print_state(&msp, _devnull);
-        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-        CU_ASSERT_EQUAL(ret, 0);
-        /* msp_print_state(&msp, stdout); */
-        msp_verify(&msp);
-        /* msp_print_state(&msp, _devnull); */
+            msp_print_state(&msp, _devnull);
+            ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+            CU_ASSERT_EQUAL(ret, 0);
+            /* msp_print_state(&msp, stdout); */
+            msp_verify(&msp);
+            /* msp_print_state(&msp, _devnull); */
 
-        CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
-        nodes = &msp.tables->nodes;
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(nodes->time[0], 0);
-        CU_ASSERT_EQUAL(nodes->time[1], 10);
-        CU_ASSERT_TRUE(nodes->time[2] > 10);
-        CU_ASSERT_TRUE(nodes->time[2] > start_times[j]);
+            CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
+            nodes = &msp.tables->nodes;
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL(nodes->time[0], 0);
+            CU_ASSERT_EQUAL(nodes->time[1], 10);
+            CU_ASSERT_TRUE(nodes->time[2] > 10);
+            CU_ASSERT_TRUE(nodes->time[2] > start_times[j]);
 
-        CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
-        edges = &msp.tables->edges;
-        CU_ASSERT_EQUAL(edges->left[0], 0);
-        CU_ASSERT_EQUAL(edges->right[0], 1);
-        CU_ASSERT_EQUAL(edges->parent[0], 2);
-        CU_ASSERT_EQUAL(edges->left[1], 0);
-        CU_ASSERT_EQUAL(edges->right[1], 1);
-        CU_ASSERT_EQUAL(edges->parent[1], 2);
+            CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
+            edges = &msp.tables->edges;
+            CU_ASSERT_EQUAL(edges->left[0], 0);
+            CU_ASSERT_EQUAL(edges->right[0], 1);
+            CU_ASSERT_EQUAL(edges->parent[0], 2);
+            CU_ASSERT_EQUAL(edges->left[1], 0);
+            CU_ASSERT_EQUAL(edges->right[1], 1);
+            CU_ASSERT_EQUAL(edges->parent[1], 2);
 
-        ret = msp_free(&msp);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = tsk_table_collection_clear(&tables);
-        CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_free(&msp);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = tsk_table_collection_clear(&tables);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
     }
     gsl_rng_free(rng);
     recomb_map_free(&recomb_map);
