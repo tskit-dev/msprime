@@ -281,12 +281,14 @@ test_single_locus_historical_sample(void)
     int ret, j;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 10.0}};
+    sample_t samples[] = {{0, 0.0}, {0, 101.0}};
     tsk_edge_table_t *edges;
     tsk_node_table_t *nodes;
     uint32_t n = 2;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
+
+    gsl_rng_set(rng, 5);
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
@@ -294,7 +296,7 @@ test_single_locus_historical_sample(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 0; j < 2; j++) {
+    for (j = 1; j < 2; j++) {
         tsk_table_collection_clear(&tables);
         ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
@@ -319,8 +321,8 @@ test_single_locus_historical_sample(void)
         nodes = &msp.tables->nodes;
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(nodes->time[0], 0);
-        CU_ASSERT_EQUAL(nodes->time[1], 10);
-        CU_ASSERT_TRUE(nodes->time[2] > 10);
+        CU_ASSERT_EQUAL(nodes->time[1], 101.0);
+        CU_ASSERT_TRUE(nodes->time[2] > 101.0);
 
         CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
         edges = &msp.tables->edges;
