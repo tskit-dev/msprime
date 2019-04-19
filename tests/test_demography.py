@@ -1482,10 +1482,11 @@ class HistoricalSamplingMixin(object):
             ts = msprime.simulate(
                 Ne=N,
                 model=self.model,
-                recombination_rate=recombination_rate,
+                recombination_map=msprime.RecombinationMap.uniform_map(
+                    num_loci=1, length=1, rate=recombination_rate),
                 samples=[
                     msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
-                random_seed=5)
+                random_seed=3)
             for t in ts.trees():
                 self.assertEqual(t.get_time(0), 0)
                 self.assertEqual(t.get_time(1), sampling_time)
@@ -1549,23 +1550,6 @@ class HistoricalSamplingMixin(object):
         self.assertEqual(time[n - 1], 0)
         # Allow it to be within 10 coalescent time units.
         self.assertLess(time[-1], sampling_time + 10 * N)
-
-    def test_sampling_time_invariance(self):
-        for N in [10, 100, 128]:
-            offset = None
-            # The difference between the sampling time and the coalescence
-            # should be invariant.
-            for sampling_time in [0, 10, 20, 50]:
-                samples = [msprime.Sample(0, sampling_time), msprime.Sample(0, 0)]
-                ts = msprime.simulate(
-                    Ne=N, samples=samples, model=self.model, random_seed=2)
-                time = [node.time for node in ts.nodes()]
-                self.assertEqual(time[0], sampling_time)
-                self.assertEqual(time[1], 0)
-                if offset is None:
-                    offset = time[2] - sampling_time
-                else:
-                    self.assertAlmostEqual(offset, time[2] - sampling_time)
 
     def test_start_time_invariance(self):
         for N in [10, 100, 128]:
@@ -1651,8 +1635,24 @@ class HistoricalSamplingMixin(object):
 class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
     model = "hudson"
 
+    def test_sampling_time_invariance(self):
+        for N in [10, 100, 128]:
+            offset = None
+            # The difference between the sampling time and the coalescence
+            # should be invariant.
+            for sampling_time in [0, 10, 20, 50]:
+                samples = [msprime.Sample(0, sampling_time), msprime.Sample(0, 0)]
+                ts = msprime.simulate(
+                    Ne=N, samples=samples, model=self.model, random_seed=2)
+                time = [node.time for node in ts.nodes()]
+                self.assertEqual(time[0], sampling_time)
+                self.assertEqual(time[1], 0)
+                if offset is None:
+                    offset = time[2] - sampling_time
+                else:
+                    self.assertAlmostEqual(offset, time[2] - sampling_time)
 
-@unittest.skip("Problems with DTWF")
+
 class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMixin):
     model = "dtwf"
 

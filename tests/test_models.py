@@ -283,3 +283,45 @@ class TestMixedModels(unittest.TestCase):
         coalescent_times = times[times > t]
         self.assertGreater(coalescent_times.shape[0], 0)
         self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))
+
+    def test_wf_hudson_recombinatation(self):
+        Ne = 100
+        t = 100
+        ts = msprime.simulate(
+            sample_size=10,
+            model=msprime.DiscreteTimeWrightFisher(Ne),
+            recombination_rate=0.1,
+            demographic_events=[
+                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))],
+            random_seed=2)
+        tree = ts.first()
+        self.assertEqual(tree.num_roots, 1)
+        times = ts.tables.nodes.time
+        dtwf_times = times[np.logical_and(times > 0, times < t)]
+        self.assertGreater(dtwf_times.shape[0], 0)
+        self.assertTrue(np.all(dtwf_times == np.floor(dtwf_times)))
+        coalescent_times = times[times > t]
+        self.assertGreater(coalescent_times.shape[0], 0)
+        self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))
+
+    def test_wf_hudson_back_and_forth(self):
+        Ne = 100
+        t1 = 100
+        t2 = 200
+        ts = msprime.simulate(
+            sample_size=10,
+            model=msprime.DiscreteTimeWrightFisher(Ne),
+            recombination_rate=0.1,
+            demographic_events=[
+                msprime.SimulationModelChange(t1, msprime.StandardCoalescent(Ne)),
+                msprime.SimulationModelChange(t2, msprime.DiscreteTimeWrightFisher(Ne))],
+            random_seed=2)
+        tree = ts.first()
+        self.assertEqual(tree.num_roots, 1)
+        times = ts.tables.nodes.time
+        dtwf_times = times[np.logical_and(times > 0, times < t1, times > t2)]
+        self.assertGreater(dtwf_times.shape[0], 0)
+        self.assertTrue(np.all(dtwf_times == np.floor(dtwf_times)))
+        coalescent_times = times[np.logical_and(times > t1, times < t2)]
+        self.assertGreater(coalescent_times.shape[0], 0)
+        self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))

@@ -2824,7 +2824,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         }
 
         if (self->next_sampling_event < self->num_sampling_events) {
-            if (self->sampling_events[self->next_sampling_event].time >= self->time) {
+            if (self->sampling_events[self->next_sampling_event].time <= self->time) {
                 se = self->sampling_events + self->next_sampling_event;
                 ret = msp_insert_sample(self, se->sample, se->population_id);
                 if (ret != 0) {
