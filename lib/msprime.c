@@ -3074,14 +3074,18 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     simulation_model_t *model = &self->model;
     double scaled_time = model->generations_to_model_time(model, max_time);
 
-    /* printf("Running until %f generations = %f scaled time\n", max_time, */
-    /*         scaled_time); */
-
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
     }
     if (self->state != MSP_STATE_SIMULATING) {
         ret = MSP_ERR_BAD_STATE;
+        goto out;
+    }
+    if (self->store_full_arg && self->model.type != MSP_MODEL_HUDSON) {
+        /* We currently only support the full ARG recording on the standard
+         * coalescent. The SMC models are also tricky because they required
+         * 'cancelling' of events. */
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
     if (self->model.type == MSP_MODEL_DTWF) {
@@ -3896,10 +3900,6 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double pr
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->model.type != MSP_MODEL_HUDSON) {
-        ret = MSP_ERR_BAD_MODEL;
-        goto out;
-    }
     ret = msp_add_demographic_event(self, time, &de);
     if (ret != 0) {
         goto out;
@@ -4073,10 +4073,6 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     }
     if (strength < 0.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (self->model.type != MSP_MODEL_HUDSON) {
-        ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
     ret = msp_add_demographic_event(self, time, &de);
@@ -4300,13 +4296,6 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
     avl_tree_t *ancestors, Q[4]; /* MSVC won't let us use num_pots here */
     avl_node_t *x_node, *y_node;
     segment_t *x, *y;
-
-    /* We need to be able to rewind the ARG events to be able to support
-     * full ARG recording. */
-    if (self->store_full_arg) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
 
     ancestors = &self->populations[pop_id].ancestors[label];
     if (gsl_rng_uniform(self->rng) < (1 / (1.0 + self->model.params.dirac_coalescent.c))) {
@@ -4559,17 +4548,9 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     segment_t *x, *y;
     double beta_x;
 
-    /* We need to be able to rewind the ARG events to be able to support
-     * full ARG recording. */
-    if (self->store_full_arg) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
-
     for (j = 0; j < 5; j++){
         avl_init_tree(&Q[j], cmp_segment_queue, NULL);
     }
-
     ancestors = &self->populations[pop_id].ancestors[label];
     /* Choose x and y */
     n = avl_count(ancestors);

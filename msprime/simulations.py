@@ -1140,6 +1140,9 @@ class SimulationModel(object):
     def get_ll_representation(self):
         return {"name": self.name, "population_size": self.population_size}
 
+    def __str__(self):
+        return "{}(population_size={})".format(self.name, self.population_size)
+
 
 class StandardCoalescent(SimulationModel):
     """
@@ -1240,7 +1243,7 @@ class DemographyDebugger(object):
     """
     def __init__(
             self, Ne=1, population_configurations=None, migration_matrix=None,
-            demographic_events=[]):
+            demographic_events=[], model="hudson"):
         self._precision = 3
         # Make sure that we have a sample size of at least 2 so that we can
         # initialise the simulator.
@@ -1253,14 +1256,14 @@ class DemographyDebugger(object):
             for pop_config in population_configurations:
                 pop_config.sample_size = 2
         simulator = simulator_factory(
-            sample_size=sample_size, Ne=Ne,
+            sample_size=sample_size, model=model, Ne=Ne,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
         # TODO implement the model change events here.
         assert len(simulator.model_change_events) == 0
-        self._make_epochs(
-            simulator, sorted(demographic_events, key=lambda e: e.time))
+        self._make_epochs(simulator, sorted(demographic_events, key=lambda e: e.time))
+        self.simulation_model = simulator.model
 
         if population_configurations is not None:
             # Restore the saved sample sizes.
@@ -1353,6 +1356,7 @@ class DemographyDebugger(object):
         """
         Prints a summary of the history of the populations.
         """
+        print("Model = ", self.simulation_model)
         for epoch in self.epochs:
             if len(epoch.demographic_events) > 0:
                 print("Events @ generation {}".format(epoch.start_time), file=output)
