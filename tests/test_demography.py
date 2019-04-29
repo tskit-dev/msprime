@@ -38,12 +38,14 @@ class TestTimeTravelErrors(unittest.TestCase):
     """
     def test_multiple_bottlenecks(self):
         with self.assertRaises(_msprime.LibraryError):
-            msprime.simulate(
-                sample_size=100,
-                demographic_events=[
-                    msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.75),
-                    msprime.SimpleBottleneck(time=0.1, population=0, proportion=1.0)],
-                random_seed=1)
+            for model in ["hudson", "smc", msprime.DiscreteTimeWrightFisher(10)]:
+                msprime.simulate(
+                    model=model,
+                    sample_size=100,
+                    demographic_events=[
+                        msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.75),
+                        msprime.SimpleBottleneck(time=0.1, population=0, proportion=1.0)],
+                    random_seed=1)
 
     def test_tiny_population_size(self):
         # Derived from bug report in #570.
@@ -835,7 +837,6 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(list(ts.samples(0)), [0])
         self.assertEqual(list(ts.samples(1)), [1])
 
-    @unittest.skip("Recomb map broken")
     def test_migration_rate_directionality_from_ts(self):
         tables = msprime.TableCollection(1)
         for _ in range(3):
@@ -893,7 +894,6 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(ts.node(0).population, 0)
         self.assertEqual(ts.node(1).population, num_demes - 1)
 
-    @unittest.skip("Recomb map broken")
     def test_many_demes_from_ts(self):
         num_demes = 300
         tables = msprime.TableCollection(1)
@@ -1014,7 +1014,6 @@ class TestMigrationRecords(unittest.TestCase):
             random_seed=1, record_migrations=True)
         self.verify_two_pops_single_sample(ts, t)
 
-    @unittest.skip("Recomb map broken")
     def test_two_pops_single_sample_from_ts(self):
         tables = msprime.TableCollection(1)
         tables.nodes.add_row(
@@ -1105,7 +1104,6 @@ class TestMigrationRecords(unittest.TestCase):
             random_seed=1, record_migrations=True)
         self.verify_two_pops_asymmetric_migrations(ts)
 
-    @unittest.skip("Recomb map broken")
     def test_two_pops_asymmetric_migrations_from_ts(self):
         tables = msprime.TableCollection(1)
         for _ in range(10):
