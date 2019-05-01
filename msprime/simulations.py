@@ -1338,6 +1338,21 @@ class Epoch(object):
         return repr(self.__dict__)
 
 
+def _matrix_exponential(A):
+    """
+    Returns the matrix exponential of A.
+    https://en.wikipedia.org/wiki/Matrix_exponential
+    Note: this is not a general purpose method and is only intended for use within
+    msprime.
+    """
+
+    d, Y = np.linalg.eig(A)
+    Yinv = np.linalg.pinv(Y)
+    D = np.diag(np.exp(d))
+    B = np.matmul(Y, np.matmul(D, Yinv))
+    return B
+
+
 class DemographyDebugger(object):
     """
     A class to facilitate debugging of population parameters and migration
@@ -1345,7 +1360,10 @@ class DemographyDebugger(object):
     """
     def __init__(
             self, Ne=1, population_configurations=None, migration_matrix=None,
-            demographic_events=[], model="hudson"):
+            demographic_events=None, model='hudson'):
+        if demographic_events is None:
+            demographic_events = []
+        self.demographic_events = demographic_events
         self._precision = 3
         # Make sure that we have a sample size of at least 2 so that we can
         # initialise the simulator.
@@ -1470,6 +1488,193 @@ class DemographyDebugger(object):
             print("=" * len(s), file=output)
             self._print_populations(epoch, output)
             print(file=output)
+
+    def population_size_trajectory(self, steps):
+        """
+        This function returns an array of per-population effective population sizes,
+        as defined by the demographic model. These are just the `population_size`
+        parameters of the model, modified by any population growth rates.
+        The sizes are computed at the time points given by `steps`.
+
+        :param list steps: List of times ago at which the population
+            size will be computed.
+
+        :return: Returns a numpy array of population sizes, with one column per
+            population, whose [i,j]th entry is the size of population
+            j at time steps[i] ago.
+        """
+        num_pops = self.num_populations
+        N_t = np.zeros([len(steps), num_pops])
+        for j, t in enumerate(steps):
+            N, _ = self.pop_size_and_migration_at_t(t)
+            N_t[j] = N
+        return N_t
+
+    def coalescence_rate_trajectory(self, steps, num_samples, min_pop_size=1,
+                                    double_step_validation=True):
+        """
+        This function will calculate the mean coalescence rates and
+        proportions of uncoalesced lineages between the
+        lineages of the sample configuration provided in `num_samples`,
+        at each of the times ago listed by steps, in this demographic model.
+        The coalescence rate at time t in the past is the average rate
+        of coalescence of as-yet-uncoalesed lineages, computed as follows:
+        let p(t) be the probability that the lineages of a randomly
+        chosen pair of samples has not yet coalesced by time t,
+        let p(z,t) be the probability that the lineages of a randomly
+        chosen pair of samples has not yet coalesced by time t *and* are
+        both in population z, and let N(z,t) be the diploid effective
+        population size of population z at time t. Then the mean coalescence
+        rate at time t is r(t) = (sum_z p(z,t) / (2 * N(z,t) ) / p(t).
+        The computation is done approximating population size trajetories
+        with piecewise constant trajectories between each of the steps.
+        For this to be accurate, the distance between the steps
+        must be small enough so that (a) short epochs
+        (e.g., bottlenecks) are not missed, and (b) populations do not
+        change in size too much over that time, if they are growing or shrinking.
+        "This function optionally provides a simple check of this approximation
+        by recomputing the coalescence rates on a grid of steps twice as fine and
+        throwing a warning if the resulting values do not match to a relative
+        tolerance of 0.001.
+
+        :param list steps: The times ago at which coalescence rates will be computed.
+
+        :param list num_samples: is a list of the same length as the number
+            of populations, so that `num_samples[j]` is the number of sampled
+            chromosomes in subpopulation `j`.
+
+        :param int min_pop_size: is the smallest allowed population size during
+            computation of coalescent rates (i.e., coalescence rates are actually
+            1 / (2 * max(min_pop_size, N(z,t))). Spurious very small population sizes
+            can occur in models where populations grow exponentially but are unused
+            before some time in the past, and lead to floating point error.
+            This should be set to a value smaller than the smallest
+            desired population size in the model.
+
+        :param bool double_step_validation: Whether to perform the check that
+            step sizes are sufficiently small, as described above. This is highly
+            recommended, and will take at most four times the computation.
+
+        :return: a tuple of arrays whose jth elements, respectively, are the
+            coalescence rate at the jth time point (denoted r(t[j]) above),
+            and the probablility that a randomly chosen pair of lineages has
+            not yet coalesced (denoted p(t[j]) above).
+
+        :rtype: class:'tuple'
+        """
+
+        num_pops = self.num_populations
+        if not len(num_samples) == num_pops:
+            raise ValueError(
+                "`num_samples` must have the same length as the number of populations")
+        if not np.all(np.diff(steps) > 0):
+            raise ValueError("`steps` must be a sequence of increasing times.")
+        if np.any(steps == 0):
+            raise ValueError("`steps` must be non-zero")
+        r, p_t = self._calculate_coalescence_rate_trajectory(
+            steps=steps,
+            num_samples=num_samples,
+            min_pop_size=min_pop_size)
+        if double_step_validation:
+            inter = steps[1:] + np.diff(steps)/2
+            double_steps = sorted(np.concatenate([steps[1:], inter]))
+            rd, p_td = self._calculate_coalescence_rate_trajectory(
+                steps=double_steps,
+                num_samples=num_samples,
+                min_pop_size=min_pop_size)
+            r_prediction_close = np.allclose(r[1:], rd[::2], rtol=1e-3)
+            p_prediction_close = np.allclose(p_t[1:], p_td[::2], rtol=1e-3)
+            if not (r_prediction_close and p_prediction_close):
+                # should we use the `warning` package?
+                raise UserWarning(
+                    "Doubling the number of steps has resulted in different"
+                    " predictions, please re-run with smaller step sizes to ensure"
+                    " numerical accuracy.")
+        return r, p_t
+
+    def _calculate_coalescence_rate_trajectory(self, steps, num_samples, min_pop_size):
+        """
+        Private function is used for doing all the calculation for
+        coalescence_rate_trajectory.
+        """
+        num_pops = self.num_populations
+        P = np.zeros([num_pops**2, num_pops**2])
+        IA = np.array(range(num_pops**2)).reshape([num_pops, num_pops])
+        Identity = np.eye(num_pops)
+        for x in range(num_pops):
+            for y in range(num_pops):
+                K_x = num_samples[x]
+                K_y = num_samples[y]
+                P[IA[x, y], IA[x, y]] = K_x * (K_y - (x == y))
+        P = P / np.sum(P)
+        epoch_breaks = [e.start_time for e in self.epochs]
+        steps_b = sorted(list(set(list(steps) + epoch_breaks)))
+        num_steps = len(steps_b)
+        r = np.zeros(num_steps)
+        p_t = np.zeros(num_steps)
+        mass_migration_objects = []
+        mass_migration_times = []
+        for demo in self.demographic_events:
+            if type(demo) == MassMigration:
+                mass_migration_objects.append(demo)
+                mass_migration_times.append(demo.time)
+        prev = 0
+        for j, time in enumerate(steps_b):
+            dt = time - prev
+            prev = time
+            N, M = self.pop_size_and_migration_at_t(time)
+            C = np.zeros([num_pops**2, num_pops**2])
+            for idx in range(num_pops):
+                C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
+            dM = np.diag([sum(s) for s in M])
+            G = (np.kron(M - dM, Identity) + np.kron(Identity, M - dM)) - C
+            if time in mass_migration_times:
+                idx = mass_migration_times.index(time)
+                a = mass_migration_objects[idx].source
+                b = mass_migration_objects[idx].dest
+                p = mass_migration_objects[idx].proportion
+                S = np.eye(num_pops**2, num_pops**2)
+                for x in range(num_pops):
+                    if x == a:
+                        S[IA[a, a], IA[a, b]] = S[IA[a, a], IA[b, a]] = p * (1 - p)
+                        S[IA[a, a], IA[b, b]] = p ** 2
+                        S[IA[a, a], IA[a, a]] = (1 - p) ** 2
+                    else:
+                        S[IA[x, a], IA[x, b]] = S[IA[a, x], IA[b, x]] = p
+                        S[IA[x, a], IA[x, a]] = S[IA[a, x], IA[a, x]] = 1 - p
+                P = np.matmul(P, S)
+            P = np.matmul(P, _matrix_exponential(dt * G))
+            p_t[j] = np.sum(P)
+            r[j] = np.sum(np.matmul(P, C)) / np.sum(P)
+        idx_counter = 0
+        diff_mask = []
+        for i in range(len(steps)):
+            if(steps[i] != steps_b[i+idx_counter]):
+                diff_mask.append(i+idx_counter)
+                idx_counter += 1
+        r = np.delete(r, diff_mask)
+        p_t = np.delete(p_t, diff_mask)
+        return r, p_t
+
+    def pop_size_and_migration_at_t(self, t):
+        """
+        Returns a tuple (N, M) of population sizes (N) and migration rates (M) at
+        time t ago.
+
+        :param float t: The time ago.
+
+        :return: A tuple of arrays, of the same form as the population sizes and
+            migration rate arrays of the demographic model.
+        """
+        j = 0
+        while self.epochs[j].end_time <= t:
+            j += 1
+        N = self.population_size_history[:, j]
+        for i, pop in enumerate(self.epochs[j].populations):
+            s = t - self.epochs[j].start_time
+            g = pop.growth_rate
+            N[i] *= np.exp(-1 * g * s)
+        return N, self.epochs[j].migration_matrix
 
     @property
     def population_size_history(self):
