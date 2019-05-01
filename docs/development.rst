@@ -209,11 +209,13 @@ Meson is best installed via ``pip``:
     $ python3 -m pip install meson --user
 
 Meson keeps all compiled binaries in a build directory (this has many advantages
-such as allowing multiple builds with different options to coexist). To set up
-the initial build directory, run
+such as allowing multiple builds with different options to coexist). It depends on
+a ``meson.build`` file which is in the ``lib`` directory. To set up the initial build
+directory, run
 
 .. code-block:: bash
 
+    $ cd lib 
     $ meson build
 
 To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
