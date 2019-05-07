@@ -1022,7 +1022,6 @@ test_single_sweep(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_single_sweep(msp, 1000.0,  49, num_steps, time, freqs);
         CU_ASSERT_EQUAL(ret, 0);
-        msp->model.params.single_sweep.trajectory.sweep_dt = dt;
         ret = msp_set_population_configuration(msp, 0, n, 0);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(msp);
@@ -1094,7 +1093,6 @@ test_single_sweep_growth(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_single_sweep(msp, 1000.0,  1, num_steps, time, freqs);
         CU_ASSERT_EQUAL(ret, 0);
-        msp->model.params.single_sweep.trajectory.sweep_dt = dt;
         ret = msp_set_population_configuration(msp, 0, n, growth_rate);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(msp);
@@ -1167,7 +1165,6 @@ test_single_sweep_recomb(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_single_sweep(msp, 1000.0,  1, num_steps, time, freqs);
         CU_ASSERT_EQUAL(ret, 0);
-        msp->model.params.single_sweep.trajectory.sweep_dt = dt;
         ret = msp_set_population_configuration(msp, 0, n, 0);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(msp);

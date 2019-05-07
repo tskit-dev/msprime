@@ -129,7 +129,6 @@ typedef struct {
         double *allele_frequency;
         double *time;
         size_t num_steps;
-        double sweep_dt;
     } trajectory;
 } single_sweep_t;
 
