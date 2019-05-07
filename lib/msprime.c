@@ -2365,25 +2365,9 @@ out:
     return ret;
 }
 
+/* Returns the size of the specified population at the specified time */
 static double
-msp_get_population_size(msp_t *self, population_t *pop)
-{
-    double ret = 0;
-    double alpha = pop->growth_rate;
-    double t = self->time;
-    double dt;
-
-    if (alpha == 0.0) {
-        ret = pop->initial_size;
-    } else {
-        dt = t - pop->start_time;
-        ret = pop->initial_size * exp(-alpha * dt);
-    }
-    return ret;
-}
-
-static double
-msp_get_population_size_time(population_t *pop, double t)
+get_population_size(population_t *pop, double t)
 {
     double ret = 0;
     double alpha = pop->growth_rate;
@@ -2397,6 +2381,7 @@ msp_get_population_size_time(population_t *pop, double t)
     }
     return ret;
 }
+
 /* Given the specified rate, return the waiting time until the next common ancestor
  * event for the specified population */
 static double
@@ -2619,7 +2604,7 @@ msp_dtwf_generation(msp_t *self)
         // is possible for populations to reach zero individuals before all
         // lineages coalesce. We round up to avoid this.
         N = (uint32_t) ceil(
-            msp_get_population_size(self, pop) * self->model.population_size);
+            get_population_size(pop, self->time) * self->model.population_size);
         if (N == 0) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
@@ -2883,9 +2868,13 @@ msp_single_sweep_initialise(msp_t *self, double switch_proba)
     avl_node_t *node, *next;
     avl_tree_t *pop;
 
-    /* Move ancestors to new labels.
-     * TODO probably need to limit model to single popn */
-    assert(self->num_populations == 1);
+    /* We only support one population and two labels for now */
+    if (self->num_populations != 1 || self->num_labels != 2) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+
+    /* Move ancestors to new labels. */
     for (j = 0; j < self->num_populations; j++) {
         assert(avl_count(&self->populations[j].ancestors[1]) == 0);
         pop = &self->populations[j].ancestors[0];
@@ -2963,8 +2952,7 @@ out:
  * trajectory array are ABSOLUTE with respect to the
  * simulation. we may want to alter this in the future */
 static int
-msp_run_single_sweep(msp_t *self, double max_time,
-        unsigned long max_events)
+msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
@@ -2977,14 +2965,12 @@ msp_run_single_sweep(msp_t *self, double max_time,
     int64_t num_links;
     unsigned long events = 0;
     label_id_t label;
-    double *time = model->params.single_sweep.trajectory.time; 
+    double *time = model->params.single_sweep.trajectory.time;
     double rec_rates[] = {0.0, 0.0};
     double sweep_pop_sizes[] = {0.0, 0.0};
     double event_prob, event_rand, tmp_rand, e_sum;
     double p_coal_b, p_coal_B, total_rate, sweep_pop_tot_rate;
 
-    assert(num_steps > 0);
-    assert(self->num_labels == 2); /* just assuming 2 labels for now */
     ret = msp_single_sweep_initialise(self, allele_frequency[0]);
     if (ret != 0) {
         goto out;
@@ -3008,11 +2994,13 @@ msp_run_single_sweep(msp_t *self, double max_time,
         event_prob = 1.0;
         event_rand = gsl_rng_uniform(self->rng);
         while (event_prob > event_rand && curr_step < num_steps) {
-            /* using pop sizes grabbed from msp_get_population_size_time */
-            p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1) ) * 0.5) / allele_frequency[curr_step] 
-                * sweep_dt / msp_get_population_size_time(&self->populations[0], time[curr_step]);
-            p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1) ) * 0.5) / (1.0 - allele_frequency[curr_step]) 
-                * sweep_dt / msp_get_population_size_time(&self->populations[0], time[curr_step]);
+            /* using pop sizes grabbed from get_population_size */
+            p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1) ) * 0.5)
+                / allele_frequency[curr_step]
+                * sweep_dt / get_population_size(&self->populations[0], time[curr_step]);
+            p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1) ) * 0.5)
+                / (1.0 - allele_frequency[curr_step])
+                * sweep_dt / get_population_size(&self->populations[0], time[curr_step]);
             sweep_pop_tot_rate = p_coal_b + p_coal_B + rec_rates[0] + rec_rates[1];
             total_rate = sweep_pop_tot_rate; /* doing this to build in generality if we want >1 pop */
             if (total_rate == 0) {
@@ -3025,7 +3013,7 @@ msp_run_single_sweep(msp_t *self, double max_time,
         }
         /* double check event happened and we haven't timed out */
         if (curr_step >= num_steps || self->time >= max_time) {
-            goto out;
+            break;
         }
 
         /*printf("\ncoal probs: %g %g rec_rates: %g %g  event_prob: %g tot rate: %g \n", p_coal_b,*/
@@ -4918,8 +4906,7 @@ single_sweep_model_free(simulation_model_t *model)
 
 int
 msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        uint32_t locus, size_t num_steps, double *time,
-        double *allele_frequency)
+        uint32_t locus, size_t num_steps, double *time, double *allele_frequency)
 {
     int ret = 0;
     size_t j;
@@ -4941,14 +4928,12 @@ msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
                 goto out;
             }
         }
-        /* TODO how do we interpret these time values? Are they relative to the
-         * current time, or absolute values?? */
         if (time[j] < 0) {
             ret = MSP_ERR_BAD_TRAJECTORY_TIME;
             goto out;
         }
         if (allele_frequency[j] < 0 || allele_frequency[j] > 1) {
-            ret = MSP_ERR_BAD_TRAJECTORY_TIME;
+            ret = MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY;
             goto out;
         }
     }
