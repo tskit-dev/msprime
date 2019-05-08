@@ -298,8 +298,7 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
 int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        uint32_t locus, size_t num_steps, double *time,
-        double *allele_frequency);
+        double position, size_t num_steps, double *time, double *allele_frequency);
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);

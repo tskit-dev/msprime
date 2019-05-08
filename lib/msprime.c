@@ -4909,15 +4909,17 @@ single_sweep_model_free(simulation_model_t *model)
 
 int
 msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        uint32_t locus, size_t num_steps, double *time, double *allele_frequency)
+        double position, size_t num_steps, double *time, double *allele_frequency)
 {
     int ret = 0;
     size_t j;
+    uint32_t locus;
     simulation_model_t *model = &self->model;
+    double L = self->recomb_map->sequence_length;
 
     /* Check the inputs to make sure they make sense */
-    if (locus >= self->num_loci) {
-        ret = MSP_ERR_BAD_SWEEP_LOCUS;
+    if (position < 0 || position >= L) {
+        ret = MSP_ERR_BAD_SWEEP_POSITION;
         goto out;
     }
     if (num_steps == 0) {
@@ -4941,6 +4943,10 @@ msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
         }
     }
 
+    ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, position, &locus);
+    if (ret != 0) {
+        goto out;
+    }
     ret = msp_set_simulation_model(self, MSP_MODEL_SINGLE_SWEEP, population_size);
     if (ret != 0) {
         goto out;

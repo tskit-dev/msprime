@@ -130,8 +130,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_INTEGRATION_FAILED:
             ret = "GSL numerical integration failed. Please check the stderr for details.";
             break;
-        case MSP_ERR_BAD_SWEEP_LOCUS:
-            ret = "Sweep locus must be between 0 and num_loci.";
+        case MSP_ERR_BAD_SWEEP_POSITION:
+            ret = "Sweep position must be between 0 and sequence length.";
             break;
         case MSP_ERR_BAD_TRAJECTORY_TIME:
             ret = "Time values must be > 0 and in increasing order.";

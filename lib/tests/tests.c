@@ -909,7 +909,7 @@ test_single_sweep_errors(void)
     CU_ASSERT_FATAL(rng != NULL);
     CU_ASSERT_FATAL(time != NULL);
     CU_ASSERT_FATAL(freqs != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 10.0, m);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, 10.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     memset(samples, 0, n * sizeof(sample_t));
@@ -922,9 +922,9 @@ test_single_sweep_errors(void)
 
     /* Errors in set simulation model */
     ret = msp_set_simulation_model_single_sweep(msp, 1000.0,  m, num_steps, time, freqs);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SWEEP_LOCUS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
     ret = msp_set_simulation_model_single_sweep(msp, 1000.0,  m + 1, num_steps, time, freqs);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SWEEP_LOCUS);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
     ret = msp_set_simulation_model_single_sweep(msp, 1000.0,  m / 2, 0, time, freqs);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EMPTY_TRAJECTORY);
     /* Bad trajectories */
@@ -987,7 +987,7 @@ test_single_sweep(void)
     CU_ASSERT_FATAL(rng != NULL);
     CU_ASSERT_FATAL(time != NULL);
     CU_ASSERT_FATAL(freqs != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 10.0, m);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, 10.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /*initialize test trajectory*/
@@ -1061,7 +1061,7 @@ test_single_sweep_growth(void)
     CU_ASSERT_FATAL(rng != NULL);
     CU_ASSERT_FATAL(time != NULL);
     CU_ASSERT_FATAL(freqs != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /*initialize test trajectory*/
@@ -1133,7 +1133,7 @@ test_single_sweep_recomb(void)
     CU_ASSERT_FATAL(rng != NULL);
     CU_ASSERT_FATAL(time != NULL);
     CU_ASSERT_FATAL(freqs != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /*initialize test trajectory*/
