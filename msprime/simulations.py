@@ -1179,6 +1179,16 @@ class ParametricSimulationModel(SimulationModel):
         return d
 
 
+class SingleSweep(ParametricSimulationModel):
+    # TODO document
+    name = "single_sweep"
+
+    def __init__(self, position, trajectory, population_size=1):
+        self.population_size = population_size
+        self.position = position
+        self.trajectory = trajectory
+
+
 class BetaCoalescent(ParametricSimulationModel):
     # TODO document.
     name = "beta"
