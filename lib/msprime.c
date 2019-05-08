@@ -2967,9 +2967,14 @@ msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
     double *time = model->params.single_sweep.trajectory.time;
     double rec_rates[] = {0.0, 0.0};
     double sweep_pop_sizes[] = {0.0, 0.0};
-    double event_prob, event_rand, tmp_rand, e_sum;
+    double event_prob, event_rand, tmp_rand, e_sum, pop_size;
     double p_coal_b, p_coal_B, total_rate, sweep_pop_tot_rate;
     double p_rec_b, p_rec_B;
+
+    /* Keep the compiler happy */
+    sweep_pop_tot_rate = 0;
+    p_coal_b = 0;
+    p_coal_B = 0;
 
     ret = msp_single_sweep_initialise(self, allele_frequency[0]);
     if (ret != 0) {
@@ -2996,12 +3001,11 @@ msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
         while (event_prob > event_rand && curr_step < num_steps) {
             sweep_dt = time[curr_step] - time[curr_step - 1];
             /* using pop sizes grabbed from get_population_size */
+            pop_size = get_population_size(&self->populations[0], time[curr_step]);
             p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1) ) * 0.5)
-                / allele_frequency[curr_step]
-                * sweep_dt / get_population_size(&self->populations[0], time[curr_step]);
+                / allele_frequency[curr_step] * sweep_dt / pop_size;
             p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1) ) * 0.5)
-                / (1.0 - allele_frequency[curr_step])
-                * sweep_dt / get_population_size(&self->populations[0], time[curr_step]);
+                / (1.0 - allele_frequency[curr_step]) * sweep_dt / pop_size;
             p_rec_b = rec_rates[0] * sweep_dt;
             p_rec_B = rec_rates[1] * sweep_dt;
             sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
