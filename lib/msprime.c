@@ -2365,12 +2365,12 @@ out:
     return ret;
 }
 
+/* Returns the size of the specified population at the specified time */
 static double
-msp_get_population_size(msp_t *self, population_t *pop)
+get_population_size(population_t *pop, double t)
 {
     double ret = 0;
     double alpha = pop->growth_rate;
-    double t = self->time;
     double dt;
 
     if (alpha == 0.0) {
@@ -2604,7 +2604,7 @@ msp_dtwf_generation(msp_t *self)
         // is possible for populations to reach zero individuals before all
         // lineages coalesce. We round up to avoid this.
         N = (uint32_t) ceil(
-            msp_get_population_size(self, pop) * self->model.population_size);
+            get_population_size(pop, self->time) * self->model.population_size);
         if (N == 0) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
@@ -2695,7 +2695,6 @@ msp_store_simultaneous_migration_events(msp_t *self, avl_tree_t *nodes,
     node = avl_at(source, j);
     assert(node != NULL);
 
-    // Move to temp storage for actual migration later
     avl_unlink_node(source, node);
     node = avl_insert_node(nodes, node);
     assert(node != NULL);
@@ -2869,6 +2868,12 @@ msp_single_sweep_initialise(msp_t *self, double switch_proba)
     avl_node_t *node, *next;
     avl_tree_t *pop;
 
+    /* We only support one population and two labels for now */
+    if (self->num_populations != 1 || self->num_labels != 2) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+
     /* Move ancestors to new labels. */
     for (j = 0; j < self->num_populations; j++) {
         assert(avl_count(&self->populations[j].ancestors[1]) == 0);
@@ -2905,74 +2910,156 @@ msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
     return ret;
 }
 
-static int
+int
 msp_single_sweep_recombination_event(msp_t *self, label_id_t label,
-        uint32_t MSP_UNUSED(sweep_locus), double population_frequency)
+        uint32_t sweep_locus, double population_frequency)
 {
     int ret = 0;
     segment_t *lhs, *rhs;
     label_id_t new_label;
+    double r;
 
     ret = msp_recombination_event(self, label, &lhs, &rhs);
     if (ret != 0) {
         goto out;
     }
     /* NOTE: we can look at rhs->left when we compare to the sweep site. */
-
-    /* LHS and RHS are the two resulting individuals */
-    if (gsl_rng_uniform(self->rng) < population_frequency) {
-        new_label = (label + 1) % 2;
-        ret = msp_change_label(self, lhs, new_label);
-        if (ret != 0) {
-            goto out;
+    r = gsl_rng_uniform(self->rng);
+    if (sweep_locus < rhs->left) {
+        if (r < 1.0 - population_frequency) {
+            /* move rhs to other population */
+            new_label = (label + 1) % 2;
+            ret = msp_change_label(self, rhs, new_label);
+            if (ret != 0) {
+                goto out;
+            }
         }
-        /* TODO actual logic here --- obviously this is nonsense. But it should
-         * be possible to use calls to msp_change_label here for all you need
-         */
+    } else {
+        if (r < 1.0 - population_frequency) {
+            /* move lhs to other population */
+            new_label = (label + 1) % 2;
+            ret = msp_change_label(self, lhs, new_label);
+            if (ret != 0) {
+                goto out;
+            }
+        }
     }
-
 out:
     return ret;
 }
 
+/* big current assumption-- times that come in through
+ * trajectory array are ABSOLUTE with respect to the
+ * simulation. we may want to alter this in the future */
 static int
-msp_run_single_sweep(msp_t *self, double MSP_UNUSED(max_time),
-        unsigned long MSP_UNUSED(max_events))
+msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
     size_t num_steps = model->params.single_sweep.trajectory.num_steps;
+    size_t curr_step = 0;
     double *allele_frequency = model->params.single_sweep.trajectory.allele_frequency;
     uint32_t sweep_locus = model->params.single_sweep.locus;
-    size_t j;
-    /* double *time = model->params.single_sweep.trajectory.time; */
+    double sweep_dt;
+    size_t j = 0;
+    int64_t num_links;
+    unsigned long events = 0;
+    label_id_t label;
+    double *time = model->params.single_sweep.trajectory.time;
+    double rec_rates[] = {0.0, 0.0};
+    double sweep_pop_sizes[] = {0.0, 0.0};
+    double event_prob, event_rand, tmp_rand, e_sum;
+    double p_coal_b, p_coal_B, total_rate, sweep_pop_tot_rate;
+    double p_rec_b, p_rec_B;
 
-
-    assert(num_steps > 0);
-    assert(self->num_labels == 2); /* just assuming 2 labels for now */
     ret = msp_single_sweep_initialise(self, allele_frequency[0]);
     if (ret != 0) {
         goto out;
     }
-    /* Obviously this is all utter rubbish, but hopefully these are the building
-     * blocks that you need??? */
-    for (j = 1; j < num_steps; j++) {
-        /* This will need to be some tiny value, or else the trees won't make sense */
-        self->time += 1e-6;
-        printf("j = %d ======================\n",(int)  j);
-        if (j % 3 == 1) {
-            /* Resolves to msp_std_common_ancestor_event(self, pop_id, label) */
-            ret = self->common_ancestor_event(self, 0, 1);
-        } else if (j % 3 == 2) {
-            ret = msp_single_sweep_recombination_event(self, 0, sweep_locus,
-                    allele_frequency[j]);
-        } else {
-            /* When we want to do an ordinary recombination event */
-            ret = msp_recombination_event(self, 0, NULL, NULL);
+
+    while (msp_get_num_ancestors(self) > 0 && self->time < max_time
+            && events < max_events && curr_step < num_steps) {
+        events++;
+        /* quick sanity check; also set pop sizes & rec_rates */
+        for (j = 0; j < self->num_labels; j++) {
+            label = (label_id_t) j;
+            num_links = fenwick_get_total(&self->links[label]);
+            ret = msp_sanity_check(self, num_links);
+            sweep_pop_sizes[j] = (double) avl_count(&self->populations[0].ancestors[label]);
+            rec_rates[j] = (double) num_links * self->recombination_rate;
+            if (ret != 0) {
+                goto out;
+            }
         }
-        msp_verify(self);
+        curr_step++;
+        event_prob = 1.0;
+        event_rand = gsl_rng_uniform(self->rng);
+        while (event_prob > event_rand && curr_step < num_steps) {
+            sweep_dt = time[curr_step] - time[curr_step - 1];
+            /* using pop sizes grabbed from get_population_size */
+            p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1) ) * 0.5)
+                / allele_frequency[curr_step]
+                * sweep_dt / get_population_size(&self->populations[0], time[curr_step]);
+            p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1) ) * 0.5)
+                / (1.0 - allele_frequency[curr_step])
+                * sweep_dt / get_population_size(&self->populations[0], time[curr_step]);
+            p_rec_b = rec_rates[0] * sweep_dt;
+            p_rec_B = rec_rates[1] * sweep_dt;
+            sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
+            total_rate = sweep_pop_tot_rate; /* doing this to build in generality if we want >1 pop */
+            if (total_rate == 0) {
+                goto out;
+            }
+            /*printf("\ncoal probs: %g %g rec_rates: %g %g  event_prob: %g tot rate: %g \n", p_coal_b,*/
+                    /*p_coal_B, rec_rates[0], rec_rates[1], event_prob, sweep_pop_tot_rate);*/
+            event_prob *= 1.0 - total_rate;
+            curr_step++;
+        }
+        /* double check event happened and we haven't timed out */
+        if (curr_step >= num_steps || self->time >= max_time) {
+            break;
+        }
+
+        /*printf("\ncoal probs: %g %g rec_rates: %g %g  event_prob: %g tot rate: %g \n", p_coal_b,*/
+                /*p_coal_B, rec_rates[0], rec_rates[1], event_prob, sweep_pop_tot_rate);*/
+        /* passed check, choose event */
+        tmp_rand = gsl_rng_uniform(self->rng);
+        e_sum = p_coal_b;
+        self->time = time[curr_step - 1];
+        if (tmp_rand < e_sum / sweep_pop_tot_rate) {
+            /* coalescent in b background */
+            //printf("coal b\n");
+            ret = self->common_ancestor_event(self, 0, 0);
+        } else {
+            e_sum += p_coal_B;
+            if (tmp_rand < e_sum / sweep_pop_tot_rate) {
+                /* coalescent in B background */
+                //printf("coal B\n");
+                ret = self->common_ancestor_event(self, 0, 1);
+            } else {
+                e_sum += rec_rates[0];
+                if (tmp_rand < e_sum / sweep_pop_tot_rate) {
+                    /* recomb in b background */
+                    //printf("recomb event b\n");
+                    ret = msp_single_sweep_recombination_event(self, 0, sweep_locus,
+                        (1.0 - allele_frequency[curr_step - 1]));
+                } else {
+                    /* recomb in B background */
+                    //printf("recomb event B\n");
+                    ret = msp_single_sweep_recombination_event(self, 1, sweep_locus,
+                        allele_frequency[curr_step - 1]);
+                }
+            }
+        }
+        if (ret != 0){
+            goto out;
+        }
+        /*msp_print_state(self, stdout);*/
+        /*printf("step: %ld freq: %lf time: %lf num_anc: %ld sweep_pop_sizes[0]: %f sweep_pop_sizes[1]: %f\n",*/
+                /*curr_step, allele_frequency[curr_step - 1], self->time, msp_get_num_ancestors(self), sweep_pop_sizes[0],sweep_pop_sizes[1]);*/
+
     }
-    msp_print_state(self, stdout);
+    msp_verify(self);
 out:
     return ret;
 }
@@ -4823,8 +4910,7 @@ single_sweep_model_free(simulation_model_t *model)
 
 int
 msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        uint32_t locus, size_t num_steps, double *time,
-        double *allele_frequency)
+        uint32_t locus, size_t num_steps, double *time, double *allele_frequency)
 {
     int ret = 0;
     size_t j;
@@ -4846,14 +4932,12 @@ msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
                 goto out;
             }
         }
-        /* TODO how do we interpret these time values? Are they relative to the
-         * current time, or absolute values?? */
         if (time[j] < 0) {
             ret = MSP_ERR_BAD_TRAJECTORY_TIME;
             goto out;
         }
         if (allele_frequency[j] < 0 || allele_frequency[j] > 1) {
-            ret = MSP_ERR_BAD_TRAJECTORY_TIME;
+            ret = MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY;
             goto out;
         }
     }
