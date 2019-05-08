@@ -2822,16 +2822,6 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             }
         }
 
-        if (self->next_sampling_event < self->num_sampling_events) {
-            if (self->sampling_events[self->next_sampling_event].time <= self->time) {
-                se = self->sampling_events + self->next_sampling_event;
-                ret = msp_insert_sample(self, se->sample, se->population_id);
-                if (ret != 0) {
-                    goto out;
-                }
-                self->next_sampling_event++;
-            }
-        }
         if (self->next_demographic_event != NULL) {
             if (self->next_demographic_event->time <= self->time) {
                 // We should always be able to execute at the exact time
@@ -2848,6 +2838,17 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         ret = msp_dtwf_generation(self);
         if (ret != 0) {
             goto out;
+        }
+
+        if (self->next_sampling_event < self->num_sampling_events) {
+            if (self->sampling_events[self->next_sampling_event].time <= self->time) {
+                se = self->sampling_events + self->next_sampling_event;
+                ret = msp_insert_sample(self, se->sample, se->population_id);
+                if (ret != 0) {
+                    goto out;
+                }
+                self->next_sampling_event++;
+            }
         }
     }
 out:
@@ -3220,6 +3221,8 @@ msp_debug_demography(msp_t *self, double *end_time)
     double t = GSL_POSINF;
     int first_call = 0;
     simulation_model_t *model = &self->model;
+    demographic_event_t *de;
+    sampling_event_t *se;
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_DEBUGGING;
@@ -3230,6 +3233,19 @@ msp_debug_demography(msp_t *self, double *end_time)
         goto out;
     }
     if (! first_call && self->next_demographic_event != NULL) {
+        de = self->next_demographic_event;
+
+        /* Add in historical samples more recent than next demographic event */
+        while (self->next_sampling_event < self->num_sampling_events
+                && self->sampling_events[self->next_sampling_event].time <= de->time) {
+            se = self->sampling_events + self->next_sampling_event;
+            ret = msp_insert_sample(self, se->sample, se->population_id);
+            if (ret != 0) {
+                goto out;
+            }
+            self->next_sampling_event++;
+        }
+
         ret = msp_apply_demographic_events(self);
         if (ret != 0) {
             goto out;
