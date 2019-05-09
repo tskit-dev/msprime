@@ -105,6 +105,30 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
         ts = msprime.simulate(10, random_seed=3, __tmp_max_time=0.0)
         self.verify(ts)
 
+    def test_dtwf_recombination(self):
+        ts = msprime.simulate(
+            10, Ne=100, model="dtwf", random_seed=2, __tmp_max_time=100,
+            recombination_rate=0.1)
+        self.assertGreater(ts.num_trees, 1)
+        self.verify(ts)
+
+    def test_dtwf_no_recombination(self):
+        ts = msprime.simulate(
+            10, Ne=100, model="dtwf", random_seed=2, __tmp_max_time=100)
+        self.verify(ts)
+
+    def test_dtwf_no_recombination_time_zero(self):
+        ts = msprime.simulate(
+            10, Ne=100, model="dtwf", random_seed=2, __tmp_max_time=0)
+        self.verify(ts)
+
+    def test_mixed_models_no_recombination(self):
+        ts = msprime.simulate(
+            10, Ne=10, model="dtwf", random_seed=2, __tmp_max_time=100,
+            demographic_events=[
+                msprime.SimulationModelChange(10, msprime.StandardCoalescent(1))])
+        self.verify(ts)
+
     def test_wright_fisher_zero_generations(self):
         ts = get_wf_base(10, 0)
         self.verify(ts)
@@ -472,7 +496,7 @@ class TestBasicFunctionality(unittest.TestCase):
             self.verify_simulation_completed(final_ts)
 
 
-class TestBaseEquivalance(unittest.TestCase):
+class BaseEquivalanceMixin(object):
     """
     Check that it's equivalent to send a from_ts with no topology to running
     a straight simulation.
@@ -482,7 +506,8 @@ class TestBaseEquivalance(unittest.TestCase):
             recombination_map=None):
         ts1 = msprime.simulate(
             n, random_seed=seed, recombination_rate=recombination_rate,
-            length=length, recombination_map=recombination_map)
+            length=length, recombination_map=recombination_map,
+            model=self.model)
         tables = msprime.TableCollection(ts1.sequence_length)
         tables.populations.add_row()
         for _ in range(n):
@@ -491,7 +516,8 @@ class TestBaseEquivalance(unittest.TestCase):
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(), start_time=0, random_seed=seed,
             recombination_rate=recombination_rate,
-            recombination_map=recombination_map)
+            recombination_map=recombination_map,
+            model=self.model)
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
         tables1.provenances.clear()
@@ -571,6 +597,14 @@ class TestBaseEquivalance(unittest.TestCase):
         tables1.provenances.clear()
         tables2.provenances.clear()
         self.assertEqual(tables1, tables2)
+
+
+class TestBaseEquivalanceHudson(BaseEquivalanceMixin, unittest.TestCase):
+    model = msprime.StandardCoalescent(1)
+
+
+class TestBaseEquivalanceWrightFisher(BaseEquivalanceMixin, unittest.TestCase):
+    model = msprime.DiscreteTimeWrightFisher(10)
 
 
 class TestDemography(unittest.TestCase):

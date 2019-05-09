@@ -1356,7 +1356,7 @@ class DemographyDebugger(object):
         """
         Prints a summary of the history of the populations.
         """
-        print("Model = ", self.simulation_model)
+        print("Model = ", self.simulation_model, file=output)
         for epoch in self.epochs:
             if len(epoch.demographic_events) > 0:
                 print("Events @ generation {}".format(epoch.start_time), file=output)

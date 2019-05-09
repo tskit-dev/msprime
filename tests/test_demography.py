@@ -1215,6 +1215,64 @@ class TimeUnitsMixin(object):
     Tests for time conversion between generations and coalescent
     units.
     """
+    def test_coalescence_after_size_change(self):
+        Ne = 2000
+        # Migrations and bottleneck occured 100 generations ago.
+        g = 100
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+        ]
+        # At this time, we migrate the lineage in 1 to 0, and
+        # have a very strong bottleneck, resulting in almost instant
+        # coalescence.
+        demographic_events = [
+            msprime.MassMigration(time=g, source=1, dest=0),
+            msprime.PopulationParametersChange(time=g, initial_size=1),
+        ]
+        reps = msprime.simulate(
+            Ne=Ne,
+            model=self.model,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, num_replicates=10)
+        for ts in reps:
+            tree = ts.first()
+            u = tree.get_mrca(0, 1)
+            self.assertEqual(u, 2)
+            self.assertLessEqual(g, tree.time(u))
+
+    def test_instantaneous_bottleneck(self):
+        Ne = 0.5
+        # Bottleneck occured 0.1 coalescent units ago
+        t = 0.1
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        # At this time, we migrate the lineages in 1 to 0, and
+        # have a very strong bottleneck, resulting in instant
+        # coalescence.
+        demographic_events = [
+            msprime.MassMigration(time=t, source=1, dest=0),
+            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
+        ]
+        reps = msprime.simulate(
+            Ne=Ne,
+            model=self.model,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, num_replicates=10)
+        for ts in reps:
+            tree = next(ts.trees())
+            self.assertAlmostEqual(t, tree.time(tree.root), places=5)
+
+
+class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
+    model = "hudson"
+
+    # We don't run this test in the DTWF case because extreme growth rates like
+    # this are problematic.
     def test_coalescence_after_growth_rate_change(self):
         Ne = 10000
         # Migrations and bottleneck occured 100 generations ago.
@@ -1246,64 +1304,7 @@ class TimeUnitsMixin(object):
             self.assertEqual(u, 2)
             self.assertAlmostEqual(g, tree.time(u), places=1)
 
-    def test_coalescence_after_size_change(self):
-        Ne = 20000
-        # Migrations and bottleneck occured 100 generations ago.
-        g = 1000
-        population_configurations = [
-            msprime.PopulationConfiguration(1),
-            msprime.PopulationConfiguration(1),
-        ]
-        # At this time, we migrate the lineage in 1 to 0, and
-        # have a very strong bottleneck, resulting in almost instant
-        # coalescence.
-        demographic_events = [
-            msprime.MassMigration(time=g, source=1, dest=0),
-            msprime.PopulationParametersChange(time=g, initial_size=1e-3),
-        ]
-        reps = msprime.simulate(
-            Ne=Ne,
-            model=self.model,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            random_seed=1, num_replicates=10)
-        for ts in reps:
-            tree = next(ts.trees())
-            u = tree.get_mrca(0, 1)
-            self.assertEqual(u, 2)
-            self.assertAlmostEqual(g, tree.time(u), places=1)
 
-    def test_instantaneous_bottleneck(self):
-        Ne = 0.5
-        # Bottleneck occured 0.1 coalescent units ago
-        t = 0.1
-        population_configurations = [
-            msprime.PopulationConfiguration(10),
-            msprime.PopulationConfiguration(10),
-        ]
-        # At this time, we migrate the lineages in 1 to 0, and
-        # have a very strong bottleneck, resulting in instant
-        # coalescence.
-        demographic_events = [
-            msprime.MassMigration(time=t, source=1, dest=0),
-            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
-        ]
-        reps = msprime.simulate(
-            Ne=Ne,
-            model=self.model,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            random_seed=1, num_replicates=10)
-        for ts in reps:
-            tree = next(ts.trees())
-            self.assertAlmostEqual(t, tree.time(tree.root), places=5)
-
-
-class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
-    model = "hudson"
-
-
-@unittest.skip("Problems with DTWF grow rates")
 class TestTimeUnitsWrightFisher(unittest.TestCase, TimeUnitsMixin):
     model = "dtwf"
 
