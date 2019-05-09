@@ -619,7 +619,7 @@ static void
 test_demographic_events(void)
 {
     int ret;
-    uint32_t j, k;
+    uint32_t j, k, model;
     uint32_t n = 10;
     uint32_t m = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -638,160 +638,183 @@ test_demographic_events(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 0; j < n; j++) {
-        samples[j].time = j;
-        samples[j].population_id = j % 2;
-    }
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* Zero or negative population sizes are not allowed */
-    ret = msp_set_population_configuration(&msp, 0, -1, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = msp_set_population_configuration(&msp, 0, 0, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-
-    ret = msp_set_num_populations(&msp, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 1, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 1, 2, 2);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    CU_ASSERT_EQUAL(
-        msp_add_mass_migration(&msp, 10, -1, 0, 1),
-        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(
-        msp_add_mass_migration(&msp, 10, 2, 0, 1),
-        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(
-        msp_add_mass_migration(&msp, 10, 0, 0, 1),
-        MSP_ERR_SOURCE_DEST_EQUAL);
-    CU_ASSERT_EQUAL(
-        msp_add_mass_migration(&msp, 10, 0, 1, -5),
-        MSP_ERR_BAD_PARAM_VALUE);
-
-    CU_ASSERT_EQUAL(
-        msp_add_migration_rate_change(&msp, 10, -2, 2.0),
-        MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-    CU_ASSERT_EQUAL(
-        msp_add_migration_rate_change(&msp, 10, -1, -2.0),
-        MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(
-        msp_add_migration_rate_change(&msp, 10, 3, 2.0),
-        MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX);
-
-    CU_ASSERT_EQUAL(
-        msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
-        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(
-        msp_add_population_parameters_change(&msp, 10, -1, -1, 0),
-        MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(
-        msp_add_population_parameters_change(&msp, 10, -1, GSL_NAN, GSL_NAN),
-        MSP_ERR_BAD_PARAM_VALUE);
-
-    CU_ASSERT_EQUAL(
-        msp_add_simple_bottleneck(&msp, 10, -1, 0),
-        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(
-        msp_add_simple_bottleneck(&msp, 10, 0, -1),
-        MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(
-        msp_add_simple_bottleneck(&msp, 10, 0, 1.1),
-        MSP_ERR_BAD_PARAM_VALUE);
-
-    CU_ASSERT_EQUAL(
-        msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
-        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(
-        msp_add_simple_bottleneck(&msp, 10, 0, -1),
-        MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL_FATAL(
-        msp_add_simple_bottleneck(&msp, 10, -1, 0),
-        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-
-    ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_instantaneous_bottleneck(&msp, 0.9, 0, 2.0);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    CU_ASSERT_EQUAL(
-            msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
-            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-    CU_ASSERT_EQUAL(
-            msp_add_migration_rate_change(&msp, 0.2, 1, 2.0),
-            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-    CU_ASSERT_EQUAL(
-            msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
-            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-    CU_ASSERT_EQUAL(
-            msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
-            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-    CU_ASSERT_EQUAL(
-            msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
-            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-
-    CU_ASSERT_EQUAL(
-        msp_debug_demography(&msp, &time),
-        MSP_ERR_BAD_STATE);
-
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    j = 0;
-    last_time = 0;
-    do {
-        ret = msp_debug_demography(&msp, &time);
-        CU_ASSERT_EQUAL(ret, 0);
-        msp_print_state(&msp, _devnull);
-        ret = msp_compute_population_size(&msp, 10, last_time, &pop_size);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-        for (k = 0; k < 2; k++) {
-            ret = msp_compute_population_size(&msp, k, last_time, &pop_size);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_TRUE(pop_size >= 0);
-            ret = msp_compute_population_size(&msp, k, time, &pop_size);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_TRUE(pop_size >= 0);
-            ret = msp_compute_population_size(&msp, k, last_time + (time - last_time) / 2,
-                    &pop_size);
-            CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_TRUE(pop_size >= 0);
+    for (model = 0; model < 2; model++) {
+        for (j = 0; j < n; j++) {
+            samples[j].time = j;
+            samples[j].population_id = j % 2;
         }
-        j++;
-        last_time = time;
-    } while (! gsl_isinf(time));
-    CU_ASSERT_EQUAL(j, 10);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(
-        msp_run(&msp, DBL_MAX, ULONG_MAX),
-        MSP_ERR_BAD_STATE);
-    ret = msp_reset(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
 
-    msp_print_state(&msp, _devnull);
-    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+        tsk_table_collection_clear(&tables);
+        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        /* Zero or negative population sizes are not allowed */
+        ret = msp_set_population_configuration(&msp, 0, -1, 0);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+        ret = msp_set_population_configuration(&msp, 0, 0, 0);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+        ret = msp_set_num_populations(&msp, 2);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(&msp, 0, 1, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(&msp, 1, 2, 2);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        CU_ASSERT_EQUAL(
+            msp_add_mass_migration(&msp, 10, -1, 0, 1),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(
+            msp_add_mass_migration(&msp, 10, 2, 0, 1),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(
+            msp_add_mass_migration(&msp, 10, 0, 0, 1),
+            MSP_ERR_SOURCE_DEST_EQUAL);
+        CU_ASSERT_EQUAL(
+            msp_add_mass_migration(&msp, 10, 0, 1, -5),
+            MSP_ERR_BAD_PARAM_VALUE);
+
+        CU_ASSERT_EQUAL(
+            msp_add_migration_rate_change(&msp, 10, -2, 2.0),
+            MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+        CU_ASSERT_EQUAL(
+            msp_add_migration_rate_change(&msp, 10, -1, -2.0),
+            MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL(
+            msp_add_migration_rate_change(&msp, 10, 3, 2.0),
+            MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX);
+
+        CU_ASSERT_EQUAL(
+            msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(
+            msp_add_population_parameters_change(&msp, 10, -1, -1, 0),
+            MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL(
+            msp_add_population_parameters_change(&msp, 10, -1, GSL_NAN, GSL_NAN),
+            MSP_ERR_BAD_PARAM_VALUE);
+
+        CU_ASSERT_EQUAL(
+            msp_add_simple_bottleneck(&msp, 10, -1, 0),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(
+            msp_add_simple_bottleneck(&msp, 10, 0, -1),
+            MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL(
+            msp_add_simple_bottleneck(&msp, 10, 0, 1.1),
+            MSP_ERR_BAD_PARAM_VALUE);
+
+        CU_ASSERT_EQUAL(
+            msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(
+            msp_add_simple_bottleneck(&msp, 10, 0, -1),
+            MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL_FATAL(
+            msp_add_simple_bottleneck(&msp, 10, -1, 0),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+
+        ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        if (model == 0) {
+            ret = msp_add_instantaneous_bottleneck(&msp, 1.9, 0, 2.0);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            /* Need to lower final migration rate for DTWF or else lineages will
+             * alternate pops every generation and miss each other - need to let
+             * one lineage migrate while the others stay put */
+            ret = msp_add_migration_rate_change(&msp, 11, -1, 0.3);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+
+        CU_ASSERT_EQUAL(
+                msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(
+                msp_add_migration_rate_change(&msp, 0.2, 1, 2.0),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(
+                msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(
+                msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(
+                msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+
+        CU_ASSERT_EQUAL(
+            msp_debug_demography(&msp, &time),
+            MSP_ERR_BAD_STATE);
+
+        if (model == 0) {
+            ret = msp_set_simulation_model_hudson(&msp, 0.25);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            ret = msp_set_simulation_model_dtwf(&msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        j = 0;
+        last_time = 0;
+        do {
+            ret = msp_debug_demography(&msp, &time);
+            CU_ASSERT_EQUAL(ret, 0);
+            msp_print_state(&msp, _devnull);
+            ret = msp_compute_population_size(&msp, 10, last_time, &pop_size);
+            CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+            for (k = 0; k < 2; k++) {
+                ret = msp_compute_population_size(&msp, k, last_time, &pop_size);
+                CU_ASSERT_EQUAL(ret, 0);
+                CU_ASSERT_TRUE(pop_size >= 0);
+                ret = msp_compute_population_size(&msp, k, time, &pop_size);
+                CU_ASSERT_EQUAL(ret, 0);
+                CU_ASSERT_TRUE(pop_size >= 0);
+                ret = msp_compute_population_size(
+                        &msp, k, last_time + (time - last_time) / 2, &pop_size);
+                CU_ASSERT_EQUAL(ret, 0);
+                CU_ASSERT_TRUE(pop_size >= 0);
+            }
+            j++;
+            last_time = time;
+        } while (! gsl_isinf(time));
+        CU_ASSERT_EQUAL(j, 10);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(
+            msp_run(&msp, DBL_MAX, ULONG_MAX),
+            MSP_ERR_BAD_STATE);
+        ret = msp_reset(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        msp_print_state(&msp, _devnull);
+        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
 
     free(samples);
-    ret = msp_free(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
@@ -802,6 +825,7 @@ test_demographic_events_start_time(void)
 {
     int ret;
     uint32_t n = 10;
+    uint32_t model;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -816,18 +840,34 @@ test_demographic_events_start_time(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_start_time(msp, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_population_parameters_change(msp, 0.4, 0, 0.5, 1.0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME);
+    for (model = 0; model < 1; model++) {
+        memset(samples, 0, n * sizeof(sample_t));
+        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
 
-    ret = msp_free(msp);
-    CU_ASSERT_EQUAL(ret, 0);
+        if (model == 0) {
+            ret = msp_set_start_time(msp, 1.0);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_add_population_parameters_change(msp, 0.4, 0, 0.5, 1.0);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_simulation_model_hudson(msp, 0.25);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            /* Times need to be bumped to integer values for DTWF */
+            ret = msp_set_start_time(msp, 2.0);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_add_population_parameters_change(msp, 1, 0, 0.5, 1.0);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_simulation_model_dtwf(msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+
+        ret = msp_initialise(msp);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME);
+        ret = msp_free(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+
     gsl_rng_free(rng);
     free(msp);
     free(samples);
@@ -3159,3 +3199,4 @@ main(int argc, char **argv)
     CU_cleanup_registry();
     return ret;
 }
+
