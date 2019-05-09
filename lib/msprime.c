@@ -230,12 +230,17 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
     simulation_model_t *model = &self->model;
 
+
     if (population_id < 0 || population_id > (int) self->num_populations) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (initial_size <= 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (model->type == MSP_MODEL_DTWF && round(initial_size) < 1) {
+        ret = MSP_ERR_DTWF_ZERO_INITIAL_POPULATION_SIZE;
         goto out;
     }
     self->initial_populations[population_id].initial_size =
@@ -2600,13 +2605,10 @@ msp_dtwf_generation(msp_t *self)
          * the nearest integer. Thus, the population's size is always relative
          * to the reference model population size (which is also true for the
          * coalescent models. */
-        // This may not be ideal, but with low migration / high growth rates it
-        // is possible for populations to reach zero individuals before all
-        // lineages coalesce. We round up to avoid this.
-        N = (uint32_t) ceil(
+        N = (uint32_t) round(
             get_population_size(pop, self->time) * self->model.population_size);
         if (N == 0) {
-            ret = MSP_ERR_INFINITE_WAITING_TIME;
+            ret = MSP_ERR_DTWF_ZERO_POPULATION_SIZE;
             goto out;
         }
 
