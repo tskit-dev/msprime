@@ -716,45 +716,27 @@ test_demographic_events(void)
             msp_add_simple_bottleneck(&msp, 10, -1, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
 
+        ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
+        CU_ASSERT_EQUAL(ret, 0);
+
         if (model == 0) {
-            ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
-            CU_ASSERT_EQUAL(ret, 0);
             ret = msp_add_instantaneous_bottleneck(&msp, 1.9, 0, 2.0);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            /* DTWF events must occur at integer times */
-            ret = msp_add_mass_migration(&msp, 1, 0, 1, 0.5);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_migration_rate_change(&msp, 2, 1, 0.3);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_migration_rate_change(&msp, 3, -1, 3.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 4, 0, 0.5, 1.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 5, -1, 0.5, 2.0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 6, 0, GSL_NAN, 0);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_population_parameters_change(&msp, 7, 1, 1, GSL_NAN);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_add_simple_bottleneck(&msp, 8, 0, 0.5);
-            CU_ASSERT_EQUAL(ret, 0);
-            /* ret = msp_add_instantaneous_bottleneck(&msp, 9, 0, 2.0); */
-            /* CU_ASSERT_EQUAL(ret, 0); */
             /* Need to lower final migration rate for DTWF or else lineages will
              * alternate pops every generation and miss each other - need to let
              * one lineage migrate while the others stay put */
@@ -827,11 +809,12 @@ test_demographic_events(void)
         msp_print_state(&msp, _devnull);
         ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
     }
 
     free(samples);
-    ret = msp_free(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
@@ -881,10 +864,10 @@ test_demographic_events_start_time(void)
 
         ret = msp_initialise(msp);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME);
+        ret = msp_free(msp);
+        CU_ASSERT_EQUAL(ret, 0);
     }
 
-    ret = msp_free(msp);
-    CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     free(msp);
     free(samples);

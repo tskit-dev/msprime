@@ -2824,8 +2824,6 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 
         if (self->next_demographic_event != NULL) {
             if (self->next_demographic_event->time <= self->time) {
-                // We should always be able to execute at the exact time
-                assert(self->next_demographic_event->time == self->time);
                 ret = msp_apply_demographic_events(self);
                 if (ret != 0) {
                     goto out;
