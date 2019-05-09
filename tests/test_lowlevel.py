@@ -885,12 +885,31 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, segment_block_size=bad_type)
             self.assertRaises(TypeError, f, node_mapping_block_size=bad_type)
             self.assertRaises(TypeError, f, start_time=bad_type)
+            self.assertRaises(TypeError, f, num_labels=bad_type)
         # Check for bad values.
         self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
         self.assertRaises(_msprime.InputError, f, segment_block_size=0)
         self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
+        self.assertRaises(_msprime.InputError, f, num_labels=0)
+        self.assertRaises(_msprime.InputError, f, num_labels=-1)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
+
+    def test_num_labels(self):
+        rng = _msprime.RandomGenerator(1)
+        recomb_map = uniform_recombination_map()
+
+        def f(num_samples=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(num_samples),
+                recomb_map, _msprime.RandomGenerator(random_seed),
+                _msprime.LightweightTableCollection(), **kwargs)
+
+        for num_labels in range(1, 10):
+            sim = f(num_labels=num_labels)
+            self.assertEqual(sim.get_num_labels(), num_labels)
+            sim.run()
+            self.assertEqual(sim.get_num_labels(), num_labels)
 
     def test_record_scaling(self):
         for Ne in [0.25, 1, 10, 1e6]:
@@ -1045,6 +1064,13 @@ class TestSimulator(LowLevelTestCase):
         model = get_single_sweep_model(time=[0, 1], allele_frequency=[-0.1, 0.1])
         self.assertRaises(_msprime.InputError, f, model=model)
 
+        # If we don't specify 2 labels we get an error.
+        model = get_single_sweep_model()
+        for bad_labels in [1, 3, 10]:
+            sim = f(model=model, num_labels=bad_labels)
+            self.assertRaises(_msprime.LibraryError, sim.run)
+
+
     def test_single_sweep_simulation_trajectory_round_trip(self):
         L = 10
 
@@ -1067,6 +1093,24 @@ class TestSimulator(LowLevelTestCase):
             model = sim.get_model()
             self.assertTrue(np.array_equal(time, model["time"]))
             self.assertTrue(np.array_equal(allele_frequency, model["allele_frequency"]))
+
+    def test_single_sweep_simulation_locus_round_trip(self):
+        L = 10
+
+        def f(num_samples=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(num_samples),
+                uniform_recombination_map(num_loci=L, rate=1, L=L),
+                _msprime.RandomGenerator(random_seed),
+                _msprime.LightweightTableCollection(), **kwargs)
+
+        for j in range(L):
+            model = get_single_sweep_model(
+                position=j, time=[1.0], allele_frequency=[0.1])
+            sim = f(model=model)
+            model = sim.get_model()
+            # Because we have a flat map we should convert exactly.
+            self.assertEqual(j, model["locus"])
 
     def test_store_migrations(self):
         def f(num_samples=10, random_seed=1, **kwargs):

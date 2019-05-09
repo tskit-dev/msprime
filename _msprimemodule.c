@@ -2351,22 +2351,12 @@ static int
 Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_config)
 {
     int ret = -1;
-    Py_ssize_t j, num_populations;
+    Py_ssize_t j;
     double initial_size, growth_rate;
     int err;
     PyObject *item, *value;
 
     if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    num_populations = PyList_Size(py_pop_config);
-    if (num_populations == 0) {
-        PyErr_SetString(PyExc_ValueError, "Empty population configuration");
-        goto out;
-    }
-    err = msp_set_num_populations(self->sim, (size_t) num_populations);
-    if (err != 0) {
-        handle_input_error(err);
         goto out;
     }
     for (j = 0; j < PyList_Size(py_pop_config); j++) {
@@ -2897,7 +2887,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "tables", "population_configuration", "migration_matrix", "demographic_events",
         "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
-        "store_full_arg", NULL};
+        "store_full_arg", "num_labels", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -2912,6 +2902,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
+    Py_ssize_t num_labels = 1;
+    Py_ssize_t num_populations = 1;
     int store_migrations = 0;
     int store_full_arg = 0;
     double start_time = -1;
@@ -2919,7 +2911,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidi", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidin", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -2930,7 +2922,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
-            &store_full_arg)) {
+            &store_full_arg, &num_labels)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -2996,9 +2988,22 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
+
     if (population_configuration != NULL) {
-        if (Simulator_parse_population_configuration(self,
-                population_configuration) != 0) {
+        num_populations = PyList_Size(population_configuration);
+        if (num_populations == 0) {
+            PyErr_SetString(PyExc_ValueError, "Empty population configuration");
+            goto out;
+        }
+    }
+    sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+
+    if (population_configuration != NULL) {
+        if (Simulator_parse_population_configuration(self, population_configuration) != 0) {
             goto out;
         }
         if (migration_matrix == NULL) {
@@ -3210,6 +3215,17 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_get_num_labels(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_labels(self->sim));
+out:
+    return ret;
+}
 
 static PyObject *
 Simulator_get_recombination_rate(Simulator  *self)
@@ -3945,6 +3961,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the sample size" },
     {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
             "Returns the number of populations." },
+    {"get_num_labels", (PyCFunction) Simulator_get_num_labels, METH_NOARGS,
+            "Returns the number of labels." },
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the recombination rate." },

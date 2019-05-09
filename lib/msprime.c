@@ -160,7 +160,7 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (num_labels < 1) {
+    if (num_labels < 1 || num_labels > UINT32_MAX) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -3353,6 +3353,12 @@ size_t
 msp_get_num_populations(msp_t *self)
 {
     return (size_t) self->num_populations;
+}
+
+size_t
+msp_get_num_labels(msp_t *self)
+{
+    return (size_t) self->num_labels;
 }
 
 size_t

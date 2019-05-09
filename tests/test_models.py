@@ -352,3 +352,28 @@ class TestMixedModels(unittest.TestCase):
             random_seed=10)
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
+
+
+class TestSingleSweep(unittest.TestCase):
+    """
+    Tests for the single sweep model.
+    """
+    def test_incorrect_num_labels(self):
+        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
+        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
+        for num_labels in [1, 3, 10]:
+            with self.assertRaises(_msprime.LibraryError):
+                msprime.simulate(
+                    10, recombination_rate=1, model=model, num_labels=num_labels)
+
+    @unittest.skip("Assertion `overlaps != NULL' fails.")
+    def test_simple_no_recomb(self):
+        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
+        model = msprime.SingleSweep(position=0, trajectory=trajectory)
+        msprime.simulate(10, model=model, num_labels=2)
+
+    @unittest.skip("Assertion `overlaps != NULL' fails.")
+    def test_simple_recomb(self):
+        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
+        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
+        msprime.simulate(10, recombination_rate=1, model=model, num_labels=2)
