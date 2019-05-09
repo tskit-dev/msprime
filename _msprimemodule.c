@@ -3821,6 +3821,7 @@ Simulator_run(Simulator *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "|d", &max_time)) {
         goto out;
     }
+
     not_done = 1;
     while (not_done) {
         Py_BEGIN_ALLOW_THREADS

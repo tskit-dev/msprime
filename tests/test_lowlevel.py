@@ -896,7 +896,6 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
 
     def test_num_labels(self):
-        rng = _msprime.RandomGenerator(1)
         recomb_map = uniform_recombination_map()
 
         def f(num_samples=10, random_seed=1, **kwargs):
@@ -1069,7 +1068,6 @@ class TestSimulator(LowLevelTestCase):
         for bad_labels in [1, 3, 10]:
             sim = f(model=model, num_labels=bad_labels)
             self.assertRaises(_msprime.LibraryError, sim.run)
-
 
     def test_single_sweep_simulation_trajectory_round_trip(self):
         L = 10

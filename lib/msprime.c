@@ -2893,6 +2893,33 @@ out:
     return ret;
 }
 
+/* Finalise the sweep by moving all lineages back to label 0.
+ */
+static int
+msp_single_sweep_finalise(msp_t *self)
+{
+    int ret = 0;
+    uint32_t j;
+    avl_node_t *node, *next;
+    avl_tree_t *pop;
+
+    /* Move ancestors to new labels. */
+    for (j = 0; j < self->num_populations; j++) {
+        pop = &self->populations[j].ancestors[1];
+        node = pop->head;
+        while (node != NULL) {
+            next = node->next;
+            ret = msp_move_individual(self, node, pop, (population_id_t) j, 0);
+            if (ret != 0) {
+                goto out;
+            }
+            node = next;
+        }
+    }
+out:
+    return ret;
+}
+
 /* Migrate the specified individual to the specified new label.
  */
 static int
@@ -2951,7 +2978,7 @@ out:
  * trajectory array are ABSOLUTE with respect to the
  * simulation. we may want to alter this in the future */
 static int
-msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
+msp_run_single_sweep(msp_t *self)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
@@ -2976,13 +3003,22 @@ msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
     p_coal_b = 0;
     p_coal_B = 0;
 
+    /* JK: I've removed the time and event limits on this function to simplify
+     * things as function is currently 'non-rentrant'; we can't stop in the middle
+     * of the sweep and pick it up again from where we left off later. This is
+     * different to all the other model runners. Probably the simplest thing to
+     * do here is to make the trajectory times absolute wrt to the simulation, and
+     * to then increment curr_step accordingly. We can then probably reason about
+     * when the call msp_single_sweep_initialise and msp_single_sweep_finalise
+     * depending on the value of curr_step, and hopefully reintroduce the max_time
+     * and max_steps parameters. */
+
     ret = msp_single_sweep_initialise(self, allele_frequency[0]);
     if (ret != 0) {
         goto out;
     }
 
-    while (msp_get_num_ancestors(self) > 0 && self->time < max_time
-            && events < max_events && curr_step < num_steps) {
+    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
         events++;
         /* quick sanity check; also set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
@@ -2995,6 +3031,7 @@ msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
         }
+
         curr_step++;
         event_prob = 1.0;
         event_rand = gsl_rng_uniform(self->rng);
@@ -3018,11 +3055,6 @@ msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
             event_prob *= 1.0 - total_rate;
             curr_step++;
         }
-        /* double check event happened and we haven't timed out */
-        if (curr_step >= num_steps || self->time >= max_time) {
-            break;
-        }
-
         /*printf("\ncoal probs: %g %g rec_rates: %g %g  event_prob: %g tot rate: %g \n", p_coal_b,*/
                 /*p_coal_B, rec_rates[0], rec_rates[1], event_prob, sweep_pop_tot_rate);*/
         /* passed check, choose event */
@@ -3058,9 +3090,11 @@ msp_run_single_sweep(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
         /*msp_print_state(self, stdout);*/
-        /*printf("step: %ld freq: %lf time: %lf num_anc: %ld sweep_pop_sizes[0]: %f sweep_pop_sizes[1]: %f\n",*/
-                /*curr_step, allele_frequency[curr_step - 1], self->time, msp_get_num_ancestors(self), sweep_pop_sizes[0],sweep_pop_sizes[1]);*/
+    }
 
+    ret = msp_single_sweep_finalise(self);
+    if (ret != 0) {
+        goto out;
     }
     msp_verify(self);
 out:
@@ -3095,7 +3129,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, scaled_time, max_events);
     } else if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
-        ret = msp_run_single_sweep(self, scaled_time, max_events);
+        /* FIXME making single_sweep atomic for now as it's non-renentrant */
+        ret = msp_run_single_sweep(self);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
@@ -4972,6 +5007,7 @@ msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
             allele_frequency, num_steps * sizeof(double));
     memcpy(model->params.single_sweep.trajectory.time,
             time, num_steps * sizeof(double));
+    /* TODO we need to rescale the times into model units here */
 out:
     return ret;
 }

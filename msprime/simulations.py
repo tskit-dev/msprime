@@ -1245,6 +1245,67 @@ class SweepTrajectory(object):
         self.allele_frequency = allele_frequency
 
 
+class TrajectorySimulator(object):
+    """
+    Class to simulate an allele frequency trajectory on which to condition
+    the coalescent simulation.
+    """
+    def __init__(
+            self, start_frequency, end_frequency, alpha, time_slice, random_seed=None):
+        self.start_frequency = start_frequency
+        self.end_frequency = end_frequency
+        self.alpha = alpha
+        self.time_slice = time_slice
+        if random_seed is None:
+            random_seed = _get_random_seed()
+        self.rng = random.Random(random_seed)
+        self.__reset()
+
+    def __reset(self):
+        # TODO these should be numpy arrays
+        self.time = []
+        self.allele_frequency = []
+
+    def __genic_selection_stochastic_forwards(self, dt, freq, alpha):
+        ux = (alpha * freq * (1 - freq)) / np.tanh(alpha * freq)
+        sign = 1 if self.rng.random() < 0.5 else -1
+        freq += (ux * dt) + sign * np.sqrt(freq * (1.0 - freq) * dt)
+        return freq
+
+    def __simulate(self):
+        """
+        Proposes a sweep trajectory and returns the acceptance probability.
+        """
+        x = self.end_frequency  # backward time
+        current_size = 1
+        t = 0
+        while x > self.start_frequency:
+            # print("x: ",x)
+            self.time.append(t)
+            self.allele_frequency.append(max(x, self.start_frequency))
+            # just a note below
+            # current_size = self._size_calculator(t)
+            x = 1.0 - self.__genic_selection_stochastic_forwards(
+                self.time_slice, 1.0 - x, self.alpha * current_size)
+            t += self.time_slice
+        # will want to return current_size / N_max
+        # for prototype this always equals 1
+        return 1
+
+    def run(self):
+        while self.rng.random() > self.__simulate():
+            self.__reset()
+        return SweepTrajectory(np.array(self.time), np.array(self.allele_frequency))
+
+
+def simulate_trajectory(
+        start_frequency, end_frequency, alpha, time_slice, random_seed=None):
+    sim = TrajectorySimulator(
+            start_frequency=start_frequency, end_frequency=end_frequency,
+            alpha=alpha, time_slice=time_slice, random_seed=random_seed)
+    return sim.run()
+
+
 class PopulationParameters(object):
     """
     Simple class to represent the state of a population in terms of its
