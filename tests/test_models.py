@@ -246,19 +246,27 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.verify_non_binary(ts)
 
 
-class TestUnsupportedDemographicEvents(unittest.TestCase):
+class TestUnsupportedFullArg(unittest.TestCase):
     """
-    Some demographic events are not supported until specific models.
+    Full ARG recording isn't supported on anything except standard coalescent.
     """
-    def test_smc_bottlenecks(self):
-        # TODO we should have a better exception here.
+    def test_smc(self):
         for model in ["smc", "smc_prime"]:
             self.assertRaises(
-                _msprime.InputError, msprime.simulate, 10, model=model,
-                demographic_events=[msprime.SimpleBottleneck(1, population=0)])
+                _msprime.LibraryError, msprime.simulate, 10, model=model,
+                record_full_arg=True)
+
+    def test_dtwf(self):
+        for model in [msprime.DiscreteTimeWrightFisher(10)]:
             self.assertRaises(
-                _msprime.InputError, msprime.simulate, 10, model=model,
-                demographic_events=[msprime.InstantaneousBottleneck(1, population=0)])
+                _msprime.LibraryError, msprime.simulate, 10, model=model,
+                record_full_arg=True)
+
+    def test_multiple_mergers(self):
+        for model in [msprime.BetaCoalescent(10), msprime.DiracCoalescent(10)]:
+            self.assertRaises(
+                _msprime.LibraryError, msprime.simulate, 10, model=model,
+                record_full_arg=True)
 
 
 class TestMixedModels(unittest.TestCase):
@@ -325,3 +333,22 @@ class TestMixedModels(unittest.TestCase):
         coalescent_times = times[np.logical_and(times > t1, times < t2)]
         self.assertGreater(coalescent_times.shape[0], 0)
         self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))
+
+    def test_many_models(self):
+        Ne = 10000
+        ts = msprime.simulate(
+            Ne=Ne,
+            sample_size=10,
+            recombination_rate=0.1,
+            demographic_events=[
+                msprime.SimulationModelChange(10, msprime.StandardCoalescent(Ne)),
+                msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent(Ne)),
+                msprime.SimulationModelChange(30, msprime.SmcPrimeApproxCoalescent(Ne)),
+                msprime.SimulationModelChange(
+                    40, msprime.DiscreteTimeWrightFisher(100)),
+                msprime.SimulationModelChange(
+                    50, msprime.BetaCoalescent(population_size=10)),
+                msprime.SimulationModelChange(60, msprime.StandardCoalescent(0.1))],
+            random_seed=10)
+        for tree in ts.trees():
+            self.assertEqual(tree.num_roots, 1)

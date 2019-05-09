@@ -565,57 +565,6 @@ test_simulator_getters_setters(void)
 }
 
 static void
-test_simulator_model_errors(void)
-{
-    uint32_t n = 10;
-    uint32_t j;
-    int ret;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    msp_t msp;
-    recomb_map_t recomb_map;
-    tsk_table_collection_t tables;
-
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    for (j = 0; j < n; j++) {
-        samples[j].time = 0;
-        samples[j].population_id = 0;
-    }
-
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, &recomb_map, &tables, rng), 0);
-    CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
-    CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), 0);
-    CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1), 0);
-    CU_ASSERT_EQUAL(msp_initialise(&msp), 0);
-    CU_ASSERT_EQUAL(msp_run(&msp, DBL_MAX, ULONG_MAX), 0);
-    CU_ASSERT_EQUAL(msp_free(&msp), 0);
-
-    for (j = 0; j < 2; j++) {
-        tsk_table_collection_clear(&tables);
-        CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, &recomb_map, &tables, rng), 0);
-        if (j == 0) {
-            CU_ASSERT_EQUAL(msp_set_simulation_model_smc(&msp, 0.25), 0);
-        } else {
-            CU_ASSERT_EQUAL(msp_set_simulation_model_smc_prime(&msp, 0.25), 0);
-        }
-        CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 1, 0, 1), MSP_ERR_BAD_MODEL);
-        CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 1, 0, 1),
-                MSP_ERR_BAD_MODEL);
-        CU_ASSERT_EQUAL(msp_free(&msp), 0);
-    }
-
-    free(samples);
-    gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
-    tsk_table_collection_free(&tables);
-}
-
-static void
 test_demographic_events(void)
 {
     int ret;
@@ -1689,7 +1638,8 @@ test_multi_locus_simulation(void)
                     ret = msp_set_simulation_model_smc_prime(msp, 0.25);
                     break;
             }
-            ret = msp_set_store_full_arg(msp, store_full_arg[k]);
+            /* Trying to run the full arg for anything except hudson is an error */
+            ret = msp_set_store_full_arg(msp, j == 0 && store_full_arg[k]);
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_initialise(msp);
             CU_ASSERT_EQUAL(ret, 0);
@@ -3103,7 +3053,6 @@ main(int argc, char **argv)
         {"test_single_locus_historical_sample_start_time",
             test_single_locus_historical_sample_start_time},
         {"test_simulator_getters_setters", test_simulator_getters_setters},
-        {"test_simulator_model_errors", test_simulator_model_errors},
         {"test_demographic_events", test_demographic_events},
         {"test_demographic_events_start_time", test_demographic_events_start_time},
         {"test_time_travel_error", test_time_travel_error},

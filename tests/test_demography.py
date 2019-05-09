@@ -38,12 +38,16 @@ class TestTimeTravelErrors(unittest.TestCase):
     """
     def test_multiple_bottlenecks(self):
         with self.assertRaises(_msprime.LibraryError):
-            msprime.simulate(
-                sample_size=100,
-                demographic_events=[
-                    msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.75),
-                    msprime.SimpleBottleneck(time=0.1, population=0, proportion=1.0)],
-                random_seed=1)
+            for model in ["hudson", "smc", msprime.DiscreteTimeWrightFisher(10)]:
+                msprime.simulate(
+                    model=model,
+                    sample_size=100,
+                    demographic_events=[
+                        msprime.SimpleBottleneck(
+                            time=0.1, population=0, proportion=0.75),
+                        msprime.SimpleBottleneck(
+                            time=0.1, population=0, proportion=1.0)],
+                    random_seed=1)
 
     def test_tiny_population_size(self):
         # Derived from bug report in #570.
@@ -496,72 +500,74 @@ class TestDemographyDebugger(unittest.TestCase):
         t1 = 5
         t2 = 10
         t3 = 15
-        dd = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N0, growth_rate=alpha),
-                msprime.PopulationConfiguration(initial_size=N1, growth_rate=0)],
-            demographic_events=[
-                # p1 changes growth rate to alpha
-                msprime.PopulationParametersChange(
-                    population=1, time=t1, growth_rate=alpha),
-                # p0 changes growth rate to -alpha
-                msprime.PopulationParametersChange(
-                    population=0, time=t2, growth_rate=-alpha),
-                # Both change growth_rate to 0 at t3.
-                msprime.PopulationParametersChange(time=t3, growth_rate=0)])
-        self.verify_arrays(dd)
+        for model in ["dtwf", "hudson"]:
+            dd = msprime.DemographyDebugger(
+                model=model,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=N0, growth_rate=alpha),
+                    msprime.PopulationConfiguration(initial_size=N1, growth_rate=0)],
+                demographic_events=[
+                    # p1 changes growth rate to alpha
+                    msprime.PopulationParametersChange(
+                        population=1, time=t1, growth_rate=alpha),
+                    # p0 changes growth rate to -alpha
+                    msprime.PopulationParametersChange(
+                        population=0, time=t2, growth_rate=-alpha),
+                    # Both change growth_rate to 0 at t3.
+                    msprime.PopulationParametersChange(time=t3, growth_rate=0)])
+            self.verify_arrays(dd)
 
-        self.assertEqual(len(dd.epochs), 4)
-        e = dd.epochs[0]
-        self.assertEqual(e.start_time, 0)
-        self.assertEqual(e.end_time, t1)
-        self.assertEqual(dd.epoch_times[0], 0)
-        self.assertEqual(dd.epoch_times[1], t1)
-        self.assertEqual(len(e.demographic_events), 0)
-        self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
-        self.assertEqual(e.populations[0].start_size, N0)
-        n0 = N0 * math.exp(-alpha * t1)
-        self.assertEqual(e.populations[0].end_size, n0)
-        self.assertEqual(e.populations[1].start_size, N1)
-        self.assertEqual(e.populations[1].end_size, N1)
+            self.assertEqual(len(dd.epochs), 4)
+            e = dd.epochs[0]
+            self.assertEqual(e.start_time, 0)
+            self.assertEqual(e.end_time, t1)
+            self.assertEqual(dd.epoch_times[0], 0)
+            self.assertEqual(dd.epoch_times[1], t1)
+            self.assertEqual(len(e.demographic_events), 0)
+            self.assertEqual(len(e.populations), 2)
+            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            self.assertEqual(e.populations[0].start_size, N0)
+            n0 = N0 * math.exp(-alpha * t1)
+            self.assertEqual(e.populations[0].end_size, n0)
+            self.assertEqual(e.populations[1].start_size, N1)
+            self.assertEqual(e.populations[1].end_size, N1)
 
-        e = dd.epochs[1]
-        self.assertEqual(e.start_time, t1)
-        self.assertEqual(e.end_time, t2)
-        self.assertEqual(len(e.demographic_events), 1)
-        self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
-        self.assertEqual(e.populations[0].start_size, n0)
-        n0 = N0 * math.exp(-alpha * t2)
-        self.assertEqual(e.populations[0].end_size, n0)
-        self.assertEqual(e.populations[1].start_size, N1)
-        n1 = N1 * math.exp(-alpha * (t2 - t1))
-        self.assertEqual(e.populations[1].end_size, n1)
+            e = dd.epochs[1]
+            self.assertEqual(e.start_time, t1)
+            self.assertEqual(e.end_time, t2)
+            self.assertEqual(len(e.demographic_events), 1)
+            self.assertEqual(len(e.populations), 2)
+            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            self.assertEqual(e.populations[0].start_size, n0)
+            n0 = N0 * math.exp(-alpha * t2)
+            self.assertEqual(e.populations[0].end_size, n0)
+            self.assertEqual(e.populations[1].start_size, N1)
+            n1 = N1 * math.exp(-alpha * (t2 - t1))
+            self.assertEqual(e.populations[1].end_size, n1)
 
-        e = dd.epochs[2]
-        self.assertEqual(e.start_time, t2)
-        self.assertEqual(e.end_time, t3)
-        self.assertEqual(len(e.demographic_events), 1)
-        self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
-        self.assertEqual(e.populations[0].start_size, n0)
-        n0 = n0 * math.exp(alpha * (t3 - t2))
-        self.assertEqual(e.populations[0].end_size, n0)
-        self.assertEqual(e.populations[1].start_size, n1)
-        n1 = N1 * math.exp(-alpha * (t3 - t1))
-        self.assertEqual(e.populations[1].end_size, n1)
+            e = dd.epochs[2]
+            self.assertEqual(e.start_time, t2)
+            self.assertEqual(e.end_time, t3)
+            self.assertEqual(len(e.demographic_events), 1)
+            self.assertEqual(len(e.populations), 2)
+            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            self.assertEqual(e.populations[0].start_size, n0)
+            n0 = n0 * math.exp(alpha * (t3 - t2))
+            self.assertEqual(e.populations[0].end_size, n0)
+            self.assertEqual(e.populations[1].start_size, n1)
+            n1 = N1 * math.exp(-alpha * (t3 - t1))
+            self.assertEqual(e.populations[1].end_size, n1)
 
-        e = dd.epochs[3]
-        self.assertEqual(e.start_time, t3)
-        self.assertTrue(math.isinf(e.end_time))
-        self.assertEqual(len(e.demographic_events), 1)
-        self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
-        self.assertEqual(e.populations[0].start_size, n0)
-        self.assertEqual(e.populations[0].end_size, n0)
-        self.assertEqual(e.populations[1].start_size, n1)
-        self.assertEqual(e.populations[1].end_size, n1)
+            e = dd.epochs[3]
+            self.assertEqual(e.start_time, t3)
+            self.assertTrue(math.isinf(e.end_time))
+            self.assertEqual(len(e.demographic_events), 1)
+            self.assertEqual(len(e.populations), 2)
+            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            self.assertEqual(e.populations[0].start_size, n0)
+            self.assertEqual(e.populations[0].end_size, n0)
+            self.assertEqual(e.populations[1].start_size, n1)
+            self.assertEqual(e.populations[1].end_size, n1)
 
 
 class TestEventTimes(unittest.TestCase):
@@ -835,7 +841,6 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(list(ts.samples(0)), [0])
         self.assertEqual(list(ts.samples(1)), [1])
 
-    @unittest.skip("Recomb map broken")
     def test_migration_rate_directionality_from_ts(self):
         tables = msprime.TableCollection(1)
         for _ in range(3):
@@ -893,7 +898,6 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(ts.node(0).population, 0)
         self.assertEqual(ts.node(1).population, num_demes - 1)
 
-    @unittest.skip("Recomb map broken")
     def test_many_demes_from_ts(self):
         num_demes = 300
         tables = msprime.TableCollection(1)
@@ -958,7 +962,7 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(ts.num_populations, 3)
 
 
-class TestMigrationRecords(unittest.TestCase):
+class MigrationRecordsMixin(object):
     """
     Tests that migrations happen where they should for simple models.
     """
@@ -1009,12 +1013,12 @@ class TestMigrationRecords(unittest.TestCase):
             msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
+            model=self.model,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1, record_migrations=True)
         self.verify_two_pops_single_sample(ts, t)
 
-    @unittest.skip("Recomb map broken")
     def test_two_pops_single_sample_from_ts(self):
         tables = msprime.TableCollection(1)
         tables.nodes.add_row(
@@ -1031,6 +1035,7 @@ class TestMigrationRecords(unittest.TestCase):
             msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
+            model=self.model,
             from_ts=tables.tree_sequence(), start_time=0,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
@@ -1038,6 +1043,131 @@ class TestMigrationRecords(unittest.TestCase):
             random_seed=1)
         self.verify_two_pops_single_sample(ts, t)
 
+    def verify_two_pops_asymmetric_migrations(self, ts):
+        self.verify_migrations(ts)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(ts.node(mig.node).population, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertEqual(mig.left, 0)
+            self.assertEqual(mig.right, 1)
+
+    def test_two_pops_asymmetric_migrations(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        ts = msprime.simulate(
+            model=self.model,
+            population_configurations=population_configurations,
+            migration_matrix=[
+                [0, 0],
+                [1, 0]],
+            # Can migrate from 1 to 0 but not vice-versa
+            random_seed=1, record_migrations=True)
+        self.verify_two_pops_asymmetric_migrations(ts)
+
+    def test_two_pops_asymmetric_migrations_from_ts(self):
+        tables = msprime.TableCollection(1)
+        for _ in range(10):
+            tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        for _ in range(10):
+            tables.nodes.add_row(
+                flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+        tables.populations.add_row()
+        tables.populations.add_row()
+
+        population_configurations = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(),
+        ]
+        ts = msprime.simulate(
+            model=self.model,
+            population_configurations=population_configurations,
+            migration_matrix=[
+                [0, 0],
+                [1, 0]],
+            # Can migrate from 1 to 0 but not vice-versa
+            random_seed=1, record_migrations=True,
+            from_ts=tables.tree_sequence(), start_time=0)
+        self.verify_two_pops_asymmetric_migrations(ts)
+
+    def test_two_pops_asymmetric_migrations_recombination(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        ts = msprime.simulate(
+            model=self.model,
+            recombination_rate=1,
+            population_configurations=population_configurations,
+            migration_matrix=[
+                [0, 0],
+                [1, 0]],
+            # Can migrate from 1 to 0 but not vice-versa
+            random_seed=1, record_migrations=True)
+        self.verify_migrations(ts)
+        self.assertGreater(ts.num_trees, 1)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(ts.node(mig.node).population, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertGreaterEqual(mig.left, 0)
+            self.assertLessEqual(mig.right, 1)
+
+    def test_two_pops_mass_migration_recombination(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+        ]
+        ts = msprime.simulate(
+            model=self.model,
+            recombination_rate=10,
+            population_configurations=population_configurations,
+            demographic_events=[
+                msprime.MassMigration(time=20, source=1, dest=0, proportion=1)
+            ],
+            random_seed=1, record_migrations=True)
+        self.verify_migrations(ts)
+        self.assertGreater(ts.num_trees, 10)
+        migrations = list(ts.migrations())
+        self.assertGreater(len(migrations), 0)
+        for mig in migrations:
+            self.assertGreater(mig.time, 0)
+            self.assertEqual(mig.node, 1)
+            self.assertEqual(mig.source, 1)
+            self.assertEqual(mig.dest, 0)
+            self.assertGreaterEqual(mig.left, 0)
+            self.assertLessEqual(mig.right, 1)
+
+
+class TestMigrationRecordsHudson(unittest.TestCase, MigrationRecordsMixin):
+    model = "hudson"
+
+
+class TestMigrationRecordsSmc(unittest.TestCase, MigrationRecordsMixin):
+    model = "smc"
+
+
+class TestMigrationRecordsSmcPrime(unittest.TestCase, MigrationRecordsMixin):
+    model = "smc_prime"
+
+
+class TestMigrationRecordsDtwf(unittest.TestCase, MigrationRecordsMixin):
+    model = msprime.DiscreteTimeWrightFisher(10)
+
+
+class TestFullArgMigration(unittest.TestCase):
+    """
+    Tests for migration with the full ARG.
+    """
     def verify_two_pops_full_arg(self, ts):
         migrations = ts.tables.migrations
         edges = ts.tables.edges
@@ -1079,113 +1209,70 @@ class TestMigrationRecords(unittest.TestCase):
             record_migrations=True, record_full_arg=True)
         self.verify_two_pops_full_arg(ts)
 
-    def verify_two_pops_asymmetric_migrations(self, ts):
-        self.verify_migrations(ts)
-        migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
-        for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(ts.node(mig.node).population, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertEqual(mig.left, 0)
-            self.assertEqual(mig.right, 1)
-
-    def test_two_pops_asymmetric_migrations(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(10),
-            msprime.PopulationConfiguration(10),
-        ]
-        ts = msprime.simulate(
-            population_configurations=population_configurations,
-            migration_matrix=[
-                [0, 0],
-                [1, 0]],
-            # Can migrate from 1 to 0 but not vice-versa
-            random_seed=1, record_migrations=True)
-        self.verify_two_pops_asymmetric_migrations(ts)
-
-    @unittest.skip("Recomb map broken")
-    def test_two_pops_asymmetric_migrations_from_ts(self):
-        tables = msprime.TableCollection(1)
-        for _ in range(10):
-            tables.nodes.add_row(
-                flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
-        for _ in range(10):
-            tables.nodes.add_row(
-                flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
-        tables.populations.add_row()
-        tables.populations.add_row()
-
-        population_configurations = [
-            msprime.PopulationConfiguration(),
-            msprime.PopulationConfiguration(),
-        ]
-        ts = msprime.simulate(
-            population_configurations=population_configurations,
-            migration_matrix=[
-                [0, 0],
-                [1, 0]],
-            # Can migrate from 1 to 0 but not vice-versa
-            random_seed=1, record_migrations=True,
-            from_ts=tables.tree_sequence(), start_time=0)
-        self.verify_two_pops_asymmetric_migrations(ts)
-
-    def test_two_pops_asymmetric_migrations_recombination(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(10),
-            msprime.PopulationConfiguration(10),
-        ]
-        ts = msprime.simulate(
-            recombination_rate=1,
-            population_configurations=population_configurations,
-            migration_matrix=[
-                [0, 0],
-                [1, 0]],
-            # Can migrate from 1 to 0 but not vice-versa
-            random_seed=1, record_migrations=True)
-        self.verify_migrations(ts)
-        self.assertGreater(ts.num_trees, 1)
-        migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
-        for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(ts.node(mig.node).population, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertGreaterEqual(mig.left, 0)
-            self.assertLessEqual(mig.right, 1)
-
-    def test_two_pops_mass_migration_recombination(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(1),
-            msprime.PopulationConfiguration(1),
-        ]
-        ts = msprime.simulate(
-            recombination_rate=10,
-            population_configurations=population_configurations,
-            demographic_events=[
-                msprime.MassMigration(time=20, source=1, dest=0, proportion=1)
-            ],
-            random_seed=1, record_migrations=True)
-        self.verify_migrations(ts)
-        self.assertGreater(ts.num_trees, 10)
-        migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
-        for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(mig.node, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertGreaterEqual(mig.left, 0)
-            self.assertLessEqual(mig.right, 1)
-
 
 class TimeUnitsMixin(object):
     """
     Tests for time conversion between generations and coalescent
     units.
     """
+    def test_coalescence_after_size_change(self):
+        Ne = 2000
+        # Migrations and bottleneck occured 100 generations ago.
+        g = 100
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(1),
+        ]
+        # At this time, we migrate the lineage in 1 to 0, and
+        # have a very strong bottleneck, resulting in almost instant
+        # coalescence.
+        demographic_events = [
+            msprime.MassMigration(time=g, source=1, dest=0),
+            msprime.PopulationParametersChange(time=g, initial_size=1),
+        ]
+        reps = msprime.simulate(
+            Ne=Ne,
+            model=self.model,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, num_replicates=10)
+        for ts in reps:
+            tree = ts.first()
+            u = tree.get_mrca(0, 1)
+            self.assertEqual(u, 2)
+            self.assertLessEqual(g, tree.time(u))
+
+    def test_instantaneous_bottleneck(self):
+        Ne = 0.5
+        # Bottleneck occured 0.1 coalescent units ago
+        t = 0.1
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        # At this time, we migrate the lineages in 1 to 0, and
+        # have a very strong bottleneck, resulting in instant
+        # coalescence.
+        demographic_events = [
+            msprime.MassMigration(time=t, source=1, dest=0),
+            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
+        ]
+        reps = msprime.simulate(
+            Ne=Ne,
+            model=self.model,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, num_replicates=10)
+        for ts in reps:
+            tree = next(ts.trees())
+            self.assertAlmostEqual(t, tree.time(tree.root), places=5)
+
+
+class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
+    model = "hudson"
+
+    # We don't run this test in the DTWF case because extreme growth rates like
+    # this are problematic.
     def test_coalescence_after_growth_rate_change(self):
         Ne = 10000
         # Migrations and bottleneck occured 100 generations ago.
@@ -1217,64 +1304,7 @@ class TimeUnitsMixin(object):
             self.assertEqual(u, 2)
             self.assertAlmostEqual(g, tree.time(u), places=1)
 
-    def test_coalescence_after_size_change(self):
-        Ne = 20000
-        # Migrations and bottleneck occured 100 generations ago.
-        g = 1000
-        population_configurations = [
-            msprime.PopulationConfiguration(1),
-            msprime.PopulationConfiguration(1),
-        ]
-        # At this time, we migrate the lineage in 1 to 0, and
-        # have a very strong bottleneck, resulting in almost instant
-        # coalescence.
-        demographic_events = [
-            msprime.MassMigration(time=g, source=1, dest=0),
-            msprime.PopulationParametersChange(time=g, initial_size=1e-3),
-        ]
-        reps = msprime.simulate(
-            Ne=Ne,
-            model=self.model,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            random_seed=1, num_replicates=10)
-        for ts in reps:
-            tree = next(ts.trees())
-            u = tree.get_mrca(0, 1)
-            self.assertEqual(u, 2)
-            self.assertAlmostEqual(g, tree.time(u), places=1)
 
-    def test_instantaneous_bottleneck(self):
-        Ne = 0.5
-        # Bottleneck occured 0.1 coalescent units ago
-        t = 0.1
-        population_configurations = [
-            msprime.PopulationConfiguration(10),
-            msprime.PopulationConfiguration(10),
-        ]
-        # At this time, we migrate the lineages in 1 to 0, and
-        # have a very strong bottleneck, resulting in instant
-        # coalescence.
-        demographic_events = [
-            msprime.MassMigration(time=t, source=1, dest=0),
-            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
-        ]
-        reps = msprime.simulate(
-            Ne=Ne,
-            model=self.model,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            random_seed=1, num_replicates=10)
-        for ts in reps:
-            tree = next(ts.trees())
-            self.assertAlmostEqual(t, tree.time(tree.root), places=5)
-
-
-class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
-    model = "hudson"
-
-
-@unittest.skip("Problems with DTWF grow rates")
 class TestTimeUnitsWrightFisher(unittest.TestCase, TimeUnitsMixin):
     model = "dtwf"
 
