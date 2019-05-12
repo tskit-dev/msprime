@@ -126,6 +126,30 @@ out:
     return ret;
 }
 
+/*
+ * Retrieves a new numpy array with the specified key from the specified
+ * dictionary.
+ */
+static PyArrayObject *
+get_dict_array(PyObject *dict, const char *key_str, int npy_type)
+{
+    PyArrayObject *ret = NULL;
+    PyObject *value;
+    PyArrayObject *array;
+
+    value = get_dict_value(dict, key_str);
+    if (value == NULL) {
+        goto out;
+    }
+    array = (PyArrayObject *) PyArray_FROMANY(value, npy_type, 1, 1, NPY_ARRAY_IN_ARRAY);
+    if (array == NULL) {
+        goto out;
+    }
+    ret = array;
+out:
+    return ret;
+}
+
 static int
 parse_samples(PyObject *py_samples, Py_ssize_t *num_samples, sample_t **samples)
 {
@@ -2327,22 +2351,12 @@ static int
 Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_config)
 {
     int ret = -1;
-    Py_ssize_t j, num_populations;
+    Py_ssize_t j;
     double initial_size, growth_rate;
     int err;
     PyObject *item, *value;
 
     if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    num_populations = PyList_Size(py_pop_config);
-    if (num_populations == 0) {
-        PyErr_SetString(PyExc_ValueError, "Empty population configuration");
-        goto out;
-    }
-    err = msp_set_num_populations(self->sim, (size_t) num_populations);
-    if (err != 0) {
-        handle_input_error(err);
         goto out;
     }
     for (j = 0; j < PyList_Size(py_pop_config); j++) {
@@ -2424,10 +2438,57 @@ out:
 }
 
 static int
+Simulator_parse_single_sweep_model(Simulator *self, PyObject *py_model, double population_size)
+{
+    int ret = -1;
+    int err;
+    double position;
+    size_t num_steps = 0;
+    PyObject *value;
+    PyArrayObject *time = NULL;
+    PyArrayObject *allele_frequency = NULL;
+    npy_intp *shape;
+
+    value = get_dict_number(py_model, "position");
+    if (value == NULL) {
+        goto out;
+    }
+    position = PyFloat_AsDouble(value);
+
+    time = get_dict_array(py_model, "time", NPY_FLOAT64);
+    if (time == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(time);
+    num_steps = shape[0];
+
+    allele_frequency = get_dict_array(py_model, "allele_frequency", NPY_FLOAT64);
+    if (allele_frequency == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(allele_frequency);
+    if (shape[0] != num_steps) {
+        PyErr_SetString(PyExc_ValueError, "Trajectory array size mismatch");
+        goto out;
+    }
+    err = msp_set_simulation_model_single_sweep(self->sim, population_size,
+            position, num_steps, PyArray_DATA(time), PyArray_DATA(allele_frequency));
+    if (err != 0) {
+        handle_input_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(time);
+    Py_XDECREF(allele_frequency);
+    return ret;
+}
+
+static int
 Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
 {
     int ret = -1;
-    int err = -1;
+    int err = 0;
     PyObject *py_name = NULL;
     PyObject *hudson_s = NULL;
     PyObject *smc_s = NULL;
@@ -2435,8 +2496,9 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *dtwf_s = NULL;
     PyObject *dirac_s = NULL;
     PyObject *beta_s = NULL;
+    PyObject *single_sweep_s = NULL;
     PyObject *value;
-    int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta;
+    int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta, is_single_sweep;
     double population_size, psi, c, alpha, truncation_point;
 
     if (Simulator_check_sim(self) != 0) {
@@ -2464,6 +2526,10 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     }
     beta_s = Py_BuildValue("s", "beta");
     if (beta_s == NULL) {
+        goto out;
+    }
+    single_sweep_s = Py_BuildValue("s", "single_sweep");
+    if (single_sweep_s == NULL) {
         goto out;
     }
 
@@ -2562,7 +2628,19 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
                 alpha, truncation_point);
     }
 
-    if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_dirac || is_beta)) {
+    is_single_sweep = PyObject_RichCompareBool(py_name, single_sweep_s, Py_EQ);
+    if (is_single_sweep == -1) {
+        goto out;
+    }
+    if (is_single_sweep) {
+        ret = Simulator_parse_single_sweep_model(self, py_model, population_size);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
+    if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_dirac
+                || is_beta || is_single_sweep)) {
         PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
         goto out;
     }
@@ -2578,9 +2656,9 @@ out:
     Py_XDECREF(smc_prime_s);
     Py_XDECREF(beta_s);
     Py_XDECREF(dirac_s);
+    Py_XDECREF(single_sweep_s);
     return ret;
 }
-
 
 static int
 Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
@@ -2809,7 +2887,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "tables", "population_configuration", "migration_matrix", "demographic_events",
         "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
-        "store_full_arg", NULL};
+        "store_full_arg", "num_labels", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -2824,6 +2902,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
+    Py_ssize_t num_labels = 1;
+    Py_ssize_t num_populations = 1;
     int store_migrations = 0;
     int store_full_arg = 0;
     double start_time = -1;
@@ -2831,7 +2911,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidi", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidin", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -2842,7 +2922,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
-            &store_full_arg)) {
+            &store_full_arg, &num_labels)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -2908,9 +2988,22 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error(sim_ret);
         goto out;
     }
+
     if (population_configuration != NULL) {
-        if (Simulator_parse_population_configuration(self,
-                population_configuration) != 0) {
+        num_populations = PyList_Size(population_configuration);
+        if (num_populations == 0) {
+            PyErr_SetString(PyExc_ValueError, "Empty population configuration");
+            goto out;
+        }
+    }
+    sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
+        goto out;
+    }
+
+    if (population_configuration != NULL) {
+        if (Simulator_parse_population_configuration(self, population_configuration) != 0) {
             goto out;
         }
         if (migration_matrix == NULL) {
@@ -2960,7 +3053,9 @@ Simulator_get_model(Simulator *self)
     PyObject *ret = NULL;
     PyObject *d = NULL;
     PyObject *value = NULL;
+    PyArrayObject *array = NULL;
     simulation_model_t *model;
+    npy_intp size;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -3007,12 +3102,48 @@ Simulator_get_model(Simulator *self)
         }
         Py_DECREF(value);
         value = NULL;
+    } else if (model->type == MSP_MODEL_SINGLE_SWEEP) {
+        value = Py_BuildValue("i", model->params.single_sweep.locus);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "locus", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
+
+        size = model->params.single_sweep.trajectory.num_steps,
+
+        array = (PyArrayObject *) PyArray_SimpleNew(1, &size, NPY_FLOAT64);
+        if (array == NULL) {
+            goto out;
+        }
+        memcpy(PyArray_DATA(array), model->params.single_sweep.trajectory.time,
+                size * sizeof(double));
+        if (PyDict_SetItemString(d, "time", (PyObject *) array) != 0) {
+            goto out;
+        }
+        Py_DECREF(array);
+
+        array = (PyArrayObject *) PyArray_SimpleNew(1, &size, NPY_FLOAT64);
+        if (array == NULL) {
+            goto out;
+        }
+        memcpy(PyArray_DATA(array), model->params.single_sweep.trajectory.allele_frequency,
+                size * sizeof(double));
+        if (PyDict_SetItemString(d, "allele_frequency", (PyObject *) array) != 0) {
+            goto out;
+        }
+        Py_DECREF(array);
+        array = NULL;
     }
     ret = d;
     d = NULL;
 out:
     Py_XDECREF(d);
     Py_XDECREF(value);
+    Py_XDECREF(array);
     return ret;
 }
 
@@ -3084,6 +3215,17 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_get_num_labels(Simulator *self)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_labels(self->sim));
+out:
+    return ret;
+}
 
 static PyObject *
 Simulator_get_recombination_rate(Simulator  *self)
@@ -3679,6 +3821,7 @@ Simulator_run(Simulator *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "|d", &max_time)) {
         goto out;
     }
+
     not_done = 1;
     while (not_done) {
         Py_BEGIN_ALLOW_THREADS
@@ -3819,6 +3962,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the sample size" },
     {"get_num_populations", (PyCFunction) Simulator_get_num_populations, METH_NOARGS,
             "Returns the number of populations." },
+    {"get_num_labels", (PyCFunction) Simulator_get_num_labels, METH_NOARGS,
+            "Returns the number of labels." },
     {"get_recombination_rate",
             (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
             "Returns the recombination rate." },

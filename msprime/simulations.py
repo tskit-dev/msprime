@@ -138,7 +138,8 @@ def simulator_factory(
         record_migrations=False,
         from_ts=None,
         start_time=None,
-        record_full_arg=False):
+        record_full_arg=False,
+        num_labels=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -185,6 +186,11 @@ def simulator_factory(
     if start_time is not None and start_time < 0:
         raise ValueError("start_time cannot be negative")
 
+    if num_labels is None:
+        num_labels = 1
+    if num_labels < 1:
+        raise ValueError("Must have at least one structured coalescent label")
+
     if from_ts is not None:
         if not isinstance(from_ts, tskit.TreeSequence):
             raise TypeError("from_ts must be a TreeSequence instance.")
@@ -229,6 +235,7 @@ def simulator_factory(
     sim.store_migrations = record_migrations
     sim.store_full_arg = record_full_arg
     sim.start_time = start_time
+    sim.num_labels = num_labels
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -261,6 +268,7 @@ def simulate(
         from_ts=None,
         start_time=None,
         record_full_arg=False,
+        num_labels=None,
         # Note max_time is not documented here because it does not currently have
         # exactly the semantics that we want as it doesn't guarantee that the
         # times of nodes returned are < max_time. However, it's useful for
@@ -352,6 +360,8 @@ def simulate(
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
+    :param int num_labels: The number of distinct 'labels' within each population
+        in the structured coalescent. Defaults to 1.
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -385,7 +395,8 @@ def simulate(
         record_migrations=record_migrations,
         from_ts=from_ts,
         start_time=start_time,
-        record_full_arg=record_full_arg)
+        record_full_arg=record_full_arg,
+        num_labels=num_labels)
 
     parameters = {
         "command": "simulate",
@@ -458,6 +469,7 @@ class Simulator(object):
         self.model_change_events = []
         self.store_migrations = False
         self.store_full_arg = False
+        self.num_labels = 1
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
         num_samples = (
@@ -648,6 +660,7 @@ class Simulator(object):
             demographic_events=ll_demographic_events,
             store_migrations=self.store_migrations,
             store_full_arg=self.store_full_arg,
+            num_labels=self.num_labels,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
             node_mapping_block_size=self.node_mapping_block_size)
@@ -1202,6 +1215,95 @@ class DiracCoalescent(ParametricSimulationModel):
         self.population_size = population_size
         self.psi = psi
         self.c = c
+
+
+class SingleSweep(SimulationModel):
+    # TODO document
+    name = "single_sweep"
+
+    def __init__(self, position, trajectory, population_size=1):
+        self.population_size = population_size
+        self.position = position
+        self.trajectory = trajectory
+
+    def get_ll_representation(self):
+        d = super().get_ll_representation()
+        d["position"] = self.position
+        d["time"] = self.trajectory.time
+        d["allele_frequency"] = self.trajectory.allele_frequency
+        return d
+
+
+class SweepTrajectory(object):
+    """
+    Class representing the allele frequency trajectory for a selective sweep.
+    The class has two attributes, time and allele_frequency which may be set
+    directly to define a trajectory.
+    """
+    def __init__(self, time=None, allele_frequency=None):
+        self.time = time
+        self.allele_frequency = allele_frequency
+
+
+class TrajectorySimulator(object):
+    """
+    Class to simulate an allele frequency trajectory on which to condition
+    the coalescent simulation.
+    """
+    def __init__(
+            self, start_frequency, end_frequency, alpha, time_slice, random_seed=None):
+        self.start_frequency = start_frequency
+        self.end_frequency = end_frequency
+        self.alpha = alpha
+        self.time_slice = time_slice
+        if random_seed is None:
+            random_seed = _get_random_seed()
+        self.rng = random.Random(random_seed)
+        self.__reset()
+
+    def __reset(self):
+        # TODO these should be numpy arrays
+        self.time = []
+        self.allele_frequency = []
+
+    def __genic_selection_stochastic_forwards(self, dt, freq, alpha):
+        ux = (alpha * freq * (1 - freq)) / np.tanh(alpha * freq)
+        sign = 1 if self.rng.random() < 0.5 else -1
+        freq += (ux * dt) + sign * np.sqrt(freq * (1.0 - freq) * dt)
+        return freq
+
+    def __simulate(self):
+        """
+        Proposes a sweep trajectory and returns the acceptance probability.
+        """
+        x = self.end_frequency  # backward time
+        current_size = 1
+        t = 0
+        while x > self.start_frequency:
+            # print("x: ",x)
+            self.time.append(t)
+            self.allele_frequency.append(max(x, self.start_frequency))
+            # just a note below
+            # current_size = self._size_calculator(t)
+            x = 1.0 - self.__genic_selection_stochastic_forwards(
+                self.time_slice, 1.0 - x, self.alpha * current_size)
+            t += self.time_slice
+        # will want to return current_size / N_max
+        # for prototype this always equals 1
+        return 1
+
+    def run(self):
+        while self.rng.random() > self.__simulate():
+            self.__reset()
+        return SweepTrajectory(np.array(self.time), np.array(self.allele_frequency))
+
+
+def simulate_trajectory(
+        start_frequency, end_frequency, alpha, time_slice, random_seed=None):
+    sim = TrajectorySimulator(
+            start_frequency=start_frequency, end_frequency=end_frequency,
+            alpha=alpha, time_slice=time_slice, random_seed=random_seed)
+    return sim.run()
 
 
 class PopulationParameters(object):

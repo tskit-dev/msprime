@@ -65,7 +65,7 @@
 #define MSP_ERR_RECOMB_MAP_TOO_COARSE                               -28
 #define MSP_ERR_TIME_TRAVEL                                         -29
 #define MSP_ERR_INTEGRATION_FAILED                                  -30
-#define MSP_ERR_BAD_SWEEP_LOCUS                                     -31
+#define MSP_ERR_BAD_SWEEP_POSITION                                  -31
 #define MSP_ERR_BAD_TRAJECTORY_TIME                                 -32
 #define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -33
 #define MSP_ERR_EMPTY_TRAJECTORY                                    -34

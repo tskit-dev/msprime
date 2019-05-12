@@ -298,8 +298,7 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
 int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        uint32_t locus, size_t num_steps, double *time,
-        double *allele_frequency);
+        double position, size_t num_steps, double *time, double *allele_frequency);
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
@@ -352,6 +351,7 @@ double msp_get_time(msp_t *self);
 size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
+size_t msp_get_num_labels(msp_t *self);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_nodes(msp_t *self);
@@ -363,7 +363,6 @@ size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
-
 
 int recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci,
         double sequence_length, double rate);

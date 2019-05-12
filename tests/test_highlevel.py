@@ -435,6 +435,11 @@ class TestSimulatorFactory(unittest.TestCase):
             with self.assertRaises(ValueError):
                 msprime.simulator_factory(10, length=bad_length)
 
+    def test_num_labels(self):
+        for bad_value in [-1, 0, 0.1]:
+            with self.assertRaises(ValueError):
+                msprime.simulator_factory(10, num_labels=bad_value)
+
     def test_sample_size(self):
         self.assertRaises(ValueError, msprime.simulator_factory)
         self.assertRaises(ValueError, msprime.simulator_factory, 1)
@@ -788,6 +793,17 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_sample_size(), n)
         self.assertGreater(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
+
+    def test_num_labels(self):
+        # Running simulations with different numbers of labels in the default
+        # setting should have no effect.
+        tables = [
+            msprime.simulate(10, num_labels=num_labels, random_seed=1).tables
+            for num_labels in range(1, 5)]
+        for t in tables:
+            t.provenances.clear()
+        for t in tables:
+            self.assertEqual(t, tables[0])
 
 
 # Convenience method for getting seeds in a subprocess.
