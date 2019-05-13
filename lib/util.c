@@ -148,6 +148,10 @@ msp_strerror_internal(int err)
         case MSP_ERR_DTWF_ZERO_POPULATION_SIZE:
             ret = "Population size has decreased to zero individuals.";
             break;
+        case MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK:
+            ret = "Bottleneck events are not supported in DTWF. They can "
+                "be implemented as population size changes.";
+            break;
 
         default:
             ret = "Error occurred generating error string. Please file a bug "

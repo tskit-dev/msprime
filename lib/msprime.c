@@ -3888,6 +3888,10 @@ msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
         ret = MSP_ERR_ASSERTION_FAILED;
         goto out;
     }
+    if (self->model.type == MSP_MODEL_DTWF) {
+        ret = MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK;
+        goto out;
+    }
     avl_init_tree(&Q, cmp_segment_queue, NULL);
     /*
      * Find the individuals that descend from the common ancestor
@@ -3981,6 +3985,10 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     /* This should have been caught on adding the event */
     if (population_id < 0 || population_id >= N) {
         ret = MSP_ERR_ASSERTION_FAILED;
+        goto out;
+    }
+    if (self->model.type == MSP_MODEL_DTWF) {
+        ret = MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK;
         goto out;
     }
     pop = &self->populations[population_id].ancestors[label];
