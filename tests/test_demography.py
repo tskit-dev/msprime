@@ -38,7 +38,7 @@ class TestTimeTravelErrors(unittest.TestCase):
     """
     def test_multiple_bottlenecks(self):
         with self.assertRaises(_msprime.LibraryError):
-            for model in ["hudson", "smc", msprime.DiscreteTimeWrightFisher(10)]:
+            for model in ["hudson", "smc"]:
                 msprime.simulate(
                     model=model,
                     sample_size=100,
@@ -91,6 +91,14 @@ class TestBadDemographicParameters(unittest.TestCase):
         for bad_size in [-1, -1e300]:
             self.assertRaises(
                 ValueError, msprime.PopulationConfiguration, sample_size=bad_size)
+
+    def test_dtwf_bottleneck(self):
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.simulate(
+                sample_size=2,
+                model="dtwf",
+                demographic_events=[msprime.SimpleBottleneck(time=0.1, population=0)],
+                random_seed=1)
 
 
 class TestBadDemographicEvents(unittest.TestCase):
@@ -1242,31 +1250,6 @@ class TimeUnitsMixin(object):
             self.assertEqual(u, 2)
             self.assertLessEqual(g, tree.time(u))
 
-    def test_instantaneous_bottleneck(self):
-        Ne = 0.5
-        # Bottleneck occured 0.1 coalescent units ago
-        t = 0.1
-        population_configurations = [
-            msprime.PopulationConfiguration(10),
-            msprime.PopulationConfiguration(10),
-        ]
-        # At this time, we migrate the lineages in 1 to 0, and
-        # have a very strong bottleneck, resulting in instant
-        # coalescence.
-        demographic_events = [
-            msprime.MassMigration(time=t, source=1, dest=0),
-            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
-        ]
-        reps = msprime.simulate(
-            Ne=Ne,
-            model=self.model,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            random_seed=1, num_replicates=10)
-        for ts in reps:
-            tree = next(ts.trees())
-            self.assertAlmostEqual(t, tree.time(tree.root), places=5)
-
 
 class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
     model = "hudson"
@@ -1303,6 +1286,32 @@ class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
             u = tree.get_mrca(0, 1)
             self.assertEqual(u, 2)
             self.assertAlmostEqual(g, tree.time(u), places=1)
+
+    # Bottlenecks are not supported in the DTWF.
+    def test_instantaneous_bottleneck(self):
+        Ne = 0.5
+        # Bottleneck occured 0.1 coalescent units ago
+        t = 0.1
+        population_configurations = [
+            msprime.PopulationConfiguration(10),
+            msprime.PopulationConfiguration(10),
+        ]
+        # At this time, we migrate the lineages in 1 to 0, and
+        # have a very strong bottleneck, resulting in instant
+        # coalescence.
+        demographic_events = [
+            msprime.MassMigration(time=t, source=1, dest=0),
+            msprime.InstantaneousBottleneck(time=t, population=0, strength=100)
+        ]
+        reps = msprime.simulate(
+            Ne=Ne,
+            model=self.model,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1, num_replicates=10)
+        for ts in reps:
+            tree = next(ts.trees())
+            self.assertAlmostEqual(t, tree.time(tree.root), places=5)
 
 
 class TestTimeUnitsWrightFisher(unittest.TestCase, TimeUnitsMixin):
