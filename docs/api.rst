@@ -81,7 +81,7 @@ Running simulations
 The :func:`.simulate` function provides the primary interface to running
 coalescent simulations in msprime.
 
-.. autofunction:: msprime.simulate
+.. autofunction:: msprime.simulate()
 
 ********************
 Population structure
