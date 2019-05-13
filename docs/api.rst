@@ -126,6 +126,7 @@ and all rates are per-generation.
 .. autoclass:: msprime.PopulationParametersChange
 .. autoclass:: msprime.MigrationRateChange
 .. autoclass:: msprime.MassMigration
+.. autoclass:: msprime.SimulationModelChange
 
 ++++++++++++++++++++++++++++
 Debugging demographic models
@@ -143,6 +144,88 @@ Variable recombination rates
 
 .. autoclass:: msprime.RecombinationMap
     :members:
+
+.. _sec_api_simulation_models:
+
+*****************
+Simulation models
+*****************
+
+The default simulation model in ``msprime`` is the standard coalescent with recombination
+model. We also support a number of different models, which are documented in this section.
+
+Simulations models are specified using the ``model`` parameter to
+:func:`.simulate`. This parameter can either take the form of a
+string describing the model (e.g. ``model="smc"``) or an instance of a
+model definition class (e.g ``model=msprime.SmcApproxCoalescent(1)``).
+The available models are documented in the following subsections.
+
+A key element of simulation models in ``msprime`` is the concept
+of ``population_size``, which is, unfortunately, somewhat complicated
+and confusing. Simulation models such as the coalescent are defined
+in terms of "scaled time". Time in the standard diploid coalescent
+is measured in units of :math:`1 / (4 N_e)` generations, and
+one of the ways in which msprime tries to make life easier for
+users is to automatically convert times into units of generations.
+Thus, a key responsibility for a simulation model is to
+convert times specified by users in generations into "model time"
+(in which the simulation is performed) and to tranlate the
+simulated model times back into generations. This is what the
+reference population size associated with a model is used for
+and fundamentally means. The ``Ne`` argument to
+:func:`simulate` can also be used to define this parameter
+when combined with a string shorthand for a model.
+Thus
+
+.. code-block:: python
+
+    msprime.simulate(10, Ne=1000, model="smc")
+
+and
+
+.. code-block:: python
+
+    msprime.simulate(10, model=msprime.SmcApproxCoalescent(1000))
+
+define the same simulation.
+
+TODO: describe what happens with population configurations
+and why this is confusing.
+
+TODO: should we chane model.population_size to reference_size?
+
+
+
+TODO: Document population size and iteraction with Ne and
+population sizes in the model.
+
+NOTE: Effective population sizes can be specified by both the `Ne`
+parameter of `msprime.simulate()` and the `initial_size` parameter of
+`msprime.PopulationConfiguration()`. `initial_size` takes priority, but
+populations where this is not specified have size `Ne`.
+
+We are often interested in simulating mixtures of models: for example,
+using the :class:`.DiscreteTimeWrightFisher` model to simulate the
+recent past and then using the standard coalescent to complete the
+simulation of the ancient past. This can be achieved using the
+:class:`.SimulationModelChange` event.
+
++++++++++++++++++++++++++++++
+Coalescent and approximations
++++++++++++++++++++++++++++++
+
+.. autoclass:: msprime.StandardCoalescent
+
+.. autoclass:: msprime.SmcApproxCoalescent
+
+.. autoclass:: msprime.SmcPrimeApproxCoalescent
+
++++++++++++++++++++++++++++
+Discrete time Wright-Fisher
++++++++++++++++++++++++++++
+
+.. autoclass:: msprime.DiscreteTimeWrightFisher
+
 
 .. _sec_api_simulate_from:
 

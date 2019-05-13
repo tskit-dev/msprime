@@ -362,8 +362,12 @@ def simulate(
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
-    :param int num_labels: The number of distinct 'labels' within each population
-        in the structured coalescent. Defaults to 1.
+    :param model: The simulation model to use.
+        This can either be a string (e.g., ``"smc_prime"``) or an instance of
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models.
+    :type model: str or simulation model instance
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -1145,7 +1149,7 @@ class InstantaneousBottleneck(DemographicEvent):
 
 class SimulationModel(object):
     """
-    Superclass of all simulation models.
+    Abstract superclass of all simulation models.
     """
     name = None
 
@@ -1162,24 +1166,41 @@ class SimulationModel(object):
 class StandardCoalescent(SimulationModel):
     """
     The classical coalescent with recombination model (i.e., Hudson's algorithm).
+    The string ``"hudson"`` can be used to refer to this model.
+
+    This is the default simulation model.
     """
     name = "hudson"
 
 
 class SmcApproxCoalescent(SimulationModel):
-    # TODO document
+    """
+    The original SMC model defined by McVean and Cardin. This
+    model is implemented using a naive rejection sampling approach
+    and so it may not be any more efficient to simulate than the
+    standard Hudson model.
+
+    The string ``"smc"`` can be used to refer to this model.
+    """
     name = "smc"
 
 
 class SmcPrimeApproxCoalescent(SimulationModel):
-    # TODO document
+    """
+    The SMC' model defined by Marjoram and Wall as an improvement on the
+    original SMC. model is implemented using a naive rejection sampling
+    approach and so it may not be any more efficient to simulate than the
+    standard Hudson model.
+
+    The string ``"smc_prime"`` can be used to refer to this model.
+    """
     name = "smc_prime"
 
 
 class DiscreteTimeWrightFisher(SimulationModel):
     """
     A discrete backwards-time Wright-Fisher model, with diploid back-and-forth
-    recombination.
+    recombination. The string ``"dtwf"`` can be used to refer to this model.
 
     Wright-Fisher simulations are performed very similarly to coalescent
     simulations, with all parameters denoting the same quantities in both
@@ -1187,28 +1208,20 @@ class DiscreteTimeWrightFisher(SimulationModel):
     they occur matters. Each generation consists of the following ordered
     events:
 
-    1) Migration events. As in the Hudson coalescent, these move single extant
-    lineages between populations. Because migration events occur before
-    lineages choose parents, migrant lineages choose parents from their new
-    population in the same generation.
+    - Migration events. As in the Hudson coalescent, these move single extant
+      lineages between populations. Because migration events occur before
+      lineages choose parents, migrant lineages choose parents from their new
+      population in the same generation.
+    - Demographic events. All events with `previous_generation < event_time <=
+      current_generation` are carried out here.
+    - Lineages draw parents. Each (monoploid) extant lineage draws a parent
+      from their current population.
+    - Diploid recombination. Each parent is diploid, so all child lineages
+      recombine back-and-forth into the same two parental genome copies. These
+      become two independent lineages in the next generation.
+    - Historical sampling events. All historical samples with
+      `previous_generation < sample_time <= current_generation` are inserted.
 
-    2) Demographic events. All events with `previous_generation < event_time <=
-    current_generation` are carried out here.
-
-    3) Lineages draw parents. Each (monoploid) extant lineage draws a parent
-    from their current population.
-
-    4) Diploid recombination. Each parent is diploid, so all child lineages
-    recombine back-and-forth into the same two parental genome copies. These
-    become two independent lineages in the next generation.
-
-    5) Historical sampling events. All historical samples with
-    `previous_generation < sample_time <= current_generation` are inserted.
-
-    NOTE: Effective population sizes can be specified by both the `Ne`
-    parameter of `msprime.simulate()` and the `initial_size` parameter of
-    `msprime.PopulationConfiguration()`. `initial_size` takes priority, but
-    populations where this is not specified have size `Ne`.
     """
     name = 'dtwf'
 
