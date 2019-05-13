@@ -3946,10 +3946,6 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double pr
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (self->model.type == MSP_MODEL_DTWF) {
-        ret = MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK;
-        goto out;
-    }
     ret = msp_add_demographic_event(self, time, &de);
     if (ret != 0) {
         goto out;
@@ -4127,10 +4123,6 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     }
     if (strength < 0.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (self->model.type == MSP_MODEL_DTWF) {
-        ret = MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK;
         goto out;
     }
     ret = msp_add_demographic_event(self, time, &de);

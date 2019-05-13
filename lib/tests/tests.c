@@ -605,9 +605,9 @@ test_demographic_events(void)
 
         ret = msp_set_num_populations(&msp, 2);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 0, 1, 1);
+        ret = msp_set_population_configuration(&msp, 0, 1, 0.001);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 1, 2, 2);
+        ret = msp_set_population_configuration(&msp, 1, 2, 0.002);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
         CU_ASSERT_EQUAL(ret, 0);
@@ -616,7 +616,7 @@ test_demographic_events(void)
             ret = msp_set_simulation_model_hudson(&msp, 0.25);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            ret = msp_set_simulation_model_dtwf(&msp, 1);
+            ret = msp_set_simulation_model_dtwf(&msp, 100);
             CU_ASSERT_EQUAL(ret, 0);
         }
 
@@ -681,9 +681,11 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_population_parameters_change(&msp, 0.4, 1, 1, GSL_NAN);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_parameters_change(&msp, 0.5, 0, 0.5, 1.0);
+        ret = msp_add_population_parameters_change(&msp, 0.5, 0, 0.5, 0.002);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_parameters_change(&msp, 0.6, -1, 0.5, 2.0);
+        ret = msp_add_population_parameters_change(&msp, 0.6, -1, 0.5, 0.001);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, 0.7, -1, 1, GSL_NAN);
         CU_ASSERT_EQUAL(ret, 0);
 
         if (model == 0) {
@@ -694,7 +696,7 @@ test_demographic_events(void)
             ret = msp_add_instantaneous_bottleneck(&msp, 2.5, 0, 2.0);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            ret = msp_add_population_parameters_change(&msp, 0.8, 0, 1, GSL_NAN);
+            ret = msp_add_population_parameters_change(&msp, 0.8, -1, 1, 0);
             CU_ASSERT_EQUAL(ret, 0);
             /* Need to lower final migration rate for DTWF or else lineages will
              * alternate pops every generation and miss each other - need to let
@@ -717,14 +719,12 @@ test_demographic_events(void)
                 msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
                 MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
 
-        if (model == 0) {
-            CU_ASSERT_EQUAL(
-                    msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
-                    MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-            CU_ASSERT_EQUAL(
-                    msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
-                    MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        }
+        CU_ASSERT_EQUAL(
+                msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(
+                msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
+                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
 
         CU_ASSERT_EQUAL(
             msp_debug_demography(&msp, &time),
@@ -737,11 +737,7 @@ test_demographic_events(void)
         last_time = 0;
         do {
             ret = msp_debug_demography(&msp, &time);
-            CU_ASSERT_EQUAL(ret, 0);
-            if (ret != 0) {
-                // This is to avoid an infinite loop on nonzero exit status
-                break;
-            }
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
             msp_print_state(&msp, _devnull);
             ret = msp_compute_population_size(&msp, 10, last_time, &pop_size);
             CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
@@ -760,18 +756,16 @@ test_demographic_events(void)
             j++;
             last_time = time;
         } while (! gsl_isinf(time));
-        CU_ASSERT_EQUAL(j, 10);
+        CU_ASSERT_TRUE(j >= 9);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(
             msp_run(&msp, DBL_MAX, ULONG_MAX),
             MSP_ERR_BAD_STATE);
         ret = msp_reset(&msp);
         CU_ASSERT_EQUAL(ret, 0);
-
         msp_print_state(&msp, _devnull);
         ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, 0);
-
         ret = msp_free(&msp);
         CU_ASSERT_EQUAL(ret, 0);
     }
@@ -919,8 +913,6 @@ test_dtwf_unsupported_bottleneck(void)
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
-    /* If model is set after adding demographic events, we won't catch
-     * the unsupported bottleneck until running the simulation */
     ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp, 1);
@@ -939,22 +931,6 @@ test_dtwf_unsupported_bottleneck(void)
     ret = msp_set_simulation_model_dtwf(&msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK);
-
-    /* If model is set before adding demographic events, adding a bottleneck
-     * event should throw an error */
-    ret = msp_reset(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK);
-
-    ret = msp_reset(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 0.5);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK);
 
     ret = msp_free(&msp);
