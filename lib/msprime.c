@@ -230,17 +230,12 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
     simulation_model_t *model = &self->model;
 
-
     if (population_id < 0 || population_id > (int) self->num_populations) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     if (initial_size <= 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (model->type == MSP_MODEL_DTWF && round(initial_size) < 1) {
-        ret = MSP_ERR_DTWF_ZERO_INITIAL_POPULATION_SIZE;
         goto out;
     }
     self->initial_populations[population_id].initial_size =

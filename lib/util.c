@@ -148,9 +148,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_DTWF_ZERO_POPULATION_SIZE:
             ret = "Population size has decreased to zero individuals.";
             break;
-        case MSP_ERR_DTWF_ZERO_INITIAL_POPULATION_SIZE:
-            ret = "DTWF population sizes must round to >= 1 individual.";
-            break;
 
         default:
             ret = "Error occurred generating error string. Please file a bug "

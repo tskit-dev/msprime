@@ -784,13 +784,13 @@ test_dtwf_zero_pop_size(void)
 {
     int ret;
     uint32_t n = 10;
-    uint32_t j;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    double migration_matrix[] = {0, 0, 0, 0};
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
+
+    memset(samples, 0, n * sizeof(sample_t));
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
@@ -799,30 +799,26 @@ test_dtwf_zero_pop_size(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 0; j < n; j++) {
-        samples[j].time = j;
-        samples[j].population_id = j % 2;
-    }
-
+    /* DTWF population size must round to >= 1 */
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-
     ret = msp_set_simulation_model_dtwf(&msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
-
-    /* DTWF population size must round to >= 1 */
     ret = msp_set_population_configuration(&msp, 0, 0.4, 0);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_ZERO_INITIAL_POPULATION_SIZE);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_ZERO_POPULATION_SIZE);
+    msp_free(&msp);
 
-    /* With no migration, populations shrink to zero individuals before all
-     * lineages coalesce */
-    ret = msp_set_num_populations(&msp, 2);
+    /* With no high growth rate, population sizes crash to zero. */
+    tsk_table_collection_clear(&tables);
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 10, 0.1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 1, 10, 0.1);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+    ret = msp_set_population_configuration(&msp, 0, 10, 100);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
