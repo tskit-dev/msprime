@@ -145,6 +145,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_UNSUPPORTED_OPERATION:
             ret = "Current simulation configuration is not supported.";
             break;
+        case MSP_ERR_DTWF_ZERO_POPULATION_SIZE:
+            ret = "Population size has decreased to zero individuals.";
+            break;
 
         default:
             ret = "Error occurred generating error string. Please file a bug "

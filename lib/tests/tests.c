@@ -612,6 +612,14 @@ test_demographic_events(void)
         ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
         CU_ASSERT_EQUAL(ret, 0);
 
+        if (model == 0) {
+            ret = msp_set_simulation_model_hudson(&msp, 0.25);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            ret = msp_set_simulation_model_dtwf(&msp, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+
         CU_ASSERT_EQUAL(
             msp_add_mass_migration(&msp, 10, -1, 0, 1),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
@@ -671,25 +679,32 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0);
+        ret = msp_add_population_parameters_change(&msp, 0.4, 1, 1, GSL_NAN);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_parameters_change(&msp, 0.5, -1, 0.5, 2.0);
+        ret = msp_add_population_parameters_change(&msp, 0.5, 0, 0.5, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_parameters_change(&msp, 0.6, 0, GSL_NAN, 0);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_parameters_change(&msp, 0.7, 1, 1, GSL_NAN);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
+        ret = msp_add_population_parameters_change(&msp, 0.6, -1, 0.5, 2.0);
         CU_ASSERT_EQUAL(ret, 0);
 
         if (model == 0) {
-            ret = msp_add_instantaneous_bottleneck(&msp, 1.9, 0, 2.0);
+            ret = msp_add_population_parameters_change(&msp, 0.7, 0, GSL_NAN, 0);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_add_simple_bottleneck(&msp, 1.5, 0, 0.5);
+            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_add_instantaneous_bottleneck(&msp, 2.5, 0, 2.0);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
+            /* DTWF pop size must round to > 0 */
+            ret = msp_add_population_parameters_change(&msp, 0.7, -1, 3.0, 0);
+            CU_ASSERT_EQUAL(ret, 0);
             /* Need to lower final migration rate for DTWF or else lineages will
              * alternate pops every generation and miss each other - need to let
              * one lineage migrate while the others stay put */
-            ret = msp_add_migration_rate_change(&msp, 11, -1, 0.3);
+            ret = msp_add_migration_rate_change(&msp, 1.5, -1, 0.3);
+            CU_ASSERT_EQUAL(ret, 0);
+            // Bottleneck events only supported in Hudson model so we add
+            // another mass migration to have the same number of events
+            ret = msp_add_mass_migration(&msp, 2.5, 1, 0, 0.6);
             CU_ASSERT_EQUAL(ret, 0);
         }
 
@@ -702,24 +717,19 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(
                 msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
                 MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(
-                msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(
-                msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+
+        if (model == 0) {
+            CU_ASSERT_EQUAL(
+                    msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
+                    MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+            CU_ASSERT_EQUAL(
+                    msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
+                    MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        }
 
         CU_ASSERT_EQUAL(
             msp_debug_demography(&msp, &time),
             MSP_ERR_BAD_STATE);
-
-        if (model == 0) {
-            ret = msp_set_simulation_model_hudson(&msp, 0.25);
-            CU_ASSERT_EQUAL(ret, 0);
-        } else {
-            ret = msp_set_simulation_model_dtwf(&msp, 1);
-            CU_ASSERT_EQUAL(ret, 0);
-        }
 
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -765,6 +775,61 @@ test_demographic_events(void)
 
     free(samples);
     gsl_rng_free(rng);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_dtwf_zero_pop_size(void)
+{
+    int ret;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    memset(samples, 0, n * sizeof(sample_t));
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* DTWF population size must round to >= 1 */
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 0.4, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_ZERO_POPULATION_SIZE);
+    msp_free(&msp);
+
+    /* With no high growth rate, population sizes crash to zero. */
+    tsk_table_collection_clear(&tables);
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 10, 100);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_ZERO_POPULATION_SIZE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    gsl_rng_free(rng);
+    free(samples);
     recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
@@ -3060,6 +3125,7 @@ main(int argc, char **argv)
         {"test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg},
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
+        {"test_dtwf_zero_pop_size", test_dtwf_zero_pop_size},
         {"test_single_sweep_errors", test_single_sweep_errors},
         {"test_single_sweep", test_single_sweep},
         {"test_single_sweep_growth", test_single_sweep_growth},
