@@ -2734,7 +2734,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
     uint32_t j, k, i, N;
     unsigned int *n = NULL;
     double *mig_tmp = NULL;
-    double sum;
+    double sum, cur_time;
     avl_tree_t *node_trees = NULL;
     avl_tree_t *nodes;
     /* Only support a single structured coalescent label at the moment */
@@ -2818,17 +2818,22 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 }
             }
         }
-
-        if (self->next_demographic_event != NULL) {
-            if (self->next_demographic_event->time <= self->time) {
-                ret = msp_apply_demographic_events(self);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-        }
         free(node_trees);
         node_trees = NULL;
+
+        /* Demographic events set the simulation time to the time of the event.
+         * In the DTWF, this would prevent more than one event occurring per
+         * generation, and throw off the time between generations. We avoid
+         * this by saving the current time and returning to it. */
+        cur_time = self->time;
+        while (self->next_demographic_event != NULL &&
+                self->next_demographic_event->time <= cur_time) {
+            ret = msp_apply_demographic_events(self);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+        self->time = cur_time;
 
         ret = msp_dtwf_generation(self);
         if (ret != 0) {
