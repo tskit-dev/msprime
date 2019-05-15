@@ -1763,7 +1763,11 @@ class TestSimulateUntilWrightFisher(unittest.TestCase, SimulateUntilMixin):
 
 
 class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
-    def test_events(self):
+    """
+    Tests that events occuring between generations in the DTWF are
+    handled correctly.
+    """
+    def test_4_populations(self):
         migration_matrix = np.zeros((4, 4))
         population_configurations = [
             msprime.PopulationConfiguration(
@@ -1788,12 +1792,11 @@ class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
             msprime.MigrationRateChange(
                 time=2.2, rate=0.3, matrix_index=(3, 2))
             ]
-
         ts = msprime.simulate(
                 migration_matrix=migration_matrix,
                 population_configurations=population_configurations,
                 demographic_events=demographic_events,
+                random_seed=2,
                 model='dtwf')
-
         for node in ts.nodes():
-            assert node.time == int(node.time)
+            self.assertEqual(node.time, int(node.time))
