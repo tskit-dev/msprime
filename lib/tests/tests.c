@@ -777,6 +777,88 @@ test_demographic_events(void)
 }
 
 static void
+test_dtwf_events_between_generations(void)
+{
+    int ret, i, j;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    population_t pop;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    double migration_matrix[] = {0, 0, 0, 0};
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    for (j = 0; j < n; j++) {
+        samples[j].time = 0;
+        samples[j].population_id = j % 2;
+    }
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_set_num_populations(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 1, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_add_population_parameters_change(&msp, 0.1, 0, 5, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 0.2, 1, 5, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 1.1, 0, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 1.2, 1, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_migration_rate_change(&msp, 3, -1, 0.3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Check that we stay on integer-valued times, and that both demographic
+     * events between generations occurred  */
+    ret = msp_run(&msp, DBL_MAX, 1);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(msp.time, 1);
+    for (i = 0; i < 2; i++) {
+        pop = msp.populations[i];
+        CU_ASSERT_EQUAL(pop.initial_size, 5);
+    }
+
+    ret = msp_run(&msp, DBL_MAX, 1);
+    CU_ASSERT_EQUAL(ret, 1);
+    CU_ASSERT_EQUAL(msp.time, 2);
+    for (i = 0; i < 2; i++) {
+        pop = msp.populations[i];
+        CU_ASSERT_EQUAL(pop.initial_size, 10);
+    }
+
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    gsl_rng_free(rng);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_dtwf_zero_pop_size(void)
 {
     int ret;
@@ -3180,6 +3262,7 @@ main(int argc, char **argv)
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_zero_pop_size", test_dtwf_zero_pop_size},
+        {"test_dtwf_events_between_generations", test_dtwf_events_between_generations},
         {"test_single_sweep_errors", test_single_sweep_errors},
         {"test_single_sweep", test_single_sweep},
         {"test_single_sweep_growth", test_single_sweep_growth},

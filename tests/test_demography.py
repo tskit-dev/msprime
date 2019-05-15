@@ -1760,3 +1760,43 @@ class TestSimulateUntilHudson(unittest.TestCase, SimulateUntilMixin):
 
 class TestSimulateUntilWrightFisher(unittest.TestCase, SimulateUntilMixin):
     model = "dtwf"
+
+
+class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
+    """
+    Tests that events occuring between generations in the DTWF are
+    handled correctly.
+    """
+    def test_4_populations(self):
+        migration_matrix = np.zeros((4, 4))
+        population_configurations = [
+            msprime.PopulationConfiguration(
+                sample_size=10, initial_size=10, growth_rate=0),
+            msprime.PopulationConfiguration(
+                sample_size=10, initial_size=10, growth_rate=0),
+            msprime.PopulationConfiguration(
+                sample_size=0, initial_size=10, growth_rate=0),
+            msprime.PopulationConfiguration(
+                sample_size=0, initial_size=10, growth_rate=0)]
+        demographic_events = [
+            msprime.PopulationParametersChange(
+                population=1, time=0.1, initial_size=5),
+            msprime.PopulationParametersChange(
+                population=0, time=0.2, initial_size=5),
+            msprime.MassMigration(
+                time=1.1, source=0, dest=2),
+            msprime.MassMigration(
+                time=1.2, source=1, dest=3),
+            msprime.MigrationRateChange(
+                time=2.1, rate=0.3, matrix_index=(2, 3)),
+            msprime.MigrationRateChange(
+                time=2.2, rate=0.3, matrix_index=(3, 2))
+            ]
+        ts = msprime.simulate(
+                migration_matrix=migration_matrix,
+                population_configurations=population_configurations,
+                demographic_events=demographic_events,
+                random_seed=2,
+                model='dtwf')
+        for node in ts.nodes():
+            self.assertEqual(node.time, int(node.time))
