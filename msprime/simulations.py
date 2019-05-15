@@ -1177,8 +1177,37 @@ class SmcPrimeApproxCoalescent(SimulationModel):
 
 class DiscreteTimeWrightFisher(SimulationModel):
     """
-    A discrete backwards-time Wright Fisher model, with back-and-forth
-    recombination
+    A discrete backwards-time Wright-Fisher model, with diploid back-and-forth
+    recombination.
+
+    Wright-Fisher simulations are performed very similarly to coalescent
+    simulations, with all parameters denoting the same quantities in both
+    models. Because events occur at discrete times however, the order in which
+    they occur matters. Each generation consists of the following ordered
+    events:
+
+    1) Migration events. As in the Hudson coalescent, these move single extant
+    lineages between populations. Because migration events occur before
+    lineages choose parents, migrant lineages choose parents from their new
+    population in the same generation.
+
+    2) Demographic events. All events with `previous_generation < event_time <=
+    current_generation` are carried out here.
+
+    3) Lineages draw parents. Each (monoploid) extant lineage draws a parent
+    from their current population.
+
+    4) Diploid recombination. Each parent is diploid, so all child lineages
+    recombine back-and-forth into the same two parental genome copies. These
+    become two independent lineages in the next generation.
+
+    5) Historical sampling events. All historical samples with
+    `previous_generation < sample_time <= current_generation` are inserted.
+
+    NOTE: Effective population sizes can be specified by both the `Ne`
+    parameter of `msprime.simulate()` and the `initial_size` parameter of
+    `msprime.PopulationConfiguration()`. `initial_size` takes priority, but
+    populations where this is not specified have size `Ne`.
     """
     name = 'dtwf'
 
