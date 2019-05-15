@@ -39,7 +39,7 @@
 #define MSP_MODEL_BETA 3
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
-#define MSP_MODEL_SINGLE_SWEEP 6
+#define MSP_MODEL_SWEEP 6
 
 #define MSP_NODE_IS_RE_EVENT    (1u << 17)
 #define MSP_NODE_IS_CA_EVENT    (1u << 18)
@@ -123,14 +123,27 @@ typedef struct {
     double c; // constant
 } dirac_coalescent_t;
 
+/* Forward declaration */
+struct _msp_t;
+
 typedef struct {
+    /* TODO document these parameters.*/
+    double start_frequency;
+    double end_frequency;
+    double alpha;
+    double dt;
+} genic_selection_trajectory_t;
+
+typedef struct _sweep_t {
     uint32_t locus;
-    struct {
-        double *allele_frequency;
-        double *time;
-        size_t num_steps;
-    } trajectory;
-} single_sweep_t;
+    union {
+        /* Future trajectory simulation models would go here */
+        genic_selection_trajectory_t genic_selection_trajectory;
+    } trajectory_params;
+    int (*generate_trajectory)(struct _sweep_t *self, struct _msp_t *simulator,
+            size_t *num_steps, double **time, double **allele_frequency);
+    void (*print_state)(struct _sweep_t *self, FILE *out);
+} sweep_t;
 
 typedef struct _simulation_model_t {
     int type;
@@ -138,7 +151,7 @@ typedef struct _simulation_model_t {
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
-        single_sweep_t single_sweep;
+        sweep_t sweep;
     } params;
     /* If the model allocates memory this function should be non-null. */
     void (*free)(struct _simulation_model_t *model);
@@ -297,8 +310,9 @@ int msp_set_simulation_model_dirac(msp_t *self, double population_size, double p
     double c);
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point);
-int msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        double position, size_t num_steps, double *time, double *allele_frequency);
+int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_size,
+        double position, double start_frequency, double end_frequency,
+        double alpha, double dt);
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
@@ -398,6 +412,6 @@ int msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, d
 
 int msp_multi_merger_common_ancestor_event(msp_t *self, double x, avl_tree_t *ancestors, avl_tree_t *Q);
 
-int msp_single_sweep_recombination_event(msp_t *self, label_id_t label,
+int msp_sweep_recombination_event(msp_t *self, label_id_t label,
         uint32_t sweep_locus, double population_frequency);
 #endif /*__MSPRIME_H__*/

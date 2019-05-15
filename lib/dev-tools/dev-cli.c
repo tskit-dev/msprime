@@ -130,64 +130,48 @@ read_samples(config_t *config, size_t *num_samples, sample_t **samples)
 }
 
 static void
-read_single_sweep_model_config(msp_t *msp, config_setting_t *model_setting,
+read_sweep_genic_selection_model_config(msp_t *msp, config_setting_t *model_setting,
         double population_size)
 {
     int ret = 0;
-    config_setting_t *s, *setting, *row;
-    int locus;
-    size_t num_steps, j;
-    double *allele_frequency = NULL;
-    double *time = NULL;
+    config_setting_t *s;
+    double position, start_frequency, end_frequency, alpha, dt;
 
-    s = config_setting_get_member(model_setting, "locus");
+    s = config_setting_get_member(model_setting, "position");
     if (s == NULL) {
-        fatal_error("single_sweep model locus not specified");
+        fatal_error("sweep genic selection model position not specified");
     }
-    locus = config_setting_get_int(s);
+    position = config_setting_get_float(s);
 
-    setting = config_setting_get_member(model_setting, "trajectory");
-    if (setting == NULL) {
-        fatal_error("single_sweep model trajectory not specified");
+    s = config_setting_get_member(model_setting, "start_frequency");
+    if (s == NULL) {
+        fatal_error("sweep genic selection model start_frequency not specified");
     }
-    if (config_setting_is_list(setting) == CONFIG_FALSE) {
-        fatal_error("trajectory must be a list");
+    start_frequency = config_setting_get_float(s);
+
+    s = config_setting_get_member(model_setting, "end_frequency");
+    if (s == NULL) {
+        fatal_error("sweep genic selection model end_frequency not specified");
     }
-    num_steps = (size_t) config_setting_length(setting);
-    allele_frequency = malloc(num_steps * sizeof(double));
-    time = malloc(num_steps * sizeof(double));
-    if (allele_frequency == NULL || time == NULL) {
-        fatal_error("Out of memory");
+    end_frequency = config_setting_get_float(s);
+
+    s = config_setting_get_member(model_setting, "dt");
+    if (s == NULL) {
+        fatal_error("sweep genic selection model dt not specified");
     }
-    for (j = 0; j < num_steps; j++) {
-        row = config_setting_get_elem(setting, (unsigned int) j);
-        if (row == NULL) {
-            fatal_error("error reading trajectory[%d]", j);
-        }
-        if (config_setting_is_array(row) == CONFIG_FALSE) {
-            fatal_error("trajectory[%d] not an array", j);
-        }
-        if (config_setting_length(row) != 2) {
-            fatal_error("trajectory entries must be [coord, rate] pairs");
-        }
-        s = config_setting_get_elem(row, 0);
-        if (!config_setting_is_number(s)) {
-            fatal_error("trajectory entries must be numbers");
-        }
-        time[j] = config_setting_get_float(s);
-        s = config_setting_get_elem(row, 1);
-        if (!config_setting_is_number(s)) {
-            fatal_error("trajectory entries must be numbers");
-        }
-        allele_frequency[j] = config_setting_get_float(s);
+    dt = config_setting_get_float(s);
+
+    s = config_setting_get_member(model_setting, "alpha");
+    if (s == NULL) {
+        fatal_error("sweep genic selection model alpha not specified");
     }
-    ret = msp_set_simulation_model_single_sweep(msp, population_size,
-            (uint32_t) locus, num_steps, time, allele_frequency);
+    alpha = config_setting_get_float(s);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(msp, population_size,
+            position, start_frequency, end_frequency, alpha, dt);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
-    free(allele_frequency);
-    free(time);
 }
 
 static void
@@ -249,8 +233,8 @@ read_model_config(msp_t *msp, config_t *config)
         }
         truncation_point = config_setting_get_float(s);
         ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
-    } else if (strcmp(name, "single_sweep") == 0) {
-        read_single_sweep_model_config(msp, setting, population_size);
+    } else if (strcmp(name, "sweep_genic_selection") == 0) {
+        read_sweep_genic_selection_model_config(msp, setting, population_size);
     } else {
         fatal_error("Unknown simulation model '%s'", name);
     }

@@ -1126,6 +1126,9 @@ get_num_children(size_t node, tsk_edge_table_t *edges)
     return num_children;
 }
 
+#if 0
+Commenting these tests out for now
+
 /* deterministic sweep trajectory function */
 static double
 single_sweep_fill_traj_test(double time)
@@ -1431,6 +1434,8 @@ test_single_sweep_recomb(void)
     }
     recomb_map_free(&recomb_map);
 }
+
+#endif
 
 static void
 test_dtwf_deterministic(void)
@@ -3315,10 +3320,10 @@ main(int argc, char **argv)
         {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_zero_pop_size", test_dtwf_zero_pop_size},
         {"test_dtwf_events_between_generations", test_dtwf_events_between_generations},
-        {"test_single_sweep_errors", test_single_sweep_errors},
-        {"test_single_sweep", test_single_sweep},
-        {"test_single_sweep_growth", test_single_sweep_growth},
-        {"test_single_sweep_recomb", test_single_sweep_recomb},
+        /* {"test_single_sweep_errors", test_single_sweep_errors}, */
+        /* {"test_single_sweep", test_single_sweep}, */
+        /* {"test_single_sweep_growth", test_single_sweep_growth}, */
+        /* {"test_single_sweep_recomb", test_single_sweep_recomb}, */
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},

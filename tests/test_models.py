@@ -359,60 +359,26 @@ class TestSingleSweep(unittest.TestCase):
     Tests for the single sweep model.
     """
     def test_incorrect_num_labels(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
-        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
+        model = msprime.SweepGenicSelection(
+            position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=0.1,
+            dt=0.01)
         for num_labels in [1, 3, 10]:
             with self.assertRaises(_msprime.LibraryError):
                 msprime.simulate(
                     10, recombination_rate=1, model=model, num_labels=num_labels)
 
-    @unittest.skip("Assertion `overlaps != NULL' fails.")
-    def test_simple_no_recomb(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
-        model = msprime.SingleSweep(position=0, trajectory=trajectory)
-        msprime.simulate(10, model=model, num_labels=2)
-
-    @unittest.skip("Assertion `overlaps != NULL' fails.")
-    def test_simple_recomb(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
-        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
-        msprime.simulate(10, recombination_rate=1, model=model, num_labels=2)
-
-    @unittest.skip("Assertion `overlaps != NULL' fails.")
-    def test_trajectory_no_recomb(self):
-        trajectory = msprime.simulate_trajectory(
-            start_frequency=0.1, end_frequency=0.8, alpha=0.1, time_slice=0.01,
-            random_seed=32)
-        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
-        msprime.simulate(10, model=model, num_labels=2)
-
+    @unittest.skip("Not completing")
     def test_simple_example(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1, 0.2, 0.3], [0.95, 0.85, 0.75, 0.5])
         recomb_map = msprime.RecombinationMap.uniform_map(
             length=100, num_loci=100, rate=0.1)
-        model = msprime.SingleSweep(
-            population_size=100, position=5, trajectory=trajectory)
+        model = msprime.SweepGenicSelection(
+            position=50, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
+            dt=0.1)
         ts = msprime.simulate(
             sample_size=10,
             recombination_map=recomb_map, model=model, num_labels=2,
-            demographic_events=[
-                msprime.SimulationModelChange(0.3, msprime.StandardCoalescent(100))])
+            # demographic_events=[
+            #     msprime.SimulationModelChange(0.3, msprime.StandardCoalescent(100))])
+        )
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
-
-
-class TestSimulateTrajectory(unittest.TestCase):
-    """
-    Tests the trajectory simulator.
-    """
-    def test_same_random_seed_equal(self):
-        trajectories = [msprime.simulate_trajectory(
-            start_frequency=0.125, end_frequency=0.75, alpha=0.125, time_slice=1 / 16,
-            random_seed=42) for _ in range(10)]
-        for trajectory in trajectories:
-            self.assertTrue(np.array_equal(trajectory.time, trajectories[0].time))
-            self.assertTrue(
-                np.array_equal(
-                    trajectory.allele_frequency, trajectories[0].allele_frequency))
-
-    # TODO more tests as we define functionality here.

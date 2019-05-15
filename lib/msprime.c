@@ -808,15 +808,9 @@ msp_print_state(msp_t *self, FILE *out)
         fprintf(out, "\tdirac coalescent parameters: psi = %f, c = %f\n",
                 self->model.params.dirac_coalescent.psi,
                 self->model.params.dirac_coalescent.c);
-    } else if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
-        fprintf(out, "\tsingle_sweep parameters: locus = %d, trajectory=[",
-                self->model.params.single_sweep.locus);
-        for (j = 0; j < self->model.params.single_sweep.trajectory.num_steps; j++) {
-            fprintf(out, "(%f, %f),",
-                self->model.params.single_sweep.trajectory.time[j],
-                self->model.params.single_sweep.trajectory.allele_frequency[j]);
-        }
-        fprintf(out, "]\n");
+    } else if (self->model.type == MSP_MODEL_SWEEP) {
+        fprintf(out, "\tsweep @ locus = %d\n", self->model.params.sweep.locus);
+        self->model.params.sweep.print_state(&self->model.params.sweep, out);
     }
     fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "m = %d\n", self->num_loci);
@@ -2861,7 +2855,7 @@ out:
  * label 0 to label 1 with the specified probability.
  */
 static int
-msp_single_sweep_initialise(msp_t *self, double switch_proba)
+msp_sweep_initialise(msp_t *self, double switch_proba)
 {
     int ret = 0;
     uint32_t j;
@@ -2897,7 +2891,7 @@ out:
 /* Finalise the sweep by moving all lineages back to label 0.
  */
 static int
-msp_single_sweep_finalise(msp_t *self)
+msp_sweep_finalise(msp_t *self)
 {
     int ret = 0;
     uint32_t j;
@@ -2938,7 +2932,7 @@ msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
 }
 
 int
-msp_single_sweep_recombination_event(msp_t *self, label_id_t label,
+msp_sweep_recombination_event(msp_t *self, label_id_t label,
         uint32_t sweep_locus, double population_frequency)
 {
     int ret = 0;
@@ -2979,20 +2973,20 @@ out:
  * trajectory array are ABSOLUTE with respect to the
  * simulation. we may want to alter this in the future */
 static int
-msp_run_single_sweep(msp_t *self)
+msp_run_sweep(msp_t *self)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
-    size_t num_steps = model->params.single_sweep.trajectory.num_steps;
     size_t curr_step = 0;
-    double *allele_frequency = model->params.single_sweep.trajectory.allele_frequency;
-    uint32_t sweep_locus = model->params.single_sweep.locus;
+    size_t num_steps;
+    double *allele_frequency = NULL;
+    double *time = NULL;
+    uint32_t sweep_locus = model->params.sweep.locus;
     double sweep_dt;
     size_t j = 0;
     int64_t num_links;
     unsigned long events = 0;
     label_id_t label;
-    double *time = model->params.single_sweep.trajectory.time;
     double rec_rates[] = {0.0, 0.0};
     double sweep_pop_sizes[] = {0.0, 0.0};
     double event_prob, event_rand, tmp_rand, e_sum, pop_size;
@@ -3010,11 +3004,16 @@ msp_run_single_sweep(msp_t *self)
      * different to all the other model runners. Probably the simplest thing to
      * do here is to make the trajectory times absolute wrt to the simulation, and
      * to then increment curr_step accordingly. We can then probably reason about
-     * when the call msp_single_sweep_initialise and msp_single_sweep_finalise
+     * when the call msp_sweep_initialise and msp_sweep_finalise
      * depending on the value of curr_step, and hopefully reintroduce the max_time
      * and max_steps parameters. */
 
-    ret = msp_single_sweep_initialise(self, allele_frequency[0]);
+    ret = model->params.sweep.generate_trajectory(
+            &model->params.sweep, self, &num_steps, &time, &allele_frequency);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_sweep_initialise(self, allele_frequency[0]);
     if (ret != 0) {
         goto out;
     }
@@ -3077,12 +3076,12 @@ msp_run_single_sweep(msp_t *self)
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
                     /* recomb in b background */
                     //printf("recomb event b\n");
-                    ret = msp_single_sweep_recombination_event(self, 0, sweep_locus,
+                    ret = msp_sweep_recombination_event(self, 0, sweep_locus,
                         (1.0 - allele_frequency[curr_step - 1]));
                 } else {
                     /* recomb in B background */
                     //printf("recomb event B\n");
-                    ret = msp_single_sweep_recombination_event(self, 1, sweep_locus,
+                    ret = msp_sweep_recombination_event(self, 1, sweep_locus,
                         allele_frequency[curr_step - 1]);
                 }
             }
@@ -3093,12 +3092,14 @@ msp_run_single_sweep(msp_t *self)
         /*msp_print_state(self, stdout);*/
     }
 
-    ret = msp_single_sweep_finalise(self);
+    ret = msp_sweep_finalise(self);
     if (ret != 0) {
         goto out;
     }
     msp_verify(self);
 out:
+    msp_safe_free(time);
+    msp_safe_free(allele_frequency);
     return ret;
 }
 
@@ -3129,9 +3130,9 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, scaled_time, max_events);
-    } else if (self->model.type == MSP_MODEL_SINGLE_SWEEP) {
-        /* FIXME making single_sweep atomic for now as it's non-renentrant */
-        ret = msp_run_single_sweep(self);
+    } else if (self->model.type == MSP_MODEL_SWEEP) {
+        /* FIXME making sweep atomic for now as it's non-renentrant */
+        ret = msp_run_sweep(self);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
@@ -3357,7 +3358,7 @@ msp_get_model_name(msp_t *self)
         case MSP_MODEL_DTWF:
             ret = "dtwf";
             break;
-        case MSP_MODEL_SINGLE_SWEEP:
+        case MSP_MODEL_SWEEP:
             ret = "single-sweep";
             break;
         default:
@@ -4699,6 +4700,81 @@ dtwf_model_rate_to_generation_rate(simulation_model_t *MSP_UNUSED(model), double
 }
 
 /**************************************************************
+ * Allele frequency trajectory simulation for genic selection
+ *
+ **************************************************************/
+
+static double
+genic_selection_stochastic_forwards(double dt, double freq, double alpha, double u)
+{
+    double ux = (alpha * freq * (1 - freq)) / tanh(alpha * freq);
+    int sign = u < 0.5? 1: -1;
+    return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
+}
+
+static int
+genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
+        size_t *ret_num_steps, double **ret_time, double **ret_allele_frequency)
+{
+    int ret = 0;
+    genic_selection_trajectory_t trajectory =
+        self->trajectory_params.genic_selection_trajectory;
+    gsl_rng *rng = simulator->rng;
+    size_t max_steps = 8192;
+    double *time = malloc(max_steps * sizeof(*time));
+    double *allele_frequency = malloc(max_steps * sizeof(*allele_frequency));
+    double x, t;
+    size_t num_steps;
+    double current_size = 1.0;
+
+    if (time == NULL || allele_frequency == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    /* TODO Wrap this in a rejection sample loop and get the population size
+     * from the simulator */
+
+    x = trajectory.end_frequency;
+    t = simulator->time;
+    num_steps = 0;
+
+    while (x > trajectory.start_frequency) {
+        assert(num_steps < max_steps); /* TODO realloc here instead */
+        time[num_steps] = t;
+        allele_frequency[num_steps] = x;
+        x = 1.0 - genic_selection_stochastic_forwards(
+                trajectory.dt, 1.0 - x, trajectory.alpha * current_size,
+                gsl_rng_uniform(rng));
+        t += trajectory.dt;
+        num_steps++;
+    }
+
+    *ret_num_steps = 0;
+    *ret_time = time;
+    *ret_allele_frequency = allele_frequency;
+    time = NULL;
+    allele_frequency = NULL;
+out:
+    msp_safe_free(time);
+    msp_safe_free(allele_frequency);
+    return ret;
+}
+
+static void
+genic_selection_print_state(sweep_t *self, FILE *out)
+{
+    genic_selection_trajectory_t *trajectory =
+        &self->trajectory_params.genic_selection_trajectory;
+
+    fprintf(out, "\tGenic selection trajectory\n");
+    fprintf(out, "\t\tstart_frequency = %f\n", trajectory->start_frequency);
+    fprintf(out, "\t\tend_frequency = %f\n", trajectory->end_frequency);
+    fprintf(out, "\t\talpha = %f\n", trajectory->alpha);
+    fprintf(out, "\t\tdt = %f\n", trajectory->dt);
+}
+
+/**************************************************************
  * Public API for setting simulation models.
  **************************************************************/
 
@@ -4794,7 +4870,7 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
             && model != MSP_MODEL_DIRAC
             && model != MSP_MODEL_BETA
             && model != MSP_MODEL_DTWF
-            && model != MSP_MODEL_SINGLE_SWEEP) {
+            && model != MSP_MODEL_SWEEP) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -4950,21 +5026,16 @@ out:
     return ret;
 }
 
-static void
-single_sweep_model_free(simulation_model_t *model)
-{
-    msp_safe_free(model->params.single_sweep.trajectory.allele_frequency);
-    msp_safe_free(model->params.single_sweep.trajectory.time);
-}
-
 int
-msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
-        double position, size_t num_steps, double *time, double *allele_frequency)
+msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_size,
+        double position, double start_frequency, double end_frequency,
+        double alpha, double dt)
 {
     int ret = 0;
-    size_t j;
     uint32_t locus;
     simulation_model_t *model = &self->model;
+    genic_selection_trajectory_t *trajectory =
+        &model->params.sweep.trajectory_params.genic_selection_trajectory;
     double L = self->recomb_map->sequence_length;
 
     /* Check the inputs to make sure they make sense */
@@ -4972,51 +5043,23 @@ msp_set_simulation_model_single_sweep(msp_t *self, double population_size,
         ret = MSP_ERR_BAD_SWEEP_POSITION;
         goto out;
     }
-    if (num_steps == 0) {
-        ret = MSP_ERR_EMPTY_TRAJECTORY;
-        goto out;
-    }
-    for (j = 0; j < num_steps; j++) {
-        if (j > 0) {
-            if (time[j - 1] >= time[j]) {
-                ret = MSP_ERR_BAD_TRAJECTORY_TIME;
-                goto out;
-            }
-        }
-        if (time[j] < 0) {
-            ret = MSP_ERR_BAD_TRAJECTORY_TIME;
-            goto out;
-        }
-        if (allele_frequency[j] < 0 || allele_frequency[j] > 1) {
-            ret = MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY;
-            goto out;
-        }
-    }
+    /* TODO check frequency, alpha and dt values! */
 
     ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, position, &locus);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_set_simulation_model(self, MSP_MODEL_SINGLE_SWEEP, population_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP, population_size);
     if (ret != 0) {
         goto out;
     }
-    self->model.free = single_sweep_model_free;
-    model->params.single_sweep.locus = locus;
-    model->params.single_sweep.trajectory.num_steps = num_steps;
-    model->params.single_sweep.trajectory.allele_frequency = malloc(
-            num_steps * sizeof(double));
-    model->params.single_sweep.trajectory.time = malloc(num_steps * sizeof(double));
-    if (model->params.single_sweep.trajectory.allele_frequency == NULL
-            || model->params.single_sweep.trajectory.time == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    memcpy(model->params.single_sweep.trajectory.allele_frequency,
-            allele_frequency, num_steps * sizeof(double));
-    memcpy(model->params.single_sweep.trajectory.time,
-            time, num_steps * sizeof(double));
-    /* TODO we need to rescale the times into model units here */
+    model->params.sweep.locus = locus;
+    model->params.sweep.generate_trajectory = genic_selection_generate_trajectory;
+    model->params.sweep.print_state = genic_selection_print_state;
+    trajectory->start_frequency = start_frequency;
+    trajectory->end_frequency = end_frequency;
+    trajectory->alpha = alpha;
+    trajectory->dt = dt;
 out:
     return ret;
 }
