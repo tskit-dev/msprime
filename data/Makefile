@@ -21,5 +21,11 @@ ms:
 	cp msdir/ms_summary_stats ./
 	cp msdir/sample_stats ./
 
+discoal:
+	wget https://github.com/kern-lab/discoal/archive/v0.1.4.tar.gz
+	tar -xf v0.1.4.tar.gz
+	cd discoal-0.1.4/ && make 
+	cp discoal-0.1.4/discoal ./
+
 clean:
-	rm -fR scrm* ms ms_summary_stats sample_stats
+	rm -fR scrm* ms ms_summary_stats sample_stats discoal* v0.1.4.tar.gz*

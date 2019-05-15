@@ -133,6 +133,7 @@ class SimulationVerifier(object):
         self._ms_executable = ["./data/ms"]
         self._scrm_executable = ["./data/scrm"]
         self._slim_executable = ["./data/slim"]
+        self._discoal_executable = ["./data/discoal"]
         self._mspms_executable = [sys.executable, "mspms_dev.py"]
 
     def check_slim_version(self):
@@ -144,13 +145,18 @@ class SimulationVerifier(object):
             if version_list[i].lower() == 'version':
                 version_str = version_list[i+1]
                 break
-        version = float(version_str.strip(' ,'))
+        version = float(version_str.strip(' ,')[0:3])
         assert version >= min_version, "Require SLiM >= 3.1!"
 
     def get_ms_seeds(self):
         max_seed = 2**16
         seeds = [random.randint(1, max_seed) for j in range(3)]
         return ["-seed"] + list(map(str, seeds))
+
+    def get_discoal_seeds(self):
+        max_seed = 2**16
+        seeds = [random.randint(1, max_seed) for j in range(3)]
+        return ["-d"] + list(map(str, seeds))
 
     def _run_sample_stats(self, args):
         print("\t", " ".join(args))
@@ -167,6 +173,10 @@ class SimulationVerifier(object):
             f.seek(0)
             df = pd.read_table(f)
         return df
+
+    def _run_discoal_mutation_stats(self, args):
+        return self._run_sample_stats(
+            self._discoal_executable + args.split() + self.get_discoal_seeds())
 
     def _run_ms_mutation_stats(self, args):
         return self._run_sample_stats(
@@ -260,6 +270,23 @@ class SimulationVerifier(object):
             print(key, command_line)
             self._run_coalescent_stats(key, command_line)
             self._run_mutation_stats(key, command_line)
+        self._instances[key] = f
+
+    def _run_mutation_discoal_stats(self, key, args):
+        # convert discoal string to msprime string
+        tokens = args.split(" ")
+        msp_str = " ".join(tokens[0:2]+tokens[3:])
+        df_msp = self._run_msprime_mutation_stats(msp_str)
+        df_d = self._run_discoal_mutation_stats(args)
+        self._plot_stats(key, "mutation", df_d, df_msp)
+
+    def add_discoal_instance(self, key, command_line):
+        """
+        Adds a test instance with the specified discoal command line.
+        """
+        def f():
+            print(key, command_line)
+            self._run_mutation_discoal_stats(key, command_line)
         self._instances[key] = f
 
     def get_pairwise_coalescence_time(self, cmd, R):
@@ -1836,6 +1863,10 @@ def main():
     # random.seed(2)
     verifier = SimulationVerifier("tmp__NOBACKUP__")
 
+    # Simple discoal tests
+    verifier.add_discoal_instance(
+        "discoal-simple-ex",
+        "15 1000 100 -t 5.0")
     # Try various options independently
     verifier.add_ms_instance(
         "size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
@@ -1922,7 +1953,7 @@ def main():
         "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 "
         "-em 0.02 3 1 1")
 
-    # Examples from ms documentation
+    # # Examples from ms documentation
     verifier.add_ms_instance(
         "msdoc-simple-ex", "4 20000 -t 5.0")
     verifier.add_ms_instance(
