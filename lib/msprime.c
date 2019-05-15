@@ -2835,15 +2835,14 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
 
-        if (self->next_sampling_event < self->num_sampling_events) {
-            if (self->sampling_events[self->next_sampling_event].time <= self->time) {
-                se = self->sampling_events + self->next_sampling_event;
-                ret = msp_insert_sample(self, se->sample, se->population_id);
-                if (ret != 0) {
-                    goto out;
-                }
-                self->next_sampling_event++;
+        while (self->next_sampling_event < self->num_sampling_events &&
+                self->sampling_events[self->next_sampling_event].time <= self->time) {
+            se = self->sampling_events + self->next_sampling_event;
+            ret = msp_insert_sample(self, se->sample, se->population_id);
+            if (ret != 0) {
+                goto out;
             }
+            self->next_sampling_event++;
         }
     }
 out:
