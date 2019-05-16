@@ -1695,6 +1695,19 @@ class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
 class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMixin):
     model = "dtwf"
 
+    def test_simultaneous_historical_samples(self):
+        N = 10
+        samples = [
+                msprime.Sample(0, 0),
+                msprime.Sample(0, 1.1),
+                msprime.Sample(0, 1.2)]
+        ts = msprime.simulate(
+            Ne=N, samples=samples, model=self.model, random_seed=2)
+        time = [node.time for node in ts.nodes()]
+        self.assertEqual(time[0], 0)
+        self.assertEqual(time[1], 1.1)
+        self.assertEqual(time[2], 1.2)
+
 
 class SimulateUntilMixin(object):
     """

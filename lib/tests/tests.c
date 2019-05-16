@@ -276,6 +276,56 @@ test_single_locus_many_populations(void)
 }
 
 static void
+test_dtwf_simultaneous_historical_samples(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0}, {0, 1.1}, {0, 1.2}};
+    tsk_node_table_t *nodes;
+    uint32_t n = 3;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    gsl_rng_set(rng, 5);
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    tsk_table_collection_clear(&tables);
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_set_simulation_model_dtwf(&msp, 100);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp);
+    msp_print_state(&msp, _devnull);
+
+    nodes = &msp.tables->nodes;
+    CU_ASSERT_EQUAL(nodes->time[0], 0);
+    CU_ASSERT_EQUAL(nodes->time[1], 1.1);
+    CU_ASSERT_EQUAL(nodes->time[2], 1.2);
+    CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 5);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+    recomb_map_free(&recomb_map);
+}
+
+static void
 test_single_locus_historical_sample(void)
 {
     int ret, j;
@@ -3250,6 +3300,8 @@ main(int argc, char **argv)
         {"test_single_locus_two_populations", test_single_locus_two_populations},
         {"test_single_locus_many_populations", test_single_locus_many_populations},
         {"test_single_locus_historical_sample", test_single_locus_historical_sample},
+        {"test_dtwf_simultaneous_historical_samples",
+            test_dtwf_simultaneous_historical_samples},
         {"test_single_locus_historical_sample_start_time",
             test_single_locus_historical_sample_start_time},
         {"test_simulator_getters_setters", test_simulator_getters_setters},
