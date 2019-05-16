@@ -1613,6 +1613,7 @@ class HistoricalSamplingMixin(object):
         migration_time = 4.33 * N
         ts = msprime.simulate(
             model=self.model,
+            random_seed=10,
             Ne=N,
             samples=[
                 msprime.Sample(0, 0),
@@ -1626,7 +1627,7 @@ class HistoricalSamplingMixin(object):
         t = next(ts.trees())
         self.assertEqual(t.get_time(0), 0)
         self.assertEqual(t.get_time(1), sampling_time)
-        self.assertGreater(t.get_time(2), migration_time)
+        self.assertGreaterEqual(t.get_time(2), migration_time)
         self.assertEqual(t.get_population(0), 0)
         self.assertEqual(t.get_population(1), 1)
         self.assertEqual(t.get_population(2), 0)
