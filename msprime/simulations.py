@@ -26,6 +26,7 @@ import math
 import random
 import sys
 import os
+import warnings
 
 import tskit
 import numpy as np
@@ -1345,7 +1346,6 @@ def _matrix_exponential(A):
     Note: this is not a general purpose method and is only intended for use within
     msprime.
     """
-
     d, Y = np.linalg.eig(A)
     Yinv = np.linalg.pinv(Y)
     D = np.diag(np.exp(d))
@@ -1492,13 +1492,12 @@ class DemographyDebugger(object):
     def population_size_trajectory(self, steps):
         """
         This function returns an array of per-population effective population sizes,
-        as defined by the demographic model. These are just the `population_size`
+        as defined by the demographic model. These are the `initial_size`
         parameters of the model, modified by any population growth rates.
         The sizes are computed at the time points given by `steps`.
 
         :param list steps: List of times ago at which the population
             size will be computed.
-
         :return: Returns a numpy array of population sizes, with one column per
             population, whose [i,j]th entry is the size of population
             j at time steps[i] ago.
@@ -1506,63 +1505,58 @@ class DemographyDebugger(object):
         num_pops = self.num_populations
         N_t = np.zeros([len(steps), num_pops])
         for j, t in enumerate(steps):
-            N, _ = self.pop_size_and_migration_at_t(t)
+            N, _ = self._pop_size_and_migration_at_t(t)
             N_t[j] = N
         return N_t
 
-    def coalescence_rate_trajectory(self, steps, num_samples, min_pop_size=1,
-                                    double_step_validation=True):
+    def coalescence_rate_trajectory(
+            self, steps, num_samples, min_pop_size=1, double_step_validation=True):
         """
-        This function will calculate the mean coalescence rates and
-        proportions of uncoalesced lineages between the
-        lineages of the sample configuration provided in `num_samples`,
-        at each of the times ago listed by steps, in this demographic model.
-        The coalescence rate at time t in the past is the average rate
-        of coalescence of as-yet-uncoalesed lineages, computed as follows:
-        let p(t) be the probability that the lineages of a randomly
-        chosen pair of samples has not yet coalesced by time t,
-        let p(z,t) be the probability that the lineages of a randomly
-        chosen pair of samples has not yet coalesced by time t *and* are
-        both in population z, and let N(z,t) be the diploid effective
-        population size of population z at time t. Then the mean coalescence
-        rate at time t is r(t) = (sum_z p(z,t) / (2 * N(z,t) ) / p(t).
-        The computation is done approximating population size trajetories
-        with piecewise constant trajectories between each of the steps.
-        For this to be accurate, the distance between the steps
-        must be small enough so that (a) short epochs
-        (e.g., bottlenecks) are not missed, and (b) populations do not
-        change in size too much over that time, if they are growing or shrinking.
-        "This function optionally provides a simple check of this approximation
-        by recomputing the coalescence rates on a grid of steps twice as fine and
-        throwing a warning if the resulting values do not match to a relative
-        tolerance of 0.001.
+        This function will calculate the mean coalescence rates and proportions
+        of uncoalesced lineages between the lineages of the sample
+        configuration provided in `num_samples`, at each of the times ago
+        listed by steps, in this demographic model. The coalescence rate at
+        time t in the past is the average rate of coalescence of
+        as-yet-uncoalesed lineages, computed as follows: let :math:`p(t)` be
+        the probability that the lineages of a randomly chosen pair of samples
+        has not yet coalesced by time :math:`t`, let :math:`p(z,t)` be the
+        probability that the lineages of a randomly chosen pair of samples has
+        not yet coalesced by time :math:`t` *and* are both in population
+        :math:`z`, and let :math:`N(z,t)` be the diploid effective population
+        size of population :math:`z` at time :math:`t`. Then the mean
+        coalescence rate at time :math:`t` is :math:`r(t) = (\\sum_z p(z,t) /
+        (2 * N(z,t)) / p(t)`.
+
+        The computation is done by approximating population size trajectories
+        with piecewise constant trajectories between each of the steps. For
+        this to be accurate, the distance between the steps must be small
+        enough so that (a) short epochs (e.g., bottlenecks) are not missed, and
+        (b) populations do not change in size too much over that time, if they
+        are growing or shrinking. This function optionally provides a simple
+        check of this approximation by recomputing the coalescence rates on a
+        grid of steps twice as fine and throwing a warning if the resulting
+        values do not match to a relative tolerance of 0.001.
 
         :param list steps: The times ago at which coalescence rates will be computed.
-
-        :param list num_samples: is a list of the same length as the number
+        :param list num_samples: A list of the same length as the number
             of populations, so that `num_samples[j]` is the number of sampled
             chromosomes in subpopulation `j`.
-
-        :param int min_pop_size: is the smallest allowed population size during
+        :param int min_pop_size: The smallest allowed population size during
             computation of coalescent rates (i.e., coalescence rates are actually
             1 / (2 * max(min_pop_size, N(z,t))). Spurious very small population sizes
             can occur in models where populations grow exponentially but are unused
             before some time in the past, and lead to floating point error.
             This should be set to a value smaller than the smallest
             desired population size in the model.
-
         :param bool double_step_validation: Whether to perform the check that
             step sizes are sufficiently small, as described above. This is highly
             recommended, and will take at most four times the computation.
-
-        :return: a tuple of arrays whose jth elements, respectively, are the
+        :return: A tuple of arrays whose jth elements, respectively, are the
             coalescence rate at the jth time point (denoted r(t[j]) above),
             and the probablility that a randomly chosen pair of lineages has
             not yet coalesced (denoted p(t[j]) above).
-
-        :rtype: class:'tuple'
+        :rtype: (numpy.array, numpy.array)
         """
-
         num_pops = self.num_populations
         if not len(num_samples) == num_pops:
             raise ValueError(
@@ -1585,18 +1579,13 @@ class DemographyDebugger(object):
             r_prediction_close = np.allclose(r[1:], rd[::2], rtol=1e-3)
             p_prediction_close = np.allclose(p_t[1:], p_td[::2], rtol=1e-3)
             if not (r_prediction_close and p_prediction_close):
-                # should we use the `warning` package?
-                raise UserWarning(
+                warnings.warn(
                     "Doubling the number of steps has resulted in different"
                     " predictions, please re-run with smaller step sizes to ensure"
                     " numerical accuracy.")
         return r, p_t
 
     def _calculate_coalescence_rate_trajectory(self, steps, num_samples, min_pop_size):
-        """
-        Private function is used for doing all the calculation for
-        coalescence_rate_trajectory.
-        """
         num_pops = self.num_populations
         P = np.zeros([num_pops**2, num_pops**2])
         IA = np.array(range(num_pops**2)).reshape([num_pops, num_pops])
@@ -1622,7 +1611,7 @@ class DemographyDebugger(object):
         for j, time in enumerate(steps_b):
             dt = time - prev
             prev = time
-            N, M = self.pop_size_and_migration_at_t(time)
+            N, M = self._pop_size_and_migration_at_t(time)
             C = np.zeros([num_pops**2, num_pops**2])
             for idx in range(num_pops):
                 C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
@@ -1656,13 +1645,16 @@ class DemographyDebugger(object):
         p_t = np.delete(p_t, diff_mask)
         return r, p_t
 
-    def pop_size_and_migration_at_t(self, t):
+    def _pop_size_and_migration_at_t(self, t):
         """
         Returns a tuple (N, M) of population sizes (N) and migration rates (M) at
         time t ago.
 
-        :param float t: The time ago.
+        Note: this isn't part of the external API as it is be better to provide
+        separate methods to access the population size and migration rates, and
+        needing both together is specialised for internal calculations.
 
+        :param float t: The time ago.
         :return: A tuple of arrays, of the same form as the population sizes and
             migration rate arrays of the demographic model.
         """

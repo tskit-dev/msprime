@@ -609,7 +609,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         #     (0 until time 200),
         #     (1/(2200) between times 200 and 300),
         #     (1/(2100) past t=300)
-
         N_A = 1e2
         N_B = 1e3
         ddb = msprime.DemographyDebugger(
@@ -756,7 +755,6 @@ class TestDemographyTrajectories(unittest.TestCase):
     def test_double_step_validation(self):
         # Test that the double step validation throws a warning
         # with small step sizes
-
         N_A = 1e3
         N_B = 1e4
         ddb = msprime.DemographyDebugger(
@@ -775,8 +773,8 @@ class TestDemographyTrajectories(unittest.TestCase):
                 [0, 0]
             ])
         steps = np.linspace(1, 400, 2)
-        with self.assertRaises(UserWarning):
-            rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        with self.assertWarns(UserWarning):
+            ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         # Test coalescence rates without double step validation
         steps = np.linspace(1, 400, 401)
         rates, P = ddb.coalescence_rate_trajectory(
@@ -796,14 +794,14 @@ class TestDemographyTrajectories(unittest.TestCase):
         steps = np.linspace(1, 10, 11)
         # Test when num_pops != len(num_samples), we throw error
         with self.assertRaises(ValueError):
-            r, p = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+            ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         # Test that when steps are not strictly increasing values, we throw error.
         with self.assertRaises(ValueError):
-            r, p = ddb.coalescence_rate_trajectory(
+            ddb.coalescence_rate_trajectory(
                 steps=np.flip(steps, axis=0), num_samples=[2])
         # Test that when all steps are not, non-zero, we throw error
         with self.assertRaises(ValueError):
-            r, p = ddb.coalescence_rate_trajectory(
+            ddb.coalescence_rate_trajectory(
                 steps=np.linspace(0, 10, 11), num_samples=[2])
 
 
