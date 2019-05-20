@@ -25,6 +25,7 @@ import tempfile
 import unittest
 
 import numpy as np
+import scipy.linalg
 
 import msprime
 import _msprime
@@ -576,6 +577,276 @@ class TestDemographyDebugger(unittest.TestCase):
             self.assertEqual(e.populations[0].end_size, n0)
             self.assertEqual(e.populations[1].start_size, n1)
             self.assertEqual(e.populations[1].end_size, n1)
+
+
+class TestDemographyTrajectories(unittest.TestCase):
+    """
+    Tests that methods msprime.DemographyDebugger.population_size_trajectory
+    and msprime.DemographyDebugger.coalescence_rate_trajectory are giving
+    correct predictions for trivial demographic models
+    """
+
+    def test_two_pop(self):
+        # Have a history with two populations, with no migration;
+        # check that coalescence rate of lineages from
+        # a single pop reflects the size history of that pop:
+        # - population sizes today are [100, 1000]
+        # - population 1 had a size change to 200 at t=100 generations ago
+        # - there is a mass migration event that entirely merges population 2 (source)
+        # into population 1 (dest) at t=200 generations ago
+        # - population 1 has a size change to 100 at t=300 generations ago
+        # Then, we can test the following:
+        # a) The coalesce rates through time of two samples from population 1 is:
+        #     (1/(2 * 100) until time 100),
+        #     (1/(2200) between times 100 and 300),
+        #     (1/(2100) past t=300)
+        # b) The coalesce rates through time of two samples from population 2 is:
+        #     (1/(21000) until time 200),
+        #     (1/(2200) between times 200 and 300),
+        #     (1/(2100) past t=300)
+        # c) The coalesce rates through time of one sample from population 1 and
+        #     one sample from population 2 is:
+        #     (0 until time 200),
+        #     (1/(2200) between times 200 and 300),
+        #     (1/(2100) past t=300)
+        N_A = 1e2
+        N_B = 1e3
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N_A),
+                msprime.PopulationConfiguration(initial_size=N_B)
+            ],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=100, initial_size=200,
+                                                   population_id=0),
+                msprime.MassMigration(time=200, source=1, dest=0),
+                msprime.PopulationParametersChange(time=300, initial_size=100)
+            ],
+            migration_matrix=[
+                [0, 0],
+                [0, 0]
+            ])
+        steps = np.linspace(1, 400, 1001)
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        rates1, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
+        rates2, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[1, 1])
+        for time_step in range(len(steps)):
+            time = steps[time_step]
+            rA = rates[time_step]
+            rB = rates1[time_step]
+            rC = rates2[time_step]
+            if time >= 0 and time < 100:
+                self.assertAlmostEqual(rA, 1 / (2 * 100))
+                self.assertAlmostEqual(rB, 1 / (2 * 1000))
+                self.assertAlmostEqual(rC, 0)
+            elif time >= 100 and time < 200:
+                self.assertAlmostEqual(rA, 1 / (2 * 200))
+                self.assertAlmostEqual(rB, 1 / (2 * 1000))
+                self.assertAlmostEqual(rC, 0)
+            elif time >= 200 and time < 300:
+                self.assertAlmostEqual(rA, 1 / (2 * 200))
+                self.assertAlmostEqual(rB, 1 / (2 * 200))
+                self.assertAlmostEqual(rC, 1 / (2 * 200))
+            else:
+                self.assertAlmostEqual(rA, 1 / (2 * 100))
+                self.assertAlmostEqual(rB, 1 / (2 * 100))
+                self.assertAlmostEqual(rC, 1 / (2 * 100))
+
+    def test_convergence(self):
+        # Have two populations with very high migration; check they act as a single
+        # population:
+        # - population sizes today are [100, 1000]
+        # - migration rate from population 1 to 2 of 20, and from 2 to 1 of 10
+        #     Then, we test:
+        # a) The coalescence rate for two samples from population 1 is
+        #     (1/3) * (1/(2100)) + (2/3) * (1/(21000))
+        # b) Same for two samples from population 2 and for one sample from each
+        #     population.
+        N_A = 1e2
+        N_B = 1e3
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N_A),
+                msprime.PopulationConfiguration(initial_size=N_B)
+            ],
+            demographic_events=[
+            ],
+            migration_matrix=[
+                [0, .5],
+                [.25, 0]])
+        steps = np.linspace(1, 400, 401)
+        rates, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        rates1, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
+        rates2, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[1, 1])
+        for time_step in range(len(steps)):
+            time = steps[time_step]
+            rA = rates[time_step]
+            rB = rates1[time_step]
+            rC = rates2[time_step]
+            if time > 100:
+                r = ((1 / 3) ** 2) * (1 / (2 * 100)) + ((2 / 3) ** 2) * (1 / (2 * 1000))
+                self.assertAlmostEqual(rA, r, places=4)
+                self.assertAlmostEqual(rB, r, places=4)
+                self.assertAlmostEqual(rC, r, places=4)
+
+    def test_rate_size_equality(self):
+        # This test will create a trivial model with two population
+        # and no migration. The population size trajectories should match the
+        # given 1/ 2*coalescent rates for the respective sampled population.
+        N_A = 1e7
+        N_B = 1e6
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N_A),
+                msprime.PopulationConfiguration(initial_size=N_B)
+            ],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=100, initial_size=1e5,
+                                                   population_id=0, growth_rate=3e-3),
+                msprime.PopulationParametersChange(time=300, initial_size=1e6,
+                                                   population_id=0, growth_rate=7e-4)
+            ],
+            migration_matrix=[
+                [0, 0],
+                [0, 0]
+            ])
+        steps = np.linspace(1, 400, 401)
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        pop_sizes = ddb.population_size_trajectory(steps=steps)
+        for r, p in zip(rates, pop_sizes[:, 0]):
+            self.assertAlmostEqual(1/(2*r), p)
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
+        pop_sizes = ddb.population_size_trajectory(steps=steps)
+        for r, p in zip(rates, pop_sizes[:, 1]):
+            self.assertAlmostEqual(1/(2*r), p)
+
+    def test_rate_size_equality_with_population_merge(self):
+        # Test equality between two population that split with continued
+        # migration
+        N_A = 1e7
+        N_B = 1e6
+
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N_A),
+                msprime.PopulationConfiguration(initial_size=N_B)
+            ],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=100, initial_size=1e5,
+                                                   population_id=0, growth_rate=0),
+                msprime.PopulationParametersChange(time=100, initial_size=1e5,
+                                                   population_id=1, growth_rate=7e-4),
+                msprime.MassMigration(time=100, source=1, dest=0),
+                msprime.PopulationParametersChange(time=200, initial_size=1e6,
+                                                   population_id=0, growth_rate=-1e-2),
+                msprime.PopulationParametersChange(time=300, initial_size=1e6,
+                                                   population_id=0, growth_rate=0),
+            ],
+            migration_matrix=[
+                [0, 0],
+                [0, 0]
+            ])
+        steps = np.linspace(1, 400, 401)
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        pop_sizes = ddb.population_size_trajectory(steps=steps)
+        for r, p in zip(rates[301:], pop_sizes[:, 0][301:]):
+            self.assertAlmostEqual(1/(2*r), p)
+
+    def test_double_step_validation(self):
+        # Test that the double step validation throws a warning
+        # with small step sizes
+        N_A = 1e3
+        N_B = 1e4
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N_A),
+                msprime.PopulationConfiguration(initial_size=N_B)
+            ],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=100, initial_size=1e2,
+                                                   population_id=0, growth_rate=3e-3),
+                msprime.PopulationParametersChange(time=300, initial_size=1e3,
+                                                   population_id=0, growth_rate=7e-4)
+            ],
+            migration_matrix=[
+                [0, 0],
+                [0, 0]
+            ])
+        steps = np.linspace(1, 400, 2)
+        with self.assertWarns(UserWarning):
+            ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        # Test coalescence rates without double step validation
+        steps = np.linspace(1, 400, 401)
+        rates, P = ddb.coalescence_rate_trajectory(
+            steps=steps, num_samples=[2, 0], double_step_validation=False)
+
+    def test_value_errors(self):
+        # test all user input domains which should raise ValuErrors.
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=1e2),
+            ],
+            demographic_events=[
+            ],
+            migration_matrix=[
+                [0],
+            ])
+        steps = np.linspace(1, 10, 11)
+        # Test when num_pops != len(num_samples), we throw error
+        with self.assertRaises(ValueError):
+            ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        # Test that when steps are not strictly increasing values, we throw error.
+        with self.assertRaises(ValueError):
+            ddb.coalescence_rate_trajectory(
+                steps=np.flip(steps, axis=0), num_samples=[2])
+        # Test that when all steps are not, non-zero, we throw error
+        with self.assertRaises(ValueError):
+            ddb.coalescence_rate_trajectory(
+                steps=np.linspace(0, 10, 11), num_samples=[2])
+
+
+class TestMatrixExponential(unittest.TestCase):
+    """
+    Test cases for the matrix exponential function.
+    """
+    def verify(self, A):
+        E1 = scipy.linalg.expm(A)
+        E2 = msprime.simulations._matrix_exponential(A)
+        self.assertEqual(E1.shape, E2.shape)
+        self.assertTrue(np.allclose(E1, E2))
+
+    def test_singleton(self):
+        for j in range(10):
+            A = np.array([[j]])
+            self.verify(A)
+
+    def test_zeros(self):
+        for j in range(1, 10):
+            A = np.zeros((j, j))
+            self.verify(A)
+
+    def test_ones_minus_diagonal(self):
+        # If we got to larger values we start getting complex number results.
+        # (k x k) matrices of ones, but with (-k) on the diagonal, for k >= 2.
+        for j in range(2, 5):
+            A = np.ones((j, j))
+            A = A - (2 * np.eye(j))
+            self.verify(A)
+
+    def test_singleton_against_exp(self):
+        # a 1 x 1 matrix consisting of just 0 (compared to exp(0) = 1)
+        # a 1 x 1 matrix consisting of just -1 (compared to exp(-1))
+        for t in [0, -1]:
+            A = msprime.simulations._matrix_exponential([[t]])
+            B = np.exp(t)
+            self.assertEqual(A, B)
+
+    def test_identity_exp(self):
+        # (-1) * np.eye(k), compared to exp(-1) * np.eye(k)
+        for k in range(2, 5):
+            A = msprime.simulations._matrix_exponential((-1) * np.eye(k))
+            B = np.exp(-1) * np.eye(k)
+            self.assertTrue(np.allclose(A, B))
 
 
 class TestEventTimes(unittest.TestCase):
