@@ -675,6 +675,102 @@ breakpoints follows the recombination rate closely.
    :alt: Density of breakpoints along the chromosome.
 
 
+.. _sec_tutorial_dtwf:
+
+*******************************
+Wright-Fisher simulations
+*******************************
+
+Msprime provides the option to perform discrete-time Wright-Fisher simulations
+for scenarios when the coalescent model is not appropriate, including large
+sample sizes, multiple chromosomes, or recent migration.
+
+To use this option, set the flag ``model="dtwf"`` as in the following example::
+
+    >>> tree_sequence = msprime.simulate(
+    ...     sample_size=6, Ne=1000, length=1e4, recombination_rate=2e-8,
+    ...     model="dtwf")
+
+
+All other parameters can be set as usual.
+
+-------------------------------------
+Multiple chromosomes
+-------------------------------------
+
+.. warning:: This option is under active development and is expected to change.
+
+Multiple chromosomes can be simulated by specifying a recombination map with
+hotspots between chromosomes. For example, to simulate two chromosomes each 1
+Morgan in length:
+
+.. code-block:: python
+
+    rho = 1e-8
+    positions = [0, 1e8-1, 1e8, 2e8-1]
+    rates = [rho, 0.5, rho, 0]
+    num_loci = int(positions[-1])
+
+    recombination_map = msprime.RecombinationMap(
+        positions=positions, rates=rates, num_loci=num_loci)
+
+    tree_sequence = msprime.simulate(
+        sample_size=100, Ne=1000, recombination_map=recombination_map,
+        model="dtwf")
+
+Care must be taken when simulating whole genomes this way, as the rescaling
+required to model such large fluctuations in recombination rate can result in
+the following error: ``Bad edge interval where right <= left``
+
+This can be avoided by discretizing the genome into 100bp chunks by changing
+the above to:
+
+.. code-block:: python
+
+    rho = 1e-8
+    positions = [0, 1e8-1, 1e8, 2e8-1]
+    rates = [rho, 0.5, rho, 0]
+    num_loci = positions[-1] // 100 # Discretize into 100bp chunks
+
+Also note that recombinations will still occur in the gaps between chromosomes,
+with corresponding trees in the tree sequence. This will be fixed in a future
+release.
+
+-------------------------------------
+Hybrid simulations
+-------------------------------------
+
+In some situations Wright-Fisher simulations are desireable yet less
+computationally efficient than coalescent simulations, for example simulating a
+small sample in a recently admixed population. In these cases, a hybrid model
+offers an excellent tradeoff between simulation accuracy and performance.
+
+This is done through a SimulationModelChange event, which is a special type of
+demographic event. 
+
+For example, here we switch from the discrete-time Wright-Fisher model to the
+standard Hudson coalescent 100 generations in the past:
+
+.. code-block:: python
+
+    num_wf_generations = 100
+
+    population_configurations = [
+            msprime.PopulationConfiguration(
+            sample_size=100, initial_size=10000, growth_rate=0)
+            ]
+
+    demographic_events = [
+        msprime.SimulationModelChange(
+            num_wf_generations, msprime.StandardCoalescent())
+    ]
+
+    ts = msprime.simulate(
+        population_configurations=population_configurations,
+        length=1e7, recombination_rate=2e-8, model="dtwf",
+        demographic_events=demographic_events)
+
+
 .. _sec_tutorial_simulate_from:
 
 *******************************
