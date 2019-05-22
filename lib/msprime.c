@@ -2931,7 +2931,7 @@ msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
     return ret;
 }
 
-int
+static int
 msp_sweep_recombination_event(msp_t *self, label_id_t label,
         uint32_t sweep_locus, double population_frequency)
 {
@@ -2989,6 +2989,7 @@ msp_run_sweep(msp_t *self)
     double event_prob, event_rand, tmp_rand, e_sum, pop_size;
     double p_coal_b, p_coal_B, total_rate, sweep_pop_tot_rate;
     double p_rec_b, p_rec_B;
+    bool sweep_over;
 
     /* Keep the compiler happy */
     sweep_pop_tot_rate = 0;
@@ -3017,22 +3018,23 @@ msp_run_sweep(msp_t *self)
 
     while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
         events++;
-        /* quick sanity check; also set pop sizes & rec_rates */
+        /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
             num_links = fenwick_get_total(&self->links[label]);
             ret = msp_sanity_check(self, num_links);
-            sweep_pop_sizes[j] = (double) avl_count(&self->populations[0].ancestors[label]);
-            rec_rates[j] = (double) num_links * self->recombination_rate;
             if (ret != 0) {
                 goto out;
             }
+            sweep_pop_sizes[j] = avl_count(&self->populations[0].ancestors[label]);
+            rec_rates[j] = (double) num_links * self->recombination_rate;
         }
 
         curr_step++;
         event_prob = 1.0;
         event_rand = gsl_rng_uniform(self->rng);
-        while (event_prob > event_rand && curr_step < num_steps) {
+        sweep_over = false;
+        while (event_prob > event_rand && curr_step < num_steps && !sweep_over) {
             sweep_dt = time[curr_step] - time[curr_step - 1];
             /* using pop sizes grabbed from get_population_size */
             pop_size = get_population_size(&self->populations[0], time[curr_step]);
@@ -3043,41 +3045,36 @@ msp_run_sweep(msp_t *self)
             p_rec_b = rec_rates[0] * sweep_dt;
             p_rec_B = rec_rates[1] * sweep_dt;
             sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
-            total_rate = sweep_pop_tot_rate; /* doing this to build in generality if we want >1 pop */
-            if (total_rate == 0) {
-                goto out;
-            }
-            /*printf("\ncoal probs: %g %g rec_rates: %g %g  event_prob: %g tot rate: %g \n", p_coal_b,*/
-                    /*p_coal_B, rec_rates[0], rec_rates[1], event_prob, sweep_pop_tot_rate);*/
+            /* doing this to build in generality if we want >1 pop */
+            total_rate = sweep_pop_tot_rate;
             event_prob *= 1.0 - total_rate;
             curr_step++;
+            /* JK->Andy: is this what it means when the total_rate goes to 0? */
+            sweep_over = total_rate == 0;
         }
-        /*printf("\ncoal probs: %g %g rec_rates: %g %g  event_prob: %g tot rate: %g \n", p_coal_b,*/
-                /*p_coal_B, rec_rates[0], rec_rates[1], event_prob, sweep_pop_tot_rate);*/
+        if (sweep_over) {
+            break;
+        }
         /* passed check, choose event */
         tmp_rand = gsl_rng_uniform(self->rng);
         e_sum = p_coal_b;
         self->time = time[curr_step - 1];
         if (tmp_rand < e_sum / sweep_pop_tot_rate) {
             /* coalescent in b background */
-            //printf("coal b\n");
             ret = self->common_ancestor_event(self, 0, 0);
         } else {
             e_sum += p_coal_B;
             if (tmp_rand < e_sum / sweep_pop_tot_rate) {
                 /* coalescent in B background */
-                //printf("coal B\n");
                 ret = self->common_ancestor_event(self, 0, 1);
             } else {
                 e_sum += rec_rates[0];
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
                     /* recomb in b background */
-                    //printf("recomb event b\n");
                     ret = msp_sweep_recombination_event(self, 0, sweep_locus,
                         (1.0 - allele_frequency[curr_step - 1]));
                 } else {
                     /* recomb in B background */
-                    //printf("recomb event B\n");
                     ret = msp_sweep_recombination_event(self, 1, sweep_locus,
                         allele_frequency[curr_step - 1]);
                 }
@@ -3088,12 +3085,13 @@ msp_run_sweep(msp_t *self)
         }
         /*msp_print_state(self, stdout);*/
     }
+    /* TODO check if any demographic events should have happened during the
+     * sweep and raise an error if they did */
 
     ret = msp_sweep_finalise(self);
     if (ret != 0) {
         goto out;
     }
-    msp_verify(self);
 out:
     msp_safe_free(time);
     msp_safe_free(allele_frequency);
@@ -5087,8 +5085,12 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_si
     model->params.sweep.print_state = genic_selection_print_state;
     trajectory->start_frequency = start_frequency;
     trajectory->end_frequency = end_frequency;
+    /* JK: question for Andy: what are the dimensions of alpha? Does it
+     * need to be rescaled into generations? */
     trajectory->alpha = alpha;
-    trajectory->dt = dt;
+    /* dt value is expressed in generations for consistency; translate to
+     * model time. */
+    trajectory->dt = self->model.generations_to_model_time(&self->model, dt);
 out:
     return ret;
 }

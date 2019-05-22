@@ -411,6 +411,5 @@ double compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, do
 int msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha, double *result);
 int msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, double *result);
 int msp_multi_merger_common_ancestor_event(msp_t *self, double x, avl_tree_t *ancestors, avl_tree_t *Q);
-int msp_sweep_recombination_event(msp_t *self, label_id_t label,
-        uint32_t sweep_locus, double population_frequency);
+
 #endif /*__MSPRIME_H__*/
