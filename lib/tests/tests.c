@@ -3046,6 +3046,57 @@ test_sweep_genic_selection_bad_parameters(void)
 }
 
 static void
+test_sweep_genic_selection_events(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 0.0}, {0, 0.0}};
+    tsk_table_collection_t tables;
+    recomb_map_t recomb_map;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_dimensions(&msp, 1, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_parameters_change(&msp, 0.1, 0, 1, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
+    msp_free(&msp);
+
+    tsk_table_collection_clear(&tables);
+    samples[1].time = 0.1;
+    ret = msp_alloc(&msp, 3, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_dimensions(&msp, 1, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
+    msp_free(&msp);
+
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
 verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
 {
     int j, ret;
@@ -3115,7 +3166,6 @@ test_sweep_genic_selection_recomb(void)
     verify_sweep_genic_selection(100, 1.0);
     verify_sweep_genic_selection(100, -1.0);
 }
-
 static void
 test_strerror(void)
 {
@@ -3255,6 +3305,7 @@ main(int argc, char **argv)
         {"test_genic_selection_trajectory", test_genic_selection_trajectory},
         {"test_sweep_genic_selection_bad_parameters",
             test_sweep_genic_selection_bad_parameters},
+        {"test_sweep_genic_selection_events", test_sweep_genic_selection_events},
         {"test_sweep_genic_selection_single_locus",
             test_sweep_genic_selection_single_locus},
         {"test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb},

@@ -26,7 +26,6 @@ import random
 import unittest
 
 import tskit
-import numpy as np
 
 import tests
 import _msprime

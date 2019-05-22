@@ -1253,7 +1253,8 @@ class SweepGenicSelection(ParametricSimulationModel):
 
     # TODO: sensible defaults for some of these params?
     def __init__(
-            self, position, start_frequency, end_frequency, alpha, dt, population_size=1):
+            self, position, start_frequency, end_frequency, alpha, dt,
+            population_size=1):
         self.population_size = population_size
         self.position = position
         self.start_frequency = start_frequency

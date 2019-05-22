@@ -142,6 +142,10 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRAJECTORY_START_END:
             ret = "Start frequency must be less than end frequency";
             break;
+        case MSP_ERR_EVENTS_DURING_SWEEP:
+            ret = "Demographic and sampling events during a sweep "
+                "are not supported";
+            break;
         case MSP_ERR_UNSUPPORTED_OPERATION:
             ret = "Current simulation configuration is not supported.";
             break;

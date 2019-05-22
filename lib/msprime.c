@@ -3085,9 +3085,21 @@ msp_run_sweep(msp_t *self)
         }
         /*msp_print_state(self, stdout);*/
     }
-    /* TODO check if any demographic events should have happened during the
-     * sweep and raise an error if they did */
-
+    /* Check if any demographic events should have happened during the
+     * event and raise an error if so. This is to keep computing population
+     * sizes simple */
+    if (self->next_demographic_event != NULL &&
+            self->next_demographic_event->time <= self->time) {
+        ret = MSP_ERR_EVENTS_DURING_SWEEP;
+        goto out;
+    }
+    /* We could implement sampling events during a sweep if we wanted
+     * to easily enough. Is this a sensible feature? */
+    if (self->next_sampling_event < self->num_sampling_events
+            && self->sampling_events[self->next_sampling_event].time <= self->time) {
+        ret = MSP_ERR_EVENTS_DURING_SWEEP;
+        goto out;
+    }
     ret = msp_sweep_finalise(self);
     if (ret != 0) {
         goto out;
@@ -4727,7 +4739,10 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         goto out;
     }
     /* TODO Wrap this in a rejection sample loop and get the population size
-     * from the simulator */
+     * from the simulator. We can use
+     * pop_size = get_population_size(sim->populations[0], time);
+     * to do this because we assume there are no demographic events
+     * during a sweep */
 
     x = trajectory.end_frequency;
     t = simulator->time;
