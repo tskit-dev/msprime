@@ -404,14 +404,13 @@ int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time)
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
+
 /* Functions exposed here for unit testing. Not part of public API. */
 double compute_falling_factorial_log(unsigned int  m);
 double compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c);
 int msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha, double *result);
 int msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, double *result);
-
 int msp_multi_merger_common_ancestor_event(msp_t *self, double x, avl_tree_t *ancestors, avl_tree_t *Q);
-
 int msp_sweep_recombination_event(msp_t *self, label_id_t label,
         uint32_t sweep_locus, double population_frequency);
 #endif /*__MSPRIME_H__*/

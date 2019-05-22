@@ -2969,9 +2969,6 @@ out:
     return ret;
 }
 
-/* big current assumption-- times that come in through
- * trajectory array are ABSOLUTE with respect to the
- * simulation. we may want to alter this in the future */
 static int
 msp_run_sweep(msp_t *self)
 {
@@ -4720,10 +4717,10 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
     genic_selection_trajectory_t trajectory =
         self->trajectory_params.genic_selection_trajectory;
     gsl_rng *rng = simulator->rng;
-    size_t max_steps = 8192;
+    size_t max_steps = 64;
     double *time = malloc(max_steps * sizeof(*time));
     double *allele_frequency = malloc(max_steps * sizeof(*allele_frequency));
-    double x, t;
+    double x, t, *tmp;
     size_t num_steps;
     double current_size = 1.0;
 
@@ -4731,7 +4728,6 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-
     /* TODO Wrap this in a rejection sample loop and get the population size
      * from the simulator */
 
@@ -4740,7 +4736,21 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
     num_steps = 0;
 
     while (x > trajectory.start_frequency) {
-        assert(num_steps < max_steps); /* TODO realloc here instead */
+        if (num_steps + 1 >= max_steps) {
+            max_steps *= 2;
+            tmp = realloc(time, max_steps * sizeof(*time));
+            if (tmp == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            time = tmp;
+            tmp = realloc(allele_frequency, max_steps * sizeof(*allele_frequency));
+            if (tmp == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            allele_frequency = tmp;
+        }
         time[num_steps] = t;
         allele_frequency[num_steps] = x;
         x = 1.0 - genic_selection_stochastic_forwards(
@@ -4749,8 +4759,15 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         t += trajectory.dt;
         num_steps++;
     }
+    assert(num_steps < max_steps); /* num_steps + 1 above guarantees this */
+    /* JK: question to Andy: Does this bookending make sense?
+     * Seemed logical that we'd always have at least two steps
+     */
+    time[num_steps] = t;
+    allele_frequency[num_steps] = trajectory.start_frequency;
+    num_steps++;
 
-    *ret_num_steps = 0;
+    *ret_num_steps = num_steps;
     *ret_time = time;
     *ret_allele_frequency = allele_frequency;
     time = NULL;
@@ -4984,7 +5001,6 @@ int
 msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
         double truncation_point)
 {
-
     int ret = 0;
 
     /* TODO bounds check alpha and truncation_point: what are legal values? */
@@ -5043,7 +5059,20 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_si
         ret = MSP_ERR_BAD_SWEEP_POSITION;
         goto out;
     }
-    /* TODO check frequency, alpha and dt values! */
+    if (start_frequency < 0.0 || start_frequency > 1.0
+            || end_frequency < 0.0 || end_frequency > 1.0) {
+        ret = MSP_ERR_BAD_ALLELE_FREQUENCY;
+        goto out;
+    }
+    if (start_frequency >= end_frequency) {
+        ret = MSP_ERR_BAD_TRAJECTORY_START_END;
+        goto out;
+    }
+    if (dt <= 0) {
+        ret = MSP_ERR_BAD_TIME_DELTA;
+        goto out;
+    }
+    /* TODO any limitations on alpha? */
 
     ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, position, &locus);
     if (ret != 0) {

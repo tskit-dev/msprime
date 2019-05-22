@@ -3218,6 +3218,133 @@ test_single_tree_mutgen_interval(void)
 }
 
 static void
+verify_simple_genic_selection_trajectory(
+       double start_frequency, double end_frequency, double alpha,
+       double dt)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 0.0}};
+    tsk_table_collection_t tables;
+    recomb_map_t recomb_map;
+    size_t j, num_steps;
+    double *allele_frequency, *time;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, start_frequency, end_frequency, alpha, dt);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* compute the trajectory */
+    ret = msp.model.params.sweep.generate_trajectory(
+            &msp.model.params.sweep, &msp, &num_steps, &time, &allele_frequency);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(num_steps > 1);
+    CU_ASSERT_EQUAL(time[0], 0);
+    CU_ASSERT_EQUAL(allele_frequency[0], end_frequency);
+    CU_ASSERT_TRUE(allele_frequency[num_steps - 1] == start_frequency);
+
+    for (j = 0; j < num_steps; j++) {
+        CU_ASSERT_TRUE(allele_frequency[j] >= 0);
+        CU_ASSERT_TRUE(allele_frequency[j] <= 1);
+        if (j > 0) {
+            CU_ASSERT_DOUBLE_EQUAL_FATAL(time[j], time[j - 1] + dt, 1e-9);
+        }
+    }
+
+    free(time);
+    free(allele_frequency);
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_genic_selection_trajectory(void)
+{
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 0.1, 0.0125);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 0.01, 0.00125);
+    verify_simple_genic_selection_trajectory(0.8999, 0.9, 0.1, 0.2);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 100, 0.1);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, -100, 0.1);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 1, 10);
+}
+
+static void
+test_sweep_genic_selection_bad_parameters(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 0.0}};
+    tsk_table_collection_t tables;
+    recomb_map_t recomb_map;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, -0.01, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.01, -0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 10.01, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.01, 10.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.01, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_START_END);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.1, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_START_END);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TIME_DELTA);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, -0.01);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TIME_DELTA);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, -1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_POPULATION_SIZE);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, -0.5, 0.1, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 5.0, 0.1, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+
+}
+
+static void
 test_strerror(void)
 {
     int j;
@@ -3320,10 +3447,6 @@ main(int argc, char **argv)
         {"test_dtwf_deterministic", test_dtwf_deterministic},
         {"test_dtwf_zero_pop_size", test_dtwf_zero_pop_size},
         {"test_dtwf_events_between_generations", test_dtwf_events_between_generations},
-        /* {"test_single_sweep_errors", test_single_sweep_errors}, */
-        /* {"test_single_sweep", test_single_sweep}, */
-        /* {"test_single_sweep_growth", test_single_sweep_growth}, */
-        /* {"test_single_sweep_recomb", test_single_sweep_recomb}, */
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
@@ -3356,6 +3479,14 @@ main(int argc, char **argv)
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
         {"test_single_tree_mutgen_interval", test_single_tree_mutgen_interval},
+
+        {"test_genic_selection_trajectory", test_genic_selection_trajectory},
+        {"test_sweep_genic_selection_bad_parameters",
+            test_sweep_genic_selection_bad_parameters},
+        /* {"test_single_sweep_errors", test_single_sweep_errors}, */
+        /* {"test_single_sweep", test_single_sweep}, */
+        /* {"test_single_sweep_growth", test_single_sweep_growth}, */
+        /* {"test_single_sweep_recomb", test_single_sweep_recomb}, */
 
         {"test_strerror", test_strerror},
         {"test_strerror_tskit", test_strerror_tskit},
