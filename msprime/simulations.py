@@ -469,7 +469,7 @@ class Simulator(object):
         self.start_time = None
         self.random_generator = None
         self.population_configurations = [
-            PopulationConfiguration(initial_size=self.model.population_size)]
+            PopulationConfiguration(initial_size=self.model.reference_size)]
         self.migration_matrix = [[0]]
         self.demographic_events = []
         self.model_change_events = []
@@ -588,7 +588,7 @@ class Simulator(object):
         # set it to the population size.
         for pop_conf in self.population_configurations:
             if pop_conf.initial_size is None:
-                pop_conf.initial_size = self.model.population_size
+                pop_conf.initial_size = self.model.reference_size
         # Now set the default migration matrix.
         N = len(self.population_configurations)
         self.migration_matrix = [[0 for j in range(N)] for k in range(N)]
@@ -607,20 +607,20 @@ class Simulator(object):
             else:
                 self.demographic_events.append(event)
 
-    def set_model(self, model, population_size):
+    def set_model(self, model, reference_size):
         """
         Sets the simulation model to the specified value. This may be either a string
         or a SimulationModel instance. If None, the default simulation model is used
         (i.e., Hudson's algorithm).
         """
         model_map = {
-            "hudson": StandardCoalescent(population_size),
-            "smc": SmcApproxCoalescent(population_size),
-            "smc_prime": SmcPrimeApproxCoalescent(population_size),
-            "dtwf": DiscreteTimeWrightFisher(population_size)
+            "hudson": StandardCoalescent(reference_size),
+            "smc": SmcApproxCoalescent(reference_size),
+            "smc_prime": SmcPrimeApproxCoalescent(reference_size),
+            "dtwf": DiscreteTimeWrightFisher(reference_size)
         }
         if model is None:
-            model_instance = StandardCoalescent(population_size)
+            model_instance = StandardCoalescent(reference_size)
         elif isinstance(model, str):
             lower_model = model.lower()
             if lower_model not in model_map:
@@ -1068,7 +1068,20 @@ class MassMigration(DemographicEvent):
 
 
 class SimulationModelChange(DemographicEvent):
-    # TODO document
+    """
+    An event representing a change of underlying simulation model.
+
+    :param float time: The time at which the simulation model changes
+        to the new model, in generations.
+    :param model: The new simulation model to use.
+        This can either be a string (e.g., ``"smc_prime"``) or an instance of
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models. If the argument is a string, the
+        reference population size is set from the top level ``Ne`` parameter
+        to :func:`.simulate`.
+    :type model: str or simulation model instance
+    """
     # Implementation note: these are treated as demographic events for the
     # sake of the high-level interface, but are treated differently at run
     # time. There is no corresponding demographic event in the C layer, as
@@ -1077,9 +1090,7 @@ class SimulationModelChange(DemographicEvent):
     # as appropriate.
     def __init__(self, time, model):
         super().__init__("simulation_model_change", time)
-        if not isinstance(model, SimulationModel):
-            raise TypeError(
-                "Simulation model must be an instance of SimulationModel")
+        # The model will be updated later during the call to simulate
         self.model = model
 
     def get_ll_representation(self, num_populations):
@@ -1153,14 +1164,14 @@ class SimulationModel(object):
     """
     name = None
 
-    def __init__(self, population_size=1):
-        self.population_size = population_size
+    def __init__(self, reference_size=1):
+        self.reference_size = reference_size
 
     def get_ll_representation(self):
-        return {"name": self.name, "population_size": self.population_size}
+        return {"name": self.name, "reference_size": self.reference_size}
 
     def __str__(self):
-        return "{}(population_size={})".format(self.name, self.population_size)
+        return "{}(reference_size={})".format(self.name, self.reference_size)
 
 
 class StandardCoalescent(SimulationModel):
@@ -1242,8 +1253,8 @@ class BetaCoalescent(ParametricSimulationModel):
 
     # TODO what is a meaningful value for this parameter? Ideally, the default
     # would be the equivalent of the Kingman coalescent or something similar.
-    def __init__(self, population_size=1, alpha=1.5, truncation_point=None):
-        self.population_size = population_size
+    def __init__(self, reference_size=1, alpha=1.5, truncation_point=None):
+        self.reference_size = reference_size
         self.alpha = alpha
         if truncation_point is None:
             truncation_point = sys.float_info.max
@@ -1255,8 +1266,8 @@ class DiracCoalescent(ParametricSimulationModel):
     name = "dirac"
 
     # TODO What is a meaningful default for this value? See above.
-    def __init__(self, population_size=1, psi=0.5, c=10.0):
-        self.population_size = population_size
+    def __init__(self, reference_size=1, psi=0.5, c=10.0):
+        self.reference_size = reference_size
         self.psi = psi
         self.c = c
 
@@ -1268,8 +1279,8 @@ class SweepGenicSelection(ParametricSimulationModel):
     # TODO: sensible defaults for some of these params?
     def __init__(
             self, position, start_frequency, end_frequency, alpha, dt,
-            population_size=1):
-        self.population_size = population_size
+            reference_size=1):
+        self.reference_size = reference_size
         self.position = position
         self.start_frequency = start_frequency
         self.end_frequency = end_frequency

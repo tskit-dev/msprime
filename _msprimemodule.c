@@ -2415,7 +2415,7 @@ out:
 
 static int
 Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model,
-        double population_size)
+        double reference_size)
 {
     int ret = -1;
     int err;
@@ -2452,7 +2452,7 @@ Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model,
     }
     dt = PyFloat_AsDouble(value);
 
-    err = msp_set_simulation_model_sweep_genic_selection(self->sim, population_size,
+    err = msp_set_simulation_model_sweep_genic_selection(self->sim, reference_size,
             position, start_frequency, end_frequency, alpha, dt);
     if (err != 0) {
         handle_input_error(err);
@@ -2478,7 +2478,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *sweep_genic_selection_s = NULL;
     PyObject *value;
     int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta, is_sweep_genic_selection;
-    double population_size, psi, c, alpha, truncation_point;
+    double reference_size, psi, c, alpha, truncation_point;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -2512,12 +2512,12 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
 
-    value = get_dict_number(py_model, "population_size");
+    value = get_dict_number(py_model, "reference_size");
     if (value == NULL) {
         goto out;
     }
-    population_size = PyFloat_AsDouble(value);
-    if (population_size <= 0) {
+    reference_size = PyFloat_AsDouble(value);
+    if (reference_size <= 0) {
         PyErr_SetString(PyExc_ValueError, "population size must be >= 0");
         goto out;
     }
@@ -2534,7 +2534,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_hudson) {
-        err = msp_set_simulation_model_hudson(self->sim, population_size);
+        err = msp_set_simulation_model_hudson(self->sim, reference_size);
     }
 
     is_dtwf = PyObject_RichCompareBool(py_name, dtwf_s, Py_EQ);
@@ -2542,7 +2542,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_dtwf) {
-        err = msp_set_simulation_model_dtwf(self->sim, population_size);
+        err = msp_set_simulation_model_dtwf(self->sim, reference_size);
     }
 
     is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
@@ -2550,7 +2550,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc) {
-        err = msp_set_simulation_model_smc(self->sim, population_size);
+        err = msp_set_simulation_model_smc(self->sim, reference_size);
     }
 
     is_smc_prime = PyObject_RichCompareBool(py_name, smc_prime_s, Py_EQ);
@@ -2558,7 +2558,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc_prime) {
-        err = msp_set_simulation_model_smc_prime(self->sim, population_size);
+        err = msp_set_simulation_model_smc_prime(self->sim, reference_size);
     }
 
     is_dirac = PyObject_RichCompareBool(py_name, dirac_s, Py_EQ);
@@ -2584,7 +2584,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
             PyErr_SetString(PyExc_ValueError, "c >= 0");
             goto out;
         }
-        err = msp_set_simulation_model_dirac(self->sim, population_size, psi, c);
+        err = msp_set_simulation_model_dirac(self->sim, reference_size, psi, c);
     }
 
     is_beta = PyObject_RichCompareBool(py_name, beta_s, Py_EQ);
@@ -2603,7 +2603,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         }
         truncation_point = PyFloat_AsDouble(value);
         /* TODO range checking on alpha and truncation_point */
-        err = msp_set_simulation_model_beta(self->sim, population_size,
+        err = msp_set_simulation_model_beta(self->sim, reference_size,
                 alpha, truncation_point);
     }
 
@@ -2612,7 +2612,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_sweep_genic_selection) {
-        ret = Simulator_parse_sweep_genic_selection_model(self, py_model, population_size);
+        ret = Simulator_parse_sweep_genic_selection_model(self, py_model, reference_size);
         if (ret != 0) {
             goto out;
         }
@@ -3041,7 +3041,7 @@ Simulator_get_model(Simulator *self)
     model = msp_get_model(self->sim);
     d = Py_BuildValue("{ss,sd}",
             "name", msp_get_model_name(self->sim),
-            "population_size", msp_get_model(self->sim)->population_size);
+            "reference_size", msp_get_model(self->sim)->reference_size);
     if (model->type == MSP_MODEL_DIRAC) {
         value = Py_BuildValue("d", model->params.dirac_coalescent.psi);
         if (value == NULL) {

@@ -110,10 +110,12 @@ class TestBadDemographicEvents(unittest.TestCase):
     def test_growth_rate_or_initial_size(self):
         self.assertRaises(ValueError, msprime.PopulationParametersChange, time=0)
 
+    @unittest.skip("Not implmented yet")
     def test_bad_simulation_model(self):
-        for model in [None, "hudson", {}]:
-            self.assertRaises(
-                TypeError, msprime.SimulationModelChange, time=0, model=model)
+        for model in [None, {}]:
+            des = [msprime.SimulationModelChange(time=0, model=model)]
+            with self.assertRaises(TypeError):
+                msprime.simulate(10, demographic_events=des)
 
 
 class TestDemographicEventStr(unittest.TestCase):

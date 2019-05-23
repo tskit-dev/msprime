@@ -161,18 +161,18 @@ model definition class (e.g ``model=msprime.SmcApproxCoalescent(1)``).
 The available models are documented in the following subsections.
 
 A key element of simulation models in ``msprime`` is the concept
-of ``population_size``, which is, unfortunately, somewhat complicated
-and confusing. Simulation models such as the coalescent are defined
+of a "reference population size". Simulation models such as
+the coalescent are defined
 in terms of "scaled time". Time in the standard diploid coalescent
-is measured in units of :math:`1 / (4 N_e)` generations, and
+is measured in units of :math:`4 N_e` generations, and
 one of the ways in which msprime tries to make life easier for
-users is to automatically convert times into units of generations.
-Thus, a key responsibility for a simulation model is to
+users is to automatically convert times and rates to and
+from units of generations. Thus, a key responsibility for a simulation model is to
 convert times specified by users in generations into "model time"
 (in which the simulation is performed) and to tranlate the
 simulated model times back into generations. This is what the
 reference population size associated with a model is used for
-and fundamentally means. The ``Ne`` argument to
+and fundamentally what it means. The ``Ne`` argument to
 :func:`simulate` can also be used to define this parameter
 when combined with a string shorthand for a model.
 Thus
@@ -189,26 +189,30 @@ and
 
 define the same simulation.
 
-TODO: describe what happens with population configurations
-and why this is confusing.
+The situation is somewhat confused by the sizes associated
+with specific populations using, e.g., the
+:class:`.PopulationConfiguration` class. In coalescent models, these
+sizes are used to compute rates of coalescence, and have no direct
+relationship to the model's reference population size. Thus, we may
+have several populations, all of which have different sizes and none
+equal to the model's reference population size.
+The model's reference population size is used to scale all times
+and rates, irrespective of the sizes of the various individual
+populations.
 
-TODO: should we chane model.population_size to reference_size?
-
-
-
-TODO: Document population size and iteraction with Ne and
-population sizes in the model.
-
-NOTE: Effective population sizes can be specified by both the `Ne`
-parameter of `msprime.simulate()` and the `initial_size` parameter of
-`msprime.PopulationConfiguration()`. `initial_size` takes priority, but
-populations where this is not specified have size `Ne`.
+The situation for the :class:`.DiscreteTimeWrightFisher` model
+is different. In this case, there is no concept of rescaling time
+as time is always measured in generations. Therefore, in this case the
+reference population size has no function and is just used as a
+shortcut for specifying individual population sizes.
 
 We are often interested in simulating mixtures of models: for example,
 using the :class:`.DiscreteTimeWrightFisher` model to simulate the
 recent past and then using the standard coalescent to complete the
 simulation of the ancient past. This can be achieved using the
-:class:`.SimulationModelChange` event.
+:class:`.SimulationModelChange` event. See the
+:ref:`sec_tutorial_hybrid_simulations` for an example of this
+approach.
 
 +++++++++++++++++++++++++++++
 Coalescent and approximations
@@ -223,6 +227,19 @@ Coalescent and approximations
 +++++++++++++++++++++++++++
 Discrete time Wright-Fisher
 +++++++++++++++++++++++++++
+
+Msprime provides the option to perform discrete-time Wright-Fisher simulations
+for scenarios when the coalescent model is not appropriate, including large
+sample sizes, multiple chromosomes, or recent migration.
+
+To use this option, set the flag ``model="dtwf"`` as in the following example::
+
+    >>> tree_sequence = msprime.simulate(
+    ...     sample_size=6, Ne=1000, length=1e4, recombination_rate=2e-8,
+    ...     model="dtwf")
+
+
+All other parameters can be set as usual.
 
 .. autoclass:: msprime.DiscreteTimeWrightFisher
 

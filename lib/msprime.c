@@ -239,7 +239,7 @@ msp_set_population_configuration(msp_t *self, int population_id, double initial_
         goto out;
     }
     self->initial_populations[population_id].initial_size =
-        initial_size / model->population_size;
+        initial_size / model->reference_size;
     self->initial_populations[population_id].growth_rate =
         model->generation_rate_to_model_rate(model, growth_rate);
     ret = 0;
@@ -528,8 +528,12 @@ msp_free(msp_t *self)
         de = tmp;
     }
     for (j = 0; j < self->num_labels; j++) {
-        fenwick_free(&self->links[j]);
-        object_heap_free(&self->segment_heap[j]);
+        if (self->links != NULL) {
+            fenwick_free(&self->links[j]);
+        }
+        if (self->segment_heap != NULL) {
+            object_heap_free(&self->segment_heap[j]);
+        }
     }
     for (j = 0; j < self->num_populations; j++) {
         msp_safe_free(self->populations[j].ancestors);
@@ -799,7 +803,7 @@ msp_print_state(msp_t *self, FILE *out)
         goto out;
     }
     fprintf(out, "simulation model      = '%s'\n", msp_get_model_name(self));
-    fprintf(out, "model population_size = %f\n", self->model.population_size);
+    fprintf(out, "model reference_size = %f\n", self->model.reference_size);
     if (self->model.type == MSP_MODEL_BETA) {
         fprintf(out, "\tbeta coalescent parameters: alpha = %f, truncation_point = %f\n",
                 self->model.params.beta_coalescent.alpha,
@@ -2628,7 +2632,7 @@ msp_dtwf_generation(msp_t *self)
          * to the reference model population size (which is also true for the
          * coalescent models. */
         N = (uint32_t) round(
-            get_population_size(pop, self->time) * self->model.population_size);
+            get_population_size(pop, self->time) * self->model.reference_size);
         if (N == 0) {
             ret = MSP_ERR_DTWF_ZERO_POPULATION_SIZE;
             goto out;
@@ -3381,10 +3385,10 @@ msp_compute_population_size(msp_t *self, size_t population_id, double time,
     }
     pop = &self->populations[population_id];
     if (pop->growth_rate == 0.0) {
-        *pop_size = model->population_size * pop->initial_size;
+        *pop_size = model->reference_size * pop->initial_size;
     } else {
         dt = model->generations_to_model_time(model, time) - pop->start_time;
-        *pop_size = model->population_size * pop->initial_size
+        *pop_size = model->reference_size * pop->initial_size
             * exp(-pop->growth_rate * dt);
     }
 out:
@@ -3585,7 +3589,7 @@ msp_get_population_configuration(msp_t *self, size_t population_id, double *init
         goto out;
     }
     pop = &self->populations[population_id];
-    *initial_size = model->population_size * pop->initial_size;
+    *initial_size = model->reference_size * pop->initial_size;
     *growth_rate = model->model_rate_to_generation_rate(model, pop->growth_rate);
 out:
     return ret;
@@ -3665,7 +3669,7 @@ msp_change_single_population_parameters(msp_t *self, size_t population_id,
         dt = time - pop->start_time;
         pop->initial_size = pop->initial_size * exp(-pop->growth_rate * dt);
     } else {
-        pop->initial_size = initial_size / model->population_size;
+        pop->initial_size = initial_size / model->reference_size;
     }
     /* Do not change the growth_rate unless it is specified */
     if (!gsl_isnan(growth_rate)) {
@@ -4223,25 +4227,25 @@ out:
 static double
 std_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * model->population_size * t;
+    return 4 * model->reference_size * t;
 }
 
 static double
 std_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g / (4 * model->population_size);
+    return g / (4 * model->reference_size);
 }
 
 static double
 std_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * 4 * model->population_size;
+    return rate * 4 * model->reference_size;
 }
 
 static double
 std_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    return rate / (4 * model->population_size);
+    return rate / (4 * model->reference_size);
 }
 
 static double
@@ -4308,26 +4312,26 @@ msp_std_common_ancestor_event(msp_t *self, population_id_t population_id,
 static double
 dirac_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * model->population_size * t;
+    return 4 * model->reference_size * t;
 }
 
 static double
 dirac_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g /(4 * model->population_size);
+    return g /(4 * model->reference_size);
 }
 
 static double
 dirac_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * 4 * model->population_size;
+    return rate * 4 * model->reference_size;
 }
 
 static double
 dirac_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
     // This works for comparing dirac kingman case ... but why 4Ne^2
-    return rate / ( 4 * gsl_pow_2(model->population_size));
+    return rate / ( 4 * gsl_pow_2(model->reference_size));
 }
 
 double
@@ -4472,19 +4476,19 @@ out:
 static double
 beta_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * model->population_size * t;
+    return 4 * model->reference_size * t;
 }
 
 static double
 beta_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g / (4 * model->population_size);
+    return g / (4 * model->reference_size);
 }
 
 static double
 beta_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * 4 * model->population_size;
+    return rate * 4 * model->reference_size;
 }
 
 static double
@@ -4495,7 +4499,7 @@ beta_model_rate_to_generation_rate(simulation_model_t *model, double rate)
     double phi = model->params.beta_coalescent.phi;
     double scalar = exp(log(alpha) - alpha * log(m)
             + gsl_sf_beta_inc (2 - alpha, alpha, phi)
-            - (alpha - 1) * model->population_size);
+            - (alpha - 1) * model->reference_size);
     return rate / ( 4 * scalar );
 }
 
@@ -4947,7 +4951,7 @@ msp_rescale_model_times(msp_t *self)
 }
 
 static int
-msp_set_simulation_model(msp_t *self, int model, double population_size)
+msp_set_simulation_model(msp_t *self, int model, double reference_size)
 {
     int ret = 0;
 
@@ -4960,7 +4964,7 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
-    if (population_size <= 0) {
+    if (reference_size <= 0) {
         ret = MSP_ERR_BAD_POPULATION_SIZE;
         goto out;
     }
@@ -4974,7 +4978,7 @@ msp_set_simulation_model(msp_t *self, int model, double population_size)
         }
     }
     self->model.type = model;
-    self->model.population_size = population_size;
+    self->model.reference_size = reference_size;
     /* For convenience here we set these to what is needed for the standard
      * coalcescent. For other models, these functions must be overwritten
      * with the correct values *before* rescaling time. */
@@ -4989,9 +4993,9 @@ out:
 }
 
 int
-msp_set_simulation_model_hudson(msp_t *self, double population_size)
+msp_set_simulation_model_hudson(msp_t *self, double reference_size)
 {
-    int ret = msp_set_simulation_model(self, MSP_MODEL_HUDSON, population_size);
+    int ret = msp_set_simulation_model(self, MSP_MODEL_HUDSON, reference_size);
     if (ret != 0) {
         goto out;
     }
@@ -5001,9 +5005,9 @@ out:
 }
 
 int
-msp_set_simulation_model_smc(msp_t *self, double population_size)
+msp_set_simulation_model_smc(msp_t *self, double reference_size)
 {
-    int ret =  msp_set_simulation_model(self, MSP_MODEL_SMC, population_size);
+    int ret =  msp_set_simulation_model(self, MSP_MODEL_SMC, reference_size);
     if (ret != 0) {
         goto out;
     }
@@ -5013,9 +5017,9 @@ out:
 }
 
 int
-msp_set_simulation_model_smc_prime(msp_t *self, double population_size)
+msp_set_simulation_model_smc_prime(msp_t *self, double reference_size)
 {
-    int ret =  msp_set_simulation_model(self, MSP_MODEL_SMC_PRIME, population_size);
+    int ret =  msp_set_simulation_model(self, MSP_MODEL_SMC_PRIME, reference_size);
     if (ret != 0) {
         goto out;
     }
@@ -5025,10 +5029,10 @@ out:
 }
 
 int
-msp_set_simulation_model_dtwf(msp_t *self, double population_size)
+msp_set_simulation_model_dtwf(msp_t *self, double reference_size)
 {
     int ret = 0;
-    ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, population_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, reference_size);
     if (ret != 0) {
         goto out;
     }
@@ -5043,12 +5047,12 @@ out:
 }
 
 int
-msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi, double c)
+msp_set_simulation_model_dirac(msp_t *self, double reference_size, double psi, double c)
 {
     int ret = 0;
 
     /* TODO bounds check psi: what are legal values? */
-    ret = msp_set_simulation_model(self, MSP_MODEL_DIRAC, population_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_DIRAC, reference_size);
     if (ret != 0) {
         goto out;
     }
@@ -5067,13 +5071,13 @@ out:
 }
 
 int
-msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
+msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
         double truncation_point)
 {
     int ret = 0;
 
     /* TODO bounds check alpha and truncation_point: what are legal values? */
-    ret = msp_set_simulation_model(self, MSP_MODEL_BETA, population_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_BETA, reference_size);
     if (ret != 0) {
         goto out;
     }
@@ -5081,7 +5085,7 @@ msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
     self->model.params.beta_coalescent.truncation_point = truncation_point;
     self->model.params.beta_coalescent.m =
         2.0 + exp(alpha * 0.6931472 + (1 - alpha) * 1.098612 - log(alpha - 1));
-    //self->model.params.beta_coalescent.phi = beta_compute_phi(population_size,
+    //self->model.params.beta_coalescent.phi = beta_compute_phi(reference_size,
                         //truncation_point, self->model.params.beta_coalescent.m);
     //self->model.params.beta_coalescent.K = truncation_point;
 
@@ -5112,7 +5116,7 @@ out:
 }
 
 int
-msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_size,
+msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_size,
         double position, double start_frequency, double end_frequency,
         double alpha, double dt)
 {
@@ -5147,7 +5151,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_si
     if (ret != 0) {
         goto out;
     }
-    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP, population_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP, reference_size);
     if (ret != 0) {
         goto out;
     }

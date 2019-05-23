@@ -607,7 +607,7 @@ test_simulator_getters_setters(void)
 
     ret = msp_set_simulation_model_hudson(&msp, Ne);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
-    CU_ASSERT_EQUAL(msp_get_model(&msp)->population_size, Ne);
+    CU_ASSERT_EQUAL(msp_get_model(&msp)->reference_size, Ne);
 
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -3138,7 +3138,7 @@ test_sweep_genic_selection_events(void)
         &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_dimensions(&msp, 1, 2);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.1, 0, 1, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);

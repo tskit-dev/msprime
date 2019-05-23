@@ -153,25 +153,25 @@ class TestParametricModels(unittest.TestCase):
         dbl_max = sys.float_info.max
         for alpha in [1.01, 1.5, 1.99]:
             model = msprime.BetaCoalescent(N, alpha)
-            self.assertEqual(model.population_size, N)
+            self.assertEqual(model.reference_size, N)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, dbl_max)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
-                "population_size": N,
+                "reference_size": N,
                 "alpha": alpha,
                 "truncation_point": dbl_max})
         alpha = 1.5
         for truncation_point in [0, 3, 1e6]:
             model = msprime.BetaCoalescent(N, alpha, truncation_point)
-            self.assertEqual(model.population_size, N)
+            self.assertEqual(model.reference_size, N)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, truncation_point)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
-                "population_size": N,
+                "reference_size": N,
                 "alpha": alpha,
                 "truncation_point": truncation_point})
 
@@ -180,12 +180,12 @@ class TestParametricModels(unittest.TestCase):
         for psi in [0.01, 0.5, 0.99]:
             for c in [1e-6, 1.0, 1e2]:
                 model = msprime.DiracCoalescent(N, psi, c)
-                self.assertEqual(model.population_size, N)
+                self.assertEqual(model.reference_size, N)
                 self.assertEqual(model.psi, psi)
                 self.assertEqual(model.c, c)
                 d = model.get_ll_representation()
                 self.assertEqual(d, {
-                    "name": "dirac", "population_size": N, "psi": psi, "c": c})
+                    "name": "dirac", "reference_size": N, "psi": psi, "c": c})
 
 
 class TestMultipleMergerModels(unittest.TestCase):
@@ -229,14 +229,14 @@ class TestMultipleMergerModels(unittest.TestCase):
 
     def test_beta_coalescent(self):
         model = msprime.BetaCoalescent(
-            population_size=5, alpha=1.5, truncation_point=10)
+            reference_size=5, alpha=1.5, truncation_point=10)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
 
     def test_beta_coalescent_integration_fails(self):
         model = msprime.BetaCoalescent(
-            population_size=5, alpha=1e-10, truncation_point=10)
+            reference_size=5, alpha=1e-10, truncation_point=10)
         with self.assertRaises(_msprime.LibraryError):
             msprime.simulate(sample_size=10, model=model)
 
@@ -348,7 +348,7 @@ class TestMixedModels(unittest.TestCase):
                 msprime.SimulationModelChange(
                     40, msprime.DiscreteTimeWrightFisher(100)),
                 msprime.SimulationModelChange(
-                    50, msprime.BetaCoalescent(population_size=10)),
+                    50, msprime.BetaCoalescent(reference_size=10)),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent(0.1))],
             random_seed=10)
         for tree in ts.trees():
@@ -404,7 +404,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     @unittest.skip("Not clear what's happening now")
     def test_sweep_start_time_complete(self):
         sweep_model = msprime.SweepGenicSelection(
-            population_size=0.25, position=0.5, start_frequency=0.6,
+            reference_size=0.25, position=0.5, start_frequency=0.6,
             end_frequency=0.7, alpha=0.9, dt=0.001)
         t_start = 0.1
         ts = msprime.simulate(
@@ -419,7 +419,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     def test_sweep_start_time_incomplete(self):
         # Short sweep that doesn't make complete coalescence.
         sweep_model = msprime.SweepGenicSelection(
-            population_size=0.25, position=0.5, start_frequency=0.69,
+            reference_size=0.25, position=0.5, start_frequency=0.69,
             end_frequency=0.7, alpha=1e-5, dt=1)
         t_start = 0.1
         ts = msprime.simulate(

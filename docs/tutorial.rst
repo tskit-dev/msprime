@@ -285,8 +285,8 @@ we do want the full genotype matrix it is simple to obtain::
 In this example, we run the same simulation but this time
 store the entire variant matrix in a two-dimensional numpy array.
 This is useful for integrating with tools such as
-`scikit allel <https://scikit-allel.readthedocs.io/en/latest/>`_, 
-but note that what we call genotype matrix corresponds to a 
+`scikit allel <https://scikit-allel.readthedocs.io/en/latest/>`_,
+but note that what we call genotype matrix corresponds to a
 scikit-allel haplotype array.
 
 ******************
@@ -675,30 +675,14 @@ breakpoints follows the recombination rate closely.
    :alt: Density of breakpoints along the chromosome.
 
 
-.. _sec_tutorial_dtwf:
+.. _sec_tutorial_multiple_chromosomes:
 
-*******************************
-Wright-Fisher simulations
-*******************************
-
-Msprime provides the option to perform discrete-time Wright-Fisher simulations
-for scenarios when the coalescent model is not appropriate, including large
-sample sizes, multiple chromosomes, or recent migration.
-
-To use this option, set the flag ``model="dtwf"`` as in the following example::
-
-    >>> tree_sequence = msprime.simulate(
-    ...     sample_size=6, Ne=1000, length=1e4, recombination_rate=2e-8,
-    ...     model="dtwf")
-
-
-All other parameters can be set as usual.
-
--------------------------------------
+********************
 Multiple chromosomes
--------------------------------------
+********************
 
-.. warning:: This option is under active development and is expected to change.
+.. warning:: This approach is somewhat hacky; hopefully we will have a more
+    elegant solution soon!
 
 Multiple chromosomes can be simulated by specifying a recombination map with
 hotspots between chromosomes. For example, to simulate two chromosomes each 1
@@ -736,39 +720,31 @@ Also note that recombinations will still occur in the gaps between chromosomes,
 with corresponding trees in the tree sequence. This will be fixed in a future
 release.
 
--------------------------------------
-Hybrid simulations
--------------------------------------
+.. _sec_tutorial_hybrid_simulations:
 
-In some situations Wright-Fisher simulations are desireable yet less
+******************
+Hybrid simulations
+******************
+
+In some situations Wright-Fisher simulations are desireable but less
 computationally efficient than coalescent simulations, for example simulating a
 small sample in a recently admixed population. In these cases, a hybrid model
 offers an excellent tradeoff between simulation accuracy and performance.
 
-This is done through a SimulationModelChange event, which is a special type of
-demographic event. 
+This is done through a :class:`.SimulationModelChange` event, which is a special type of
+demographic event.
 
 For example, here we switch from the discrete-time Wright-Fisher model to the
 standard Hudson coalescent 100 generations in the past:
 
+.. todo:: FIXME this doesn't work yet.
+
 .. code-block:: python
 
-    num_wf_generations = 100
-
-    population_configurations = [
-            msprime.PopulationConfiguration(
-            sample_size=100, initial_size=10000, growth_rate=0)
-            ]
-
-    demographic_events = [
-        msprime.SimulationModelChange(
-            num_wf_generations, msprime.StandardCoalescent())
-    ]
-
     ts = msprime.simulate(
-        population_configurations=population_configurations,
-        length=1e7, recombination_rate=2e-8, model="dtwf",
-        demographic_events=demographic_events)
+        sample_size=10, Ne=1000, model="dtwf",
+        demographic_events=[
+            msprime.SimulationModelChange(time=100, model="hudson")])
 
 
 .. _sec_tutorial_simulate_from:

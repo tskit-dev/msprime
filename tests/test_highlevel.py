@@ -463,9 +463,10 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f, bad_value)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
-            self.assertEqual(sim.model.population_size, Ne)
+            self.assertEqual(sim.model.reference_size, Ne)
         # Test the default.
         sim = msprime.simulator_factory(10)
+        self.assertEqual(sim.model.reference_size, 1)
 
     def test_population_configurations(self):
         def f(configs):

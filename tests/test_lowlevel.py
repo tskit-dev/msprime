@@ -46,23 +46,23 @@ def uniform_recombination_map(num_loci=1, rate=0, L=None):
         num_loci=num_loci, positions=[0, L], rates=[rate, 0])
 
 
-def get_simulation_model(name="hudson", population_size=0.25, **kwargs):
+def get_simulation_model(name="hudson", reference_size=0.25, **kwargs):
     """
     Returns simulation model dictionary suitable for passing to the low-level API.
     """
-    d = {"name": name, "population_size": population_size}
+    d = {"name": name, "reference_size": reference_size}
     d.update(kwargs)
     return d
 
 
 def get_sweep_genic_selection_model(
-        population_size=0.25, position=0.5, start_frequency=0.1, end_frequency=0.9,
+        reference_size=0.25, position=0.5, start_frequency=0.1, end_frequency=0.9,
         alpha=0.1, dt=0.1):
     """
     Returns a sweep model for the specified parameters.
     """
     return get_simulation_model(
-            name="sweep_genic_selection", population_size=population_size,
+            name="sweep_genic_selection", reference_size=reference_size,
             position=position, start_frequency=start_frequency,
             end_frequency=end_frequency, alpha=alpha, dt=dt)
 
@@ -211,7 +211,7 @@ def get_example_simulator(
         population_configuration=population_configuration,
         migration_matrix=migration_matrix,
         store_migrations=store_migrations,
-        model=get_simulation_model(population_size=Ne))
+        model=get_simulation_model(reference_size=Ne))
     return sim, tables
 
 
