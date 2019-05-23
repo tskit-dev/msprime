@@ -26,7 +26,6 @@ import random
 import unittest
 
 import tskit
-import numpy as np
 
 import tests
 import _msprime
@@ -56,14 +55,16 @@ def get_simulation_model(name="hudson", population_size=0.25, **kwargs):
     return d
 
 
-def get_single_sweep_model(
-        population_size=0.25, position=0.5, time=[1.0], allele_frequency=[0.5]):
+def get_sweep_genic_selection_model(
+        population_size=0.25, position=0.5, start_frequency=0.1, end_frequency=0.9,
+        alpha=0.1, dt=0.1):
     """
-    Returns a single sweep model for the specified parameters.
+    Returns a sweep model for the specified parameters.
     """
     return get_simulation_model(
-            name="single_sweep", population_size=population_size,
-            position=position, time=time, allele_frequency=allele_frequency)
+            name="sweep_genic_selection", population_size=population_size,
+            position=position, start_frequency=start_frequency,
+            end_frequency=end_frequency, alpha=alpha, dt=dt)
 
 
 def get_population_configuration(growth_rate=0.0, initial_size=1.0):
@@ -1017,7 +1018,7 @@ class TestSimulator(LowLevelTestCase):
                 sim = f(model=model)
                 self.assertEqual(sim.get_model(), model)
 
-    def test_single_sweep_simulation_model_errors(self):
+    def test_sweep_genic_selection_simulation_model_errors(self):
         L = 10
 
         def f(num_samples=10, random_seed=1, **kwargs):
@@ -1028,71 +1029,49 @@ class TestSimulator(LowLevelTestCase):
                 _msprime.LightweightTableCollection(), **kwargs)
 
         # Partialy specified models.
-        model = get_simulation_model("single_sweep")
+        model = get_simulation_model("sweep_genic_selection")
         self.assertRaises(ValueError, f, model=model)
-        model = get_simulation_model("single_sweep", position=0.5)
-        self.assertRaises(ValueError, f, model=model)
-        model = get_simulation_model("single_sweep", position=0.5, time=[1.0])
+        model = get_simulation_model("sweep_genic_selection", position=0.5)
         self.assertRaises(ValueError, f, model=model)
         model = get_simulation_model(
-                "single_sweep", position=0.5, allele_frequency=[1.0])
+            "sweep_genic_selection", position=0.5, start_frequency=0.1)
+        self.assertRaises(ValueError, f, model=model)
+        model = get_simulation_model(
+            "sweep_genic_selection", position=0.5, start_frequency=0.1,
+            end_frequency=0.5)
+        self.assertRaises(ValueError, f, model=model)
+        model = get_simulation_model(
+            "sweep_genic_selection", position=0.5, start_frequency=0.1,
+            end_frequency=0.5, alpha=0.1)
+        self.assertRaises(ValueError, f, model=model)
+        model = get_simulation_model(
+            "sweep_genic_selection", position=0.5, start_frequency=0.1,
+            end_frequency=0.5, dt=0.1)
         self.assertRaises(ValueError, f, model=model)
 
         for bad_type in [None, str, "sdf"]:
-            model = get_single_sweep_model(position=bad_type)
+            model = get_sweep_genic_selection_model(position=bad_type)
             self.assertRaises(TypeError, f, model=model)
-        for bad_array in [None, str, "sdf", [[0], [0]]]:
-            model = get_single_sweep_model(time=bad_array)
-            self.assertRaises(ValueError, f, model=model)
-            model = get_single_sweep_model(allele_frequency=bad_array)
-            self.assertRaises(ValueError, f, model=model)
-
-        model = get_single_sweep_model(time=[], allele_frequency=[1])
-        self.assertRaises(ValueError, f, model=model)
-        model = get_single_sweep_model(time=[1, 1], allele_frequency=[1])
-        self.assertRaises(ValueError, f, model=model)
+            model = get_sweep_genic_selection_model(start_frequency=bad_type)
+            self.assertRaises(TypeError, f, model=model)
+            model = get_sweep_genic_selection_model(end_frequency=bad_type)
+            self.assertRaises(TypeError, f, model=model)
+            model = get_sweep_genic_selection_model(alpha=bad_type)
+            self.assertRaises(TypeError, f, model=model)
+            model = get_sweep_genic_selection_model(dt=bad_type)
+            self.assertRaises(TypeError, f, model=model)
 
         for bad_position in [-1, L, L + 1]:
-            model = get_single_sweep_model(position=bad_position)
+            model = get_sweep_genic_selection_model(position=bad_position)
             self.assertRaises(_msprime.InputError, f, model=model)
-        model = get_single_sweep_model(time=[], allele_frequency=[])
-        self.assertRaises(_msprime.InputError, f, model=model)
-
-        model = get_single_sweep_model(time=[1, 0], allele_frequency=[0.1, 0.1])
-        self.assertRaises(_msprime.InputError, f, model=model)
-        model = get_single_sweep_model(time=[0, 1], allele_frequency=[-0.1, 0.1])
-        self.assertRaises(_msprime.InputError, f, model=model)
 
         # If we don't specify 2 labels we get an error.
-        model = get_single_sweep_model()
+        model = get_sweep_genic_selection_model()
         for bad_labels in [1, 3, 10]:
             sim = f(model=model, num_labels=bad_labels)
             self.assertRaises(_msprime.LibraryError, sim.run)
 
-    def test_single_sweep_simulation_trajectory_round_trip(self):
-        L = 10
-
-        def f(num_samples=10, random_seed=1, **kwargs):
-            return _msprime.Simulator(
-                get_samples(num_samples),
-                uniform_recombination_map(L=L),
-                _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
-
-        inputs = [
-            ([0], [1]),
-            ([0.1, 0.2], [0.1, 0.01]),
-            (np.arange(10), np.ones(10)),
-            (np.arange(1000), np.ones(1000)),
-        ]
-        for time, allele_frequency in inputs:
-            model = get_single_sweep_model(time=time, allele_frequency=allele_frequency)
-            sim = f(model=model)
-            model = sim.get_model()
-            self.assertTrue(np.array_equal(time, model["time"]))
-            self.assertTrue(np.array_equal(allele_frequency, model["allele_frequency"]))
-
-    def test_single_sweep_simulation_locus_round_trip(self):
+    def test_sweep_genic_selection_simulation_locus_round_trip(self):
         L = 10
 
         def f(num_samples=10, random_seed=1, **kwargs):
@@ -1103,8 +1082,7 @@ class TestSimulator(LowLevelTestCase):
                 _msprime.LightweightTableCollection(), **kwargs)
 
         for j in range(L):
-            model = get_single_sweep_model(
-                position=j, time=[1.0], allele_frequency=[0.1])
+            model = get_sweep_genic_selection_model(position=j)
             sim = f(model=model)
             model = sim.get_model()
             # Because we have a flat map we should convert exactly.

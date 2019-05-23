@@ -133,14 +133,18 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_SWEEP_POSITION:
             ret = "Sweep position must be between 0 and sequence length.";
             break;
-        case MSP_ERR_BAD_TRAJECTORY_TIME:
-            ret = "Time values must be > 0 and in increasing order.";
+        case MSP_ERR_BAD_TIME_DELTA:
+            ret = "Time delta values must be > 0.";
             break;
-        case MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY:
+        case MSP_ERR_BAD_ALLELE_FREQUENCY:
             ret = "Allele frequency values must be between 0 and 1.";
             break;
-        case MSP_ERR_EMPTY_TRAJECTORY:
-            ret = "Trajectory must contain at least one time point.";
+        case MSP_ERR_BAD_TRAJECTORY_START_END:
+            ret = "Start frequency must be less than end frequency";
+            break;
+        case MSP_ERR_EVENTS_DURING_SWEEP:
+            ret = "Demographic and sampling events during a sweep "
+                "are not supported";
             break;
         case MSP_ERR_UNSUPPORTED_OPERATION:
             ret = "Current simulation configuration is not supported.";

@@ -66,12 +66,13 @@
 #define MSP_ERR_TIME_TRAVEL                                         -29
 #define MSP_ERR_INTEGRATION_FAILED                                  -30
 #define MSP_ERR_BAD_SWEEP_POSITION                                  -31
-#define MSP_ERR_BAD_TRAJECTORY_TIME                                 -32
-#define MSP_ERR_BAD_TRAJECTORY_ALLELE_FREQUENCY                     -33
-#define MSP_ERR_EMPTY_TRAJECTORY                                    -34
-#define MSP_ERR_UNSUPPORTED_OPERATION                               -35
-#define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -36
-#define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -37
+#define MSP_ERR_BAD_TIME_DELTA                                      -32
+#define MSP_ERR_BAD_ALLELE_FREQUENCY                                -33
+#define MSP_ERR_BAD_TRAJECTORY_START_END                            -34
+#define MSP_ERR_EVENTS_DURING_SWEEP                                 -35
+#define MSP_ERR_UNSUPPORTED_OPERATION                               -36
+#define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -38
+#define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -39
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

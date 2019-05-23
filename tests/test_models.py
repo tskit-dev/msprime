@@ -1,5 +1,6 @@
 #
 # Copyright (C) 2016 University of Oxford
+
 #
 # This file is part of msprime.
 #
@@ -354,65 +355,74 @@ class TestMixedModels(unittest.TestCase):
             self.assertEqual(tree.num_roots, 1)
 
 
-class TestSingleSweep(unittest.TestCase):
+class TestSweepGenicSelection(unittest.TestCase):
     """
     Tests for the single sweep model.
     """
     def test_incorrect_num_labels(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
-        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
+        model = msprime.SweepGenicSelection(
+            position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=0.1,
+            dt=0.01)
         for num_labels in [1, 3, 10]:
             with self.assertRaises(_msprime.LibraryError):
                 msprime.simulate(
                     10, recombination_rate=1, model=model, num_labels=num_labels)
 
-    @unittest.skip("Assertion `overlaps != NULL' fails.")
-    def test_simple_no_recomb(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
-        model = msprime.SingleSweep(position=0, trajectory=trajectory)
-        msprime.simulate(10, model=model, num_labels=2)
-
-    @unittest.skip("Assertion `overlaps != NULL' fails.")
-    def test_simple_recomb(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1], [0.1, 0.11])
-        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
-        msprime.simulate(10, recombination_rate=1, model=model, num_labels=2)
-
-    @unittest.skip("Assertion `overlaps != NULL' fails.")
-    def test_trajectory_no_recomb(self):
-        trajectory = msprime.simulate_trajectory(
-            start_frequency=0.1, end_frequency=0.8, alpha=0.1, time_slice=0.01,
-            random_seed=32)
-        model = msprime.SingleSweep(position=0.5, trajectory=trajectory)
-        msprime.simulate(10, model=model, num_labels=2)
-
-    def test_simple_example(self):
-        trajectory = msprime.SweepTrajectory([0, 0.1, 0.2, 0.3], [0.95, 0.85, 0.75, 0.5])
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            length=100, num_loci=100, rate=0.1)
-        model = msprime.SingleSweep(
-            population_size=100, position=5, trajectory=trajectory)
-        ts = msprime.simulate(
-            sample_size=10,
-            recombination_map=recomb_map, model=model, num_labels=2,
-            demographic_events=[
-                msprime.SimulationModelChange(0.3, msprime.StandardCoalescent(100))])
+    def test_sweep_coalescence_no_recomb(self):
+        model = msprime.SweepGenicSelection(
+            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
+            dt=0.1)
+        ts = msprime.simulate(10, model=model, num_labels=2, random_seed=2)
+        self.assertEqual(ts.num_trees, 1)
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
+    def test_sweep_coalescence_recomb(self):
+        model = msprime.SweepGenicSelection(
+            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
+            dt=0.1)
+        ts = msprime.simulate(
+            10, model=model, recombination_rate=0.1, num_labels=2, random_seed=2)
+        self.assertGreater(ts.num_trees, 1)
+        for tree in ts.trees():
+            self.assertEqual(tree.num_roots, 1)
 
-class TestSimulateTrajectory(unittest.TestCase):
-    """
-    Tests the trajectory simulator.
-    """
-    def test_same_random_seed_equal(self):
-        trajectories = [msprime.simulate_trajectory(
-            start_frequency=0.125, end_frequency=0.75, alpha=0.125, time_slice=1 / 16,
-            random_seed=42) for _ in range(10)]
-        for trajectory in trajectories:
-            self.assertTrue(np.array_equal(trajectory.time, trajectories[0].time))
-            self.assertTrue(
-                np.array_equal(
-                    trajectory.allele_frequency, trajectories[0].allele_frequency))
+    def test_sweep_coalescence_same_seed(self):
+        model = msprime.SweepGenicSelection(
+            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
+            dt=0.1)
+        ts1 = msprime.simulate(5, model=model, num_labels=2, random_seed=2)
+        ts2 = msprime.simulate(5, model=model, num_labels=2, random_seed=2)
+        t1 = ts1.dump_tables()
+        t2 = ts2.dump_tables()
+        t1.provenances.clear()
+        t2.provenances.clear()
+        self.assertEqual(t1, t2)
 
-    # TODO more tests as we define functionality here.
+    def test_sweep_start_time_complete(self):
+        sweep_model = msprime.SweepGenicSelection(
+            population_size=0.25, position=0.5, start_frequency=0.6,
+            end_frequency=0.7, alpha=0.9, dt=0.001)
+        t_start = 0.1
+        ts = msprime.simulate(
+            10, Ne=0.25,
+            recombination_rate=2,
+            demographic_events=[
+                msprime.SimulationModelChange(t_start, sweep_model)],
+            num_labels=2, random_seed=2)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
+
+    @unittest.skip("Can't get sweep to be incomplete")
+    def test_sweep_start_time_incomplete(self):
+        # Short sweep that doesn't make complete coalescence.
+        sweep_model = msprime.SweepGenicSelection(
+            population_size=0.25, position=0.5, start_frequency=0.69,
+            end_frequency=0.7, alpha=1e-5, dt=1)
+        t_start = 0.1
+        ts = msprime.simulate(
+            10, Ne=0.25,
+            recombination_rate=2,
+            demographic_events=[
+                msprime.SimulationModelChange(t_start, sweep_model)],
+            num_labels=2, random_seed=2)
+        self.assertTrue(any(tree.num_roots > 1 for tree in ts.trees()))
