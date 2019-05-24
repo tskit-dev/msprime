@@ -735,16 +735,38 @@ This is done through a :class:`.SimulationModelChange` event, which is a special
 demographic event.
 
 For example, here we switch from the discrete-time Wright-Fisher model to the
-standard Hudson coalescent 100 generations in the past:
-
-.. todo:: FIXME this doesn't work yet.
+standard Hudson coalescent 500 generations in the past:
 
 .. code-block:: python
 
+
     ts = msprime.simulate(
-        sample_size=10, Ne=1000, model="dtwf",
+        sample_size=6, Ne=1000, model="dtwf", random_seed=2,
         demographic_events=[
-            msprime.SimulationModelChange(time=100, model="hudson")])
+            msprime.SimulationModelChange(time=500, model="hudson")])
+    print(ts.tables.nodes)
+
+::
+
+    id      flags   population      individual      time    metadata
+    0       1       0       -1      0.00000000000000
+    1       1       0       -1      0.00000000000000
+    2       1       0       -1      0.00000000000000
+    3       1       0       -1      0.00000000000000
+    4       1       0       -1      0.00000000000000
+    5       1       0       -1      0.00000000000000
+    6       0       0       -1      78.00000000000000
+    7       0       0       -1      227.00000000000000
+    8       0       0       -1      261.00000000000000
+    9       0       0       -1      272.00000000000000
+    10      0       0       -1      1629.06982528980075
+
+
+Because of the integer node times, we can see here that most of the coalescent
+happened during the Wright-Fisher phase of the simulation, and as-of 500
+generations in the past, there were only two lineages left. The continuous
+time standard coalescent model was then used to simulate the ancient past of
+these two lineages.
 
 
 .. _sec_tutorial_simulate_from:

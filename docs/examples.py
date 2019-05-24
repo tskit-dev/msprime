@@ -423,9 +423,9 @@ def full_arg_example():
 
 def hybrid_sim_example():
     ts = msprime.simulate(
-        sample_size=10, Ne=1000, model="dtwf", random_seed=2,
+        sample_size=6, Ne=1000, model="dtwf", random_seed=2,
         demographic_events=[
-            msprime.SimulationModelChange(time=100, model="hudson")])
+            msprime.SimulationModelChange(time=500, model="hudson")])
     print(ts.tables.nodes)
 
 

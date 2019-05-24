@@ -110,9 +110,8 @@ class TestBadDemographicEvents(unittest.TestCase):
     def test_growth_rate_or_initial_size(self):
         self.assertRaises(ValueError, msprime.PopulationParametersChange, time=0)
 
-    @unittest.skip("Not implmented yet")
     def test_bad_simulation_model(self):
-        for model in [None, {}]:
+        for model in [[], {}]:
             des = [msprime.SimulationModelChange(time=0, model=model)]
             with self.assertRaises(TypeError):
                 msprime.simulate(10, demographic_events=des)
@@ -1075,6 +1074,49 @@ class TestCoalescenceLocations(unittest.TestCase):
             msprime.MassMigration(time=t3, source=2, dest=3),
         ]
         ts = msprime.simulate(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            random_seed=1)
+        tree = next(ts.trees())
+        # Check the leaves have the correct population.
+        self.assertEqual(tree.population(0), 0)
+        self.assertEqual(tree.population(1), 3)
+        self.assertEqual(ts.node(0).population, 0)
+        self.assertEqual(ts.node(1).population, 3)
+        self.assertEqual(list(ts.samples(0)), [0])
+        self.assertEqual(list(ts.samples(1)), [])
+        self.assertEqual(list(ts.samples(2)), [])
+        self.assertEqual(list(ts.samples(3)), [1])
+        # The MRCA of 0, 1 in 3 at time > t3
+        u = tree.get_mrca(0, 1)
+        self.assertEqual(u, 2)
+        self.assertEqual(tree.population(u), 3)
+        g = tree.time(u) * 4
+        self.assertGreater(g, t3)
+
+    def test_empty_demes_model_changes(self):
+        t1 = 1
+        t2 = 100
+        t3 = 200
+        dt = 10
+        population_configurations = [
+            msprime.PopulationConfiguration(1),
+            msprime.PopulationConfiguration(0),
+            msprime.PopulationConfiguration(0),
+            msprime.PopulationConfiguration(1),
+        ]
+        # We migrate the lineages to the next step by step and intersperse
+        # them mmodel change events
+        demographic_events = [
+            msprime.MassMigration(time=t1, source=0, dest=1),
+            msprime.SimulationModelChange(t1 + dt, "dtwf"),
+            msprime.MassMigration(time=t2, source=1, dest=2),
+            msprime.SimulationModelChange(t2 + dt, "hudson"),
+            msprime.MassMigration(time=t3, source=2, dest=3),
+            msprime.SimulationModelChange(t3 + dt, "dtwf"),
+        ]
+        ts = msprime.simulate(
+            Ne=100,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
             random_seed=1)

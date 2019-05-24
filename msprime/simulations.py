@@ -27,6 +27,7 @@ import random
 import sys
 import os
 import warnings
+import copy
 
 import tskit
 import numpy as np
@@ -96,6 +97,43 @@ def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     https://www.python.org/dev/peps/pep-0485/
     """
     return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+
+def model_factory(model, reference_size=1):
+    """
+    Returns a simulation model corresponding to the specified model and
+    reference size.
+    - If model is None, the default simulation model is returned with the
+      specified reference size.
+    - If model is a string, return the corresponding model instance
+      with the specified reference size
+    - If model is an instance of SimulationModel, return a copy of it.
+      In this case, if the model's reference_size is None, set it to the
+      parameter reference size.
+    - Otherwise return a type error.
+    """
+    model_map = {
+        "hudson": StandardCoalescent(reference_size),
+        "smc": SmcApproxCoalescent(reference_size),
+        "smc_prime": SmcPrimeApproxCoalescent(reference_size),
+        "dtwf": DiscreteTimeWrightFisher(reference_size)
+    }
+    if model is None:
+        model_instance = StandardCoalescent(reference_size)
+    elif isinstance(model, str):
+        lower_model = model.lower()
+        if lower_model not in model_map:
+            raise ValueError("Model '{}' unknown. Choose from {}".format(
+                model, list(model_map.keys())))
+        model_instance = model_map[lower_model]
+    elif isinstance(model, SimulationModel):
+        model_instance = copy.copy(model)
+        if model_instance.reference_size is None:
+            model_instance.reference_size = reference_size
+    else:
+        raise TypeError(
+            "Simulation model must be a string or an instance of SimulationModel")
+    return model_instance
 
 
 def _check_population_configurations(population_configurations):
@@ -463,7 +501,7 @@ class Simulator(object):
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self.ll_sim = None
-        self.set_model(model, Ne)
+        self.model = model_factory(model, Ne)
         self.recombination_map = recombination_map
         self.from_ts = from_ts
         self.start_time = None
@@ -603,37 +641,14 @@ class Simulator(object):
             if not isinstance(event, DemographicEvent):
                 raise TypeError(err)
             if isinstance(event, SimulationModelChange):
+                # Take a copy so that we're not modifying our input params
+                event = copy.copy(event)
+                # Update the model so that we can parse strings and set
+                # the reference size appropriately.
+                event.model = model_factory(event.model, self.model.reference_size)
                 self.model_change_events.append(event)
             else:
                 self.demographic_events.append(event)
-
-    def set_model(self, model, reference_size):
-        """
-        Sets the simulation model to the specified value. This may be either a string
-        or a SimulationModel instance. If None, the default simulation model is used
-        (i.e., Hudson's algorithm).
-        """
-        model_map = {
-            "hudson": StandardCoalescent(reference_size),
-            "smc": SmcApproxCoalescent(reference_size),
-            "smc_prime": SmcPrimeApproxCoalescent(reference_size),
-            "dtwf": DiscreteTimeWrightFisher(reference_size)
-        }
-        if model is None:
-            model_instance = StandardCoalescent(reference_size)
-        elif isinstance(model, str):
-            lower_model = model.lower()
-            if lower_model not in model_map:
-                raise ValueError("Model '{}' unknown. Choose from {}".format(
-                    model, list(model_map.keys())))
-            model_instance = model_map[lower_model]
-        else:
-            if not isinstance(model, SimulationModel):
-                raise TypeError(
-                    "Simulation model must be a string or an instance of "
-                    "SimulationModel")
-            model_instance = model
-        self.model = model_instance
 
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
@@ -1069,17 +1084,20 @@ class MassMigration(DemographicEvent):
 
 class SimulationModelChange(DemographicEvent):
     """
-    An event representing a change of underlying simulation model.
+    An event representing a change of underlying :ref:`simulation model
+    <sec_api_simulation_models>`.
 
     :param float time: The time at which the simulation model changes
-        to the new model, in generations.
+        to the new model, in generations. After this time, all internal
+        tree nodes, edges and migrations are the result of the new model.
     :param model: The new simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
         Please see the :ref:`sec_api_simulation_models` section for more details
         on specifying simulations models. If the argument is a string, the
         reference population size is set from the top level ``Ne`` parameter
-        to :func:`.simulate`.
+        to :func:`.simulate`. If this is None (the default) we revert to
+        the standard coalescent with the reference population size set by ``Ne``.
     :type model: str or simulation model instance
     """
     # Implementation note: these are treated as demographic events for the
@@ -1088,7 +1106,7 @@ class SimulationModelChange(DemographicEvent):
     # this would add too much complexity to the main loops. Instead, we
     # detect these events at the high level, and insert calls to set_model
     # as appropriate.
-    def __init__(self, time, model):
+    def __init__(self, time, model=None):
         super().__init__("simulation_model_change", time)
         # The model will be updated later during the call to simulate
         self.model = model
@@ -1164,7 +1182,7 @@ class SimulationModel(object):
     """
     name = None
 
-    def __init__(self, reference_size=1):
+    def __init__(self, reference_size=None):
         self.reference_size = reference_size
 
     def get_ll_representation(self):
