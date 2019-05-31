@@ -30,6 +30,75 @@ import _msprime
 import msprime
 
 
+class TestModelFactory(unittest.TestCase):
+    """
+    Tests that the model_factory function, which we use for instantiating model
+    objects in various different ways, works correctly.
+    """
+
+    def test_bad_model_names(self):
+        for bad_model in ["NOT", "",  "MODEL"]:
+            self.assertRaises(
+                ValueError, msprime.model_factory, model=bad_model)
+
+    def test_named_model_variants(self):
+        simulation_models = [
+            ("hudson", msprime.StandardCoalescent),
+            ("smc", msprime.SmcApproxCoalescent),
+            ("smc_prime", msprime.SmcPrimeApproxCoalescent),
+            ("dtwf", msprime.DiscreteTimeWrightFisher)
+        ]
+        for name, model_class in simulation_models:
+            model = msprime.model_factory(model=name.upper())
+            self.assertIsInstance(model, model_class)
+            model = msprime.model_factory(model=name.title())
+            self.assertIsInstance(model, model_class)
+            model = msprime.model_factory(model=name)
+            self.assertIsInstance(model, model_class)
+
+    def test_bad_models(self):
+        for bad_type in [1234, {}]:
+            self.assertRaises(
+                TypeError, msprime.model_factory, model=bad_type)
+
+    def test_model_instances(self):
+        models = [
+            msprime.StandardCoalescent(100),
+            msprime.SmcApproxCoalescent(30),
+            msprime.SmcPrimeApproxCoalescent(2132),
+            msprime.DiscreteTimeWrightFisher(500),
+            msprime.SweepGenicSelection(
+                reference_size=500, position=0.5, start_frequency=0.1,
+                end_frequency=0.9, alpha=0.1, dt=0.01),
+            msprime.DiracCoalescent(),
+            msprime.BetaCoalescent(),
+        ]
+        for model in models:
+            new_model = msprime.model_factory(model=model)
+            self.assertFalse(new_model is model)
+            self.assertEqual(new_model.__dict__, model.__dict__)
+
+    def test_reference_size_string(self):
+        for size in range(1, 10):
+            model = msprime.model_factory("hudson", reference_size=size)
+            self.assertEqual(model.reference_size, size)
+
+    def test_reference_size_instance(self):
+        for size in range(1, 10):
+            existing_model = msprime.StandardCoalescent()
+            model = msprime.model_factory(existing_model, reference_size=size)
+            self.assertEqual(model.reference_size, size)
+
+            existing_model = msprime.StandardCoalescent(None)
+            model = msprime.model_factory(existing_model, reference_size=size)
+            self.assertEqual(model.reference_size, size)
+
+            # If the size is already set, the model isn't changed.
+            existing_model = msprime.StandardCoalescent(10**4)
+            model = msprime.model_factory(existing_model, reference_size=size)
+            self.assertEqual(model.reference_size, 10**4)
+
+
 class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
     """
     Tests to see if we get the correct number of rejected commone ancestor
@@ -106,44 +175,6 @@ class TestEdges(unittest.TestCase):
             self.assertEqual(num_found, 0)
 
 
-class TestModelParsing(unittest.TestCase):
-    """
-    Tests the parsing code for model strings.
-    """
-    def test_bad_models(self):
-        for bad_model in ["NOT", "",  "MODEL"]:
-            self.assertRaises(ValueError, msprime.simulate, 10, model=bad_model)
-
-    def test_named_model_variants(self):
-        simulation_models = [
-            ("hudson", msprime.StandardCoalescent),
-            ("smc", msprime.SmcApproxCoalescent),
-            ("smc_prime", msprime.SmcPrimeApproxCoalescent),
-            ("dtwf", msprime.DiscreteTimeWrightFisher)
-        ]
-        for name, model in simulation_models:
-            sim = msprime.simulator_factory(sample_size=10, model=name.upper())
-            self.assertIsInstance(sim.model, model)
-            sim = msprime.simulator_factory(sample_size=10, model=name.title())
-            self.assertIsInstance(sim.model, model)
-
-    def test_model_instances(self):
-        for bad_type in [1234, {}]:
-            self.assertRaises(
-                TypeError, msprime.simulator_factory, sample_size=2, model=bad_type)
-        models = [
-            msprime.StandardCoalescent(),
-            msprime.SmcApproxCoalescent(),
-            msprime.SmcPrimeApproxCoalescent(),
-            msprime.DiscreteTimeWrightFisher(),
-            msprime.BetaCoalescent(),
-            msprime.DiracCoalescent(),
-        ]
-        for model in models:
-            sim = msprime.simulator_factory(sample_size=10, model=model)
-            self.assertEqual(sim.model, model)
-
-
 class TestParametricModels(unittest.TestCase):
     """
     Tests for the parametric simulation models.
@@ -153,25 +184,25 @@ class TestParametricModels(unittest.TestCase):
         dbl_max = sys.float_info.max
         for alpha in [1.01, 1.5, 1.99]:
             model = msprime.BetaCoalescent(N, alpha)
-            self.assertEqual(model.population_size, N)
+            self.assertEqual(model.reference_size, N)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, dbl_max)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
-                "population_size": N,
+                "reference_size": N,
                 "alpha": alpha,
                 "truncation_point": dbl_max})
         alpha = 1.5
         for truncation_point in [0, 3, 1e6]:
             model = msprime.BetaCoalescent(N, alpha, truncation_point)
-            self.assertEqual(model.population_size, N)
+            self.assertEqual(model.reference_size, N)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, truncation_point)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
-                "population_size": N,
+                "reference_size": N,
                 "alpha": alpha,
                 "truncation_point": truncation_point})
 
@@ -180,12 +211,12 @@ class TestParametricModels(unittest.TestCase):
         for psi in [0.01, 0.5, 0.99]:
             for c in [1e-6, 1.0, 1e2]:
                 model = msprime.DiracCoalescent(N, psi, c)
-                self.assertEqual(model.population_size, N)
+                self.assertEqual(model.reference_size, N)
                 self.assertEqual(model.psi, psi)
                 self.assertEqual(model.c, c)
                 d = model.get_ll_representation()
                 self.assertEqual(d, {
-                    "name": "dirac", "population_size": N, "psi": psi, "c": c})
+                    "name": "dirac", "reference_size": N, "psi": psi, "c": c})
 
 
 class TestMultipleMergerModels(unittest.TestCase):
@@ -229,14 +260,14 @@ class TestMultipleMergerModels(unittest.TestCase):
 
     def test_beta_coalescent(self):
         model = msprime.BetaCoalescent(
-            population_size=5, alpha=1.5, truncation_point=10)
+            reference_size=5, alpha=1.5, truncation_point=10)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
 
     def test_beta_coalescent_integration_fails(self):
         model = msprime.BetaCoalescent(
-            population_size=5, alpha=1e-10, truncation_point=10)
+            reference_size=5, alpha=1e-10, truncation_point=10)
         with self.assertRaises(_msprime.LibraryError):
             msprime.simulate(sample_size=10, model=model)
 
@@ -291,6 +322,25 @@ class TestMixedModels(unittest.TestCase):
         self.assertTrue(np.all(dtwf_times == np.floor(dtwf_times)))
         coalescent_times = times[times > t]
         self.assertGreater(coalescent_times.shape[0], 0)
+
+    def test_wf_hudson_ancient_samples(self):
+        Ne = 10
+        t = 10
+        n = 20
+        ts = msprime.simulate(
+            samples=[msprime.Sample(time=j, population=0) for j in range(n)],
+            model=msprime.DiscreteTimeWrightFisher(Ne),
+            demographic_events=[
+                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))],
+            random_seed=2)
+        tree = ts.first()
+        self.assertEqual(tree.num_roots, 1)
+        times = ts.tables.nodes.time[ts.tables.nodes.flags == 0]
+        dtwf_times = times[np.logical_and(times > 0, times < t)]
+        self.assertGreater(dtwf_times.shape[0], 0)
+        self.assertTrue(np.all(dtwf_times == np.floor(dtwf_times)))
+        coalescent_times = times[times > t]
+        self.assertGreater(coalescent_times.shape[0], 0)
         self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))
 
     def test_wf_hudson_recombinatation(self):
@@ -312,6 +362,35 @@ class TestMixedModels(unittest.TestCase):
         coalescent_times = times[times > t]
         self.assertGreater(coalescent_times.shape[0], 0)
         self.assertTrue(np.all(coalescent_times != np.floor(coalescent_times)))
+
+    def test_wf_hudson_different_specifications(self):
+        Ne = 100
+        t = 100
+        ts1 = msprime.simulate(
+            sample_size=10,
+            model=msprime.DiscreteTimeWrightFisher(Ne),
+            recombination_rate=0.1,
+            demographic_events=[
+                msprime.SimulationModelChange(t, msprime.StandardCoalescent(Ne))],
+            random_seed=2)
+        ts2 = msprime.simulate(
+            sample_size=10, recombination_rate=0.1,
+            Ne=Ne, model="dtwf",
+            demographic_events=[msprime.SimulationModelChange(t, "hudson")],
+            random_seed=2)
+        ts3 = msprime.simulate(
+            sample_size=10, recombination_rate=0.1,
+            Ne=Ne, model="dtwf",
+            demographic_events=[msprime.SimulationModelChange(t)],
+            random_seed=2)
+        t1 = ts1.dump_tables()
+        t2 = ts2.dump_tables()
+        t3 = ts3.dump_tables()
+        t1.provenances.clear()
+        t2.provenances.clear()
+        t3.provenances.clear()
+        self.assertEqual(t1, t2)
+        self.assertEqual(t1, t3)
 
     def test_wf_hudson_back_and_forth(self):
         Ne = 100
@@ -348,7 +427,7 @@ class TestMixedModels(unittest.TestCase):
                 msprime.SimulationModelChange(
                     40, msprime.DiscreteTimeWrightFisher(100)),
                 msprime.SimulationModelChange(
-                    50, msprime.BetaCoalescent(population_size=10)),
+                    50, msprime.BetaCoalescent(reference_size=10)),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent(0.1))],
             random_seed=10)
         for tree in ts.trees():
@@ -404,7 +483,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     @unittest.skip("Not clear what's happening now")
     def test_sweep_start_time_complete(self):
         sweep_model = msprime.SweepGenicSelection(
-            population_size=0.25, position=0.5, start_frequency=0.6,
+            reference_size=0.25, position=0.5, start_frequency=0.6,
             end_frequency=0.7, alpha=0.9, dt=0.001)
         t_start = 0.1
         ts = msprime.simulate(
@@ -419,7 +498,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     def test_sweep_start_time_incomplete(self):
         # Short sweep that doesn't make complete coalescence.
         sweep_model = msprime.SweepGenicSelection(
-            population_size=0.25, position=0.5, start_frequency=0.69,
+            reference_size=0.25, position=0.5, start_frequency=0.69,
             end_frequency=0.7, alpha=1e-5, dt=1)
         t_start = 0.1
         ts = msprime.simulate(

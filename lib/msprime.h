@@ -152,7 +152,8 @@ typedef struct _sweep_t {
 
 typedef struct _simulation_model_t {
     int type;
-    double population_size;
+    /* For coalescent models, the reference population size used to rescale time */
+    double reference_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;

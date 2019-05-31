@@ -421,6 +421,14 @@ def full_arg_example():
         print("interval:", tree.interval)
         print(tree.draw(format="unicode"))
 
+def hybrid_sim_example():
+    ts = msprime.simulate(
+        sample_size=6, Ne=1000, model="dtwf", random_seed=2,
+        demographic_events=[
+            msprime.SimulationModelChange(time=500, model="hudson")])
+    print(ts.tables.nodes)
+
+
 
 
 if __name__ == "__main__":
@@ -438,4 +446,5 @@ if __name__ == "__main__":
     # ld_matrix_example()
     # threads_example()
     # simulate_from_example()
-    full_arg_example()
+    # full_arg_example()
+    hybrid_sim_example()

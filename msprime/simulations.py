@@ -27,6 +27,7 @@ import random
 import sys
 import os
 import warnings
+import copy
 
 import tskit
 import numpy as np
@@ -96,6 +97,43 @@ def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     https://www.python.org/dev/peps/pep-0485/
     """
     return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+
+def model_factory(model, reference_size=1):
+    """
+    Returns a simulation model corresponding to the specified model and
+    reference size.
+    - If model is None, the default simulation model is returned with the
+      specified reference size.
+    - If model is a string, return the corresponding model instance
+      with the specified reference size
+    - If model is an instance of SimulationModel, return a copy of it.
+      In this case, if the model's reference_size is None, set it to the
+      parameter reference size.
+    - Otherwise return a type error.
+    """
+    model_map = {
+        "hudson": StandardCoalescent(reference_size),
+        "smc": SmcApproxCoalescent(reference_size),
+        "smc_prime": SmcPrimeApproxCoalescent(reference_size),
+        "dtwf": DiscreteTimeWrightFisher(reference_size)
+    }
+    if model is None:
+        model_instance = StandardCoalescent(reference_size)
+    elif isinstance(model, str):
+        lower_model = model.lower()
+        if lower_model not in model_map:
+            raise ValueError("Model '{}' unknown. Choose from {}".format(
+                model, list(model_map.keys())))
+        model_instance = model_map[lower_model]
+    elif isinstance(model, SimulationModel):
+        model_instance = copy.copy(model)
+        if model_instance.reference_size is None:
+            model_instance.reference_size = reference_size
+    else:
+        raise TypeError(
+            "Simulation model must be a string or an instance of SimulationModel")
+    return model_instance
 
 
 def _check_population_configurations(population_configurations):
@@ -362,8 +400,12 @@ def simulate(
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
-    :param int num_labels: The number of distinct 'labels' within each population
-        in the structured coalescent. Defaults to 1.
+    :param model: The simulation model to use.
+        This can either be a string (e.g., ``"smc_prime"``) or an instance of
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models.
+    :type model: str or simulation model instance
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -459,13 +501,13 @@ class Simulator(object):
         if not isinstance(recombination_map, RecombinationMap):
             raise TypeError("RecombinationMap instance required")
         self.ll_sim = None
-        self.set_model(model, Ne)
+        self.model = model_factory(model, Ne)
         self.recombination_map = recombination_map
         self.from_ts = from_ts
         self.start_time = None
         self.random_generator = None
         self.population_configurations = [
-            PopulationConfiguration(initial_size=self.model.population_size)]
+            PopulationConfiguration(initial_size=self.model.reference_size)]
         self.migration_matrix = [[0]]
         self.demographic_events = []
         self.model_change_events = []
@@ -584,7 +626,7 @@ class Simulator(object):
         # set it to the population size.
         for pop_conf in self.population_configurations:
             if pop_conf.initial_size is None:
-                pop_conf.initial_size = self.model.population_size
+                pop_conf.initial_size = self.model.reference_size
         # Now set the default migration matrix.
         N = len(self.population_configurations)
         self.migration_matrix = [[0 for j in range(N)] for k in range(N)]
@@ -599,37 +641,14 @@ class Simulator(object):
             if not isinstance(event, DemographicEvent):
                 raise TypeError(err)
             if isinstance(event, SimulationModelChange):
+                # Take a copy so that we're not modifying our input params
+                event = copy.copy(event)
+                # Update the model so that we can parse strings and set
+                # the reference size appropriately.
+                event.model = model_factory(event.model, self.model.reference_size)
                 self.model_change_events.append(event)
             else:
                 self.demographic_events.append(event)
-
-    def set_model(self, model, population_size):
-        """
-        Sets the simulation model to the specified value. This may be either a string
-        or a SimulationModel instance. If None, the default simulation model is used
-        (i.e., Hudson's algorithm).
-        """
-        model_map = {
-            "hudson": StandardCoalescent(population_size),
-            "smc": SmcApproxCoalescent(population_size),
-            "smc_prime": SmcPrimeApproxCoalescent(population_size),
-            "dtwf": DiscreteTimeWrightFisher(population_size)
-        }
-        if model is None:
-            model_instance = StandardCoalescent(population_size)
-        elif isinstance(model, str):
-            lower_model = model.lower()
-            if lower_model not in model_map:
-                raise ValueError("Model '{}' unknown. Choose from {}".format(
-                    model, list(model_map.keys())))
-            model_instance = model_map[lower_model]
-        else:
-            if not isinstance(model, SimulationModel):
-                raise TypeError(
-                    "Simulation model must be a string or an instance of "
-                    "SimulationModel")
-            model_instance = model
-        self.model = model_instance
 
     def create_ll_instance(self):
         # Now, convert the high-level values into their low-level
@@ -1064,18 +1083,32 @@ class MassMigration(DemographicEvent):
 
 
 class SimulationModelChange(DemographicEvent):
-    # TODO document
+    """
+    An event representing a change of underlying :ref:`simulation model
+    <sec_api_simulation_models>`.
+
+    :param float time: The time at which the simulation model changes
+        to the new model, in generations. After this time, all internal
+        tree nodes, edges and migrations are the result of the new model.
+    :param model: The new simulation model to use.
+        This can either be a string (e.g., ``"smc_prime"``) or an instance of
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models. If the argument is a string, the
+        reference population size is set from the top level ``Ne`` parameter
+        to :func:`.simulate`. If this is None (the default) we revert to
+        the standard coalescent with the reference population size set by ``Ne``.
+    :type model: str or simulation model instance
+    """
     # Implementation note: these are treated as demographic events for the
     # sake of the high-level interface, but are treated differently at run
     # time. There is no corresponding demographic event in the C layer, as
     # this would add too much complexity to the main loops. Instead, we
     # detect these events at the high level, and insert calls to set_model
     # as appropriate.
-    def __init__(self, time, model):
+    def __init__(self, time, model=None):
         super().__init__("simulation_model_change", time)
-        if not isinstance(model, SimulationModel):
-            raise TypeError(
-                "Simulation model must be an instance of SimulationModel")
+        # The model will be updated later during the call to simulate
         self.model = model
 
     def get_ll_representation(self, num_populations):
@@ -1145,41 +1178,58 @@ class InstantaneousBottleneck(DemographicEvent):
 
 class SimulationModel(object):
     """
-    Superclass of all simulation models.
+    Abstract superclass of all simulation models.
     """
     name = None
 
-    def __init__(self, population_size=1):
-        self.population_size = population_size
+    def __init__(self, reference_size=None):
+        self.reference_size = reference_size
 
     def get_ll_representation(self):
-        return {"name": self.name, "population_size": self.population_size}
+        return {"name": self.name, "reference_size": self.reference_size}
 
     def __str__(self):
-        return "{}(population_size={})".format(self.name, self.population_size)
+        return "{}(reference_size={})".format(self.name, self.reference_size)
 
 
 class StandardCoalescent(SimulationModel):
     """
     The classical coalescent with recombination model (i.e., Hudson's algorithm).
+    The string ``"hudson"`` can be used to refer to this model.
+
+    This is the default simulation model.
     """
     name = "hudson"
 
 
 class SmcApproxCoalescent(SimulationModel):
-    # TODO document
+    """
+    The original SMC model defined by McVean and Cardin. This
+    model is implemented using a naive rejection sampling approach
+    and so it may not be any more efficient to simulate than the
+    standard Hudson model.
+
+    The string ``"smc"`` can be used to refer to this model.
+    """
     name = "smc"
 
 
 class SmcPrimeApproxCoalescent(SimulationModel):
-    # TODO document
+    """
+    The SMC' model defined by Marjoram and Wall as an improvement on the
+    original SMC. model is implemented using a naive rejection sampling
+    approach and so it may not be any more efficient to simulate than the
+    standard Hudson model.
+
+    The string ``"smc_prime"`` can be used to refer to this model.
+    """
     name = "smc_prime"
 
 
 class DiscreteTimeWrightFisher(SimulationModel):
     """
     A discrete backwards-time Wright-Fisher model, with diploid back-and-forth
-    recombination.
+    recombination. The string ``"dtwf"`` can be used to refer to this model.
 
     Wright-Fisher simulations are performed very similarly to coalescent
     simulations, with all parameters denoting the same quantities in both
@@ -1187,28 +1237,20 @@ class DiscreteTimeWrightFisher(SimulationModel):
     they occur matters. Each generation consists of the following ordered
     events:
 
-    1) Migration events. As in the Hudson coalescent, these move single extant
-    lineages between populations. Because migration events occur before
-    lineages choose parents, migrant lineages choose parents from their new
-    population in the same generation.
+    - Migration events. As in the Hudson coalescent, these move single extant
+      lineages between populations. Because migration events occur before
+      lineages choose parents, migrant lineages choose parents from their new
+      population in the same generation.
+    - Demographic events. All events with `previous_generation < event_time <=
+      current_generation` are carried out here.
+    - Lineages draw parents. Each (monoploid) extant lineage draws a parent
+      from their current population.
+    - Diploid recombination. Each parent is diploid, so all child lineages
+      recombine back-and-forth into the same two parental genome copies. These
+      become two independent lineages in the next generation.
+    - Historical sampling events. All historical samples with
+      `previous_generation < sample_time <= current_generation` are inserted.
 
-    2) Demographic events. All events with `previous_generation < event_time <=
-    current_generation` are carried out here.
-
-    3) Lineages draw parents. Each (monoploid) extant lineage draws a parent
-    from their current population.
-
-    4) Diploid recombination. Each parent is diploid, so all child lineages
-    recombine back-and-forth into the same two parental genome copies. These
-    become two independent lineages in the next generation.
-
-    5) Historical sampling events. All historical samples with
-    `previous_generation < sample_time <= current_generation` are inserted.
-
-    NOTE: Effective population sizes can be specified by both the `Ne`
-    parameter of `msprime.simulate()` and the `initial_size` parameter of
-    `msprime.PopulationConfiguration()`. `initial_size` takes priority, but
-    populations where this is not specified have size `Ne`.
     """
     name = 'dtwf'
 
@@ -1229,8 +1271,8 @@ class BetaCoalescent(ParametricSimulationModel):
 
     # TODO what is a meaningful value for this parameter? Ideally, the default
     # would be the equivalent of the Kingman coalescent or something similar.
-    def __init__(self, population_size=1, alpha=1.5, truncation_point=None):
-        self.population_size = population_size
+    def __init__(self, reference_size=1, alpha=1.5, truncation_point=None):
+        self.reference_size = reference_size
         self.alpha = alpha
         if truncation_point is None:
             truncation_point = sys.float_info.max
@@ -1242,8 +1284,8 @@ class DiracCoalescent(ParametricSimulationModel):
     name = "dirac"
 
     # TODO What is a meaningful default for this value? See above.
-    def __init__(self, population_size=1, psi=0.5, c=10.0):
-        self.population_size = population_size
+    def __init__(self, reference_size=1, psi=0.5, c=10.0):
+        self.reference_size = reference_size
         self.psi = psi
         self.c = c
 
@@ -1255,8 +1297,8 @@ class SweepGenicSelection(ParametricSimulationModel):
     # TODO: sensible defaults for some of these params?
     def __init__(
             self, position, start_frequency, end_frequency, alpha, dt,
-            population_size=1):
-        self.population_size = population_size
+            reference_size=1):
+        self.reference_size = reference_size
         self.position = position
         self.start_frequency = start_frequency
         self.end_frequency = end_frequency
