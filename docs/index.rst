@@ -28,6 +28,7 @@ Contents:
    cli
    development
    CITATION
+   changelog
 
 Indices and tables
 ==================

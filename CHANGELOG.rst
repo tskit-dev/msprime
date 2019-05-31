@@ -1,3 +1,9 @@
+**********************
+[0.7.1b1] - 2019-05-31
+**********************
+
+Early release making DTWF code available to beta testers.
+
 ********************
 [0.7.0] - 2019-02-19
 ********************
@@ -10,11 +16,11 @@ to work without changes.
 
 **New features**
 
-- Ability to record the full ARG (Jere Koskela; #665)
+- Ability to record the full ARG (:user:`jerekoskela`; :issue:`665`)
 
 **Bug fixes**:
 
-- Fix deprecation warning (#695).
+- Fix deprecation warning (:issue:`695`).
 
 
 **********************
@@ -332,12 +338,12 @@ upcoming functionality.
 - Similarly, the undocumented ``variants`` method has some major changes:
 
   1. The returned tuple has two new values, ``node`` and ``index``
-    in the middle of the tuple (but see the point above about using
-    named attributes).
+     in the middle of the tuple (but see the point above about using
+     named attributes).
 
   2. The returned genotypes are by default numpy arrays. To revert
-    to the old behaviour of returning Python bytes objects, use the
-    ``as_bytes`` argument to the ``variants()`` method.
+     to the old behaviour of returning Python bytes objects, use the
+     ``as_bytes`` argument to the ``variants()`` method.
 
 **New features**:
 

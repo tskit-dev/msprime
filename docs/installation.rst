@@ -9,7 +9,6 @@ pre-built binary packages using :ref:`sec_installation_conda` or
 by compiling locally using :ref:`sec_installation_pip`. We recommend using ``conda``
 for most users, although ``pip`` can be more convenient in certain cases.
 
-
 .. _sec_installation_requirements:
 
 ============
@@ -300,3 +299,19 @@ Now install the dependencies and msprime::
 Check if it works::
 
     $ mspms 10 1 -T
+
+
+==============
+Python 2 users
+==============
+
+Msprime no longer supports Python 2, and therefore those wishing to continue
+using Python 2.7 will not be able to take advantage of newer features. We
+recommend using msprime version 0.6.2 if you need to work with Python 2.7::
+
+$ python -m pip install msprime==0.6.2
+
+or ::
+
+$ conda install msprime==0.6.2
+

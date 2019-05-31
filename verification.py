@@ -1133,15 +1133,19 @@ class SimulationVerifier(object):
         for model in ["hudson", "dtwf"]:
             kwargs["model"] = model
             print("Running: ", kwargs)
-            replicates = msprime.simulate(**kwargs)
             data = collections.defaultdict(list)
-            for ts in replicates:
-                t_mrca = np.zeros(ts.num_trees)
-                for tree in ts.trees():
-                    t_mrca[tree.index] = tree.time(tree.root)
-                data["tmrca_mean"].append(np.mean(t_mrca))
-                data["num_trees"].append(ts.num_trees)
-                data["model"].append(model)
+            try:
+                replicates = msprime.simulate(**kwargs)
+                for ts in replicates:
+                    t_mrca = np.zeros(ts.num_trees)
+                    for tree in ts.trees():
+                        t_mrca[tree.index] = tree.time(tree.root)
+                    data["tmrca_mean"].append(np.mean(t_mrca))
+                    data["num_trees"].append(ts.num_trees)
+                    data["model"].append(model)
+            except Exception as e:
+                print("TEST FAILED!!!:", e)
+                return
             df = df.append(pd.DataFrame(data))
 
         basedir = os.path.join("tmp__NOBACKUP__", test_name)
@@ -1344,7 +1348,9 @@ class SimulationVerifier(object):
         times = sorted(np.random.randint(500, t_max, size=num_demographic_events))
         for t in times:
             initial_size = np.random.randint(500, 1000)
-            growth_rate = np.random.uniform(-0.005, 0.01)
+            # Setting growth_rate to 0 because it's too tricky to get
+            # growth_rates in the DTWF which don't result in N going to 0.
+            growth_rate = 0
             pop_id = np.random.randint(N)
             demographic_events.append(
                 msprime.PopulationParametersChange(
@@ -1867,6 +1873,7 @@ def main():
     verifier.add_discoal_instance(
         "discoal-simple-ex",
         "15 1000 100 -t 5.0")
+
     # Try various options independently
     verifier.add_ms_instance(
         "size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
