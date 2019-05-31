@@ -21,7 +21,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
             pip install --user -r requirements/development.txt
-            pip install --user meson
+            pip install --user meson twine
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
@@ -37,7 +37,8 @@ jobs:
       - run:
           name: Compile Python
           command: |
-            CFLAGS=--coverage python setup.py build_ext --inplace
+            CFLAGS="--coverage -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-field-initializers" \
+              python setup.py build_ext --inplace
 
       - run:
           name: Run highlevel tests and upload coverage
@@ -78,7 +79,10 @@ jobs:
           command: make -C docs
       - run:
           name: Make sure we can build a distribution tarball.
-          command: python setup.py sdist
+          command: |
+            python setup.py sdist
+            python setup.py check
+            python -m twine check dist/*.tar.gz
       - run:
           name: Install from the distribution tarball
           command: |

@@ -1,8 +1,10 @@
 environment:
   matrix:
+    # Disabling py37 because of weird issue with h5py/numpy. See
+    # https://github.com/tskit-dev/tskit/issues/87
+    # - PYTHON: "C:\\Miniconda37-x64"
     - PYTHON: "C:\\Miniconda36-x64"
-    # Disabling Py37. See https://github.com/tskit-dev/msprime/issues/653
-    #- PYTHON: "C:\\Miniconda37-x64"
+
 install:
   - "git submodule update --init --recursive"
   # We have symlinks in the repo, which need to be treated specially on Windows.
