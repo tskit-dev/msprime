@@ -104,6 +104,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
     'sphinxarg.ext',
+    'sphinx_issues',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -366,3 +367,7 @@ intersphinx_mapping = {
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
     'tskit': ('https://tskit.readthedocs.io/en/stable', None),
 }
+
+# Github repo
+issues_github_path = "tskit-dev/msprime"
+

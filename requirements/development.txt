@@ -12,6 +12,7 @@ setuptools_scm == 1.11.1
 sphinx
 sphinx-argparse
 sphinx_rtd_theme
+sphinx-issues
 
 newick
 # We use JSON-schema to test out metadata handling.
