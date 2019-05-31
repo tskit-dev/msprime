@@ -354,14 +354,14 @@ table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool c
     }
     shape = PyArray_DIMS(array);
     if (! check_num_rows) {
-        *num_rows = shape[0];
+        *num_rows = (size_t) shape[0];
         if (*num_rows == 0) {
             PyErr_SetString(PyExc_ValueError, "Offset arrays must have at least one element");
             goto out;
         }
         *num_rows -= 1;
     }
-    if (shape[0] != *num_rows + 1) {
+    if (((size_t) shape[0]) != *num_rows + 1) {
         PyErr_SetString(PyExc_ValueError, "offset columns must have n + 1 rows.");
         goto out;
     }
