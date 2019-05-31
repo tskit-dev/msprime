@@ -467,6 +467,77 @@ test_single_locus_historical_sample_start_time(void)
     tsk_table_collection_free(&tables);
 }
 
+static void
+test_single_locus_historical_sample_end_time(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    sample_t samples[] = {{0, 0.0}, {0, 10.0}};
+    tsk_node_table_t *nodes;
+    uint32_t n = 2;
+    size_t model;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (model = 0; model < 2; model++) {
+        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        if (model == 0) {
+            ret = msp_set_simulation_model_hudson(&msp, 100);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            ret = msp_set_simulation_model_dtwf(&msp, 100);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        msp_print_state(&msp, _devnull);
+        ret = msp_run(&msp, 10.0, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
+        /* msp_verify(&msp); */
+
+        /* The sampling event should *not* have been applied */
+        CU_ASSERT_EQUAL_FATAL(msp.next_sampling_event, 0);
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_ancestors(&msp), 1);
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 2);
+
+        nodes = &msp.tables->nodes;
+        CU_ASSERT_EQUAL(nodes->time[0], 0);
+        CU_ASSERT_EQUAL(nodes->time[1], 10);
+        CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 0);
+
+        /* msp_print_state(&msp, stdout); */
+
+        ret = msp_finalise_tables(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(tables.nodes.num_rows, 3);
+        CU_ASSERT_EQUAL(tables.edges.num_rows, 1);
+
+        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_finalise_tables(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(tables.nodes.num_rows, 4);
+        CU_ASSERT_EQUAL(tables.edges.num_rows, 3);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = tsk_table_collection_clear(&tables);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+    gsl_rng_free(rng);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
 
 static void
 test_simulator_getters_setters(void)
@@ -1369,7 +1440,7 @@ test_single_locus_simulation(void)
     /* For the single locus sim we should have exactly n - 1 events */
     for (j = 0; j < n - 2; j++) {
         ret = msp_run(msp, DBL_MAX, 1);
-        CU_ASSERT_EQUAL(ret, 1);
+        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
         msp_verify(msp);
     }
     ret = msp_run(msp, DBL_MAX, 1);
@@ -1500,7 +1571,7 @@ test_dtwf_multi_locus_simulation(void)
     /* We should be able to step backward here generation-by-generation until
      * coalescence.
      */
-    while ((ret = msp_run(msp, t, ULONG_MAX)) > 0) {
+    while ((ret = msp_run(msp, DBL_MAX, 1)) > 0) {
         msp_verify(msp);
         CU_ASSERT_EQUAL_FATAL(msp->time, t);
         t++;
@@ -1860,10 +1931,10 @@ test_large_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
 
     for (j = 0; j < num_bottlenecks - 1; j++) {
-        ret = msp_run(msp, bottlenecks[j].time, ULONG_MAX);
-        CU_ASSERT_EQUAL(ret, 2);
+        ret = msp_run(msp, bottlenecks[j].time + 1e-6, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         CU_ASSERT_FALSE(msp_is_completed(msp));
-        CU_ASSERT_EQUAL(msp->time, bottlenecks[j].time);
+        CU_ASSERT_EQUAL(msp->time, bottlenecks[j].time + 1e-6);
         msp_verify(msp);
     }
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
@@ -3258,6 +3329,8 @@ main(int argc, char **argv)
             test_dtwf_simultaneous_historical_samples},
         {"test_single_locus_historical_sample_start_time",
             test_single_locus_historical_sample_start_time},
+        {"test_single_locus_historical_sample_end_time",
+            test_single_locus_historical_sample_end_time},
         {"test_simulator_getters_setters", test_simulator_getters_setters},
         {"test_demographic_events", test_demographic_events},
         {"test_demographic_events_start_time", test_demographic_events_start_time},

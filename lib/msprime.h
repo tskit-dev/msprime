@@ -41,6 +41,11 @@
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SWEEP 6
 
+/* Exit codes from msp_run to distinguish different reasons for exiting
+ * before coalescence. */
+#define MSP_EXIT_MAX_EVENTS     1
+#define MSP_EXIT_MAX_TIME       2
+
 #define MSP_NODE_IS_RE_EVENT    (1u << 17)
 #define MSP_NODE_IS_CA_EVENT    (1u << 18)
 #define MSP_NODE_IS_MIG_EVENT   (1u << 19)

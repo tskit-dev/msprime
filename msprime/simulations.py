@@ -107,7 +107,7 @@ def _check_population_configurations(population_configurations):
 
 
 def _replicate_generator(
-        sim, mutation_generator, num_replicates, provenance_dict, max_time):
+        sim, mutation_generator, num_replicates, provenance_dict, end_time):
     """
     Generator function for the many-replicates case of the simulate
     function.
@@ -118,7 +118,7 @@ def _replicate_generator(
     # the random number generator.
     provenance_record = json.dumps(provenance_dict)
     for j in range(num_replicates):
-        sim.run(max_time)
+        sim.run(end_time)
         tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
         yield tree_sequence
         sim.reset()
@@ -139,6 +139,7 @@ def simulator_factory(
         record_migrations=False,
         from_ts=None,
         start_time=None,
+        end_time=None,
         record_full_arg=False,
         num_labels=None):
     """
@@ -268,16 +269,9 @@ def simulate(
         num_replicates=None,
         from_ts=None,
         start_time=None,
+        end_time=None,
         record_full_arg=False,
-        num_labels=None,
-        # Note max_time is not documented here because it does not currently have
-        # exactly the semantics that we want as it doesn't guarantee that the
-        # times of nodes returned are < max_time. However, it's useful for
-        # testing, so we keep it. We call it __tmp_max_time just to make sure
-        # it's not used accidentially though.
-        # TODO also, when implementing rename to end_time. See
-        # https://github.com/tskit-dev/msprime/issues/564
-        __tmp_max_time=None):
+        num_labels=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`tskit.TreeSequence`. Note that
@@ -357,6 +351,13 @@ def simulate(
         time is zero if performing a simulation of a set of samples,
         or is the time of the oldest node if simulating from an
         existing tree sequence (see the ``from_ts`` parameter).
+    :param float end_time: If specified, terminate the simulation at the
+        specified time. In the returned tree sequence, all rootward paths from
+        samples with time < end_time will end in a node with one child with
+        time equal to end_time. Sample nodes with time >= end_time will
+        also be present in the output tree sequence. If not specified or ``None``,
+        run the simulation until all samples have an MRCA at all positions in
+        the genome.
     :param bool record_full_arg: If True, record all intermediate nodes
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
@@ -435,10 +436,10 @@ def simulate(
         mutation_generator = MutationGenerator(rng, mutation_rate)
     if num_replicates is None:
         return next(_replicate_generator(
-            sim, mutation_generator, 1, provenance_dict, __tmp_max_time))
+            sim, mutation_generator, 1, provenance_dict, end_time))
     else:
         return _replicate_generator(
-            sim, mutation_generator, num_replicates, provenance_dict, __tmp_max_time)
+            sim, mutation_generator, num_replicates, provenance_dict, end_time)
 
 
 class Simulator(object):
@@ -479,7 +480,7 @@ class Simulator(object):
         self.segment_block_size = max(block_size, num_samples)
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
-        self.max_time = None
+        self.end_time = None
 
     @property
     def num_loci(self):
@@ -667,7 +668,7 @@ class Simulator(object):
             node_mapping_block_size=self.node_mapping_block_size)
         return ll_sim
 
-    def run(self, max_time=None):
+    def run(self, end_time=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -676,8 +677,8 @@ class Simulator(object):
         for event in self.model_change_events:
             self.ll_sim.run(event.time)
             self.ll_sim.set_model(event.model.get_ll_representation())
-        max_time = sys.float_info.max if max_time is None else max_time
-        self.ll_sim.run(max_time)
+        end_time = sys.float_info.max if end_time is None else end_time
+        self.ll_sim.run(end_time)
         self.ll_sim.finalise_tables()
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):

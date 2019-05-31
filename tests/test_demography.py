@@ -26,6 +26,7 @@ import unittest
 
 import numpy as np
 import scipy.linalg
+import tskit
 
 import msprime
 import _msprime
@@ -1981,12 +1982,12 @@ class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMi
         self.assertEqual(time[2], 1.2)
 
 
-class SimulateUntilMixin(object):
+class EndTimeMixin(object):
     """
     Tests for the max_time parameter.
     """
     # NOTE This feature is only partially implemented and does not currently
-    # have the semantics that we would like. We use the parameter __tmp_max_time
+    # have the semantics that we would like. We use the parameter end_time
     # to ensure that it's not used accidentally.
 
     def verify_empty_tree_sequence(self, n, ts):
@@ -1999,29 +2000,34 @@ class SimulateUntilMixin(object):
 
     def verify_incomplete_tree_sequence(self, n, max_time, ts):
         self.assertEqual(ts.num_samples, n)
-        # internal_time = ts.tables.nodes.time[n:]
-        # TODO this isn't true currently because we don't guarantee that the
-        # times are always less than max_time. This should be resolved when
-        # we implement this feature properly.
-        # self.assertTrue(np.all(internal_time < max_time))
+        time = ts.tables.nodes.time
+        for tree in ts.trees():
+            # Every sample with time <= max_time will end on a path
+            # with time == max_time
+            for u in tree.samples():
+                if time[u] <= max_time:
+                    while tree.parent(u) != tskit.NULL:
+                        u = tree.parent(u)
+                    self.assertEqual(ts.node(u).time, max_time)
+                else:
+                    self.assertEqual(tree.parent(u), tskit.NULL)
         max_roots = max(tree.num_roots for tree in ts.trees())
         self.assertGreater(max_roots, 1)
 
     def test_zero_time(self):
         n = 10
         for n in [2, 10, 100]:
-            ts = msprime.simulate(n, __tmp_max_time=0, model=self.model)
+            ts = msprime.simulate(n, end_time=0, model=self.model)
             self.verify_empty_tree_sequence(n, ts)
 
     def test_negative(self):
-        n = 3
-        ts = msprime.simulate(n, __tmp_max_time=-1, model=self.model)
-        self.verify_empty_tree_sequence(n, ts)
+        with self.assertRaises(ValueError):
+            msprime.simulate(3, end_time=-1, model=self.model)
 
     def test_large_time(self):
         seed = 1
         ts1 = msprime.simulate(
-            10, Ne=100, __tmp_max_time=1e10, model=self.model, random_seed=seed)
+            10, Ne=100, end_time=1e10, model=self.model, random_seed=seed)
         ts2 = msprime.simulate(10, Ne=100, model=self.model, random_seed=seed)
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
@@ -2033,17 +2039,65 @@ class SimulateUntilMixin(object):
         n = 100
         max_time = 100
         ts = msprime.simulate(
-            n, Ne=1000, __tmp_max_time=max_time, model=self.model, random_seed=10)
+            n, Ne=1000, end_time=max_time, model=self.model, random_seed=10)
         self.verify_incomplete_tree_sequence(n, max_time, ts)
 
-    # TODO test with demographic events, ancient samples, etc.
+    def test_migrations(self):
+        n = 10
+        max_time = 100
+        ts = msprime.simulate(
+            Ne=1000, end_time=max_time, model=self.model, random_seed=10,
+            record_migrations=True,
+            migration_matrix=[[0, 1], [1, 0]],
+            population_configurations=[
+                msprime.PopulationConfiguration(n),
+                msprime.PopulationConfiguration(n)])
+        self.verify_incomplete_tree_sequence(2 * n, max_time, ts)
+        self.assertGreater(ts.num_migrations, 0)
+        self.assertTrue(np.all(ts.tables.migrations.time < max_time))
+
+    def test_ancient_samples(self):
+        n = 40
+        samples = [msprime.Sample(time=j, population=0) for j in range(n)]
+        max_time = 20
+        ts = msprime.simulate(
+            samples=samples, Ne=10, end_time=max_time, model=self.model,
+            random_seed=100)
+        self.verify_incomplete_tree_sequence(n, max_time, ts)
+        nodes = ts.tables.nodes
+        self.assertTrue(np.array_equal(nodes.time[:n], np.arange(n)))
+        self.assertGreater(len(nodes), n)
+        tree = ts.first()
+        self.assertGreater(tree.num_roots, 1)
+
+    def test_ancient_samples_equal_time(self):
+        max_time = 10
+        samples = [
+            msprime.Sample(time=0, population=0),
+            msprime.Sample(time=max_time, population=0)]
+        ts = msprime.simulate(
+            samples=samples, Ne=10, end_time=max_time, model=self.model,
+            random_seed=1000)
+        self.verify_incomplete_tree_sequence(2, max_time, ts)
+        self.assertEqual(ts.num_nodes, 3)
+        self.assertEqual(ts.num_edges, 1)
+
+    def test_demographic_events(self):
+        max_time = 100
+        n = 20
+        ts = msprime.simulate(
+            n, Ne=1000, end_time=max_time, model=self.model,
+            demographic_events=[
+                msprime.SimpleBottleneck(time=max_time, population=0, proportion=1)],
+            random_seed=1000)
+        self.verify_incomplete_tree_sequence(n, max_time, ts)
 
 
-class TestSimulateUntilHudson(unittest.TestCase, SimulateUntilMixin):
+class TestEndTimeHudson(unittest.TestCase, EndTimeMixin):
     model = "hudson"
 
 
-class TestSimulateUntilWrightFisher(unittest.TestCase, SimulateUntilMixin):
+class TestEndTimeWrightFisher(unittest.TestCase, EndTimeMixin):
     model = "dtwf"
 
 
