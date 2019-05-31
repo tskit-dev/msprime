@@ -1344,7 +1344,9 @@ class SimulationVerifier(object):
         times = sorted(np.random.randint(500, t_max, size=num_demographic_events))
         for t in times:
             initial_size = np.random.randint(500, 1000)
-            growth_rate = np.random.uniform(-0.005, 0.01)
+            # Setting growth_rate to 0 because it's too tricky to get
+            # growth_rates in the DTWF which don't result in N going to 0.
+            growth_rate = 0
             pop_id = np.random.randint(N)
             demographic_events.append(
                 msprime.PopulationParametersChange(
