@@ -3767,25 +3767,29 @@ Simulator_run(Simulator *self, PyObject *args)
     PyObject *ret = NULL;
     int status, not_done, coalesced;
     uint64_t chunk = 1024;
-    double max_time = DBL_MAX;
+    double end_time = DBL_MAX;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "|d", &max_time)) {
+    if (!PyArg_ParseTuple(args, "|d", &end_time)) {
+        goto out;
+    }
+    if (end_time < 0) {
+        PyErr_SetString(PyExc_ValueError, "end_time must be > 0");
         goto out;
     }
 
     not_done = 1;
     while (not_done) {
         Py_BEGIN_ALLOW_THREADS
-        status = msp_run(self->sim, max_time, chunk);
+        status = msp_run(self->sim, end_time, chunk);
         Py_END_ALLOW_THREADS
         if (status < 0) {
             handle_library_error(status);
             goto out;
         }
-        not_done = status == 1;
+        not_done = status == MSP_EXIT_MAX_EVENTS;
         if (PyErr_CheckSignals() < 0) {
             goto out;
         }

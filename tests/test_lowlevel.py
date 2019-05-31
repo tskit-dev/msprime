@@ -348,12 +348,12 @@ class TestSimulationState(LowLevelTestCase):
         """
         self.assertRaises(_msprime.LibraryError, sim.debug_demography)
         self.assertGreaterEqual(sim.get_num_breakpoints(), 0)
-        self.assertGreater(sim.get_time(), 0.0)
+        self.assertGreaterEqual(sim.get_time(), 0.0)
         self.assertGreater(sim.get_num_ancestors(), 1)
         events = sim.get_num_common_ancestor_events()
         events += sim.get_num_recombination_events()
         events += sum(sim.get_num_migration_events())
-        self.assertGreater(events, 0)
+        self.assertGreaterEqual(events, 0)
         self.assertGreater(sim.get_num_avl_node_blocks(), 0)
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
@@ -625,7 +625,7 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(
                     node_mapping_block_size, sim.get_node_mapping_block_size())
                 # Run this for a tiny amount of time and check the state
-                self.assertFalse(sim.run(start_time + 1e-8))
+                self.assertFalse(sim.run(start_time + 2e-8))
                 self.verify_running_simulation(sim)
             sim.reset()
 
@@ -690,14 +690,14 @@ class TestSimulationState(LowLevelTestCase):
             node_mapping_block_size=1000, model=model)
         for _ in range(3):
             # Run the sim for a tiny amount of time and check.
-            self.assertFalse(sim.run(1e-8))
-            self.verify_running_simulation(sim)
-            increment = 0.01
-            t = sim.get_time() + increment
-            while not sim.run(t):
-                self.assertGreaterEqual(sim.get_time(), t)
+            if not sim.run():
                 self.verify_running_simulation(sim)
-                t += increment
+                increment = 0.01
+                t = sim.get_time() + increment
+                while not sim.run(t):
+                    self.assertLess(sim.get_time(), t)
+                    self.verify_running_simulation(sim)
+                    t += increment
             self.verify_completed_simulation(sim, tables)
             sim.reset()
 
@@ -726,8 +726,8 @@ class TestSimulationState(LowLevelTestCase):
             recombination_map=uniform_recombination_map(num_loci=m, rate=1),
             random_generator=_msprime.RandomGenerator(1),
             tables=_msprime.LightweightTableCollection())
-        # We run until time -1 to for initialisation
-        sim.run(-1)
+        # We run until time 0 to for initialisation
+        sim.run(0)
         self.assertEqual(sim.get_time(), 0)
         ancestors = sim.get_ancestors()
         self.assertEqual(len(ancestors), n)
@@ -795,12 +795,13 @@ class TestSimulationState(LowLevelTestCase):
             event_type = event["type"]
             self.assertEqual(next_event_time, t)
             self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
-            completed = sim.run(t)
+            dt = 1e-10
+            completed = sim.run(t + dt)
             for j in range(N):
                 s = sim2.compute_population_size(j, t)
                 self.assertGreater(s, 0)
             self.assertFalse(completed)
-            self.assertEqual(sim.get_time(), t)
+            self.assertEqual(sim.get_time(), t + dt)
             if event_type == "migration_rate_change":
                 matrix_index = event["matrix_index"]
                 rate = event["migration_rate"]
@@ -927,6 +928,13 @@ class TestSimulator(LowLevelTestCase):
             for j in range(len(tables.migrations)):
                 generation = tables.migrations[j].time
                 self.assertAlmostEqual(generation, sim_times[j])
+
+    def test_bad_run_args(self):
+        sim, _ = get_example_simulator(10)
+        for bad_type in ["x", []]:
+            self.assertRaises(TypeError, sim.run, bad_type)
+        for bad_value in [-1, -1e-6]:
+            self.assertRaises(ValueError, sim.run, bad_value)
 
     def test_migrations(self):
         sim, ll_tables = get_example_simulator(
@@ -1652,7 +1660,7 @@ class TestSimulator(LowLevelTestCase):
         for ind in sim.get_ancestors():
             for _, _, _, pop_id in ind:
                 pop_sizes_before[pop_id] += 1
-        sim.run(t + dt)
+        sim.run(t + 2 * dt)
         pop_sizes_after = [0, 0]
         for ind in sim.get_ancestors():
             for _, _, _, pop_id in ind:
@@ -1664,6 +1672,7 @@ class TestSimulator(LowLevelTestCase):
         t1 = 0.01
         t2 = 0.02
         t3 = 0.03
+        dt = 1e-9
         sim = _msprime.Simulator(
             get_population_samples(n, n),
             uniform_recombination_map(), _msprime.RandomGenerator(1),
@@ -1676,13 +1685,13 @@ class TestSimulator(LowLevelTestCase):
                 get_simple_bottleneck_event(t2, population=1, proportion=1),
                 get_mass_migration_event(t3, source=0, dest=1, proportion=1)],
             migration_matrix=[0, 0, 0, 0])
-        sim.run(t1)
+        sim.run(t1 + dt)
         pop_sizes = [0, 0]
         for ind in sim.get_ancestors():
             for _, _, _, pop_id in ind:
                 pop_sizes[pop_id] += 1
         self.assertEqual(pop_sizes[0], 1)
-        sim.run(t2)
+        sim.run(t2 + dt)
         pop_sizes = [0, 0]
         for ind in sim.get_ancestors():
             for _, _, _, pop_id in ind:

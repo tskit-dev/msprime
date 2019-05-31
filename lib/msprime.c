@@ -2427,7 +2427,21 @@ out:
     return ret;
 }
 
-/* The main event loop for continuous time coalescent models. */
+/* The main event loop for continuous time coalescent models. Runs until either
+ * coalescence; or the time of a simulated event would have exceeded the
+ * specified max_time; or for a specified number of events. The num_events
+ * parameter is provided so that higher-level code can run the simulation for
+ * smaller time chunks. This is used in the Python interface to check for
+ * interrupts, so that long-running simulations can be killed using CTRL-C.
+ *
+ * Returns:
+ * 0 if the simulation completed to coalescence
+ * MSP_EXIT_MAX_EVENTS if the simulation stopped because the maximum number
+ *    of events was reached.
+ * MSP_EXIT_MAX_TIME if the simulation stopped because the maximum time would
+ *    have been exceeded by an event.
+ * A negative value if an error occured.
+ */
 static int MSP_WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
@@ -2442,8 +2456,11 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
     /* Only support a single label for now. */
     label_id_t label = 0;
 
-    while (msp_get_num_ancestors(self) > 0
-            && self->time < max_time && events < max_events) {
+    while (msp_get_num_ancestors(self) > 0) {
+        if (events == max_events) {
+            ret = MSP_EXIT_MAX_EVENTS;
+            break;
+        }
         events++;
         num_links = fenwick_get_total(&self->links[label]);
         ret = msp_sanity_check(self, num_links);
@@ -2506,9 +2523,17 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         if (self->next_demographic_event != NULL) {
             demographic_event_time = self->next_demographic_event->time;
         }
+
+        /* The simulation state is can only changed from this point on. If
+         * any of the events would cause the time to be >= max_time, we exit
+         */
         if (sampling_event_time < t_temp
                 && sampling_event_time < demographic_event_time) {
             se = &self->sampling_events[self->next_sampling_event];
+            if (se->time >= max_time) {
+                ret = MSP_EXIT_MAX_TIME;
+                break;
+            }
             self->time = se->time;
             ret = msp_insert_sample(self, se->sample, se->population_id);
             if (ret != 0) {
@@ -2516,12 +2541,20 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             }
             self->next_sampling_event++;
         } else if (demographic_event_time < t_temp) {
+            if (demographic_event_time >= max_time) {
+                ret = MSP_EXIT_MAX_TIME;
+                break;
+            }
             ret = msp_apply_demographic_events(self);
             if (ret != 0) {
                 goto out;
             }
         } else {
-            self->time += t_wait;
+            if (t_temp >= max_time) {
+                ret = MSP_EXIT_MAX_TIME;
+                break;
+            }
+            self->time = t_temp;
             if (re_t_wait == t_wait) {
                 ret = msp_recombination_event(self, label, NULL, NULL);
             } else if (ca_t_wait == t_wait) {
@@ -2717,7 +2750,16 @@ out:
     return ret;
 }
 
-/* The main event loop for the Wright Fisher model. */
+/* The main event loop for the Wright Fisher model.
+ *
+ * Returns:
+ * 0 if the simulation completed to coalescence
+ * MSP_EXIT_MAX_EVENTS if the simulation stopped because the maximum number
+ *    of events was reached.
+ * MSP_EXIT_MAX_TIME if the simulation stopped because the maximum time would
+ *    have been exceeded by an event.
+ * A negative value if an error occured.
+ */
 static int MSP_WARN_UNUSED
 msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
 {
@@ -2741,9 +2783,16 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
 
-    while (msp_get_num_ancestors(self) > 0
-            && self->time < max_time && events < max_events) {
+    while (msp_get_num_ancestors(self) > 0) {
+        if (events == max_events) {
+            ret = MSP_EXIT_MAX_EVENTS;
+            break;
+        }
         events++;
+        if (self->time + 1 >= max_time) {
+            ret = MSP_EXIT_MAX_TIME;
+            goto out;
+        }
         self->time++;
 
         /* Following SLiM, we perform migrations prior to selecting
@@ -2822,13 +2871,16 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         cur_time = self->time;
         while (self->next_demographic_event != NULL &&
                 self->next_demographic_event->time <= cur_time) {
+            if (self->next_demographic_event->time >= max_time) {
+                ret = MSP_EXIT_MAX_TIME;
+                goto out;
+            }
             ret = msp_apply_demographic_events(self);
             if (ret != 0) {
                 goto out;
             }
         }
         self->time = cur_time;
-
         ret = msp_dtwf_generation(self);
         if (ret != 0) {
             goto out;
@@ -2837,6 +2889,8 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         while (self->next_sampling_event < self->num_sampling_events &&
                 self->sampling_events[self->next_sampling_event].time <= self->time) {
             se = self->sampling_events + self->next_sampling_event;
+            /* The sampling event doesn't modify the tables, so we don't need to
+             * catch it here */
             ret = msp_insert_sample(self, se->sample, se->population_id);
             if (ret != 0) {
                 goto out;
@@ -3118,6 +3172,7 @@ int MSP_WARN_UNUSED
 msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
+    int err;
     simulation_model_t *model = &self->model;
     double scaled_time = model->generations_to_model_time(model, max_time);
 
@@ -3143,19 +3198,20 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
-    if (ret != 0) {
+    if (ret < 0) {
         goto out;
     }
-    ret = msp_flush_edges(self);
-
-    if (ret != 0) {
-        goto out;
+    if (ret == MSP_EXIT_MAX_TIME) {
+        /* Set the time to the max_time specified. If the tables are finalised
+         * after this we will get unary edges on the end of each extant node
+         * to this point so that the simulation can be resumed accurately.
+         */
+        self->time = scaled_time;
     }
-    if (msp_get_num_ancestors(self) != 0) {
-        ret = 1;
-        if (self->time >= scaled_time) {
-            ret = 2;
-        }
+    err = msp_flush_edges(self);
+    if (err != 0) {
+        ret = err;
+        goto out;
     }
 out:
     return ret;
