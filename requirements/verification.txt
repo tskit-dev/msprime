@@ -4,5 +4,8 @@ dendropy
 matplotlib
 numpy
 pandas
-scipy
+scipy==1.2 # 1.3 deprecates scipy.misc.factorial imported by current statsmodels (0.9)
 statsmodels
+seaborn
+tqdm
+argparse
