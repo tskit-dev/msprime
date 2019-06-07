@@ -23,6 +23,7 @@ import seaborn as sns
 import statsmodels.api as sm
 import dendropy
 import tqdm
+import argparse
 
 import msprime.cli as cli
 import msprime
@@ -804,7 +805,7 @@ class SimulationVerifier(object):
             for t in [0.5, 1, 1.5, 5]:
                 T2 = np.zeros(num_replicates)
                 reps = msprime.simulate(
-                    n, num_replicates=num_replicates, __tmp_max_time=t)
+                    n, num_replicates=num_replicates, end_time=t)
                 for j, ts in enumerate(reps):
                     final_ts = msprime.simulate(
                         from_ts=ts, start_time=np.max(ts.tables.nodes.time))
@@ -841,7 +842,7 @@ class SimulationVerifier(object):
                 num_trees2 = np.zeros(num_replicates)
                 reps = msprime.simulate(
                     n, num_replicates=num_replicates,
-                    recombination_map=recomb_map, __tmp_max_time=t)
+                    recombination_map=recomb_map, end_time=t)
                 for j, ts in enumerate(reps):
                     final_ts = msprime.simulate(
                         from_ts=ts,
@@ -896,7 +897,7 @@ class SimulationVerifier(object):
             num_edges2 = np.zeros(num_replicates)
             reps = msprime.simulate(
                 n, num_replicates=num_replicates,
-                recombination_rate=recombination_rate, __tmp_max_time=t)
+                recombination_rate=recombination_rate, end_time=t)
             for j, ts in enumerate(reps):
                 final_ts = msprime.simulate(
                     from_ts=ts,
@@ -1010,12 +1011,13 @@ class SimulationVerifier(object):
             num_mig_events2 = np.zeros(num_replicates)
             sim = msprime.simulator_factory(
                 samples=samples,
+                end_time=t,
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events,
                 recombination_rate=recombination_rate)
             for j in range(num_replicates):
-                sim.run(max_time=t)
+                sim.run()
                 ts = sim.get_tree_sequence()
                 num_ca_events2[j] = sim.num_common_ancestor_events
                 num_re_events2[j] = sim.num_recombination_events
@@ -1116,7 +1118,7 @@ class SimulationVerifier(object):
             t = ts.tables.nodes.time[-1] / 100
             ts = msprime.simulate(
                 n, recombination_rate=1e-8, Ne=10**4, length=L, random_seed=seed,
-                __tmp_max_time=t)
+                end_time=t)
             duration = time.perf_counter() - before
             print("Initial sim required {:.2f} sec".format(duration))
             roots = np.array([tree.num_roots for tree in ts.trees()])
@@ -1134,18 +1136,14 @@ class SimulationVerifier(object):
             kwargs["model"] = model
             print("Running: ", kwargs)
             data = collections.defaultdict(list)
-            try:
-                replicates = msprime.simulate(**kwargs)
-                for ts in replicates:
-                    t_mrca = np.zeros(ts.num_trees)
-                    for tree in ts.trees():
-                        t_mrca[tree.index] = tree.time(tree.root)
-                    data["tmrca_mean"].append(np.mean(t_mrca))
-                    data["num_trees"].append(ts.num_trees)
-                    data["model"].append(model)
-            except Exception as e:
-                print("TEST FAILED!!!:", e)
-                return
+            replicates = msprime.simulate(**kwargs)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["model"].append(model)
             df = df.append(pd.DataFrame(data))
 
         basedir = os.path.join("tmp__NOBACKUP__", test_name)
@@ -1187,7 +1185,9 @@ class SimulationVerifier(object):
             self, key, initial_sizes, sample_sizes, num_loci, recombination_rate,
             migration_matrix=None, growth_rates=None, num_replicates=None):
         """
-        Generic test of DTWF vs hudson coalescent
+        Generic test of DTWF vs hudson coalescent. Populations are not
+        allowed to shrink to fewer than 100 individuals, and if starting with
+        fewer than 100 have growth rate set to zero.
         """
         assert len(sample_sizes) == len(initial_sizes)
         num_pops = len(sample_sizes)
@@ -1200,12 +1200,28 @@ class SimulationVerifier(object):
             growth_rates = [default_growth_rate] * num_pops
 
         population_configurations = []
-        for s_size, i_size, g_rate in zip(sample_sizes, initial_sizes, growth_rates):
+        demographic_events = []
+
+        for i in range(num_pops):
+            if initial_sizes[i] > 100:
+                # Growth rate set to zero at pop size 100
+                t_100 = (np.log(initial_sizes[i]) - np.log(100)) / growth_rates[i]
+                de = msprime.PopulationParametersChange(
+                        t_100, growth_rate=0, population=i)
+                demographic_events.append(de)
+
+                growth_rate = growth_rates[i]
+            else:
+                # Enforce zero growth rate for small populations
+                print("Warning - setting growth rate to zero for small",
+                      "population of size", initial_sizes[i])
+                growth_rate = 0
+
             population_configurations.append(
                     msprime.PopulationConfiguration(
-                        sample_size=s_size,
-                        initial_size=i_size,
-                        growth_rate=g_rate
+                        sample_size=sample_sizes[i],
+                        initial_size=initial_sizes[i],
+                        growth_rate=growth_rate
                         )
                     )
 
@@ -1213,7 +1229,7 @@ class SimulationVerifier(object):
                 [0, num_loci], [recombination_rate, 0], num_loci=num_loci)
 
         if migration_matrix is None:
-            default_mig_rate = 0.01
+            default_mig_rate = 0.05
             migration_matrix = []
             for i in range(num_pops):
                 row = [default_mig_rate] * num_pops
@@ -1226,6 +1242,7 @@ class SimulationVerifier(object):
                     population_configurations=population_configurations,
                     migration_matrix=migration_matrix,
                     num_replicates=num_replicates,
+                    demographic_events=demographic_events,
                     recombination_map=recombination_map
                     )
         self._instances[key] = f
@@ -1335,17 +1352,18 @@ class SimulationVerifier(object):
         for i in range(N):
             population_configurations.append(
                 msprime.PopulationConfiguration(
-                    sample_size=np.random.randint(1, 10), initial_size=int(2000 / N)))
+                    sample_size=np.random.randint(1, 10),
+                    initial_size=int(1000 / N)))
 
         migration_matrix = []
         for i in range(N):
             migration_matrix.append(
-                [random.uniform(0.1, 0.5) * (j != i) for j in range(N)])
+                [random.uniform(0.05, 0.25) * (j != i) for j in range(N)])
 
         # Add demographic events and some migration rate changes
-        t_max = 2000
+        t_max = 1000
         demographic_events = []
-        times = sorted(np.random.randint(500, t_max, size=num_demographic_events))
+        times = sorted(np.random.randint(300, t_max, size=num_demographic_events))
         for t in times:
             initial_size = np.random.randint(500, 1000)
             # Setting growth_rate to 0 because it's too tricky to get
@@ -1358,7 +1376,7 @@ class SimulationVerifier(object):
                     growth_rate=growth_rate, population_id=pop_id))
 
             if random.random() < 0.5 and N >= 2:
-                rate = random.uniform(0.1, 0.5)
+                rate = random.uniform(0.05, 0.25)
                 index = tuple(
                     np.random.choice(range(num_populations), size=2, replace=False))
                 demographic_events.append(
@@ -1372,7 +1390,7 @@ class SimulationVerifier(object):
 
         demographic_events.append(
             msprime.PopulationParametersChange(
-                time=t_max, initial_size=1000, growth_rate=0.01, population_id=0))
+                time=t_max, initial_size=100, growth_rate=0, population_id=0))
 
         def f():
             self.run_dtwf_coalescent_comparison(
@@ -1432,8 +1450,8 @@ class SimulationVerifier(object):
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
             f = os.path.join(basedir, "{}.png".format(stat))
-            pyplot.xlabel = 'DTWF'
-            pyplot.ylabel = 'SLiM'
+            pyplot.xlabel("DTWF")
+            pyplot.ylabel("SLiM")
             pyplot.savefig(f, dpi=72)
             pyplot.close('all')
 
@@ -1865,7 +1883,7 @@ class SimulationVerifier(object):
         self.add_ms_instance(key, cmd)
 
 
-def main():
+def run_tests(args):
     # random.seed(2)
     verifier = SimulationVerifier("tmp__NOBACKUP__")
 
@@ -2052,150 +2070,64 @@ def main():
         'dtwf_vs_coalescent_2_pops', [500, 500], [5, 5], int(1e6), 1e-8,
         num_replicates=500)
     verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_2_pops_2', [500, 500], [20, 0], int(1e7), 1e-8)
-    verifier.add_dtwf_vs_coalescent(
         'dtwf_vs_coalescent_3_pops', [500, 500, 500], [5, 2, 0], int(1e7), 1e-8)
     verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_3_pops_2', [500, 500, 500], [20, 0, 0], int(1e6), 1e-8)
-    verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_4_pops_1', [1000, 1000, 1000, 1000], [0, 20, 0, 0],
+        'dtwf_vs_coalescent_4_pops', [1000, 1000, 1000, 1000], [0, 20, 0, 0],
         int(1e6), 1e-8, num_replicates=500)
-    verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_4_pops_2', [1000, 500, 1000, 500], [5, 10, 0, 0],
-        int(1e7), 1e-8, num_replicates=500)
 
     migration_matrix = [[0, 0.2, 0.1], [0.1, 0, 0.2], [0.2, 0.1, 0]]
     verifier.add_dtwf_vs_coalescent(
         'dtwf_vs_coalescent_3_pops_asymm_mig', [500, 500, 500], [20, 0, 0],
-        int(1e7), 1e-8, migration_matrix=migration_matrix, num_replicates=500)
-    migration_matrix = [[0, 0.1, 0.05], [0.1, 0, 0.1], [0.1, 0.2, 0]]
-    verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_3_pops_asymm_mig_2', [500, 500, 500], [10, 10, 10],
-        int(1e7), 1e-8, migration_matrix=migration_matrix, num_replicates=500)
-    migration_matrix = [[0, 0.05, 0.05], [0.1, 0, 0.2], [0.05, 0.05, 0]]
-    verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_3_pops_asymm_mig_3', [500, 500, 500], [10, 10, 0],
-        int(1e7), 1e-8, migration_matrix=migration_matrix, num_replicates=500)
+        int(1e6), 1e-8, migration_matrix=migration_matrix, num_replicates=500)
 
     migration_matrix = [[0, 0.5], [0.7, 0]]
     verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_2_pops_high_asymm_mig_1', [5000, 5000], [10, 10],
-        int(1e7), 1e-8, migration_matrix=migration_matrix, num_replicates=200,
-        growth_rates=[0.005, 0.005])
-    migration_matrix = [[0, 0.3], [0.8, 0]]
-    verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_2_pops_high_asymm_mig_2', [2000, 2000], [10, 10],
-        int(1e8), 1e-8, migration_matrix=migration_matrix, num_replicates=200,
+        'dtwf_vs_coalescent_2_pops_high_asymm_mig', [1000, 1000], [10, 10],
+        int(1e6), 1e-8, migration_matrix=migration_matrix, num_replicates=200,
         growth_rates=[0.005, 0.005])
 
-    migration_matrix = [[0, 0.5, 0.6], [0.7, 0, 0.2], [0.4, 0.8, 0]]
-    verifier.add_dtwf_vs_coalescent(
-        'dtwf_vs_coalescent_3_pops_high_asymm_mig_1', [1000, 5000, 5000], [20, 10, 10],
-        int(1e7), 1e-8, migration_matrix=migration_matrix, num_replicates=200,
-        growth_rates=[0.005, 0.005, 0.005])
-
-    # Random checks vs Hudson coalescent
-    verifier.add_dtwf_vs_coalescent_random_instance(
-        "dtwf_vs_coalescent_random_1",
-        num_populations=2, num_replicates=200, num_demographic_events=3)
-    verifier.add_dtwf_vs_coalescent_random_instance(
-        "dtwf_vs_coalescent_random_2",
-        num_populations=3, num_replicates=200, num_demographic_events=3)
-    verifier.add_dtwf_vs_coalescent_random_instance(
-        "dtwf_vs_coalescent_random_3",
-        num_populations=2, num_replicates=200, num_demographic_events=6)
-    verifier.add_dtwf_vs_coalescent_random_instance(
-        "dtwf_vs_coalescent_random_4",
-        num_populations=1, num_replicates=200, num_demographic_events=8)
+    # Random checks vs Hudson coalescent - extended only
+    if args.extended is True:
+        verifier.add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_1",
+            num_populations=2, num_replicates=200, num_demographic_events=3)
+        verifier.add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_2",
+            num_populations=3, num_replicates=200, num_demographic_events=3)
+        verifier.add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_3",
+            num_populations=2, num_replicates=200, num_demographic_events=6)
+        verifier.add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_4",
+            num_populations=1, num_replicates=200, num_demographic_events=8)
 
     # DTWF checks against SLiM
-    # NOTE: Departures are expected in multi-pop scenarios since SLiM migrates
-    # diploid individuals, who may carry either 1 or 2 extant lineages. Current
-    # msprime DTWF implementation only migrates one extant lineage per
-    # migration event, following Hudson's coalescent algorithm.
+    # TODO: Add back multi-pop tests of DTWF vs. SLiM when full diploid
+    # simulations are implemented.
     verifier.add_dtwf_vs_slim(
         'dtwf_vs_slim_single_locus', [10], [10], 1, 0)
     verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_short_region', [10], [10], 1e7, 1e-8, num_replicates=400)
+        'dtwf_vs_slim_short_region', [100], [10], 1e7, 1e-8, num_replicates=200)
     verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_short_region_2', [100], [10], 1e7, 1e-8, num_replicates=200)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_long_region', [100], [10], 1e8, 1e-8, num_replicates=200)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_long_region_2', [10], [10], 5e8, 1e-8, num_replicates=200)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_long_region_3', [2], [2], 1e9, 1e-8, num_replicates=500)
-
-    migration_matrix = [[0, 0.001], [0.001, 0]]
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_single_locus', [10, 10], [2, 2], 1, 0,
-        num_replicates=200, migration_matrix=migration_matrix)
-
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_1', [100, 100], [10, 1], 1e7, 1e-8, num_replicates=200)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_2', [100, 100], [10, 10], 1e8, 1e-8, num_replicates=200)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_3', [100, 10], [1, 1], 5e8, 1e-8, num_replicates=100)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_4', [100, 100], [10, 10], 5e8, 1e-8, num_replicates=100)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_5', [10, 10], [1, 1], 5e8, 1e-8, num_replicates=500)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_6', [2, 2], [2, 2], 5e8, 1e-8, num_replicates=1000)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_7', [2, 2], [2, 2], 1e8, 1e-8, num_replicates=500)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_8', [2, 2], [2, 2], 1e7, 1e-8, num_replicates=5000)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_10', [100, 100], [1, 1], 1e6, 1e-8, num_replicates=500)
-
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_3_pops_single_locus', [10, 10, 10], [5, 5, 5], 1, 0,
-        num_replicates=300)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_3_pops_1', [10, 10, 10], [5, 5, 5], 5e7, 1e-8, num_replicates=300)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_3_pops_2', [10, 10, 10], [5, 5, 5], 1e8, 1e-8, num_replicates=300)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_3_pops_3', [10, 10, 10], [5, 5, 5], 3e8, 1e-8, num_replicates=300)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_3_pops_4', [50, 50, 50], [5, 5, 5], 5e7, 1e-8, num_replicates=200)
-
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_4_pops_single_locus', [10, 10, 10, 10], [5, 5, 5, 5], 1, 0,
-        num_replicates=500)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_4_pops_single_locus_2', [10, 10, 10, 10], [1, 1, 1, 1], 1, 0,
-        num_replicates=500)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_4_pops_single_locus_3', [10, 10, 10, 10], [10, 10, 10, 10], 1, 0,
-        num_replicates=100)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_4_pops_1', [10, 10, 10, 10], [5, 5, 5, 5], 5e2, 1e-3,
-        num_replicates=500)
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_4_pops_2', [2, 2, 2, 2], [2, 2, 2, 2], 5e8, 1e-8,
-        num_replicates=200)
-
-    migration_matrix = [[0, 0.9], [0.9, 0]]
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_small_pops_high_mig', [1, 1], [1, 1], 1, 0,
-        migration_matrix=migration_matrix, num_replicates=200)
-    migration_matrix = [[0, 0.8], [0.3, 0]]
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_2_pops_high_mig', [100, 100], [10, 1], 1e14, 1e-14,
-        migration_matrix=migration_matrix, num_replicates=200)
-    migration_matrix = [[0, 0.5, 0.4], [0.8, 0, 0.2], [0.3, 0.6, 0]]
-    verifier.add_dtwf_vs_slim(
-        'dtwf_vs_slim_3_pops_high_mig_3', [100, 100, 50], [10, 1, 1], 1e13, 1e-14,
-        migration_matrix=migration_matrix, num_replicates=200)
+        'dtwf_vs_slim_long_region', [50], [10], 1e8, 1e-8, num_replicates=200)
 
     keys = None
-    if len(sys.argv) > 1:
-        keys = sys.argv[1:]
+    if len(args.keys) > 0:
+        keys = args.keys
 
     verifier.run(keys)
+
+
+def add_simulator_arguments(parser):
+    parser.add_argument("--extended", action="store_true")
+    parser.add_argument("keys", nargs="*")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    add_simulator_arguments(parser)
+    args = parser.parse_args()
+    run_tests(args)
 
 
 if __name__ == "__main__":
