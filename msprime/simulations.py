@@ -709,6 +709,12 @@ class Simulator(object):
         tables = tskit.TableCollection.fromdict(self.ll_tables.asdict())
         if provenance_record is not None:
             tables.provenances.add_row(provenance_record)
+        if self.from_ts is None:
+            # Add the populations with metadata
+            assert len(tables.populations) == len(self.population_configurations)
+            tables.populations.clear()
+            for pop_config in self.population_configurations:
+                tables.populations.add_row(metadata=pop_config.encoded_metadata)
         return tables.tree_sequence()
 
     def reset(self):
@@ -908,8 +914,15 @@ class PopulationConfiguration(object):
         population per generation. Growth rates can be negative. This is zero for a
         constant population size, and positive for a population that has been
         growing. Defaults to 0.
+    :param dict metadata: A JSON-encodable dictionary of metadata to associate
+        with the corresponding Population in the output tree sequence.
+        If not specified or None, no metadata is stored (i.e., an empty bytes array).
+        Note that this metadata is ignored when using the ``from_ts`` argument to
+        :func:`simulate`, as the population definitions in the tree sequence that
+        is used as the starting point take precedence.
     """
-    def __init__(self, sample_size=None, initial_size=None, growth_rate=0.0):
+    def __init__(
+            self, sample_size=None, initial_size=None, growth_rate=0.0, metadata=None):
         if initial_size is not None and initial_size <= 0:
             raise ValueError("Population size must be > 0")
         if sample_size is not None and sample_size < 0:
@@ -917,6 +930,10 @@ class PopulationConfiguration(object):
         self.sample_size = sample_size
         self.initial_size = initial_size
         self.growth_rate = growth_rate
+        self.metadata = metadata
+        self.encoded_metadata = b''
+        if self.metadata is not None:
+            self.encoded_metadata = json.dumps(self.metadata).encode()
 
     def get_ll_representation(self):
         """
@@ -1379,7 +1396,10 @@ class DemographyDebugger(object):
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        # TODO implement the model change events here.
+        if len(simulator.model_change_events) > 0:
+            raise ValueError(
+                "Model changes not currently supported by the DemographyDebugger. "
+                "Please open an issue on GitHub if this feature would be useful to you")
         assert len(simulator.model_change_events) == 0
         self._make_epochs(simulator, sorted(demographic_events, key=lambda e: e.time))
         self.simulation_model = simulator.model

@@ -1,3 +1,26 @@
+********************
+[0.7.1] - 2019-06-08
+********************
+
+**New features**
+
+- Discrete Time Wright-Fisher simulation model (:user:`DomNelson`).
+- SMC/SMC' simulation models (:user:`jeromekelleher`).
+- Mixed simulation models (:user:`jeromekelleher`).
+- Specify ``end_time`` to allow early-finish for simulations (:user:`jeromekelleher`).
+- Calculation of historical coalescence rates in the DemographyDebugger
+  (:user:`jgallowa07`, :user:`petrelharp`).
+- Additional information on population sizes in DemographyDebugger
+  (:user:`andrewkern`).
+- Remove support for Python 2 (:user:`hugovk`).
+- Allow specifying metadata for populations (:user:`jeromekelleher`).
+
+**Bug fixes**:
+
+- Various minor bug and doc fixes from :user:`hyanwong`, :user:`petrelharp`,
+  :user:`brianzhang01`, :user:`mufernando` and :user:`andrewkern`.
+
+
 **********************
 [0.7.1b1] - 2019-05-31
 **********************

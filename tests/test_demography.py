@@ -23,6 +23,7 @@ import itertools
 import math
 import tempfile
 import unittest
+import json
 
 import numpy as np
 import scipy.linalg
@@ -369,6 +370,16 @@ class TestDemographyDebugger(unittest.TestCase):
             population_configurations=population_configurations)
         self.assertEqual(population_configurations[0].sample_size, 10)
         self.assertEqual(population_configurations[1].sample_size, 20)
+
+    def test_model_change_events(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(sample_size=10)]
+        demographic_events = [
+            msprime.SimulationModelChange(1, "hudson")]
+        with self.assertRaises(ValueError):
+            msprime.DemographyDebugger(
+                population_configurations=population_configurations,
+                demographic_events=demographic_events)
 
     def test_one_pop_zero_events(self):
         dd = msprime.DemographyDebugger(
@@ -2183,3 +2194,53 @@ class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
                 model='dtwf')
         for node in ts.nodes():
             self.assertEqual(node.time, int(node.time))
+
+
+class TestPopulationMetadata(unittest.TestCase):
+    """
+    Tests for the metadata behaviour on populations.
+    """
+    def test_simple_case(self):
+        md = {"x": "y"}
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(2, metadata=md)],
+            random_seed=1)
+        self.assertEqual(ts.num_populations, 1)
+        pop = ts.population(0)
+        self.assertEqual(md, json.loads(pop.metadata.decode()))
+
+    def test_default(self):
+        ts = msprime.simulate(
+            population_configurations=[msprime.PopulationConfiguration(2)],
+            random_seed=1)
+        self.assertEqual(ts.num_populations, 1)
+        pop = ts.population(0)
+        self.assertEqual(b'', pop.metadata)
+
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(2, metadata=None)],
+            random_seed=1)
+        self.assertEqual(ts.num_populations, 1)
+        pop = ts.population(0)
+        self.assertEqual(b'', pop.metadata)
+
+    def test_errors(self):
+        for bad_metadata in [b"asdf", Exception]:
+            with self.assertRaises(TypeError):
+                msprime.PopulationConfiguration(2, metadata=bad_metadata)
+
+    def test_multi_population(self):
+        for num_pops in range(1, 10):
+            pop_configs = [
+                msprime.PopulationConfiguration(2, metadata={"x": "x" * j})
+                for j in range(num_pops)]
+            ts = msprime.simulate(
+                population_configurations=pop_configs,
+                random_seed=1, end_time=1)
+            self.assertEqual(ts.num_populations, num_pops)
+            for j in range(num_pops):
+                pop = ts.population(j)
+                self.assertEqual(
+                    pop_configs[j].metadata, json.loads(pop.metadata.decode()))
