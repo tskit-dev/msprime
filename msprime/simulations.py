@@ -1396,7 +1396,10 @@ class DemographyDebugger(object):
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events)
-        # TODO implement the model change events here.
+        if len(simulator.model_change_events) > 0:
+            raise ValueError(
+                "Model changes not currently supported by the DemographyDebugger. "
+                "Please open an issue on GitHub if this feature would be useful to you")
         assert len(simulator.model_change_events) == 0
         self._make_epochs(simulator, sorted(demographic_events, key=lambda e: e.time))
         self.simulation_model = simulator.model
