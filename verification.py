@@ -87,7 +87,7 @@ def write_slim_script(outfile, format_dict):
                 catn(sim.tag + ': COALESCED');
             }}
         }}
-        if (sim.generation == sim.tag * 2) {{
+        if (sim.generation == sim.tag * 10) {{
             sim.simulationFinished();
             catn('Ran a further ' + sim.tag * 10 + ' generations');
             sim.treeSeqOutput('{OUTFILE}');
