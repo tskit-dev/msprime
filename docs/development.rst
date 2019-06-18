@@ -512,6 +512,51 @@ QQ-plots of the statistics in question comparing ``ms`` and ``msprime``.
 There are also several "analytical" tests, which compare the distributions of
 values from ``msprime`` with analytical expectations.
 
+****************
+Containerization
+****************
+
+This repo is integrated with Dockerhub and the Docker image will be automatically
+built upon pushes to master on Dockerhub.
+
+A Docker image can also be locally built with the following steps.
+
+Build image:
+.. code-block:: bash
+
+    $ sudo docker build -t tskit/msprime .
+
+Enter Docker container:
+.. code-block:: bash
+
+    $ sudo docker run -it tskit/msprime
+
+Alternatively, msprime can be executed via the Docker container:
+.. code-block:: bash
+
+    $ sudo docker run -it tskit/msprime mspms 10 1 -T
+
+Building Docker images and running Docker containers requires root access.
+If you are on a system and do not have root access, you can pull the Docker image
+and run it as a Singularity container.
+
+To run as a Singularity container, pull the docker image:
+.. code-block:: bash
+
+    $ singularity pull docker://tskit/msprime msprime.simg
+
+Enter Singularity container container:
+.. code-block:: bash
+
+    $ singularity shell msprime.simg
+
+Or, msprime can be executed via the Singularity container:
+.. code-block:: bash
+
+    $ singularity exec msprime.simg mspms 10 1 -T
+
+For more information on Singularity, see https://www.sylabs.io/guides/3.0/user-guide/
+
 *************
 Documentation
 *************
