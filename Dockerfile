@@ -4,12 +4,6 @@
 
 FROM ubuntu:18.04
 
-# Set the working directory to /app
-WORKDIR /app
-
-# Copy the current directory contents into the container at /app
-COPY . /app
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
             python3 \
             python3-dev \
@@ -22,6 +16,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN git submodule update --init --recursive
 RUN pip3 install --upgrade setuptools
-RUN pip3 install .
+RUN pip3 install -e .
