@@ -24,6 +24,8 @@ import math
 import tempfile
 import unittest
 import json
+import random
+from unittest import mock
 
 import numpy as np
 import scipy.linalg
@@ -599,7 +601,91 @@ class TestDemographyTrajectories(unittest.TestCase):
     correct predictions for trivial demographic models
     """
 
-    def test_two_pop(self):
+    def subdivide(self, steps):
+        inter = steps[:-1] + np.diff(steps)/2
+        double_steps = sorted(np.concatenate([steps, inter]))
+        return double_steps
+
+    def one_pop_example(self):
+        # One population:
+        # - population size today is 100
+        # - size change to 200 at t=100 generations ago
+        # - population 1 has a size change to 100 at t=300 generations ago
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=100)
+            ],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=100, initial_size=200,
+                                                   population_id=0),
+                msprime.PopulationParametersChange(time=300, initial_size=100)
+            ])
+        return ddb
+
+    def test_one_pop(self):
+        # a) The coalescence rates through time of two samples are:
+        #     (1/(2 * 100) until time 100),
+        #     (1/(2 * 200) between times 100 and 300),
+        #     (1/(2 * 100) past t=300)
+        # b) The probabilities of not yet having coalesced for two samples:
+        #     (exp(-t/200) until time 100)
+        #     (exp(-100/200 - (t-100)/400) between times 100 and 300)
+        #     (exp(-100/200 - (300-100)/400 - (t-300)/200) past t=300)
+        ddb = self.one_pop_example()
+        steps = np.linspace(0, 400, 101)
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
+        for time_step in range(len(steps)):
+            time = steps[time_step]
+            rA = rates[time_step]
+            pA = P[time_step]
+            if time >= 0 and time < 100:
+                self.assertAlmostEqual(rA, 1 / (2 * 100))
+                self.assertAlmostEqual(pA, np.exp(-time / 200))
+            elif time >= 100 and time < 200:
+                self.assertAlmostEqual(rA, 1 / (2 * 200))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (time - 100)/400))
+            elif time >= 200 and time < 300:
+                self.assertAlmostEqual(rA, 1 / (2 * 200))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (time - 100)/400))
+            else:
+                self.assertAlmostEqual(rA, 1 / (2 * 100))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (300 - 100)/400
+                                                  - (time - 300)/200))
+
+    def test_mean_one_pop(self):
+        # As above. The mean time to coalescence should be
+        #  200 * (1 - exp(-100/200))
+        #  + 400 * exp(-100/200) * (1 - exp(-(300-100)/400))
+        #  + 200 * exp(-100/200 - (300-100)/400)
+        ddb = self.one_pop_example()
+        m = ddb.mean_coalescence_time(num_samples=[2])
+        truth = (
+            200 * (1 - np.exp(-100/200))
+            + 400 * np.exp(-100/200) * (1 - np.exp(-(300-100)/400))
+            + 200 * np.exp(-100/200 - (300-100)/400))
+        self.assertLess(abs(m - truth)/truth, 5e-3)
+        # test passing steps
+        m = ddb.mean_coalescence_time(
+                num_samples=[2],
+                steps=[0, 100, 1000])
+        self.assertLess(abs(m - truth)/truth, 5e-3)
+
+    def test_logging(self):
+        ddb = self.one_pop_example()
+        with mock.patch("msprime.simulations.logger.debug") as mocked_debug:
+            ddb.mean_coalescence_time([2])
+        self.assertEqual(mocked_debug.call_count, 3)
+
+    def test_mean_errors(self):
+        ddb = self.one_pop_example()
+        self.assertRaises(
+                ValueError,
+                ddb.mean_coalescence_time,
+                num_samples=[2],
+                steps=[0, 10],
+                max_iter=1)
+
+    def two_pop_example(self):
         # Have a history with two populations, with no migration;
         # check that coalescence rate of lineages from
         # a single pop reflects the size history of that pop:
@@ -608,26 +694,10 @@ class TestDemographyTrajectories(unittest.TestCase):
         # - there is a mass migration event that entirely merges population 2 (source)
         # into population 1 (dest) at t=200 generations ago
         # - population 1 has a size change to 100 at t=300 generations ago
-        # Then, we can test the following:
-        # a) The coalesce rates through time of two samples from population 1 is:
-        #     (1/(2 * 100) until time 100),
-        #     (1/(2200) between times 100 and 300),
-        #     (1/(2100) past t=300)
-        # b) The coalesce rates through time of two samples from population 2 is:
-        #     (1/(21000) until time 200),
-        #     (1/(2200) between times 200 and 300),
-        #     (1/(2100) past t=300)
-        # c) The coalesce rates through time of one sample from population 1 and
-        #     one sample from population 2 is:
-        #     (0 until time 200),
-        #     (1/(2200) between times 200 and 300),
-        #     (1/(2100) past t=300)
-        N_A = 1e2
-        N_B = 1e3
         ddb = msprime.DemographyDebugger(
             population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N_A),
-                msprime.PopulationConfiguration(initial_size=N_B)
+                msprime.PopulationConfiguration(initial_size=1e2),
+                msprime.PopulationConfiguration(initial_size=1e3)
             ],
             demographic_events=[
                 msprime.PopulationParametersChange(time=100, initial_size=200,
@@ -639,31 +709,153 @@ class TestDemographyTrajectories(unittest.TestCase):
                 [0, 0],
                 [0, 0]
             ])
-        steps = np.linspace(1, 400, 1001)
+        return ddb
+
+    def test_two_pop(self):
+        # Then, we can test the following:
+        # a) The coalescence rates through time of two samples from population 1 is:
+        #     (1/(2 * 100) until time 100),
+        #     (1/(2 * 200) between times 100 and 300),
+        #     (1/(2 * 100) past t=300)
+        # b) The coalescence rates through time of two samples from population 2 is:
+        #     (1/(2 * 1000) until time 200),
+        #     (1/(2 * 200) between times 200 and 300),
+        #     (1/(2 * 100) past t=300)
+        # c) The coalescence rates through time of one sample from population 1 and
+        #     one sample from population 2 is:
+        #     (0 until time 200),
+        #     (1/(2 * 200) between times 200 and 300),
+        #     (1/(2 * 100) past t=300)
+        # d) The probabilities of not yet having coalesced for two samples
+        #     from population 1 are:
+        #     (exp(-t/200) until time 100)
+        #     (exp(-100/200 - (t-100)/400) between times 100 and 300)
+        #     (exp(-100/200 - (300-100)/400 - (t-300)/200) past t=300)
+        # e) The probabilities of not yet having coalesced for two samples
+        #     from population 2 are:
+        #     (exp(-t/2000) until time 200)
+        #     (exp(-200/2000 - (t-200)/400) between times 200 and 300)
+        #     (exp(-200/2000 - (300-200)/400 - (t-300)/200) past t=300)
+        # f) The probabilities of not yet having coalesced for one sample
+        #     from population 1 and one from population 2 are;
+        #     (1.0 until time 200)
+        #     (exp(- (t-200)/400) between times 200 and 300)
+        #     (exp(-(300-200)/400 - (t-300)/200) past t=300)
+        # Also note that when comparing to P, the time intervals should include the
+        # right endpoints but for comparing to rates, they should include the
+        # left endpoints.
+        ddb = self.two_pop_example()
+        steps = np.linspace(0, 400, 1001)
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
-        rates1, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
-        rates2, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[1, 1])
+        rates1, P1 = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
+        rates2, P2 = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[1, 1])
         for time_step in range(len(steps)):
             time = steps[time_step]
             rA = rates[time_step]
             rB = rates1[time_step]
             rC = rates2[time_step]
+            pA = P[time_step]
+            pB = P1[time_step]
+            pC = P2[time_step]
             if time >= 0 and time < 100:
                 self.assertAlmostEqual(rA, 1 / (2 * 100))
                 self.assertAlmostEqual(rB, 1 / (2 * 1000))
                 self.assertAlmostEqual(rC, 0)
-            elif time >= 100 and time < 200:
+                self.assertAlmostEqual(pA, np.exp(-time / 200))
+                self.assertAlmostEqual(pB, np.exp(-time / 2000))
+                self.assertAlmostEqual(pC, 1.0)
+            elif time == 100:
                 self.assertAlmostEqual(rA, 1 / (2 * 200))
                 self.assertAlmostEqual(rB, 1 / (2 * 1000))
                 self.assertAlmostEqual(rC, 0)
-            elif time >= 200 and time < 300:
+                self.assertAlmostEqual(pA, np.exp(-time / 200))
+                self.assertAlmostEqual(pB, np.exp(-time / 2000))
+                self.assertAlmostEqual(pC, 1.0)
+            elif time > 100 and time < 200:
+                self.assertAlmostEqual(rA, 1 / (2 * 200))
+                self.assertAlmostEqual(rB, 1 / (2 * 1000))
+                self.assertAlmostEqual(rC, 0)
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (time - 100)/400))
+                self.assertAlmostEqual(pB, np.exp(-time / 2000))
+                self.assertAlmostEqual(pC, 1.0)
+            elif time == 200:
                 self.assertAlmostEqual(rA, 1 / (2 * 200))
                 self.assertAlmostEqual(rB, 1 / (2 * 200))
                 self.assertAlmostEqual(rC, 1 / (2 * 200))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (time - 100)/400))
+                self.assertAlmostEqual(pB, np.exp(-time / 2000))
+                self.assertAlmostEqual(pC, 1.0)
+            elif time > 200 and time < 300:
+                self.assertAlmostEqual(rA, 1 / (2 * 200))
+                self.assertAlmostEqual(rB, 1 / (2 * 200))
+                self.assertAlmostEqual(rC, 1 / (2 * 200))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (time - 100)/400))
+                self.assertAlmostEqual(pB, np.exp(-200 / 2000 - (time - 200)/400))
+                self.assertAlmostEqual(pC, np.exp(-(time - 200) / 400))
+            elif time == 300:
+                self.assertAlmostEqual(rA, 1 / (2 * 100))
+                self.assertAlmostEqual(rB, 1 / (2 * 100))
+                self.assertAlmostEqual(rC, 1 / (2 * 100))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (time - 100)/400))
+                self.assertAlmostEqual(pB, np.exp(-200 / 2000 - (time - 200)/400))
+                self.assertAlmostEqual(pC, np.exp(-(time - 200) / 400))
             else:
                 self.assertAlmostEqual(rA, 1 / (2 * 100))
                 self.assertAlmostEqual(rB, 1 / (2 * 100))
                 self.assertAlmostEqual(rC, 1 / (2 * 100))
+                self.assertAlmostEqual(pA, np.exp(-100 / 200 - (300 - 100)/400
+                                                  - (time - 300)/200))
+                self.assertAlmostEqual(pB, np.exp(-200 / 2000 - (300 - 200)/400
+                                                  - (time - 300)/200))
+                self.assertAlmostEqual(pC, np.exp(-(300 - 200) / 400 - (time - 300)/200))
+
+    def test_mean_two_pop(self):
+        # As above. The mean times to coalescence should be:
+        # pop 1:  200 * (1 - exp(-100/200))
+        #        + 400 * exp(-100/200) * (1 - exp(-(300-100)/400))
+        #        + 200 * exp(-100/200-(300-100)/400)
+        # pop 2:  2000 * (1 - exp(-200/2000))
+        #        + 400 * exp(-200/2000) * (1 - exp(-(300-200)/400))
+        #        + 200 * exp(-200/2000-(300-200)/400)
+        # pop 1-2: 200 + 400 * (1 - exp(-(300-200)/400))
+        #        + 200 * exp(-(300-200)/400)
+        ddb = self.two_pop_example()
+        mA = ddb.mean_coalescence_time(num_samples=[2, 0])
+        mB = ddb.mean_coalescence_time(num_samples=[0, 2])
+        mC = ddb.mean_coalescence_time(num_samples=[1, 1])
+        tA = (
+            200 * (1 - np.exp(-100/200))
+            + 400 * np.exp(-100/200) * (1 - np.exp(-(300-100)/400))
+            + 200 * np.exp(-100/200 - (300-100)/400))
+        tB = (
+            2000 * (1 - np.exp(-200/2000))
+            + 400 * np.exp(-200/2000) * (1 - np.exp(-(300-200)/400))
+            + 200 * np.exp(-200/2000 - (300-200)/400))
+        tC = (
+            200 + 400 * (1 - np.exp(-(300-200)/400))
+            + 200 * np.exp(-(300-200)/400))
+        self.assertLess(abs(mA - tA)/tA, 5e-3)
+        self.assertLess(abs(mB - tB)/tB, 5e-3)
+        self.assertLess(abs(mC - tC)/tC, 5e-3)
+
+    def test_constant_sizes(self):
+        # With constant population sizes, results should not depend on the steps
+        N_A = 1e2
+        ddb = msprime.DemographyDebugger(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=N_A)
+            ],
+            demographic_events=[
+                msprime.PopulationParametersChange(time=100, initial_size=200),
+                msprime.PopulationParametersChange(time=300, initial_size=100)
+            ])
+        steps = np.linspace(0, 400, 21)
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
+        steps2 = self.subdivide(steps)
+        rates2, P2 = ddb.coalescence_rate_trajectory(steps=steps2, num_samples=[2])
+        assert(np.all(steps == steps2[::2]))
+        self.assertLess(max(np.abs(rates - rates2[::2])), 1e-6)
+        self.assertLess(max(np.abs(P - P2[::2])), 1e-6)
 
     def test_convergence(self):
         # Have two populations with very high migration; check they act as a single
@@ -687,7 +879,7 @@ class TestDemographyTrajectories(unittest.TestCase):
             migration_matrix=[
                 [0, .5],
                 [.25, 0]])
-        steps = np.linspace(1, 400, 401)
+        steps = np.linspace(0, 400, 401)
         rates, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         rates1, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
         rates2, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[1, 1])
@@ -703,8 +895,8 @@ class TestDemographyTrajectories(unittest.TestCase):
                 self.assertAlmostEqual(rC, r, places=4)
 
     def test_rate_size_equality(self):
-        # This test will create a trivial model with two population
-        # and no migration. The population size trajectories should match the
+        # This tests a trivial model with two populations and no migration.
+        # The population size trajectories should match the
         # given 1/ 2*coalescent rates for the respective sampled population.
         N_A = 1e7
         N_B = 1e6
@@ -723,15 +915,14 @@ class TestDemographyTrajectories(unittest.TestCase):
                 [0, 0],
                 [0, 0]
             ])
-        steps = np.linspace(1, 400, 401)
+        steps = np.linspace(0, 400, 1001)
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         pop_sizes = ddb.population_size_trajectory(steps=steps)
         for r, p in zip(rates, pop_sizes[:, 0]):
-            self.assertAlmostEqual(1/(2*r), p)
+            self.assertAlmostEqual(r, 1/(2*p))
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
-        pop_sizes = ddb.population_size_trajectory(steps=steps)
         for r, p in zip(rates, pop_sizes[:, 1]):
-            self.assertAlmostEqual(1/(2*r), p)
+            self.assertAlmostEqual(r, 1/(2*p))
 
     def test_rate_size_equality_with_population_merge(self):
         # Test equality between two population that split with continued
@@ -759,7 +950,7 @@ class TestDemographyTrajectories(unittest.TestCase):
                 [0, 0],
                 [0, 0]
             ])
-        steps = np.linspace(1, 400, 401)
+        steps = np.linspace(0, 400, 401)
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         pop_sizes = ddb.population_size_trajectory(steps=steps)
         for r, p in zip(rates[301:], pop_sizes[:, 0][301:]):
@@ -785,11 +976,11 @@ class TestDemographyTrajectories(unittest.TestCase):
                 [0, 0],
                 [0, 0]
             ])
-        steps = np.linspace(1, 400, 2)
+        steps = np.linspace(0, 400, 2)
         with self.assertWarns(UserWarning):
             ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         # Test coalescence rates without double step validation
-        steps = np.linspace(1, 400, 401)
+        steps = np.linspace(0, 400, 401)
         rates, P = ddb.coalescence_rate_trajectory(
             steps=steps, num_samples=[2, 0], double_step_validation=False)
 
@@ -804,7 +995,7 @@ class TestDemographyTrajectories(unittest.TestCase):
             migration_matrix=[
                 [0],
             ])
-        steps = np.linspace(1, 10, 11)
+        steps = np.linspace(0, 10, 11)
         # Test when num_pops != len(num_samples), we throw error
         with self.assertRaises(ValueError):
             ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
@@ -812,10 +1003,73 @@ class TestDemographyTrajectories(unittest.TestCase):
         with self.assertRaises(ValueError):
             ddb.coalescence_rate_trajectory(
                 steps=np.flip(steps, axis=0), num_samples=[2])
-        # Test that when all steps are not, non-zero, we throw error
+        # Test that when steps are negative, we throw error
         with self.assertRaises(ValueError):
             ddb.coalescence_rate_trajectory(
-                steps=np.linspace(0, 10, 11), num_samples=[2])
+                steps=np.linspace(-1, 10, 11), num_samples=[2])
+
+    def get_random_example(self):
+        """
+        A big annoying example.
+        """
+        random.seed(23)
+        Ne = 100
+        N = 4
+        pop_sizes = [random.uniform(0.01, 10) * Ne for _ in range(N)]
+        growth_rates = [random.uniform(-0.01, 0.01) for _ in range(N)]
+        migration_matrix = [
+            [random.random() * (i != j) for j in range(N)]
+            for i in range(N)]
+        sample_sizes = [random.randint(2, 10) for _ in range(N)]
+        population_configurations = [
+                msprime.PopulationConfiguration(
+                    initial_size=k,
+                    sample_size=n,
+                    growth_rate=r)
+                for k, n, r in zip(pop_sizes, sample_sizes, growth_rates)]
+        demographic_events = []
+        for i in [0, 1]:
+            n = random.uniform(0.01, 10)
+            r = 0
+            demographic_events.append(
+                msprime.PopulationParametersChange(
+                    time=100, initial_size=n, growth_rate=r, population_id=i))
+        for ij in [(0, 1), (2, 3), (0, 3)]:
+            demographic_events.append(
+                    msprime.MigrationRateChange(
+                        180, random.random(),
+                        matrix_index=ij))
+        demographic_events.append(
+            msprime.MassMigration(time=200, source=3, dest=0, proportion=0.3))
+        for i in [1, 3]:
+            n = random.uniform(0.01, 10)
+            r = random.uniform(-0.01, 0.01)
+            demographic_events.append(
+                msprime.PopulationParametersChange(
+                    time=210, initial_size=n, growth_rate=r, population_id=i))
+
+        ddb = msprime.DemographyDebugger(
+                population_configurations=population_configurations,
+                demographic_events=demographic_events,
+                migration_matrix=migration_matrix)
+        return ddb
+
+    def test_random_example(self):
+        ddb = self.get_random_example()
+        num_samples = list(range(ddb.num_populations))
+        rates, P = ddb.coalescence_rate_trajectory(
+                        steps=np.linspace(0, 200, 2001),
+                        num_samples=num_samples)
+        self.assertTrue(np.all(rates >= 0))
+        self.assertTrue(np.all(P >= 0))
+        self.assertTrue(np.all(P <= 1))
+        self.assertTrue(np.all(np.diff(P) <= 0))
+        coaltime = ddb.mean_coalescence_time(num_samples=num_samples)
+        self.assertGreater(coaltime, 0)
+        coaltime2 = ddb.mean_coalescence_time(
+                            num_samples=num_samples,
+                            steps=np.linspace(0, 200, 501))
+        self.assertLess(abs(coaltime - coaltime2), 2)
 
 
 class TestMatrixExponential(unittest.TestCase):

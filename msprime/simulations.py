@@ -28,6 +28,7 @@ import sys
 import os
 import warnings
 import copy
+import logging
 
 import tskit
 import numpy as np
@@ -50,6 +51,9 @@ from _msprime import MutationGenerator
 # _msprime.restore_gsl_error_handler(), which will set the error handler to
 # the value that it had before this function was called.
 _msprime.unset_gsl_error_handler()
+
+
+logger = logging.getLogger(__name__)
 
 
 Sample = collections.namedtuple(
@@ -1366,7 +1370,7 @@ def _matrix_exponential(A):
     Yinv = np.linalg.pinv(Y)
     D = np.diag(np.exp(d))
     B = np.matmul(Y, np.matmul(D, Yinv))
-    return B
+    return np.real_if_close(B, tol=1000)
 
 
 class DemographyDebugger(object):
@@ -1528,6 +1532,122 @@ class DemographyDebugger(object):
             N_t[j] = N
         return N_t
 
+    def mean_coalescence_time(
+            self, num_samples, min_pop_size=1, steps=None, rtol=0.005, max_iter=12):
+        """
+        Compute the mean time until coalescence between lineages of two samples drawn
+        from the sample configuration specified in `num_samples`. This is done using
+        :meth:`coalescence_rate_trajectory
+        <.DemographyDebugger.coalescence_rate_trajectory>`
+        to compute the probability that the lineages have not yet coalesced by time `t`,
+        and using these to approximate :math:`E[T] = \\int_t^\\infty P(T > t) dt`,
+        where :math:`T` is the coalescence time. See
+        :meth:`coalescence_rate_trajectory
+        <.DemographyDebugger.coalescence_rate_trajectory>`
+        for more details.
+
+        To compute this, an adequate time discretization must be arrived at
+        by iteratively extending or refining the current discretization.
+        Debugging information about numerical convergence of this procedure is
+        logged using the Python :mod:`logging` infrastructure. To make it appear, using
+        the :mod:`daiquiri` module, do for instance::
+
+            import daiquiri
+
+            daiquiri.setup(level="DEBUG")
+            debugger.mean_coalescence_time([2])
+
+        will print this debugging information to stderr. Briefly, this outputs
+        iteration number, mean coalescence time, maximum difference in probabilty
+        of not having coalesced yet, difference to last coalescence time,
+        probability of not having coalesced by the final time point, and
+        whether the last iteration was an extension or refinement.
+
+        :param list num_samples: A list of the same length as the number
+            of populations, so that `num_samples[j]` is the number of sampled
+            chromosomes in subpopulation `j`.
+        :param int min_pop_size: See :meth:`coalescence_rate_trajectory
+            <.DemographyDebugger.coalescence_rate_trajectory>`.
+        :param list steps: The time discretization to start out with (by default,
+            picks something based on epoch times).
+        :param float rtol: The relative tolerance to determine mean coalescence time
+            to (used to decide when to stop subdividing the steps).
+        :param int max_iter: The maximum number of times to subdivide the steps.
+        :return: The mean coalescence time (a number).
+        :rtype: float
+        """
+
+        def mean_time(steps, P):
+            # Mean is int_0^infty P(T > t) dt, which we estimate by discrete integration
+            # assuming that f(t) = P(T > t) is piecewise exponential:
+            # if f(u) = a exp(bu) then b = log(f(t)/f(s)) / (t-s) for each s < t, so
+            # \int_s^t f(u) du = (a/b) \int_s^t exp(bu) b du = (a/b)(exp(bt) - exp(bs))
+            #    = (t - s) * (f(t) - f(s)) / log(f(t) / f(s))
+            # unless b = 0, of course.
+            assert steps[0] == 0
+            dt = np.diff(steps)
+            dP = np.diff(P)
+            dlogP = np.diff(np.log(P))
+            nz = np.logical_and(dP < 0, P[1:]*P[:-1] > 0)
+            const = (dP == 0)
+            return (np.sum(dt[const] * (P[:-1])[const])
+                    + np.sum(dt[nz] * dP[nz] / dlogP[nz]))
+
+        if steps is None:
+            last_N = max(self.population_size_history[:, self.num_epochs - 1])
+            last_epoch = max(self.epoch_times)
+            steps = sorted(list(set(np.linspace(0, last_epoch + 12 * last_N,
+                                                101)).union(set(self.epoch_times))))
+        p_diff = m_diff = np.inf
+        last_P = np.inf
+        step_type = "none"
+        n = 0
+        logger.debug(
+            "iter    mean    P_diff    mean_diff last_P    adjust_type"
+            "num_steps  last_step")
+        # The factors of 20 here are probably not optimal: clearly, we need to
+        # compute P accurately, but there's no good reason for this stopping rule.
+        # If populations have picewise constant size then we shouldn't need this:
+        # setting steps equal to the epoch boundaries should suffice; while if
+        # there is very fast exponential change in some epochs caution is needed.
+        while n < max_iter and (last_P > rtol or p_diff > rtol/20 or m_diff > rtol/20):
+            last_steps = steps
+            _, P1 = self.coalescence_rate_trajectory(
+                            steps=last_steps, num_samples=num_samples,
+                            min_pop_size=min_pop_size,
+                            double_step_validation=False)
+            m1 = mean_time(last_steps, P1)
+            if last_P > rtol:
+                step_type = "extend"
+                steps = np.concatenate([
+                    steps,
+                    np.linspace(steps[-1], steps[-1] * 1.2, 20)[1:]])
+            else:
+                step_type = "refine"
+                inter = steps[:-1] + np.diff(steps)/2
+                steps = np.concatenate([steps, inter])
+                steps.sort()
+            _, P2 = self.coalescence_rate_trajectory(
+                            steps=steps, num_samples=num_samples,
+                            min_pop_size=min_pop_size,
+                            double_step_validation=False)
+            m2 = mean_time(steps, P2)
+            keep_steps = np.in1d(steps, last_steps)
+            p_diff = max(np.abs(P1 - P2[keep_steps]))
+            m_diff = np.abs(m1 - m2)/m2
+            last_P = P2[-1]
+            n += 1
+            # Use the old-style string formatting as this is the logging default
+            logger.debug(
+                "%d %g %g %g %g %s %d %d",
+                n, m2, p_diff, m_diff, last_P, step_type, len(steps), max(steps))
+
+        if n == max_iter:
+            raise ValueError("Did not converge on an adequate discretisation: "
+                             "Increase max_iter or rtol. Consult the log for "
+                             "debugging information")
+        return m2
+
     def coalescence_rate_trajectory(
             self, steps, num_samples, min_pop_size=1, double_step_validation=True):
         """
@@ -1580,27 +1700,30 @@ class DemographyDebugger(object):
         if not len(num_samples) == num_pops:
             raise ValueError(
                 "`num_samples` must have the same length as the number of populations")
+        steps = np.array(steps)
         if not np.all(np.diff(steps) > 0):
             raise ValueError("`steps` must be a sequence of increasing times.")
-        if np.any(steps == 0):
-            raise ValueError("`steps` must be non-zero")
+        if np.any(steps < 0):
+            raise ValueError("`steps` must be non-negative")
         r, p_t = self._calculate_coalescence_rate_trajectory(
-            steps=steps,
-            num_samples=num_samples,
-            min_pop_size=min_pop_size)
+                        steps=steps,
+                        num_samples=num_samples,
+                        min_pop_size=min_pop_size)
         if double_step_validation:
-            inter = steps[1:] + np.diff(steps)/2
-            double_steps = sorted(np.concatenate([steps[1:], inter]))
+            inter = steps[:-1] + np.diff(steps)/2
+            double_steps = np.concatenate([steps, inter])
+            double_steps.sort()
             rd, p_td = self._calculate_coalescence_rate_trajectory(
-                steps=double_steps,
-                num_samples=num_samples,
-                min_pop_size=min_pop_size)
-            r_prediction_close = np.allclose(r[1:], rd[::2], rtol=1e-3)
-            p_prediction_close = np.allclose(p_t[1:], p_td[::2], rtol=1e-3)
+                              steps=double_steps,
+                              num_samples=num_samples,
+                              min_pop_size=min_pop_size)
+            assert np.all(steps == double_steps[::2])
+            r_prediction_close = np.allclose(r, rd[::2], rtol=1e-3)
+            p_prediction_close = np.allclose(p_t, p_td[::2], rtol=1e-3)
             if not (r_prediction_close and p_prediction_close):
                 warnings.warn(
-                    "Doubling the number of steps has resulted in different"
-                    " predictions, please re-run with smaller step sizes to ensure"
+                    "Doubling the number of steps has resulted in different "
+                    " predictions, please re-run with smaller step sizes to ensure "
                     " numerical accuracy.")
         return r, p_t
 
@@ -1611,31 +1734,35 @@ class DemographyDebugger(object):
         Identity = np.eye(num_pops)
         for x in range(num_pops):
             for y in range(num_pops):
-                K_x = num_samples[x]
-                K_y = num_samples[y]
-                P[IA[x, y], IA[x, y]] = K_x * (K_y - (x == y))
+                P[IA[x, y], IA[x, y]] = num_samples[x] * (num_samples[y] - (x == y))
         P = P / np.sum(P)
-        epoch_breaks = [e.start_time for e in self.epochs]
-        steps_b = sorted(list(set(list(steps) + epoch_breaks)))
-        num_steps = len(steps_b)
-        r = np.zeros(num_steps)
-        p_t = np.zeros(num_steps)
+        # add epoch breaks if not there already but remember which steps they are
+        epoch_breaks = list(set([0.0] + [t for t in self.epoch_times
+                                         if t not in steps]))
+        steps_b = np.concatenate([steps, epoch_breaks])
+        ix = np.argsort(steps_b)
+        steps_b = steps_b[ix]
+        keep_steps = np.concatenate([np.repeat(True, len(steps)),
+                                     np.repeat(False, len(epoch_breaks))])[ix]
+        assert np.all(steps == steps_b[keep_steps])
         mass_migration_objects = []
         mass_migration_times = []
         for demo in self.demographic_events:
             if type(demo) == MassMigration:
                 mass_migration_objects.append(demo)
                 mass_migration_times.append(demo.time)
-        prev = 0
-        for j, time in enumerate(steps_b):
-            dt = time - prev
-            prev = time
+        num_steps = len(steps_b)
+        # recall that steps_b[0] = 0.0
+        r = np.zeros(num_steps)
+        p_t = np.zeros(num_steps)
+        for j in range(num_steps - 1):
+            time = steps_b[j]
+            dt = steps_b[j + 1] - steps_b[j]
             N, M = self._pop_size_and_migration_at_t(time)
             C = np.zeros([num_pops**2, num_pops**2])
             for idx in range(num_pops):
                 C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
             dM = np.diag([sum(s) for s in M])
-            G = (np.kron(M - dM, Identity) + np.kron(Identity, M - dM)) - C
             if time in mass_migration_times:
                 idx = mass_migration_times.index(time)
                 a = mass_migration_objects[idx].source
@@ -1651,18 +1778,13 @@ class DemographyDebugger(object):
                         S[IA[x, a], IA[x, b]] = S[IA[a, x], IA[b, x]] = p
                         S[IA[x, a], IA[x, a]] = S[IA[a, x], IA[a, x]] = 1 - p
                 P = np.matmul(P, S)
-            P = np.matmul(P, _matrix_exponential(dt * G))
             p_t[j] = np.sum(P)
             r[j] = np.sum(np.matmul(P, C)) / np.sum(P)
-        idx_counter = 0
-        diff_mask = []
-        for i in range(len(steps)):
-            if(steps[i] != steps_b[i+idx_counter]):
-                diff_mask.append(i+idx_counter)
-                idx_counter += 1
-        r = np.delete(r, diff_mask)
-        p_t = np.delete(p_t, diff_mask)
-        return r, p_t
+            G = (np.kron(M - dM, Identity) + np.kron(Identity, M - dM)) - C
+            P = np.matmul(P, _matrix_exponential(dt * G))
+        p_t[num_steps - 1] = np.sum(P)
+        r[num_steps - 1] = np.sum(np.matmul(P, C)) / np.sum(P)
+        return r[keep_steps], p_t[keep_steps]
 
     def _pop_size_and_migration_at_t(self, t):
         """
