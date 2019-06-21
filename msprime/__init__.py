@@ -50,3 +50,4 @@ from msprime.provenance import __version__
 from msprime.simulations import *
 from msprime.exceptions import *
 from msprime.mutations import *
+from msprime.likelihood import *
