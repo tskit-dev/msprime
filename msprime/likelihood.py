@@ -1,7 +1,28 @@
+#
+# Copyright (C) 2019 University of Oxford
+#
+# This file is part of msprime.
+#
+# msprime is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# msprime is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+#
+"""
+Module responsible for computing likelihoods.
+"""
 import math
 import msprime
-import tskit
 import numpy as np
+
 
 def unnormalised_log_mutation_likelihood(arg, theta):
     # log_likelihood of mutations on a given ARG up to a normalising constant
@@ -17,7 +38,8 @@ def unnormalised_log_mutation_likelihood(arg, theta):
         right = tables.edges[edge].right
         left = tables.edges[edge].left
         parent = tables.edges[edge].parent
-        total_material += (right - left) * (tables.nodes[parent].time - tables.nodes[child].time)
+        total_material += ((right - left) *
+                           (tables.nodes[parent].time - tables.nodes[child].time))
         edges_above[child] = [edge]
         edge += 1
         if edge == number_of_edges:
@@ -26,7 +48,8 @@ def unnormalised_log_mutation_likelihood(arg, theta):
             right = tables.edges[edge].right
             left = tables.edges[edge].left
             parent = tables.edges[edge].parent
-            total_material += (right - left) * (tables.nodes[parent].time - tables.nodes[child].time)
+            total_material += ((right - left) *
+                               (tables.nodes[parent].time - tables.nodes[child].time))
             edges_above[child].append(edge)
             edge += 1
             if edge == number_of_edges:
@@ -48,7 +71,8 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     if number_of_mutations == 0 and theta == 0:
         ret = -float("inf")
     else:
-        ret = number_of_mutations * math.log(total_material * theta) - total_material * theta
+        ret = (number_of_mutations * math.log(total_material * theta) -
+               total_material * theta)
     for mut in arg.mutations():
         mutant_location = tables.sites[mut.site].position
         ind = 0
@@ -67,13 +91,15 @@ def unnormalised_log_mutation_likelihood(arg, theta):
             count = 0
             to_check = edges_below[child]
             for e in to_check:
-                if tables.edges[e].left <= mutant_location and mutant_location < tables.edges[e].right:
+                if (tables.edges[e].left <= mutant_location and
+                        mutant_location < tables.edges[e].right):
                     count += 1
                     tmp_edge = e
             if count == 1:
                 parent = tables.edges[tmp_edge].parent
                 child = tables.edges[tmp_edge].child
-                potential_branch_length += tables.nodes[parent].time - tables.nodes[child].time
+                potential_branch_length += (tables.nodes[parent].time -
+                                            tables.nodes[child].time)
                 if tables.nodes[child].time == 0:
                     continue_downwards = False
             else:
@@ -88,24 +114,28 @@ def unnormalised_log_mutation_likelihood(arg, theta):
             count_up = 0
             to_check = edges_above[parent]
             for e in to_check:
-                if tables.edges[e].left <= mutant_location and mutant_location < tables.edges[e].right:
+                if (tables.edges[e].left <= mutant_location and
+                        mutant_location < tables.edges[e].right):
                     count_up += 1
                     tmp_edge = e
             count_down = 0
             to_check = edges_below[parent]
             for e in to_check:
-                if tables.edges[e].left <= mutant_location and mutant_location < tables.edges[e].right:
+                if (tables.edges[e].left <= mutant_location and
+                        mutant_location < tables.edges[e].right):
                     count_down += 1
             if count_up == 1 and count_down == 1:
                 parent = tables.edges[tmp_edge].parent
                 child = tables.edges[tmp_edge].child
-                potential_branch_length += tables.nodes[parent].time - tables.nodes[child].time
+                potential_branch_length += (tables.nodes[parent].time -
+                                            tables.nodes[child].time)
                 if parent not in edges_above:
                     continue_upwards = False
             else:
                 continue_upwards = False
         ret += math.log(potential_branch_length / total_material)
     return ret
+
 
 def log_arg_likelihood(arg, rho):
     tables = arg.tables
@@ -142,7 +172,8 @@ def log_arg_likelihood(arg, rho):
                 edge += 1
                 if edge == number_of_edges:
                     break
-            segment_length_in_children += tables.edges.right[edge - 1] - tables.edges.left[edge]
+            segment_length_in_children += (tables.edges.right[edge - 1] -
+                                           tables.edges.left[edge])
             child = tables.edges[edge].child
             while tables.edges[edge].child == child:
                 edge += 1
@@ -151,7 +182,8 @@ def log_arg_likelihood(arg, rho):
             segment_length_in_children += tables.edges.right[edge - 1]
             parent_edges = edge + np.flatnonzero(tables.edges.child[edge:] == parent)
             if len(parent_edges) > 0:
-                segment_length_in_parent = tables.edges.right[parent_edges[-1]] - tables.edges.left[parent_edges[0]]
+                segment_length_in_parent = (tables.edges.right[parent_edges[-1]] -
+                                            tables.edges.left[parent_edges[0]])
                 number_of_lineages -= 1
                 number_of_links -= segment_length_in_children - segment_length_in_parent
             else:
