@@ -29,15 +29,10 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     # that depends on the pattern of observed mutations, but not on the ARG
     # or the mutation rate
     tables = arg.tables
-    edges_above = collections.defaultdict(list)
-    edges_below = collections.defaultdict(list)
-    total_material = 0
     time = tables.nodes.time
-    for edge in tables.edges:
-        total_material += ((edge.right - edge.left) *
-                           (time[edge.parent] - time[edge.child]))
-        edges_above[edge.child].append(edge)
-        edges_below[edge.parent].append(edge)
+    total_material = 0
+    for e in tables.edges:
+        total_material += (e.right - e.left) * (time[e.parent] - time[e.child])
     number_of_mutations = len(tables.mutations)
     if theta == 0:
         if number_of_mutations == 0:
@@ -47,45 +42,21 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     else:
         ret = (number_of_mutations * math.log(total_material * theta) -
                total_material * theta)
-    for mut in arg.mutations():
-        mutant_location = tables.sites[mut.site].position
-        index = 0
-        to_check = edges_above[mut.node]
-        while to_check[index].right < mutant_location:
-            index += 1
-        edge = edges_above[mut.node][index]
-        potential_branch_length = time[edge.parent] - time[edge.child]
-        continue_leafwards = time[edge.child] > 0
-        tmp_edge = edge
-        while continue_leafwards:
-            count = 0
-            for e in edges_below[tmp_edge.child]:
-                if e.left <= mutant_location and mutant_location < e.right:
-                    count += 1
-                    tmp_edge = e
-            if count == 1:
-                potential_branch_length += time[tmp_edge.parent] - time[tmp_edge.child]
-                continue_leafwards = time[tmp_edge.child] > 0
-            else:
-                continue_leafwards = False
-        tmp_edge = edge
-        continue_rootwards = tmp_edge.parent in edges_above
-        while continue_rootwards:
-            count = 0
-            for e in edges_below[tmp_edge.parent]:
-                if e.left <= mutant_location and mutant_location < e.right:
-                    count += 1
-            if count == 1:
-                to_check = edges_above[tmp_edge.parent]
-                index = 0
-                while to_check[index].right < mutant_location:
-                    index += 1
-                tmp_edge = to_check[index]
-                potential_branch_length += time[tmp_edge.parent] - time[tmp_edge.child]
-                continue_rootwards = tmp_edge.parent in edges_above
-            else:
-                continue_rootwards = False
-        ret += math.log(potential_branch_length / total_material)
+    for tree in arg.trees():
+        for site in tree.sites():
+            mutation = site.mutations[0]
+            child = mutation.node
+            parent = tree.parent(child)
+            potential_branch_length = tree.branch_length(child)
+            while tree.parent(parent) is not None and len(tree.children(parent)) == 1:
+                child = parent
+                parent = tree.parent(child)
+                potential_branch_length += tree.branch_length(child)
+            child = mutation.node
+            while len(tree.children(child)) == 1:
+                child = tree.children(child)[0]
+                potential_branch_length += tree.branch_length(child)
+            ret += math.log(potential_branch_length / total_material)
     return ret
 
 
