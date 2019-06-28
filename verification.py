@@ -19,6 +19,7 @@ import matplotlib
 # Note this must be done before importing statsmodels.
 matplotlib.use('Agg') # NOQA
 from matplotlib import pyplot
+from matplotlib import lines as mlines
 import seaborn as sns
 import statsmodels.api as sm
 import dendropy
@@ -499,6 +500,92 @@ class SimulationVerifier(object):
         filename = os.path.join(basedir, "var.png")
         pyplot.plot(sample_size, predicted_var, "-")
         pyplot.plot(sample_size, var, "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+    def run_mean_coaltime_check(self):
+        """
+        Checks the mean coalescence time calculation against pi.
+        """
+        random.seed(5)
+        num_models = 8
+        num_reps = 8
+        T = np.zeros((num_models, num_reps))
+        U = np.zeros(num_models)
+        print("coaltime: theory  mean  sd   z")
+        for k in range(num_models):
+            Ne = 100
+            N = 4
+            pop_sizes = [random.uniform(0.01, 10) * Ne for _ in range(N)]
+            growth_rates = [random.uniform(-0.01, 0.01) for _ in range(N)]
+            migration_matrix = [
+                [random.random() * (i != j) for j in range(N)]
+                for i in range(N)]
+            sample_size = [random.randint(2, 10) for _ in range(N)]
+            population_configurations = [
+                    msprime.PopulationConfiguration(
+                        initial_size=k,
+                        sample_size=n,
+                        growth_rate=r)
+                    for k, n, r in zip(pop_sizes, sample_size, growth_rates)]
+            demographic_events = []
+            for i in [0, 1]:
+                n = random.uniform(0.01, 10)
+                r = 0
+                demographic_events.append(
+                    msprime.PopulationParametersChange(
+                        time=100, initial_size=n, growth_rate=r, population_id=i))
+            for ij in [(0, 1), (2, 3), (0, 3)]:
+                demographic_events.append(
+                        msprime.MigrationRateChange(
+                            180, random.random(),
+                            matrix_index=ij))
+            demographic_events.append(
+                msprime.MassMigration(time=200, source=3, dest=0, proportion=0.3))
+            for i in [1, 3]:
+                n = random.uniform(0.01, 10)
+                r = random.uniform(-0.01, 0.01)
+                demographic_events.append(
+                    msprime.PopulationParametersChange(
+                        time=210, initial_size=n, growth_rate=r, population_id=i))
+
+            ddb = msprime.DemographyDebugger(
+                    population_configurations=population_configurations,
+                    demographic_events=demographic_events,
+                    migration_matrix=migration_matrix)
+
+            U[k] = ddb.mean_coalescence_time(num_samples=sample_size)
+
+            mut_rate = 1e-8
+            replicates = msprime.simulate(
+                    length=1e7,
+                    recombination_rate=1e-8,
+                    mutation_rate=mut_rate,
+                    population_configurations=population_configurations,
+                    demographic_events=demographic_events,
+                    migration_matrix=migration_matrix,
+                    random_seed=5, num_replicates=num_reps)
+            for j, ts in enumerate(replicates):
+                T[k, j] = ts.get_pairwise_diversity()
+                T[k, j] /= ts.sequence_length
+                T[k, j] /= 2 * mut_rate
+            mT = np.mean(T[k])
+            sT = np.std(T[k])
+            print("        {:.2f} {:.2f} {:.2f} {:.2f}".format(
+                    U[k], mT, sT, (U[k] - mT)/(sT * np.sqrt(num_reps))))
+
+        basedir = "tmp__NOBACKUP__/coaltime"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        fig, ax = pyplot.subplots()
+        ax.scatter(np.column_stack([U]*T.shape[1]), T)
+        # where oh where is abline(0,1)
+        line = mlines.Line2D([0, 1], [0, 1])
+        line.set_transform(ax.transAxes)
+        ax.add_line(line)
+        ax.set_xlabel("calculated mean coaltime")
+        ax.set_ylabel("pairwise diversity, scaled")
+        filename = os.path.join(basedir, "mean_coaltimes.png")
         pyplot.savefig(filename)
         pyplot.close('all')
 
@@ -1746,6 +1833,13 @@ class SimulationVerifier(object):
         """
         self._instances["analytical_pi"] = self.run_pi_analytical_check
 
+    def add_mean_coaltime_check(self):
+        """
+        Adds a check for the demography debugger predictions about
+        mean coalescence time.
+        """
+        self._instances["mean_coaltime"] = self.run_mean_coaltime_check
+
     def add_total_branch_length_analytical_check(self):
         """
         Adds a check for the analytical check for the total branch length.
@@ -2030,6 +2124,7 @@ def run_tests(args):
     # Add analytical checks
     verifier.add_s_analytical_check()
     verifier.add_pi_analytical_check()
+    verifier.add_mean_coaltime_check()
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()
     verifier.add_cli_num_trees_analytical_check()
