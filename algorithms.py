@@ -896,22 +896,22 @@ class Simulator(object):
         """
         h = random.randint(1, self.L[label].get_total())
         # generate tracklength
-        l = np.random.geometric(1/self.tracklength)
+        tl = np.random.geometric(1/self.tracklength)
         # Get the segment containing the h'th link
         y = self.segments[self.L[label].find(h)]
         k = y.right - self.L[label].get_cumulative_frequency(y.index) + h - 1
         # check if the gene conversion falls between segments --> no effect
-        if y.left >= k+l:
+        if y.left >= k+tl:
             # print("noneffective GCI EVENT")
             return None
         self.num_gc_events += 1
         x = y.prev
         # both breaks are within the same segment
-        if k+l < y.right:
+        if k+tl < y.right:
             if k <= y.left:
                 y.prev = None
                 z2 = self.alloc_segment(
-                    k+l, y.right, y.node, y.population, x, y.next)
+                    k+tl, y.right, y.node, y.population, x, y.next)
                 if x is not None:
                     x.next = z2
                     lhs = x.right
@@ -923,14 +923,14 @@ class Simulator(object):
                 if y.next is not None:
                     y.next.prev = z2
                 y.next = None
-                y.right = k+l
-                self.L[label].increment(y.index, k + l - z2.right)
+                y.right = k+tl
+                self.L[label].increment(y.index, k + tl - z2.right)
                 z = y
             elif k > y.left:
                 z = self.alloc_segment(
-                    k, k+l, y.node, y.population, None, None)
+                    k, k+tl, y.node, y.population, None, None)
                 z2 = self.alloc_segment(
-                    k+l, y.right, y.node, y.population, y, y.next)
+                    k+tl, y.right, y.node, y.population, y, y.next)
                 if y.next is not None:
                     y.next.prev = z2
                 y.next = z2
@@ -942,7 +942,7 @@ class Simulator(object):
         else:
             # Get the segment y2 containing the end of the conversion tract
             y2 = y
-            while y2 is not None and k + l >= y2.right:
+            while y2 is not None and k+tl >= y2.right:
                 y2 = y2.next
             # process left break
             if k <= y.left:
@@ -963,9 +963,9 @@ class Simulator(object):
                 lhs_tail = y
             # process right break
             if y2 is not None:
-                if y2.left < k + l:
+                if y2.left < k + tl:
                     z2 = self.alloc_segment(
-                        k + l, y2.right, y2.node, y2.population, lhs_tail, y2.next)
+                        k + tl, y2.right, y2.node, y2.population, lhs_tail, y2.next)
                     if lhs_tail is not None:
                         lhs_tail.next = z2
                         lhs = lhs_tail.right
@@ -976,11 +976,11 @@ class Simulator(object):
                     if y2.next is not None:
                         y2.next.prev = z2
                     y2.next = None
-                    y2.right = k + l
-                    self.L[label].increment(y2.index, k + l - z2.right)
+                    y2.right = k + tl
+                    self.L[label].increment(y2.index, k + tl - z2.right)
                     if z2.prev is None:
                         z = z2
-                elif y2.left >= k + l:
+                elif y2.left >= k + tl:
                     lhs_tail.next = y2
                     y2.prev.next = None
                     y2.prev = lhs_tail
