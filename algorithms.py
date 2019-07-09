@@ -333,8 +333,8 @@ class Simulator(object):
             population_growth_rate_changes, population_size_changes,
             migration_matrix_element_changes, bottlenecks, model='hudson',
             from_ts=None, max_segments=100, num_labels=1, sweep_trajectory=None,
-            full_arg=False, time_slice=None, geneconversion_rate=0.0,
-            geneconversion_length=1):
+            full_arg=False, time_slice=None, gene_conversion_rate=0.0,
+            gene_conversion_length=1):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -349,8 +349,8 @@ class Simulator(object):
         self.n = sample_size
         self.m = num_loci
         self.r = recombination_rate
-        self.g = geneconversion_rate
-        self.tracklength = geneconversion_length
+        self.g = gene_conversion_rate
+        self.tracklength = gene_conversion_length
         self.pc = (self.tracklength-1)/self.tracklength
         if self.tracklength == 1:
             self.lnpc = -math.inf
@@ -890,6 +890,16 @@ class Simulator(object):
             ret = x, z
         return ret
 
+    def cut_right_break(self, lhs_tail, y, new_segment, track_end, label):
+        assert lhs_tail is not None
+        lhs_tail.next = new_segment
+        self.L[label].set_value(new_segment.index, new_segment.right - lhs_tail.right)
+        if y.next is not None:
+            y.next.prev = new_segment
+        y.next = None
+        y.right = track_end
+        self.L[label].increment(y.index, track_end - new_segment.right)
+
     def wiuf_geneconversion_within_event(self, label, return_heads=False):
         """
         Implements a gene conversion event that starts within a segment
@@ -912,19 +922,8 @@ class Simulator(object):
                 y.prev = None
                 z2 = self.alloc_segment(
                     k+tl, y.right, y.node, y.population, x, y.next)
-                if x is not None:
-                    x.next = z2
-                    lhs = x.right
-                    lhs_tail = x
-                else:
-                    print("this should never be possible")
-                    lhs = z2.left
-                self.L[label].set_value(z2.index, z2.right - lhs)
-                if y.next is not None:
-                    y.next.prev = z2
-                y.next = None
-                y.right = k+tl
-                self.L[label].increment(y.index, k + tl - z2.right)
+                lhs_tail = x
+                self.cut_right_break(lhs_tail, y, z2, k + tl, label)
                 z = y
             elif k > y.left:
                 z = self.alloc_segment(
@@ -966,18 +965,7 @@ class Simulator(object):
                 if y2.left < k + tl:
                     z2 = self.alloc_segment(
                         k + tl, y2.right, y2.node, y2.population, lhs_tail, y2.next)
-                    if lhs_tail is not None:
-                        lhs_tail.next = z2
-                        lhs = lhs_tail.right
-                    else:
-                        print("this should never be possible(2)")
-                        lhs = z2.left
-                    self.L[label].set_value(z2.index, z2.right - lhs)
-                    if y2.next is not None:
-                        y2.next.prev = z2
-                    y2.next = None
-                    y2.right = k + tl
-                    self.L[label].increment(y2.index, k + tl - z2.right)
+                    self.cut_right_break(lhs_tail, y2, z2, k + tl, label)
                     if z2.prev is None:
                         z = z2
                 elif y2.left >= k + tl:
@@ -1499,10 +1487,10 @@ def run_simulate(args):
     m = args.num_loci
     rho = args.recombination_rate
     if rho == 0:
-        gamma = args.geneconversion_rate[0]
+        gamma = args.gene_conversion_rate[0]
     else:
-        gamma = args.geneconversion_rate[0] * rho
-    mean_tracklength = args.geneconversion_rate[1]
+        gamma = args.gene_conversion_rate[0] * rho
+    mean_tracklength = args.gene_conversion_rate[1]
     num_populations = args.num_populations
     migration_matrix = [
         [args.migration_rate * int(j != k) for j in range(num_populations)]
@@ -1540,7 +1528,7 @@ def run_simulate(args):
         args.bottleneck, args.model, from_ts=args.from_ts,
         max_segments=10000, num_labels=num_labels, full_arg=args.full_arg,
         sweep_trajectory=sweep_trajectory, time_slice=args.time_slice,
-        geneconversion_rate=gamma, geneconversion_length=mean_tracklength)
+        gene_conversion_rate=gamma, gene_conversion_length=mean_tracklength)
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -1561,7 +1549,7 @@ def add_simulator_arguments(parser):
     parser.add_argument(
         "--recombination-rate", "-r", type=float, default=0.01)
     parser.add_argument(
-        "--geneconversion-rate", "-c", type=float, nargs=2, default=[0, 3])
+        "--gene-conversion-rate", "-c", type=float, nargs=2, default=[0, 3])
     parser.add_argument(
         "--num-populations", "-p", type=int, default=1)
     parser.add_argument(
