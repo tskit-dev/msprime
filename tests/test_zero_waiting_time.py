@@ -9,7 +9,7 @@ class TestZeroWaitingTime(unittest.TestCase):
     Hudson algorithm.  The simulation here
     is based on input from David Lawrie.
     """
-    def _ancient_sample_test(
+    def _ancient_sample_test(self,
             num_modern=1000, anc_pop=0, anc_num=1, anc_time=200,
             split_time_anc=400, Ne0=10000, Ne1=10000, length=1000):
         samples = [msp.Sample(population=0, time=0)]*num_modern
