@@ -20,6 +20,7 @@
 #include <string.h>
 #include <assert.h>
 #include <float.h>
+#include <math.h>
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
@@ -2517,7 +2518,11 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
-        t_temp = self->time + t_wait;
+        if (t_wait == 0.) {
+            t_temp = nextafter(self->time, INFINITY);
+        } else {
+            t_temp = self->time + t_wait;
+        }
         sampling_event_time = DBL_MAX;
         if (self->next_sampling_event < self->num_sampling_events) {
             sampling_event_time = self->sampling_events[
@@ -4048,7 +4053,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     avl_tree_t *sets = NULL;
     node_id_t u, parent;
     uint32_t j, k, n, num_roots;
-    double rate, t;
+    double rate, t, ttemp;
     avl_tree_t *pop;
     avl_node_t *node, *set_node;
     segment_t *individual;
@@ -4095,8 +4100,13 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     while (j > 0) {
         rate = j + 1;
         rate = rate * j;
-        t += msp_get_common_ancestor_waiting_time_from_rate(self,
+        ttemp = msp_get_common_ancestor_waiting_time_from_rate(self,
                 &self->populations[population_id], rate);
+        if( ttemp == 0. ) {
+            t = nextafter(t, INFINITY);
+        } else {
+            t+= ttemp;
+        }
         if (t >= T2) {
             break;
         }
