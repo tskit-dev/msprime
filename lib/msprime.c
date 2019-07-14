@@ -2403,6 +2403,17 @@ msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, d
                 ret = log(z) / alpha;
             }
         }
+        if (u == 0) {
+            /* In the exceedingly rare cases where gsl_ran_exponential returns
+             * 0, we return the smallest representable value > the current time
+             * to avoid returning a tree sequence with zero length branches.
+             * Note that we can still return 0 from this function if population
+             * sizes are extremely small. This is intentional, as it is almost
+             * certainly an error to have simulations at such extreme values
+             * and the user should be alerted to this. */
+            ret = nextafter(t, DBL_MAX) - t;
+            assert(ret != 0);
+        }
     }
     return ret;
 }
@@ -2518,11 +2529,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
-        if (t_wait == 0.) {
-            t_temp = nextafter(self->time, INFINITY);
-        } else {
-            t_temp = self->time + t_wait;
-        }
+        t_temp = self->time + t_wait;
+
         sampling_event_time = DBL_MAX;
         if (self->next_sampling_event < self->num_sampling_events) {
             sampling_event_time = self->sampling_events[
@@ -4053,7 +4061,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     avl_tree_t *sets = NULL;
     node_id_t u, parent;
     uint32_t j, k, n, num_roots;
-    double rate, t, ttemp;
+    double rate, t;
     avl_tree_t *pop;
     avl_node_t *node, *set_node;
     segment_t *individual;
@@ -4100,13 +4108,8 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     while (j > 0) {
         rate = j + 1;
         rate = rate * j;
-        ttemp = msp_get_common_ancestor_waiting_time_from_rate(self,
+        t += msp_get_common_ancestor_waiting_time_from_rate(self,
                 &self->populations[population_id], rate);
-        if( ttemp == 0. ) {
-            t = nextafter(t, INFINITY);
-        } else {
-            t+= ttemp;
-        }
         if (t >= T2) {
             break;
         }
