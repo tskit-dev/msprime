@@ -20,6 +20,7 @@
 #include <string.h>
 #include <assert.h>
 #include <float.h>
+#include <math.h>
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
@@ -2402,6 +2403,17 @@ msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, d
                 ret = log(z) / alpha;
             }
         }
+        if (u == 0) {
+            /* In the exceedingly rare cases where gsl_ran_exponential returns
+             * 0, we return the smallest representable value > the current time
+             * to avoid returning a tree sequence with zero length branches.
+             * Note that we can still return 0 from this function if population
+             * sizes are extremely small. This is intentional, as it is almost
+             * certainly an error to have simulations at such extreme values
+             * and the user should be alerted to this. */
+            ret = nextafter(t, DBL_MAX) - t;
+            assert(ret != 0);
+        }
     }
     return ret;
 }
@@ -2518,6 +2530,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
         t_temp = self->time + t_wait;
+
         sampling_event_time = DBL_MAX;
         if (self->next_sampling_event < self->num_sampling_events) {
             sampling_event_time = self->sampling_events[
