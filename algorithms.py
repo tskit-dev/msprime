@@ -164,6 +164,32 @@ class Population(object):
                     u = u.next
                 print("\t\t" + s)
 
+    def get_cleft(self, tracklength):
+        cleft = 0
+        for ancestors in self._ancestors:
+            for u in ancestors:
+                left = u.left
+                while u.next is not None:
+                    u = u.next
+                right = u.right
+                dist = right - left
+                cleft += 1 - ((tracklength-1) / tracklength) ** (dist - 1)
+        return cleft
+
+    def find_cleft(self, rvalue, tracklength):
+        for ancestors in self._ancestors:
+            for u in ancestors:
+                left = u.left
+                index = u.index
+                while u.next is not None:
+                    u = u.next
+                right = u.right
+                dist = right - left
+                rvalue -= 1 - ((tracklength-1)/tracklength) ** (dist - 1)
+                if rvalue <= 0:
+                    break
+            return rvalue, index, dist
+
     def set_growth_rate(self, growth_rate, time):
         # TODO This doesn't work because we need to know what the time
         # is so we can set the start size accordingly. Need to look at
@@ -307,7 +333,8 @@ class Simulator(object):
             population_growth_rate_changes, population_size_changes,
             migration_matrix_element_changes, bottlenecks, model='hudson',
             from_ts=None, max_segments=100, num_labels=1, sweep_trajectory=None,
-            full_arg=False, time_slice=None):
+            full_arg=False, time_slice=None, gene_conversion_rate=0.0,
+            gene_conversion_length=1):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -322,6 +349,13 @@ class Simulator(object):
         self.n = sample_size
         self.m = num_loci
         self.r = recombination_rate
+        self.g = gene_conversion_rate
+        self.tracklength = gene_conversion_length
+        self.pc = (self.tracklength-1)/self.tracklength
+        if self.tracklength == 1:
+            self.lnpc = -math.inf
+        else:
+            self.lnpc = math.log(1.0-1.0/self.tracklength)
         self.migration_matrix = migration_matrix
         self.num_labels = num_labels
         self.num_populations = N
@@ -367,6 +401,7 @@ class Simulator(object):
 
         self.num_ca_events = 0
         self.num_re_events = 0
+        self.num_gc_events = 0
 
         # Sweep variables
         self.sweep_site = (self.m // 2) - 1  # need to add options here
@@ -457,6 +492,18 @@ class Simulator(object):
         print("Changing migration rate", pop_i, pop_j, rate)
         self.migration_matrix[pop_i][pop_j] = rate
 
+    def get_cleft_total(self, tracklength):
+        cleft = 0
+        for pop in self.P:
+            cleft += pop.get_cleft(tracklength)
+        return cleft
+
+    def find_cleft_individual(self, rvalue, tracklength):
+        for pop in self.P:
+            if rvalue > 0:
+                rvalue, index, distance = pop.find_cleft(rvalue, tracklength)
+        return index, distance
+
     def alloc_segment(self, left, right, node, pop_index, prev=None, next=None):
         """
         Pops a new segment off the stack and sets its properties.
@@ -544,6 +591,18 @@ class Simulator(object):
             t_re = infinity
             if rate != 0:
                 t_re = random.expovariate(rate)
+            # Gene conversion can occur within segments ..
+            rate = self.g * self.L[0].get_total()
+            t_gcin = infinity
+            if rate != 0:
+                t_gcin = random.expovariate(rate)
+            # .. or left of the first segment
+            cleft = self.get_cleft_total(self.tracklength)
+            assert cleft <= sum(pop.get_num_ancestors() for pop in self.P)
+            rate = self.g * self.tracklength * cleft
+            t_gcleft = infinity
+            if rate != 0:
+                t_gcleft = random.expovariate(rate)
             # Common ancestor events occur within demes.
             t_ca = infinity
             for index, pop in enumerate(self.P):
@@ -563,7 +622,7 @@ class Simulator(object):
                             t_mig = t
                             mig_source = j
                             mig_dest = k
-            min_time = min(t_re, t_ca, t_mig)
+            min_time = min(t_re, t_ca, t_gcin, t_gcleft, t_mig)
             assert min_time != infinity
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
@@ -574,6 +633,12 @@ class Simulator(object):
                 if min_time == t_re:
                     # print("RE EVENT")
                     self.hudson_recombination_event(0)
+                elif min_time == t_gcin:
+                    # print("GCI EVENT")
+                    self.wiuf_geneconversion_within_event(0)
+                elif min_time == t_gcleft:
+                    # print("GCL EVENT")
+                    self.wiuf_geneconversion_left_event(0)
                 elif min_time == t_ca:
                     # print("CA EVENT")
                     self.common_ancestor_event(ca_population, 0)
@@ -816,6 +881,148 @@ class Simulator(object):
             self.store_arg_edges(lhs_tail)
             self.store_node(z.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(z)
+        ret = None
+        if return_heads:
+            x = lhs_tail
+            # Seek back to the head of the x chain
+            while x.prev is not None:
+                x = x.prev
+            ret = x, z
+        return ret
+
+    def cut_right_break(self, lhs_tail, y, new_segment, track_end, label):
+        assert lhs_tail is not None
+        lhs_tail.next = new_segment
+        self.L[label].set_value(new_segment.index, new_segment.right - lhs_tail.right)
+        if y.next is not None:
+            y.next.prev = new_segment
+        y.next = None
+        y.right = track_end
+        self.L[label].increment(y.index, track_end - new_segment.right)
+
+    def wiuf_geneconversion_within_event(self, label, return_heads=False):
+        """
+        Implements a gene conversion event that starts within a segment
+        """
+        h = random.randint(1, self.L[label].get_total())
+        # generate tracklength
+        tl = np.random.geometric(1/self.tracklength)
+        # Get the segment containing the h'th link
+        y = self.segments[self.L[label].find(h)]
+        k = y.right - self.L[label].get_cumulative_frequency(y.index) + h - 1
+        # check if the gene conversion falls between segments --> no effect
+        if y.left >= k+tl:
+            # print("noneffective GCI EVENT")
+            return None
+        self.num_gc_events += 1
+        x = y.prev
+        # both breaks are within the same segment
+        if k+tl < y.right:
+            if k <= y.left:
+                y.prev = None
+                z2 = self.alloc_segment(
+                    k+tl, y.right, y.node, y.population, x, y.next)
+                lhs_tail = x
+                self.cut_right_break(lhs_tail, y, z2, k + tl, label)
+                z = y
+            elif k > y.left:
+                z = self.alloc_segment(
+                    k, k+tl, y.node, y.population, None, None)
+                z2 = self.alloc_segment(
+                    k+tl, y.right, y.node, y.population, y, y.next)
+                if y.next is not None:
+                    y.next.prev = z2
+                y.next = z2
+                y.right = k
+                self.L[label].set_value(z2.index, z2.right - y.right)
+                self.L[label].increment(y.index, k - z2.right)
+                lhs_tail = y
+        # breaks are in separate segments
+        else:
+            # Get the segment y2 containing the end of the conversion tract
+            y2 = y
+            while y2 is not None and k+tl >= y2.right:
+                y2 = y2.next
+            # process left break
+            if k <= y.left:
+                if x is not None:
+                    x.next = None
+                y.prev = None
+                z = y
+                lhs_tail = x
+            elif k > y.left:
+                z = self.alloc_segment(
+                    k, y.right, y.node, y.population, None, y.next)
+                self.L[label].set_value(z.index, z.right - z.left)
+                if y.next is not None:
+                    y.next.prev = z
+                y.next = None
+                y.right = k
+                self.L[label].increment(y.index, k - z.right)
+                lhs_tail = y
+            # process right break
+            if y2 is not None:
+                if y2.left < k + tl:
+                    z2 = self.alloc_segment(
+                        k + tl, y2.right, y2.node, y2.population, lhs_tail, y2.next)
+                    self.cut_right_break(lhs_tail, y2, z2, k + tl, label)
+                    if z2.prev is None:
+                        z = z2
+                elif y2.left >= k + tl:
+                    lhs_tail.next = y2
+                    y2.prev.next = None
+                    y2.prev = lhs_tail
+                    self.L[label].set_value(y2.index, y2.right - lhs_tail.right)
+        # update population
+        z.label = label
+        self.L[label].set_value(z.index, z.right - z.left - 1)
+        self.P[z.population].add(z, label)
+        # TODO check what needs to be added for full arg
+        ret = None
+        if return_heads:
+            x = lhs_tail
+            # Seek back to the head of the x chain
+            while x.prev is not None:
+                x = x.prev
+            ret = x, z
+        return ret
+
+    def wiuf_geneconversion_left_event(self, label, return_heads=False):
+        """
+        Implements a gene conversion event that started left of a first segment.
+        """
+        self.num_gc_events += 1
+        h = random.uniform(0, self.get_cleft_total(self.tracklength))
+        # Get segment where gene conversion starts from left and length of the individual
+        index, distance = self.find_cleft_individual(h, self.tracklength)
+        y = self.segments[index]
+        # generate tracklength
+        k = y.left + math.floor(1.0 +
+                                math.log(1.0 - random.random() *
+                                         (1.0 - (self.pc) ** (distance - 1)))/self.lnpc)
+        while y.right <= k:
+            y = y.next
+        x = y.prev
+        if y.left < k:
+            # Make new segment
+            z = self.alloc_segment(
+                k, y.right, y.node, y.population, None, y.next)
+            if y.next is not None:
+                y.next.prev = z
+            y.next = None
+            y.right = k
+            self.L[label].increment(y.index, k - z.right)
+            lhs_tail = y
+        else:
+            # split the link between x and y.
+            x.next = None
+            y.prev = None
+            z = y
+            lhs_tail = x
+        z.label = label
+        self.L[label].set_value(z.index, z.right - z.left - 1)
+        self.P[z.population].add(z, label)
+        # TODO check what needs to be added for full arg
         ret = None
         if return_heads:
             x = lhs_tail
@@ -1216,7 +1423,7 @@ class Simulator(object):
                     right = u.left
                     while u is not None:
                         assert u.population == pop_index
-                        assert u.left <= u.right
+                        assert u.left < u.right
                         if u.prev is not None:
                             s = u.right - u.prev.right
                             assert u.prev.label == u.label
@@ -1279,6 +1486,11 @@ def run_simulate(args):
     n = args.sample_size
     m = args.num_loci
     rho = args.recombination_rate
+    if rho == 0:
+        gamma = args.gene_conversion_rate[0]
+    else:
+        gamma = args.gene_conversion_rate[0] * rho
+    mean_tracklength = args.gene_conversion_rate[1]
     num_populations = args.num_populations
     migration_matrix = [
         [args.migration_rate * int(j != k) for j in range(num_populations)]
@@ -1306,6 +1518,7 @@ def run_simulate(args):
         sweep_trajectory = traj_sim.run()
         num_labels = 2
     random.seed(args.random_seed)
+    np.random.seed(args.random_seed+1)
     s = Simulator(
         n, m, rho, migration_matrix,
         sample_configuration, population_growth_rates,
@@ -1314,7 +1527,8 @@ def run_simulate(args):
         args.migration_matrix_element_change,
         args.bottleneck, args.model, from_ts=args.from_ts,
         max_segments=10000, num_labels=num_labels, full_arg=args.full_arg,
-        sweep_trajectory=sweep_trajectory, time_slice=args.time_slice)
+        sweep_trajectory=sweep_trajectory, time_slice=args.time_slice,
+        gene_conversion_rate=gamma, gene_conversion_length=mean_tracklength)
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -1334,6 +1548,8 @@ def add_simulator_arguments(parser):
         "--num-replicates", "-R", type=int, default=1000)
     parser.add_argument(
         "--recombination-rate", "-r", type=float, default=0.01)
+    parser.add_argument(
+        "--gene-conversion-rate", "-c", type=float, nargs=2, default=[0, 3])
     parser.add_argument(
         "--num-populations", "-p", type=int, default=1)
     parser.add_argument(
