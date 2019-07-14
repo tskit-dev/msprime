@@ -242,20 +242,18 @@ msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
 {
     int ret = 0;
 
-    if (rate < 0 || track_length < 1.0) {
+    if (rate < 0 || track_length < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
     self->gene_conversion_rate = rate;
     self->gene_conversion_track_length = track_length;
-    self->gene_conversion_prob_to_continue_track = (track_length-1.0)/track_length;
     if (track_length > 1.0){
         self->gene_conversion_log_prob_to_continue_track = log(1.0-1.0/track_length);
     }
     else{
         self->gene_conversion_log_prob_to_continue_track = 0;
     }
-
 out:
     return ret;
 }
@@ -3184,8 +3182,6 @@ msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, d
     }
     return ret;
 }
-
-
 
 static int MSP_WARN_UNUSED
 msp_sanity_check(msp_t *self, int64_t num_links)
