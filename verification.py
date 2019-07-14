@@ -274,10 +274,25 @@ class SimulationVerifier(object):
             self._run_mutation_stats(key, command_line)
         self._instances[key] = f
 
-    def _run_mutation_discoal_stats(self, key, args):
+    def _discoal_str_to_ms(self, args):
         # convert discoal string to msprime string
         tokens = args.split(" ")
-        msp_str = " ".join(tokens[0:2]+tokens[3:])
+        # cut out sites param
+        del(tokens[2])
+        # adjust popIDs
+        for i in range(len(tokens)):
+            # pop size change case
+            if tokens[i] == "-en":
+                tokens[i+2] = str(int(tokens[i + 2]) + 1)
+            # migration rate case
+            if tokens[i] == "-m":
+                tokens[i+1] = str(int(tokens[i + 1]) + 1)
+                tokens[i+2] = str(int(tokens[i + 2]) + 1)
+        msp_str = " ".join(tokens)
+        return(msp_str)
+
+    def _run_mutation_discoal_stats(self, key, args):
+        msp_str = self._discoal_str_to_ms(args)
         df_msp = self._run_msprime_mutation_stats(msp_str)
         df_d = self._run_discoal_mutation_stats(args)
         self._plot_stats(key, "mutation", df_d, df_msp)
@@ -1981,11 +1996,6 @@ def run_tests(args):
     # random.seed(2)
     verifier = SimulationVerifier("tmp__NOBACKUP__")
 
-    # Simple discoal tests
-    verifier.add_discoal_instance(
-        "discoal-simple-ex",
-        "15 1000 100 -t 5.0")
-
     # Try various options independently
     verifier.add_ms_instance(
         "size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
@@ -2114,6 +2124,23 @@ def run_tests(args):
         "-ej 0.189256 1 2 -ej 0.483492 2 3")
     verifier.add_ms_instance(
         "konrad-3", "100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 ")
+
+    # Simple discoal tests
+    verifier.add_discoal_instance(
+        "discoal-simple-ex",
+        "15 1000 100 -t 5.0")
+    verifier.add_discoal_instance(
+        "discoal-size-change1",
+        "15 1000 100 -t 10.0 -en 0.1 0 2.0")
+    verifier.add_discoal_instance(
+        "discoal-size-change2",
+        "15 1000 100 -t 10.0 -en 0.1 0 0.1")
+    verifier.add_discoal_instance(
+        "discoal-size-change3",
+        "50 1000 100 -t 10.0 -en 0.01 0 0.01")
+    verifier.add_discoal_instance(
+        "discoal-size-change4",
+        "50 1000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0")
 
     # Add some random instances.
     verifier.add_random_instance("random1")
