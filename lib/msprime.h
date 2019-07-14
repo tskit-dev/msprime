@@ -219,6 +219,8 @@ typedef struct _msp_t {
     uint32_t num_loci;
     double recombination_rate;
     recomb_map_t *recomb_map;
+    double gene_conversion_rate;
+    double gene_conversion_track_length;
     uint32_t num_populations;
     uint32_t num_labels;
     sample_t *samples;
@@ -357,6 +359,7 @@ int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
+int msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);

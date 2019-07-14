@@ -619,6 +619,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
     int err;
     int int_tmp;
     uint32_t num_loci;
+    double gene_conversion_rate, gene_conversion_track_length;
     size_t num_samples;
     const char *from_ts_path;
     sample_t *samples = NULL;
@@ -651,6 +652,20 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
     read_recomb_map(num_loci, recomb_map, config);
 
     ret = msp_alloc(msp, num_samples, samples, recomb_map, tables, rng);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    if (config_lookup_float(config, "gene_conversion_rate", &gene_conversion_rate)
+            == CONFIG_FALSE) {
+        fatal_error("gene_conversion_rate is a required parameter");
+    }
+    if (config_lookup_float(config, "gene_conversion_track_length",
+                &gene_conversion_track_length)
+            == CONFIG_FALSE) {
+        fatal_error("gene_conversion_track_length is a required parameter");
+    }
+    ret = msp_set_gene_conversion_rate(msp, gene_conversion_rate,
+            gene_conversion_track_length);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

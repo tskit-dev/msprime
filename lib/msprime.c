@@ -232,6 +232,21 @@ out:
 }
 
 int
+msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
+{
+    int ret = 0;
+
+    if (rate < 0 || track_length < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->gene_conversion_rate = rate;
+    self->gene_conversion_track_length = track_length;
+out:
+    return ret;
+}
+
+int
 msp_set_num_populations(msp_t *self, size_t num_populations)
 {
     return msp_set_dimensions(self, num_populations, 1);
@@ -831,6 +846,9 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "m = %d\n", self->num_loci);
+    fprintf(out, "recombination_rate           = %f\n", self->recombination_rate);
+    fprintf(out, "gene_conversion_rate         = %f\n", self->gene_conversion_rate);
+    fprintf(out, "gene_conversion_track_length = %f\n", self->gene_conversion_track_length);
     fprintf(out, "from_ts    = %p\n", (void *) self->from_ts);
     fprintf(out, "start_time = %f\n", self->start_time);
     fprintf(out, "Samples    = \n");
@@ -1848,6 +1866,26 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         *rhs = z;
     }
 out:
+    return ret;
+}
+
+
+static int MSP_WARN_UNUSED
+msp_gene_conversion_within_event(msp_t *self, label_id_t label)
+{
+    int ret = 0;
+
+    printf("GC_WITHIN: %p %d \n", (void *) self, label);
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_gene_conversion_left_event(msp_t *self, label_id_t label)
+{
+    int ret = 0;
+
+    printf("GC_LEFT: %p %d\n", (void *) self, label);
+
     return ret;
 }
 
@@ -2882,6 +2920,42 @@ msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, d
     return ret;
 }
 
+/* This is an inefficient function used until we figure out how to use a
+ * Fenwick tree to implement it without iterating over the full population */
+/* TODO: what does 'cleft' mean? I'm not finding it very enlightening. We should
+ * change this to something more meaningful here and in algorithms.py */
+static double
+msp_get_cleft_total(msp_t *self)
+{
+    double ret = 0;
+    avl_node_t *node;
+    avl_tree_t *population_ancestors;
+    label_id_t label;
+    size_t j;
+    segment_t *u;
+    double dist, left, right;
+    const double track_length = self->gene_conversion_track_length;
+    const double x = (track_length - 1) / track_length;
+
+    for (j = 0; j < self->num_populations; j++) {
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            population_ancestors = &self->populations[j].ancestors[label];
+            for (node = population_ancestors->head; node != NULL; node = node->next) {
+                u = (segment_t *) node->item;
+                left = u->left;
+                while (u->next != NULL) {
+                    u = u->next;
+                }
+                right = u -> right;
+                dist = right - left;
+                ret += 1 - pow(x, dist - 1);
+            }
+        }
+    }
+    /* printf("CLEFT_TOTAL = %f\n", ret); */
+    return ret;
+}
+
 static int MSP_WARN_UNUSED
 msp_sanity_check(msp_t *self, int64_t num_links)
 {
@@ -2926,7 +3000,8 @@ static int MSP_WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, mig_t_wait,
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait,
+           gc_in_t_wait, gc_left_t_wait, mig_t_wait,
            sampling_event_time, demographic_event_time;
     int64_t num_links;
     uint32_t j, k, n;
@@ -2936,12 +3011,16 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
     /* Only support a single label for now. */
     label_id_t label = 0;
 
+    gc_in_t_wait = DBL_MAX;
+    gc_left_t_wait = DBL_MAX;
+
     while (msp_get_num_ancestors(self) > 0) {
         if (events == max_events) {
             ret = MSP_EXIT_MAX_EVENTS;
             break;
         }
         events++;
+
         num_links = fenwick_get_total(&self->links[label]);
         ret = msp_sanity_check(self, num_links);
         if (ret != 0) {
@@ -2953,6 +3032,26 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         if (lambda != 0.0) {
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
         }
+
+        /* For now, don't compute the GC rates if 0 to avoid slowing down other
+         * simulations */
+        if (self->gene_conversion_rate > 0) {
+            /* Gene conversion within segments */
+            lambda = (double) num_links * self->gene_conversion_rate;
+            gc_in_t_wait = DBL_MAX;
+            if (lambda != 0.0) {
+                gc_in_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+            }
+
+            /* Gene conversion to the left of initial segments */
+            gc_left_t_wait = DBL_MAX;
+            lambda = msp_get_cleft_total(self) * self->gene_conversion_rate
+                * self->gene_conversion_track_length;
+            if (lambda != 0.0) {
+                gc_left_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+            }
+        }
+
         /* Common ancestors */
         ca_t_wait = DBL_MAX;
         ca_pop_id = 0;
@@ -2963,6 +3062,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 ca_pop_id = (population_id_t) j;
             }
         }
+
         /* Migration */
         mig_t_wait = DBL_MAX;
         mig_source_pop = 0;
@@ -2986,7 +3086,10 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 }
             }
         }
-        t_wait = GSL_MIN(GSL_MIN(re_t_wait, ca_t_wait), mig_t_wait);
+        t_wait = GSL_MIN(mig_t_wait,
+            GSL_MIN(gc_in_t_wait,
+                GSL_MIN(gc_left_t_wait,
+                    GSL_MIN(re_t_wait, ca_t_wait))));
         if (self->next_demographic_event == NULL
                 && self->next_sampling_event == self->num_sampling_events
                 && t_wait == DBL_MAX) {
@@ -3042,6 +3145,10 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             self->time = t_temp;
             if (re_t_wait == t_wait) {
                 ret = msp_recombination_event(self, label, NULL, NULL);
+            } else if (gc_in_t_wait == t_wait) {
+                ret = msp_gene_conversion_within_event(self, label);
+            } else if (gc_left_t_wait == t_wait) {
+                ret = msp_gene_conversion_left_event(self, label);
             } else if (ca_t_wait == t_wait) {
                 ret = self->common_ancestor_event(self, ca_pop_id, label);
                 if (ret == 1) {
