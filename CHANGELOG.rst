@@ -1,4 +1,14 @@
 ********************
+[0.8.0] - 2019-XX-XX
+********************
+
+**Breaking changes**
+
+- The random trajectory has been changed slightly to improve handling
+  of ancient sampling events (:pr:`782`). Thus, simulations for a given
+  random seed will not be identical to previous versions.
+
+********************
 [0.7.1] - 2019-06-08
 ********************
 
