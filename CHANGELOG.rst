@@ -1,12 +1,28 @@
 ********************
-[0.8.0] - 2019-XX-XX
+[0.7.2] - 2019-07-30
 ********************
 
 **Breaking changes**
 
 - The random trajectory has been changed slightly to improve handling
   of ancient sampling events (:pr:`782`). Thus, simulations for a given
-  random seed will not be identical to previous versions.
+  random seed will not be identical to previous versions, if ancient
+  samples are used.
+
+**New features**
+
+- Automated Docker builds (:user:`agladstein`; :pr:`661`)
+- Add mean coalescence time to DemographyDebugger (:user:`petrelharp`; :pr:`779`).
+- Improve MassMigration descriptions in DemographyDebugger
+  (:user:`marianne-aspbury`; :pr:`791`).
+
+**Bug fixes**:
+
+- In very, very, very rare cases it was possible to generate a
+  zero waiting time until the next coalescent event, leading to
+  zero branch lengths in the output tree sequence and an error
+  being raised (:user:`molpopgen`, :user:`DL42`, :user:`jeromekelleher`;
+  :issue:`783`, :pr:`785`).
 
 ********************
 [0.7.1] - 2019-06-08
