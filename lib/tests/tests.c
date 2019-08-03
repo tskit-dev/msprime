@@ -1653,9 +1653,8 @@ test_multi_locus_simulation(void)
                     ret = msp_set_simulation_model_smc_prime(msp, 0.25);
                     break;
             }
-            /* Trying to run the full arg for anything except hudson is an error */
-            ret = msp_set_store_full_arg(msp, j == 0 && store_full_arg[k]);
-            CU_ASSERT_EQUAL(ret, 0);
+            ret = msp_set_store_full_arg(msp, store_full_arg[k]);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = msp_initialise(msp);
             CU_ASSERT_EQUAL(ret, 0);
 

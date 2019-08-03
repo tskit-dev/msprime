@@ -3187,10 +3187,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
-    if (self->store_full_arg && self->model.type != MSP_MODEL_HUDSON) {
+    if (self->store_full_arg && ! (
+            self->model.type == MSP_MODEL_HUDSON
+            || self->model.type == MSP_MODEL_SMC
+            || self->model.type == MSP_MODEL_SMC_PRIME)) {
         /* We currently only support the full ARG recording on the standard
-         * coalescent. The SMC models are also tricky because they required
-         * 'cancelling' of events. */
+         * coalescent. */
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
