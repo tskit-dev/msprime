@@ -1,4 +1,14 @@
 ********************
+[0.7.3] - 2019-08-03
+********************
+
+**Bug fixes**:
+
+- Support for SMC models coupled with the record_full_arg feature was
+  erroneously removed in a previous version (:issue:`795`). The feature
+  has been resinstated (:pr:`796`).
+
+********************
 [0.7.2] - 2019-07-30
 ********************
 
