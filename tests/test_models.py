@@ -282,12 +282,6 @@ class TestUnsupportedFullArg(unittest.TestCase):
     """
     Full ARG recording isn't supported on anything except standard coalescent.
     """
-    def test_smc(self):
-        for model in ["smc", "smc_prime"]:
-            self.assertRaises(
-                _msprime.LibraryError, msprime.simulate, 10, model=model,
-                record_full_arg=True)
-
     def test_dtwf(self):
         for model in [msprime.DiscreteTimeWrightFisher(10)]:
             self.assertRaises(

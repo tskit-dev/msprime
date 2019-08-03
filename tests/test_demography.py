@@ -1798,6 +1798,22 @@ class TestFullArgMigration(unittest.TestCase):
             record_migrations=True, record_full_arg=True)
         self.verify_two_pops_full_arg(ts)
 
+    def test_full_arg_migration_smc(self):
+        for model in ["smc", "smc_prime"]:
+
+            population_configurations = [
+                msprime.PopulationConfiguration(10),
+                msprime.PopulationConfiguration(10),
+            ]
+            ts = msprime.simulate(
+                population_configurations=population_configurations,
+                migration_matrix=[
+                    [0, 1],
+                    [1, 0]],
+                random_seed=101, recombination_rate=0.1,
+                model=model, record_migrations=True, record_full_arg=True)
+            self.verify_two_pops_full_arg(ts)
+
 
 class TimeUnitsMixin(object):
     """
