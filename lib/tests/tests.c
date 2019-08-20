@@ -957,6 +957,60 @@ test_demographic_events(void)
 }
 
 static void
+test_census_event(void)
+{
+    int ret;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+    int no_census_nodes = 0;
+    int i;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    /* Add a census event in at 0.5 generations. */
+    ret = msp_add_census_event(msp, 0.5);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+    msp_print_state(msp, _devnull);
+
+    /* Check there is more than 1 node at the census time. */
+    for (i = 0; i < tables.nodes.num_rows; i++) {
+        if (tables.nodes.time[i] == 0.5) {
+            no_census_nodes++;
+        }
+    }
+    CU_ASSERT_TRUE(no_census_nodes > 1);
+
+    /* Free things. */
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_dtwf_events_between_generations(void)
 {
     int ret, i, j;
@@ -3394,6 +3448,7 @@ main(int argc, char **argv)
         {"test_simulator_getters_setters", test_simulator_getters_setters},
         {"test_demographic_events", test_demographic_events},
         {"test_demographic_events_start_time", test_demographic_events_start_time},
+        {"test_census_event", test_census_event},
         {"test_dtwf_unsupported_bottleneck", test_dtwf_unsupported_bottleneck},
         {"test_time_travel_error", test_time_travel_error},
         {"test_single_locus_simulation", test_single_locus_simulation},

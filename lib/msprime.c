@@ -2533,7 +2533,6 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         if (self->next_demographic_event != NULL) {
             demographic_event_time = self->next_demographic_event->time;
         }
-
         /* The simulation state is can only changed from this point on. If
          * any of the events would cause the time to be >= max_time, we exit
          */
@@ -3632,6 +3631,11 @@ msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
     int ret = MSP_ERR_GENERIC;
     demographic_event_t *ret_event = NULL;
 
+    if (time < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
     if (self->demographic_events_tail != NULL) {
         if (time < self->demographic_events_tail->time) {
             ret = MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS;
@@ -4221,6 +4225,80 @@ msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
     de->change_state = msp_instantaneous_bottleneck;
     de->print_state = msp_print_instantaneous_bottleneck;
     ret = 0;
+out:
+    return ret;
+}
+
+/* Add a census event at a specified time (given in generations). */
+static int
+msp_census_event(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    double time = self->model.model_time_to_generations(&self->model, event->time);
+    avl_tree_t *ancestors;
+    avl_node_t *node;
+    segment_t *seg;
+    int i, j;
+    node_id_t u;
+
+    for (i = 0; i < (int) self->num_populations; i++) {
+        for (j = 0; j < (int) self->num_labels; j++) {
+
+            // Get segment from an ancestor in a population.
+            ancestors = &self->populations[i].ancestors[j];
+            node = ancestors->head;
+
+            while (node != NULL){
+                seg = node->item;
+
+                while (seg != NULL) {
+                    // Add an edge to the edge table.
+                    ret = msp_flush_edges(self);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                    ret = tsk_node_table_add_row(&self->tables->nodes,
+                            MSP_NODE_IS_CEN_EVENT, time, (population_id_t) i, TSK_NULL,
+                            NULL, 0);
+                    u = ret;
+                    // Add an edge joining the segment to the new node.
+                    ret = msp_store_edge(self, seg->left, seg->right, ret, seg->value);
+                    // Modify segment node id.
+                    seg->value = u;
+                    ret = 0;
+                    seg = seg->next;
+                }
+                node = node->next;
+            }
+        }
+    }
+
+out:
+    return ret;
+}
+
+static void
+msp_print_census_event(msp_t * MSP_UNUSED(self), demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tcensus_event:\n",
+            event->time);
+}
+
+int MSP_WARN_UNUSED
+msp_add_census_event(msp_t *self, double time)
+{
+    int ret = 0;
+    demographic_event_t *de;
+
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+
+    de->change_state = msp_census_event;
+    de->print_state = msp_print_census_event;
+    ret = 0;
+
 out:
     return ret;
 }
