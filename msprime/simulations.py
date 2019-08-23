@@ -1201,6 +1201,21 @@ class InstantaneousBottleneck(DemographicEvent):
                 self.population, self.strength))
 
 
+class CensusEvent(DemographicEvent):
+
+    def __init__(self, time):
+        super().__init__("census_event", time)
+
+    def get_ll_representation(self, num_populations):
+        return {
+            "type": self.type,
+            "time": self.time,
+        }
+
+    def __str__(self):
+        return "Census event"
+
+
 class SimulationModel(object):
     """
     Abstract superclass of all simulation models.

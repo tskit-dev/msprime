@@ -2514,3 +2514,49 @@ class TestPopulationMetadata(unittest.TestCase):
                 pop = ts.population(j)
                 self.assertEqual(
                     pop_configs[j].metadata, json.loads(pop.metadata.decode()))
+
+
+class TestCensusEvent(unittest.TestCase):
+    """
+    Tests of the census demographic event.
+    """
+    def verify(self, ts, census_time):
+        """
+        Verifies that a census event has been added correctly.
+        """
+        # It would be better to get the census nodes using node flags.
+        census_ids = np.where(ts.tables.nodes.time == census_time)[0]
+        self.assertGreater(len(census_ids), 1)
+        # Check that all samples have a census ancestor on each tree.
+        for tree in ts.trees():
+            leaves = []
+            census_nodes = [u for u in census_ids if u in list(tree.nodes())]
+            for node in census_nodes:
+                le = list(tree.leaves(node))
+                leaves += le
+            leaves.sort()
+            self.assertEqual(leaves, [i for i in range(0, ts.num_samples)])
+
+    def test_simple_case(self):
+        census_time = 0.5
+        ts = msprime.simulate(
+            sample_size=5, random_seed=1,
+            demographic_events=[msprime.CensusEvent(time=census_time)])
+        self.verify(ts, census_time)
+
+    def test_multiple_trees(self):
+        census_time = 0.5
+        ts = msprime.simulate(
+                sample_size=5, random_seed=1, recombination_rate=0.4,
+                demographic_events=[msprime.CensusEvent(time=census_time)])
+        self.verify(ts, census_time)
+
+    """
+    Other tests to add in later:
+
+     - Population IDs are recorded correctly.
+     - What happens if a migration time == a census time?
+     - An error is thrown if census time is equal to another node time.
+     ... and others?
+
+    """
