@@ -39,6 +39,7 @@ import _msprime
 from _msprime import NODE_IS_CA_EVENT  # NOQA
 from _msprime import NODE_IS_RE_EVENT  # NOQA
 from _msprime import NODE_IS_MIG_EVENT  # NOQA
+from _msprime import NODE_IS_CEN_EVENT  # NOQA
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
@@ -1202,7 +1203,16 @@ class InstantaneousBottleneck(DemographicEvent):
 
 
 class CensusEvent(DemographicEvent):
+    """
+    An event that adds a node to each branch of every tree at a given time
+    during the simulation. This may be used to record all ancestral haplotypes
+    present at that time, and to extract other information related to these
+    haplotypes: for instance to trace the local ancestry of a sample back to a
+    set of contemporaneous ancestors, or to assess whether a subset of samples
+    has coalesced more recently than the census time.
 
+    :param float time: The time at which this event occurs in generations.
+    """
     def __init__(self, time):
         super().__init__("census_event", time)
 

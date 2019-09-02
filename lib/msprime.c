@@ -4260,19 +4260,24 @@ msp_census_event(msp_t *self, demographic_event_t *event)
                     ret = tsk_node_table_add_row(&self->tables->nodes,
                             MSP_NODE_IS_CEN_EVENT, time, (population_id_t) i, TSK_NULL,
                             NULL, 0);
+                    if (ret < 0) {
+                        goto out;
+                    }
                     u = ret;
                     // Add an edge joining the segment to the new node.
                     ret = msp_store_edge(self, seg->left, seg->right, ret, seg->value);
+                    if (ret != 0) {
+                        goto out;
+                    }
                     // Modify segment node id.
                     seg->value = u;
-                    ret = 0;
                     seg = seg->next;
                 }
                 node = node->next;
             }
         }
     }
-
+    ret = 0;
 out:
     return ret;
 }

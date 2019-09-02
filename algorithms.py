@@ -1163,7 +1163,8 @@ class Simulator(object):
             for ancestor in pop.iter_ancestors():
                 seg = ancestor
                 self.flush_edges()
-                u = self.tables.nodes.add_row(time=time, flags=18, population=pop._id)
+                u = self.tables.nodes.add_row(
+                        time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop._id)
                 while seg is not None:
                     # Add an edge joining the segment to the new node.
                     self.store_edge(seg.left, seg.right, u, seg.node)

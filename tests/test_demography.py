@@ -2524,14 +2524,16 @@ class TestCensusEvent(unittest.TestCase):
         """
         Verifies that a census event has been added correctly.
         """
-        # It would be better to get the census nodes using node flags.
-        census_ids = np.where(ts.tables.nodes.time == census_time)[0]
+        census_ids = np.where(ts.tables.nodes.flags == msprime.NODE_IS_CEN_EVENT)[0]
+        for u in census_ids:
+            self.assertEqual(ts.tables.nodes.time[u], census_time)
         self.assertGreater(len(census_ids), 1)
         # Check that all samples have a census ancestor on each tree.
         for tree in ts.trees():
             leaves = []
             census_nodes = [u for u in census_ids if u in list(tree.nodes())]
             for node in census_nodes:
+                self.assertEqual(len(tree.children(node)), 1)
                 le = list(tree.leaves(node))
                 leaves += le
             leaves.sort()
