@@ -2553,12 +2553,67 @@ class TestCensusEvent(unittest.TestCase):
                 demographic_events=[msprime.CensusEvent(time=census_time)])
         self.verify(ts, census_time)
 
-    """
-    Other tests to add in later:
+    def test_population_IDs(self):
+        census_time = 100
+        pop = msprime.PopulationConfiguration(sample_size=8, initial_size=500)
+        mig_rate_change = msprime.MigrationRateChange(time=200, rate=0.05)
+        ts = msprime.simulate(
+            population_configurations=[pop, pop], length=1000,
+            demographic_events=[msprime.CensusEvent(time=census_time), mig_rate_change],
+            recombination_rate=1e-5, random_seed=142)
+        self.verify(ts, census_time)
+        # Since there is no migration between generations 0 - 200, the census nodes
+        # should have the same population label as their children in the trees.
+        census_ids = np.where(ts.tables.nodes.flags == msprime.NODE_IS_CEN_EVENT)[0]
+        nodes = ts.tables.nodes
+        for row in ts.tables.edges:
+            if row.parent in census_ids:
+                self.assertEqual(
+                    nodes.population[row.parent], nodes.population[row.child])
 
-     - Population IDs are recorded correctly.
-     - What happens if a migration time == a census time?
-     - An error is thrown if census time is equal to another node time.
-     ... and others?
+    def test_census_at_existing_node_time(self):
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.simulate(
+                sample_size=2, random_seed=3,
+                demographic_events=[msprime.CensusEvent(time=0)])
 
-    """
+    def test_migration_time_equals_census_time(self):
+        census_time = 100
+        pop = msprime.PopulationConfiguration(sample_size=8, initial_size=500)
+        mig_rate_change = msprime.MigrationRateChange(time=census_time, rate=0.05)
+        # If the census is before the migration in the list, census nodes should have
+        # the same population as their children.
+        ts = msprime.simulate(
+            population_configurations=[pop, pop], length=1000,
+            demographic_events=[msprime.CensusEvent(time=census_time), mig_rate_change],
+            recombination_rate=1e-5, random_seed=142)
+        self.verify(ts, census_time)
+        census_ids = np.where(ts.tables.nodes.flags == msprime.NODE_IS_CEN_EVENT)[0]
+        nodes = ts.tables.nodes
+        for row in ts.tables.edges:
+            if row.parent in census_ids:
+                self.assertEqual(
+                    nodes.population[row.parent], nodes.population[row.child])
+        # If the census is after the migration in the list, census nodes should have
+        # the same population as their parents.
+        divergence = msprime.MassMigration(
+            time=census_time, source=1, dest=0, proportion=1)
+        ts = msprime.simulate(
+            population_configurations=[pop, pop], length=1000,
+            demographic_events=[divergence, msprime.CensusEvent(time=census_time)],
+            recombination_rate=1e-5, random_seed=12)
+        self.verify(ts, census_time)
+        census_ids = np.where(ts.tables.nodes.flags == msprime.NODE_IS_CEN_EVENT)[0]
+        nodes = ts.tables.nodes
+        for row in ts.tables.edges:
+            if row.child in census_ids:
+                self.assertEqual(
+                    nodes.population[row.parent], nodes.population[row.child])
+
+    def test_no_census_nodes_above_root_nodes(self):
+        ts = msprime.simulate(sample_size=2, random_seed=525)
+        self.assertTrue(all(ts.tables.nodes.flags) != msprime.NODE_IS_CEN_EVENT)
+        tsc = msprime.simulate(
+            sample_size=2, random_seed=525,
+            demographic_events=[msprime.CensusEvent(time=2000)])
+        self.assertEqual(ts.tables.nodes, tsc.tables.nodes)
