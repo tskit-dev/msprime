@@ -127,6 +127,7 @@ and all rates are per-generation.
 .. autoclass:: msprime.MigrationRateChange
 .. autoclass:: msprime.MassMigration
 .. autoclass:: msprime.SimulationModelChange
+.. autoclass:: msprime.CensusEvent
 
 ++++++++++++++++++++++++++++
 Debugging demographic models
@@ -351,6 +352,10 @@ flags values are defined:
     The node is an ARG migration event identifying the individual that migrated.
     Can be used in combination with the ``record_migrations`` argument to
     :func:`.simulate`.
+
+.. data:: msprime.NODE_IS_CEN_EVENT
+
+    The node was created by a `msprime.CensusEvent`.
 
 
 ********************
