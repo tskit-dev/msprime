@@ -1,5 +1,5 @@
 numpy
 nose
-gsl
+gsl=2.4
 tskit
 scipy
