@@ -225,14 +225,14 @@ directory, run
 
       ERROR: Compiler x86_64-apple-darwin13.4.0-clang can not compile programs.
 
-   This is due to incompatibilities between meson and some versions of ``clang`` (specifically: ``clang_osx-64`` and ``clangxx_osx-64``), which is the default compiler on Mac OS X systems. If you have this problem, you have a few options.
-   One option is to install the ``gcc`` compiler from Xcode. You can then explicitly specify your meson build to use gcc instead of clang:
+   This is due to setup issues with some versions of ``clang`` (specifically: ``clang_osx-64`` and ``clangxx_osx-64``), which is the default compiler on Mac OS X systems. If you have this problem, you have a few options.
+   One option is to install Xcode. You can then explicitly specify your meson build to use the  ``clang`` compiler from Xcode via its alias, ``gcc``.
 
    .. code-block:: bash
 
       $ CC=gcc CXX=g++ meson build
 
-   If you wish, you can remove these problematic versions of clang from the conda environment completely. Take care, though - this will also remove any packages that depend on these versions of clang!
+   If you wish, you can remove the problematic default versions of clang from the conda environment completely. Take care, though - this will also remove any packages that depend on them!
 
    .. code-block:: bash
 
