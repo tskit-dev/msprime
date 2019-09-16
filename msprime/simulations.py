@@ -1210,6 +1210,7 @@ class CensusEvent(DemographicEvent):
     haplotypes: for instance to trace the local ancestry of a sample back to a
     set of contemporaneous ancestors, or to assess whether a subset of samples
     has coalesced more recently than the census time.
+    See the :ref:`tutorial<sec_tutorial_demography_census>` for an example.
 
     :param float time: The time at which this event occurs in generations.
     """

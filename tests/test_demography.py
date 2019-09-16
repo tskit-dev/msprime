@@ -340,7 +340,8 @@ class TestDemographyDebuggerOutput(unittest.TestCase):
             msprime.MigrationRateChange(0.2, rate=0),
             msprime.MigrationRateChange(0.4, matrix_index=(0, 1), rate=1),
             msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1),
-            msprime.InstantaneousBottleneck(0.5, population=0, strength=100)]
+            msprime.InstantaneousBottleneck(0.5, population=0, strength=100),
+            msprime.CensusEvent(0.55)]
         self.verify_debug(
             population_configurations, migration_matrix, demographic_events)
 

@@ -111,6 +111,8 @@ more details on the migration rates.
 
 .. autoclass:: msprime.PopulationConfiguration
 
+.. _sec_api_demographic_events:
+
 ******************
 Demographic Events
 ******************
@@ -127,6 +129,9 @@ and all rates are per-generation.
 .. autoclass:: msprime.MigrationRateChange
 .. autoclass:: msprime.MassMigration
 .. autoclass:: msprime.SimulationModelChange
+
+.. _sec_api_demographic_events_census:
+
 .. autoclass:: msprime.CensusEvent
 
 ++++++++++++++++++++++++++++
@@ -355,7 +360,7 @@ flags values are defined:
 
 .. data:: msprime.NODE_IS_CEN_EVENT
 
-    The node was created by a `msprime.CensusEvent`.
+    The node was created by a :class:`msprime.CensusEvent`.
 
 
 ********************

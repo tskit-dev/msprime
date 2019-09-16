@@ -618,13 +618,21 @@ Once you are satisfied that the demographic history that you have built
 is correct, it can then be simulated by calling the :func:`.simulate`
 function.
 
+.. _sec_tutorial_demography_census:
+
 -------------
 Census events
 -------------
 
-Census events allow you to add a node to each branch of the tree sequence at a given time during the simulation. This can be useful when you wish to study haplotypes that are ancestral to your simulated sample.
+Census events allow you to add a node to each branch of the tree sequence at a given time
+during the simulation. This can be useful when you wish to study haplotypes that are
+ancestral to your simulated sample, or when you wish to know which lineages were present in
+which populations at specified times.
 
-For instance, the following code specifies a simulation with two samples drawn from each of two populations. There are two demographic events: a migration rate change and a census event. At generation 100 and earlier, the two populations exchange migrants at a rate of 0.05. At generation 5000, a census is performed.
+For instance, the following code specifies a simulation with two samples drawn from each of
+two populations. There are two demographic events: a migration rate change and a census
+event. At generation 100 and earlier, the two populations exchange migrants at a rate of
+0.05. At generation 5000, a census is performed:
 
 .. code-block:: python
 
@@ -637,54 +645,18 @@ For instance, the following code specifies a simulation with two samples drawn f
                 recombination_rate=1e-7,
                 random_seed=141)
 
-The resulting tree sequence has nodes on each tree at the specified census time. These are the nodes with IDs 9, 10, 11, 12 and 13:
+The resulting tree sequence has nodes on each tree at the specified census time.
+These are the nodes with IDs 8, 9, 10, 11, 12 and 13:
 
 .. code-block:: python
 
-    >>> for tree in ts.trees():
-        print(tree.draw(format="unicode"))
+    >>> display(SVG(ts.draw_svg()))
 
-      14   
-     ┏━┻━┓ 
-     9  12 
-     ┃   ┃ 
-     5   ┃ 
-    ┏┻┓  ┃ 
-    ┃ ┃  4 
-    ┃ ┃ ┏┻┓
-    1 3 0 2
+.. image:: _static/ts_with_census_nodes.svg
+   :width: 800px
+   :alt: A tree sequence with census nodes.
 
-     14     
-    ┏━┻━┓   
-    10 13   
-    ┃   ┃   
-    ┃   6   
-    ┃  ┏┻━┓ 
-    ┃  ┃  4 
-    ┃  ┃ ┏┻┓
-    3  1 0 2
-
-      14   
-     ┏━┻━┓ 
-    13  11 
-     ┃   ┃ 
-     ┃   7 
-     ┃  ┏┻┓
-     6  ┃ ┃
-    ┏┻┓ ┃ ┃
-    1 0 2 3
-
-      15   
-     ┏━┻━┓ 
-     8  11 
-     ┃   ┃ 
-     ┃   7 
-     ┃  ┏┻┓
-     6  ┃ ┃
-    ┏┻┓ ┃ ┃
-    1 0 2 3
-
-This tells us that the genetic material ancestral to the present day sample was held within 5 haplotypes at time 5000. The node table shows us that three of these haplotypes (nodes 9, 10 and 11) were in population 0 at this time, and two of these haplotypes (nodes 12 and 13) were in population 1 at this time.
+This tells us that the genetic material ancestral to the present day sample was held within 5 haplotypes at time 5000. The node table shows us that four of these haplotypes (nodes 8, 9, 10 and 11) were in population 0 at this time, and two of these haplotypes (nodes 12 and 13) were in population 1 at this time.
 
 .. code-block:: python
 
@@ -707,12 +679,18 @@ This tells us that the genetic material ancestral to the present day sample was 
     14  0       1   -1  5246.90282987397495 
     15  0       0   -1  8206.73121309170347
 
-If we wish to study these ancestral haplotypes further, we can simplify the tree sequence with respect to the census nodes and perform subsequent analyses on this simplified tree sequence:
+If we wish to study these ancestral haplotypes further, we can simplify the tree sequence
+with respect to the census nodes and perform subsequent analyses on this simplified tree
+sequence.
+In this example, ``ts_anc`` is a tree sequence obtained from the original tree sequence
+``ts`` by labelling the census nodes as samples and removing all nodes and edges that are 
+not ancestral to these census nodes.
 
 .. code-block:: python
 
-    >>> nodes = [i.id for i in list(ts.nodes()) if i.flags==msprime.NODE_IS_CEN_EVENT]
+    >>> nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
     >>> ts_anc = ts.simplify(samples=nodes)
+
 
 ******************
 Recombination maps

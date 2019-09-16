@@ -4249,7 +4249,7 @@ msp_census_event(msp_t *self, demographic_event_t *event)
             node = ancestors->head;
 
             while (node != NULL){
-                seg = node->item;
+                seg = (segment_t *) node->item;
 
                 while (seg != NULL) {
                     // Add an edge to the edge table.
@@ -4263,9 +4263,9 @@ msp_census_event(msp_t *self, demographic_event_t *event)
                     if (ret < 0) {
                         goto out;
                     }
-                    u = ret;
+                    u = (tsk_id_t) ret;
                     // Add an edge joining the segment to the new node.
-                    ret = msp_store_edge(self, seg->left, seg->right, ret, seg->value);
+                    ret = msp_store_edge(self, seg->left, seg->right, u, seg->value);
                     if (ret != 0) {
                         goto out;
                     }

@@ -853,6 +853,12 @@ test_demographic_events(void)
             msp_add_simple_bottleneck(&msp, 10, -1, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
 
+        CU_ASSERT_EQUAL(
+        	msp_add_census_event(&msp, -0.5),
+        	MSP_ERR_BAD_PARAM_VALUE);
+
+        ret = msp_add_census_event(&msp, 0.05);
+        CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
@@ -966,7 +972,7 @@ test_census_event(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
-    int no_census_nodes = 0;
+    int num_census_nodes = 0;
     int i;
 
     CU_ASSERT_FATAL(msp != NULL);
@@ -995,10 +1001,10 @@ test_census_event(void)
     /* Check there is more than 1 node at the census time. */
     for (i = 0; i < tables.nodes.num_rows; i++) {
         if (tables.nodes.time[i] == 0.5) {
-            no_census_nodes++;
+            num_census_nodes++;
         }
     }
-    CU_ASSERT_TRUE(no_census_nodes > 1);
+    CU_ASSERT_TRUE(num_census_nodes > 1);
 
     /* Free things. */
     ret = msp_free(msp);
