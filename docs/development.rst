@@ -218,6 +218,26 @@ directory, run
     $ cd lib 
     $ meson build
 
+.. note::
+   Some Mac OS X users may run into errors like this one when running ``meson build``:
+
+   .. code-block:: bash
+
+      ERROR: Compiler x86_64-apple-darwin13.4.0-clang can not compile programs.
+
+   This is due to setup issues with some versions of ``clang`` (specifically: ``clang_osx-64`` and ``clangxx_osx-64``), which is the default compiler on Mac OS X systems. If you have this problem, you have a few options.
+   One option is to install Xcode. You can then explicitly specify your meson build to use the  ``clang`` compiler from Xcode via its alias, ``gcc``.
+
+   .. code-block:: bash
+
+      $ CC=gcc CXX=g++ meson build
+
+   If you wish, you can remove the problematic default versions of clang from the conda environment completely. Take care, though - this will also remove any packages that depend on them!
+
+   .. code-block:: bash
+
+      $ conda remove clang_osx-64  clangxx_osx-64
+
 To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
 compiled binaries are then in the ``build`` directory:
 
@@ -522,16 +542,19 @@ built upon pushes to master on Dockerhub.
 A Docker image can also be locally built with the following steps.
 
 Build image:
+
 .. code-block:: bash
 
     $ sudo docker build -t tskit/msprime .
 
 Enter Docker container:
+
 .. code-block:: bash
 
     $ sudo docker run -it tskit/msprime
 
 Alternatively, msprime can be executed via the Docker container:
+
 .. code-block:: bash
 
     $ sudo docker run -it tskit/msprime mspms 10 1 -T
@@ -541,16 +564,19 @@ If you are on a system and do not have root access, you can pull the Docker imag
 and run it as a Singularity container.
 
 To run as a Singularity container, pull the docker image:
+
 .. code-block:: bash
 
     $ singularity pull docker://tskit/msprime msprime.simg
 
 Enter Singularity container container:
+
 .. code-block:: bash
 
     $ singularity shell msprime.simg
 
 Or, msprime can be executed via the Singularity container:
+
 .. code-block:: bash
 
     $ singularity exec msprime.simg mspms 10 1 -T
