@@ -35,7 +35,7 @@ get_total_material(tsk_treeseq_t *ts) {
     tsk_node_table_t *nodes = &ts->tables->nodes;
     tsk_id_t parent;
     tsk_id_t child;
-    
+
     for (j = 0; j < edges->num_rows; j++) {
         parent = edges->parent[j];
         child = edges->child[j];
@@ -57,7 +57,7 @@ msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double theta,
     double branch_length, lik;
     tsk_tree_t tree;
     tsk_id_t parent, child, it;
-    
+
     ret = tsk_tree_init(&tree, ts, 0);
     if (ret != 0) {
         goto out;
@@ -84,8 +84,11 @@ msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double theta,
                     parent = tree.parent[parent];
                 }
                 child = mut.node;
-                while (tree.left_child[child] >= 0 && tree.left_child[child]
-                        == tree.right_child[child]) {
+                while (tree.left_child[child] != TSK_NULL &&
+                        tree.left_child[child] == tree.right_child[child]) {
+                    // unary nodes have left_child[node] == right_child[node]
+                    // so this measures the valid leafwards branch length on
+                    // which mutation mut could have taken place
                     parent = child;
                     child = tree.left_child[child];
                     branch_length += node_time[parent] - node_time[child];
@@ -123,13 +126,10 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik) {
     tsk_id_t *last_parent_edge = NULL;
     tsk_id_t edge = 0;
     tsk_id_t parent;
-    
+
     first_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
-    if (first_parent_edge == NULL) {
-        goto out;
-    }
     last_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
-    if (last_parent_edge == NULL) {
+    if (first_parent_edge == NULL || last_parent_edge == NULL) {
         goto out;
     }
     memset(first_parent_edge, TSK_NULL, sizeof(tsk_id_t) * nodes->num_rows);
