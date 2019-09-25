@@ -44,31 +44,9 @@ class PathConfigurator(object):
             warn("Error occured getting GSL path config: {}".format(e))
         # If the conda prefix is defined, then we are compiling in a conda
         # context. All include and lib paths should come from within this prefix.
-        print(CONDA_PREFIX)
         if CONDA_PREFIX is not None:
-            prefix = CONDA_PREFIX
             if IS_WINDOWS:
-                prefix = os.path.join(prefix, "Library")
-            print("**{}**".format(CONDA_PREFIX))
-            print(self._run_command(["dir", CONDA_PREFIX]))
-            print("**{}/include/**".format(CONDA_PREFIX))
-            print(self._run_command(["dir", os.path.join(CONDA_PREFIX, "include")]))
-            print("**{}/envs/**".format(CONDA_PREFIX))
-            print(self._run_command(["dir", os.path.join(CONDA_PREFIX, "envs")]))
-            print("**{}/envs/testenv".format(CONDA_PREFIX))
-            print(self._run_command(
-                ["dir", os.path.join(CONDA_PREFIX, "envs", "testenv")]))
-            print("**{}/envs/testenv/include".format(CONDA_PREFIX))
-            print(self._run_command(
-                ["dir", os.path.join(CONDA_PREFIX, "envs", "testenv", "include")]))
-            print("**{}/envs/testenv/Library/include**".format(CONDA_PREFIX))
-            print(self._run_command(
-                ["dir", os.path.join(
-                    CONDA_PREFIX, "envs", "testenv", "Library", "include")]))
-            print("**{}**".format(prefix))
-            print(self._run_command(["dir", prefix]))
-            print("**{}/include/**".format(prefix))
-            print(self._run_command(["dir", os.path.join(prefix, "include")]))
+                prefix = "Library"
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
 
@@ -103,6 +81,8 @@ tskroot = os.path.join(libdir, "subprojects", "tskit")
 tskdir = os.path.join(tskroot, "tskit")
 kasdir = os.path.join(libdir, "subprojects", "kastore")
 includes = [libdir, tskroot, tskdir, kasdir]
+
+print(includes)
 
 configurator = PathConfigurator()
 msp_source_files = [
