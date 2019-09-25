@@ -19,9 +19,9 @@
 """
 Module responsible for computing likelihoods.
 """
-import collections
 import math
-import msprime
+
+import _msprime
 
 
 def unnormalised_log_mutation_likelihood(arg, theta):
@@ -60,53 +60,12 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     return ret
 
 
-def log_arg_likelihood(arg, rho):
-    tables = arg.tables
-    number_of_lineages = arg.num_samples
-    number_of_links = number_of_lineages * arg.sequence_length
-    number_of_edges = len(tables.edges)
-    edges_above = collections.defaultdict(list)
-    for edge in tables.edges:
-        edges_above[edge.child].append(edge)
-    edge = 0
-    time = 0
-    ret = 0
-    while edge < number_of_edges:
-        parent = tables.edges[edge].parent
-        rate = number_of_lineages * (number_of_lineages - 1) / 2 + number_of_links * rho
-        ret -= rate * (tables.nodes[parent].time - time)
-        time = tables.nodes[parent].time
-        child = tables.edges[edge].child
-        if tables.nodes[parent].flags == msprime.NODE_IS_RE_EVENT:
-            while tables.edges[edge].child == child:
-                if tables.edges[edge].parent != tables.edges[edge - 1].parent:
-                    gap = tables.edges[edge].left - tables.edges[edge - 1].right
-                edge += 1
-            number_of_links -= gap
-            number_of_lineages += 1
-            if gap == 0:
-                # we evaluate the density rather than the probability if there is no gap
-                gap = 1
-            if rho == 0:
-                ret -= float("inf")
-            else:
-                ret += math.log(rho * gap)
-        else:
-            segment_length_in_children = -tables.edges.left[edge]
-            while edge < number_of_edges and tables.edges[edge].child == child:
-                edge += 1
-            segment_length_in_children += (tables.edges.right[edge - 1] -
-                                           tables.edges.left[edge])
-            child = tables.edges[edge].child
-            while edge < number_of_edges and tables.edges[edge].child == child:
-                edge += 1
-            segment_length_in_children += tables.edges.right[edge - 1]
-            if parent in edges_above:
-                segment_length_in_parent = (edges_above[parent][-1].right -
-                                            edges_above[parent][0].left)
-                number_of_lineages -= 1
-                number_of_links -= segment_length_in_children - segment_length_in_parent
-            else:
-                number_of_lineages -= 2
-                number_of_links -= segment_length_in_children
-    return ret
+def log_arg_likelihood(arg, recombination_rate, Ne=0.25):
+    # TODO: Ne should default to 1 for compatability with msprime.simulate. Setting
+    # to 1/4 now to keep the tests working.
+
+    # Get the tables into the format we need to interchange with the low-level code.
+    lw_tables = _msprime.LightweightTableCollection()
+    lw_tables.fromdict(arg.tables.asdict())
+    return _msprime.log_likelihood_arg(
+        lw_tables, Ne=Ne, recombination_rate=recombination_rate)

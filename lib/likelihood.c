@@ -112,8 +112,9 @@ out:
 }
 
 int
-msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik) {
-    int ret = 1;
+msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik)
+{
+    int ret = 0;
     tsk_id_t i;
     tsk_size_t lineages = tsk_treeseq_get_num_samples(ts);
     double sim_time = 0;
@@ -130,6 +131,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik) {
     first_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
     last_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
     if (first_parent_edge == NULL || last_parent_edge == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     memset(first_parent_edge, TSK_NULL, sizeof(tsk_id_t) * nodes->num_rows);
@@ -146,7 +148,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik) {
         lik -= rate * (nodes->time[parent] - sim_time);
         sim_time = nodes->time[parent];
         if (nodes->flags[parent] & MSP_NODE_IS_RE_EVENT) {
-            while (edge < (tsk_id_t)edges->num_rows 
+            while (edge < (tsk_id_t)edges->num_rows
                     && edges->parent[edge] == parent) {
                 edge++;
             }
@@ -157,9 +159,6 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik) {
             if (gap <= 0) {
                 // we evaluate the density rather than probability
                 gap = 1;
-            }
-            if (rho <= 0) {
-                lik = -DBL_MAX;
             }
             lik += log(rho * gap);
         } else {

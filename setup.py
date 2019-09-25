@@ -86,7 +86,8 @@ includes = [libdir, tskroot, tskdir, kasdir]
 configurator = PathConfigurator()
 msp_source_files = [
     "msprime.c", "fenwick.c", "avl.c", "util.c",
-    "object_heap.c", "recomb_map.c", "mutgen.c"
+    "object_heap.c", "recomb_map.c", "mutgen.c",
+    "likelihood.c"
 ]
 tsk_source_files = ["core.c", "tables.c", "trees.c"]
 kas_source_files = ["kastore.c"]
