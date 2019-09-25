@@ -55,12 +55,11 @@ class PathConfigurator(object):
         return subprocess.check_output(" ".join(args), universal_newlines=True, shell=True)
 
     def _configure_gsl(self):
-        print(self._run_command(["dir"]))
-        output = self._run_command(["Library/bin/gsl-config", "--cflags"]).split()
+        output = self._run_command(["gsl-config", "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
             self.include_dirs.append(token[2:])
-        output = self._run_command(["Library/bin/gsl-config", "--libs"]).split()
+        output = self._run_command(["gsl-config", "--libs"]).split()
         for token in output:
             if token.startswith("-L"):
                 self.library_dirs.append(token[2:])
