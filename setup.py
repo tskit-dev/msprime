@@ -55,11 +55,8 @@ class PathConfigurator(object):
         return subprocess.check_output(" ".join(args), universal_newlines=True, shell=True)
 
     def _configure_gsl(self, prefix):
-        print(self._run_command(['dir', CONDA_PREFIX]))
-        print(self._run_command(['dir', prefix]))
-        print(self._run_command(['dir', os.path.join(prefix, 'bin')]))
-        print(self._run_command(['dir', os.path.join(prefix, 'include', 'gsl')]))
-        output = self._run_command(["bash" '"gsl-config --cflags"']).split()
+        print(self._run_command(['dir', r"C:\Miniconda37-x64\envs\testenv\include"]))
+        print(self._run_command(['dir', r"C:\Miniconda37-x64\envs\testenv\Library\include"]))
         output = self._run_command([os.path.join(prefix, 'bin', 'gsl-config'), "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
