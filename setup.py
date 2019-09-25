@@ -38,28 +38,29 @@ class PathConfigurator(object):
     def __init__(self):
         self.include_dirs = []
         self.library_dirs = []
+        try:
+            self._configure_gsl()
+        except OSError as e:
+            warn("Error occured getting GSL path config: {}".format(e))
+        # If the conda prefix is defined, then we are compiling in a conda
+        # context. All include and lib paths should come from within this prefix.
         if CONDA_PREFIX is not None:
             prefix = CONDA_PREFIX
             if IS_WINDOWS:
                 prefix = os.path.join(prefix, "Library")
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
-        try:
-            self._configure_gsl(prefix)
-        except OSError as e:
-            warn("Error occured getting GSL path config: {}".format(e))
-        # If the conda prefix is defined, then we are compiling in a conda
-        # context. All include and lib paths should come from within this prefix.
 
     def _run_command(self, args):
         return subprocess.check_output(" ".join(args), universal_newlines=True, shell=True)
 
-    def _configure_gsl(self, prefix):
-        output = self._run_command([os.path.join(prefix, 'bin', 'gsl-config'), "--cflags"]).split()
+    def _configure_gsl(self):
+        print(self._run_command(["dir"]))
+        output = self._run_command(["Library/bin/gsl-config", "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
             self.include_dirs.append(token[2:])
-        output = self._run_command([os.path.join(prefix, 'bin', 'gsl-config'), "--libs"]).split()
+        output = self._run_command(["Library/bin/gsl-config", "--libs"]).split()
         for token in output:
             if token.startswith("-L"):
                 self.library_dirs.append(token[2:])
