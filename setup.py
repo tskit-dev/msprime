@@ -49,7 +49,7 @@ class PathConfigurator(object):
             if IS_WINDOWS:
                 prefix = os.path.join(prefix, "Library")
                 print(self._run_command(["dir", prefix]))
-                print(self._run_command(["dir", os.path.join(prefix, "include", "gsl"]))
+                print(self._run_command(["dir", os.path.join(prefix, "include", "gsl")]))
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
 
