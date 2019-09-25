@@ -447,12 +447,10 @@ class TestSimulatedExamples(unittest.TestCase):
 
     def test_no_recombination(self):
         ts = msprime.simulate(10, random_seed=2)
-        self.verify(ts, recombination_rate=0)
         self.verify(ts, recombination_rate=1)
 
     def test_small_arg_no_mutation(self):
         ts = msprime.simulate(
             5, recombination_rate=1, random_seed=12, record_full_arg=True)
         self.assertGreater(ts.num_edges, 10)
-        self.verify(ts, recombination_rate=0)
         self.verify(ts, recombination_rate=1)

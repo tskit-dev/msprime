@@ -1977,3 +1977,14 @@ class TestLikelihood(unittest.TestCase):
                 _msprime.log_likelihood_arg(tables, bad_float, 1)
             with self.assertRaises(TypeError):
                 _msprime.log_likelihood_arg(tables, 1, bad_float)
+
+        for bad_rec_rate in [0, -1]:
+            with self.assertRaises(ValueError):
+                _msprime.log_likelihood_arg(tables, 1, recombination_rate=bad_rec_rate)
+
+    def test_bad_tables(self):
+        # Pass in a table collection that can't be made into a tree
+        # sequence.
+        lw_tables = _msprime.LightweightTableCollection()
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.log_likelihood_arg(lw_tables, 1, 1)

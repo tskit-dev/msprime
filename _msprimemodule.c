@@ -4079,6 +4079,11 @@ msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
+    if (recombination_rate <= 0) {
+        PyErr_SetString(PyExc_ValueError, "recombination_rate must be > 0");
+        goto out;
+    }
+
     /* Note: this will be inefficient here if we're building indexes for large
      * tables. */
     err = tsk_treeseq_init(&ts, tables->tables, TSK_BUILD_INDEXES);
