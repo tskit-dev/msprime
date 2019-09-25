@@ -55,9 +55,9 @@ class PathConfigurator(object):
         return subprocess.check_output(" ".join(args), universal_newlines=True, shell=True)
 
     def _configure_gsl(self, prefix):
-        print(self._run_command(['dir', CONDA_PREFIX]))
-        print(self._run_command(['dir', prefix]))
-        print(self._run_command(['dir', os.path.join(prefix, 'bin')]))
+        self._run_command(['dir', CONDA_PREFIX])
+        self._run_command(['dir', prefix])
+        self._run_command(['dir', os.path.join(prefix, 'bin')])
         output = self._run_command([os.path.join(prefix, 'bin', 'gsl-config'), "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
