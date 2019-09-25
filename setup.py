@@ -45,8 +45,9 @@ class PathConfigurator(object):
         # If the conda prefix is defined, then we are compiling in a conda
         # context. All include and lib paths should come from within this prefix.
         if CONDA_PREFIX is not None:
+            prefix = CONDA_PREFIX
             if IS_WINDOWS:
-                prefix = "Library"
+                prefix = os.path.join(prefix, "Library")
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
 
@@ -81,8 +82,6 @@ tskroot = os.path.join(libdir, "subprojects", "tskit")
 tskdir = os.path.join(tskroot, "tskit")
 kasdir = os.path.join(libdir, "subprojects", "kastore")
 includes = [libdir, tskroot, tskdir, kasdir]
-
-print(includes)
 
 configurator = PathConfigurator()
 msp_source_files = [
