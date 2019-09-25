@@ -49,7 +49,13 @@ class PathConfigurator(object):
             prefix = CONDA_PREFIX
             if IS_WINDOWS:
                 prefix = os.path.join(prefix, "Library")
+            print("****")
+            print(self._run_command(["dir", CONDA_PREFIX]))
+            print("****")
+            print(self._run_command(["dir", os.path.join(CONDA_PREFIX, "include")]))
+            print("****")
             print(self._run_command(["dir", prefix]))
+            print("****")
             print(self._run_command(["dir", os.path.join(prefix, "include", "gsl")]))
             self.library_dirs.append(os.path.join(prefix, "lib"))
             self.include_dirs.append(os.path.join(prefix, "include"))
