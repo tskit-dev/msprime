@@ -21,6 +21,7 @@ install:
   - cmd: python --version
 
 build_script:
+  - cmd: SET MSP_CONDA_PREFIX=%PYTHON%
   - cmd: python setup.py build_ext --inplace
   - cmd: python -m pip install newick
   - cmd: python -m nose
