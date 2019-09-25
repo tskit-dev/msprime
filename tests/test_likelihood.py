@@ -20,15 +20,73 @@
 Test cases for likelihood functions in msprime.
 """
 import math
+import unittest
+import collections
+
 import msprime
 import numpy as np
 import tskit
-import unittest
+
+# Python implementations of the likelihood calculations
 
 
-class TestLikelihood(unittest.TestCase):
+# TODO give this the same signature as the production version
+def log_arg_likelihood(arg, rho):
+    tables = arg.tables
+    number_of_lineages = arg.num_samples
+    number_of_links = number_of_lineages * arg.sequence_length
+    number_of_edges = len(tables.edges)
+    edges_above = collections.defaultdict(list)
+    for edge in tables.edges:
+        edges_above[edge.child].append(edge)
+    edge = 0
+    time = 0
+    ret = 0
+    while edge < number_of_edges:
+        parent = tables.edges[edge].parent
+        rate = number_of_lineages * (number_of_lineages - 1) / 2 + number_of_links * rho
+        ret -= rate * (tables.nodes[parent].time - time)
+        time = tables.nodes[parent].time
+        child = tables.edges[edge].child
+        if tables.nodes[parent].flags == msprime.NODE_IS_RE_EVENT:
+            while tables.edges[edge].child == child:
+                if tables.edges[edge].parent != tables.edges[edge - 1].parent:
+                    gap = tables.edges[edge].left - tables.edges[edge - 1].right
+                edge += 1
+            number_of_links -= gap
+            number_of_lineages += 1
+            if gap == 0:
+                # we evaluate the density rather than the probability if there is no gap
+                gap = 1
+            if rho == 0:
+                ret -= float("inf")
+            else:
+                ret += math.log(rho * gap)
+        else:
+            segment_length_in_children = -tables.edges.left[edge]
+            while edge < number_of_edges and tables.edges[edge].child == child:
+                edge += 1
+            segment_length_in_children += (tables.edges.right[edge - 1] -
+                                           tables.edges.left[edge])
+            child = tables.edges[edge].child
+            while edge < number_of_edges and tables.edges[edge].child == child:
+                edge += 1
+            segment_length_in_children += tables.edges.right[edge - 1]
+            if parent in edges_above:
+                segment_length_in_parent = (edges_above[parent][-1].right -
+                                            edges_above[parent][0].left)
+                number_of_lineages -= 1
+                number_of_links -= segment_length_in_children - segment_length_in_parent
+            else:
+                number_of_lineages -= 2
+                number_of_links -= segment_length_in_children
+    return ret
+
+
+class TestKnownExamples(unittest.TestCase):
     """
-    Tests for likelihood evaluation with the full ARG.
+    Tests for likelihood evaluation with the full ARG in cases where we've
+    calculated the exact values beforehand.
     """
     def test_log_likelihoods(self):
         tables = tskit.TableCollection(sequence_length=1)
@@ -374,3 +432,27 @@ class TestLikelihood(unittest.TestCase):
             self.assertTrue(math.isclose(
                             unnormalised_mutation_ll_exact,
                             msprime.unnormalised_log_mutation_likelihood(arg, t)))
+
+
+class TestSimulatedExamples(unittest.TestCase):
+    """
+    Given some simulated ARGs test that the Python likelihood implementation
+    computes the same likelihoods as the C code.
+    """
+    # TODO Add Ne and mutation rate as parameters here.
+    def verify(self, ts, recombination_rate):
+        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate)
+        l2 = log_arg_likelihood(ts, recombination_rate)
+        self.assertAlmostEqual(l1, l2)
+
+    def test_no_recombination(self):
+        ts = msprime.simulate(10, random_seed=2)
+        self.verify(ts, recombination_rate=0)
+        self.verify(ts, recombination_rate=1)
+
+    def test_small_arg_no_mutation(self):
+        ts = msprime.simulate(
+            5, recombination_rate=1, random_seed=12, record_full_arg=True)
+        self.assertGreater(ts.num_edges, 10)
+        self.verify(ts, recombination_rate=0)
+        self.verify(ts, recombination_rate=1)

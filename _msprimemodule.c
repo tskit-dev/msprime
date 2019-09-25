@@ -30,6 +30,7 @@
 #include <gsl/gsl_errno.h>
 
 #include "msprime.h"
+#include "likelihood.h"
 
 /* We keep a reference to the gsl_error_handler so it can be restored if needed */
 static gsl_error_handler_t *old_gsl_error_handler;
@@ -77,6 +78,12 @@ static void
 handle_library_error(int err)
 {
     PyErr_SetString(MsprimeLibraryError, msp_strerror(err));
+}
+
+static void
+handle_tskit_library_error(int err)
+{
+    PyErr_SetString(MsprimeLibraryError, tsk_strerror(err));
 }
 
 static void
@@ -4057,6 +4064,45 @@ static PyTypeObject SimulatorType = {
  */
 
 static PyObject *
+msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    PyObject *ret = NULL;
+    int err;
+    LightweightTableCollection *tables = NULL;
+    double recombination_rate, Ne, ret_likelihood, rho;
+    static char *kwlist[] = {"tables", "Ne", "recombination_rate", NULL};
+    tsk_treeseq_t ts;
+
+    memset(&ts, 0, sizeof(ts));
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!dd", kwlist,
+            &LightweightTableCollectionType, &tables, &Ne, &recombination_rate)) {
+        goto out;
+    }
+
+    /* Note: this will be inefficient here if we're building indexes for large
+     * tables. */
+    err = tsk_treeseq_init(&ts, tables->tables, TSK_BUILD_INDEXES);
+    if (err != 0) {
+        handle_tskit_library_error(err);
+        goto out;
+    }
+    /* Note: this should be done within the library probably because we'll
+     * need to rescale the branch lengths according to Ne also, right?
+     */
+    rho = 4 * Ne * recombination_rate;
+
+    err = msp_log_likelihood_arg(&ts, rho, &ret_likelihood);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = Py_BuildValue("d", ret_likelihood);
+out:
+    tsk_treeseq_free(&ts);
+    return ret;
+}
+
+static PyObject *
 msprime_get_gsl_version(PyObject *self)
 {
     return Py_BuildValue("ii", GSL_MAJOR_VERSION, GSL_MINOR_VERSION);
@@ -4079,6 +4125,9 @@ msprime_unset_gsl_error_handler(PyObject *self)
 }
 
 static PyMethodDef msprime_methods[] = {
+    {"log_likelihood_arg", (PyCFunction) msprime_log_likelihood_arg,
+            METH_VARARGS|METH_KEYWORDS,
+            "Computes the log-likelihood of an ARG." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
     {"restore_gsl_error_handler", (PyCFunction) msprime_restore_gsl_error_handler,

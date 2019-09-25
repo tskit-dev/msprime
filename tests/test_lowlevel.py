@@ -1935,3 +1935,45 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertRaises(_msprime.LibraryError, sim.run)
         self.assertRaises(_msprime.LibraryError, sim.run)
         self.assertTrue(math.isinf(sim.debug_demography()))
+
+
+class TestLikelihood(unittest.TestCase):
+    """
+    Tests for the low-level likelihood calculation interface.
+    """
+    def get_arg(self):
+        rng = _msprime.RandomGenerator(1)
+        tables = _msprime.LightweightTableCollection()
+        sim = _msprime.Simulator(
+            get_samples(5), uniform_recombination_map(num_loci=20, rate=2),
+            rng, tables, store_full_arg=True)
+        sim.run()
+        mutgen = _msprime.MutationGenerator(rng, 2)
+        mutgen.generate(tables)
+        t = tskit.TableCollection.fromdict(tables.asdict())
+        self.assertGreater(len(t.edges), 10)
+        self.assertGreater(len(t.mutations), 10)
+        return tables
+
+    def test_simple_example(self):
+        tables = self.get_arg()
+        log_lik = _msprime.log_likelihood_arg(tables, 1, 1)
+        self.assertLess(log_lik, 0)
+
+    def test_interface(self):
+        tables = self.get_arg()
+        self.assertRaises(TypeError, _msprime.log_likelihood_arg)
+        self.assertRaises(TypeError, _msprime.log_likelihood_arg, tables)
+        self.assertRaises(TypeError, _msprime.log_likelihood_arg, tables, 1)
+        self.assertRaises(
+            TypeError, _msprime.log_likelihood_arg, tables, recombination_rate=1)
+
+        for bad_tables in [None, {}, "SDf"]:
+            with self.assertRaises(TypeError):
+                _msprime.log_likelihood_arg(bad_tables, 1, 1)
+
+        for bad_float in [[], None, "SDF"]:
+            with self.assertRaises(TypeError):
+                _msprime.log_likelihood_arg(tables, bad_float, 1)
+            with self.assertRaises(TypeError):
+                _msprime.log_likelihood_arg(tables, 1, bad_float)
