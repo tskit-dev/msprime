@@ -58,6 +58,8 @@ class PathConfigurator(object):
         print(self._run_command(['dir', CONDA_PREFIX]))
         print(self._run_command(['dir', prefix]))
         print(self._run_command(['dir', os.path.join(prefix, 'bin')]))
+        print(self._run_command(['dir', os.path.join(prefix, 'include', 'gsl')]))
+        output = self._run_command(["bash" '"gsl-config --cflags"']).split()
         output = self._run_command([os.path.join(prefix, 'bin', 'gsl-config'), "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
