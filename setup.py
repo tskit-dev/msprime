@@ -52,7 +52,7 @@ class PathConfigurator(object):
             self.include_dirs.append(os.path.join(prefix, "include"))
 
     def _run_command(self, args):
-        return subprocess.check_output(args, universal_newlines=True)
+        return subprocess.check_output(args, universal_newlines=True, shell=True)
 
     def _configure_gsl(self):
         output = self._run_command(["gsl-config", "--cflags"]).split()
