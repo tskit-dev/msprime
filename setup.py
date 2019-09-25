@@ -55,6 +55,12 @@ class PathConfigurator(object):
             print(self._run_command(["dir", os.path.join(CONDA_PREFIX, "include")]))
             print("**{}/envs/**".format(CONDA_PREFIX))
             print(self._run_command(["dir", os.path.join(CONDA_PREFIX, "envs")]))
+            print("**{}/envs/testenv".format(CONDA_PREFIX))
+            print(self._run_command(
+                ["dir", os.path.join(CONDA_PREFIX, "envs", "testenv")]))
+            print("**{}/envs/testenv/include".format(CONDA_PREFIX))
+            print(self._run_command(
+                ["dir", os.path.join(CONDA_PREFIX, "envs", "testenv", "include")]))
             print("**{}**".format(prefix))
             print(self._run_command(["dir", prefix]))
             print("**{}/include/**".format(prefix))
