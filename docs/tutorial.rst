@@ -618,6 +618,80 @@ Once you are satisfied that the demographic history that you have built
 is correct, it can then be simulated by calling the :func:`.simulate`
 function.
 
+.. _sec_tutorial_demography_census:
+
+-------------
+Census events
+-------------
+
+Census events allow you to add a node to each branch of the tree sequence at a given time
+during the simulation. This can be useful when you wish to study haplotypes that are
+ancestral to your simulated sample, or when you wish to know which lineages were present in
+which populations at specified times.
+
+For instance, the following code specifies a simulation with two samples drawn from each of
+two populations. There are two demographic events: a migration rate change and a census
+event. At generation 100 and earlier, the two populations exchange migrants at a rate of
+0.05. At generation 5000, a census is performed:
+
+.. code-block:: python
+
+    >>> pop_config = msprime.PopulationConfiguration(sample_size=2, initial_size=1000)
+    >>> mig_rate_change = msprime.MigrationRateChange(time=100, rate=0.05)
+    >>> ts = msprime.simulate(
+                population_configurations=[pop_config, pop_config],
+                length=1000,
+                demographic_events=[mig_rate_change, msprime.CensusEvent(time=5000)],
+                recombination_rate=1e-7,
+                random_seed=141)
+
+The resulting tree sequence has nodes on each tree at the specified census time.
+These are the nodes with IDs 8, 9, 10, 11, 12 and 13:
+
+.. code-block:: python
+
+    >>> display(SVG(ts.draw_svg()))
+
+.. image:: _static/ts_with_census_nodes.svg
+   :width: 800px
+   :alt: A tree sequence with census nodes.
+
+This tells us that the genetic material ancestral to the present day sample was held within 5 haplotypes at time 5000. The node table shows us that four of these haplotypes (nodes 8, 9, 10 and 11) were in population 0 at this time, and two of these haplotypes (nodes 12 and 13) were in population 1 at this time.
+
+.. code-block:: python
+
+    >>> print(ts.tables.nodes)
+    id  flags   population  individual  time    metadata
+    0   1       0   -1  0.00000000000000    
+    1   1       0   -1  0.00000000000000    
+    2   1       1   -1  0.00000000000000    
+    3   1       1   -1  0.00000000000000    
+    4   0       1   -1  2350.08685279051815 
+    5   0       1   -1  3759.20387382847684 
+    6   0       0   -1  4234.97992185234671 
+    7   0       1   -1  4598.83898042243527 
+    8   1048576 0   -1  5000.00000000000000 
+    9   1048576 0   -1  5000.00000000000000 
+    10  1048576 0   -1  5000.00000000000000 
+    11  1048576 0   -1  5000.00000000000000 
+    12  1048576 1   -1  5000.00000000000000 
+    13  1048576 1   -1  5000.00000000000000 
+    14  0       1   -1  5246.90282987397495 
+    15  0       0   -1  8206.73121309170347
+
+If we wish to study these ancestral haplotypes further, we can simplify the tree sequence
+with respect to the census nodes and perform subsequent analyses on this simplified tree
+sequence.
+In this example, ``ts_anc`` is a tree sequence obtained from the original tree sequence
+``ts`` by labelling the census nodes as samples and removing all nodes and edges that are 
+not ancestral to these census nodes.
+
+.. code-block:: python
+
+    >>> nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
+    >>> ts_anc = ts.simplify(samples=nodes)
+
+
 ******************
 Recombination maps
 ******************

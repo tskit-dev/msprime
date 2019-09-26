@@ -266,6 +266,14 @@ class Population(object):
         """
         return iter(self._ancestors[label])
 
+    def iter_ancestors(self):
+        """
+        Iterates over all ancestors in a population.
+        """
+        for ancestors in self._ancestors:
+            for ancestor in ancestors:
+                yield ancestor
+
     def find_indv(self, indv):
         """
         find the index of an ancestor in population
@@ -331,10 +339,10 @@ class Simulator(object):
             self, sample_size, num_loci, recombination_rate, migration_matrix,
             sample_configuration, population_growth_rates, population_sizes,
             population_growth_rate_changes, population_size_changes,
-            migration_matrix_element_changes, bottlenecks, model='hudson',
-            from_ts=None, max_segments=100, num_labels=1, sweep_trajectory=None,
-            full_arg=False, time_slice=None, gene_conversion_rate=0.0,
-            gene_conversion_length=1):
+            migration_matrix_element_changes, bottlenecks, census_times,
+            model='hudson', from_ts=None, max_segments=100, num_labels=1,
+            sweep_trajectory=None, full_arg=False, time_slice=None,
+            gene_conversion_rate=0.0, gene_conversion_length=1):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -423,6 +431,8 @@ class Simulator(object):
         for time, pop_id, intensity in bottlenecks:
             self.modifier_events.append(
                 (time, self.bottleneck_event, (int(pop_id), 0, intensity)))
+        for time in census_times:
+            self.modifier_events.append((time[0], self.census_event, time))
         self.modifier_events.sort()
 
     def initialise_from_ts(self, ts):
@@ -1148,6 +1158,19 @@ class Simulator(object):
                 u = u.next
             print(s)
 
+    def census_event(self, time):
+        for pop in self.P:
+            for ancestor in pop.iter_ancestors():
+                seg = ancestor
+                self.flush_edges()
+                u = self.tables.nodes.add_row(
+                        time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop._id)
+                while seg is not None:
+                    # Add an edge joining the segment to the new node.
+                    self.store_edge(seg.left, seg.right, u, seg.node)
+                    seg.node = u
+                    seg = seg.next
+
     def bottleneck_event(self, pop_id, label, intensity):
         # self.print_state()
         # Merge some of the ancestors.
@@ -1525,7 +1548,7 @@ def run_simulate(args):
         population_sizes, args.population_growth_rate_change,
         args.population_size_change,
         args.migration_matrix_element_change,
-        args.bottleneck, args.model, from_ts=args.from_ts,
+        args.bottleneck, args.census_time, args.model, from_ts=args.from_ts,
         max_segments=10000, num_labels=num_labels, full_arg=args.full_arg,
         sweep_trajectory=sweep_trajectory, time_slice=args.time_slice,
         gene_conversion_rate=gamma, gene_conversion_length=mean_tracklength)
@@ -1571,6 +1594,8 @@ def add_simulator_arguments(parser):
         action="append", default=[])
     parser.add_argument(
         "--bottleneck", type=float, nargs=3, action="append", default=[])
+    parser.add_argument(
+        "--census-time", type=float, nargs=1, action="append", default=[])
     parser.add_argument(
         "--trajectory", type=float, nargs=3, default=None,
         help="Parameters for the allele frequency trajectory simulation")
