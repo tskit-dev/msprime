@@ -536,8 +536,8 @@ values from ``msprime`` with analytical expectations.
 Containerization
 ****************
 
-This repo is integrated with Dockerhub and the Docker image will be automatically
-built upon each release on GitHub. Each Docker image is tagged with the corresponding release.
+This repo is integrated with `Dockerhub <https://hub.docker.com/r/tskit/msprime>`__ and the Docker image will be automatically
+built upon each release on GitHub. Each Docker image is `tagged <https://hub.docker.com/r/tskit/msprime/tags>`__ with the corresponding release.
 
 Enter a Docker container from Dockerhub:
 
@@ -545,7 +545,9 @@ Enter a Docker container from Dockerhub:
 
     $ sudo docker run -it tskit/msprime:<release>
 
-Alternatively, msprime can be executed via the Docker container:
+For example, if we want to use msprime release 0.7.3, we would use the corresponding Docker image tag (``tskit/msprime:0.7.3``)
+
+msprime can also be executed via the Docker container:
 
 .. code-block:: bash
 
