@@ -221,6 +221,8 @@ typedef struct _msp_t {
     recomb_map_t *recomb_map;
     double gene_conversion_rate;
     double gene_conversion_track_length;
+    double gene_conversion_prob_to_continue_track;
+    double gene_conversion_log_prob_to_continue_track;
     uint32_t num_populations;
     uint32_t num_labels;
     sample_t *samples;
@@ -237,10 +239,12 @@ typedef struct _msp_t {
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
+    size_t num_gc_events;
     size_t num_rejected_ca_events;
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
+    size_t num_noneffective_gc_events;
     /* sampling events */
     sampling_event_t *sampling_events;
     size_t num_sampling_events;
