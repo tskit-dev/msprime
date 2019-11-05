@@ -242,7 +242,7 @@ msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
 {
     int ret = 0;
 
-    if (rate < 0 || track_length < 0) {
+    if (rate < 0 || track_length < 1.0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -1902,6 +1902,7 @@ msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *n
 static int MSP_WARN_UNUSED
 msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 {
+    /*processes a gene conversion event that starts within or between segments*/
     int ret = 0;
     int64_t h, tl, t, k;
     int64_t num_links = fenwick_get_total(&self->links[label]);
@@ -2098,6 +2099,7 @@ msp_find_cleft_individual(msp_t *self, double rvalue, size_t *segment_id, double
 static int MSP_WARN_UNUSED
 msp_gene_conversion_left_event(msp_t *self, label_id_t label)
 {
+    /*processes a gene conversion event that started left of a first segment and does not span the whole segment chain*/
     int ret = 0;
     double h, length, p, logp, u;
     segment_t *x, *y, *z;
