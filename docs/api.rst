@@ -53,13 +53,13 @@ the :class:`.RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
-For gene conversion there are two parameters. The gene conversion rate determines the initiation 
+For gene conversion there are two parameters. The gene conversion rate determines the initiation
 and is again per unit of sequence length and per generation in ``msprime``.
-Thus, given the per generation gene conversion rate :math:`g`, the overall rate of 
-gene conversion initiation between the ends of the sequence is :math:`\rho = 4 N_e g L` in 
+Thus, given the per generation gene conversion rate :math:`g`, the overall rate of
+gene conversion initiation between the ends of the sequence is :math:`\rho = 4 N_e g L` in
 coalescent time units. The second parameter :math:`track_len` is the expected track length
 of a gene conversion. At each gene conversion initiation site the track of the conversion
-extends to the right and the length of the track is geometric distributed with parameter 
+extends to the right and the length of the track is geometric distributed with parameter
 :math:`1/track_len`. Currently recombination maps for gene conversion are not supported.
 However, recombination (with or without recombination maps) and a constant gene conversion
 rate along the genome can be combined in ``msprime``.
@@ -84,10 +84,10 @@ configuration at a particular time in the past.
     and to also allow users directly state times and rates in units of
     generations. However, the ``mspms`` command line application is
     fully :program:`ms` compatible.
-    If recombination and gene conversion are combined the gene conversion 
-    rate in :program:`ms` is determined by the ratio :math:`f`, which corresponds to 
-    setting :math:`g = f r`. In ``msprime`` the gene conversion rate :math:`g` is 
-    set independently and does not depend on the recombination rate. However, 
+    If recombination and gene conversion are combined the gene conversion
+    rate in :program:`ms` is determined by the ratio :math:`f`, which corresponds to
+    setting :math:`g = f r`. In ``msprime`` the gene conversion rate :math:`g` is
+    set independently and does not depend on the recombination rate. However,
     ``mspms`` mimics the :program:`ms` behaviour.
 
 *******************
