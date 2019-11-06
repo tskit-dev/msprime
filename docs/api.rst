@@ -64,12 +64,6 @@ extends to the right and the length of the track is geometric distributed with p
 However, recombination (with or without recombination maps) and a constant gene conversion
 rate along the genome can be combined in ``msprime``.
 
-.. warning:: If recombination and gene conversion are combined the gene conversion 
-    rate in :program:`ms` is determined by the ratio :math:`f`, which corresponds to 
-    setting :math:`g = f r`. In ``msprime`` the gene conversion rate :math:`g` is 
-    set independently and does not depend on the recombination rate. However, 
-    ``mspms`` mimics the :program:`ms` behaviour.
-
 Population structure is modelled by specifying a fixed number of subpopulations
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
 migration rates. Each element of the matrix :math:`M_{j,k}` defines
@@ -90,6 +84,11 @@ configuration at a particular time in the past.
     and to also allow users directly state times and rates in units of
     generations. However, the ``mspms`` command line application is
     fully :program:`ms` compatible.
+    If recombination and gene conversion are combined the gene conversion 
+    rate in :program:`ms` is determined by the ratio :math:`f`, which corresponds to 
+    setting :math:`g = f r`. In ``msprime`` the gene conversion rate :math:`g` is 
+    set independently and does not depend on the recombination rate. However, 
+    ``mspms`` mimics the :program:`ms` behaviour.
 
 *******************
 Running simulations
