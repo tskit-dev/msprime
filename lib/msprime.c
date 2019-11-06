@@ -2101,7 +2101,7 @@ static int MSP_WARN_UNUSED
 msp_gene_conversion_left_event(msp_t *self, label_id_t label)
 {
     int ret = 0;
-    double h, length, p, u;
+    double h, length, p, logp, u;
     segment_t *x, *y, *z;
     int64_t k, tl;
     size_t segment_id;
@@ -2117,8 +2117,9 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         tl = 1;
     } else {
         p = self->gene_conversion_prob_to_continue_track;
+        logp = self->gene_conversion_log_prob_to_continue_track;
         u = gsl_rng_uniform(self->rng);
-        tl = (int64_t) floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / p);
+        tl = (int64_t) floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / logp);
     }
     k = (int64_t) y->left + tl;
 
