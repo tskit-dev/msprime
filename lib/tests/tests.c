@@ -1868,10 +1868,12 @@ test_single_locus_gene_conversion(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_gene_conversion_rate(msp, 10, 10);
+    ret = msp_set_gene_conversion_rate(msp, 10, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(msp_get_gene_conversion_rate(msp), 10);
 
     /* For the single locus sim we should have exactly n - 1 events */
     for (j = 0; j < n - 2; j++) {
@@ -2027,7 +2029,7 @@ test_gene_conversion_simulation(void)
     int ret;
     uint32_t n = 100;
     uint32_t m = 100;
-    double track_lengths[] = {1.0, 1.3333, 5, 100, 10000};
+    double track_lengths[] = {1.0, 1.3333, 5, 100};
     long seed = 10;
     size_t j, num_ca_events, num_re_events, num_gc_events;
     recomb_map_t recomb_map;
@@ -2040,7 +2042,7 @@ test_gene_conversion_simulation(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2051,7 +2053,7 @@ test_gene_conversion_simulation(void)
         ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_gene_conversion_rate(msp, 1.0, track_lengths[j]);
-        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_initialise(msp);
         CU_ASSERT_EQUAL(ret, 0);
 
@@ -3926,7 +3928,11 @@ test_simulate_init_errors(void)
 
     ret = msp_set_gene_conversion_rate(&msp, -1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = msp_set_gene_conversion_rate(&msp, 0, 0.9999);
+    ret = msp_set_gene_conversion_rate(&msp, 1, -1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_rate(&msp, 1, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_rate(&msp, 1, 0.9999);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
     ret = msp_initialise(&msp);

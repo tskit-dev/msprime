@@ -186,7 +186,9 @@ def simulator_factory(
         start_time=None,
         end_time=None,
         record_full_arg=False,
-        num_labels=None):
+        num_labels=None,
+        gene_conversion_rate=None,
+        gene_conversion_track_length=None):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
@@ -279,6 +281,13 @@ def simulator_factory(
                 "a recombination map")
         recomb_map = recombination_map
 
+    # FIXME check the valid inputs for GC. Should we allow it when we
+    # have a non-trivial genetic map?
+    if gene_conversion_rate is None:
+        gene_conversion_rate = 0
+    if gene_conversion_track_length is None:
+        gene_conversion_track_length = 1
+
     if from_ts is not None:
         if from_ts.sequence_length != recomb_map.get_length():
             raise ValueError(
@@ -290,6 +299,8 @@ def simulator_factory(
     sim.store_full_arg = record_full_arg
     sim.start_time = start_time
     sim.num_labels = num_labels
+    sim.gene_conversion_rate = gene_conversion_rate
+    sim.gene_conversion_track_length = gene_conversion_track_length
     rng = random_generator
     if rng is None:
         rng = RandomGenerator(_get_random_seed())
@@ -329,7 +340,10 @@ def simulate(
         start_time=None,
         end_time=None,
         record_full_arg=False,
-        num_labels=None):
+        num_labels=None,
+        # FIXME add documentation for these.
+        gene_conversion_rate=None,
+        gene_conversion_track_length=None):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`tskit.TreeSequence`. Note that
@@ -463,7 +477,9 @@ def simulate(
         from_ts=from_ts,
         start_time=start_time,
         record_full_arg=record_full_arg,
-        num_labels=num_labels)
+        num_labels=num_labels,
+        gene_conversion_rate=gene_conversion_rate,
+        gene_conversion_track_length=gene_conversion_track_length)
 
     parameters = {
         "command": "simulate",
@@ -547,6 +563,8 @@ class Simulator(object):
         self.avl_node_block_size = block_size
         self.node_mapping_block_size = block_size
         self.end_time = None
+        self.gene_conversion_rate = 0
+        self.gene_conversion_track_length = 1
 
     @property
     def num_loci(self):
@@ -742,7 +760,9 @@ class Simulator(object):
             num_labels=self.num_labels,
             segment_block_size=self.segment_block_size,
             avl_node_block_size=self.avl_node_block_size,
-            node_mapping_block_size=self.node_mapping_block_size)
+            node_mapping_block_size=self.node_mapping_block_size,
+            gene_conversion_rate=self.gene_conversion_rate,
+            gene_conversion_track_length=self.gene_conversion_track_length)
         return ll_sim
 
     def run(self, end_time=None):

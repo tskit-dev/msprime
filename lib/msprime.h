@@ -421,6 +421,7 @@ simulation_model_t * msp_get_model(msp_t *self);
 const char * msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
 double msp_get_recombination_rate(msp_t *self);
+double msp_get_gene_conversion_rate(msp_t *self);
 double msp_get_time(msp_t *self);
 size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);

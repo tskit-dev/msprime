@@ -3003,7 +3003,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "tables", "population_configuration", "pedigree", "migration_matrix", "demographic_events",
         "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
-        "store_full_arg", "num_labels", NULL};
+        "store_full_arg", "num_labels", "gene_conversion_rate",
+        "gene_conversion_track_length", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -3024,11 +3025,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int store_migrations = 0;
     int store_full_arg = 0;
     double start_time = -1;
+    double gene_conversion_rate = 0;
+    double gene_conversion_track_length = 1.0;
 
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OO!O!O!nnnidin", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidindd", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -3040,7 +3043,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
-            &store_full_arg, &num_labels)) {
+            &store_full_arg, &num_labels,
+            &gene_conversion_rate, &gene_conversion_track_length)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -3105,6 +3109,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             (size_t) node_mapping_block_size);
     if (sim_ret != 0) {
         handle_input_error("node_mapping_block_size", sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_gene_conversion_rate(self->sim, gene_conversion_rate,
+            gene_conversion_track_length);
+    if (sim_ret != 0) {
+        handle_input_error(sim_ret);
         goto out;
     }
 

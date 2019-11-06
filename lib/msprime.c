@@ -241,19 +241,33 @@ int
 msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
 {
     int ret = 0;
+    double genetic_track_length = 1;
 
-    if (rate < 0 || track_length < 1.0) {
+    /* if the rate is zero, we ignore the track length */
+    if (rate > 0) {
+        /* The input track_length is in physical distance, and we must convert this
+         * into genetic distances for the simulation. Note that we're assuming this
+         * is a *flat* map because we're assuming that a give physical distance
+         * always maps to the same genetic distance */
+
+        if (track_length < 0 || track_length > self->recomb_map->sequence_length) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+        genetic_track_length = recomb_map_phys_to_genetic(self->recomb_map, track_length);
+        if (genetic_track_length < 1.0) {
+            ret = MSP_ERR_BAD_PARAM_VALUE;
+            goto out;
+        }
+    }
+    if (rate < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
+    /* NB: the gene_conversion_rate gets rescaled when we call msp_initialise,
+     * so that it's in model units. */
     self->gene_conversion_rate = rate;
-    self->gene_conversion_track_length = track_length;
-    if (track_length > 1.0){
-        self->gene_conversion_log_prob_to_continue_track = log(1.0-1.0/track_length);
-    }
-    else{
-        self->gene_conversion_log_prob_to_continue_track = 0;
-    }
+    self->gene_conversion_track_length = genetic_track_length;
 out:
     return ret;
 }
@@ -426,9 +440,11 @@ msp_alloc(msp_t *self,
 
     self->recombination_rate = recomb_map_get_per_locus_recombination_rate(
             self->recomb_map);
-    /* And rescale the recombination rate */
+    /* And rescale the rates */
     self->recombination_rate = self->model.generation_rate_to_model_rate(
             &self->model, self->recombination_rate);
+    self->gene_conversion_rate = self->model.generation_rate_to_model_rate(
+            &self->model, self->gene_conversion_rate);
 
     if (num_samples > 0) {
         if (num_samples < 2 || samples == NULL || self->tables->nodes.num_rows > 0) {
@@ -1940,7 +1956,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             lhs_tail = x;
             msp_cut_right_break(self, lhs_tail, y, z2, (uint32_t) (k + tl), label);
             z = y;
-        } else if (k > y->left) {
+        } else {
             z = msp_alloc_segment(self, (uint32_t) k, (uint32_t) (k + tl), y->value,
                     y->population_id, y->label, NULL, NULL);
             z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value,
@@ -1974,7 +1990,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             y->prev = NULL;
             z = y;
             lhs_tail = x;
-        } else if (k > y->left) {
+        } else {
             z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
                     y->population_id, y->label, NULL, y->next);
             if (z == NULL) {
@@ -4577,6 +4593,13 @@ msp_get_recombination_rate(msp_t *self)
     return model->model_rate_to_generation_rate(model, self->recombination_rate);
 }
 
+double
+msp_get_gene_conversion_rate(msp_t *self)
+{
+    simulation_model_t *model = &self->model;
+    return model->model_rate_to_generation_rate(model, self->gene_conversion_rate);
+}
+
 /* Demographic events. All times and input parameters are specified in units
  * of generations. When we store these values, we must rescale them into
  * model time, as appropriate. */
@@ -5932,6 +5955,8 @@ msp_unscale_model_times(msp_t *self)
     self->time = self->model.model_time_to_generations(model, self->time);
     self->recombination_rate = self->model.model_rate_to_generation_rate(
             model, self->recombination_rate);
+    self->gene_conversion_rate = self->model.model_rate_to_generation_rate(
+            model, self->gene_conversion_rate);
     /* Samples */
     for (j = 0; j < self->num_samples; j++) {
         self->samples[j].time = model->model_time_to_generations(
@@ -5973,6 +5998,8 @@ msp_rescale_model_times(msp_t *self)
     self->start_time = model->generations_to_model_time(model, self->start_time);
     self->recombination_rate = model->generation_rate_to_model_rate(
             model, self->recombination_rate);
+    self->gene_conversion_rate = model->generation_rate_to_model_rate(
+            model, self->gene_conversion_rate);
     /* Samples */
     for (j = 0; j < self->num_samples; j++) {
         self->samples[j].time = model->generations_to_model_time(
