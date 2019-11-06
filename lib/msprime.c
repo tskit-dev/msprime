@@ -136,6 +136,12 @@ msp_get_num_recombination_events(msp_t *self)
     return self->num_re_events;
 }
 
+size_t
+msp_get_num_gene_conversion_events(msp_t *self)
+{
+    return self->num_gc_events;
+}
+
 int
 msp_set_start_time(msp_t *self, double start_time)
 {
@@ -2134,8 +2140,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         y->next = NULL;
         y->right = (uint32_t) k;
         fenwick_increment(&self->links[label], y->id, k - (int64_t) z->right);
-    }
-    else{
+    } else {
         /*split the link between x and y*/
         x->next = NULL;
         y->prev = NULL;

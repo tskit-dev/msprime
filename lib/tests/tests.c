@@ -1975,6 +1975,81 @@ test_dtwf_multi_locus_simulation(void)
 }
 
 static void
+test_gene_conversion_simulation(void)
+{
+    int ret;
+    uint32_t n = 100;
+    uint32_t m = 100;
+    long seed = 10;
+    size_t num_ca_events, num_re_events, num_gc_events;
+    double t;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, m);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_set(rng, seed);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(msp, 1.0, 5);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+    msp_verify(msp);
+    num_ca_events = msp_get_num_common_ancestor_events(msp);
+    num_re_events = msp_get_num_recombination_events(msp);
+    num_gc_events = msp_get_num_gene_conversion_events(msp);
+    CU_ASSERT_TRUE(num_ca_events > 0);
+    CU_ASSERT_TRUE(num_re_events > 0);
+    CU_ASSERT_TRUE(num_gc_events > 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_free(msp);
+
+    /* Realloc the simulator under different memory params to see if
+     * we get the same result. */
+    gsl_rng_set(rng, seed);
+    tsk_table_collection_clear(&tables);
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(msp, 1.0, 5);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    t = 1;
+    while ((ret = msp_run(msp, DBL_MAX, 1)) > 0) {
+        msp_verify(msp);
+        CU_ASSERT_EQUAL_FATAL(msp->time, t);
+        t++;
+    }
+    msp_verify(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(num_ca_events == msp_get_num_common_ancestor_events(msp));
+    CU_ASSERT_TRUE(num_re_events == msp_get_num_recombination_events(msp));
+    CU_ASSERT_TRUE(num_gc_events == msp_get_num_gene_conversion_events(msp));
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_likelihood_three_leaves(void)
 {
     int i;
@@ -4478,6 +4553,7 @@ main(int argc, char **argv)
             test_likelihood_recombination_in_material_gap},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
+        {"test_gene_conversion_simulation", test_gene_conversion_simulation},
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_compute_falling_factorial", test_compute_falling_factorial},

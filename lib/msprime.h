@@ -439,6 +439,7 @@ size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
+size_t msp_get_num_gene_conversion_events(msp_t *self);
 
 int recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci,
         double sequence_length, double rate);
