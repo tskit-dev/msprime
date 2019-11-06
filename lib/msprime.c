@@ -249,7 +249,7 @@ msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
     else{
         self->gene_conversion_log_prob_to_continue_track = 0;
     }
-    
+
 out:
     return ret;
 }
@@ -1738,11 +1738,11 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             ix = (ix + 1) % 2;
             z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
                     x->population_id, x->label, seg_tails[ix], x->next);
-            assert(z->left < z->right);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
+            assert(z->left < z->right);
             if (x->next != NULL) {
                 x->next->prev = z;
             }
@@ -1877,10 +1877,12 @@ out:
     return ret;
 }
 
-
-static int MSP_WARN_UNUSED
-msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *new_segment, uint32_t track_end, label_id_t label){
-    assert(lhs_tail != NULL );
+/* Helper function for doing GC */
+static void
+msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *new_segment,
+        uint32_t track_end, label_id_t label)
+{
+    assert(lhs_tail != NULL);
     lhs_tail->next = new_segment;
     fenwick_set_value(&self->links[label], new_segment->id, new_segment->right - lhs_tail->right);
     if (y->next != NULL){
@@ -1889,53 +1891,60 @@ msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *n
     y->next = NULL;
     y->right = track_end;
     fenwick_increment(&self->links[label], y->id, (int64_t) track_end - (int64_t) new_segment->right);
-    return 0;
 }
 
+/* Processes a gene conversion event that starts within or between segments.
+ */
 static int MSP_WARN_UNUSED
 msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 {
-    /*processes a gene conversion event that starts within or between segments*/
     int ret = 0;
     int64_t h, tl, t, k;
     int64_t num_links = fenwick_get_total(&self->links[label]);
     size_t segment_id;
     segment_t *x, *y, *y2, *z, *z2, *lhs_tail;
 
-    
-    
     h = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
     assert(h > 0 && h <= num_links);
     /* generate track length */
-    tl = (int64_t) gsl_ran_geometric(self->rng, 1.0/self->gene_conversion_track_length);
+    tl = (int64_t) gsl_ran_geometric(self->rng, 1.0 / self->gene_conversion_track_length);
     assert(tl > 0);
     segment_id = fenwick_find(&self->links[label], h);
     y = msp_get_segment(self, segment_id, label);
-    
+
     t = fenwick_get_cumulative_sum(&self->links[label], segment_id);
-    k = y->right -t + h - 1;
+    k = y->right - t + h - 1;
     assert(k >= 0 && k < self->num_loci);
-    /*check if the gene conversion falls between segments and hence has no effect */
+    /* Check if the gene conversion falls between segments and hence has no effect */
     if (y->left >= k + tl){
-//         printf("noneffective GCI event\n");
         self->num_noneffective_gc_events++;
-        return ret;
+        return 0;
     }
-//     printf("GC_WITHIN: %p %d \n", (void *) self, label);
+
     self->num_gc_events++;
     x = y->prev;
-    /*both breaks are within the same segment:*/
-    if (k + tl < y->right){
+    if (k + tl < y->right) {
+        /* Both breaks are within the same segment */
         if(k <= y->left){
             y->prev = NULL;
-            z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value, y->population_id, y->label, x, y->next);
+            z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value,
+                    y->population_id, y->label, x, y->next);
+            if (z2 == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
             lhs_tail = x;
-            assert(msp_cut_right_break(self, lhs_tail, y, z2, (uint32_t) (k + tl), label) == 0);
+            msp_cut_right_break(self, lhs_tail, y, z2, (uint32_t) (k + tl), label);
             z = y;
-        }
-        else if(k > y->left){
-            z = msp_alloc_segment(self, (uint32_t) k, (uint32_t) (k + tl), y->value, y->population_id, y->label, NULL, NULL);
-            z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value, y->population_id, y->label, y, y->next);
+        } else if (k > y->left) {
+            z = msp_alloc_segment(self, (uint32_t) k, (uint32_t) (k + tl), y->value,
+                    y->population_id, y->label, NULL, NULL);
+            z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value,
+                    y->population_id, y->label, y, y->next);
+            if (z == NULL || z2 == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
             if (y->next != NULL){
                 y->next->prev = z2;
             }
@@ -1945,26 +1954,31 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             fenwick_increment(&self->links[label], y->id, k - z2->right);
             lhs_tail = y;
         }
-    }
-    /*breaks are in separate segments*/
-    else{
-        /*Get the segment y2 containing the end of the conversion tract*/
+    } else{
+        /* Breaks are in separate segments */
+
+        /* Get the segment y2 containing the end of the conversion tract*/
         y2 = y;
         while(y2 != NULL && k + tl >= y2->right){
             y2 = y2->next;
         }
-        /*process left break*/
-        if(k <= y->left){
-            if(x != NULL){
+        /* Process left break */
+        if (k <= y->left) {
+            if (x != NULL) {
                 x->next = NULL;
             }
             y->prev = NULL;
             z = y;
             lhs_tail = x;
-        }else if(k > y->left){
-            z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value, y->population_id, y->label, NULL, y->next);
+        } else if (k > y->left) {
+            z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
+                    y->population_id, y->label, NULL, y->next);
+            if (z == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
             fenwick_set_value(&self->links[label], z->id, z->right - z->left);
-            if(y->next != NULL){
+            if (y->next != NULL) {
                 y->next->prev = z;
             }
             y->next = NULL;
@@ -1972,15 +1986,21 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             fenwick_increment(&self->links[label], y->id, k - z->right);
             lhs_tail = y;
         }
-        /*process right break*/
-        if(y2 != NULL){
-            if(y2->left < k + tl){
-                z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y2->right, y2->value, y2->population_id, y2->label, lhs_tail, y2->next);
-                assert(msp_cut_right_break(self, lhs_tail, y2, z2, (uint32_t) (k + tl), label) == 0);
+
+        /* Process right break */
+        if (y2 != NULL) {
+            if (y2->left < k + tl) {
+                z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y2->right, y2->value,
+                        y2->population_id, y2->label, lhs_tail, y2->next);
+                if (z2 == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
+                msp_cut_right_break(self, lhs_tail, y2, z2, (uint32_t) (k + tl), label);
                 if(z2->prev == NULL){
                     z = z2;
                 }
-            }else if(y2->left >= k + tl){
+            } else if(y2->left >= k + tl) {
                 lhs_tail->next = y2;
                 y2->prev->next = NULL;
                 y2->prev = lhs_tail;
@@ -1988,13 +2008,14 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             }
         }
     }
-    /*update population*/
+
+    /* Update population */
     z->label = label;
     fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
     ret = msp_insert_individual(self, z);
+out:
     return ret;
 }
-
 
 /* This is an inefficient function used until we figure out how to use a
  * Fenwick tree to implement it without iterating over the full population */
@@ -2032,18 +2053,20 @@ msp_get_cleft_total(msp_t *self)
     return ret;
 }
 
-static size_t MSP_WARN_UNUSED
-msp_find_cleft_individual(msp_t *self, double rvalue, double *dist)
+static void
+msp_find_cleft_individual(msp_t *self, double rvalue, size_t *segment_id, double *dist)
 {
     avl_node_t *node;
     avl_tree_t *population_ancestors;
     label_id_t label;
-    size_t j, ret;
+    size_t j;
+    size_t head_id = 0;
     segment_t *u;
     double left, right, distance;
     const double track_length = self->gene_conversion_track_length;
     const double x = (track_length - 1) / track_length;
 
+    distance = 0;
     for (j = 0; j < self->num_populations; j++) {
         for (label = 0; label < (label_id_t) self->num_labels; label++) {
             population_ancestors = &self->populations[j].ancestors[label];
@@ -2051,7 +2074,7 @@ msp_find_cleft_individual(msp_t *self, double rvalue, double *dist)
                 if (rvalue > 0){
                     u = (segment_t *) node->item;
                     left = u->left;
-                    ret = u->id;
+                    head_id = u->id;
                     while (u->next != NULL) {
                         u = u->next;
                     }
@@ -2062,65 +2085,66 @@ msp_find_cleft_individual(msp_t *self, double rvalue, double *dist)
             }
         }
     }
+    *segment_id = head_id;
     *dist = distance;
-    return ret;
 }
 
-
-
+/* Processes a gene conversion event that started left of a first
+ * segment and does not span the whole segment chain*/
 static int MSP_WARN_UNUSED
 msp_gene_conversion_left_event(msp_t *self, label_id_t label)
 {
-    /*processes a gene conversion event that started left of a first segment and does not span the whole segment chain*/
     int ret = 0;
-    double h, length = 0;
+    double h, length, p, u;
     segment_t *x, *y, *z;
-//     segment_t *lhs_tail;
     int64_t k, tl;
     size_t segment_id;
 
-//     printf("GC_LEFT: %p %d\n", (void *) self, label);
     self->num_gc_events++;
     h = gsl_rng_uniform(self->rng) * msp_get_cleft_total(self);
-    /*get the segement where gc starts from left and the length of the segment chain*/
-    segment_id = msp_find_cleft_individual(self, h, &length);
+    /* Get the segment where gc starts from left and the length of the segment chain */
+    msp_find_cleft_individual(self, h, &segment_id, &length);
     y = msp_get_segment(self, segment_id, label);
-    /*generate conditional track length*/
+    /* Generate conditional track length */
     assert(length > 0);
-    if(self->gene_conversion_track_length == 1.0){
+    if (self->gene_conversion_track_length == 1.0) {
         tl = 1;
-    }else{
-        tl = (int64_t) floor( 1.0 + log(1.0 - gsl_rng_uniform(self->rng) * 
-                                        (1.0 - pow(self->gene_conversion_prob_to_continue_track, length - 1.0) ) )/self->gene_conversion_log_prob_to_continue_track  );    
+    } else {
+        p = self->gene_conversion_prob_to_continue_track;
+        u = gsl_rng_uniform(self->rng);
+        tl = (int64_t) floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / p);
     }
     k = (int64_t) y->left + tl;
-    
+
     while (y->right <= k){
         y = y->next;
     }
     x = y->prev;
     if (y->left < k){
         /*make new segment*/
-        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value, y->population_id, y->label, NULL, y->next);
+        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value, y->population_id,
+                y->label, NULL, y->next);
+        if (z == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
         if (y->next != NULL){
             y->next->prev = z;
         }
         y->next = NULL;
         y->right = (uint32_t) k;
         fenwick_increment(&self->links[label], y->id, k - (int64_t) z->right);
-//         lhs_tail = y;
     }
     else{
         /*split the link between x and y*/
         x->next = NULL;
         y->prev = NULL;
         z = y;
-//         lhs_tail = x;
     }
     z->label = label;
     fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
     ret = msp_insert_individual(self, z);
-
+out:
     return ret;
 }
 
