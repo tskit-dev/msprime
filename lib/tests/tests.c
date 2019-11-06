@@ -1846,6 +1846,53 @@ test_single_locus_simulation(void)
 }
 
 static void
+test_single_locus_gene_conversion(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(msp, 10, 10);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    /* For the single locus sim we should have exactly n - 1 events */
+    for (j = 0; j < n - 2; j++) {
+        ret = msp_run(msp, DBL_MAX, 1);
+        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
+        msp_verify(msp);
+    }
+    ret = msp_run(msp, DBL_MAX, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_multi_locus_bottleneck_arg(void)
 {
     int ret;
@@ -1980,12 +2027,12 @@ test_gene_conversion_simulation(void)
     int ret;
     uint32_t n = 100;
     uint32_t m = 100;
+    double track_lengths[] = {1.0, 1.3333, 5, 100, 10000};
     long seed = 10;
-    size_t num_ca_events, num_re_events, num_gc_events;
-    double t;
+    size_t j, num_ca_events, num_re_events, num_gc_events;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
-
+    tsk_treeseq_t ts;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -1998,50 +2045,35 @@ test_gene_conversion_simulation(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_set(rng, seed);
-    memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_gene_conversion_rate(msp, 1.0, 5);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, 0);
 
-    ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-    msp_verify(msp);
-    num_ca_events = msp_get_num_common_ancestor_events(msp);
-    num_re_events = msp_get_num_recombination_events(msp);
-    num_gc_events = msp_get_num_gene_conversion_events(msp);
-    CU_ASSERT_TRUE(num_ca_events > 0);
-    CU_ASSERT_TRUE(num_re_events > 0);
-    CU_ASSERT_TRUE(num_gc_events > 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    msp_free(msp);
+    for (j = 0; j < sizeof(track_lengths) / sizeof(double); j++) {
+        memset(samples, 0, n * sizeof(sample_t));
+        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_gene_conversion_rate(msp, 1.0, track_lengths[j]);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(msp);
+        CU_ASSERT_EQUAL(ret, 0);
 
-    /* Realloc the simulator under different memory params to see if
-     * we get the same result. */
-    gsl_rng_set(rng, seed);
-    tsk_table_collection_clear(&tables);
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_gene_conversion_rate(msp, 1.0, 5);
-    CU_ASSERT_EQUAL(ret, 0);
-
-    ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    t = 1;
-    while ((ret = msp_run(msp, DBL_MAX, 1)) > 0) {
+        ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
         msp_verify(msp);
-//         CU_ASSERT_EQUAL_FATAL(msp->time, t);
-        t++;
-    }
-    msp_verify(msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_TRUE(num_ca_events == msp_get_num_common_ancestor_events(msp));
-    CU_ASSERT_TRUE(num_re_events == msp_get_num_recombination_events(msp));
-    CU_ASSERT_TRUE(num_gc_events == msp_get_num_gene_conversion_events(msp));
+        num_ca_events = msp_get_num_common_ancestor_events(msp);
+        num_re_events = msp_get_num_recombination_events(msp);
+        num_gc_events = msp_get_num_gene_conversion_events(msp);
+        CU_ASSERT_TRUE(num_ca_events > 0);
+        CU_ASSERT_TRUE(num_re_events > 0);
+        CU_ASSERT_TRUE(num_gc_events > 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_free(msp);
 
-    ret = msp_free(msp);
-    CU_ASSERT_EQUAL(ret, 0);
+        /* Make sure we can build a tree sequence out of the result */
+        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        tsk_treeseq_free(&ts);
+
+        tsk_table_collection_clear(&tables);
+    }
     gsl_rng_free(rng);
     free(msp);
     free(samples);
@@ -3891,6 +3923,12 @@ test_simulate_init_errors(void)
 
     ret = msp_set_start_time(&msp, -1);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME);
+
+    ret = msp_set_gene_conversion_rate(&msp, -1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_rate(&msp, 0, 0.9999);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -4535,6 +4573,7 @@ main(int argc, char **argv)
         {"test_dtwf_unsupported_bottleneck", test_dtwf_unsupported_bottleneck},
         {"test_time_travel_error", test_time_travel_error},
         {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_single_locus_gene_conversion", test_single_locus_gene_conversion},
         {"test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg},
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},

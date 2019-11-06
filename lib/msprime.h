@@ -221,8 +221,6 @@ typedef struct _msp_t {
     recomb_map_t *recomb_map;
     double gene_conversion_rate;
     double gene_conversion_track_length;
-    double gene_conversion_prob_to_continue_track;
-    double gene_conversion_log_prob_to_continue_track;
     uint32_t num_populations;
     uint32_t num_labels;
     sample_t *samples;
