@@ -1205,7 +1205,6 @@ out:
     return ret;
 }
 
-
 /*
  * Inserts a new overlap_count at the specified locus left, mapping to the
  * specified number of overlapping segments b.

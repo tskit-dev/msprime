@@ -283,6 +283,11 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(
             args.migration_rate_change, [(0, [2, 3]), (2, [4, 5])])
 
+    def test_gene_conversion(self):
+        args = self.parse_args("10 1 -r 1 100 -c 5 12".split())
+        self.assertEqual(args.recombination, [1, 100])
+        self.assertEqual(args.gene_conversion, [5, 12])
+
 
 class CustomExceptionForTesting(Exception):
     """
