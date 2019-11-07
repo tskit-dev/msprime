@@ -706,6 +706,39 @@ out:
     return ret;
 }
 
+/* Returns true if the specified breakpoint exists */
+static bool
+msp_has_breakpoint(msp_t *self, uint32_t x)
+{
+    node_mapping_t search;
+    search.left = x;
+
+    return avl_search(&self->breakpoints, &search) != NULL;
+}
+
+/*
+ * Inserts a new breakpoint at the specified locus left.
+ */
+static int MSP_WARN_UNUSED
+msp_insert_breakpoint(msp_t *self, uint32_t left)
+{
+    int ret = 0;
+    avl_node_t *node = msp_alloc_avl_node(self);
+    node_mapping_t *m = msp_alloc_node_mapping(self);
+
+    if (node == NULL || m == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    m->left = left;
+    m->value = 0;
+    avl_init_node(node, m);
+    node = avl_insert_node(&self->breakpoints, node);
+    assert(node != NULL);
+out:
+    return ret;
+}
+
 static void
 msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 {
@@ -720,7 +753,7 @@ msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 }
 
 static void
-msp_verify_segments(msp_t *self)
+msp_verify_segments(msp_t *self, bool verify_breakpoints)
 {
     int64_t s, ss, total_links, left, right, alt_total_links;
     size_t j, k;
@@ -755,6 +788,9 @@ msp_verify_segments(msp_t *self)
                     assert(s == ss);
                     if (s == ss) {
                         /* do nothing; just to keep compiler happy - see below also */
+                    }
+                    if (verify_breakpoints && u->left != 0) {
+                        assert(msp_has_breakpoint(self, u->left));
                     }
                     right = u->right;
                     u = u->next;
@@ -829,9 +865,9 @@ msp_verify_overlaps(msp_t *self)
 }
 
 void
-msp_verify(msp_t *self)
+msp_verify(msp_t *self, int options)
 {
-    msp_verify_segments(self);
+    msp_verify_segments(self, options & MSP_VERIFY_BREAKPOINTS);
     msp_verify_overlaps(self);
 }
 
@@ -974,7 +1010,7 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "node_mapping_heap:");
     object_heap_print_state(&self->node_mapping_heap, out);
     fflush(out);
-    msp_verify(self);
+    msp_verify(self, 0);
 out:
     if (ancestors != NULL) {
         free(ancestors);
@@ -1178,29 +1214,6 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         }
     }
     ret = msp_insert_individual(self, new_ind);
-out:
-    return ret;
-}
-
-/*
- * Inserts a new breakpoint at the specified locus left.
- */
-static int MSP_WARN_UNUSED
-msp_insert_breakpoint(msp_t *self, uint32_t left)
-{
-    int ret = 0;
-    avl_node_t *node = msp_alloc_avl_node(self);
-    node_mapping_t *m = msp_alloc_node_mapping(self);
-
-    if (node == NULL || m == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    m->left = left;
-    m->value = 0;
-    avl_init_node(node, m);
-    node = avl_insert_node(&self->breakpoints, node);
-    assert(node != NULL);
 out:
     return ret;
 }
@@ -1810,7 +1823,6 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     int ret = 0;
     int64_t l, t, gap, k;
     size_t segment_id;
-    node_mapping_t search;
     segment_t *x, *y, *z, *lhs_tail;
     int64_t num_links = fenwick_get_total(&self->links[label]);
 
@@ -1840,14 +1852,13 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         y->next = NULL;
         y->right = (uint32_t) k;
         fenwick_increment(&self->links[label], y->id, k - z->right);
-        search.left = (uint32_t) k;
-        if (avl_search(&self->breakpoints, &search) == NULL) {
+        if (msp_has_breakpoint(self, (uint32_t) k)) {
+            self->num_multiple_re_events++;
+        } else {
             ret = msp_insert_breakpoint(self, (uint32_t) k);
             if (ret != 0) {
                 goto out;
             }
-        } else {
-            self->num_multiple_re_events++;
         }
         lhs_tail = y;
     } else {

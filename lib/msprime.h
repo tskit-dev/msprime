@@ -52,6 +52,9 @@
 #define MSP_NODE_IS_MIG_EVENT   (1u << 19)
 #define MSP_NODE_IS_CEN_EVENT   (1u << 20)
 
+/* Flags for verify */
+#define MSP_VERIFY_BREAKPOINTS  (1 << 1)
+
 /* Alphabets for mutation generator */
 #define MSP_ALPHABET_BINARY     0
 #define MSP_ALPHABET_NUCLEOTIDE 1
@@ -404,7 +407,7 @@ int msp_finalise_tables(msp_t *self);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);
-void msp_verify(msp_t *self);
+void msp_verify(msp_t *self, int options);
 
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);

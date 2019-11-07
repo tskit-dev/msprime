@@ -795,7 +795,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
         if (ret < 0) {
             fatal_msprime_error(ret, __LINE__);
@@ -806,7 +806,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
                 msp_print_pedigree_inds(&msp, stdout);
             }
         }
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
         ret = msp_finalise_tables(&msp);
 
         if (ret != 0) {
