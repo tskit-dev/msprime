@@ -87,9 +87,9 @@ handle_tskit_library_error(int err)
 }
 
 static void
-handle_input_error(int err)
+handle_input_error(const char *section, int err)
 {
-    PyErr_SetString(MsprimeInputError, msp_strerror(err));
+    PyErr_Format(MsprimeInputError, "Input error in %s: %s", section, msp_strerror(err));
 }
 
 /*
@@ -2361,7 +2361,7 @@ Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_confi
         err = msp_set_population_configuration(self->sim, j,
                 initial_size, growth_rate);
         if (err != 0) {
-            handle_input_error(err);
+            handle_input_error("population configuration", err);
             goto out;
         }
     }
@@ -2409,7 +2409,7 @@ Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
     }
     err = msp_set_migration_matrix(self->sim, size, migration_matrix);
     if (err != 0) {
-        handle_input_error(err);
+        handle_input_error("migration matrix", err);
         goto out;
     }
     ret = 0;
@@ -2462,7 +2462,7 @@ Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model,
     err = msp_set_simulation_model_sweep_genic_selection(self->sim, reference_size,
             position, start_frequency, end_frequency, alpha, dt);
     if (err != 0) {
-        handle_input_error(err);
+        handle_input_error("sweep genic selection", err);
         goto out;
     }
     ret = 0;
@@ -2631,7 +2631,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (err != 0) {
-        handle_input_error(err);
+        handle_input_error("simulation model", err);
         goto out;
     }
     ret = 0;
@@ -2846,7 +2846,9 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             goto out;
         }
         if (err != 0) {
-            handle_input_error(err);
+            PyErr_Format(MsprimeInputError,
+                    "Input error in demographic_events[%d]: %s", j,
+                    msp_strerror(err));
             goto out;
         }
     }
@@ -2948,7 +2950,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             recombination_map->recomb_map, tables->tables,
             self->random_generator->rng);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("simulator alloc", sim_ret);
         goto out;
     }
     if (py_model != NULL) {
@@ -2959,31 +2961,31 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (start_time >= 0) {
         sim_ret = msp_set_start_time(self->sim, start_time);
         if (sim_ret != 0) {
-            handle_input_error(sim_ret);
+            handle_input_error("start time", sim_ret);
             goto out;
         }
     }
     sim_ret = msp_set_store_migrations(self->sim, (bool) store_migrations);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("store migrations", sim_ret);
         goto out;
     }
     sim_ret = msp_set_avl_node_block_size(self->sim,
             (size_t) avl_node_block_size);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("avl_node_block_size", sim_ret);
         goto out;
     }
     sim_ret = msp_set_segment_block_size(self->sim,
             (size_t) segment_block_size);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("segment_block_size", sim_ret);
         goto out;
     }
     sim_ret = msp_set_node_mapping_block_size(self->sim,
             (size_t) node_mapping_block_size);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("node_mapping_block_size", sim_ret);
         goto out;
     }
 
@@ -2996,7 +2998,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("set_dimensions", sim_ret);
         goto out;
     }
 
@@ -3029,7 +3031,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("initialise", sim_ret);
         goto out;
     }
     ret = 0;

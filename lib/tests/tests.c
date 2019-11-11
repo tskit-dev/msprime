@@ -812,7 +812,7 @@ test_demographic_events(void)
             MSP_ERR_SOURCE_DEST_EQUAL);
         CU_ASSERT_EQUAL(
             msp_add_mass_migration(&msp, 10, 0, 1, -5),
-            MSP_ERR_BAD_PARAM_VALUE);
+            MSP_ERR_BAD_PROPORTION);
 
         CU_ASSERT_EQUAL(
             msp_add_migration_rate_change(&msp, 10, -2, 2.0),
@@ -839,17 +839,17 @@ test_demographic_events(void)
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL(
             msp_add_simple_bottleneck(&msp, 10, 0, -1),
-            MSP_ERR_BAD_PARAM_VALUE);
+            MSP_ERR_BAD_PROPORTION);
         CU_ASSERT_EQUAL(
             msp_add_simple_bottleneck(&msp, 10, 0, 1.1),
-            MSP_ERR_BAD_PARAM_VALUE);
+            MSP_ERR_BAD_PROPORTION);
 
         CU_ASSERT_EQUAL(
             msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL(
             msp_add_simple_bottleneck(&msp, 10, 0, -1),
-            MSP_ERR_BAD_PARAM_VALUE);
+            MSP_ERR_BAD_PROPORTION);
         CU_ASSERT_EQUAL_FATAL(
             msp_add_simple_bottleneck(&msp, 10, -1, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);

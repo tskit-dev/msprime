@@ -1,4 +1,13 @@
 ********************
+[0.7.4] - XXXXXXXXXX
+********************
+
+**New features**:
+
+- Improved error reporting for input parameters, in particular
+  demographic events (:pr:`829`).
+
+********************
 [0.7.3] - 2019-08-03
 ********************
 
