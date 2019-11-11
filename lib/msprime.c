@@ -3941,7 +3941,7 @@ msp_add_mass_migration(msp_t *self, double time, int source, int destination,
         goto out;
     }
     if (proportion < 0.0 || proportion > 1.0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_BAD_PROPORTION;
         goto out;
     }
     ret = msp_add_demographic_event(self, time, &de);
@@ -4033,7 +4033,7 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double pr
         goto out;
     }
     if (proportion < 0.0 || proportion > 1.0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_BAD_PROPORTION;
         goto out;
     }
     ret = msp_add_demographic_event(self, time, &de);

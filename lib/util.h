@@ -73,6 +73,7 @@
 #define MSP_ERR_UNSUPPORTED_OPERATION                               -36
 #define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -38
 #define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -39
+#define MSP_ERR_BAD_PROPORTION                                      -40
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

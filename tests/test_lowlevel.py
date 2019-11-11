@@ -1480,6 +1480,26 @@ class TestSimulator(LowLevelTestCase):
             event = get_simple_bottleneck_event(proportion=bad_proportion)
             self.assertRaises(_msprime.InputError, f, [event])
 
+    def test_bad_demographic_event_messages(self):
+        def f(events, num_populations=1):
+            population_configuration = [get_population_configuration(2)] + [
+                get_population_configuration(0)
+                for _ in range(num_populations - 1)]
+            _msprime.Simulator(
+                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(), demographic_events=events,
+                population_configuration=population_configuration,
+                migration_matrix=get_migration_matrix(num_populations))
+
+        # Make sure we're getting the right index in error message.
+        events = [get_size_change_event(), get_size_change_event(size=-1)]
+        try:
+            f(events)
+        except _msprime.InputError as e:
+            message = str(e)
+        self.assertTrue(
+            message.startswith("Input error in demographic_events[1]"))
+
     def test_unsorted_demographic_events(self):
         event_generators = [
             get_size_change_event, get_growth_rate_change_event,

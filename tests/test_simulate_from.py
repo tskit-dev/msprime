@@ -893,7 +893,7 @@ class TestErrors(unittest.TestCase):
         message = str(e.exception)
         with self.assertRaises(_msprime.InputError) as e:
             msprime.simulate(from_ts=ts)
-        self.assertEqual(message, str(e.exception))
+        self.assertTrue(str(e.exception).endswith(message))
 
 
 class TestSlimOutput(unittest.TestCase):

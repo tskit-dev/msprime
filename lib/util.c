@@ -156,7 +156,9 @@ msp_strerror_internal(int err)
             ret = "Bottleneck events are not supported in DTWF. They can "
                 "be implemented as population size changes.";
             break;
-
+        case MSP_ERR_BAD_PROPORTION:
+            ret = "Proportion values must have 0 <= x <= 1";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                 "report!";
