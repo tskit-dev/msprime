@@ -360,7 +360,9 @@ def simulate(
         parameter, then the migration matrix must be an
         :math:`N \\times N` matrix with 0 on the diagonal, consisting of
         :math:`N` lists of length :math:`N` or an :math:`N \\times N` numpy
-        array.
+        array, with the [j, k]th element giving the fraction of
+        population j that consists of migrants from population k in each
+        generation.
     :param list demographic_events: The list of demographic events to
         simulate. Demographic events describe changes to the populations
         in the past. Events should be supplied in non-decreasing
