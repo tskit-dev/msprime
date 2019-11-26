@@ -371,3 +371,5 @@ intersphinx_mapping = {
 # Github repo
 issues_github_path = "tskit-dev/msprime"
 
+# Mathjax path
+mathjax_path = 'http://cdn.mathjax.org/mathjax/latest/MathJax.js'
