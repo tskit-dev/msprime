@@ -1530,6 +1530,47 @@ test_dtwf_single_locus_simulation(void)
 }
 
 static void
+test_dtwf_low_recombination(void)
+{
+    int ret;
+    uint32_t n = 2;
+
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, UINT32_MAX, 1.0, 1e-9);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(msp, 1e3);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* msp_verify(msp); */
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_single_locus_simulation(void)
 {
     int ret;
@@ -4003,6 +4044,7 @@ main(int argc, char **argv)
         {"test_dtwf_zero_pop_size", test_dtwf_zero_pop_size},
         {"test_dtwf_events_between_generations", test_dtwf_events_between_generations},
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
+        {"test_dtwf_low_recombination", test_dtwf_low_recombination},
         {"test_likelihood_three_leaves", test_likelihood_three_leaves},
         {"test_likelihood_two_mrcas", test_likelihood_two_mrcas},
         {"test_likelihood_material_overhang", test_likelihood_material_overhang},

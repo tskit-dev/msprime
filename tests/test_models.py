@@ -278,6 +278,22 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.verify_non_binary(ts)
 
 
+class TestDtwf(unittest.TestCase):
+    """
+    Tests for the DTWF model.
+    """
+    def test_low_recombination(self):
+        # https://github.com/tskit-dev/msprime/issues/831
+        ts = msprime.simulate(
+            10, Ne=1e2, model="dtwf", recombination_rate=1e-9, random_seed=2)
+        self.assertEqual(ts.num_trees, 1)
+
+    def test_very_low_recombination(self):
+        ts = msprime.simulate(
+            10, Ne=1e2, model="dtwf", recombination_rate=1e-300, random_seed=2)
+        self.assertEqual(ts.num_trees, 1)
+
+
 class TestUnsupportedFullArg(unittest.TestCase):
     """
     Full ARG recording isn't supported on anything except standard coalescent.
