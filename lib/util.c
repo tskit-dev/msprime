@@ -153,8 +153,15 @@ msp_strerror_internal(int err)
             ret = "Population size has decreased to zero individuals.";
             break;
         case MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK:
-            ret = "Bottleneck events are not supported in DTWF. They can "
-                "be implemented as population size changes.";
+            ret = "Bottleneck events are not supported in the DTWF model. "
+                "They can be implemented as population size changes.";
+            break;
+        case MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES:
+            ret = "The number of haploid lineages denoted by sample_size must "
+                "be divisible by ploidy (default 2)";
+            break;
+        case MSP_ERR_BAD_PEDIGREE_ID:
+            ret = "Individual IDs in pedigrees must be strictly > 0.";
             break;
         case MSP_ERR_BAD_PROPORTION:
             ret = "Proportion values must have 0 <= x <= 1";

@@ -450,6 +450,113 @@ read_migration_matrix(msp_t *msp, config_t *config)
 }
 
 static void
+read_pedigree(msp_t *msp, config_t *config)
+{
+    int ret = 0;
+    size_t i, j, size, num_inds, num_samples;
+    size_t ploidy = 2;
+    tsk_id_t *inds = NULL;
+    tsk_id_t *parents = NULL;
+    double *time = NULL;
+    tsk_flags_t *is_sample = NULL;
+    config_setting_t *s, *row;
+    config_setting_t *setting;
+
+    // Read individual array
+    setting = config_lookup(config, "individual");
+    if (config_setting_is_array(setting) == CONFIG_FALSE) {
+        fatal_error("Pedigree individuals must be an array");
+    }
+    size = (size_t) config_setting_length(setting);
+    num_inds = size;
+
+    inds = malloc(num_inds * sizeof(tsk_id_t));
+    parents = malloc(num_inds * ploidy * sizeof(tsk_id_t));
+    time = malloc(num_inds * sizeof(double));
+    is_sample = malloc(num_inds * sizeof(tsk_flags_t));
+    if (inds == NULL || parents == NULL || time == NULL ||
+            is_sample == NULL) {
+        fatal_error("Out of memory");
+    }
+
+    // Set individual array
+    for (j = 0; j < num_inds; j++) {
+        s = config_setting_get_elem(setting, (unsigned int) j);
+        if (s == NULL) {
+            fatal_error("error reading pedigree individual %d", j);
+        }
+        inds[j] = (tsk_id_t) config_setting_get_int(s);
+    }
+
+    // Read remaining pedigree arrays
+    setting = config_lookup(config, "parents");
+    if (config_setting_is_list(setting) == CONFIG_FALSE) {
+        fatal_error("Pedigree parents must be an list");
+    }
+    for (j = 0; j < num_inds; j++) {
+        row = config_setting_get_elem(setting, (unsigned int) j);
+        if (row == NULL) {
+            fatal_error("error reading pedigree parents %d", j);
+        }
+        if (config_setting_is_array(row) == CONFIG_FALSE) {
+            fatal_error("pedigree parents row %d not an array", j);
+        }
+        if (config_setting_length(row) != ploidy) {
+            fatal_error(
+                "pedigree parents must have 'ploidy' columns");
+        }
+        for (i = 0; i < ploidy; i++) {
+            s = config_setting_get_elem(row, (unsigned int) i);
+            if (!config_setting_is_number(s)) {
+                fatal_error("pedigree parent entries must be numbers");
+            }
+            parents[j * ploidy + i] = (tsk_id_t) config_setting_get_int(s);
+        }
+    }
+
+    setting = config_lookup(config, "time");
+    if (config_setting_is_array(setting) == CONFIG_FALSE) {
+        fatal_error("Pedigree times must be an array");
+    }
+    for (j = 0; j < num_inds; j++) {
+        s = config_setting_get_elem(setting, (unsigned int) j);
+        if (s == NULL) {
+            fatal_error("error reading pedigree individual %d", j);
+        }
+        time[j] = (double) config_setting_get_float(s);
+    }
+
+    setting = config_lookup(config, "is_sample");
+    if (config_setting_is_array(setting) == CONFIG_FALSE) {
+        fatal_error("Pedigree sample flags must be an array");
+    }
+    num_samples = 0;
+    for (j = 0; j < num_inds; j++) {
+        s = config_setting_get_elem(setting, (unsigned int) j);
+        if (s == NULL) {
+            fatal_error("error reading pedigree individual %d", j);
+        }
+        is_sample[j] = (tsk_flags_t) config_setting_get_int(s);
+        assert(is_sample[j] == 0 || is_sample[j] == 1);
+        num_samples += is_sample[j];
+    }
+    assert(num_samples > 0);
+
+    ret = msp_alloc_pedigree(msp, num_inds, ploidy);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    ret = msp_set_pedigree(msp, num_inds, inds, parents, time, is_sample);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    free(inds);
+    free(parents);
+    free(time);
+    free(is_sample);
+}
+
+static void
 read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
 {
     int ret = 0;
@@ -601,6 +708,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
     }
     read_model_config(msp, config);
     read_population_configuration(msp, config);
+    read_pedigree(msp, config);
     read_migration_matrix(msp, config);
     read_demographic_events(msp, config);
     config_destroy(config);
@@ -679,6 +787,9 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         }
         if (verbose >= 1) {
             msp_print_state(&msp, stdout);
+            if (verbose >= 2 && msp.pedigree != NULL) {
+                msp_print_pedigree_inds(&msp, stdout);
+            }
         }
         msp_verify(&msp);
         ret = msp_finalise_tables(&msp);

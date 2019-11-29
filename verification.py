@@ -1232,6 +1232,101 @@ class SimulationVerifier(object):
             duration = time.perf_counter() - before
             print("Final sim required {:.2f} sec".format(duration))
 
+    def run_dtwf_pedigree_comparison(self, test_name, **kwargs):
+        df = pd.DataFrame()
+        pedigree = kwargs['pedigree']
+        assert kwargs['sample_size'] % 2 == 0
+        sample_size = kwargs['sample_size']
+        sample_size_diploid = sample_size // 2
+        for model in ["wf_ped", "dtwf"]:
+            kwargs["model"] = model
+            kwargs['pedigree'] = None
+            kwargs['sample_size'] = sample_size
+            if model == "wf_ped":
+                kwargs['sample_size'] = sample_size_diploid
+                kwargs['pedigree'] = pedigree
+
+                des = []
+                if "demographic_events" in kwargs:
+                    des = kwargs["demographic_events"]
+                max_ped_time = max(pedigree.times)
+                des.append(msprime.SimulationModelChange(max_ped_time, 'dtwf'))
+                des = sorted(des, key=lambda x: x.time)
+                kwargs["demographic_events"] = des
+
+            print("Running: ", kwargs)
+            data = collections.defaultdict(list)
+            try:
+                replicates = msprime.simulate(**kwargs)
+                for ts in replicates:
+                    t_mrca = np.zeros(ts.num_trees)
+                    for tree in ts.trees():
+                        t_mrca[tree.index] = tree.time(tree.root)
+                    data["tmrca_mean"].append(np.mean(t_mrca))
+                    data["num_trees"].append(ts.num_trees)
+                    data["model"].append(model)
+            except Exception as e:
+                print("TEST FAILED!!!:", e)
+                return
+            df = df.append(pd.DataFrame(data))
+
+        basedir = os.path.join("tmp__NOBACKUP__", test_name)
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        df_wf_ped = df[df.model == "wf_ped"]
+        df_dtwf = df[df.model == "dtwf"]
+        for stat in ["tmrca_mean", "num_trees"]:
+            v1 = df_wf_ped[stat]
+            v2 = df_dtwf[stat]
+            sm.graphics.qqplot(v1)
+            sm.qqplot_2samples(v1, v2, line="45")
+            f = os.path.join(basedir, "{}.png".format(stat))
+            pyplot.savefig(f, dpi=72)
+            pyplot.close('all')
+
+    def add_dtwf_vs_pedigree_single_locus(self):
+        """
+        Checks the DTWF against the standard coalescent at a single locus.
+        """
+        pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
+        pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
+
+        def f():
+            self.run_dtwf_pedigree_comparison(
+                "dtwf_vs_pedigree_single_locus", sample_size=10, Ne=100,
+                num_replicates=400, length=1, pedigree=pedigree,
+                recombination_rate=0, mutation_rate=1e-8)
+        self._instances["dtwf_vs_pedigree_single_locus"] = f
+
+    def add_dtwf_vs_pedigree_short_region(self):
+        """
+        Checks the DTWF against the standard coalescent at a single locus.
+        """
+        pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
+        pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
+
+        def f():
+            self.run_dtwf_pedigree_comparison(
+                "dtwf_vs_pedigree_short_region", sample_size=10, Ne=100,
+                num_replicates=400, length=1e6, pedigree=pedigree,
+                recombination_rate=1e-8, mutation_rate=1e-8)
+        self._instances["dtwf_vs_pedigree_short_region"] = f
+
+    def add_dtwf_vs_pedigree_long_region(self):
+        """
+        Checks the DTWF against the standard coalescent at a single locus.
+        """
+        pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
+        pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
+
+        def f():
+            self.run_dtwf_pedigree_comparison(
+                "dtwf_vs_pedigree_long_region", sample_size=10, Ne=100,
+                num_replicates=200, length=1e8, pedigree=pedigree,
+                recombination_rate=1e-8, mutation_rate=1e-8)
+        self._instances["dtwf_vs_pedigree_long_region"] = f
+
     def run_dtwf_coalescent_comparison(self, test_name, **kwargs):
         df = pd.DataFrame()
         for model in ["hudson", "dtwf"]:

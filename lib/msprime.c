@@ -48,6 +48,19 @@ cmp_individual(const void *a, const void *b) {
     return (ia->id > ib->id) - (ia->id < ib->id);
 }
 
+/* For pedigree individuals we sort on time and to break ties
+ * we arbitrarily use the ID */
+static int
+cmp_pedigree_individual(const void *a, const void *b) {
+    const individual_t *ia = (const individual_t *) a;
+    const individual_t *ib = (const individual_t *) b;
+    int ret =  (ia->time > ib->time) - (ia->time < ib->time);
+    if (ret == 0)  {
+        ret = (ia->id > ib->id) - (ia->id < ib->id);
+    }
+    return ret;
+}
+
 /* For the segment priority queue we want to sort on the left
  * coordinate and to break ties we arbitrarily use the ID */
 static int
@@ -457,6 +470,8 @@ msp_alloc(msp_t *self,
     self->demographic_events_tail = NULL;
     self->next_demographic_event = NULL;
     self->state = MSP_STATE_NEW;
+    /* Set up pedigree */
+    self->pedigree = NULL;
 out:
     return ret;
 }
@@ -558,6 +573,9 @@ msp_free(msp_t *self)
     }
     if (self->model.free != NULL) {
         self->model.free(&self->model);
+    }
+    if (self->pedigree != NULL) {
+        msp_free_pedigree(self);
     }
     ret = 0;
     return ret;
@@ -971,7 +989,8 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id)
+msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t population_id,
+        tsk_id_t individual)
 {
     int ret = 0;
     double scaled_time = self->model.model_time_to_generations(&self->model, time);
@@ -981,7 +1000,7 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
         goto out;
     }
     ret = tsk_node_table_add_row(&self->tables->nodes, flags, scaled_time, population_id,
-            TSK_NULL, NULL, 0);
+            individual, NULL, 0);
     if (ret < 0) {
         goto out;
     }
@@ -1072,7 +1091,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     msp_free_avl_node(self, node);
 
     if (self->store_full_arg) {
-        ret = msp_store_node(self, MSP_NODE_IS_MIG_EVENT, self->time, dest_pop);
+        ret = msp_store_node(self, MSP_NODE_IS_MIG_EVENT, self->time, dest_pop, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
@@ -1278,6 +1297,392 @@ msp_dtwf_generate_breakpoint(msp_t *self, int64_t start)
     return 1 + start + (int64_t) x;
 }
 
+int MSP_WARN_UNUSED
+alloc_individual(individual_t *ind, size_t ploidy)
+{
+    int ret;
+    size_t i;
+
+    ind->id = -1;
+    ind->tsk_id = TSK_NULL;
+    ind->sex = -1;
+    ind->time = -1;
+    ind->queued = false;
+    ind->merged = false;
+
+    // Better to allocate these as a block?
+    ind->parents = malloc(ploidy * sizeof(individual_t *));
+    ind->segments = malloc(ploidy * sizeof(avl_tree_t));
+    if (ind->parents == NULL || ind->segments == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (i = 0; i < ploidy; i++) {
+        avl_init_tree(&ind->segments[i], cmp_segment_queue, NULL);
+        ind->parents[i] = NULL;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_reset_individual(msp_t *self, individual_t *ind)
+{
+    int ret = 0;
+    /* avl_node_t *node; */
+    size_t i;
+
+    ind->tsk_id = TSK_NULL;
+    ind->queued = false;
+    ind->merged = false;
+
+    for (i = 0; i < self->pedigree->ploidy; i++) {
+        /* TODO: We don't yet support terminating pedigree simulations before
+           reaching the pedigree founders, which means all segments are moved
+           back into the population pool before a reset is possible. Might need
+           more here when we support early termination. */
+        assert(avl_count(&ind->segments[i]) == 0);
+    }
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_reset_pedigree(msp_t *self)
+{
+    int ret;
+    size_t i;
+    /* avl_node_t *node; */
+    individual_t *ind;
+
+    ind = self->pedigree->inds;
+    for (i = 0; i < self->pedigree->num_inds; i++) {
+        ret = msp_reset_individual(self, ind);
+        if (ret != 0) {
+            goto out;
+        }
+        ind++;
+    }
+    /* TODO: We don't yet support terminating pedigree simulations before
+       reaching the pedigree founders, which means no individuals will remain in
+       the pedigree heap when a reset is possibile. Might need more here when we
+       support early termination. */
+    assert(avl_count(&self->pedigree->ind_heap) == 0);
+
+    self->pedigree->state = MSP_PED_STATE_UNCLIMBED;
+
+    ret = 0;
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy)
+{
+    int ret;
+    size_t i, num_samples;
+    individual_t *ind;
+
+    num_samples = self->num_samples / ploidy;
+
+    self->pedigree = malloc(sizeof(pedigree_t));
+    if (self->pedigree == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    self->pedigree->inds = calloc(num_inds, sizeof(individual_t));
+    if (self->pedigree->inds == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ind = self->pedigree->inds;
+    for (i = 0; i < num_inds; i++) {
+        ret = alloc_individual(ind, ploidy);
+        if (ret != 0) {
+            goto out;
+        }
+        ind++;
+    }
+    self->pedigree->samples = malloc(num_samples * sizeof(individual_t *));
+    if (self->pedigree->samples == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_tree(&self->pedigree->ind_heap, cmp_pedigree_individual, NULL);
+
+    self->pedigree->num_inds = num_inds;
+    self->pedigree->ploidy = ploidy;
+    self->pedigree->num_samples = num_samples;
+    self->pedigree->state = MSP_PED_STATE_UNCLIMBED;
+
+    ret = 0;
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_free_pedigree(msp_t *self)
+{
+    int ret;
+    individual_t *ind = NULL;
+    size_t i;
+
+    ind = self->pedigree->inds;
+    if (ind != NULL) {
+        assert(self->pedigree->num_inds > 0);
+        for (i = 0; i < self->pedigree->num_inds; i++) {
+            msp_safe_free(ind->parents);
+            msp_safe_free(ind->segments);
+            ind++;
+        }
+    }
+    msp_safe_free(self->pedigree->inds);
+    msp_safe_free(self->pedigree->samples);
+    msp_safe_free(self->pedigree);
+
+    ret = 0;
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_set_pedigree(msp_t *self, size_t num_rows, tsk_id_t *inds, tsk_id_t *parents,
+        double *times, tsk_flags_t *is_sample)
+{
+    int ret;
+    size_t i, j;
+    tsk_id_t parent_ix;
+    tsk_flags_t sample_flag;
+    size_t sample_num;
+    individual_t *ind = NULL;
+
+    assert(self->pedigree != NULL);
+    if (num_rows != self->pedigree->num_inds) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
+    ind = self->pedigree->inds;
+    sample_num = 0;
+    for (i = 0; i < self->pedigree->num_inds; i++) {
+        ind->id = inds[i];
+
+        if (ind->id <= 0) {
+            ret = MSP_ERR_BAD_PEDIGREE_ID;
+            goto out;
+        }
+
+        ind->time = times[i];
+
+        // Link individuals to parents
+        for (j = 0; j < self->pedigree->ploidy; j++) {
+            parent_ix = parents[i * self->pedigree->ploidy + j];
+            if (parent_ix >= 0) {
+                *(ind->parents + j) = self->pedigree->inds + parent_ix;
+            }
+        }
+
+        // Set samples
+        sample_flag = is_sample[i];
+        if (sample_flag != 0) {
+            assert(sample_flag == 1);
+            self->pedigree->samples[sample_num] = ind;
+            sample_num++;
+        }
+        ind++;
+    }
+    if (sample_num != self->pedigree->num_samples) {
+        /* TODO: Should be something like MSP_ERR_PEDIGREE_BAD_NUM_SAMPLES */
+        ret = MSP_ERR_BAD_PEDIGREE_ID;
+        goto out;
+    }
+
+    ret = 0;
+out:
+    return ret;
+}
+
+void
+msp_check_samples(msp_t *self)
+{
+    // Samples should have a single segment for each copy of their genome
+    size_t i, j;
+    individual_t *sample;
+
+    for (i = 0; i < self->pedigree->num_samples; i++) {
+        sample = self->pedigree->samples[i];
+        for (j = 0; j < self->pedigree->ploidy; j++) {
+            assert(avl_count(&sample->segments[j]) == 1);
+        }
+    }
+}
+
+int MSP_WARN_UNUSED
+msp_pedigree_load_pop(msp_t *self)
+{
+    int ret;
+    size_t i, sample_ix, parent_ix, ploidy;
+    population_t *pop;
+    individual_t *sample_ind;
+    segment_t *segment;
+    avl_node_t *node;
+    label_id_t label = 0;
+
+    assert(self->num_populations == 1); // Only support single pop for now
+    assert(self->pedigree->ploidy > 0);
+
+    pop = &self->populations[0];
+    ploidy = self->pedigree->ploidy;
+    if (avl_count(&pop->ancestors[label]) != self->pedigree->num_samples * ploidy) {
+        ret = MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES;
+        goto out;
+    }
+
+    // Move segments from population into pedigree samples
+    i = 0;
+    while(avl_count(&pop->ancestors[label]) > 0) {
+        node = pop->ancestors[label].head;
+        sample_ix = i / ploidy;
+        sample_ind = self->pedigree->samples[sample_ix];
+        parent_ix = i % ploidy;
+        segment = node->item;
+        avl_unlink_node(&pop->ancestors[label], node);
+        msp_free_avl_node(self, node);
+
+        ret = msp_pedigree_add_individual_segment(self, sample_ind, segment, parent_ix);
+        if (ret != 0) {
+            goto out;
+        }
+        i++;
+    }
+    msp_check_samples(self);
+    ret = 0;
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_pedigree_add_individual_segment(msp_t *self, individual_t *ind,
+        segment_t *segment, size_t parent_ix)
+{
+    int ret;
+    avl_node_t *node;
+
+    assert(ind->segments != NULL);
+    assert(parent_ix < self->pedigree->ploidy);
+
+    node = msp_alloc_avl_node(self);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(node, segment);
+    node = avl_insert_node(&ind->segments[parent_ix], node);
+    assert(node != NULL);
+
+    ret = 0;
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_pedigree_build_ind_queue(msp_t *self)
+{
+    int ret;
+    size_t i;
+    individual_t *ind;
+
+    assert(self->pedigree->num_samples > 0);
+    assert(self->pedigree->samples != NULL);
+
+    for (i = 0; i < self->pedigree->num_samples; i++) {
+        ind = self->pedigree->samples[i];
+        ret = msp_pedigree_push_ind(self, ind);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_pedigree_push_ind(msp_t *self, individual_t *ind)
+{
+    int ret;
+    avl_node_t *node;
+
+    assert(ind->queued == false);
+
+    node = msp_alloc_avl_node(self);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(node, ind);
+    node = avl_insert_node(&self->pedigree->ind_heap, node);
+    assert(node != NULL);
+    ind->queued = true;
+
+    ret = 0;
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_pedigree_pop_ind(msp_t *self, individual_t **ind)
+{
+    int ret;
+    avl_node_t *node;
+
+    assert(avl_count(&self->pedigree->ind_heap) > 0);
+
+    node = self->pedigree->ind_heap.head;
+    assert(node != NULL);
+    *ind = node->item;
+    assert((*ind)->queued);
+    (*ind)->queued = false;
+    msp_free_avl_node(self, node);
+    avl_unlink_node(&self->pedigree->ind_heap, node);
+
+    ret = 0;
+    return ret;
+}
+
+static void
+msp_print_individual(msp_t *self, individual_t ind, FILE *out)
+{
+    size_t j;
+
+    fprintf(out, "ID: %d, TSK_ID %u - Time: %f, Parents: [", ind.id, ind.tsk_id, ind.time);
+
+    for (j = 0; j < self->pedigree->ploidy; j++) {
+        if (ind.parents[j] != NULL) {
+            fprintf(out, " %d", ind.parents[j]->id);
+        } else {
+            fprintf(out, " None");
+        }
+    }
+    fprintf(out, " ]\n");
+}
+
+void
+msp_print_pedigree_inds(msp_t *self, FILE *out)
+{
+    individual_t ind;
+    size_t i;
+
+    assert(self->pedigree != NULL);
+    assert(self->pedigree->inds != NULL);
+    assert(self->pedigree->num_inds > 0);
+
+    for (i = 0; i < self->pedigree->num_inds; i++) {
+        ind = self->pedigree->inds[i];
+        assert(ind.id > 0);
+        msp_print_individual(self, ind, out);
+    }
+}
+
 static int MSP_WARN_UNUSED
 msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
@@ -1293,6 +1698,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     s2.next = NULL;
     ix = (int) gsl_rng_uniform_int(self->rng, 2);
     seg_tails[ix]->next = x;
+    assert(x->prev == NULL);
     x->prev = seg_tails[ix];
 
     while (x != NULL) {
@@ -1414,7 +1820,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     }
     if (self->store_full_arg) {
         /* Store the edges for the LHS */
-        ret = msp_store_node(self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population_id);
+        ret = msp_store_node(self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population_id, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
@@ -1423,7 +1829,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
             goto out;
         }
         /* Store the edges for the RHS */
-        ret = msp_store_node(self, MSP_NODE_IS_RE_EVENT, self->time, z->population_id);
+        ret = msp_store_node(self, MSP_NODE_IS_RE_EVENT, self->time, z->population_id, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
@@ -1533,7 +1939,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 if (!coalescence) {
                     coalescence = true;
                     l_min = l;
-                    ret = msp_store_node(self, 0, self->time, population_id);
+                    ret = msp_store_node(self, 0, self->time, population_id, TSK_NULL);
                     if (ret != 0) {
                         goto out;
                     }
@@ -1633,7 +2039,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     }
     if (self->store_full_arg) {
         if (! coalescence) {
-            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id);
+            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
             if (ret != 0) {
                 goto out;
             }
@@ -1686,11 +2092,12 @@ out:
  */
 static int MSP_WARN_UNUSED
 msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
-        label_id_t label)
+        label_id_t label, segment_t **merged_segment, tsk_id_t individual)
 {
     int ret = MSP_ERR_GENERIC;
     bool coalescence = false;
     bool defrag_required = false;
+    bool set_merged = false;
     node_id_t v;
     uint32_t j, l, r, h, r_max, next_l, l_min;
     avl_node_t *node;
@@ -1750,7 +2157,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             if (!coalescence) {
                 coalescence = true;
                 l_min = l;
-                ret = msp_store_node(self, 0, self->time, population_id);
+                ret = msp_store_node(self, 0, self->time, population_id, individual);
                 if (ret != 0) {
                     goto out;
                 }
@@ -1820,18 +2227,36 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     if (ret != 0) {
                         goto out;
                     }
+                } else {
+                    /* If we've fully coalesced, we stop tracking the segment in
+                       the pedigree. */
+                    if (self->pedigree != NULL &&
+                            self->pedigree->state == MSP_PED_STATE_CLIMBING) {
+                        if (!set_merged) {
+                            *merged_segment = NULL;
+                        }
+                    }
                 }
             }
         }
         /* Loop tail; integrate alpha into the global state */
         if (alpha != NULL) {
             if (z == NULL) {
-                ret = msp_insert_individual(self, alpha);
-                if (ret != 0) {
-                    goto out;
-                }
                 fenwick_set_value(&self->links[label], alpha->id,
                         alpha->right - alpha->left - 1);
+                /* Pedigree doesn't currently track lineages in Populations, so
+                   keep reference to merged segments instead */
+                if (self->pedigree != NULL &&
+                        self->pedigree->state == MSP_PED_STATE_CLIMBING) {
+                    assert(merged_segment != NULL);
+                    set_merged = true; //TODO: Must be better way of checking this
+                    *merged_segment = alpha;
+                } else {
+                    ret = msp_insert_individual(self, alpha);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
             } else {
                 if (self->store_full_arg) {
                     // we pre-empt the fact that values will be set equal later
@@ -1850,7 +2275,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     }
     if (self->store_full_arg) {
         if (! coalescence) {
-            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id);
+            ret = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time, population_id, individual);
             if (ret != 0) {
                 goto out;
             }
@@ -2110,8 +2535,12 @@ static int
 msp_reset_from_samples(msp_t *self)
 {
     int ret = 0;
-    size_t j;
+    char id_str[100];
+    tsk_size_t id_str_len;
+    size_t sample_idx, j;
+    individual_t *ind = NULL;
     node_id_t u;
+    tsk_id_t tsk_ind;
 
     tsk_population_table_clear(&self->tables->populations);
     tsk_edge_table_clear(&self->tables->edges);
@@ -2134,9 +2563,32 @@ msp_reset_from_samples(msp_t *self)
                 goto out;
             }
         }
+        tsk_ind = TSK_NULL;
+        if (self->pedigree != NULL) {
+            /* If we're doing pedigree simulations, assign 'ploidy' nodes
+             * per individual. */
+            assert(self->pedigree->num_samples * self->pedigree->ploidy ==
+                    self->num_samples);
+            sample_idx = (size_t) u / self->pedigree->ploidy;
+
+            // TODO: When pedigrees and populations are properly sorted out,
+            //       add population to individual here
+            ind = self->pedigree->samples[sample_idx];
+            id_str_len = (tsk_size_t) ceil(log10(ind->id + 1));
+            sprintf(id_str, "%d", ind->id);
+            if (ind->tsk_id == TSK_NULL) {
+                ret = tsk_individual_table_add_row(&self->tables->individuals, 0,
+                        NULL, 0, id_str, id_str_len);
+                if (ret < 0) {
+                    goto out;
+                }
+                ind->tsk_id = ret;
+            }
+            tsk_ind = ind->tsk_id;
+        }
         ret = msp_store_node(self, TSK_NODE_IS_SAMPLE,
                 self->samples[u].time,
-                self->samples[u].population_id);
+                self->samples[u].population_id, tsk_ind);
         if (ret != 0) {
             goto out;
         }
@@ -2183,12 +2635,19 @@ out:
 int
 msp_reset(msp_t *self)
 {
+    // TODO: This will need to be updated to allow replicates within pedigree sims
     int ret = 0;
     size_t N = self->num_populations;
     population_id_t population_id;
     population_t *pop, *initial_pop;
 
     memcpy(&self->model, &self->initial_model, sizeof(self->model));
+    if (self->pedigree != NULL) {
+        ret = msp_reset_pedigree(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     ret = msp_reset_memory_state(self);
     if (ret != 0) {
         goto out;
@@ -2606,6 +3065,134 @@ out:
     return ret;
 }
 
+int MSP_WARN_UNUSED
+msp_pedigree_climb(msp_t *self)
+{
+    int ret, ix;
+    char id_str[100];
+    size_t i, j;
+    tsk_size_t id_str_len;
+    tsk_id_t node_tsk_id = TSK_NULL;
+    individual_t *ind = NULL;
+    individual_t *parent = NULL;
+    segment_t *merged_segment = NULL;
+    segment_t *u[2]; // Will need to update for different ploidy
+    avl_tree_t *segments = NULL;
+    /* avl_node_t *node; */
+
+    assert(self->num_populations == 1);
+    assert(avl_count(&self->pedigree->ind_heap) > 0);
+    assert(self->pedigree->state == MSP_PED_STATE_UNCLIMBED);
+
+    self->pedigree->state = MSP_PED_STATE_CLIMBING;
+
+    while (avl_count(&self->pedigree->ind_heap) > 0) {
+        /* NOTE: We don't yet support early termination - need to properly
+         handle moving segments back into population (or possibly keep them
+         there in the first place) before we can handle that */
+        ret = msp_pedigree_pop_ind(self, &ind);
+        if (ret != 0) {
+            goto out;
+        }
+        assert(ind->time >= self->time);
+        self->time = ind->time;
+
+        for (i = 0; i < self->pedigree->ploidy; i++) {
+            parent = ind->parents[i];
+            if (parent != NULL && ind->time >= parent->time) {
+                ret = MSP_ERR_TIME_TRAVEL;
+                goto out;
+            }
+            segments = ind->segments + i;
+
+            /* This parent may not have contributed any ancestral material
+             * to the samples */
+            if (avl_count(segments) == 0) {
+                continue;
+            }
+
+            /* If the parent did contribute, we add them to the individual table */
+            // TODO: This adds the parents of all individuals who are reached by
+            // climbing - wasteful, since few visited individuals become nodes
+            // through CA events
+            if (parent != NULL && parent->tsk_id == TSK_NULL) {
+                sprintf(id_str, "%d", parent->id);
+                id_str_len = (tsk_size_t) ceil(log10(parent->id + 1));
+                assert(id_str_len > 0);
+                ret = tsk_individual_table_add_row(&self->tables->individuals, 0,
+                        NULL, 0, id_str, id_str_len);
+                if (ret < 0) {
+                    goto out;
+                }
+                parent->tsk_id = ret;
+            }
+            node_tsk_id = TSK_NULL;
+            if (parent != NULL) {
+                node_tsk_id = parent->tsk_id;
+            }
+
+            /* Merge segments inherited from this ind and recombine */
+            // TODO: Make sure population gets properly set when more than one
+            ret = msp_merge_ancestors(self, segments, 0, 0, &merged_segment,
+                    node_tsk_id);
+            if (ret != 0) {
+                goto out;
+            }
+            if (merged_segment == NULL) {
+                // This lineage has coalesced
+                continue;
+            }
+            assert(avl_count(segments) == 0);
+            assert(merged_segment->prev == NULL);
+
+            /* If parent is NULL, we are at a pedigree founder and we add the
+             * lineage back to its original population */
+            if (parent == NULL) {
+                ret = msp_insert_individual(self, merged_segment);
+                if (ret != 0) {
+                    goto out;
+                }
+                continue;
+            }
+
+            /* Recombine and climb to segments to the parents */
+            if (self->recombination_rate > 0) {
+                ret = msp_dtwf_recombine(self, merged_segment, &u[0], &u[1]);
+                if (ret != 0) {
+                    goto out;
+                }
+            } else {
+                ix = (int) gsl_rng_uniform_int(self->rng, 2);
+                u[0] = NULL;
+                u[1] = NULL;
+                u[ix] = merged_segment;
+            }
+            for (j = 0; j < self->pedigree->ploidy; j++) {
+                if (u[j] == NULL) {
+                    continue;
+                }
+                /* assert(u[j]->prev == NULL); */
+                ret = msp_pedigree_add_individual_segment(self, parent, u[j], j);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+            if (parent->queued == false) {
+                ret = msp_pedigree_push_ind(self, parent);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+        ind->merged = true;
+    }
+    self->pedigree->state = MSP_PED_STATE_CLIMB_COMPLETE;
+
+    ret = 0;
+out:
+    return ret;
+}
+
 /* List structure for collecting segments by parent */
 typedef struct _segment_list_t {
     avl_node_t *node;
@@ -2713,7 +3300,7 @@ msp_dtwf_generation(msp_t *self)
             }
             // Merge segments in each parental chromosome
             for (i = 0; i < 2; i ++) {
-                ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j, label);
+                ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j, label, NULL, TSK_NULL);
                 if (ret != 0) {
                     goto out;
                 }
@@ -3220,6 +3807,24 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     }
     if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, scaled_time, max_events);
+    } else if (self->model.type == MSP_MODEL_WF_PED) {
+        if (self->pedigree == NULL ||
+            self->pedigree->state != MSP_PED_STATE_UNCLIMBED) {
+            ret = MSP_ERR_BAD_STATE;
+            goto out;
+        }
+        ret = msp_pedigree_load_pop(self);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_pedigree_build_ind_queue(self);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_pedigree_climb(self);
+        if (ret != 0) {
+            goto out;
+        }
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-renentrant */
         ret = msp_run_sweep(self);
@@ -3448,6 +4053,9 @@ msp_get_model_name(msp_t *self)
             break;
         case MSP_MODEL_DTWF:
             ret = "dtwf";
+            break;
+        case MSP_MODEL_WF_PED:
+            ret = "wf_ped";
             break;
         case MSP_MODEL_SWEEP:
             ret = "single-sweep";
@@ -4017,7 +4625,7 @@ msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
         }
         node = next;
     }
-    ret = msp_merge_ancestors(self, &Q, population_id, label);
+    ret = msp_merge_ancestors(self, &Q, population_id, label, NULL, TSK_NULL);
 out:
     return ret;
 }
@@ -4175,7 +4783,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     for (j = 0; j < num_roots; j++) {
         if (lineages[j] >= (node_id_t) n) {
-            ret = msp_merge_ancestors(self, &sets[lineages[j]], population_id, label);
+            ret = msp_merge_ancestors(self, &sets[lineages[j]], population_id, label, NULL, TSK_NULL);
             if (ret != 0) {
                 goto out;
             }
@@ -4561,7 +5169,7 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
         max_pot_size = 0;
         for (j = 0; j < 4; j++){
             max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[j]));
-            ret = msp_merge_ancestors(self, &Q[j], pop_id, label);
+            ret = msp_merge_ancestors(self, &Q[j], pop_id, label, NULL, TSK_NULL);
             if (ret < 0) {
                 goto out;
             }
@@ -4828,7 +5436,7 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     max_pot_size = 0;
     for (j = 0; j < 5; j++){
         max_pot_size = GSL_MAX(max_pot_size, avl_count(&Q[j]));
-        ret = msp_merge_ancestors(self, &Q[j], pop_id, label);
+        ret = msp_merge_ancestors(self, &Q[j], pop_id, label, NULL, TSK_NULL);
         if (ret < 0) {
             goto out;
         }
@@ -5068,6 +5676,7 @@ msp_set_simulation_model(msp_t *self, int model, double reference_size)
             && model != MSP_MODEL_DIRAC
             && model != MSP_MODEL_BETA
             && model != MSP_MODEL_DTWF
+            && model != MSP_MODEL_WF_PED
             && model != MSP_MODEL_SWEEP) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
@@ -5141,6 +5750,24 @@ msp_set_simulation_model_dtwf(msp_t *self, double reference_size)
 {
     int ret = 0;
     ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, reference_size);
+    if (ret != 0) {
+        goto out;
+    }
+    self->model.model_time_to_generations = dtwf_model_time_to_generations;
+    self->model.generations_to_model_time = dtwf_generations_to_model_time;
+    self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;
+    self->model.generation_rate_to_model_rate = dtwf_generation_rate_to_model_rate;
+
+    ret = msp_rescale_model_times(self);
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_wf_ped(msp_t *self, double reference_size)
+{
+    int ret = 0;
+    ret = msp_set_simulation_model(self, MSP_MODEL_WF_PED, reference_size);
     if (ret != 0) {
         goto out;
     }
