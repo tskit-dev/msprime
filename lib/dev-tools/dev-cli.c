@@ -652,7 +652,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     }
     get_configuration(rng, &msp, &tables, &mutation_params, &recomb_map, conf_file);
     ret = mutgen_alloc(&mutgen, mutation_params.mutation_rate, rng,
-            mutation_params.alphabet, 1024);
+            mutation_params.alphabet, 0);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

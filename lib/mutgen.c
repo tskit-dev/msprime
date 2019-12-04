@@ -101,18 +101,9 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
     self->rng = rng;
     self->start_time = -DBL_MAX;
     self->end_time = DBL_MAX;
+    self->block_size = block_size;
 
     avl_init_tree(&self->sites, cmp_site, NULL);
-    if (block_size == 0) {
-        block_size = 8192;
-    }
-    /* In practice this is the minimum we can support */
-    block_size = GSL_MAX(block_size, 128);
-    ret = tsk_blkalloc_init(&self->allocator, block_size);
-    if (ret != 0) {
-        ret = msp_set_tsk_error(ret);
-        goto out;
-    }
 out:
     return ret;
 }
@@ -135,6 +126,39 @@ mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time)
     }
     self->start_time = start_time;
     self->end_time = end_time;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+mutgen_init_allocator(mutgen_t *self, tsk_table_collection_t *tables)
+{
+    int ret = -1;
+
+    tsk_blkalloc_free(&self->allocator);
+    if (self->block_size == 0) {
+        /* Default */
+        self->block_size = 8192;
+    }
+    /* This is the effective minimum */
+    self->block_size = GSL_MAX(self->block_size, 128);
+    /* Need to make sure we have enough space to store sites and mutations. We
+     * allocate ancestral and derived states, as well as a list of mutations
+     * for each site. This ensures that we can always allocate the required amount.
+     * We need to add one because the assert trips when the block size is equal
+     * to chunk size (probably wrongly).
+     */
+    self->block_size = GSL_MAX(self->block_size, 1 + tables->sites.ancestral_state_length);
+    self->block_size = GSL_MAX(self->block_size, 1 + tables->sites.metadata_length);
+    self->block_size = GSL_MAX(self->block_size, 1 + tables->mutations.derived_state_length);
+    self->block_size = GSL_MAX(self->block_size, 1 + tables->mutations.metadata_length);
+    self->block_size = GSL_MAX(self->block_size,
+            (1 + tables->mutations.num_rows) * sizeof(tsk_mutation_t));
+    ret = tsk_blkalloc_init(&self->allocator, self->block_size);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
 out:
     return ret;
 }
@@ -196,7 +220,7 @@ mutget_initialise_sites(mutgen_t *self, tsk_table_collection_t *tables)
         site = tsk_blkalloc_get(&self->allocator, sizeof(*site));
         avl_node = tsk_blkalloc_get(&self->allocator, sizeof(*avl_node));
         site_mutations = tsk_blkalloc_get(&self->allocator,
-                num_mutations * sizeof(*mutations));
+                num_mutations * sizeof(*site_mutations));
         if (site == NULL || avl_node == NULL || site_mutations == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -344,8 +368,11 @@ mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
     tsk_site_t search;
 
     avl_clear_tree(&self->sites);
-    tsk_blkalloc_reset(&self->allocator);
 
+    ret = mutgen_init_allocator(self, tables);
+    if (ret != 0) {
+        goto out;
+    }
     if (flags & MSP_KEEP_SITES) {
         ret = mutget_initialise_sites(self, tables);
         if (ret != 0) {

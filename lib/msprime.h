@@ -301,6 +301,7 @@ typedef struct {
     double start_time;
     double end_time;
     double mutation_rate;
+    size_t block_size;
     avl_tree_t sites;
     tsk_blkalloc_t allocator;
 } mutgen_t;
