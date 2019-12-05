@@ -187,7 +187,7 @@ class SimulationRunner(object):
         same tree. Therefore, we must keep track of all breakpoints from the
         simulation and write out a tree for each one.
         """
-        # breakpoints = self._simulator.breakpoints + [self._num_loci]
+        breakpoints = self._simulator.breakpoints + [self._num_loci]
         if self._num_loci == 1:
             tree = next(tree_sequence.trees())
             newick = tree.newick(precision=self._precision)
