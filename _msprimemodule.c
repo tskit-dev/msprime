@@ -2861,6 +2861,7 @@ out:
     Py_XDECREF(instantaneous_bottleneck_s);
     Py_XDECREF(initial_size_s);
     Py_XDECREF(growth_rate_s);
+    Py_XDECREF(census_event_s);
     return ret;
 }
 
