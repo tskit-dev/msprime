@@ -1928,6 +1928,54 @@ class TestMutationGenerator(unittest.TestCase):
                 random_generator=rng, mutation_rate=0, alphabet=alphabet)
             self.assertEqual(alphabet, mg.get_alphabet())
 
+    def test_generate_interface(self):
+        rng = _msprime.RandomGenerator(1)
+        mutgen = _msprime.MutationGenerator(rng, 2)
+        tables = _msprime.LightweightTableCollection()
+        for bad_type in [None, [], {}]:
+            self.assertRaises(TypeError, mutgen.generate, bad_type)
+            self.assertRaises(TypeError, mutgen.generate, tables, bad_type)
+        for _ in range(10):
+            tables = _msprime.LightweightTableCollection()
+            mutgen.generate(tables)
+
+    def verify_block_size(self, tables):
+        rng = _msprime.RandomGenerator(1)
+        mutgen = _msprime.MutationGenerator(rng, 2)
+        ll_tables = _msprime.LightweightTableCollection()
+        ll_tables.fromdict(tables.asdict())
+        mutgen.generate(ll_tables, keep=True)
+        after_tables = tskit.TableCollection.fromdict(ll_tables.asdict())
+        self.assertEqual(tables, after_tables)
+
+    def test_keep_mutations_block_size_mutations(self):
+        tables = tskit.TableCollection()
+        tables.sites.add_row(0, "a")
+        for j in range(8192):
+            tables.mutations.add_row(0, node=0, derived_state="b")
+        self.verify_block_size(tables)
+
+    def test_keep_mutations_block_size_ancestral_state(self):
+        tables = tskit.TableCollection()
+        big_alloc = 64 * 1024
+        tables.sites.add_row(0, "a" * big_alloc)
+        self.verify_block_size(tables)
+
+    def test_keep_mutations_block_size_derived_state(self):
+        tables = tskit.TableCollection()
+        tables.sites.add_row(0, "a")
+        big_alloc = 64 * 1024
+        tables.mutations.add_row(0, node=0, derived_state="b" * big_alloc)
+        self.verify_block_size(tables)
+
+    def test_keep_mutations_block_size_metadata(self):
+        tables = tskit.TableCollection()
+        big_alloc = 64 * 1024
+        tables.sites.add_row(0, "a", metadata=b"x" * big_alloc)
+        self.verify_block_size(tables)
+        tables.mutations.add_row(0, node=0, derived_state="b" * 2 * big_alloc)
+        self.verify_block_size(tables)
+
 
 class TestDemographyDebugger(unittest.TestCase):
     """

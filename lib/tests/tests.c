@@ -3614,6 +3614,40 @@ test_single_tree_mutgen_keep_sites(void)
 }
 
 static void
+test_single_tree_mutgen_keep_sites_many_mutations(void)
+{
+    int ret = 0;
+    int j;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    mutgen_t mutgen;
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables);
+
+    for (j = 0; j < 8192; j++) {
+        ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j + 1);
+    }
+
+    gsl_rng_set(rng, 2);
+    ret = mutgen_alloc(&mutgen, 10.0, rng, 0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < 10; j++) {
+        ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+    }
+
+    CU_ASSERT_TRUE(tables.sites.num_rows > 2);
+    mutgen_free(&mutgen);
+
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
 test_single_tree_mutgen_interval(void)
 {
     int ret = 0;
@@ -4081,6 +4115,8 @@ main(int argc, char **argv)
 
         {"test_single_tree_mutgen", test_single_tree_mutgen},
         {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
+        {"test_single_tree_mutgen_keep_sites_many_mutations",
+            test_single_tree_mutgen_keep_sites_many_mutations},
         {"test_single_tree_mutgen_interval", test_single_tree_mutgen_interval},
 
         {"test_genic_selection_trajectory", test_genic_selection_trajectory},
