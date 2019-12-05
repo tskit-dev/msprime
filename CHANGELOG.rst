@@ -1,11 +1,39 @@
 ********************
-[0.7.4] - XXXXXXXXXX
+[0.7.4] - 2019-12-05
 ********************
+
+**Bug fixes**:
+
+- Fix error in mspms output of tree spans. In previous versions, the length of
+  genome spanned by trees in the newick output was incorrect in certain situations
+  (specifically, when "invisible" recombinations are present so that two or more
+  identical trees are printed out). Thanks to :user:`fbaumdicker` for spotting
+  the problem. (:user:`jeromekelleher`, :pr:`837`, :issue:`836`)
+
+- Fix assertion tripped when we have very low recombination rates in the DTWF
+  model. Thanks to :user:`terhorst` for the bug report.
+  (:user:`jeromekelleher`, :pr:`833`, :issue:`831`).
+
+- Fix bug in memory allocation when simulating mutations on a tree sequence
+  that already contains many mutations. Thanks to :user:`santaci` for the
+  bug report. (:user:`jeromekelleher`, :user:`petrelharp`, :pr:`838`,
+  :issue:`806`)
 
 **New features**:
 
+- Add the new Census event, which allows us to place nodes on all extant
+  branches at a given time (:user:`gtsambos` :pr:`799`).
+
 - Improved error reporting for input parameters, in particular
   demographic events (:pr:`829`).
+
+**Documentation**:
+
+- Improved container documentation (:user:`agladstein`, :pr:`822`, :issue:`809`).
+
+- Improved developer docs for macs (:user:`gtsambos`, :user:`molpopgen`, :pr:`805`).
+
+- Clarify meaning of migration matrix (:user:`petrelharp`, :pr:`830`).
 
 ********************
 [0.7.3] - 2019-08-03
