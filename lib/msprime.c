@@ -1263,21 +1263,32 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
     return 0;
 }
 
+static int64_t
+msp_dtwf_generate_breakpoint(msp_t *self, int64_t start)
+{
+    double mu = 1.0 / self->recombination_rate;
+    double x = gsl_ran_exponential(self->rng, mu);
+
+    /* Prevent overflowing into a negative number when we convert to int
+     * and clamp to UINT32_MAX since we can't have anything bigger than
+     * this anyway. */
+    x = GSL_MIN(UINT32_MAX, x);
+    assert(x >= 0);
+    /* TODO: is floor the correct operation here or should we round? */
+    return 1 + start + (int64_t) x;
+}
+
 static int MSP_WARN_UNUSED
 msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
     int ix;
-    double mu;
     int64_t k;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
-    mu = 1.0 / self->recombination_rate;
-    k = 1 + x->left + (int64_t) gsl_ran_exponential(self->rng, mu);
-    assert(k > 0 && "Negative distance: Overflow in gsl_ran_exponential!");
-
+    k = msp_dtwf_generate_breakpoint(self, x->left);
     s1.next = NULL;
     s2.next = NULL;
     ix = (int) gsl_rng_uniform_int(self->rng, 2);
@@ -1310,7 +1321,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             fenwick_increment(&self->links[x->label], x->id, k - z->right);
             assert(x->left < x->right);
             x = z;
-            k = 1 + k + (int64_t) gsl_ran_exponential(self->rng, mu);
+            k = msp_dtwf_generate_breakpoint(self, k);
         }
         else if (x->right <= k && y != NULL && y->left >= k) {
             // Recombine in gap between segment and the next
@@ -1319,7 +1330,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             while (y->left >= k) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
-                k = 1 + k + (int64_t) gsl_ran_exponential(self->rng, mu);
+                k = msp_dtwf_generate_breakpoint(self, k);
             }
             seg_tails[ix]->next = y;
             y->prev = seg_tails[ix];
