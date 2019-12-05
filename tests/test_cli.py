@@ -984,6 +984,11 @@ class TestMspmsOutput(TestCli):
             sample_size=10, mutation_rate=1, num_loci=10,
             recombination_rate=0, num_replicates=2)
 
+    def test_invisible_recombinations(self):
+        self.verify_output(
+            sample_size=10, mutation_rate=0, num_loci=100,
+            recombination_rate=1, num_replicates=1)
+
     def test_num_replicates(self):
         for j in range(1, 10):
             self.verify_output(

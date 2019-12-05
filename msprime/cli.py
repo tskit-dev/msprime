@@ -193,6 +193,7 @@ class SimulationRunner(object):
                 left, right = tree.interval
                 while j < len(breakpoints) and breakpoints[j] <= right:
                     length = breakpoints[j] - left
+                    left = breakpoints[j]
                     j += 1
                     # Print these seperately to avoid the cost of creating
                     # another string.
