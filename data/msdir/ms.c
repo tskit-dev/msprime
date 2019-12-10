@@ -169,7 +169,7 @@ main(argc,argv)
 
 #ifdef SUMMARY_STATS
     /* print out the header*/
-    printf("t\tnum_trees\tre_events\tca_events");
+    printf("t\tnum_trees\tre_events\tca_events\tgc_events");
     int N = pars.cp.npop;
 	struct devent *event ;
 

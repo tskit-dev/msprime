@@ -617,6 +617,10 @@ class Simulator(object):
         return self.ll_sim.get_num_recombination_events()
 
     @property
+    def num_gene_conversion_events(self):
+        return self.ll_sim.get_num_gene_conversion_events()
+
+    @property
     def num_populations(self):
         return len(self.population_configurations)
 

@@ -251,11 +251,13 @@ msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
          * always maps to the same genetic distance */
 
         if (track_length < 0 || track_length > self->recomb_map->sequence_length) {
+            printf("tl > recomb_map seq length");
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
         genetic_track_length = recomb_map_phys_to_genetic(self->recomb_map, track_length);
         if (genetic_track_length < 1.0) {
+            printf("genetic track length < 1");
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
@@ -1956,6 +1958,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
     assert(k >= 0 && k < self->num_loci);
     /* Check if the gene conversion falls between segments and hence has no effect */
     if (y->left >= k + tl){
+        self->num_gc_events++;
         self->num_noneffective_gc_events++;
         return 0;
     }
@@ -3047,6 +3050,7 @@ msp_reset(msp_t *self)
             N * N * sizeof(double));
     self->next_sampling_event = 0;
     self->num_re_events = 0;
+    self->num_gc_events = 0;
     self->num_ca_events = 0;
     self->num_rejected_ca_events = 0;
     self->num_trapped_re_events = 0;

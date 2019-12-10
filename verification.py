@@ -210,6 +210,7 @@ class SimulationVerifier(object):
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
         re_events = [0 for j in range(replicates)]
+        gc_events = [0 for j in range(replicates)]
         mig_events = [None for j in range(replicates)]
         for j in range(replicates):
             sim.reset()
@@ -218,10 +219,11 @@ class SimulationVerifier(object):
             time[j] = sim.time
             ca_events[j] = sim.num_common_ancestor_events
             re_events[j] = sim.num_recombination_events
+            gc_events[j] = sim.num_gene_conversion_events
             mig_events[j] = [r for row in sim.num_migration_events for r in row]
         d = {
             "t": time, "num_trees": num_trees,
-            "ca_events": ca_events, "re_events": re_events}
+            "ca_events": ca_events, "re_events": re_events, "gc_events": gc_events}
         for j in range(num_populations**2):
             events = [mig_events[k][j] for k in range(replicates)]
             d["mig_events_{}".format(j)] = events
@@ -2176,6 +2178,18 @@ def run_tests(args):
         "admixture-2-pop4",
         "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 "
         "-em 0.02 3 1 1")
+    verifier.add_ms_instance(
+        "gene-conversion-1",
+        "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
+    verifier.add_ms_instance(
+        "gene-conversion-2",
+        "100 10000 -t 5.0 -r 10 2501 -c 2 1")
+    verifier.add_ms_instance(
+        "gene-conversion-2-tl-10",
+        "100 10000 -t 5.0 -r 10 2501 -c 2 10")
+    verifier.add_ms_instance(
+        "gene-conversion-2-tl-100",
+        "100 10000 -t 5.0 -r 10 2501 -c 2 100")
 
     # # Examples from ms documentation
     verifier.add_ms_instance(
