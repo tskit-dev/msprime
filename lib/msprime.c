@@ -251,13 +251,11 @@ msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
          * always maps to the same genetic distance */
 
         if (track_length < 0 || track_length > self->recomb_map->sequence_length) {
-            printf("tl > recomb_map seq length");
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
         genetic_track_length = recomb_map_phys_to_genetic(self->recomb_map, track_length);
         if (genetic_track_length < 1.0) {
-            printf("genetic track length < 1");
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
@@ -1910,7 +1908,7 @@ out:
 }
 
 /* Helper function for doing GC */
-static void
+static int MSP_WARN_UNUSED
 msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *new_segment,
         uint32_t track_end, label_id_t label)
 {
@@ -1924,14 +1922,14 @@ msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *n
     y->next = NULL;
     y->right = track_end;
     fenwick_increment(&self->links[label], y->id, (int64_t) track_end - (int64_t) new_segment->right);
-    if (msp_has_breakpoint(self, (uint32_t) track_end)) {
-//             self->num_multiple_gc_breakpoints++;
-    } else {
+    if (!msp_has_breakpoint(self, (uint32_t) track_end)) {
         ret = msp_insert_breakpoint(self, (uint32_t) track_end);
         if (ret != 0) {
-            printf("Warning: Bad breakpoint insertion\n");
+            goto out;
         }
     }
+out:
+    return ret;
 }
 
 /* Processes a gene conversion event that starts within or between segments.
@@ -1976,7 +1974,10 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
                 goto out;
             }
             lhs_tail = x;
-            msp_cut_right_break(self, lhs_tail, y, z2, (uint32_t) (k + tl), label);
+            ret = msp_cut_right_break(self, lhs_tail, y, z2, (uint32_t) (k + tl), label);
+            if (ret != 0){
+                goto out;
+            }
             z = y;
         } else {
             z = msp_alloc_segment(self, (uint32_t) k, (uint32_t) (k + tl), y->value,
@@ -1994,21 +1995,17 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             y->right = (uint32_t) k;
             fenwick_set_value(&self->links[label], z2->id, z2->right - y->right);
             fenwick_increment(&self->links[label], y->id, k - z2->right);
-            if (msp_has_breakpoint(self, (uint32_t) k)) {
-//             self->num_multiple_gc_breakpoints++;
-            } else {
+            if (!msp_has_breakpoint(self, (uint32_t) k)) {
                 ret = msp_insert_breakpoint(self, (uint32_t) k);
                 if (ret != 0) {
-                    printf("Warning: Bad breakpoint insertion\n");
+                    goto out;
                 }
             }
 
-            if (msp_has_breakpoint(self, (uint32_t) (k + tl) )) {
-//             self->num_multiple_gc_breakpoints++;
-            } else {
+            if (!msp_has_breakpoint(self, (uint32_t) (k + tl) )) {
                 ret = msp_insert_breakpoint(self, (uint32_t) (k + tl) );
                 if (ret != 0) {
-                    printf("Warning: Bad breakpoint insertion\n");
+                    goto out;
                 }
             }
             lhs_tail = y;
@@ -2043,12 +2040,10 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             y->next = NULL;
             y->right = (uint32_t) k;
             fenwick_increment(&self->links[label], y->id, k - z->right);
-            if (msp_has_breakpoint(self, (uint32_t) k)) {
-//             self->num_multiple_gc_breakpoints++;
-            } else {
+            if (!msp_has_breakpoint(self, (uint32_t) k)) {
                 ret = msp_insert_breakpoint(self, (uint32_t) k);
                 if (ret != 0) {
-                    printf("Warning: Bad breakpoint insertion\n");
+                    goto out;
                 }
             }
             lhs_tail = y;
@@ -2063,7 +2058,10 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
-                msp_cut_right_break(self, lhs_tail, y2, z2, (uint32_t) (k + tl), label);
+                ret = msp_cut_right_break(self, lhs_tail, y2, z2, (uint32_t) (k + tl), label);
+                if (ret != 0){
+                    goto out;
+                }
                 if (z2->prev == NULL) {
                     z = z2;
                 }
@@ -2204,12 +2202,10 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         y->next = NULL;
         y->right = (uint32_t) k;
         fenwick_increment(&self->links[label], y->id, k - (int64_t) z->right);
-        if (msp_has_breakpoint(self, (uint32_t) k)) {
-//         self->num_multiple_gc_breakpoints++;
-        } else {
+        if (!msp_has_breakpoint(self, (uint32_t) k)) {
             ret = msp_insert_breakpoint(self, (uint32_t) k);
             if (ret != 0) {
-                printf("Warning: Bad breakpoint insertion\n");
+                goto out;
             }
         }
     } else {
