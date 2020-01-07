@@ -3175,6 +3175,60 @@ test_recomb_map_errors(void)
     recomb_map_free(&recomb_map);
 }
 
+/* Linear version of the genetic_to_phys coordinate translation, to
+   verify against the binary search version in
+   recomb_map_genetic_to_phys */
+static double
+recomb_map_genetic_to_phys_linear(recomb_map_t *self, double genetic_x)
+{
+    size_t k;
+    double ret = 0.0;
+    double x, s, excess;
+    double *p = self->positions;
+    double *r = self->rates;
+    double num_loci = self->num_loci;
+
+    assert(num_loci >= 1);
+    assert(genetic_x >= 0);
+    assert(genetic_x <= num_loci);
+    if (self->total_recombination_rate == 0) {
+        /* When we have a 0 total rate, anything other than m maps to 0. */
+        ret = genetic_x >= self->num_loci? self->sequence_length: 0;
+    } else if (self->size == 2) {
+        /* Avoid roundoff when num_loci == self->sequence_length */
+        ret = genetic_x;
+        if (self->sequence_length != num_loci) {
+            ret = (genetic_x / num_loci) * self->sequence_length;
+        }
+    } else if (genetic_x == num_loci) {
+        /* Map the right end of the chromosome to the right end of the
+         * chromosome, even if there are zero-recomb regions on the end. */
+        ret = self->sequence_length;
+    } else {
+        /* genetic_x is in the range [0,num_loci], and so we rescale
+         * this into [0,total_recombination_rate] so that we can
+         * map back into physical coordinates. */
+        x = (genetic_x / num_loci) * self->total_recombination_rate;
+        if (x > 0) {
+
+            s = 0;
+            k = 0;
+            while (s < x && k < self->size - 1) {
+                s += (p[k + 1] - p[k]) * r[k];
+                k++;
+            }
+            assert((s >= x) || (k >= self->size - 1));
+            assert(k > 0);
+            excess = 0;
+            if (r[k - 1] > 0) {
+                excess = (s - x) / r[k - 1];
+            }
+            ret = p[k] - excess;
+        }
+    }
+    return ret;
+}
+
 static void
 verify_recomb_map(uint32_t num_loci, double length, double *positions,
         double *rates, size_t size)
@@ -3182,7 +3236,7 @@ verify_recomb_map(uint32_t num_loci, double length, double *positions,
 
     int ret;
     recomb_map_t recomb_map;
-    double total_rate, x, y, z;
+    double total_rate, x, y, z, w;
     uint32_t locus;
     size_t j;
     size_t num_checks = 1000;
@@ -3203,8 +3257,11 @@ verify_recomb_map(uint32_t num_loci, double length, double *positions,
     CU_ASSERT_EQUAL(recomb_map_get_num_loci(&recomb_map), num_loci);
     CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), size);
     CU_ASSERT_EQUAL(recomb_map_genetic_to_phys(&recomb_map, 0), 0);
+    CU_ASSERT_EQUAL(recomb_map_genetic_to_phys_linear(&recomb_map, 0), 0);
     CU_ASSERT_EQUAL(
             recomb_map_genetic_to_phys(&recomb_map, num_loci), length);
+    CU_ASSERT_EQUAL(
+            recomb_map_genetic_to_phys_linear(&recomb_map, num_loci), length);
     total_rate = recomb_map_get_total_recombination_rate(&recomb_map);
     CU_ASSERT_DOUBLE_EQUAL(
             total_rate / (num_loci - 1),
@@ -3214,6 +3271,8 @@ verify_recomb_map(uint32_t num_loci, double length, double *positions,
         x = j * (num_loci / num_checks);
         y = recomb_map_genetic_to_phys(&recomb_map, x);
         CU_ASSERT_TRUE(0 <= y && y <= length);
+        w = recomb_map_genetic_to_phys_linear(&recomb_map, x);
+        CU_ASSERT_TRUE(w == y);
         z = recomb_map_phys_to_genetic(&recomb_map, y);
         CU_ASSERT_DOUBLE_EQUAL(x, z, eps);
         ret = recomb_map_phys_to_discrete_genetic(&recomb_map, y, &locus);
@@ -3249,6 +3308,112 @@ test_recomb_map_examples(void)
     verify_recomb_map(2, 16.0, p2, r2, 7);
     verify_recomb_map(100, 16.0, p2, r2, 7);
     verify_recomb_map(UINT32_MAX, 16.0, p2, r2, 7);
+}
+
+static void
+test_msp_binary_interval_search(void)
+{
+        double values[] = {-10, 10, 20, 30};
+        size_t size = 4;
+        size_t idx;
+
+        // Search from bottom
+        idx = msp_binary_interval_search(-11, values, size);
+        CU_ASSERT_EQUAL(idx, 0);
+        // Exact match returns index of value
+        idx = msp_binary_interval_search(-10, values, size);
+        CU_ASSERT_EQUAL(idx, 0);
+        // values[index-1] < query <= values[index]
+        idx = msp_binary_interval_search(9, values, size);
+        CU_ASSERT_EQUAL(idx, 1);
+        // exact match
+        idx = msp_binary_interval_search(10, values, size);
+        CU_ASSERT_EQUAL(idx, 1);
+        // Within mid interval
+        idx = msp_binary_interval_search(11, values, size);
+        CU_ASSERT_EQUAL(idx, 2);
+        idx = msp_binary_interval_search(19, values, size);
+        CU_ASSERT_EQUAL(idx, 2);
+        // Exact
+        idx = msp_binary_interval_search(20, values, size);
+        CU_ASSERT_EQUAL(idx, 2);
+        // Within
+        idx = msp_binary_interval_search(21, values, size);
+        CU_ASSERT_EQUAL(idx, 3);
+        // Exact
+        idx = msp_binary_interval_search(30, values, size);
+        CU_ASSERT_EQUAL(idx, 3);
+        // from the top - return last element
+        idx = msp_binary_interval_search(31, values, size);
+        CU_ASSERT_EQUAL(idx, 3);
+        // way above - same
+        idx = msp_binary_interval_search(300, values, size);
+        CU_ASSERT_EQUAL(idx, 3);
+}
+
+static void
+test_msp_binary_interval_search_repeating(void)
+{
+    double values_repeating[] = {0, 10, 10, 30};
+    size_t size = 4;
+    size_t idx;
+
+    // Same as above
+    idx = msp_binary_interval_search(-1, values_repeating, size);
+    CU_ASSERT_EQUAL(idx, 0);
+    // Want leftmost interval
+    idx = msp_binary_interval_search(10, values_repeating, size);
+    CU_ASSERT_EQUAL(idx, 1);
+    // Same as above
+    idx = msp_binary_interval_search(11, values_repeating, size);
+    CU_ASSERT_EQUAL(idx, 3);
+}
+
+
+static void
+test_msp_binary_interval_search_edge_cases(void)
+{
+    double values_empty[] = {};
+    size_t idx;
+
+    // Empty list
+    idx = msp_binary_interval_search(0, values_empty, 0);
+    CU_ASSERT_EQUAL(idx, 0);
+
+    // Size 1 list
+    double values_one[] = {10};
+
+    // below
+    idx = msp_binary_interval_search(9, values_one, 1);
+    CU_ASSERT_EQUAL(idx, 0);
+    // exact
+    idx = msp_binary_interval_search(10, values_one, 1);
+    CU_ASSERT_EQUAL(idx, 0);
+    // above
+    idx = msp_binary_interval_search(11, values_one, 1);
+    CU_ASSERT_EQUAL(idx, 0);
+
+    // Size 2 list
+    double values_two[] = {10,20};
+    idx = msp_binary_interval_search(9, values_two, 2);
+    CU_ASSERT_EQUAL(idx, 0);
+    idx = msp_binary_interval_search(10, values_two, 2);
+    CU_ASSERT_EQUAL(idx, 0);
+    idx = msp_binary_interval_search(15, values_two, 2);
+    CU_ASSERT_EQUAL(idx, 1);
+    idx = msp_binary_interval_search(20, values_two, 2);
+    CU_ASSERT_EQUAL(idx, 1);
+    idx = msp_binary_interval_search(21, values_two, 2);
+    CU_ASSERT_EQUAL(idx, 1);
+
+    // All zeros
+    double values_zeros[] = {0,0,0};
+    idx = msp_binary_interval_search(-1, values_zeros, 3);
+    CU_ASSERT_EQUAL(idx, 0);
+    idx = msp_binary_interval_search(0, values_zeros, 3);
+    CU_ASSERT_EQUAL(idx, 0);
+    idx = msp_binary_interval_search(1, values_zeros, 3);
+    CU_ASSERT_EQUAL(idx, 2);
 }
 
 static void
@@ -4324,6 +4489,11 @@ main(int argc, char **argv)
         {"test_simple_recombination_map", test_simple_recomb_map},
         {"test_recombination_map_errors", test_recomb_map_errors},
         {"test_recombination_map_examples", test_recomb_map_examples},
+
+        {"test_binary_search", test_msp_binary_interval_search},
+        {"test_binary_search_repeating", test_msp_binary_interval_search_repeating},
+        {"test_binary_search_edge_cases", test_msp_binary_interval_search_edge_cases},
+        
         {"test_simulate_from_single_locus", test_simulate_from_single_locus},
         {"test_simulate_from_single_locus_sequence_length",
             test_simulate_from_single_locus_sequence_length},

@@ -206,6 +206,7 @@ typedef struct {
     size_t size;            /* the total number of values in the map */
     double *positions;
     double *rates;
+    double *cumulative;
 } recomb_map_t;
 
 typedef struct _msp_t {
