@@ -519,6 +519,102 @@ class SimulationVerifier(object):
         pyplot.plot(sample_size, var, "-")
         pyplot.savefig(filename)
         pyplot.close('all')
+        
+        
+    def run_correlation_between_trees_analytical_check(self):
+        """
+        Runs the check for the probability of same tree at two sites against analytical predictions.
+        """
+        R = 1000
+        basedir = "tmp__NOBACKUP__/analytical_corr_tree"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        sample_size = 2
+        gc_length_rate_ratio = np.array([0.05,0.5,5.0])
+        gc_length = np.array([100,50,20])
+        gc_rate = 1.0/(gc_length_rate_ratio*gc_length)
+        seq_length = 500
+        predicted_prob = np.zeros([gc_length_rate_ratio.size,seq_length], dtype=float)
+        empirical_prob_first = np.zeros([gc_length_rate_ratio.size,seq_length], dtype=float)
+        empirical_prob_mid = np.zeros([gc_length_rate_ratio.size,seq_length], dtype=float)
+        empirical_prob_last = np.zeros([gc_length_rate_ratio.size,seq_length], dtype=float)
+
+        for k, l in enumerate(gc_length):
+            same_root_count_first = np.zeros(seq_length)
+            same_root_count_mid = np.zeros(seq_length)
+            same_root_count_last = np.zeros(seq_length)
+            low_recombination_rate = 0.000001
+            recomb_map = msprime.RecombinationMap.uniform_map(seq_length, low_recombination_rate, num_loci=seq_length)
+            replicates = msprime.simulate(
+                sample_size=sample_size,
+                recombination_map = recomb_map,
+                gene_conversion_rate = gc_rate[k],
+                gene_conversion_track_length = gc_length[k],
+                num_replicates=R)
+            for j, ts in enumerate(replicates):
+                firstroot = ts.first().get_root()
+                lastroot = ts.last().get_root()
+                for tree in ts.trees():
+                    if tree.get_interval()[0] <= seq_length/2 and seq_length/2 <= tree.get_interval()[1]:
+                        midroot = tree.get_root()
+                for tree in ts.trees():
+                    if firstroot == tree.get_root():
+                        same_root_count_first[int(tree.get_interval()[0]):int(tree.get_interval()[1])] += 1
+                    if lastroot == tree.get_root():
+                        same_root_count_last[int(tree.get_interval()[0]):int(tree.get_interval()[1])] += 1
+                    if midroot == tree.get_root():
+                        same_root_count_mid[int(tree.get_interval()[0]):int(tree.get_interval()[1])] += 1
+            empirical_prob_first[k,:] = same_root_count_first/R
+            empirical_prob_last[k,:] = same_root_count_last/R
+            empirical_prob_mid[k,:] = same_root_count_mid/R
+            # Predicted prob
+            # From Wiuf, Hein, 2000, eqn (15), pg. 457
+            rG = 2/gc_length_rate_ratio[k]*(1.0-np.exp(-np.arange(seq_length)/gc_length[k]))
+            predicted_prob[k,:] = (18.0 + rG)/(18.0 + 13.0*rG + rG*rG)
+        
+        filename = os.path.join(basedir, "prob_first.png")
+        pyplot.plot(np.arange(500)+1, predicted_prob[0,], "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_first[0,], "-")
+        pyplot.plot(np.arange(500)+1, predicted_prob[1,], "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_first[1,], "-")
+        pyplot.plot(np.arange(500)+1, predicted_prob[2,], "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_first[2,], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+        
+        filename = os.path.join(basedir, "prob_last.png")
+        pyplot.plot(np.arange(500)+1, predicted_prob[0,::-1], "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_last[0,], "-")
+        pyplot.plot(np.arange(500)+1, predicted_prob[1,::-1], "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_last[1,], "-")
+        pyplot.plot(np.arange(500)+1, predicted_prob[2,::-1], "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_last[2,], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+        
+        filename = os.path.join(basedir, "prob_mid.png")
+        pyplot.plot(np.arange(500)+1, np.concatenate((predicted_prob[0,249::-1],predicted_prob[0,:250])) , "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_mid[0,], "-")
+        pyplot.plot(np.arange(500)+1, np.concatenate((predicted_prob[1,249::-1],predicted_prob[1,:250])) , "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_mid[1,], "-")
+        pyplot.plot(np.arange(500)+1, np.concatenate((predicted_prob[2,249::-1],predicted_prob[2,:250])) , "--")
+        pyplot.plot(np.arange(500)+1, empirical_prob_mid[2,], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+        
+        filename = os.path.join(basedir, "prob_first_zoom.png")
+        pyplot.plot(np.arange(10)+1, predicted_prob[0,range(10)], "--")
+        pyplot.plot(np.arange(10)+1, empirical_prob_first[0,range(10)], "-")
+        pyplot.plot(np.arange(10)+1, predicted_prob[1,range(10)], "--")
+        pyplot.plot(np.arange(10)+1, empirical_prob_first[1,range(10)], "-")
+        pyplot.plot(np.arange(10)+1, predicted_prob[2,range(10)], "--")
+        pyplot.plot(np.arange(10)+1, empirical_prob_first[2,range(10)], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+        
+        
+
 
     def run_mean_coaltime_check(self):
         """
@@ -1944,6 +2040,13 @@ class SimulationVerifier(object):
         the pairwise site diversity.
         """
         self._instances["analytical_pi"] = self.run_pi_analytical_check
+        
+    def add_corr_trees_analytical_check(self):
+        """
+        Adds a check for the analytical predictions about the correlation between
+        trees in the case of gene conversion.
+        """
+        self._instances["analytical_prob_same_tree"] = self.run_correlation_between_trees_analytical_check
 
     def add_mean_coaltime_check(self):
         """
@@ -2260,6 +2363,7 @@ def run_tests(args):
     # Add analytical checks
     verifier.add_s_analytical_check()
     verifier.add_pi_analytical_check()
+    verifier.add_corr_trees_analytical_check()
     verifier.add_mean_coaltime_check()
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()
