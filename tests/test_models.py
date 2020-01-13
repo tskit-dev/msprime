@@ -46,7 +46,8 @@ class TestModelFactory(unittest.TestCase):
             ("hudson", msprime.StandardCoalescent),
             ("smc", msprime.SmcApproxCoalescent),
             ("smc_prime", msprime.SmcPrimeApproxCoalescent),
-            ("dtwf", msprime.DiscreteTimeWrightFisher)
+            ("dtwf", msprime.DiscreteTimeWrightFisher),
+            ("wf_ped", msprime.WrightFisherPedigree)
         ]
         for name, model_class in simulation_models:
             model = msprime.model_factory(model=name.upper())
@@ -67,6 +68,7 @@ class TestModelFactory(unittest.TestCase):
             msprime.SmcApproxCoalescent(30),
             msprime.SmcPrimeApproxCoalescent(2132),
             msprime.DiscreteTimeWrightFisher(500),
+            msprime.WrightFisherPedigree(500),
             msprime.SweepGenicSelection(
                 reference_size=500, position=0.5, start_frequency=0.1,
                 end_frequency=0.9, alpha=0.1, dt=0.01),
@@ -277,6 +279,18 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.assertTrue(ts is not None)
         self.verify_non_binary(ts)
 
+    def test_wf_ped(self):
+        inds = np.array([1, 2, 3, 4])
+        parent_indices = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
+        times = np.array([0, 0, 1, 1])
+        is_sample = np.array([1, 1, 0, 0])
+
+        model = msprime.WrightFisherPedigree()
+        ped = msprime.Pedigree(inds, parent_indices, times, is_sample,
+                               sex=None, ploidy=2)
+        ts = msprime.simulate(2, pedigree=ped, model=model)
+        self.assertTrue(ts is not None)
+
 
 class TestDtwf(unittest.TestCase):
     """
@@ -315,6 +329,97 @@ class TestMixedModels(unittest.TestCase):
     """
     Tests that we can run mixed simulation models.
     """
+    def test_ped_wf_single_locus(self):
+        inds = np.array([1, 2, 3, 4, 5, 6])
+        parent_indices = np.array([
+            4, 5,
+            4, 5,
+            4, 5,
+            4, 5,
+            -1, -1,
+            -1, -1]).reshape(-1, 2)
+        times = np.array([0, 0, 0, 0, 1, 1])
+        is_sample = np.array([1, 1, 1, 1, 0, 0])
+        t = max(times)
+
+        model = msprime.WrightFisherPedigree()
+        ped = msprime.Pedigree(inds, parent_indices, times, is_sample,
+                               sex=None, ploidy=2)
+        ts = msprime.simulate(
+            sample_size=4,
+            pedigree=ped,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    t, msprime.DiscreteTimeWrightFisher(2))],
+            model=model)
+        tree = ts.first()
+        self.assertEqual(tree.num_roots, 1)
+        all_times = ts.tables.nodes.time
+        ped_times = all_times[np.logical_and(all_times > 0, all_times <= t)]
+        self.assertGreater(ped_times.shape[0], 0)
+        self.assertTrue(np.all(ped_times == np.floor(ped_times)))
+        wf_times = all_times[all_times > t]
+        self.assertGreater(wf_times.shape[0], 0)
+
+    def test_pedigree_unsupported_events(self):
+        inds = np.array([1, 2, 3, 4, 5, 6])
+        parent_indices = np.array([
+            4, 5,
+            4, 5,
+            4, 5,
+            4, 5,
+            -1, -1,
+            -1, -1]).reshape(-1, 2)
+        times = np.array([0, 0, 0, 0, 1, 1])
+        is_sample = np.array([1, 1, 1, 1, 0, 0])
+        t = max(times)
+
+        ped = msprime.Pedigree(inds, parent_indices, times, is_sample,
+                               sex=None, ploidy=2)
+
+        bad_model_change = msprime.SimulationModelChange(
+            0.5, msprime.DiscreteTimeWrightFisher(2))
+        self.assertRaises(
+            NotImplementedError, msprime.simulate, 4, pedigree=ped,
+            demographic_events=[bad_model_change], model="wf_ped")
+        bad_demographic_event = msprime.PopulationParametersChange(
+            t, initial_size=2)
+        self.assertRaises(
+            NotImplementedError, msprime.simulate, 4, pedigree=ped,
+            demographic_events=[bad_demographic_event], model="wf_ped")
+
+    def test_ped_wf_recombination(self):
+        inds = np.array([1, 2, 3, 4, 5, 6])
+        parent_indices = np.array([
+            4, 5,
+            4, 5,
+            4, 5,
+            4, 5,
+            -1, -1,
+            -1, -1]).reshape(-1, 2)
+        times = np.array([0, 0, 0, 0, 1, 1])
+        is_sample = np.array([1, 1, 1, 1, 0, 0])
+        t = max(times)
+
+        model = msprime.WrightFisherPedigree()
+        ped = msprime.Pedigree(inds, parent_indices, times, is_sample,
+                               sex=None, ploidy=2)
+        ts = msprime.simulate(
+            sample_size=4,
+            pedigree=ped,
+            recombination_rate=0.1,
+            demographic_events=[
+                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher(2))],
+            model=model)
+        tree = ts.first()
+        self.assertEqual(tree.num_roots, 1)
+        all_times = ts.tables.nodes.time
+        ped_times = all_times[np.logical_and(all_times > 0, all_times <= t)]
+        self.assertGreater(ped_times.shape[0], 0)
+        self.assertTrue(np.all(ped_times == np.floor(ped_times)))
+        wf_times = all_times[all_times > t]
+        self.assertGreater(wf_times.shape[0], 0)
+
     def test_wf_hudson_single_locus(self):
         Ne = 100
         t = 10

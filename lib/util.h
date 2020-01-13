@@ -74,6 +74,8 @@
 #define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -38
 #define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -39
 #define MSP_ERR_BAD_PROPORTION                                      -40
+#define MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES                            -41
+#define MSP_ERR_BAD_PEDIGREE_ID                                     -42
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

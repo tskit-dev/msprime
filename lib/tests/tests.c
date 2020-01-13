@@ -1318,6 +1318,229 @@ get_num_children(size_t node, tsk_edge_table_t *edges)
 }
 
 static void
+test_pedigree_multi_locus_simulation(void)
+{
+    int ret;
+    const char *model_name;
+    /* int i; */
+    /* int num_coalescent_events = 0; */
+    /* int num_children; */
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+    int num_inds = 4;
+    int ploidy = 2;
+    tsk_id_t inds[4] = {1, 2, 3, 4};
+    tsk_id_t parents[8] = {2, 3, 2, 3, -1, -1, -1, -1};  // size num_inds * ploidy
+    double times[4] = {0, 0, 1, 1};
+    tsk_flags_t is_sample[4] = {1, 1, 0, 0};
+    uint32_t N = 4;
+    uint32_t n = 2 * ploidy;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 100, 10.0, 10.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_alloc_pedigree(msp, num_inds, ploidy);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_pedigree(msp, num_inds, inds, parents, times, is_sample);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_wf_ped(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "wf_ped");
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+    ret = msp_set_simulation_model_dtwf(msp, N);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+    msp_print_pedigree_inds(msp, _devnull);
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_finalise_tables(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.migrations.num_rows, 0);
+    CU_ASSERT(tables.nodes.num_rows > 0);
+    CU_ASSERT(tables.edges.num_rows > 0);
+
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_pedigree_specification(void)
+{
+    int ret;
+    const char *model_name;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+    int num_inds = 4;
+    int ploidy = 2;
+    tsk_id_t inds[4] = {1, 2, 3, 4};
+    tsk_id_t parents[8] = {2, 3, 2, 3, -1, -1, -1, -1};  // size num_inds * ploidy
+    double times_good[4] = {0, 0, 1, 1};
+    tsk_flags_t is_sample[4] = {1, 1, 0, 0};
+    uint32_t n = 2 * ploidy;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_alloc_pedigree(msp, num_inds, ploidy);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_pedigree(msp, num_inds + 1, inds, parents, times_good, is_sample);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_pedigree(msp, num_inds, inds, parents, times_good, is_sample);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_wf_ped(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "wf_ped");
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+
+    ret = msp_finalise_tables(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+
+static void
+test_pedigree_single_locus_simulation(void)
+{
+    int ret;
+    const char *model_name;
+    int i;
+    int num_coalescent_events = 0;
+    int num_children;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+    int num_inds = 4;
+    int ploidy = 2;
+    tsk_id_t inds[4] = {1, 2, 3, 4};
+    tsk_id_t bad_inds[4] = {0, 1, 2, 3};
+    tsk_id_t parents[8] = {2, 3, 2, 3, -1, -1, -1, -1};  // size num_inds * ploidy
+    double times[4] = {0, 0, 1, 1};
+    tsk_flags_t is_sample[4] = {1, 1, 0, 0};
+    tsk_flags_t bad_is_sample[4] = {1, 0, 0, 0};
+    uint32_t N = 4;
+    uint32_t n = 2 * ploidy;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_alloc_pedigree(msp, num_inds, ploidy);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_pedigree(msp, num_inds, bad_inds, parents, times, is_sample);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PEDIGREE_ID);
+    ret = msp_set_pedigree(msp, num_inds, inds, parents, times, bad_is_sample);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PEDIGREE_ID);
+    ret = msp_set_pedigree(msp, num_inds, inds, parents, times, is_sample);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_wf_ped(msp, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "wf_ped");
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
+    ret = msp_set_simulation_model_dtwf(msp, N);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp);
+
+    /* For the single locus sim we should have n-1 coalescent events,
+     * counting multiple mergers as multiple coalescent events */
+    for (i = 0; i < msp->tables->nodes.num_rows; i++) {
+      num_children = get_num_children(i, &msp->tables->edges);
+      if (num_children > 0) {
+        num_coalescent_events += num_children - 1;
+      }
+    }
+    CU_ASSERT_EQUAL(num_coalescent_events, n-1);
+
+    ret = msp_finalise_tables(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(tables.migrations.num_rows, 0);
+    CU_ASSERT(tables.nodes.num_rows > 0);
+    CU_ASSERT(tables.edges.num_rows > 0);
+
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_dtwf_deterministic(void)
 {
     int j, ret;
@@ -4079,6 +4302,9 @@ main(int argc, char **argv)
         {"test_dtwf_events_between_generations", test_dtwf_events_between_generations},
         {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
         {"test_dtwf_low_recombination", test_dtwf_low_recombination},
+        {"test_pedigree_single_locus_simulation", test_pedigree_single_locus_simulation},
+        {"test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation},
+        {"test_pedigree_specification", test_pedigree_specification},
         {"test_likelihood_three_leaves", test_likelihood_three_leaves},
         {"test_likelihood_two_mrcas", test_likelihood_two_mrcas},
         {"test_likelihood_material_overhang", test_likelihood_material_overhang},

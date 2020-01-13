@@ -40,6 +40,7 @@
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SWEEP 6
+#define MSP_MODEL_WF_PED 7
 
 /* Exit codes from msp_run to distinguish different reasons for exiting
  * before coalescence. */
@@ -57,6 +58,11 @@
 
 /* Flags for mutgen */
 #define MSP_KEEP_SITES  1
+
+/* Pedigree states */
+#define MSP_PED_STATE_UNCLIMBED         0
+#define MSP_PED_STATE_CLIMBING          1
+#define MSP_PED_STATE_CLIMB_COMPLETE    2
 
 /* FIXME: Using these typedefs to keep the diff size small on the initial
  * tskit transition. Can remove later. */
@@ -103,6 +109,28 @@ typedef struct {
     double start_time;
     avl_tree_t *ancestors;
 } population_t;
+
+typedef struct individual_t_t {
+    tsk_id_t id;
+    tsk_id_t tsk_id;
+    struct individual_t_t **parents;
+    avl_tree_t *segments;
+    int sex;
+    double time;
+    bool queued;
+    // For debugging, to ensure we only merge once.
+    bool merged;
+} individual_t;
+
+typedef struct {
+    individual_t *inds;
+    size_t num_inds;
+    size_t ploidy;
+    individual_t **samples;
+    size_t num_samples;
+    avl_tree_t ind_heap;
+    int state;
+} pedigree_t;
 
 typedef struct {
     double time;
@@ -198,6 +226,7 @@ typedef struct _msp_t {
     simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;
+    pedigree_t *pedigree;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
@@ -314,6 +343,7 @@ int msp_set_simulation_model_hudson(msp_t *self, double population_size);
 int msp_set_simulation_model_smc(msp_t *self, double population_size);
 int msp_set_simulation_model_smc_prime(msp_t *self, double population_size);
 int msp_set_simulation_model_dtwf(msp_t *self, double population_size);
+int msp_set_simulation_model_wf_ped(msp_t *self, double population_size);
 int msp_set_simulation_model_dirac(msp_t *self, double population_size, double psi,
     double c);
 int msp_set_simulation_model_beta(msp_t *self, double population_size, double alpha,
@@ -345,6 +375,21 @@ int msp_add_simple_bottleneck(msp_t *self, double time, int population_id,
 int msp_add_instantaneous_bottleneck(msp_t *self, double time, int population_id,
         double strength);
 int msp_add_census_event(msp_t *self, double time);
+
+int alloc_individual(individual_t *ind, size_t ploidy);
+int msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy);
+int msp_free_pedigree(msp_t *self);
+int msp_set_pedigree(msp_t *self, size_t num_rows, int *inds, int *parents,
+        double *times, uint32_t *is_sample);
+int msp_pedigree_load_pop(msp_t *self);
+void msp_check_samples(msp_t *self);
+int msp_pedigree_build_ind_queue(msp_t *self);
+int msp_pedigree_push_ind(msp_t *self, individual_t *ind);
+int msp_pedigree_pop_ind(msp_t *self, individual_t **ind);
+int msp_pedigree_add_individual_segment(msp_t *self, individual_t *ind,
+        segment_t *segment, size_t parent_ix);
+int msp_pedigree_climb(msp_t *self);
+void msp_print_pedigree_inds(msp_t *self, FILE *out);
 
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);

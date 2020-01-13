@@ -24,6 +24,7 @@ import itertools
 import math
 import random
 import unittest
+import numpy as np
 
 import tskit
 
@@ -896,6 +897,46 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, num_labels=-1)
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
+
+    def test_pedigree_simulation_model(self):
+        recomb_map = uniform_recombination_map()
+        base_ped = {
+            "individual": np.array([1, 2, 3, 4], dtype=np.int32),
+            "parents": np.array([2, 3, 2, 3, -1, -1, -1, -1],
+                                dtype=np.int32).reshape(-1, 2),
+            "time": np.array([0, 0, 1, 1], dtype=np.float64),
+            "is_sample": np.array([1, 1, 0, 0], dtype=np.uint32)
+        }
+        bad_ped_too_many_samples = base_ped.copy()
+        bad_ped_too_many_samples["is_sample"] = 1
+        bad_ped_bad_inds = base_ped.copy()
+        bad_ped_bad_inds["individual"] = np.array([0, 1, 2, 3], dtype=np.int32),
+        bad_ped_bad_is_sample = base_ped.copy()
+        bad_ped_bad_is_sample["is_sample"] = np.array([0, 1, 0, 0], dtype=np.int32),
+
+        def f(num_samples=4, random_seed=1, model='wf_ped', **kwargs):
+            return _msprime.Simulator(
+                get_samples(num_samples),
+                recomb_map, _msprime.RandomGenerator(random_seed),
+                _msprime.LightweightTableCollection(),
+                model=get_simulation_model(model), **kwargs)
+
+        for bad_type in ["1", [], int, set()]:
+            self.assertRaises(TypeError, f, pedigree=bad_type)
+        for bad_value in [{}]:
+            self.assertRaises(ValueError, f, pedigree=bad_value)
+        for bad_model in ["dtwf", "hudson"]:
+            self.assertRaises(ValueError, f, pedigree=base_ped,
+                              model=bad_model)
+        for bad_ped in [
+                bad_ped_too_many_samples,
+                bad_ped_bad_inds,
+                bad_ped_bad_is_sample]:
+            self.assertRaises(ValueError, f, pedigree=bad_ped)
+        for good_ped in [base_ped]:
+            sim = f(pedigree=good_ped)
+            sim.run()
+            self.assertEqual(sim.get_model(), get_simulation_model("wf_ped"))
 
     def test_num_labels(self):
         recomb_map = uniform_recombination_map()
