@@ -3000,8 +3000,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int sim_ret;
     static char *kwlist[] = {"samples", "recombination_map", "random_generator",
-        "tables", "population_configuration", "pedigree", "migration_matrix", "demographic_events",
-        "model", "avl_node_block_size", "segment_block_size",
+        "tables", "population_configuration", "pedigree", "migration_matrix",
+        "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "store_full_arg", "num_labels", "gene_conversion_rate",
         "gene_conversion_track_length", NULL};
@@ -3031,11 +3031,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!O!O!O!nnnidindd", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OO!O!O!nnnidindd", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
             &LightweightTableCollectionType, &tables,
+            /* optional */
             &PyList_Type, &population_configuration,
             &pedigree,
             &PyList_Type, &migration_matrix,
@@ -3114,7 +3115,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     sim_ret = msp_set_gene_conversion_rate(self->sim, gene_conversion_rate,
             gene_conversion_track_length);
     if (sim_ret != 0) {
-        handle_input_error(sim_ret);
+        handle_input_error("set_gene_conversion_rate", sim_ret);
         goto out;
     }
 

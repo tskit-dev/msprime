@@ -1915,13 +1915,15 @@ msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *n
     int ret = 0;
     assert(lhs_tail != NULL);
     lhs_tail->next = new_segment;
-    fenwick_set_value(&self->links[label], new_segment->id, new_segment->right - lhs_tail->right);
+    fenwick_set_value(&self->links[label], new_segment->id,
+            new_segment->right - lhs_tail->right);
     if (y->next != NULL){
         y->next->prev = new_segment;
     }
     y->next = NULL;
     y->right = track_end;
-    fenwick_increment(&self->links[label], y->id, (int64_t) track_end - (int64_t) new_segment->right);
+    fenwick_increment(&self->links[label], y->id,
+            (int64_t) track_end - (int64_t) new_segment->right);
     if (!msp_has_breakpoint(self, (uint32_t) track_end)) {
         ret = msp_insert_breakpoint(self, (uint32_t) track_end);
         if (ret != 0) {
@@ -1939,9 +1941,9 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 {
     int ret = 0;
     int64_t h, tl, t, k;
-    int64_t num_links = fenwick_get_total(&self->links[label]);
     size_t segment_id;
     segment_t *x, *y, *y2, *z, *z2, *lhs_tail;
+    int64_t num_links = fenwick_get_total(&self->links[label]);
 
     h = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
     assert(h > 0 && h <= num_links);
