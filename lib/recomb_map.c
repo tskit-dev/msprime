@@ -56,7 +56,7 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
         double *positions, double *rates, size_t size)
 {
     int ret = MSP_ERR_BAD_RECOMBINATION_MAP;
-    double length;
+    double length, s;
     size_t j;
 
     memset(self, 0, sizeof(recomb_map_t));
@@ -69,7 +69,9 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
     }
     self->positions = malloc(size * sizeof(double));
     self->rates = malloc(size * sizeof(double));
-    if (self->positions == NULL || self->rates == NULL) {
+    self->cumulative = malloc(size * sizeof(double));
+    
+    if (self->positions == NULL || self->rates == NULL || self->cumulative == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -92,6 +94,13 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
         self->rates[j] = rates[j];
         self->positions[j] = positions[j];
     }
+    
+    s = 0;
+    self->cumulative[0] = 0;
+    for (j = 1; j < size; j ++) {
+        s += (self->positions[j] - self->positions[j - 1]) * self->rates[j - 1];
+        self->cumulative[j] = s;
+    }
     ret = 0;
 out:
     return ret;
@@ -105,6 +114,9 @@ recomb_map_free(recomb_map_t *self)
     }
     if (self->rates != NULL) {
         free(self->rates);
+    }
+    if (self->cumulative != NULL) {
+        free(self->cumulative);
     }
     return 0;
 }
@@ -231,12 +243,10 @@ recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
          * map back into physical coordinates. */
         x = (genetic_x / num_loci) * self->total_recombination_rate;
         if (x > 0) {
-            s = 0;
-            k = 0;
-            while (s < x && k < self->size - 1) {
-                s += (p[k + 1] - p[k]) * r[k];
-                k++;
-            }
+            
+            k = msp_binary_interval_search(x, self->cumulative, self->size);
+            s = self->cumulative[k];
+            assert((s >= x) || (k >= self->size - 1));
             assert(k > 0);
             excess = 0;
             if (r[k - 1] > 0) {
