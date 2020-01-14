@@ -53,6 +53,17 @@ the :class:`.RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
+For gene conversion there are two parameters. The gene conversion rate determines the initiation
+and is again per unit of sequence length and per generation in ``msprime``.
+Thus, given the per generation gene conversion rate :math:`g`, the overall rate of
+gene conversion initiation between the ends of the sequence is :math:`\rho = 4 N_e g L` in
+coalescent time units. The second parameter :math:`track_len` is the expected track length
+of a gene conversion. At each gene conversion initiation site the track of the conversion
+extends to the right and the length of the track is geometric distributed with parameter
+:math:`1/track_len`. Currently recombination maps for gene conversion are not supported.
+However, recombination (with or without recombination maps) and a constant gene conversion
+rate along the genome can be combined in ``msprime``.
+
 Population structure is modelled by specifying a fixed number of subpopulations
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
 migration rates. Each element of the matrix :math:`M_{j,k}` defines
@@ -69,10 +80,15 @@ configuration at a particular time in the past.
     migration rates is different to :program:`ms`, which states these
     rates over the entire region and in coalescent time units. The
     motivation for this is to allow the user change the size of the simulated
-    region without having to rescale the recombination and mutation rates,
+    region without having to rescale the recombination, gene conversion, and mutation rates,
     and to also allow users directly state times and rates in units of
     generations. However, the ``mspms`` command line application is
     fully :program:`ms` compatible.
+    If recombination and gene conversion are combined the gene conversion
+    rate in :program:`ms` is determined by the ratio :math:`f`, which corresponds to
+    setting :math:`g = f r`. In ``msprime`` the gene conversion rate :math:`g` is
+    set independently and does not depend on the recombination rate. However,
+    ``mspms`` mimics the :program:`ms` behaviour.
 
 *******************
 Running simulations

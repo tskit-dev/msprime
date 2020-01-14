@@ -889,12 +889,20 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, node_mapping_block_size=bad_type)
             self.assertRaises(TypeError, f, start_time=bad_type)
             self.assertRaises(TypeError, f, num_labels=bad_type)
+            self.assertRaises(TypeError, f, gene_conversion_rate=bad_type)
+            self.assertRaises(TypeError, f, gene_conversion_track_length=bad_type)
         # Check for bad values.
         self.assertRaises(_msprime.InputError, f, avl_node_block_size=0)
         self.assertRaises(_msprime.InputError, f, segment_block_size=0)
         self.assertRaises(_msprime.InputError, f, node_mapping_block_size=0)
         self.assertRaises(_msprime.InputError, f, num_labels=0)
         self.assertRaises(_msprime.InputError, f, num_labels=-1)
+        self.assertRaises(_msprime.InputError, f, gene_conversion_rate=-1)
+        # Track length is ignored if gene_conversion_rate is 0
+        self.assertRaises(
+            _msprime.InputError, f, gene_conversion_rate=1,
+            gene_conversion_track_length=-100)
+
         # Check for other type specific errors.
         self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
 

@@ -81,8 +81,6 @@ verify_simulator_tsk_treeseq_equality(msp_t *msp, tsk_treeseq_t *tree_seq,
     tsk_treeseq_print_state(tree_seq, _devnull);
 }
 
-
-
 /* Simple unit tests for the Fenwick tree API. */
 static void
 test_fenwick(void)
@@ -184,7 +182,7 @@ test_single_locus_two_populations(void)
     msp_print_state(&msp, _devnull);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(&msp);
+    msp_verify(&msp, 0);
     msp_print_state(&msp, _devnull);
 
     nodes = &msp.tables->nodes;
@@ -259,7 +257,7 @@ test_single_locus_many_populations(void)
     msp_print_state(&msp, _devnull);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(&msp);
+    msp_verify(&msp, 0);
     msp_print_state(&msp, _devnull);
     CU_ASSERT_EQUAL_FATAL(msp_get_num_edges(&msp), 2);
     CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
@@ -309,7 +307,7 @@ test_dtwf_simultaneous_historical_samples(void)
     msp_print_state(&msp, _devnull);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(&msp);
+    msp_verify(&msp, 0);
     msp_print_state(&msp, _devnull);
 
     nodes = &msp.tables->nodes;
@@ -365,7 +363,7 @@ test_single_locus_historical_sample(void)
         msp_print_state(&msp, _devnull);
         ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, 0);
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
         msp_print_state(&msp, _devnull);
 
         CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
@@ -432,16 +430,16 @@ test_single_locus_multiple_historical_samples(void)
         ret = msp_run(&msp, 10, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         CU_ASSERT_EQUAL(msp_get_num_ancestors(&msp), 1);
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
         ret = msp_run(&msp, DBL_MAX, 1);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
         /* All the samples should be added in now. */
         CU_ASSERT_EQUAL(msp_get_num_ancestors(&msp), 4);
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
 
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
         CU_ASSERT_EQUAL(ret, 0);
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
 
         ret = msp_free(&msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -496,7 +494,7 @@ test_single_locus_historical_sample_start_time(void)
             ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
             CU_ASSERT_EQUAL(ret, 0);
             /* msp_print_state(&msp, stdout); */
-            msp_verify(&msp);
+            msp_verify(&msp, 0);
             /* msp_print_state(&msp, _devnull); */
 
             CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 3);
@@ -996,7 +994,7 @@ test_census_event(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
     msp_print_state(msp, _devnull);
 
     /* Check there is more than 1 node at the census time. */
@@ -1365,7 +1363,7 @@ test_pedigree_multi_locus_simulation(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
     ret = msp_set_simulation_model_dtwf(msp, N);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
@@ -1435,7 +1433,7 @@ test_pedigree_specification(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     ret = msp_finalise_tables(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1504,7 +1502,7 @@ test_pedigree_single_locus_simulation(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
     ret = msp_set_simulation_model_dtwf(msp, N);
@@ -1513,7 +1511,7 @@ test_pedigree_single_locus_simulation(void)
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
@@ -1575,7 +1573,7 @@ test_dtwf_deterministic(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_run(msp, DBL_MAX, UINT32_MAX);
         CU_ASSERT_EQUAL(ret, 0);
-        msp_verify(msp);
+        msp_verify(msp, 0);
         ret = msp_finalise_tables(msp);
         CU_ASSERT_EQUAL(ret, 0);
         msp_free(msp);
@@ -1645,7 +1643,7 @@ test_mixed_model_simulation(void)
     /* Run for 10 generations each for the different models, alternating */
     j = 0;
     while ((ret = msp_run(msp, j * 10, UINT32_MAX)) == 2) {
-        msp_verify(msp);
+        msp_verify(msp, 0);
         /* Check that our populations and growth rates are still correct */
         for (k = 0; k < 3; k++) {
             ret = msp_get_population_configuration(msp, k, &initial_size, &growth_rate);
@@ -1731,7 +1729,7 @@ test_dtwf_single_locus_simulation(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
@@ -1825,16 +1823,65 @@ test_single_locus_simulation(void)
     for (j = 0; j < n - 2; j++) {
         ret = msp_run(msp, DBL_MAX, 1);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
-        msp_verify(msp);
+        msp_verify(msp, 0);
     }
     ret = msp_run(msp, DBL_MAX, 1);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     model = msp_get_model(msp)->type;
     CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "hudson");
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_single_locus_gene_conversion(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1, 1.0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(msp, 10, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(msp_get_gene_conversion_rate(msp), 10);
+
+    /* For the single locus sim we should have exactly n - 1 events */
+    for (j = 0; j < n - 2; j++) {
+        ret = msp_run(msp, DBL_MAX, 1);
+        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
+        msp_verify(msp, 0);
+    }
+    ret = msp_run(msp, DBL_MAX, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(msp, 0);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1876,7 +1923,7 @@ test_multi_locus_bottleneck_arg(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1930,7 +1977,7 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
 
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-    msp_verify(msp);
+    msp_verify(msp, 0);
     num_ca_events = msp_get_num_common_ancestor_events(msp);
     num_re_events = msp_get_num_recombination_events(msp);
     CU_ASSERT_TRUE(num_ca_events > 0);
@@ -1956,17 +2003,79 @@ test_dtwf_multi_locus_simulation(void)
      * coalescence.
      */
     while ((ret = msp_run(msp, DBL_MAX, 1)) > 0) {
-        msp_verify(msp);
+        msp_verify(msp, 0);
         CU_ASSERT_EQUAL_FATAL(msp->time, t);
         t++;
     }
-    msp_verify(msp);
+    msp_verify(msp, 0);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(num_ca_events == msp_get_num_common_ancestor_events(msp));
     CU_ASSERT_TRUE(num_re_events == msp_get_num_recombination_events(msp));
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_gene_conversion_simulation(void)
+{
+    int ret;
+    uint32_t n = 100;
+    uint32_t m = 100;
+    double track_lengths[] = {1.0, 1.3333, 5, 100};
+    long seed = 10;
+    size_t j, num_events, num_ca_events, num_re_events, num_gc_events;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_set(rng, seed);
+
+    for (j = 0; j < sizeof(track_lengths) / sizeof(double); j++) {
+        memset(samples, 0, n * sizeof(sample_t));
+        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_gene_conversion_rate(msp, 1.0, track_lengths[j]);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = msp_initialise(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+            msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
+            num_events++;
+        }
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
+        num_ca_events = msp_get_num_common_ancestor_events(msp);
+        num_re_events = msp_get_num_recombination_events(msp);
+        num_gc_events = msp_get_num_gene_conversion_events(msp);
+        CU_ASSERT_TRUE(num_ca_events > 0);
+        CU_ASSERT_TRUE(num_re_events > 0);
+        CU_ASSERT_TRUE(num_gc_events > 0);
+        msp_free(msp);
+
+        /* Make sure we can build a tree sequence out of the result */
+        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        tsk_treeseq_free(&ts);
+
+        tsk_table_collection_clear(&tables);
+    }
     gsl_rng_free(rng);
     free(msp);
     free(samples);
@@ -2582,11 +2691,11 @@ test_multi_locus_simulation(void)
 
             num_events = 0;
             while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-                msp_verify(msp);
+                msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
                 num_events++;
             }
             CU_ASSERT_EQUAL(ret, 0);
-            msp_verify(msp);
+            msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
             ret = msp_get_num_migration_events(msp, migration_events);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT(num_events > n - 1);
@@ -2604,7 +2713,7 @@ test_multi_locus_simulation(void)
             ret = msp_reset(msp);
             num_events = 0;
             while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-                msp_verify(msp);
+                msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
                 num_events++;
             }
             CU_ASSERT_EQUAL(ret, 0);
@@ -2618,7 +2727,6 @@ test_multi_locus_simulation(void)
             if (models[j] == MSP_MODEL_HUDSON) {
                 CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
             }
-
             model = msp_get_model(msp)->type;
             CU_ASSERT_EQUAL(model, models[j]);
             model_name = msp_get_model_name(msp);
@@ -2689,7 +2797,7 @@ test_simulation_replicates(void)
     for (j = 0; j < num_replicates; j++) {
         ret = msp_run(&msp, DBL_MAX, SIZE_MAX);
         CU_ASSERT_EQUAL(ret, 0);
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_finalise_tables(&msp);
         ret = mutgen_generate(&mutgen, &tables, 0);
@@ -2770,11 +2878,11 @@ test_bottleneck_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(msp));
     CU_ASSERT_EQUAL(msp->time, t2);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     msp_reset(msp);
     while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-        msp_verify(msp);
+        msp_verify(msp, 0);
         if (msp->time == 0.1) {
             t1_found = 1;
         }
@@ -2856,13 +2964,13 @@ test_large_bottleneck_simulation(void)
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         CU_ASSERT_FALSE(msp_is_completed(msp));
         CU_ASSERT_EQUAL(msp->time, bottlenecks[j].time + 1e-6);
-        msp_verify(msp);
+        msp_verify(msp, 0);
     }
     ret = msp_run(msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(msp));
     CU_ASSERT_EQUAL(msp->time, bottlenecks[num_bottlenecks - 1].time);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     /* Test out resets on partially completed simulations. */
     ret = msp_reset(msp);
@@ -2872,7 +2980,7 @@ test_large_bottleneck_simulation(void)
         CU_ASSERT_EQUAL(ret, 2);
     }
     ret = msp_reset(msp);
-    msp_verify(msp);
+    msp_verify(msp, 0);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -3077,11 +3185,11 @@ test_multiple_mergers_simulation(void)
                 CU_ASSERT_EQUAL_FATAL(ret, 0);
                 CU_ASSERT_TRUE(msp_is_completed(msp));
                 CU_ASSERT_TRUE(msp->time > 0);
-                msp_verify(msp);
+                msp_verify(msp, 0);
 
                 msp_reset(msp);
                 while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-                    msp_verify(msp);
+                    msp_verify(msp, 0);
                 }
                 CU_ASSERT_EQUAL_FATAL(ret, 0);
                 CU_ASSERT_TRUE(msp_is_completed(msp));
@@ -3443,7 +3551,7 @@ verify_simulate_from(int model, recomb_map_t *recomb_map,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < num_replicates; j++) {
-        msp_verify(&msp);
+        msp_verify(&msp, 0);
         ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_TRUE(msp_is_completed(&msp));
@@ -3816,6 +3924,16 @@ test_simulate_init_errors(void)
 
     ret = msp_set_start_time(&msp, -1);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME);
+
+    ret = msp_set_gene_conversion_rate(&msp, -1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_rate(&msp, 1, -1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_rate(&msp, 1, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_rate(&msp, 1, 0.9999);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -4460,6 +4578,7 @@ main(int argc, char **argv)
         {"test_dtwf_unsupported_bottleneck", test_dtwf_unsupported_bottleneck},
         {"test_time_travel_error", test_time_travel_error},
         {"test_single_locus_simulation", test_single_locus_simulation},
+        {"test_single_locus_gene_conversion", test_single_locus_gene_conversion},
         {"test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg},
         {"test_mixed_model_simulation", test_mixed_model_simulation},
         {"test_dtwf_deterministic", test_dtwf_deterministic},
@@ -4478,6 +4597,7 @@ main(int argc, char **argv)
             test_likelihood_recombination_in_material_gap},
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
+        {"test_gene_conversion_simulation", test_gene_conversion_simulation},
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_compute_falling_factorial", test_compute_falling_factorial},

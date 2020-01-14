@@ -84,7 +84,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 	int migrant, source_pop, *config, flagint ;
 	double  ran1(), sum, x, tcoal, ttemp, rft, clefta,  tmin, p  ;
 	double prec, cin,  prect, nnm1, nnm0, mig, ran, coal_prob, prob, rdum , arg ;
-	char c, event ;
+	char c, event, subevent ;
 	int re(), xover(), cinr(), cleftr(), eflag, cpop, ic  ;
 	int nsam, npop, nsites, nintn, *inconfig ;
 	double r,  f, rf,  track_len, *nrec, *npast, *tpast, **migm ;
@@ -93,6 +93,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 #ifdef SUMMARY_STATS
     unsigned int jk_pop_j, jk_pop_k;
     unsigned int recombination_events = 0;
+    unsigned int conversion_events = 0;
     unsigned int coancestry_events = 0;
     int N = cp->npop;
 	struct devent *e;
@@ -358,14 +359,17 @@ segtre_mig(struct c_params *cp, int *pnsegs )
                 if( (ran = ran1()) < ( prec / prect ) ){ /*recombination*/
                     rchrom = re(nsam);
                     config[ chrom[rchrom].pop ] += 1 ;
+                    subevent = 'r';
                 }
                 else if( ran < (prec + clefta)/(prect) ){    /*  cleft event */
                     rchrom = cleftr(nsam);
                     config[ chrom[rchrom].pop ] += 1 ;
+                    subevent = 'g';
                 }
                 else  {         /* cin event */
                     rchrom = cinr(nsam,nsites);
                     if( rchrom >= 0 ) config[ chrom[rchrom].pop ] += 1 ;
+                    subevent = 'g';
                 }
             }
             else if ( event == 'm' ) {  /* migration event */
@@ -402,7 +406,13 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 #ifdef SUMMARY_STATS
             /* verify that the events are what we think and count*/
             if (event == 'r') {
-                recombination_events++;
+                if (subevent == 'r'){
+                    recombination_events++;                    
+                }
+                if (subevent == 'g'){
+                    conversion_events++;
+                }
+
             } else if (event == 'c') {
                 coancestry_events++;
             } else if (event == 'm') {
@@ -417,7 +427,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
 }
 #ifdef SUMMARY_STATS
     /* print out the events */
-    printf("%f\t%d\t%d\t%d", t, nsegs, recombination_events, coancestry_events);
+    printf("%f\t%d\t%d\t%d\t%d", t, nsegs, recombination_events, coancestry_events, conversion_events);
     for (i = 0; i < N * N; i++) {
         printf("\t%d", migration_events[i]);
     }

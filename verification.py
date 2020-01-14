@@ -210,6 +210,7 @@ class SimulationVerifier(object):
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
         re_events = [0 for j in range(replicates)]
+        gc_events = [0 for j in range(replicates)]
         mig_events = [None for j in range(replicates)]
         for j in range(replicates):
             sim.reset()
@@ -218,10 +219,11 @@ class SimulationVerifier(object):
             time[j] = sim.time
             ca_events[j] = sim.num_common_ancestor_events
             re_events[j] = sim.num_recombination_events
+            gc_events[j] = sim.num_gene_conversion_events
             mig_events[j] = [r for row in sim.num_migration_events for r in row]
         d = {
             "t": time, "num_trees": num_trees,
-            "ca_events": ca_events, "re_events": re_events}
+            "ca_events": ca_events, "re_events": re_events, "gc_events": gc_events}
         for j in range(num_populations**2):
             events = [mig_events[k][j] for k in range(replicates)]
             d["mig_events_{}".format(j)] = events
@@ -515,6 +517,115 @@ class SimulationVerifier(object):
         filename = os.path.join(basedir, "var.png")
         pyplot.plot(sample_size, predicted_var, "-")
         pyplot.plot(sample_size, var, "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+    def run_correlation_between_trees_analytical_check(self):
+        """
+        Runs the check for the probability of same tree at two sites against
+        analytical predictions.
+        """
+        R = 1000
+        basedir = "tmp__NOBACKUP__/analytical_corr_same_tree"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        sample_size = 2
+        gc_length_rate_ratio = np.array([0.05, 0.5, 5.0])
+        gc_length = np.array([100, 50, 20])
+        gc_rate = 1.0 / (gc_length_rate_ratio * gc_length)
+        seq_length = 500
+        predicted_prob = np.zeros(
+            [gc_length_rate_ratio.size, seq_length], dtype=float)
+        empirical_prob_first = np.zeros(
+            [gc_length_rate_ratio.size, seq_length], dtype=float)
+        empirical_prob_mid = np.zeros(
+            [gc_length_rate_ratio.size, seq_length], dtype=float)
+        empirical_prob_last = np.zeros(
+            [gc_length_rate_ratio.size, seq_length], dtype=float)
+
+        for k, l in enumerate(gc_length):
+            same_root_count_first = np.zeros(seq_length)
+            same_root_count_mid = np.zeros(seq_length)
+            same_root_count_last = np.zeros(seq_length)
+            low_recombination_rate = 0.000001
+            recomb_map = msprime.RecombinationMap.uniform_map(
+                seq_length, low_recombination_rate, num_loci=seq_length)
+            replicates = msprime.simulate(
+                sample_size=sample_size,
+                recombination_map=recomb_map,
+                gene_conversion_rate=gc_rate[k],
+                gene_conversion_track_length=gc_length[k],
+                num_replicates=R)
+            for j, ts in enumerate(replicates):
+                firstroot = ts.first().root
+                lastroot = ts.last().root
+                for tree in ts.trees():
+                    left, right = tree.interval
+                    if left <= seq_length / 2 < right:
+                        midroot = tree.root
+                for tree in ts.trees():
+                    left, right = map(int, tree.interval)
+                    if firstroot == tree.root:
+                        same_root_count_first[left: right] += 1
+                    if lastroot == tree.root:
+                        same_root_count_last[left: right] += 1
+                    if midroot == tree.root:
+                        same_root_count_mid[left: right] += 1
+            empirical_prob_first[k, :] = same_root_count_first / R
+            empirical_prob_last[k, :] = same_root_count_last / R
+            empirical_prob_mid[k, :] = same_root_count_mid / R
+            # Predicted prob
+            # From Wiuf, Hein, 2000, eqn (15), pg. 457
+            rG = 2 / gc_length_rate_ratio[k] * (
+                    1.0 - np.exp(-np.arange(seq_length) / gc_length[k]))
+            predicted_prob[k, :] = (18.0 + rG)/(18.0 + 13.0*rG + rG*rG)
+
+        x = np.arange(500)+1
+        filename = os.path.join(basedir, "prob_first.png")
+        pyplot.plot(x, predicted_prob[0], "--")
+        pyplot.plot(x, empirical_prob_first[0], "-")
+        pyplot.plot(x, predicted_prob[1], "--")
+        pyplot.plot(x, empirical_prob_first[1], "-")
+        pyplot.plot(x, predicted_prob[2], "--")
+        pyplot.plot(x, empirical_prob_first[2], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+        filename = os.path.join(basedir, "prob_last.png")
+        pyplot.plot(x, predicted_prob[0, ::-1], "--")
+        pyplot.plot(x, empirical_prob_last[0], "-")
+        pyplot.plot(x, predicted_prob[1, ::-1], "--")
+        pyplot.plot(x, empirical_prob_last[1], "-")
+        pyplot.plot(x, predicted_prob[2, ::-1], "--")
+        pyplot.plot(x, empirical_prob_last[2], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+        filename = os.path.join(basedir, "prob_mid.png")
+        pyplot.plot(
+            x, np.concatenate((predicted_prob[0, 249::-1], predicted_prob[0, :250])),
+            "--")
+        pyplot.plot(x, empirical_prob_mid[0], "-")
+        pyplot.plot(
+            x, np.concatenate((predicted_prob[1, 249::-1], predicted_prob[1, :250])),
+            "--")
+        pyplot.plot(x, empirical_prob_mid[1], "-")
+        pyplot.plot(
+            x, np.concatenate((predicted_prob[2, 249::-1], predicted_prob[2, :250])),
+            "--")
+        pyplot.plot(x, empirical_prob_mid[2], "-")
+        pyplot.savefig(filename)
+        pyplot.close('all')
+
+        filename = os.path.join(basedir, "prob_first_zoom.png")
+        x = np.arange(10) + 1
+        pyplot.plot(x, predicted_prob[0, range(10)], "--")
+        pyplot.plot(x, empirical_prob_first[0, range(10)], "-")
+        pyplot.plot(x, predicted_prob[1, range(10)], "--")
+        pyplot.plot(x, empirical_prob_first[1, range(10)], "-")
+        pyplot.plot(x, predicted_prob[2, range(10)], "--")
+        pyplot.plot(x, empirical_prob_first[2, range(10)], "-")
         pyplot.savefig(filename)
         pyplot.close('all')
 
@@ -1943,6 +2054,14 @@ class SimulationVerifier(object):
         """
         self._instances["analytical_pi"] = self.run_pi_analytical_check
 
+    def add_corr_trees_analytical_check(self):
+        """
+        Adds a check for the analytical predictions about the correlation between
+        trees in the case of gene conversion.
+        """
+        self._instances["analytical_corr_same_tree"] = \
+            self.run_correlation_between_trees_analytical_check
+
     def add_mean_coaltime_check(self):
         """
         Adds a check for the demography debugger predictions about
@@ -2176,6 +2295,18 @@ def run_tests(args):
         "admixture-2-pop4",
         "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 "
         "-em 0.02 3 1 1")
+    verifier.add_ms_instance(
+        "gene-conversion-1",
+        "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
+    verifier.add_ms_instance(
+        "gene-conversion-2",
+        "100 10000 -t 5.0 -r 10 2501 -c 2 1")
+    verifier.add_ms_instance(
+        "gene-conversion-2-tl-10",
+        "100 10000 -t 5.0 -r 10 2501 -c 2 10")
+    verifier.add_ms_instance(
+        "gene-conversion-2-tl-100",
+        "100 10000 -t 5.0 -r 10 2501 -c 2 100")
 
     # # Examples from ms documentation
     verifier.add_ms_instance(
@@ -2246,6 +2377,7 @@ def run_tests(args):
     # Add analytical checks
     verifier.add_s_analytical_check()
     verifier.add_pi_analytical_check()
+    verifier.add_corr_trees_analytical_check()
     verifier.add_mean_coaltime_check()
     verifier.add_total_branch_length_analytical_check()
     verifier.add_pairwise_island_model_analytical_check()

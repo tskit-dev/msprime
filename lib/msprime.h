@@ -52,6 +52,9 @@
 #define MSP_NODE_IS_MIG_EVENT   (1u << 19)
 #define MSP_NODE_IS_CEN_EVENT   (1u << 20)
 
+/* Flags for verify */
+#define MSP_VERIFY_BREAKPOINTS  (1 << 1)
+
 /* Alphabets for mutation generator */
 #define MSP_ALPHABET_BINARY     0
 #define MSP_ALPHABET_NUCLEOTIDE 1
@@ -219,6 +222,8 @@ typedef struct _msp_t {
     uint32_t num_loci;
     double recombination_rate;
     recomb_map_t *recomb_map;
+    double gene_conversion_rate;
+    double gene_conversion_track_length;
     uint32_t num_populations;
     uint32_t num_labels;
     sample_t *samples;
@@ -235,10 +240,12 @@ typedef struct _msp_t {
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
+    size_t num_gc_events;
     size_t num_rejected_ca_events;
     size_t *num_migration_events;
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
+    size_t num_noneffective_gc_events;
     /* sampling events */
     sampling_event_t *sampling_events;
     size_t num_sampling_events;
@@ -357,6 +364,7 @@ int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
+int msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
@@ -399,7 +407,7 @@ int msp_finalise_tables(msp_t *self);
 int msp_reset(msp_t *self);
 int msp_print_state(msp_t *self, FILE *out);
 int msp_free(msp_t *self);
-void msp_verify(msp_t *self);
+void msp_verify(msp_t *self, int options);
 
 int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
@@ -416,6 +424,7 @@ simulation_model_t * msp_get_model(msp_t *self);
 const char * msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
 double msp_get_recombination_rate(msp_t *self);
+double msp_get_gene_conversion_rate(msp_t *self);
 double msp_get_time(msp_t *self);
 size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
@@ -432,6 +441,7 @@ size_t msp_get_num_segment_blocks(msp_t *self);
 size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
+size_t msp_get_num_gene_conversion_events(msp_t *self);
 
 int recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci,
         double sequence_length, double rate);

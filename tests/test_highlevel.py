@@ -791,9 +791,31 @@ class TestSimulateInterface(unittest.TestCase):
         n = 10
         ts = msprime.simulate(n, recombination_rate=10)
         self.assertIsInstance(ts, msprime.TreeSequence)
-        self.assertEqual(ts.get_sample_size(), n)
-        self.assertGreater(ts.get_num_trees(), 1)
-        self.assertEqual(ts.get_num_mutations(), 0)
+        self.assertEqual(ts.sample_size, n)
+        self.assertGreater(ts.num_trees, 1)
+        self.assertEqual(ts.num_mutations, 0)
+
+    def test_gene_conversion_simple_map(self):
+        n = 10
+        ts = msprime.simulate(
+            n, gene_conversion_rate=1, gene_conversion_track_length=1,
+            recombination_map=msprime.RecombinationMap.uniform_map(
+                num_loci=10, rate=1, length=10))
+        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertEqual(ts.num_samples, n)
+        self.assertGreater(ts.num_trees, 1)
+
+    @unittest.skip("Cannot use GC with default recomb map")
+    def test_gene_conversion_default_map(self):
+        n = 10
+        # FIXME we have to be quite delicate with the GC code at the moment.
+        # If we take the default where we have a very large number of loci,
+        # we might be getting overflows. It's not clear what happening in any case.
+        ts = msprime.simulate(
+            n, gene_conversion_rate=1, gene_conversion_track_length=1)
+        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertEqual(ts.num_samples, n)
+        self.assertGreater(ts.num_trees, 1)
 
     def test_num_labels(self):
         # Running simulations with different numbers of labels in the default
