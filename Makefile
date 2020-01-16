@@ -13,10 +13,7 @@ ext3-coverage: ${SRC}
 	rm -fR build
 	CFLAGS="-coverage" python3 setup.py build_ext --inplace
 
-figs:
-	cd docs/asy && make 
-
-docs: ext3 figs 
+docs: ext3
 	cd docs && make clean && make html
 	
 tags:
