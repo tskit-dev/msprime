@@ -357,7 +357,7 @@ class TestSimulator(HighLevelTestCase):
         """
         Verifies a simulation for the specified parameters.
         """
-        recomb_map = msprime.RecombinationMap.uniform_map(m, r, num_loci=m)
+        recomb_map = msprime.RecombinationMap.uniform_map(m, r, discrete=True)
         rng = msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
             n, recombination_map=recomb_map, random_generator=rng)
@@ -579,30 +579,7 @@ class TestSimulatorFactory(unittest.TestCase):
             sim = f(rate)
             recomb_map = sim.recombination_map
             self.assertEqual(recomb_map.get_positions(), [0, 1], [rate, 0])
-            self.assertEqual(
-                recomb_map.get_num_loci(), msprime.RecombinationMap.DEFAULT_NUM_LOCI)
-            self.assertEqual(sim.num_loci, recomb_map.get_num_loci())
-
-    def test_recombination_rate_scaling(self):
-        values = [
-            (10, 0.1, 0.1),
-            (0.1, 1, 10),
-            (1e-8, 10**4, 10**8),
-            (1e-8, 10**5, 10**9),
-        ]
-        for rate, Ne, length in values:
-            sim = msprime.simulator_factory(
-                10, Ne=Ne, recombination_rate=rate, length=length)
-            num_loci = msprime.RecombinationMap.DEFAULT_NUM_LOCI
-            total_rate = length * rate
-            per_locus_rate = total_rate / (num_loci - 1)
-            # We expect all these rates to be positive.
-            self.assertGreater(per_locus_rate, 0)
-            ll_sim = sim.create_ll_instance()
-            self.assertAlmostEqual(per_locus_rate, ll_sim.get_recombination_rate())
-            self.assertAlmostEqual(
-                sim.recombination_map.get_per_locus_recombination_rate(),
-                per_locus_rate)
+            self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
 
     def test_recombination_map(self):
         def f(recomb_map):
@@ -616,9 +593,10 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(sim.recombination_map, recomb_map)
             self.assertEqual(recomb_map.get_positions(), positions)
             self.assertEqual(recomb_map.get_rates(), rates)
-            self.assertEqual(sim.num_loci, recomb_map.get_num_loci())
+            self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
             ll_sim = sim.create_ll_instance()
-            self.assertEqual(ll_sim.get_num_loci(), recomb_map.get_num_loci())
+            self.assertEqual(
+                ll_sim.get_sequence_length(), recomb_map.get_sequence_length())
 
     def test_zero_recombination_map(self):
         # test that beginning and trailing zero recombination regions in the
@@ -799,8 +777,7 @@ class TestSimulateInterface(unittest.TestCase):
         n = 10
         ts = msprime.simulate(
             n, gene_conversion_rate=1, gene_conversion_track_length=1,
-            recombination_map=msprime.RecombinationMap.uniform_map(
-                num_loci=10, rate=1, length=10))
+            recombination_map=msprime.RecombinationMap.uniform_map(10, 1, discrete=True))
         self.assertIsInstance(ts, msprime.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)

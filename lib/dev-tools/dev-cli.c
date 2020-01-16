@@ -601,8 +601,9 @@ read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
         }
         rates[j] = config_setting_get_float(s);
     }
-    ret = recomb_map_alloc(recomb_map, num_loci, coordinates[size - 1],
-            coordinates, rates, size);
+    // TODO Read discrete flag from recombination map
+    ret = recomb_map_alloc(recomb_map, coordinates[size - 1],
+            coordinates, rates, size, true);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

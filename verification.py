@@ -605,7 +605,7 @@ class SimulationVerifier(object):
             same_root_count_last = np.zeros(seq_length)
             low_recombination_rate = 0.000001
             recomb_map = msprime.RecombinationMap.uniform_map(
-                seq_length, low_recombination_rate, num_loci=seq_length)
+                seq_length, low_recombination_rate)
             replicates = msprime.simulate(
                 sample_size=sample_size,
                 recombination_map=recomb_map,
@@ -1098,7 +1098,7 @@ class SimulationVerifier(object):
             print("running for m =", m)
             T1 = np.zeros(num_replicates)
             num_trees1 = np.zeros(num_replicates)
-            recomb_map = msprime.RecombinationMap.uniform_map(1, 1, num_loci=m)
+            recomb_map = msprime.RecombinationMap.uniform_map(m, 1 / m, discrete=True)
             reps = msprime.simulate(
                 n, recombination_map=recomb_map, num_replicates=num_replicates)
             for j, ts in enumerate(reps):
@@ -1589,7 +1589,7 @@ class SimulationVerifier(object):
                     )
 
         recombination_map = msprime.RecombinationMap(
-                [0, num_loci], [recombination_rate, 0], num_loci=num_loci)
+                [0, num_loci], [recombination_rate, 0], discrete=True)
 
         if migration_matrix is None:
             default_mig_rate = 0.05
@@ -1615,7 +1615,7 @@ class SimulationVerifier(object):
             msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
             msprime.PopulationConfiguration(sample_size=10, initial_size=1000)]
         recombination_map = msprime.RecombinationMap(
-                [0, int(1e6)], [1e-8, 0], num_loci=int(1e8))
+                [0, int(1e6)], [1e-8, 0])
         demographic_events = [
             msprime.MassMigration(
                 time=300, source=1, destination=0, proportion=1.0)]
@@ -1635,7 +1635,7 @@ class SimulationVerifier(object):
             msprime.PopulationConfiguration(
                 sample_size=10, initial_size=1000, growth_rate=0.01)]
         recombination_map = msprime.RecombinationMap(
-                [0, int(5e7)], [1e-8, 0], num_loci=int(5e7))
+                [0, int(5e7)], [1e-8, 0], discrete=True)
 
         def f():
             self.run_dtwf_coalescent_comparison(
@@ -1652,7 +1652,7 @@ class SimulationVerifier(object):
             msprime.PopulationConfiguration(
                 sample_size=10, initial_size=initial_size, growth_rate=-0.01)]
         recombination_map = msprime.RecombinationMap(
-            [0, int(1e7)], [1e-8, 0], num_loci=int(1e7))
+            [0, int(1e7)], [1e-8, 0], discrete=True)
         demographic_events = [
             msprime.PopulationParametersChange(
                 time=200, initial_size=initial_size, growth_rate=0.01, population_id=0)
@@ -1672,7 +1672,7 @@ class SimulationVerifier(object):
             msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
             msprime.PopulationConfiguration(sample_size=5, initial_size=1000)]
         recombination_map = msprime.RecombinationMap(
-                [0, int(1e6)], [1e-8, 0], num_loci=int(1e8))
+                [0, int(1e6)], [1e-8, 0])
         # migration_matrix = [[0, 0.1], [0.1, 0]]
 
         demographic_events = [
@@ -1709,7 +1709,7 @@ class SimulationVerifier(object):
         num_loci = np.random.randint(1e5, 1e7)
         rho = 1e-8
         recombination_map = msprime.RecombinationMap(
-                [0, num_loci], [rho, 0], num_loci=num_loci)
+                [0, num_loci], [rho, 0], discrete=True)
 
         population_configurations = []
         for i in range(N):
@@ -1875,7 +1875,7 @@ class SimulationVerifier(object):
 
         num_loci = int(num_loci)
         recombination_map = msprime.RecombinationMap(
-                [0, num_loci], [recombination_rate, 0], num_loci=num_loci)
+                [0, num_loci], [recombination_rate, 0], discrete=True)
         slim_args['RHO'] = recombination_rate
         slim_args['NUM_LOCI'] = num_loci
 

@@ -363,13 +363,13 @@ follows:
     typedef struct {
         size_t size;
         size_t log_size;
-        int64_t *tree;
-        int64_t *values;
+        double *tree;
+        double *values;
     } fenwick_t;
 
     int fenwick_alloc(fenwick_t *self, size_t initial_size);
     int fenwick_free(fenwick_t *self);
-    int64_t fenwick_get_total(fenwick_t *self);
+    double fenwick_get_total(fenwick_t *self);
 
 This defines the ``fenwick_t`` struct, and alloc and free methods and a method
 to return the total of the tree. Note that we follow the Python convention

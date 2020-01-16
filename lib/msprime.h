@@ -87,8 +87,8 @@ typedef struct segment_t_t {
     population_id_t population_id;
     label_id_t label;
     /* During simulation we use genetic coordinates */
-    uint32_t left;
-    uint32_t right;
+    double left;
+    double right;
     node_id_t value;
     size_t id;
     struct segment_t_t *prev;
@@ -97,7 +97,7 @@ typedef struct segment_t_t {
 
 
 typedef struct {
-    uint32_t left; /* TODO CHANGE THIS - not a good name! */
+    double left; /* TODO CHANGE THIS - not a good name! */
     uint32_t value;
 } node_mapping_t;
 
@@ -172,7 +172,8 @@ typedef struct {
 } genic_selection_trajectory_t;
 
 typedef struct _sweep_t {
-    uint32_t locus;
+    /* TODO change the name of this to position */
+    double locus;
     union {
         /* Future trajectory simulation models would go here */
         genic_selection_trajectory_t genic_selection_trajectory;
@@ -203,13 +204,13 @@ typedef struct _simulation_model_t {
 /* Recombination map */
 
 typedef struct {
-    uint32_t num_loci;      /* size of the genetic coordinate space  */
     double sequence_length; /* size of the physical coordinate space */
     double total_recombination_rate;
     size_t size;            /* the total number of values in the map */
     double *positions;
     double *rates;
     double *cumulative;
+    bool discrete;
 } recomb_map_t;
 
 typedef struct _msp_t {
@@ -219,8 +220,7 @@ typedef struct _msp_t {
     bool store_migrations;
     bool store_full_arg;
     uint32_t num_samples;
-    uint32_t num_loci;
-    double recombination_rate;
+    double sequence_length;
     recomb_map_t *recomb_map;
     double gene_conversion_rate;
     double gene_conversion_track_length;
@@ -443,11 +443,11 @@ size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
 
-int recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci,
-        double sequence_length, double rate);
-int recomb_map_alloc(recomb_map_t *self, uint32_t num_loci,
+int recomb_map_alloc_uniform(recomb_map_t *self,
+        double sequence_length, double rate, bool discrete);
+int recomb_map_alloc(recomb_map_t *self,
         double sequence_length, double *positions, double *rates,
-        size_t size);
+        size_t size, bool discrete);
 int recomb_map_free(recomb_map_t *self);
 uint32_t recomb_map_get_num_loci(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);
@@ -462,6 +462,13 @@ int recomb_map_get_positions(recomb_map_t *self, double *positions);
 int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
 void recomb_map_print_state(recomb_map_t *self, FILE *out);
+
+double recomb_map_mass_between_left_exclusive(recomb_map_t *self, double left, double right);
+double recomb_map_mass_between(recomb_map_t *self, double left, double right);
+double recomb_map_mass_to_position(recomb_map_t *self, double mass);
+double recomb_map_position_to_mass(recomb_map_t *self, double position);
+double recomb_map_shift_left_by_mass(recomb_map_t *self, double right_pos, double recomb_mass);
+double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
         int alphabet, size_t mutation_block_size);

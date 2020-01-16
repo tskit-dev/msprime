@@ -273,7 +273,8 @@ def simulator_factory(
             raise ValueError("Cannot provide non-positive sequence length")
         if the_rate < 0:
             raise ValueError("Cannot provide negative recombination rate")
-        recomb_map = RecombinationMap.uniform_map(the_length, the_rate)
+        recomb_map = RecombinationMap.uniform_map(
+                the_length, the_rate, discrete=False)
     else:
         if length is not None or recombination_rate is not None:
             raise ValueError(
@@ -567,8 +568,8 @@ class Simulator(object):
         self.gene_conversion_track_length = 1
 
     @property
-    def num_loci(self):
-        return self.recombination_map.get_num_loci()
+    def sequence_length(self):
+        return self.recombination_map.get_sequence_length()
 
     @property
     def sample_configuration(self):
@@ -584,9 +585,7 @@ class Simulator(object):
         Returns the recombination breakpoints translated into physical
         coordinates.
         """
-        return [
-            self.recombination_map.genetic_to_physical(x)
-            for x in self.ll_sim.get_breakpoints()]
+        return self.ll_sim.get_breakpoints()
 
     @property
     def time(self):
@@ -819,13 +818,10 @@ class RecombinationMap(object):
     is also required to be zero (although it is not used).
 
     .. warning::
-        The chromosome is divided into ``num_loci`` regions of equal
-        *recombination* distance, between which recombinations occur.  This
-        means that if recombination is constant and the genome is length ``n``,
-        then ``num_loci=n`` will produce breakpoints only at integer values. If
-        recombination rate is *not* constant, breakpoints will still only occur
-        at ``n`` distinct positions, but these will probably not coincide with
-        the ``positions`` provided.
+        The ``num_loci`` parameter is deprecated. To set a discrete number of
+        possible recombination sites along the sequence, scale ``positions``
+        to the desired number of sites and set ``discrete=True`` to ensure
+        recombination occurs only at integer values.
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can
@@ -833,43 +829,55 @@ class RecombinationMap(object):
     :param list rates: The list of rates corresponding to the supplied
         ``positions``. Recombination rates are specified per base,
         per generation.
-    :param int num_loci: The maximum number of non-recombining loci
+    :param int num_loci: **This parameter is deprecated**.
+        The maximum number of non-recombining loci
         in the underlying simulation. By default this is set to
         the largest possible value, allowing the maximum resolution
         in the recombination process. However, for a finite sites
         model this can be set to smaller values.
+    :param bool discrete: Whether recombination can occur only at integer
+        positions. When ``False``, recombination sites can take continuous
+        values. To simulate a fixed number of loci, set this parameter to
+        ``True`` and scale ``positions`` to span the desired number of loci.
     """
-    DEFAULT_NUM_LOCI = 2**32 - 1
-    """
-    The default number of non-recombining loci in a RecombinationMap.
-    """
-    def __init__(self, positions, rates, num_loci=None):
-        if num_loci is None:
-            num_loci = self.DEFAULT_NUM_LOCI
+    def __init__(self, positions, rates, num_loci=None, discrete=False):
+        if num_loci is not None:
+            if num_loci == positions[-1]:
+                warnings.warn(
+                        "num_loci is no longer supported and should not be used.")
+            else:
+                raise ValueError(
+                        "num_loci does not match sequence length. "
+                        "To set a discrete number of recombination sites, "
+                        "scale positions to span the desired number of loci "
+                        "and set discrete=True")
         self._ll_recombination_map = _msprime.RecombinationMap(
-            num_loci, positions, rates)
+            positions, rates, discrete)
 
     @classmethod
-    def uniform_map(cls, length, rate, num_loci=None):
+    def uniform_map(cls, length, rate, num_loci=None, discrete=False):
         """
         Returns a :class:`.RecombinationMap` instance in which the recombination
         rate is constant over a chromosome of the specified length. The optional
-        ``num_loci`` controls the number of discrete loci in the underlying
-        simulation, and is by default large enough to be effectively be
-        a continuous model.
+        ``discrete`` controls whether recombination sites can occur only on integer
+        positions or can take continuous values. The legacy ``num_loci`` option is
+        no longer supported and should not be used.
 
         The following map can be used to simulate a true finite locus model
         with a fixed number of loci ``m``::
 
-            >>> recomb_map = RecombinationMap.uniform_map(m, rate, num_loci=m)
+            >>> recomb_map = RecombinationMap.uniform_map(m, rate, discrete=True)
 
         :param float length: The length of the chromosome.
         :param float rate: The rate of recombination per unit of sequence length
             along this chromosome.
-        :param int num_loci: The number of discrete loci in the underlying
-            simulation. By default this is set to a large number.
+        :param int num_loci: This parameter is no longer supported.
+        :param bool discrete: Whether recombination can occur only at integer
+            positions. When ``False``, recombination sites can take continuous
+            values. To simulate a fixed number of loci, set this parameter to
+            ``True`` and set ``length`` to the desired number of loci.
         """
-        return cls([0, length], [rate, 0], num_loci)
+        return cls([0, length], [rate, 0], num_loci=num_loci, discrete=discrete)
 
     @classmethod
     def read_hapmap(cls, filename):
@@ -950,25 +958,25 @@ class RecombinationMap(object):
         return self._ll_recombination_map
 
     def physical_to_genetic(self, physical_x):
-        return self._ll_recombination_map.physical_to_genetic(physical_x)
+        raise ValueError("Genetic space is no longer supported")
 
     def physical_to_discrete_genetic(self, physical_x):
-        return self._ll_recombination_map.physical_to_discrete_genetic(physical_x)
+        raise ValueError("Genetic space is no longer supported")
 
     def genetic_to_physical(self, genetic_x):
-        return self._ll_recombination_map.genetic_to_physical(genetic_x)
+        raise ValueError("Genetic space is no longer supported")
 
     def get_total_recombination_rate(self):
         return self._ll_recombination_map.get_total_recombination_rate()
 
     def get_per_locus_recombination_rate(self):
-        return self._ll_recombination_map.get_per_locus_recombination_rate()
+        raise ValueError("Genetic space is no longer supported")
 
     def get_size(self):
         return self._ll_recombination_map.get_size()
 
     def get_num_loci(self):
-        return self._ll_recombination_map.get_num_loci()
+        raise ValueError("num_loci is no longer supported")
 
     def get_positions(self):
         return self._ll_recombination_map.get_positions()
@@ -977,7 +985,7 @@ class RecombinationMap(object):
         return self._ll_recombination_map.get_sequence_length()
 
     def get_length(self):
-        # Deprecated: use sequence_length instread
+        # Deprecated: use sequence_length instead
         return self.get_sequence_length()
 
     def get_rates(self):

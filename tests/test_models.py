@@ -132,9 +132,9 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
                 sample_size=10, recombination_rate=5, model=model)
             sim.random_generator = msprime.RandomGenerator(3)
             sim.run()
+            self.assertGreater(sim.num_rejected_common_ancestor_events, 0)
             self.assertGreater(sim.num_common_ancestor_events, threshold)
             self.assertGreater(sim.num_recombination_events, threshold)
-            self.assertGreater(sim.num_rejected_common_ancestor_events, 0)
 
 
 class TestEdges(unittest.TestCase):

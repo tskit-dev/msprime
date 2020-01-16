@@ -49,12 +49,12 @@ fenwick_alloc_buffers(fenwick_t *self)
 
     self->tree = NULL;
     self->values = NULL;
-    self->tree = calloc((1 + self->size), sizeof(int64_t));
+    self->tree = calloc((1 + self->size), sizeof(*self->tree));
     if (self->tree == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->values = calloc((1 + self->size), sizeof(int64_t));
+    self->values = calloc((1 + self->size), sizeof(*self->tree));
     if (self->values == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -79,12 +79,12 @@ fenwick_expand(fenwick_t *self, size_t increment)
     size_t j, n, k;
     void *p;
 
-    p = realloc(self->tree, (1 + self->size + increment) * sizeof(int64_t));
+    p = realloc(self->tree, (1 + self->size + increment) * sizeof(*self->tree));
     if (p == NULL) {
         goto out;
     }
     self->tree = p;
-    p = realloc(self->values, (1 + self->size + increment) * sizeof(int64_t));
+    p = realloc(self->values, (1 + self->size + increment) * sizeof(*self->tree));
     if (p == NULL) {
         goto out;
     }
@@ -131,14 +131,14 @@ fenwick_get_size(fenwick_t *self)
     return self->size;
 }
 
-int64_t
+double
 fenwick_get_total(fenwick_t *self)
 {
     return fenwick_get_cumulative_sum(self, self->size);
 }
 
 void
-fenwick_increment(fenwick_t *self, size_t index, int64_t value)
+fenwick_increment(fenwick_t *self, size_t index, double value)
 {
     size_t j = index;
 
@@ -151,17 +151,17 @@ fenwick_increment(fenwick_t *self, size_t index, int64_t value)
 }
 
 void
-fenwick_set_value(fenwick_t *self, size_t index, int64_t value)
+fenwick_set_value(fenwick_t *self, size_t index, double value)
 {
-    int64_t v = value - self->values[index];
+    double v = value - self->values[index];
 
     fenwick_increment(self, index, v);
 }
 
-int64_t
+double
 fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
 {
-    int64_t ret = 0;
+    double ret = 0;
     size_t j = index;
 
     assert(0 < index && index <= self->size);
@@ -172,7 +172,7 @@ fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
     return ret;
 }
 
-int64_t
+double
 fenwick_get_value(fenwick_t *self, size_t index)
 {
     assert(0 < index && index <= self->size);
@@ -181,11 +181,11 @@ fenwick_get_value(fenwick_t *self, size_t index)
 
 
 size_t
-fenwick_find(fenwick_t *self, int64_t sum)
+fenwick_find(fenwick_t *self, double sum)
 {
     size_t j = 0;
     size_t k;
-    int64_t s = sum;
+    double s = sum;
     size_t half = self->log_size;
 
     while (half > 0) {
