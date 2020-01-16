@@ -208,6 +208,15 @@ Meson is best installed via ``pip``:
 
     $ python3 -m pip install meson --user
 
+On Mac OS X rather than use ``apt-get`` for installation of these requirements 
+a combination of ``homebrew`` and ``pip`` can be used (working as of 2020-01-15).
+
+.. code-block:: bash
+
+    $ brew install cunit
+    $ python3 -m pip install meson --user
+    $ python3 -m pip install ninja --user
+
 Meson keeps all compiled binaries in a build directory (this has many advantages
 such as allowing multiple builds with different options to coexist). It depends on
 a ``meson.build`` file which is in the ``lib`` directory. To set up the initial build
