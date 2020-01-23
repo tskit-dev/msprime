@@ -234,11 +234,20 @@ On macOS, conda builds are generally done using ``clang`` packages that are kept
     $ conda install clang_osx-64  clangxx_osx-64
 
 In order do make sure that these compilers work correctly (*e.g.*, so that they can find
-other dependencies installed via ``conda``), you need to compile ``msprime`` with this command:
+other dependencies installed via ``conda``), you need to compile ``msprime`` with this command
+on versions of macOS older than "Mojave":
 
 .. code-block:: bash
 
     $ CONDA_BUILD_SYSROOT=/ python3 setup.py build_ext -i
+
+On more recent macOS releases, you may omit the ``CONDA_BUILD_SYSROOT`` prefix.
+
+.. note::
+
+   The use of the C toolchain on macOS is a moving target.  The above advice
+   was written on 23 January, 2020 and was validated by a few ``msprime`` contributors.
+   Caveat emptor, etc..
       
 To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
 compiled binaries are then in the ``build`` directory:
