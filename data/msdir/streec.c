@@ -407,7 +407,7 @@ segtre_mig(struct c_params *cp, int *pnsegs )
             /* verify that the events are what we think and count*/
             if (event == 'r') {
                 if (subevent == 'r'){
-                    recombination_events++;                    
+                    recombination_events++;
                 }
                 if (subevent == 'g'){
                     conversion_events++;
@@ -431,6 +431,14 @@ segtre_mig(struct c_params *cp, int *pnsegs )
     for (i = 0; i < N * N; i++) {
         printf("\t%d", migration_events[i]);
     }
+    int end;
+    printf("\t[");
+    for(seg=0, k=0; k<nsegs - 2; seg=seglst[seg].next, k++) {
+		    end = seglst[seglst[seg].next].beg - 1;
+        printf("%.1f, ", (float) end);
+    }
+		end = seglst[seglst[seg].next].beg - 1;
+    printf("%.1f]", (float) end);
     printf("\n");
 #endif
 	*pnsegs = nsegs ;

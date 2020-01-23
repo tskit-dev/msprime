@@ -53,6 +53,15 @@ mscompat_recombination_help = (
     "of sites between which recombination can occur")
 mscompat_gene_conversion_help = (
     "TODO")
+mshotcompat_hotspot_help = (
+    "Recombination hotspots defined according to the msHOT format. This is "
+    "defined as a sequence: n (start stop scale)+ where n is the number of "
+    "hotspots and each hotspot spans [start, stop) where the recombination "
+    "rate is the background recombination rate times scale. Adjacent hotspots "
+    "may stop and start at the same position but must otherwise be non-overlapping "
+    "and specified in ascending order."
+        )
+
 msprime_citation_text = """
 If you use msprime in your work, please cite the following paper:
 Jerome Kelleher, Alison M Etheridge and Gilean McVean (2016), "Efficient
@@ -111,6 +120,46 @@ def get_single_seed(seeds):
     return int(m.hexdigest(), 16) % (2**32)
 
 
+def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
+    """
+    Translates the background recombination rate and recombination
+    hotspots according to the msHOT cli spec to a msprime
+    recombination map.
+
+    hotspots is of the form: [n] + [start, stop, factor]+
+    where n is the number of hotspots and each hotspot spans [start, stop)
+    with a recombination rate of background_rate * factor. Intervals between
+    hotspots have a recombination rate of background_rate.
+    """
+    assert len(hotspots) > 0
+    n_hotspots = hotspots[0]
+    assert len(hotspots[1:]) == 3 * n_hotspots
+    positions = []
+    rates = []
+    if hotspots[1] != 0:
+        positions.append(0)
+        rates.append(background_rate)
+    for i in range(1, len(hotspots) - 2, 3):
+        [start, stop, factor] = hotspots[i:i+3]
+        # Beginning hotspot
+        positions.append(start)
+        rates.append(factor * background_rate)
+
+        if i == len(hotspots) - 3 or stop != hotspots[i+3]:
+            # Ending hotspot, back to normal recombination rate
+            positions.append(stop)
+            if stop != seq_length:
+                rates.append(background_rate)
+            else:
+                rates.append(0)
+
+    if positions[-1] != seq_length:
+        positions.append(seq_length)
+        rates.append(0)
+
+    return msprime.RecombinationMap(positions, rates, int(positions[-1]))
+
+
 class SimulationRunner(object):
     """
     Class to run msprime simulation and output the results.
@@ -121,15 +170,21 @@ class SimulationRunner(object):
             population_configurations=None, demographic_events=None,
             scaled_mutation_rate=0, print_trees=False,
             precision=3, random_seeds=None,
-            scaled_gene_conversion_rate=0, gene_conversion_track_length=1):
+            scaled_gene_conversion_rate=0, gene_conversion_track_length=1,
+            hotspots=None):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
         self._recombination_rate = scaled_recombination_rate
         self._mutation_rate = scaled_mutation_rate
         # For strict ms-compability we want to have m non-recombining loci
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            num_loci, self._recombination_rate, num_loci)
+        if hotspots is None:
+            self._recomb_map = msprime.RecombinationMap.uniform_map(
+                num_loci, self._recombination_rate, num_loci)
+        else:
+            self._recomb_map = hotspots_to_recomb_map(
+                    hotspots, self._recombination_rate, num_loci)
+
         # If we have specified any population_configurations we don't want
         # to give the overall sample size.
         sample_size = self._sample_size
@@ -141,7 +196,7 @@ class SimulationRunner(object):
         self._simulator = msprime.simulator_factory(
             Ne=0.25,
             sample_size=sample_size,
-            recombination_map=recomb_map,
+            recombination_map=self._recomb_map,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events,
@@ -179,6 +234,12 @@ class SimulationRunner(object):
         msprime.
         """
         return self._mutation_rate
+
+    def get_recomb_map(self):
+        """
+        Returns the RecombinationMap used by msprime.
+        """
+        return self._recomb_map
 
     def print_trees(self, tree_sequence, output):
         """
@@ -556,7 +617,8 @@ def create_simulation_runner(parser, arg_list):
         gene_conversion_track_length=gc_track_length,
         precision=args.precision,
         print_trees=args.trees,
-        random_seeds=args.random_seeds)
+        random_seeds=args.random_seeds,
+        hotspots=args.hotspots)
     return runner
 
 
@@ -628,6 +690,9 @@ def get_mspms_parser(error_handler=None):
         "--gene-conversion", "-c", type=float, nargs=2, default=(0, 1),
         metavar=("gc_recomb_ratio", "track_length"),
         help=mscompat_gene_conversion_help)
+    group.add_argument(
+            "--hotspots", "-v", type=float, nargs="+",
+            default=None, help=mshotcompat_hotspot_help)
 
     group = parser.add_argument_group("Structure and migration")
     group.add_argument(

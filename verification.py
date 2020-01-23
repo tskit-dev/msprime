@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import ast
 
 import scipy.special
 import pandas as pd
@@ -28,6 +29,10 @@ import argparse
 
 import msprime.cli as cli
 import msprime
+
+
+def flatten(l):
+    return [x for sublist in l for x in sublist]
 
 
 def harmonic_number(n):
@@ -188,15 +193,27 @@ class SimulationVerifier(object):
         return self._run_sample_stats(
             self._mspms_executable + args.split() + self.get_ms_seeds())
 
-    def _run_ms_coalescent_stats(self, args):
-        executable = ["./data/ms_summary_stats"]
+    def _deserialize_breakpoints(self, df):
+        breakpoints_strs = df["breakpoints"]
+        breakpoints = [ast.literal_eval(l) for l in breakpoints_strs]
+        df["breakpoints"] = breakpoints
+        return df
+
+    def _exec_coalescent_stats(self, executable, args, seeds=None):
         with tempfile.TemporaryFile() as f:
-            argList = executable + args.split() + self.get_ms_seeds()
+            argList = [executable] + args.split() + self.get_ms_seeds()
             print("\t", " ".join(argList))
             subprocess.call(argList, stdout=f)
             f.seek(0)
             df = pd.read_table(f)
+        self._deserialize_breakpoints(df)
         return df
+
+    def _run_ms_coalescent_stats(self, args):
+        return self._exec_coalescent_stats("./data/ms_summary_stats", args)
+
+    def _run_mshot_coalescent_stats(self, args):
+        return self._exec_coalescent_stats("./data/msHOT_summary_stats", args)
 
     def _run_msprime_coalescent_stats(self, args):
         print("\t msprime:", args)
@@ -212,10 +229,12 @@ class SimulationVerifier(object):
         re_events = [0 for j in range(replicates)]
         gc_events = [0 for j in range(replicates)]
         mig_events = [None for j in range(replicates)]
+        breakpoints = [[] for j in range(replicates)]
         for j in range(replicates):
             sim.reset()
             sim.run()
             num_trees[j] = sim.num_breakpoints + 1
+            breakpoints[j] = sim.breakpoints
             time[j] = sim.time
             ca_events[j] = sim.num_common_ancestor_events
             re_events[j] = sim.num_recombination_events
@@ -227,6 +246,7 @@ class SimulationVerifier(object):
         for j in range(num_populations**2):
             events = [mig_events[k][j] for k in range(replicates)]
             d["mig_events_{}".format(j)] = events
+        d["breakpoints"] = breakpoints
         df = pd.DataFrame(d)
         return df
 
@@ -236,13 +256,24 @@ class SimulationVerifier(object):
             os.mkdir(output_dir)
         return os.path.join(output_dir, "_".join(args[1:]))
 
-    def _plot_stats(self, key, stats_type, df_msp, df_ms):
-        assert set(df_ms.columns.values) == set(df_msp.columns.values)
-        for stat in df_ms.columns.values:
-            v1 = df_ms[stat]
-            v2 = df_msp[stat]
-            sm.graphics.qqplot(v1)
-            sm.qqplot_2samples(v1, v2, line="45")
+    def _plot_qq(self, v1, v2):
+        sm.graphics.qqplot(v1)
+        sm.qqplot_2samples(v1, v2, line="45")
+
+    def _plot_breakpoints_hist(self, v1, v2, v1_name, v2_name):
+        sns.kdeplot(flatten(v1), color='b', label=v1_name, shade=True, legend=False)
+        sns.kdeplot(flatten(v2), color='r', label=v2_name, shade=True, legend=False)
+        pyplot.legend(loc='upper right')
+
+    def _plot_stats(self, key, stats_type, df1, df2, df1_name, df2_name):
+        assert set(df1.columns.values) == set(df2.columns.values)
+        for stat in df1.columns.values:
+            v1 = df1[stat]
+            v2 = df2[stat]
+            if stat == "breakpoints":
+                self._plot_breakpoints_hist(v1, v2, df1_name, df2_name)
+            else:
+                self._plot_qq(v1, v2)
             f = self._build_filename(key, stats_type, stat)
             pyplot.savefig(f, dpi=72)
             pyplot.close('all')
@@ -250,12 +281,24 @@ class SimulationVerifier(object):
     def _run_coalescent_stats(self, key, args):
         df_msp = self._run_msprime_coalescent_stats(args)
         df_ms = self._run_ms_coalescent_stats(args)
-        self._plot_stats(key, "coalescent", df_ms, df_msp)
+        self._plot_stats(key, "coalescent", df_msp, df_ms, "msp", "ms")
+
+    def _run_variable_recombination_coalescent_stats(self, key, args):
+        df_msp = self._run_msprime_coalescent_stats(args)
+        df_mshot = self._run_mshot_coalescent_stats(args)
+        self._plot_stats(
+            key, "recomb map coalescent",
+            df_msp, df_mshot, "msp", "msHOT")
+
+    def _run_ms_mshot_stats(self, key, args):
+        df_ms = self._run_ms_coalescent_stats(args)
+        df_mshot = self._run_mshot_coalescent_stats(args)
+        self._plot_stats(key, "ms mshot consistency", df_mshot, df_ms, "msHOT", "ms")
 
     def _run_mutation_stats(self, key, args):
-        df_msp = self._run_msprime_mutation_stats(args)
         df_ms = self._run_ms_mutation_stats(args)
-        self._plot_stats(key, "mutation", df_ms, df_msp)
+        df_msp = self._run_msprime_mutation_stats(args)
+        self._plot_stats(key, "mutation", df_ms, df_msp, "ms", "msp")
 
     def run(self, keys=None):
         the_keys = sorted(self._instances.keys())
@@ -274,6 +317,18 @@ class SimulationVerifier(object):
             print(key, command_line)
             self._run_coalescent_stats(key, command_line)
             self._run_mutation_stats(key, command_line)
+        self._instances[key] = f
+
+    def add_mshot_instance(self, key, command_line):
+        def f():
+            print(key, command_line)
+            self._run_variable_recombination_coalescent_stats(key, command_line)
+        self._instances[key] = f
+
+    def add_ms_mshot_instance(self, key, command_line):
+        def f():
+            print(key, command_line)
+            self._run_ms_mshot_stats(key, command_line)
         self._instances[key] = f
 
     def _discoal_str_to_ms(self, args):
@@ -297,7 +352,7 @@ class SimulationVerifier(object):
         msp_str = self._discoal_str_to_ms(args)
         df_msp = self._run_msprime_mutation_stats(msp_str)
         df_d = self._run_discoal_mutation_stats(args)
-        self._plot_stats(key, "mutation", df_d, df_msp)
+        self._plot_stats(key, "mutation", df_d, df_msp, "discoal", "msp")
 
     def add_discoal_instance(self, key, command_line):
         """
@@ -2350,6 +2405,28 @@ def run_tests(args):
         "-ej 0.189256 1 2 -ej 0.483492 2 3")
     verifier.add_ms_instance(
         "konrad-3", "100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 ")
+
+    # Examples from msHOT documentation
+    verifier.add_mshot_instance(
+        "mshotdoc-hotspot-ex",
+        "10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20")
+
+    verifier.add_mshot_instance(
+        "mshot-zero-recomb-interval",
+        "10 1000 -t 10.4 -r 10.0 25000 -v 1 5000 13000 0")
+
+    verifier.add_mshot_instance(
+        "mshot-zero-recomb",
+        "10 1000 -t 10.4 -r 10.0 25000 -v 1 100 25000 0")
+
+    hotspots = "4 1000 2000 0 7000 8000 20 12000 15000 10 20000 22000 0"
+    verifier.add_mshot_instance(
+        "mshot-high-recomb-variance",
+        f'10 1000 -t 10.4 -r 10.0 25000 -v {hotspots}')
+
+    verifier.add_ms_mshot_instance(
+        "ms-mshot-consistency-check",
+        "10 1000 -t 10.4 -r 10.0 25000")
 
     # Simple discoal tests
     verifier.add_discoal_instance(
