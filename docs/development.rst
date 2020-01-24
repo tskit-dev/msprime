@@ -208,7 +208,7 @@ Meson is best installed via ``pip``:
 
     $ python3 -m pip install meson --user
 
-On Mac OS X rather than use ``apt-get`` for installation of these requirements 
+On macOS rather than use ``apt-get`` for installation of these requirements 
 a combination of ``homebrew`` and ``pip`` can be used (working as of 2020-01-15).
 
 .. code-block:: bash
@@ -227,26 +227,28 @@ directory, run
     $ cd lib 
     $ meson build
 
+On macOS, conda builds are generally done using ``clang`` packages that are kept up to date:
+
+.. code-block:: bash
+
+    $ conda install clang_osx-64  clangxx_osx-64
+
+In order do make sure that these compilers work correctly (*e.g.*, so that they can find
+other dependencies installed via ``conda``), you need to compile ``msprime`` with this command
+on versions of macOS older than "Mojave":
+
+.. code-block:: bash
+
+    $ CONDA_BUILD_SYSROOT=/ python3 setup.py build_ext -i
+
+On more recent macOS releases, you may omit the ``CONDA_BUILD_SYSROOT`` prefix.
+
 .. note::
-   Some Mac OS X users may run into errors like this one when running ``meson build``:
 
-   .. code-block:: bash
-
-      ERROR: Compiler x86_64-apple-darwin13.4.0-clang can not compile programs.
-
-   This is due to setup issues with some versions of ``clang`` (specifically: ``clang_osx-64`` and ``clangxx_osx-64``), which is the default compiler on Mac OS X systems. If you have this problem, you have a few options.
-   One option is to install Xcode. You can then explicitly specify your meson build to use the  ``clang`` compiler from Xcode via its alias, ``gcc``.
-
-   .. code-block:: bash
-
-      $ CC=gcc CXX=g++ meson build
-
-   If you wish, you can remove the problematic default versions of clang from the conda environment completely. Take care, though - this will also remove any packages that depend on them!
-
-   .. code-block:: bash
-
-      $ conda remove clang_osx-64  clangxx_osx-64
-
+   The use of the C toolchain on macOS is a moving target.  The above advice
+   was written on 23 January, 2020 and was validated by a few ``msprime`` contributors.
+   Caveat emptor, etc..
+      
 To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
 compiled binaries are then in the ``build`` directory:
 
