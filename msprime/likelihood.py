@@ -24,7 +24,7 @@ import math
 import _msprime
 
 
-def unnormalised_log_mutation_likelihood(arg, theta):
+def unnormalised_log_mutation_likelihood(arg, mu):
     # log_likelihood of mutations on a given ARG up to a normalising constant
     # that depends on the pattern of observed mutations, but not on the ARG
     # or the mutation rate
@@ -34,14 +34,14 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     for e in tables.edges:
         total_material += (e.right - e.left) * (time[e.parent] - time[e.child])
     number_of_mutations = len(tables.mutations)
-    if theta == 0:
+    if mu == 0:
         if number_of_mutations == 0:
             ret = 0
         else:
             ret = -float("inf")
     else:
-        ret = (number_of_mutations * math.log(total_material * theta) -
-               total_material * theta)
+        ret = (number_of_mutations * math.log(total_material * mu) -
+               total_material * mu)
     for tree in arg.trees():
         for site in tree.sites():
             mutation = site.mutations[0]
@@ -60,9 +60,9 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     return ret
 
 
-def log_arg_likelihood(arg, recombination_rate, Ne=0.25):
+def log_arg_likelihood(arg, recombination_rate, Ne=0.5):
     # TODO: Ne should default to 1 for compatability with msprime.simulate. Setting
-    # to 1/4 now to keep the tests working.
+    # to 1/2 now to keep the tests working.
 
     # Get the tables into the format we need to interchange with the low-level code.
     lw_tables = _msprime.LightweightTableCollection()

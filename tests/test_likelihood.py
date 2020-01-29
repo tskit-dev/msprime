@@ -31,7 +31,7 @@ import tskit
 
 
 # TODO give this the same signature as the production version
-def log_arg_likelihood(arg, rho):
+def log_arg_likelihood(arg, r, Ne):
     tables = arg.tables
     number_of_lineages = arg.num_samples
     number_of_links = number_of_lineages * arg.sequence_length
@@ -44,7 +44,7 @@ def log_arg_likelihood(arg, rho):
     ret = 0
     while edge < number_of_edges:
         parent = tables.edges[edge].parent
-        rate = number_of_lineages * (number_of_lineages - 1) / 2 + number_of_links * rho
+        rate = number_of_lineages * (number_of_lineages - 1) / (4 * Ne) + number_of_links * r
         ret -= rate * (tables.nodes[parent].time - time)
         time = tables.nodes[parent].time
         child = tables.edges[edge].child
@@ -58,10 +58,10 @@ def log_arg_likelihood(arg, rho):
             if gap == 0:
                 # we evaluate the density rather than the probability if there is no gap
                 gap = 1
-            if rho == 0:
+            if r == 0:
                 ret -= float("inf")
             else:
-                ret += math.log(rho * gap)
+                ret += math.log(r * gap)
         else:
             segment_length_in_children = -tables.edges.left[edge]
             while edge < number_of_edges and tables.edges[edge].child == child:
@@ -139,7 +139,7 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (3 + 2.5 * r) * 0.25
             log_arg_likelihood_exact -= (1 + 2 * r) * 0.5
             self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r)))
+                                         msprime.log_arg_likelihood(arg, r, 0.5)))
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 19 / 8
@@ -201,7 +201,7 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.35
             log_arg_likelihood_exact -= (1 + r) * 0.5
             self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r)))
+                                         msprime.log_arg_likelihood(arg, r, 0.5)))
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 1.5
@@ -267,7 +267,7 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (3 + r) * 0.5
             log_arg_likelihood_exact -= (1 + 0.4 * r) * 0.3
             self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r)))
+                                         msprime.log_arg_likelihood(arg, r, 0.5)))
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 81 / 50
@@ -339,7 +339,7 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (3 + 2.2 * r) * 0.1
             log_arg_likelihood_exact -= (1 + 0.4 * r) * 0.1
             self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r)))
+                                         msprime.log_arg_likelihood(arg, r, 0.5)))
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 0.84
@@ -420,7 +420,7 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (3 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (1 + 1.4 * r) * 0.1
             self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r)))
+                                         msprime.log_arg_likelihood(arg, r, 0.5)))
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 1.34
@@ -441,8 +441,8 @@ class TestSimulatedExamples(unittest.TestCase):
     """
     # TODO Add Ne and mutation rate as parameters here.
     def verify(self, ts, recombination_rate):
-        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate)
-        l2 = log_arg_likelihood(ts, recombination_rate)
+        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate, Ne=0.5)
+        l2 = log_arg_likelihood(ts, recombination_rate, 0.5)
         self.assertAlmostEqual(l1, l2)
 
     def test_no_recombination(self):

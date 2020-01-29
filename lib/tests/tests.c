@@ -2170,7 +2170,7 @@ test_likelihood_three_leaves(void)
         ll_exact -= (6 + 3 * rho[i]) * 0.15;
         ll_exact -= (3 + 2.5 * rho[i]) * 0.25;
         ll_exact -= (1 + 2 * rho[i]) * 0.5;
-        ret = msp_log_likelihood_arg(&ts, rho[i], &lik);
+        ret = msp_log_likelihood_arg(&ts, rho[i], 0.5, &lik);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_DOUBLE_EQUAL(ll_exact, lik, tol);
     }
@@ -2266,7 +2266,7 @@ test_likelihood_two_mrcas(void)
         ll_exact += log(rho[i]) - (3 + 2 * rho[i]) * 0.05;
         ll_exact -= (6 + 2 * rho[i]) * 0.35;
         ll_exact -= (1 + rho[i]) * 0.5;
-        ret = msp_log_likelihood_arg(&ts, rho[i], &lik);
+        ret = msp_log_likelihood_arg(&ts, rho[i], 0.5, &lik);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_DOUBLE_EQUAL(ll_exact, lik, tol);
     }
@@ -2368,7 +2368,7 @@ test_likelihood_material_overhang(void)
         ll_exact -= (6 + 2 * rho[i]) * 0.35;
         ll_exact -= (3 + rho[i]) * 0.5;
         ll_exact -= (1 + 0.4 * rho[i]) * 0.3;
-        ret = msp_log_likelihood_arg(&ts, rho[i], &lik);
+        ret = msp_log_likelihood_arg(&ts, rho[i], 0.5, &lik);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_DOUBLE_EQUAL(ll_exact, lik, tol);
     }
@@ -2481,7 +2481,7 @@ test_likelihood_material_gap(void)
         ll_exact -= (6 + 2 * rho[i]) * 0.1;
         ll_exact -= (3 + 2.2 * rho[i]) * 0.1;
         ll_exact -= (1 + 0.4 * rho[i]) * 0.1;
-        ret = msp_log_likelihood_arg(&ts, rho[i], &lik);
+        ret = msp_log_likelihood_arg(&ts, rho[i], 0.5, &lik);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_DOUBLE_EQUAL(ll_exact, lik, tol);
     }
@@ -2605,7 +2605,7 @@ test_likelihood_recombination_in_material_gap(void)
         ll_exact -= (6 + 2 * rho[i]) * 0.1;
         ll_exact -= (3 + 2 * rho[i]) * 0.1;
         ll_exact -= (1 + 1.4 * rho[i]) * 0.1;
-        ret = msp_log_likelihood_arg(&ts, rho[i], &lik);
+        ret = msp_log_likelihood_arg(&ts, rho[i], 0.5, &lik);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_DOUBLE_EQUAL(ll_exact, lik, tol);
     }

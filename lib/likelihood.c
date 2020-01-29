@@ -46,7 +46,7 @@ get_total_material(tsk_treeseq_t *ts) {
 }
 
 int
-msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double theta,
+msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu,
                                     double *r_lik) {
     int ret = 1;
     tsk_size_t j;
@@ -62,9 +62,9 @@ msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double theta,
     if (ret != 0) {
         goto out;
     }
-    if (theta > 0) {
-        lik = num_mutations * log(total_material * theta) -
-            total_material * theta;
+    if (mu > 0) {
+        lik = num_mutations * log(total_material * mu) -
+            total_material * mu;
         for (it = tsk_tree_first(&tree); it == 1; it = tsk_tree_next(&tree)) {
             for (j = 0; j < tree.sites_length; j++) {
                 if (tree.sites[j].mutations_length != 1) {
@@ -112,7 +112,7 @@ out:
 }
 
 int
-msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik)
+msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
 {
     int ret = 0;
     tsk_id_t i;
@@ -143,7 +143,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik)
         last_parent_edge[edges->child[i]] = i;
     }
     while (lineages > 0) {
-        rate = lineages * (lineages - 1) / 2 + material * rho;
+        rate = lineages * (lineages - 1) / (4 * Ne) + material * r;
         parent = edges->parent[edge];
         lik -= rate * (nodes->time[parent] - sim_time);
         sim_time = nodes->time[parent];
@@ -160,7 +160,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double rho, double *r_lik)
                 // we evaluate the density rather than probability
                 gap = 1;
             }
-            lik += log(rho * gap);
+            lik += log(r * gap);
         } else {
             material_in_children = -edges->left[edge];
             edge = last_parent_edge[edges->child[edge]];
