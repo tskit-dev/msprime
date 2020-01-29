@@ -1,4 +1,4 @@
-CFLAGS=-ggdb -Wno-unused-result
+CFLAGS=-ansi -ggdb -Wno-unused-result -Wno-return-type
 SRC=ms.c streec.c rand1.c
 all: ms ms_summary_stats sample_stats
 

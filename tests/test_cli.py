@@ -215,6 +215,23 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
         self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
 
+    def test_mshot_examples(self):
+        args = self.parse_args("15 1000 -t 10.04".split())
+        self.assertEqual(args.sample_size, 15)
+        self.assertEqual(args.num_replicates, 1000)
+        self.assertEqual(args.mutation_rate, 10.04)
+        self.assertEqual(args.trees, False)
+        self.assertEqual(args.hotspots, None)
+
+        arg_str = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 7000 8000 20"
+        args = self.parse_args(arg_str.split())
+        self.assertEqual(args.sample_size, 15)
+        self.assertEqual(args.num_replicates, 1000)
+        self.assertEqual(args.mutation_rate, 10.04)
+        self.assertEqual(args.trees, False)
+        self.assertEqual(args.recombination, [100, 25001])
+        self.assertEqual(args.hotspots, [2.0, 100.0, 200.0, 10.0, 7000.0, 8000.0, 20.0])
+
     def test_positional_arguments(self):
         args = self.parse_args(["40", "20"])
         self.assertEqual(args.sample_size, 40)
@@ -294,6 +311,58 @@ class CustomExceptionForTesting(Exception):
     This exception class is used to check that errors are correctly
     thrown.
     """
+
+
+class TestHotspotsToRecombMap(TestCli):
+
+    def verify_map(self, recomb_map, expected_positions, expected_rates):
+        self.assertEqual(recomb_map.get_positions(), expected_positions)
+        self.assertEqual(recomb_map.get_rates(), expected_rates)
+
+    def test_multiple_hotspots(self):
+        seq_length = 1000
+        rate = 0.1
+        hotspots = [2, 100, 200, 10, 700, 900, 20]
+        expected_positions = [0, 100, 200, 700, 900, 1000]
+        expected_rates = [0.1, 1.0, 0.1, 2.0, 0.1, 0.0]
+        recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
+        self.verify_map(recomb_map, expected_positions, expected_rates)
+
+    def test_adjacent_hotspots(self):
+        seq_length = 1000
+        rate = 0.1
+        hotspots = [2, 100, 200, 10, 200, 900, 20]
+        expected_positions = [0, 100, 200, 900, 1000]
+        expected_rates = [0.1, 1.0, 2.0, 0.1, 0.0]
+        recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
+        self.verify_map(recomb_map, expected_positions, expected_rates)
+
+    def test_hotspot_on_left_bound(self):
+        seq_length = 1000
+        rate = 0.1
+        hotspots = [1, 0, 200, 10]
+        expected_positions = [0, 200, 1000]
+        expected_rates = [1.0, 0.1, 0.0]
+        recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
+        self.verify_map(recomb_map, expected_positions, expected_rates)
+
+    def test_hotspot_on_right_bound(self):
+        seq_length = 1000
+        rate = 0.1
+        hotspots = [1, 800, 1000, 10]
+        expected_positions = [0, 800, 1000]
+        expected_rates = [0.1, 1.0, 0.0]
+        recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
+        self.verify_map(recomb_map, expected_positions, expected_rates)
+
+    def test_hotspot_covering_whole_sequence(self):
+        seq_length = 1000
+        rate = 0.1
+        hotspots = [1, 0, 1000, 10]
+        expected_positions = [0, 1000]
+        expected_rates = [1.0, 0.0]
+        recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
+        self.verify_map(recomb_map, expected_positions, expected_rates)
 
 
 class TestMspmsCreateSimulationRunnerErrors(TestCli):
@@ -549,6 +618,37 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(runner.get_mutation_rate(), 2 / 10)
         runner = self.create_runner("2 1 -t 0.2 -r 1 2")
         self.assertEqual(runner.get_mutation_rate(), 0.2 / 2)
+
+    def test_recomb_map(self):
+        runner = self.create_runner("15 1000 -t 10.04 -r 100.0 2501")
+        uniform = msprime.RecombinationMap([0, 2501], [0.04, 0])
+        actual = runner.get_recomb_map()
+        self.assertEqual(actual.get_positions(), uniform.get_positions())
+        self.assertEqual(actual.get_rates(), uniform.get_rates())
+
+        args = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 7000 8000 20"
+        runner = self.create_runner(args)
+        positions = [0, 100, 200, 7000, 8000, 25001]
+        rates = [0.004, 0.04, 0.004, 0.08, 0.004, 0]
+        actual = runner.get_recomb_map()
+        self.assertEqual(actual.get_positions(), positions)
+        self.assertEqual(actual.get_rates(), rates)
+
+        args = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 200 300 20"
+        runner = self.create_runner(args)
+        positions = [0, 100, 200, 300, 25001]
+        rates = [0.004, 0.04, 0.08, 0.004, 0]
+        actual = runner.get_recomb_map()
+        self.assertEqual(actual.get_positions(), positions)
+        self.assertEqual(actual.get_rates(), rates)
+
+        args = "15 1000 -t 10.04 -r 100.0 25001 -v 1 0 25001 0"
+        runner = self.create_runner(args)
+        positions = [0, 25001]
+        rates = [0, 0]
+        actual = runner.get_recomb_map()
+        self.assertEqual(actual.get_positions(), positions)
+        self.assertEqual(actual.get_rates(), rates)
 
     def test_structure_args(self):
         sim = self.create_simulator("2 1 -T")
