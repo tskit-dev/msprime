@@ -366,6 +366,7 @@ intersphinx_mapping = {
     'https://docs.python.org/3/': None,
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
     'tskit': ('https://tskit.readthedocs.io/en/stable', None),
+    'stdpopsim': ('https://stdpopsim.readthedocs.io/en/stable', None),
 }
 
 # Github repo
