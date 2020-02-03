@@ -30,6 +30,8 @@ import argparse
 import msprime.cli as cli
 import msprime
 
+import pylab 
+import scipy.stats as stats
 
 def flatten(l):
     return [x for sublist in l for x in sublist]
@@ -2064,6 +2066,95 @@ class SimulationVerifier(object):
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
+    def compare_xi_beta_ARGs(self, sample_size, L, r, alpha, scenario):
+        """
+        Runs simulations of the xi beta model and compares to the expected ARGs.
+        """
+        Ne=10e4
+        if scenario == 0 :
+            for rep in range(0, 1):
+                ts = msprime.simulate(sample_size, model=msprime.BetaCoalescent(alpha=alpha), recombination_rate=r, Ne=Ne, length=L) # 
+                ts_tree_length_x_seq = []
+                for tree in ts.trees():
+                    ts_tree_length_x_seq.append((tree.total_branch_length*(tree.interval[1]-tree.interval[0])/10e4))
+        if scenario == 1 :
+            for rep in range(0, 1):
+                ts = msprime.simulate(population_configurations=[msprime.PopulationConfiguration( sample_size=sample_size, initial_size=0.5, growth_rate=0.05)], model=msprime.BetaCoalescent(alpha=alpha), recombination_rate=r, Ne=Ne, length=L) # 
+                ts_tree_length_x_seq = []
+                for tree in ts.trees():
+                    ts_tree_length_x_seq.append((tree.total_branch_length*(tree.interval[1]-tree.interval[0])/10e4))
+        if scenario == 2 :
+            for rep in range(0, 1):
+                ts = msprime.simulate(population_configurations=[msprime.PopulationConfiguration( sample_size=sample_size, initial_size=0.5, growth_rate=-0.05)], model=msprime.BetaCoalescent(alpha=alpha), recombination_rate=r, Ne=Ne, length=L) # 
+                ts_tree_length_x_seq = []
+                for tree in ts.trees():
+                    ts_tree_length_x_seq.append((tree.total_branch_length*(tree.interval[1]-tree.interval[0])/10e4))
+
+        test_ARGs = stats.probplot( ts_tree_length_x_seq, dist = stats.expon(Ne*r), plot = pylab)
+        figname = " ".join(["QQ_plot_xi_beta_scenario_",str(scenario+1),"_rep_nb_",str(rep+1),"_alpha_",str(alpha),".png"])
+        pylab.savefig(figname)
+        pylab.close()
+
+    def compare_xi_dirac_ARGs(self, sample_size, L, r, psi, c, scenario):
+        """
+        Runs simulations of the xi beta model and compares to the expected ARGs.
+        """
+        Ne=10e4
+        if scenario == 0 :
+           for rep in range(0, 1):
+               ts = msprime.simulate(sample_size, model=msprime.DiracCoalescent(Ne, psi=0.99, c=0), recombination_rate=r, Ne=Ne, length=L) # 
+               ts_tree_length_x_seq = []
+               for tree in ts.trees():
+                   ts_tree_length_x_seq.append((tree.total_branch_length*(tree.interval[1]-tree.interval[0])/10e4))
+        if scenario == 1 :
+           for rep in range(0, 1):
+               ts = msprime.simulate( population_configurations=[msprime.PopulationConfiguration( sample_size=sample_size, initial_size=0.5, growth_rate=0.05)], model=msprime.DiracCoalescent(Ne, psi=0.99, c=0), recombination_rate=r, Ne=Ne, length=L) # 
+               ts_tree_length_x_seq = []
+               for tree in ts.trees():
+                   ts_tree_length_x_seq.append((tree.total_branch_length*(tree.interval[1]-tree.interval[0])/10e4))
+        if scenario == 2 :
+           for rep in range(0, 1):
+               ts = msprime.simulate( population_configurations=[msprime.PopulationConfiguration( sample_size=sample_size, initial_size=0.5, growth_rate=-0.05)], model=msprime.DiracCoalescent(Ne, psi=0.99, c=0), recombination_rate=r, Ne=Ne, length=L) # 
+               ts_tree_length_x_seq = []
+               for tree in ts.trees():
+                   ts_tree_length_x_seq.append((tree.total_branch_length*(tree.interval[1]-tree.interval[0])/10e4))
+
+        test_ARGs = stats.probplot( ts_tree_length_x_seq, dist = stats.expon(Ne*r), plot = pylab)
+        figname = " ".join(["QQ_plot_xi_dirac_scenario_",str(scenario+1),"_rep_nb_",str(rep+1),"_psi_",str(psi),".png"])
+        pylab.savefig(figname)
+        pylab.close() 
+
+    def run_xi_beta_ARGs(self):
+        for scenario in range(0, 3):
+            self.compare_xi_beta_ARGs(sample_size=10, L=10e5, r=1e-8, alpha=1.01, scenario=scenario)
+            self.compare_xi_beta_ARGs(sample_size=10, L=10e5, r=1e-8, alpha=1.3, scenario=scenario)
+            self.compare_xi_beta_ARGs(sample_size=10, L=10e5, r=1e-8, alpha=1.6, scenario=scenario)
+            self.compare_xi_beta_ARGs(sample_size=10, L=10e5, r=1e-8, alpha=1.9, scenario=scenario)
+
+    def run_xi_dirac_ARGs(self):
+        for scenario in range(0, 3):
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.1, c=0.9, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.3, c=0.9, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.6, c=0.9, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.9, c=0.9, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.1, c=0.5, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.3, c=0.5, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.6, c=0.5, scenario=scenario)
+            self.compare_xi_dirac_ARGs(sample_size=10, L=10e5, r=1e-8, psi=0.9, c=0.5, scenario=scenario)
+
+
+    def add_xi_beta_ARGs(self):
+        """
+        Adds a check for xi_beta Ancestral Recombination Graph
+        """
+        self.run_xi_beta_ARGs()
+
+    def add_xi_dirac_ARGs(self):
+        """
+        Adds a check for xi_dirac Ancestral Recombination Graph
+        """
+        self.run_xi_dirac_ARGs()
+
     def run_xi_beta_expected_sfs(self):
         self.compare_xi_beta_sfs(
             num_replicates=5000,
@@ -2526,6 +2617,9 @@ def run_tests(args):
         verifier.add_dtwf_vs_coalescent_random_instance(
             "dtwf_vs_coalescent_random_4",
             num_populations=1, num_replicates=200, num_demographic_events=8)
+#Check ARGs
+    verifier.add_xi_beta_ARGs()
+    verifier.add_xi_dirac_ARGs()
 
     # DTWF checks against SLiM
     # TODO: Add back multi-pop tests of DTWF vs. SLiM when full diploid
