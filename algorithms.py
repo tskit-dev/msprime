@@ -117,6 +117,8 @@ class Segment(object):
     def __init__(self, index):
         self.left = None
         self.right = None
+        self.left_mass = None
+        self.right_mass = None
         self.node = None
         self.prev = None
         self.next = None
@@ -635,7 +637,10 @@ class Simulator(object):
                 sample_size = sample_configuration[pop_index]
                 for k in range(sample_size):
                     j = len(self.tables.nodes)
-                    x = self.alloc_segment(0, self.m, j, pop_index)
+                    x = self.alloc_segment(
+                        0, self.m, 0,
+                        self.recomb_map.position_to_mass(self.m),
+                        j, pop_index)
                     self.set_single_segment_mass(x)
                     self.P[pop_index].add(x)
                     self.tables.nodes.add_row(
@@ -707,7 +712,11 @@ class Simulator(object):
                 for root in tree.roots:
                     population = ts.node(root).population
                     if root_segments_head[root] is None:
-                        seg = self.alloc_segment(left, right, root, population)
+                        seg = self.alloc_segment(
+                                left, right,
+                                self.recomb_map.position_to_mass(left),
+                                self.recomb_map.position_to_mass(right),
+                                root, population)
                         root_segments_head[root] = seg
                         root_segments_tail[root] = seg
                     else:
@@ -715,7 +724,11 @@ class Simulator(object):
                         if tail.right == left:
                             tail.right = right
                         else:
-                            seg = self.alloc_segment(left, right, root, population, tail)
+                            seg = self.alloc_segment(
+                                    left, right,
+                                    self.recomb_map.position_to_mass(left),
+                                    self.recomb_map.position_to_mass(right),
+                                    root, population, tail)
                             tail.next = seg
                             root_segments_tail[root] = seg
         self.S[self.m] = -1
@@ -766,13 +779,18 @@ class Simulator(object):
                 rvalue, index, distance = pop.find_cleft(rvalue, tracklength)
         return index, distance
 
-    def alloc_segment(self, left, right, node, pop_index, prev=None, next=None):
+    def alloc_segment(
+            self, left, right,
+            left_mass, right_mass,  node,
+            pop_index, prev=None, next=None):
         """
         Pops a new segment off the stack and sets its properties.
         """
         s = self.segment_stack.pop()
         s.left = left
         s.right = right
+        s.left_mass = left_mass
+        s.right_mass = right_mass
         s.node = node
         s.population = pop_index
         s.next = next
@@ -1180,12 +1198,25 @@ class Simulator(object):
             u = u.next
         # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
-    def increment_segment_mass(self, seg, left, right):
-        mass = self.recomb_map.mass_between(left, right)
-        self.L[seg.label].increment(seg.index, mass)
+    def set_segment_left_endpoint(self, seg, pos):
+        seg.left = pos
+        seg.left_mass = self.recomb_map.position_to_mass(pos)
 
-    def set_segment_mass(self, seg, left, right):
-        mass = self.recomb_map.mass_between(left, right)
+    def add_segment_mass_between(self, seg1, l_mass, r_mass):
+        self.L[seg1.label].increment(seg1.index, r_mass - l_mass)
+
+    # Add the mass subtended by the endpoints of seg2 to that of seg1
+    def add_segment_mass(self, seg1, seg2):
+        mass = seg2.right_mass - seg2.left_mass
+        self.L[seg1.label].increment(seg1.index, mass)
+
+    # Subtract the mass subtended by the endpoints of seg2 to that of seg1
+    def subtract_segment_mass(self, seg1, seg2):
+        mass = seg2.left_mass - seg2.right_mass
+        self.L[seg1.label].increment(seg1.index, mass)
+
+    def set_segment_mass(self, seg, tail_seg):
+        mass = seg.right_mass - tail_seg.right_mass
         self.L[seg.label].set_value(seg.index, mass)
 
     def set_single_segment_mass(self, seg):
@@ -1197,7 +1228,7 @@ class Simulator(object):
         y = self.segments[self.L[label].find(h)]
 
         t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.shift_by_mass(y.right, h - t)
+        k = self.recomb_map.mass_to_position(y.right_mass - (t - h))
         if k == y.left and y.prev is None:
             return self.pick_segments_and_breakpoint(label)
 
@@ -1209,15 +1240,19 @@ class Simulator(object):
         """
         self.num_re_events += 1
         x, y, k = self.pick_segments_and_breakpoint(label)
+        k_mass = self.recomb_map.position_to_mass(k)
         if y.left < k:
             # Make new segment
             z = self.alloc_segment(
-                k, y.right, y.node, y.population, None, y.next)
+                k, y.right,
+                k_mass, y.right_mass, y.node,
+                y.population, None, y.next)
             if y.next is not None:
                 y.next.prev = z
             y.next = None
             y.right = k
-            self.increment_segment_mass(y, z.right, k)
+            y.right_mass = k_mass
+            self.subtract_segment_mass(y, z)
             lhs_tail = y
         else:
             # split the link between x and y.
@@ -1245,12 +1280,13 @@ class Simulator(object):
     def cut_right_break(self, lhs_tail, y, new_segment, track_end, label):
         assert lhs_tail is not None
         lhs_tail.next = new_segment
-        self.set_segment_mass(new_segment, lhs_tail.right, new_segment.right)
+        self.set_segment_mass(new_segment, lhs_tail)
         if y.next is not None:
             y.next.prev = new_segment
         y.next = None
         y.right = track_end
-        self.increment_segment_mass(y, new_segment.right, track_end)
+        y.right_mass = self.recomb_map.position_to_mass(track_end)
+        self.add_segment_mass_between(y, new_segment.right_mass, y.right_mass)
 
     def wiuf_geneconversion_within_event(self, label, return_heads=False):
         """
@@ -1263,6 +1299,8 @@ class Simulator(object):
         y = self.segments[self.L[label].find(h)]
         t = self.L[label].get_cumulative_frequency(y.index)
         k = self.recomb_map.shift_by_mass(y.right, h - t)
+        k_plus_tl_mass = self.recomb_map.position_to_mass(k + tl)
+        k_mass = self.recomb_map.position_to_mass(k)
         # check if the gene conversion falls between segments --> no effect
         if y.left >= k+tl:
             # print("noneffective GCI EVENT")
@@ -1274,21 +1312,29 @@ class Simulator(object):
             if k <= y.left:
                 y.prev = None
                 z2 = self.alloc_segment(
-                    k+tl, y.right, y.node, y.population, x, y.next)
+                    k+tl, y.right,
+                    k_plus_tl_mass, y.right_mass,
+                    y.node, y.population, x, y.next)
                 lhs_tail = x
                 self.cut_right_break(lhs_tail, y, z2, k + tl, label)
                 z = y
             elif k > y.left:
                 z = self.alloc_segment(
-                    k, k+tl, y.node, y.population, None, None)
+                    k, k+tl,
+                    k_mass, k_plus_tl_mass,
+                    y.node, y.population, None, None)
                 z2 = self.alloc_segment(
-                    k+tl, y.right, y.node, y.population, y, y.next)
+                    k+tl, y.right,
+                    k_plus_tl_mass, y.right_mass,
+                    y.node, y.population, y, y.next)
                 if y.next is not None:
                     y.next.prev = z2
                 y.next = z2
                 y.right = k
-                self.set_segment_mass(z2, y.right, z2.right)
-                self.increment_segment_mass(y, z2.right, k)
+                y.right_mass = k_mass
+                self.set_segment_mass(z2, y)
+                self.subtract_segment_mass(y, z)
+                self.subtract_segment_mass(y, z2)
                 lhs_tail = y
         # breaks are in separate segments
         else:
@@ -1305,19 +1351,24 @@ class Simulator(object):
                 lhs_tail = x
             elif k > y.left:
                 z = self.alloc_segment(
-                    k, y.right, y.node, y.population, None, y.next)
-                self.set_segment_mass(z, z.left, z.right)
+                    k, y.right,
+                    k_mass, y.right_mass,
+                    y.node, y.population, None, y.next)
+                self.set_single_segment_mass(z)
                 if y.next is not None:
                     y.next.prev = z
                 y.next = None
                 y.right = k
-                self.increment_segment_mass(y, z.right, k)
+                y.right_mass = k_mass
+                self.subtract_segment_mass(y, z)
                 lhs_tail = y
             # process right break
             if y2 is not None:
                 if y2.left < k + tl:
                     z2 = self.alloc_segment(
-                        k + tl, y2.right, y2.node, y2.population, lhs_tail, y2.next)
+                        k + tl, y2.right,
+                        k_plus_tl_mass, y2.right_mass,
+                        y2.node, y2.population, lhs_tail, y2.next)
                     self.cut_right_break(lhs_tail, y2, z2, k + tl, label)
                     if z2.prev is None:
                         z = z2
@@ -1325,10 +1376,10 @@ class Simulator(object):
                     lhs_tail.next = y2
                     y2.prev.next = None
                     y2.prev = lhs_tail
-                    self.set_segment_mass(y2, lhs_tail.right, y2.right)
+                    self.set_segment_mass(y2, lhs_tail)
         # update population
         z.label = label
-        self.set_segment_mass(z, z.left, z.right)
+        self.set_single_segment_mass(z)
         self.P[z.population].add(z, label)
         # TODO check what needs to be added for full arg
         ret = None
@@ -1353,18 +1404,22 @@ class Simulator(object):
         k = y.left + math.floor(1.0 +
                                 math.log(1.0 - random.random() *
                                          (1.0 - (self.pc) ** (distance - 1)))/self.lnpc)
+        k_mass = self.recomb_map.position_to_mass(k)
         while y.right <= k:
             y = y.next
         x = y.prev
         if y.left < k:
             # Make new segment
             z = self.alloc_segment(
-                k, y.right, y.node, y.population, None, y.next)
+                k, y.right,
+                k_mass, y.right_mass,
+                y.node, y.population, None, y.next)
             if y.next is not None:
                 y.next.prev = z
             y.next = None
             y.right = k
-            self.increment_segment_mass(y, z.right, k)
+            y.right_mass = k_mass
+            self.subtract_segment_mass(y, z)
             lhs_tail = y
         else:
             # split the link between x and y.
@@ -1373,7 +1428,7 @@ class Simulator(object):
             z = y
             lhs_tail = x
         z.label = label
-        self.set_segment_mass(z, z.left, z.right)
+        self.set_single_segment_mass(z)
         self.P[z.population].add(z, label)
         # TODO check what needs to be added for full arg
         ret = None
@@ -1422,8 +1477,8 @@ class Simulator(object):
         Chooses breakpoints and returns segments sorted by inheritance
         direction, by iterating through segment chain starting with x
         """
-        u = self.alloc_segment(-1, -1, -1, -1, None, None)
-        v = self.alloc_segment(-1, -1, -1, -1, None, None)
+        u = self.alloc_segment(-1, -1, -1, -1, -1, -1, None, None)
+        v = self.alloc_segment(-1, -1, -1, -1, -1, -1, None, None)
         seg_tails = [u, v]
 
         if self.recomb_map.total_recombination_rate > 0:
@@ -1441,17 +1496,21 @@ class Simulator(object):
 
             if x.right > k:
                 assert x.left <= k
+                k_mass = self.recomb_map.position_to_mass(k)
                 self.num_re_events += 1
                 ix = (ix + 1) % 2
                 # Make new segment
                 z = self.alloc_segment(
-                    k, x.right, x.node, x.population, seg_tails[ix], x.next)
+                    k, x.right,
+                    k_mass, x.right_mass,
+                    x.node, x.population, seg_tails[ix], x.next)
                 if x.next is not None:
                     x.next.prev = z
                 seg_tails[ix].next = z
                 seg_tails[ix] = z
                 x.next = None
                 x.right = k
+                x.right_mass = k_mass
                 x = z
                 k = self.dtwf_generate_breakpoint(k)
             elif x.right <= k and y is not None and y.left >= k:
@@ -1547,10 +1606,14 @@ class Simulator(object):
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
+                    next_l_mass = H[0][1].left_mass
                     alpha = self.alloc_segment(
-                        x.left, H[0][0], x.node, x.population)
+                        x.left, H[0][0],
+                        x.left_mass, next_l_mass,
+                        x.node, x.population)
                     alpha.label = label
                     x.left = H[0][0]
+                    x.left_mass = next_l_mass
                     heapq.heappush(H, (x.left, x))
                 else:
                     if x.next is not None:
@@ -1580,7 +1643,11 @@ class Simulator(object):
                     while right < r_max and self.S[right] != len(X):
                         self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
-                    alpha = self.alloc_segment(left, right, u, pop_id)
+                    alpha = self.alloc_segment(
+                                left, right,
+                                self.recomb_map.position_to_mass(left),
+                                self.recomb_map.position_to_mass(right),
+                                u, pop_id)
                 # Update the heaps and make the record.
                 for x in X:
                     self.store_edge(left, right, u, x.node)
@@ -1590,7 +1657,7 @@ class Simulator(object):
                             y = x.next
                             heapq.heappush(H, (y.left, y))
                     elif x.right > right:
-                        x.left = right
+                        self.set_segment_left_endpoint(x, right)
                         heapq.heappush(H, (x.left, x))
 
             # loop tail; update alpha and integrate it into the state.
@@ -1612,7 +1679,7 @@ class Simulator(object):
                         defrag_required |= (
                             z.right == alpha.left and z.node == alpha.node)
                     z.next = alpha
-                    self.set_segment_mass(alpha, z.right, alpha.right)
+                    self.set_segment_mass(alpha, z)
                 alpha.prev = z
                 z = alpha
         if self.full_arg:
@@ -1630,10 +1697,11 @@ class Simulator(object):
             x = y.prev
             if x.right == y.left and x.node == y.node:
                 x.right = y.right
+                x.right_mass = y.right_mass
                 x.next = y.next
                 if y.next is not None:
                     y.next.prev = x
-                self.increment_segment_mass(x, y.left, y.right)
+                self.add_segment_mass(x, y)
                 self.free_segment(y)
             y = x
 
@@ -1683,8 +1751,11 @@ class Simulator(object):
                     alpha.next = None
                 elif x.left != y.left:
                     alpha = self.alloc_segment(
-                        x.left, y.left, x.node, x.population)
+                        x.left, y.left,
+                        x.left_mass, y.left_mass,
+                        x.node, x.population)
                     x.left = y.left
+                    x.left_mass = y.left_mass
                     alpha.label = x.label
                 else:
                     if not coalescence:
@@ -1710,7 +1781,11 @@ class Simulator(object):
                         while right < r_max and self.S[right] != 2:
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
-                        alpha = self.alloc_segment(left, right, u, population_index)
+                        alpha = self.alloc_segment(
+                                    left, right,
+                                    self.recomb_map.position_to_mass(left),
+                                    self.recomb_map.position_to_mass(right),
+                                    u, population_index)
                         alpha.label = label
                     self.store_edge(left, right, u, x.node)
                     self.store_edge(left, right, u, y.node)
@@ -1719,12 +1794,12 @@ class Simulator(object):
                         self.free_segment(x)
                         x = x.next
                     else:
-                        x.left = right
+                        self.set_segment_left_endpoint(x, right)
                     if y.right == right:
                         self.free_segment(y)
                         y = y.next
                     else:
-                        y.left = right
+                        self.set_segment_left_endpoint(y, right)
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
@@ -1738,7 +1813,7 @@ class Simulator(object):
                         defrag_required |= (
                             z.right == alpha.left and z.node == alpha.node)
                     z.next = alpha
-                    self.set_segment_mass(alpha, z.right, alpha.right)
+                    self.set_segment_mass(alpha, z)
                 alpha.prev = z
                 z = alpha
 
@@ -1795,6 +1870,10 @@ class Simulator(object):
                     while u is not None:
                         assert u.population == pop_index
                         assert u.left < u.right
+                        l_mass = self.recomb_map.position_to_mass(u.left)
+                        r_mass = self.recomb_map.position_to_mass(u.right)
+                        assert math.isclose(u.left_mass, l_mass, abs_tol=1e-6)
+                        assert math.isclose(u.right_mass, r_mass, abs_tol=1e-6)
                         if u.prev is not None:
                             s = self.recomb_map.mass_between(u.prev.right, u.right)
                             assert u.prev.label == u.label
@@ -1803,7 +1882,8 @@ class Simulator(object):
                                             u.left, u.right)
                         right = u.right
                         if self.model != 'dtwf' and self.model != 'wf_ped':
-                            assert math.isclose(s, self.L[l].get_frequency(u.index))
+                            freq = self.L[l].get_frequency(u.index)
+                            assert math.isclose(s, freq, abs_tol=1e-6), f'{s} | {freq}'
                         v = u.next
                         if v is not None:
                             assert v.prev == u
@@ -1817,7 +1897,7 @@ class Simulator(object):
         for l in range(self.num_labels):
             lab_tot += self.L[l].get_total()
         if self.model != 'dtwf' and self.model != 'wf_ped':
-            assert math.isclose(q, lab_tot)
+            assert math.isclose(q, lab_tot, abs_tol=1e-6)
 
         assert self.S[self.m] == -1
         # Check the ancestry tracking.

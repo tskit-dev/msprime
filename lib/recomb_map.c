@@ -139,6 +139,11 @@ recomb_map_get_sequence_length(recomb_map_t *self)
     return self->sequence_length;
 }
 
+bool recomb_map_get_discrete(recomb_map_t *self)
+{
+    return self->discrete;
+}
+
 double
 recomb_map_mass_between(recomb_map_t *self, double left, double right)
 {

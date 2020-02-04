@@ -89,6 +89,8 @@ typedef struct segment_t_t {
     /* During simulation we use genetic coordinates */
     double left;
     double right;
+    double left_mass;
+    double right_mass;
     node_id_t value;
     size_t id;
     struct segment_t_t *prev;
@@ -451,6 +453,7 @@ int recomb_map_alloc(recomb_map_t *self,
 int recomb_map_free(recomb_map_t *self);
 uint32_t recomb_map_get_num_loci(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);
+bool recomb_map_get_discrete(recomb_map_t *self);
 double recomb_map_get_per_locus_recombination_rate(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
 double recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x);
