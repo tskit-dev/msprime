@@ -36,15 +36,12 @@ import _tskit
 NULL_NODE = -1
 
 
-def uniform_recombination_map(num_loci=1, rate=0, L=None):
+def uniform_recombination_map(L=1, rate=0, discrete=True):
     """
-    Returns a uniform recombination map for the specified number of loci
+    Returns a uniform recombination map for the specified sequence length
     and rate.
     """
-    if L is None:
-        L = num_loci
-    return _msprime.RecombinationMap(
-        num_loci=num_loci, positions=[0, L], rates=[rate, 0])
+    return _msprime.RecombinationMap([0, L], [rate, 0], discrete)
 
 
 def get_simulation_model(name="hudson", reference_size=0.25, **kwargs):
@@ -359,19 +356,19 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(sim.get_num_segment_blocks(), 0)
         self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
         n = sim.get_num_samples()
-        m = sim.get_num_loci()
+        L = sim.get_sequence_length()
         N = sim.get_num_populations()
         ancestors = sim.get_ancestors()
         self.assertEqual(len(ancestors), sim.get_num_ancestors())
         for ind in ancestors:
             the_pop_id = ind[0][-1]
             for l, r, node, pop_id in ind:
-                self.assertTrue(0 <= l < m)
-                self.assertTrue(1 <= r <= m)
+                self.assertTrue(0 <= l < L)
+                self.assertTrue(1 <= r <= L)
                 self.assertGreaterEqual(node, 0)
                 self.assertTrue(0 <= pop_id < N)
                 self.assertEqual(the_pop_id, pop_id)
-        breakpoints = [0] + sim.get_breakpoints() + [m]
+        breakpoints = [0] + sim.get_breakpoints() + [L]
         self.assertEqual(len(breakpoints), sim.get_num_breakpoints() + 2)
         self.assertEqual(breakpoints, sorted(breakpoints))
         nodes = sim.get_nodes()
@@ -388,11 +385,6 @@ class TestSimulationState(LowLevelTestCase):
 
         edges = sim.get_edges()
         self.assertEqual(len(edges), sim.get_num_edges())
-        for l, r, p, c in edges:
-            self.assertTrue(0 <= l < m)
-            self.assertTrue(1 <= r <= m)
-            self.assertIn(l, breakpoints)
-            self.assertIn(r, breakpoints)
         # The amount of ancestral material in the edges and
         # the extant segments over all intervals should be either n (if
         # the given interval has not fully coalesced yet) or n - 1 (if
@@ -568,7 +560,7 @@ class TestSimulationState(LowLevelTestCase):
         avl_node_block_size = rng.randint(1, 100)
         sim = _msprime.Simulator(
             samples=get_population_samples(*num_sampless),
-            recombination_map=uniform_recombination_map(num_loci=m, rate=rho, L=m - 1),
+            recombination_map=uniform_recombination_map(L=m, rate=rho),
             tables=_msprime.LightweightTableCollection(),
             random_generator=_msprime.RandomGenerator(random_seed),
             store_migrations=store_migrations,
@@ -592,7 +584,7 @@ class TestSimulationState(LowLevelTestCase):
             self.assertGreater(sim.get_num_segment_blocks(), 0)
             self.assertGreater(sim.get_num_node_mapping_blocks(), 0)
             self.assertEqual(sim.get_num_samples(), n)
-            self.assertEqual(sim.get_num_loci(), m)
+            self.assertEqual(sim.get_sequence_length(), m)
             self.assertEqual(n, len(sim.get_ancestors()))
             self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
@@ -619,8 +611,7 @@ class TestSimulationState(LowLevelTestCase):
             for j in range(3):
                 # Check the getters to ensure we've got the right values.
                 self.assertEqual(n, sim.get_num_samples())
-                self.assertEqual(m, sim.get_num_loci())
-                self.assertAlmostEqual(rho, sim.get_recombination_rate())
+                self.assertEqual(m, sim.get_sequence_length())
                 self.assertEqual(segment_block_size, sim.get_segment_block_size())
                 self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
                 self.assertEqual(
@@ -684,7 +675,7 @@ class TestSimulationState(LowLevelTestCase):
         tables = _msprime.LightweightTableCollection()
         sim = _msprime.Simulator(
             samples=get_samples(n),
-            recombination_map=uniform_recombination_map(num_loci=m, rate=r),
+            recombination_map=uniform_recombination_map(L=m, rate=r),
             random_generator=_msprime.RandomGenerator(random_seed),
             tables=tables, demographic_events=demographic_events,
             segment_block_size=1000, avl_node_block_size=1000,
@@ -724,7 +715,7 @@ class TestSimulationState(LowLevelTestCase):
         m = 100
         sim = _msprime.Simulator(
             samples=get_samples(n),
-            recombination_map=uniform_recombination_map(num_loci=m, rate=1),
+            recombination_map=uniform_recombination_map(L=m, rate=1),
             random_generator=_msprime.RandomGenerator(1),
             tables=_msprime.LightweightTableCollection())
         # We run until time 0 to for initialisation
@@ -1134,7 +1125,7 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(num_loci=L, rate=1, L=L),
+                uniform_recombination_map(L=L, rate=1),
                 _msprime.RandomGenerator(random_seed),
                 _msprime.LightweightTableCollection(), **kwargs)
 
@@ -1170,8 +1161,8 @@ class TestSimulator(LowLevelTestCase):
             records = sim.get_migrations()
             self.assertEqual(len(records), sim.get_num_migrations())
             for l, r, node, source, dest, time in records:
-                self.assertTrue(0 <= l < sim.get_num_loci())
-                self.assertTrue(0 < r <= sim.get_num_loci())
+                self.assertTrue(0 <= l < sim.get_sequence_length())
+                self.assertTrue(0 < r <= sim.get_sequence_length())
                 self.assertTrue(0 <= source < 2)
                 self.assertTrue(0 <= dest < 2)
                 self.assertGreaterEqual(node, 0)
@@ -1576,7 +1567,7 @@ class TestSimulator(LowLevelTestCase):
                     get_simple_bottleneck_event(0.01, 0, 1.0)],
             }, {
                 "samples": get_samples(10),
-                "recombination_map": uniform_recombination_map(num_loci=10, rate=1)
+                "recombination_map": uniform_recombination_map(L=10, rate=1)
             }, {
                 "samples": get_population_samples(3, 3, 4),
                 "population_configuration": [
@@ -1776,7 +1767,7 @@ class TestSimulator(LowLevelTestCase):
             get_population_configuration(n),
             get_population_configuration(0)]
         sim = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(num_loci=10, rate=10),
+            get_samples(n), uniform_recombination_map(L=10, rate=10),
             _msprime.RandomGenerator(1), _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
             migration_matrix=[0.0, 0.0, 0.0, 0.0])
@@ -1833,80 +1824,30 @@ class TestRecombinationMap(LowLevelTestCase):
     """
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.RecombinationMap)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, 1, None)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, 1, None, None)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, 1, {}, {})
-        self.assertRaises(TypeError, _msprime.RecombinationMap, "1", [], [])
-        self.assertRaises(ValueError, _msprime.RecombinationMap, 1, [0, 0.1], [1, 2, 3])
-        self.assertRaises(ValueError, _msprime.RecombinationMap, 1, [], [0, 0])
-        self.assertRaises(_msprime.LibraryError, _msprime.RecombinationMap, 1, [], [])
+        self.assertRaises(TypeError, _msprime.RecombinationMap, None)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, None, None)
+        self.assertRaises(TypeError, _msprime.RecombinationMap, {}, {}, False)
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, 1, [0, -2], [0, 0])
+                ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3], False)
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, 1, [1, 0], [0, 0])
+                ValueError, _msprime.RecombinationMap, [], [0, 0], False)
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, 1, [0, 1, 0.5], [0, 0, 0])
+                _msprime.LibraryError, _msprime.RecombinationMap, [], [], False)
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, 0, [0, 1], [0.1, 0])
-
-    def verify_random_recomb_map(self, size, num_random_checks):
-        positions = [0] + sorted(
-            random.random() for j in range(size - 2)) + [1]
-        rates = [random.uniform(0, 5) for j in range(size - 1)] + [0]
-        num_loci = 1000
-        rm = _msprime.RecombinationMap(
-            num_loci=num_loci, positions=positions, rates=rates)
-        for bad_type in [{}, None, "10", []]:
-            self.assertRaises(TypeError, rm.genetic_to_physical, bad_type)
-        for bad_value in [-1, num_loci + 0.001, 1e7, 2**32]:
-            self.assertRaises(ValueError, rm.genetic_to_physical, bad_value)
-        self.assertEqual(rm.get_size(), size)
-        self.assertEqual(rm.get_positions(), positions)
-        self.assertEqual(rm.get_rates(), rates)
-        self.assertEqual(rm.genetic_to_physical(0), 0)
-        self.assertAlmostEqual(rm.genetic_to_physical(num_loci), 1)
-        total_rate = rm.get_total_recombination_rate()
-        self.assertGreater(total_rate, 0)
-        self.assertEqual(
-            total_rate / (num_loci - 1), rm.get_per_locus_recombination_rate())
-        for j in range(num_random_checks):
-            x = random.uniform(0, num_loci)
-            y = rm.genetic_to_physical(x)
-            self.assertTrue(0 <= y <= 1)
-            z = rm.physical_to_genetic(y)
-            self.assertAlmostEqual(x, z)
-
-    def test_coordinate_conversions(self):
-        num_random_checks = 100
-        for size in [2, 3, 4, 5, 100]:
-            self.verify_random_recomb_map(size, num_random_checks)
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0], False)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0], False)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap,
+            [0, 1, 0.5], [0, 0, 0], False)
+        self.assertRaises(
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, .5], [0.1, 0], True)
 
     def test_total_rate(self):
-        m = 1000
-        rm = _msprime.RecombinationMap(m, [0, 10], [0.25, 0])
+        rm = _msprime.RecombinationMap([0, 10], [0.25, 0], True)
         self.assertEqual(rm.get_total_recombination_rate(), 2.5)
-        rm = _msprime.RecombinationMap(m, [0, 10, 20], [0.25, 0.5, 0])
+        rm = _msprime.RecombinationMap([0, 10, 20], [0.25, 0.5, 0], True)
         self.assertEqual(rm.get_total_recombination_rate(), 7.5)
-
-    def test_uniform_rate(self):
-        for m in [1, 10, 100]:
-            rm = _msprime.RecombinationMap(m, [0, m], [0.001, 0])
-            # For a uniform map with an equal number of loci and physical
-            # length we should map 1-1 exactly.
-            for v in range(0, m + 1):
-                self.assertEqual(v, rm.genetic_to_physical(v))
-                # We don't bother special casing for physical to genetic as
-                # this isn't really used.
-                self.assertAlmostEqual(v, rm.physical_to_genetic(v))
-
-    def test_range_errors(self):
-        rm = _msprime.RecombinationMap(100, [0, 10], [0.1, 0])
-        self.assertRaises(ValueError, rm.physical_to_discrete_genetic, -1)
-        self.assertRaises(ValueError, rm.physical_to_discrete_genetic, 10.1)
-        self.assertRaises(ValueError, rm.physical_to_genetic, -1)
-        self.assertRaises(ValueError, rm.physical_to_genetic, 10.1)
-        self.assertRaises(ValueError, rm.genetic_to_physical, -1)
-        self.assertRaises(ValueError, rm.genetic_to_physical, 100.1)
 
 
 class TestRandomGenerator(unittest.TestCase):
@@ -2062,7 +2003,7 @@ class TestLikelihood(unittest.TestCase):
         rng = _msprime.RandomGenerator(1)
         tables = _msprime.LightweightTableCollection()
         sim = _msprime.Simulator(
-            get_samples(5), uniform_recombination_map(num_loci=20, rate=2),
+            get_samples(5), uniform_recombination_map(L=20, rate=2),
             rng, tables, store_full_arg=True)
         sim.run()
         mutgen = _msprime.MutationGenerator(rng, 2)

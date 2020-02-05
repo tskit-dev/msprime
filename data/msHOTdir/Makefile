@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-ansi -ggdb -Wno-unused-result -Wno-return-type
+CFLAGS=-ggdb -Wno-unused-result -Wno-return-type
 SRC=msGCHOT.c streecGCHOT.c rand1.c
 all: msHOT msHOT_summary_stats
 

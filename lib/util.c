@@ -52,9 +52,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_POPULATION_OVERFLOW:
             ret = "Population Overflow occurred.";
             break;
-        case MSP_ERR_LINKS_OVERFLOW:
-            ret = "Links Overflow occurred.";
-            break;
         case MSP_ERR_OUT_OF_BOUNDS:
             ret = "Object reference out of bounds";
             break;

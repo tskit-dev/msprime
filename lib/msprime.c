@@ -41,6 +41,12 @@
 #define MSP_STATE_SIMULATING 2
 #define MSP_STATE_DEBUGGING 3
 
+static bool
+doubles_almost_equal(double a, double b, double eps)
+{
+    return (fabs(a) < eps && fabs(b) < eps) || gsl_fcmp(a, b, eps) == 0;
+}
+
 static int
 cmp_individual(const void *a, const void *b) {
     const segment_t *ia = (const segment_t *) a;
@@ -241,21 +247,10 @@ int
 msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
 {
     int ret = 0;
-    double genetic_track_length = 1;
 
     /* if the rate is zero, we ignore the track length */
     if (rate > 0) {
-        /* The input track_length is in physical distance, and we must convert this
-         * into genetic distances for the simulation. Note that we're assuming this
-         * is a *flat* map because we're assuming that a give physical distance
-         * always maps to the same genetic distance */
-
         if (track_length < 0 || track_length > self->recomb_map->sequence_length) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        genetic_track_length = recomb_map_phys_to_genetic(self->recomb_map, track_length);
-        if (genetic_track_length < 1.0) {
             ret = MSP_ERR_BAD_PARAM_VALUE;
             goto out;
         }
@@ -267,7 +262,7 @@ msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
     /* NB: the gene_conversion_rate gets rescaled when we call msp_initialise,
      * so that it's in model units. */
     self->gene_conversion_rate = rate;
-    self->gene_conversion_track_length = genetic_track_length;
+    self->gene_conversion_track_length = track_length;
 out:
     return ret;
 }
@@ -378,14 +373,8 @@ out:
     return ret;
 }
 
-static double
-msp_genetic_to_phys(msp_t *self, double x)
-{
-    return recomb_map_genetic_to_phys(self->recomb_map, x);
-}
-
 static segment_t * MSP_WARN_UNUSED
-msp_alloc_segment(msp_t *self, uint32_t left, uint32_t right, node_id_t value,
+msp_alloc_segment(msp_t *self, double left, double right, node_id_t value,
         population_id_t population, label_id_t label,
         segment_t *prev, segment_t *next)
 {
@@ -436,13 +425,9 @@ msp_alloc(msp_t *self,
     self->rng = rng;
     self->recomb_map = recomb_map;
     self->tables = tables;
-    self->num_loci = recomb_map_get_num_loci(self->recomb_map);
+    self->sequence_length = self->recomb_map->sequence_length;
 
-    self->recombination_rate = recomb_map_get_per_locus_recombination_rate(
-            self->recomb_map);
     /* And rescale the rates */
-    self->recombination_rate = self->model.generation_rate_to_model_rate(
-            &self->model, self->recombination_rate);
     self->gene_conversion_rate = self->model.generation_rate_to_model_rate(
             &self->model, self->gene_conversion_rate);
 
@@ -708,7 +693,7 @@ out:
 
 /* Returns true if the specified breakpoint exists */
 static bool
-msp_has_breakpoint(msp_t *self, uint32_t x)
+msp_has_breakpoint(msp_t *self, double x)
 {
     node_mapping_t search;
     search.left = x;
@@ -720,7 +705,7 @@ msp_has_breakpoint(msp_t *self, uint32_t x)
  * Inserts a new breakpoint at the specified locus left.
  */
 static int MSP_WARN_UNUSED
-msp_insert_breakpoint(msp_t *self, uint32_t left)
+msp_insert_breakpoint(msp_t *self, double left)
 {
     int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
@@ -746,7 +731,7 @@ msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 
     fprintf(out, "[pop=%d,label=%d]", s->population_id, s->label);
     while (s != NULL) {
-        fprintf(out, "[(%d-%d) %d] ", s->left, s->right, (int) s->value);
+        fprintf(out, "[(%f-%f) %d] ", s->left, s->right, (int) s->value);
         s = s->next;
     }
     fprintf(out, "\n");
@@ -755,7 +740,8 @@ msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 static void
 msp_verify_segments(msp_t *self, bool verify_breakpoints)
 {
-    int64_t s, ss, total_links, left, right, alt_total_links;
+    double left, right;
+    double s, ss, total_mass, alt_total_mass;
     size_t j, k;
     size_t label_segments = 0;
     size_t total_avl_nodes = 0;
@@ -763,8 +749,8 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     segment_t *u;
 
     for (k = 0; k < self->num_labels; k++) {
-        total_links = 0;
-        alt_total_links = 0;
+        total_mass = 0;
+        alt_total_mass = 0;
         label_segments = 0;
         for (j = 0; j < self->num_populations; j++) {
             node = (&self->populations[j].ancestors[k])->head;
@@ -777,15 +763,17 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                     assert(u->population_id == (population_id_t) j);
                     assert(u->label == (label_id_t) k);
                     assert(u->left < u->right);
-                    assert(u->right <= self->num_loci);
+                    assert(u->right <= self->sequence_length);
                     if (u->prev != NULL) {
-                        s = u->right - u->prev->right;
+                        s = recomb_map_mass_between(
+                                self->recomb_map, u->prev->right, u->right);
                     } else {
-                        s = u->right - u->left - 1;
+                        s = recomb_map_mass_between_left_exclusive(
+                                self->recomb_map, u->left, u->right);
                     }
                     ss = fenwick_get_value(&self->links[k], u->id);
-                    total_links += ss;
-                    assert(s == ss);
+                    total_mass += ss;
+                    assert(doubles_almost_equal(s, ss, 1e-6));
                     if (s == ss) {
                         /* do nothing; just to keep compiler happy - see below also */
                     }
@@ -795,12 +783,14 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                     right = u->right;
                     u = u->next;
                 }
-                alt_total_links += right - left - 1;
+                s = recomb_map_mass_between_left_exclusive(
+                        self->recomb_map, left, right);
+                alt_total_mass += s;
                 node = node->next;
             }
         }
-        assert(total_links == fenwick_get_total(&self->links[k]));
-        assert(total_links == alt_total_links);
+        assert(doubles_almost_equal(total_mass, fenwick_get_total(&self->links[k]), 1e-6));
+        assert(doubles_almost_equal(total_mass, alt_total_mass, 1e-6));
         assert(label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
     total_avl_nodes = msp_get_num_ancestors(self)
@@ -817,25 +807,27 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     }
 }
 
+/* FIXME logic doesn't make sense in continuous space */
 static void
 msp_verify_overlaps(msp_t *self)
 {
     avl_node_t *node;
     node_mapping_t *nm;
     segment_t *u;
-    uint32_t j, k, left, right, count, label;
+    uint32_t j, k, count, label;
+    double left, right;
     size_t remaining_samples = self->num_sampling_events - self->next_sampling_event;
     /* We check for every locus, so obviously this rules out large numbers
      * of loci. This code should never be called except during testing,
      * so we don't need to recover from malloc failure.
      */
-    uint32_t *overlaps = calloc(self->num_loci, sizeof(uint32_t));
+    uint32_t *overlaps = calloc((uint32_t) self->sequence_length, sizeof(uint32_t));
 
     assert(overlaps != NULL);
     /* Add in the counts for any historical samples that haven't been
      * included yet.
      */
-    for (k = 0; k < self->num_loci; k++) {
+    for (k = 0; k < self->sequence_length; k++) {
         overlaps[k] += (uint32_t) remaining_samples;
     }
     for (label = 0; label < self->num_labels; label++) {
@@ -844,7 +836,7 @@ msp_verify_overlaps(msp_t *self)
                     node != NULL; node = node->next) {
                 u = (segment_t *) node->item;
                 while (u != NULL) {
-                    for (k = u->left; k < u->right; k++) {
+                    for (k = (uint32_t) u->left; k < (uint32_t) u->right; k++) {
                         overlaps[k]++;
                     }
                     u = u->next;
@@ -857,7 +849,7 @@ msp_verify_overlaps(msp_t *self)
         left = nm->left;
         right = ((node_mapping_t *) node->next->item)->left;
         count = nm->value;
-        for (k = left; k < right; k++) {
+        for (k = (uint32_t) left; k < (uint32_t) right; k++) { /* FIXME here too */
             assert(overlaps[k] == count);
         }
     }
@@ -881,7 +873,7 @@ msp_print_state(msp_t *self, FILE *out)
     tsk_edge_t *edge;
     demographic_event_t *de;
     sampling_event_t *se;
-    int64_t v;
+    double v;
     uint32_t j, k;
     segment_t **ancestors = malloc(msp_get_num_ancestors(self)
             * sizeof(segment_t *));
@@ -905,12 +897,11 @@ msp_print_state(msp_t *self, FILE *out)
                 self->model.params.dirac_coalescent.psi,
                 self->model.params.dirac_coalescent.c);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
-        fprintf(out, "\tsweep @ locus = %d\n", self->model.params.sweep.locus);
+        fprintf(out, "\tsweep @ locus = %f\n", self->model.params.sweep.locus);
         self->model.params.sweep.print_state(&self->model.params.sweep, out);
     }
     fprintf(out, "n = %d\n", self->num_samples);
-    fprintf(out, "m = %d\n", self->num_loci);
-    fprintf(out, "recombination_rate           = %f\n", self->recombination_rate);
+    fprintf(out, "m = %f\n", self->sequence_length);
     fprintf(out, "gene_conversion_rate         = %f\n", self->gene_conversion_rate);
     fprintf(out, "gene_conversion_track_length = %f\n", self->gene_conversion_track_length);
     fprintf(out, "from_ts    = %p\n", (void *) self->from_ts);
@@ -950,8 +941,8 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Population sizes\n");
     for (j = 0; j < self->num_labels; j++) {
         fprintf(out, "label %d\n", j);
-        fprintf(out, "\tnum_links = %ld\n",
-                (long) fenwick_get_total(&self->links[j]));
+        fprintf(out, "\trecomb_mass = %f\n",
+                fenwick_get_total(&self->links[j]));
         for (k = 0; k < self->num_populations; k++) {
             fprintf(out, "\tpop_size[%d] = %d\n", k,
                 avl_count(&self->populations[k].ancestors[j]));
@@ -975,7 +966,7 @@ msp_print_state(msp_t *self, FILE *out)
             u = msp_get_segment(self, j, (label_id_t) k);
             v = fenwick_get_value(&self->links[k], j);
             if (v != 0) {
-                fprintf(out, "\t%ld\ti=%d l=%d r=%d v=%d prev=%p next=%p\n", (long) v,
+                fprintf(out, "\t%ld\ti=%d l=%f r=%f v=%d prev=%p next=%p\n", (long) v,
                         (int) u->id, u->left, u->right,
                         (int) u->value, (void *) u->prev, (void *) u->next);
             }
@@ -984,12 +975,12 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Breakpoints = %d\n", avl_count(&self->breakpoints));
     for (a = self->breakpoints.head; a != NULL; a = a->next) {
         nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%f -> %d\n", nm->left, nm->value);
     }
     fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
     for (a = self->overlap_counts.head; a != NULL; a = a->next) {
         nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%d -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%f -> %d\n", nm->left, nm->value);
     }
     fprintf(out, "Tables = \n");
     tsk_table_collection_print_state(self->tables, out);
@@ -1019,16 +1010,14 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_record_migration(msp_t *self, uint32_t left, uint32_t right,
+msp_record_migration(msp_t *self, double left, double right,
         node_id_t node, population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
     double scaled_time = self->model.model_time_to_generations(&self->model, self->time);
 
     ret = tsk_migration_table_add_row(&self->tables->migrations,
-            msp_genetic_to_phys(self, left),
-            msp_genetic_to_phys(self, right),
-            node, source_pop, dest_pop, scaled_time);
+            left, right, node, source_pop, dest_pop, scaled_time);
     if (ret < 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -1054,9 +1043,7 @@ msp_flush_edges(msp_t *self)
         for (j = 0; j < num_edges; j++) {
             edge = self->buffered_edges[j];
             ret = tsk_edge_table_add_row(&self->tables->edges,
-                    msp_genetic_to_phys(self, edge.left),
-                    msp_genetic_to_phys(self, edge.right),
-                    edge.parent, edge.child);
+                    edge.left, edge.right, edge.parent, edge.child);
             if (ret < 0) {
                 ret = msp_set_tsk_error(ret);
                 goto out;
@@ -1166,7 +1153,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
 {
     int ret = 0;
     segment_t *ind, *x, *y, *new_ind;
-    int64_t num_links;
+    double recomb_mass;
 
     ind = (segment_t *) node->item;
     avl_unlink_node(source, node);
@@ -1208,8 +1195,8 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
             } else {
                 y->prev->next = y;
             }
-            num_links = fenwick_get_value(&self->links[x->label], x->id);
-            fenwick_increment(&self->links[y->label], y->id, num_links);
+            recomb_mass = fenwick_get_value(&self->links[x->label], x->id);
+            fenwick_increment(&self->links[y->label], y->id, recomb_mass);
             msp_free_segment(self, x);
         }
     }
@@ -1223,7 +1210,7 @@ out:
  * specified number of overlapping segments b.
  */
 static int MSP_WARN_UNUSED
-msp_insert_overlap_count(msp_t *self, uint32_t left, uint32_t v)
+msp_insert_overlap_count(msp_t *self, double left, uint32_t v)
 {
     int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
@@ -1247,7 +1234,7 @@ out:
  * node mapping from the containing overlap_count.
  */
 static int MSP_WARN_UNUSED
-msp_copy_overlap_count(msp_t *self, uint32_t k)
+msp_copy_overlap_count(msp_t *self, double k)
 {
     int ret;
     node_mapping_t search, *nm;
@@ -1266,7 +1253,7 @@ msp_copy_overlap_count(msp_t *self, uint32_t k)
     return ret;
 }
 static int
-msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
+msp_compress_overlap_counts(msp_t *self, double l, double r)
 {
     int ret = 0;
     avl_node_t *node1, *node2;
@@ -1296,10 +1283,10 @@ msp_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
 }
 
 static int MSP_WARN_UNUSED
-msp_conditional_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
+msp_conditional_compress_overlap_counts(msp_t *self, double l, double r)
 {
     int ret = 0;
-    double covered_fraction = (r - l) / (double) self->num_loci;
+    double covered_fraction = (r - l) / self->sequence_length;
 
     /* This is a heuristic to prevent us spending a lot of time pointlessly
      * trying to defragment during the early stages of the simulation.
@@ -1314,6 +1301,38 @@ msp_conditional_compress_overlap_counts(msp_t *self, uint32_t l, uint32_t r)
     }
 out:
     return ret;
+}
+
+/* Updates the mass on the specified segment to account for the additional
+ * mass incurred from the specified left and right physical coordinates.
+ */
+static void
+msp_increment_segment_mass(msp_t *self, segment_t *seg, double left, double right)
+{
+    double mass = recomb_map_mass_between(self->recomb_map, left, right);
+    fenwick_increment(&self->links[seg->label], seg->id, mass);
+}
+
+/* Set the mass of the specified segment to that between the supplied
+ * left and right physical coordinates.
+ */
+static void
+msp_set_segment_mass(msp_t *self, segment_t *seg, double left, double right)
+{
+    double mass = recomb_map_mass_between(self->recomb_map, left, right);
+    fenwick_set_value(&self->links[seg->label], seg->id, mass);
+}
+
+/* Set the mass of a specified segment that is not part of a
+ * chain to the mass spanned by the segment, exlusive of its
+ * endpoints.
+ */
+static void
+msp_set_single_segment_mass(msp_t *self, segment_t *seg)
+{
+    double mass = recomb_map_mass_between_left_exclusive(
+        self->recomb_map, seg->left, seg->right);
+    fenwick_set_value(&self->links[seg->label], seg->id, mass);
 }
 
 /* Defragment the segment chain ending in z by squashing any redundant
@@ -1332,7 +1351,7 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
             if (y->next != NULL) {
                 y->next->prev = x;
             }
-            fenwick_increment(&self->links[x->label], x->id, y->right - y->left);
+            msp_increment_segment_mass(self, x, y->left, y->right);
             msp_free_segment(self, y);
         }
         y = x;
@@ -1340,19 +1359,13 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
     return 0;
 }
 
-static int64_t
-msp_dtwf_generate_breakpoint(msp_t *self, int64_t start)
+/* TODO: is floor the correct operation here or should we round? */
+static double
+msp_dtwf_generate_breakpoint(msp_t *self, double start)
 {
-    double mu = 1.0 / self->recombination_rate;
-    double x = gsl_ran_exponential(self->rng, mu);
-
-    /* Prevent overflowing into a negative number when we convert to int
-     * and clamp to UINT32_MAX since we can't have anything bigger than
-     * this anyway. */
-    x = GSL_MIN(UINT32_MAX, x);
-    assert(x >= 0);
-    /* TODO: is floor the correct operation here or should we round? */
-    return 1 + start + (int64_t) x;
+    double k = recomb_map_sample_poisson(self->recomb_map, self->rng, start);
+    assert(k > start);
+    return k;
 }
 
 int MSP_WARN_UNUSED
@@ -1746,7 +1759,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 {
     int ret = 0;
     int ix;
-    int64_t k;
+    double k;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
@@ -1768,7 +1781,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             assert(x->left <= k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
-            z = msp_alloc_segment(self, (uint32_t) k, x->right, x->value,
+            z = msp_alloc_segment(self, k, x->right, x->value,
                     x->population_id, x->label, seg_tails[ix], x->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -1781,8 +1794,8 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix]->next = z;
             seg_tails[ix] = z;
             x->next = NULL;
-            x->right = (uint32_t) k;
-            fenwick_increment(&self->links[x->label], x->id, k - z->right);
+            x->right = k;
+            msp_increment_segment_mass(self, x, z->right, k);
             assert(x->left < x->right);
             x = z;
             k = msp_dtwf_generate_breakpoint(self, k);
@@ -1801,7 +1814,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = y;
             x = y;
             z = y;
-            fenwick_set_value(&self->links[z->label], z->id, z->right - z->left - 1);
+            msp_set_single_segment_mass(self, z);
 
         } else {
             // Breakpoint in later segment
@@ -1817,30 +1830,43 @@ out:
     return ret;
 }
 
+
+static double
+msp_init_segments_and_compute_breakpoint(msp_t *self, label_id_t label, segment_t **x_ret, segment_t **y_ret)
+{
+    double h, t, k;
+    segment_t *x, *y;
+    fenwick_t *tree = &self->links[label];
+
+    h = gsl_rng_uniform(self->rng) * fenwick_get_total(tree);
+    y = msp_get_segment(self, fenwick_find(tree, h), label);
+    t = fenwick_get_cumulative_sum(tree, y->id);
+    x = y->prev;
+
+    k = recomb_map_shift_left_by_mass(self->recomb_map, y->right, t - h);
+
+    /* Reject if fallen directly on y left when not allowed to */
+    if (k == y->left && y->prev == NULL) {
+      return msp_init_segments_and_compute_breakpoint(self, label, x_ret, y_ret);
+    }
+
+    *x_ret = x;
+    *y_ret = y;
+
+    return k;
+}
+
 static int MSP_WARN_UNUSED
 msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_t **rhs)
 {
     int ret = 0;
-    int64_t l, t, gap, k;
-    size_t segment_id;
+    double k;
     segment_t *x, *y, *z, *lhs_tail;
-    int64_t num_links = fenwick_get_total(&self->links[label]);
 
     self->num_re_events++;
-    /* We can't use the GSL integer generator here as the range is too large */
-    l = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
-    //printf("l = %d, num_links = %d\n", (int)l, (int)num_links);
-    assert(l > 0 && l <= num_links);
-    segment_id = fenwick_find(&self->links[label], l);
-    t = fenwick_get_cumulative_sum(&self->links[label], segment_id);
-    gap = t - l;
-    assert(gap >= 0 && gap < self->num_loci);
-    y = msp_get_segment(self, segment_id, label);
-    x = y->prev;
-    k = y->right - gap - 1;
-    assert(k >= 0 && k < self->num_loci);
+    k = msp_init_segments_and_compute_breakpoint(self, label, &x, &y);
     if (y->left < k) {
-        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
+        z = msp_alloc_segment(self, k, y->right, y->value,
                 y->population_id, y->label, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -1850,12 +1876,12 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
             y->next->prev = z;
         }
         y->next = NULL;
-        y->right = (uint32_t) k;
-        fenwick_increment(&self->links[label], y->id, k - z->right);
-        if (msp_has_breakpoint(self, (uint32_t) k)) {
+        y->right = k;
+        msp_increment_segment_mass(self, y, z->right, k);
+        if (msp_has_breakpoint(self, k)) {
             self->num_multiple_re_events++;
         } else {
-            ret = msp_insert_breakpoint(self, (uint32_t) k);
+            ret = msp_insert_breakpoint(self, k);
             if (ret != 0) {
                 goto out;
             }
@@ -1869,7 +1895,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         self->num_trapped_re_events++;
         lhs_tail = x;
     }
-    fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
+    msp_set_single_segment_mass(self, z);
     ret = msp_insert_individual(self, z);
     if (ret != 0) {
         goto out;
@@ -1910,22 +1936,20 @@ out:
 /* Helper function for doing GC */
 static int MSP_WARN_UNUSED
 msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *new_segment,
-        uint32_t track_end, label_id_t label)
+        double track_end)
 {
     int ret = 0;
     assert(lhs_tail != NULL);
     lhs_tail->next = new_segment;
-    fenwick_set_value(&self->links[label], new_segment->id,
-            new_segment->right - lhs_tail->right);
+    msp_set_segment_mass(self, new_segment, lhs_tail->right, new_segment->right);
     if (y->next != NULL){
         y->next->prev = new_segment;
     }
     y->next = NULL;
     y->right = track_end;
-    fenwick_increment(&self->links[label], y->id,
-            (int64_t) track_end - (int64_t) new_segment->right);
-    if (!msp_has_breakpoint(self, (uint32_t) track_end)) {
-        ret = msp_insert_breakpoint(self, (uint32_t) track_end);
+    msp_increment_segment_mass(self, y, new_segment->right, track_end);
+    if (!msp_has_breakpoint(self, track_end)) {
+        ret = msp_insert_breakpoint(self, track_end);
         if (ret != 0) {
             goto out;
         }
@@ -1940,22 +1964,22 @@ static int MSP_WARN_UNUSED
 msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 {
     int ret = 0;
-    int64_t h, tl, t, k;
+    double k, h, tl, t;
     size_t segment_id;
     segment_t *x, *y, *y2, *z, *z2, *lhs_tail;
-    int64_t num_links = fenwick_get_total(&self->links[label]);
+    double recomb_mass = fenwick_get_total(&self->links[label]);
 
-    h = 1 + (int64_t) (gsl_rng_uniform(self->rng) * (double) num_links);
-    assert(h > 0 && h <= num_links);
+    h = gsl_rng_uniform(self->rng) * recomb_mass;
+    assert(h > 0 && h <= recomb_mass);
     /* generate track length */
-    tl = (int64_t) gsl_ran_geometric(self->rng, 1.0 / self->gene_conversion_track_length);
+    tl = gsl_ran_geometric(self->rng, 1.0 / self->gene_conversion_track_length);
     assert(tl > 0);
     segment_id = fenwick_find(&self->links[label], h);
     y = msp_get_segment(self, segment_id, label);
 
     t = fenwick_get_cumulative_sum(&self->links[label], segment_id);
-    k = y->right - t + h - 1;
-    assert(k >= 0 && k < self->num_loci);
+    k = recomb_map_shift_left_by_mass(self->recomb_map, y->right, t - h);
+    assert(k >= 0 && k < self->sequence_length);
     /* Check if the gene conversion falls between segments and hence has no effect */
     if (y->left >= k + tl){
         self->num_gc_events++;
@@ -1969,22 +1993,22 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
         /* Both breaks are within the same segment */
         if (k <= y->left) {
             y->prev = NULL;
-            z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value,
+            z2 = msp_alloc_segment(self, k + tl, y->right, y->value,
                     y->population_id, y->label, x, y->next);
             if (z2 == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
             lhs_tail = x;
-            ret = msp_cut_right_break(self, lhs_tail, y, z2, (uint32_t) (k + tl), label);
+            ret = msp_cut_right_break(self, lhs_tail, y, z2, k + tl);
             if (ret != 0){
                 goto out;
             }
             z = y;
         } else {
-            z = msp_alloc_segment(self, (uint32_t) k, (uint32_t) (k + tl), y->value,
+            z = msp_alloc_segment(self, k, k + tl, y->value,
                     y->population_id, y->label, NULL, NULL);
-            z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y->right, y->value,
+            z2 = msp_alloc_segment(self, k + tl, y->right, y->value,
                     y->population_id, y->label, y, y->next);
             if (z == NULL || z2 == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -1994,18 +2018,18 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
                 y->next->prev = z2;
             }
             y->next = z2;
-            y->right = (uint32_t) k;
-            fenwick_set_value(&self->links[label], z2->id, z2->right - y->right);
-            fenwick_increment(&self->links[label], y->id, k - z2->right);
-            if (!msp_has_breakpoint(self, (uint32_t) k)) {
-                ret = msp_insert_breakpoint(self, (uint32_t) k);
+            y->right = k;
+            msp_set_segment_mass(self, z2, y->right, z2->right);
+            msp_increment_segment_mass(self, y, z2->right, k);
+            if (!msp_has_breakpoint(self, k)) {
+                ret = msp_insert_breakpoint(self, k);
                 if (ret != 0) {
                     goto out;
                 }
             }
 
-            if (!msp_has_breakpoint(self, (uint32_t) (k + tl) )) {
-                ret = msp_insert_breakpoint(self, (uint32_t) (k + tl) );
+            if (!msp_has_breakpoint(self, k + tl)) {
+                ret = msp_insert_breakpoint(self, k + tl);
                 if (ret != 0) {
                     goto out;
                 }
@@ -2029,21 +2053,21 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             z = y;
             lhs_tail = x;
         } else {
-            z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value,
+            z = msp_alloc_segment(self, k, y->right, y->value,
                     y->population_id, y->label, NULL, y->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
-            fenwick_set_value(&self->links[label], z->id, z->right - z->left);
+            msp_set_segment_mass(self, z, z->left, z->right);
             if (y->next != NULL) {
                 y->next->prev = z;
             }
             y->next = NULL;
-            y->right = (uint32_t) k;
-            fenwick_increment(&self->links[label], y->id, k - z->right);
-            if (!msp_has_breakpoint(self, (uint32_t) k)) {
-                ret = msp_insert_breakpoint(self, (uint32_t) k);
+            y->right = k;
+            msp_increment_segment_mass(self, y, z->right, k);
+            if (!msp_has_breakpoint(self, k)) {
+                ret = msp_insert_breakpoint(self, k);
                 if (ret != 0) {
                     goto out;
                 }
@@ -2054,13 +2078,13 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
         /* Process right break */
         if (y2 != NULL) {
             if (y2->left < k + tl) {
-                z2 = msp_alloc_segment(self, (uint32_t) (k + tl), y2->right, y2->value,
+                z2 = msp_alloc_segment(self, k + tl, y2->right, y2->value,
                         y2->population_id, y2->label, lhs_tail, y2->next);
                 if (z2 == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
-                ret = msp_cut_right_break(self, lhs_tail, y2, z2, (uint32_t) (k + tl), label);
+                ret = msp_cut_right_break(self, lhs_tail, y2, z2, k + tl);
                 if (ret != 0){
                     goto out;
                 }
@@ -2071,14 +2095,14 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
                 lhs_tail->next = y2;
                 y2->prev->next = NULL;
                 y2->prev = lhs_tail;
-                fenwick_set_value(&self->links[label], y2->id, y2->right - lhs_tail->right);
+                msp_set_segment_mass(self, y2, lhs_tail->right, y2->right);
             }
         }
     }
 
     /* Update population */
     z->label = label;
-    fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
+    msp_set_single_segment_mass(self, z);
     ret = msp_insert_individual(self, z);
 out:
     return ret;
@@ -2164,7 +2188,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     int ret = 0;
     double h, length, p, logp, u;
     segment_t *x, *y, *z;
-    int64_t k, tl;
+    double k, tl;
     size_t segment_id;
     const double track_length = self->gene_conversion_track_length;
 
@@ -2182,9 +2206,9 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         p = (track_length - 1.0) / track_length;
         logp = log(1.0 - 1.0 / track_length);
         u = gsl_rng_uniform(self->rng);
-        tl = (int64_t) floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / logp);
+        tl = floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / logp);
     }
-    k = (int64_t) y->left + tl;
+    k = y->left + tl;
 
     while (y->right <= k){
         y = y->next;
@@ -2192,7 +2216,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     x = y->prev;
     if (y->left < k){
         /*make new segment*/
-        z = msp_alloc_segment(self, (uint32_t) k, y->right, y->value, y->population_id,
+        z = msp_alloc_segment(self, k, y->right, y->value, y->population_id,
                 y->label, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -2202,10 +2226,10 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
             y->next->prev = z;
         }
         y->next = NULL;
-        y->right = (uint32_t) k;
-        fenwick_increment(&self->links[label], y->id, k - (int64_t) z->right);
-        if (!msp_has_breakpoint(self, (uint32_t) k)) {
-            ret = msp_insert_breakpoint(self, (uint32_t) k);
+        y->right = k;
+        msp_increment_segment_mass(self, y, z->right, k);
+        if (!msp_has_breakpoint(self, k)) {
+            ret = msp_insert_breakpoint(self, k);
             if (ret != 0) {
                 goto out;
             }
@@ -2217,7 +2241,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         z = y;
     }
     z->label = label;
-    fenwick_set_value(&self->links[label], z->id, z->right - z->left - 1);
+    msp_set_single_segment_mass(self, z);
     ret = msp_insert_individual(self, z);
 out:
     return ret;
@@ -2233,19 +2257,23 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
     segment_t *x = a;
     segment_t *y = b;
     segment_t *beta;
-    int64_t overlap, min_overlap;
+    double overlap;
+    int model = self->model.type;
 
-    if (self->model.type == MSP_MODEL_SMC || self->model.type == MSP_MODEL_SMC_PRIME) {
+    if (model == MSP_MODEL_SMC || model == MSP_MODEL_SMC_PRIME) {
         ret = 1;
-        min_overlap = self->model.type == MSP_MODEL_SMC ? 1: 0;
         while (x != NULL && y != NULL) {
             if (y->left < x->left) {
                 beta = x;
                 x = y;
                 y = beta;
             }
-            overlap = ((int64_t) x->right) - ((int64_t) y->left);
-            if (overlap >= min_overlap) {
+            overlap = x->right - y->left;
+            /* For the SMC' overlap must be >= 0, but SMC it must
+             * be strictly greater than zero, as it doesn't allow
+             * directly adjacent segments to coalesce */
+            if ((model == MSP_MODEL_SMC_PRIME && overlap >= 0)
+                    || (overlap > 0)) { /* SMC */
                 ret = 0;
                 break;
             }
@@ -2263,7 +2291,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     bool coalescence = false;
     bool defrag_required = false;
     node_id_t v;
-    uint32_t l, r, l_min, r_max;
+    double l, r, l_min, r_max;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -2274,7 +2302,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     l_min = 0;
     r_max = 0;
 
-    /* update num_links and get ready for loop */
+    /* update recomb mass and get ready for loop */
     z = NULL;
     while (x != NULL || y != NULL) {
         alpha = NULL;
@@ -2393,8 +2421,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 if (ret != 0) {
                     goto out;
                 }
-                fenwick_set_value(&self->links[label], alpha->id,
-                        alpha->right - alpha->left - 1);
+                msp_set_single_segment_mass(self, alpha);
             } else {
                 if (self->store_full_arg) {
                     // we pre-empt the fact that values will be set equal later
@@ -2403,7 +2430,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     defrag_required |= z->right == alpha->left && z->value == alpha->value;
                 }
                 z->next = alpha;
-                fenwick_set_value(&self->links[label], alpha->id, alpha->right - z->right);
+                msp_set_segment_mass(self, alpha, z->right, alpha->right);
             }
             alpha->prev = z;
             z = alpha;
@@ -2471,7 +2498,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool defrag_required = false;
     bool set_merged = false;
     node_id_t v;
-    uint32_t j, l, r, h, r_max, next_l, l_min;
+    uint32_t j, h;
+    double l, r, r_max, next_l, l_min;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -2489,7 +2517,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         h = 0;
         node = Q->head;
         l = ((segment_t *) node->item)->left;
-        r_max = self->num_loci;
+        r_max = self->sequence_length;
         while (node != NULL && ((segment_t *) node->item)->left == l) {
             H[h] = (segment_t *) node->item;
             r_max = GSL_MIN(r_max, H[h]->right);
@@ -2614,8 +2642,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         /* Loop tail; integrate alpha into the global state */
         if (alpha != NULL) {
             if (z == NULL) {
-                fenwick_set_value(&self->links[label], alpha->id,
-                        alpha->right - alpha->left - 1);
+                msp_set_single_segment_mass(self, alpha);
                 /* Pedigree doesn't currently track lineages in Populations, so
                    keep reference to merged segments instead */
                 if (self->pedigree != NULL &&
@@ -2638,8 +2665,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                         z->right == alpha->left && z->value == alpha->value;
                 }
                 z->next = alpha;
-                fenwick_set_value(&self->links[label], alpha->id,
-                        alpha->right - z->right);
+                msp_set_segment_mass(self, alpha, z->right, alpha->right);
             }
             alpha->prev = z;
             z = alpha;
@@ -2742,7 +2768,7 @@ msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
     int ret = MSP_ERR_GENERIC;
     segment_t *u;
 
-    u = msp_alloc_segment(self, 0, self->num_loci, sample, population, 0, NULL, NULL);
+    u = msp_alloc_segment(self, 0, self->sequence_length, sample, population, 0, NULL, NULL);
     if (u == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -2751,14 +2777,14 @@ msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
     if (ret != 0) {
         goto out;
     }
-    fenwick_set_value(&self->links[u->label], u->id, self->num_loci - 1);
+    msp_set_single_segment_mass(self, u);
 out:
     return ret;
 }
 
 static inline int
 msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree,
-        uint32_t left, uint32_t right,
+        double left, double right,
         segment_t * restrict *root_segments_head,
         segment_t * restrict *root_segments_tail)
 {
@@ -2815,11 +2841,10 @@ msp_reset_from_ts(msp_t *self)
     tsk_tree_t t;
     node_id_t root;
     segment_t *seg;
-    uint32_t left, right, num_roots, overlap, last_overlap;
+    uint32_t num_roots, overlap, last_overlap;
     size_t num_nodes = self->tables->nodes.num_rows;
     segment_t **root_segments_head = calloc(num_nodes, sizeof(*root_segments_head));
     segment_t **root_segments_tail = calloc(num_nodes, sizeof(*root_segments_tail));
-    label_id_t label = 0; /* For now only support label 0 */
 
     ret = tsk_tree_init(&t, self->from_ts, 0);
     if (ret != 0) {
@@ -2839,32 +2864,18 @@ msp_reset_from_ts(msp_t *self)
 
     last_overlap = UINT32_MAX;
     for (t_iter = tsk_tree_first(&t); t_iter == 1; t_iter = tsk_tree_next(&t)) {
-        ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, t.left, &left);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, t.right, &right);
-        if (ret != 0) {
-            goto out;
-        }
-        if (left == right) {
-            ret = MSP_ERR_RECOMB_MAP_TOO_COARSE;
-            goto out;
-        }
-        assert(left < right);
-
         num_roots = (uint32_t) tsk_tree_get_num_roots(&t);
         overlap = 0;
         if (num_roots > 1) {
             overlap = num_roots;
-            ret = msp_allocate_root_segments(self, &t,left, right,
+            ret = msp_allocate_root_segments(self, &t, t.left, t.right,
                     root_segments_head, root_segments_tail);
             if (ret != 0) {
                 goto out;
             }
         }
         if (overlap != last_overlap) {
-            ret = msp_insert_overlap_count(self, left, overlap);
+            ret = msp_insert_overlap_count(self, t.left, overlap);
             if (ret != 0) {
                 goto out;
             }
@@ -2875,7 +2886,7 @@ msp_reset_from_ts(msp_t *self)
         goto out;
     }
 
-    ret = msp_insert_overlap_count(self, self->num_loci, UINT32_MAX);
+    ret = msp_insert_overlap_count(self, self->sequence_length, UINT32_MAX);
     if (ret != 0) {
         goto out;
     }
@@ -2888,10 +2899,9 @@ msp_reset_from_ts(msp_t *self)
             if (ret != 0) {
                 goto out;
             }
-            fenwick_set_value(&self->links[label], seg->id, seg->right - seg->left - 1);
+            msp_set_single_segment_mass(self, seg);
             for (seg = seg->next; seg != NULL; seg = seg->next) {
-                fenwick_set_value(&self->links[label], seg->id,
-                        seg->right - seg->prev->right);
+                msp_set_segment_mass(self, seg, seg->prev->right, seg->right);
             }
         }
     }
@@ -2969,7 +2979,7 @@ msp_reset_from_samples(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    ret = msp_insert_overlap_count(self, self->num_loci, self->num_samples + 1);
+    ret = msp_insert_overlap_count(self, self->sequence_length, self->num_samples + 1);
     if (ret != 0) {
         goto out;
     }
@@ -3167,7 +3177,6 @@ msp_initialise(msp_t *self)
     int ret = -1;
 
     /* These should really be proper checks with a return value */
-    assert(self->num_loci >= 1);
     assert(self->num_populations >= 1);
 
     ret = msp_alloc_memory_blocks(self);
@@ -3255,31 +3264,6 @@ msp_get_common_ancestor_waiting_time_from_rate(msp_t *self, population_t *pop, d
     return ret;
 }
 
-static int MSP_WARN_UNUSED
-msp_sanity_check(msp_t *self, int64_t num_links)
-{
-    int ret = 0;
-    size_t n = msp_get_num_ancestors(self);
-
-    /* TODO there are various worries when we're dealing with very
-     * large population sizes and numbers of links. For example,
-     * what if n is too big for the gsl integer random generator?
-     * To at least determine if these are real things to worry
-     * about, we put in some arbitrary (and hopefully safe) limits
-     * and see if they are ever hit in practise.
-     */
-    if (n >= UINT32_MAX / 8) {
-        ret = MSP_ERR_POPULATION_OVERFLOW;
-        goto out;
-    }
-    if (num_links >= INT64_MAX / 8) {
-        ret = MSP_ERR_LINKS_OVERFLOW;
-        goto out;
-    }
-out:
-    return ret;
-}
-
 /* The main event loop for continuous time coalescent models. Runs until either
  * coalescence; or the time of a simulated event would have exceeded the
  * specified max_time; or for a specified number of events. The num_events
@@ -3302,7 +3286,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
     double lambda, t_temp, t_wait, ca_t_wait, re_t_wait,
            gc_in_t_wait, gc_left_t_wait, mig_t_wait,
            sampling_event_time, demographic_event_time;
-    int64_t num_links;
+    double recomb_mass;
     uint32_t j, k, n;
     population_id_t ca_pop_id, mig_source_pop, mig_dest_pop;
     unsigned long events = 0;
@@ -3320,15 +3304,11 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         }
         events++;
 
-        num_links = fenwick_get_total(&self->links[label]);
-        ret = msp_sanity_check(self, num_links);
-        if (ret != 0) {
-            goto out;
-        }
+        recomb_mass = fenwick_get_total(&self->links[label]);
         /* Recombination */
-        lambda = (double) num_links * self->recombination_rate;
+        lambda = self->model.generation_rate_to_model_rate(&self->model, recomb_mass);
         re_t_wait = DBL_MAX;
-        if (lambda != 0.0) {
+        if (lambda > 0.0) { /* fenwick_get_total sometimes returns -0.0 */
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
         }
 
@@ -3336,7 +3316,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
          * simulations */
         if (self->gene_conversion_rate > 0) {
             /* Gene conversion within segments */
-            lambda = (double) num_links * self->gene_conversion_rate;
+            lambda = recomb_map_mass_to_position(
+                self->recomb_map, recomb_mass) * self->gene_conversion_rate;
             gc_in_t_wait = DBL_MAX;
             if (lambda != 0.0) {
                 gc_in_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
@@ -3562,7 +3543,7 @@ msp_pedigree_climb(msp_t *self)
             }
 
             /* Recombine and climb to segments to the parents */
-            if (self->recombination_rate > 0) {
+            if (recomb_map_get_total_recombination_rate(self->recomb_map) > 0) {
                 ret = msp_dtwf_recombine(self, merged_segment, &u[0], &u[1]);
                 if (ret != 0) {
                     goto out;
@@ -3612,7 +3593,6 @@ msp_dtwf_generation(msp_t *self)
     int ret = 0;
     int ix;
     uint32_t N, i, j, k, p;
-    int64_t num_links;
     size_t segment_mem_offset;
     population_t *pop;
     segment_t *x;
@@ -3627,12 +3607,6 @@ msp_dtwf_generation(msp_t *self)
 
     for (i = 0; i < 2; i++) {
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
-    }
-
-    num_links = fenwick_get_total(&self->links[label]);
-    ret = msp_sanity_check(self, num_links);
-    if (ret != 0) {
-        goto out;
     }
 
     for (j = 0; j < self->num_populations; j++) {
@@ -3683,7 +3657,7 @@ msp_dtwf_generation(msp_t *self)
                 msp_free_avl_node(self, node);
 
                 // Recombine ancestor
-                if (self->recombination_rate > 0) {
+                if (recomb_map_get_total_recombination_rate(self->recomb_map) > 0) {
                     ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
                     if (ret != 0) {
                         goto out;
@@ -4006,7 +3980,7 @@ msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
 
 static int
 msp_sweep_recombination_event(msp_t *self, label_id_t label,
-        uint32_t sweep_locus, double population_frequency)
+        double sweep_locus, double population_frequency)
 {
     int ret = 0;
     segment_t *lhs, *rhs;
@@ -4051,10 +4025,10 @@ msp_run_sweep(msp_t *self)
     size_t num_steps;
     double *allele_frequency = NULL;
     double *time = NULL;
-    uint32_t sweep_locus = model->params.sweep.locus;
+    double sweep_locus = model->params.sweep.locus;
     double sweep_dt;
     size_t j = 0;
-    int64_t num_links;
+    double recomb_mass;
     unsigned long events = 0;
     label_id_t label;
     double rec_rates[] = {0.0, 0.0};
@@ -4094,13 +4068,9 @@ msp_run_sweep(msp_t *self)
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
-            num_links = fenwick_get_total(&self->links[label]);
-            ret = msp_sanity_check(self, num_links);
-            if (ret != 0) {
-                goto out;
-            }
+            recomb_mass = fenwick_get_total(&self->links[label]);
             sweep_pop_sizes[j] = avl_count(&self->populations[0].ancestors[label]);
-            rec_rates[j] = (double) num_links * self->recombination_rate;
+            rec_rates[j] = recomb_mass;
         }
 
         curr_step++;
@@ -4303,9 +4273,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
                     if (seg->value != node) {
                         assert(nodes->time[node] > nodes->time[seg->value]);
                         ret = tsk_edge_table_add_row(&self->tables->edges,
-                            msp_genetic_to_phys(self, seg->left),
-                            msp_genetic_to_phys(self, seg->right),
-                            node, seg->value);
+                              seg->left, seg->right, node, seg->value);
                         if (ret < 0) {
                             ret = msp_set_tsk_error(ret);
                             goto out;
@@ -4479,12 +4447,6 @@ msp_get_num_samples(msp_t *self)
     return (size_t) self->num_samples;
 }
 
-size_t
-msp_get_num_loci(msp_t *self)
-{
-    return (size_t) self->num_loci;
-}
-
 bool
 msp_get_store_migrations(msp_t *self)
 {
@@ -4638,13 +4600,6 @@ msp_get_time(msp_t *self)
 {
     simulation_model_t *model = &self->model;
     return model->model_time_to_generations(model, self->time);
-}
-
-double
-msp_get_recombination_rate(msp_t *self)
-{
-    simulation_model_t *model = &self->model;
-    return model->model_rate_to_generation_rate(model, self->recombination_rate);
 }
 
 double
@@ -6007,8 +5962,6 @@ msp_unscale_model_times(msp_t *self)
 
     self->start_time = self->model.model_time_to_generations(model, self->start_time);
     self->time = self->model.model_time_to_generations(model, self->time);
-    self->recombination_rate = self->model.model_rate_to_generation_rate(
-            model, self->recombination_rate);
     self->gene_conversion_rate = self->model.model_rate_to_generation_rate(
             model, self->gene_conversion_rate);
     /* Samples */
@@ -6050,8 +6003,6 @@ msp_rescale_model_times(msp_t *self)
 
     self->time = model->generations_to_model_time(model, self->time);
     self->start_time = model->generations_to_model_time(model, self->start_time);
-    self->recombination_rate = model->generation_rate_to_model_rate(
-            model, self->recombination_rate);
     self->gene_conversion_rate = model->generation_rate_to_model_rate(
             model, self->gene_conversion_rate);
     /* Samples */
@@ -6273,7 +6224,6 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
         double alpha, double dt)
 {
     int ret = 0;
-    uint32_t locus;
     simulation_model_t *model = &self->model;
     genic_selection_trajectory_t *trajectory =
         &model->params.sweep.trajectory_params.genic_selection_trajectory;
@@ -6299,15 +6249,11 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
     }
     /* TODO any limitations on alpha? */
 
-    ret = recomb_map_phys_to_discrete_genetic(self->recomb_map, position, &locus);
-    if (ret != 0) {
-        goto out;
-    }
     ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP, reference_size);
     if (ret != 0) {
         goto out;
     }
-    model->params.sweep.locus = locus;
+    model->params.sweep.locus = position;
     model->params.sweep.generate_trajectory = genic_selection_generate_trajectory;
     model->params.sweep.print_state = genic_selection_print_state;
     trajectory->start_frequency = start_frequency;

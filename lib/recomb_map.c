@@ -21,6 +21,7 @@
 #include <assert.h>
 
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_randist.h>
 
 #include "util.h"
 #include "msprime.h"
@@ -31,10 +32,7 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
     size_t j;
 
     fprintf(out, "recombination_map (%p):: size = %d\n", (void *) self, (int) self->size);
-    fprintf(out, "\tnum_loci = %d\n", recomb_map_get_num_loci(self));
     fprintf(out, "\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
-    fprintf(out, "\tper_locus_rate = %f\n",
-            recomb_map_get_per_locus_recombination_rate(self));
     fprintf(out, "\tindex\tlocation\trate\n");
     for (j = 0; j < self->size; j++) {
         fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
@@ -42,43 +40,46 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc_uniform(recomb_map_t *self, uint32_t num_loci, double sequence_length,
-        double rate)
+recomb_map_alloc_uniform(recomb_map_t *self, double sequence_length,
+        double rate, bool discrete)
 {
     double positions[] = {0.0, sequence_length};
     double rates[] = {rate, 0.0};
 
-    return recomb_map_alloc(self, num_loci, sequence_length, positions, rates, 2);
+    return recomb_map_alloc(self, sequence_length, positions, rates, 2, discrete);
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
-        double *positions, double *rates, size_t size)
+recomb_map_alloc(recomb_map_t *self, double sequence_length,
+        double *positions, double *rates, size_t size, bool discrete)
 {
     int ret = MSP_ERR_BAD_RECOMBINATION_MAP;
     double length, s;
     size_t j;
 
     memset(self, 0, sizeof(recomb_map_t));
-    if (size < 2 || num_loci == 0) {
+    if (size < 2) {
         goto out;
     }
     /* Check the framing positions */
     if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
         goto out;
     }
+    if (sequence_length < 1 && discrete) {
+        goto out;
+    }
     self->positions = malloc(size * sizeof(double));
     self->rates = malloc(size * sizeof(double));
     self->cumulative = malloc(size * sizeof(double));
-    
+
     if (self->positions == NULL || self->rates == NULL || self->cumulative == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     self->total_recombination_rate = 0.0;
     self->size = size;
-    self->num_loci = num_loci;
     self->sequence_length = sequence_length;
+    self->discrete = discrete;
     for (j = 0; j < size; j++) {
         if (rates[j] < 0 || positions[j] < 0) {
             goto out;
@@ -94,10 +95,10 @@ recomb_map_alloc(recomb_map_t *self, uint32_t num_loci, double sequence_length,
         self->rates[j] = rates[j];
         self->positions[j] = positions[j];
     }
-    
+
     s = 0;
     self->cumulative[0] = 0;
-    for (j = 1; j < size; j ++) {
+    for (j = 1; j < size; j++) {
         s += (self->positions[j] - self->positions[j - 1]) * self->rates[j - 1];
         self->cumulative[j] = s;
     }
@@ -130,19 +131,6 @@ recomb_map_get_total_recombination_rate(recomb_map_t *self)
     return self->total_recombination_rate;
 }
 
-/* Returns the equivalent recombination rate between pairs of
- * adjacent loci.
- */
-double
-recomb_map_get_per_locus_recombination_rate(recomb_map_t *self)
-{
-    double ret = 0.0;
-    if (self->num_loci > 1) {
-        ret = self->total_recombination_rate / (self->num_loci - 1);
-    }
-    return ret;
-}
-
 /* Returns the total physical length of the sequence.
  */
 double
@@ -151,112 +139,97 @@ recomb_map_get_sequence_length(recomb_map_t *self)
     return self->sequence_length;
 }
 
-/* Returns the total number of discrete loci, between which
- * recombination can occur.
- */
-uint32_t
-recomb_map_get_num_loci(recomb_map_t *self)
+double
+recomb_map_mass_between(recomb_map_t *self, double left, double right)
 {
-    return self->num_loci;
+    double left_mass = recomb_map_position_to_mass(self, left);
+    double right_mass =recomb_map_position_to_mass(self, right);
+    return right_mass - left_mass;
 }
 
-/* Remaps the specified physical coordinate in the range (0, sequence_length)
- * to the genetic coordinate space in the range (0, num_loci)
+double
+recomb_map_mass_between_left_exclusive(recomb_map_t *self, double left, double right)
+{
+    double left_bound = self->discrete ? left + 1 : left;
+    return recomb_map_mass_between(self, left_bound, right);
+}
+
+static double
+recomb_map_rate_between(recomb_map_t *self, double start, double end)
+{
+    return recomb_map_mass_between(self, start, end) / (end - start);
+}
+
+/* Translates a physical coordinate to the cumulative recombination
+ * mass up to (but not including) that position.
  */
 double
-recomb_map_phys_to_genetic(recomb_map_t *self, double x)
+recomb_map_position_to_mass(recomb_map_t *self, double pos)
 {
-    size_t j;
-    double s = 0.0;
-    double ret = 0.0;
-    double rate = 1.0;
-    double last_phys_x, phys_x;
+    double offset;
+    size_t index;
 
-    if (self->total_recombination_rate == 0) {
-        /* When the total recombination rate is zero anything within the interval
-         * maps to 0. L maps to num_loci */
-        ret = x >= self->sequence_length? 1: 0;
-    } else {
-        last_phys_x = 0;
-        for (j = 1; j < self->size && x > self->positions[j]; j++) {
-            phys_x = self->positions[j];
-            rate = self->rates[j - 1];
-            s += (phys_x - last_phys_x) * rate;
-            last_phys_x = phys_x;
-        }
-        rate = self->rates[j - 1];
-        s += (x - last_phys_x) * rate;
-        assert(s >= 0 && s <= self->total_recombination_rate);
-        ret = s / self->total_recombination_rate;
+    if (pos == self->positions[0]) {
+        return 0;
     }
-    return ret * self->num_loci;
+    if (pos >= self->positions[self->size - 1]) {
+        return self->cumulative[self->size - 1];
+    }
+    index = msp_binary_interval_search(pos, self->positions, self->size);
+    assert(index > 0);
+    index--;
+    offset = pos - self->positions[index];
+
+    return self->cumulative[index] + offset * self->rates[index];
 }
 
-/* Remaps the specified coordinate in physical space into a discrete genetic
- * coordinate. */
-int
-recomb_map_phys_to_discrete_genetic(recomb_map_t *self, double x, uint32_t *locus)
-{
-    int ret = 0;
-
-    if (x < 0 || x > self->sequence_length) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    *locus = (uint32_t) round(recomb_map_phys_to_genetic(self, x));
-out:
-    return ret;
-}
-
-/* Remaps the specified genetic coordinate in the range (0, num_loci) to
- * the physical coordinate space in the range (0, sequence_length)
+/* Finds the physical coordinate such that the sequence up to (but not
+ * including) that position has the specified recombination mass.
  */
 double
-recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x)
+recomb_map_mass_to_position(recomb_map_t *self, double mass)
 {
-    size_t k;
-    double ret = 0.0;
-    double x, s, excess;
-    double *p = self->positions;
-    double *r = self->rates;
-    double num_loci = self->num_loci;
+    double mass_in_interval, pos;
+    size_t index;
 
-    assert(num_loci >= 1);
-    assert(genetic_x >= 0);
-    assert(genetic_x <= num_loci);
-    if (self->total_recombination_rate == 0) {
-        /* When we have a 0 total rate, anything other than m maps to 0. */
-        ret = genetic_x >= self->num_loci? self->sequence_length: 0;
-    } else if (self->size == 2) {
-        /* Avoid roundoff when num_loci == self->sequence_length */
-        ret = genetic_x;
-        if (self->sequence_length != num_loci) {
-            ret = (genetic_x / num_loci) * self->sequence_length;
-        }
-    } else if (genetic_x == num_loci) {
-        /* Map the right end of the chromosome to the right end of the
-         * chromosome, even if there are zero-recomb regions on the end. */
-        ret = self->sequence_length;
-    } else {
-        /* genetic_x is in the range [0,num_loci], and so we rescale
-         * this into [0,total_recombination_rate] so that we can
-         * map back into physical coordinates. */
-        x = (genetic_x / num_loci) * self->total_recombination_rate;
-        if (x > 0) {
-            
-            k = msp_binary_interval_search(x, self->cumulative, self->size);
-            s = self->cumulative[k];
-            assert((s >= x) || (k >= self->size - 1));
-            assert(k > 0);
-            excess = 0;
-            if (r[k - 1] > 0) {
-                excess = (s - x) / r[k - 1];
-            }
-            ret = p[k] - excess;
-        }
+    if (mass == 0.0) {
+        return self->positions[0];
     }
-    return ret;
+    index = msp_binary_interval_search(mass, self->cumulative, self->size);
+    assert(index > 0);
+    index--;
+    mass_in_interval = mass - self->cumulative[index];
+    pos =  self->positions[index] + mass_in_interval / self->rates[index];
+
+    return self->discrete ? floor(pos) : pos;
 }
+
+double
+recomb_map_shift_left_by_mass(recomb_map_t *self, double right_pos, double mass_to_shift_by)
+{
+    double right_pos_mass = recomb_map_position_to_mass(self, right_pos);
+    double result_mass = right_pos_mass - mass_to_shift_by;
+    return recomb_map_mass_to_position(self, result_mass);
+}
+
+/* Sample a position from [start, sequence_length) from a poisson
+ * distribution with a rate equivalent to the average recombination rate
+ * on that interval.
+ */
+double
+recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
+{
+    double lambda, x;
+
+    lambda = recomb_map_rate_between(self, start, self->sequence_length);
+    x = gsl_ran_exponential(rng, 1.0 / lambda);
+    if (self->discrete) {
+        x = x < 1 ? ceil(x) : floor(x);
+    }
+
+    return start + x;
+}
+
 
 size_t
 recomb_map_get_size(recomb_map_t *self)

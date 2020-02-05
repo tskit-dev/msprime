@@ -1969,21 +1969,22 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"num_loci", "positions", "rates", NULL};
+    static char *kwlist[] = {"positions", "rates", "discrete", NULL};
     Py_ssize_t size, j;
     PyObject *py_positions = NULL;
     PyObject *py_rates = NULL;
     double *positions = NULL;
     double *rates = NULL;
-    unsigned int num_loci = 0;
+    int discrete = false;
     PyObject *item;
 
     self->recomb_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "IO!O!", kwlist,
-            &num_loci, &PyList_Type, &py_positions, &PyList_Type,
-            &py_rates)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!p", kwlist,
+            &PyList_Type, &py_positions, &PyList_Type,
+            &py_rates, &discrete)) {
         goto out;
     }
+
     if (PyList_Size(py_positions) != PyList_Size(py_rates)) {
         PyErr_SetString(PyExc_ValueError,
             "positions and rates list must be the same length");
@@ -2015,8 +2016,8 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = recomb_map_alloc(self->recomb_map, (uint32_t) num_loci,
-            positions[size - 1], positions, rates, size);
+    err = recomb_map_alloc(self->recomb_map,
+            positions[size - 1], positions, rates, size, discrete);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2033,100 +2034,6 @@ out:
 }
 
 static PyObject *
-RecombinationMap_genetic_to_physical(RecombinationMap *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    double genetic_x, physical_x;
-    uint32_t num_loci;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    num_loci = recomb_map_get_num_loci(self->recomb_map);
-    if (!PyArg_ParseTuple(args, "d", &genetic_x)) {
-        goto out;
-    }
-    if (genetic_x < 0 || genetic_x > num_loci) {
-        PyErr_SetString(PyExc_ValueError,
-                "coordinates must be 0 <= x <= num_loci");
-        goto out;
-    }
-    physical_x = recomb_map_genetic_to_phys(self->recomb_map, genetic_x);
-    ret = Py_BuildValue("d", physical_x);
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_physical_to_genetic(RecombinationMap *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    double genetic_x, physical_x, sequence_length;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
-    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
-        goto out;
-    }
-    if (physical_x < 0 || physical_x > sequence_length) {
-        PyErr_SetString(PyExc_ValueError,
-            "coordinates must be 0 <= x <= sequence_length");
-        goto out;
-    }
-    genetic_x = recomb_map_phys_to_genetic(self->recomb_map, physical_x);
-    ret = Py_BuildValue("d", genetic_x);
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_physical_to_discrete_genetic(RecombinationMap *self, PyObject *args)
-{
-    PyObject *ret = NULL;
-    double physical_x, sequence_length;
-    int err;
-    uint32_t locus;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    if (!PyArg_ParseTuple(args, "d", &physical_x)) {
-        goto out;
-    }
-    sequence_length = recomb_map_get_sequence_length(self->recomb_map);
-    if (physical_x < 0 || physical_x > sequence_length) {
-        PyErr_SetString(PyExc_ValueError,
-            "coordinates must be 0 <= x <= sequence_length");
-        goto out;
-    }
-    err = recomb_map_phys_to_discrete_genetic(self->recomb_map, physical_x, &locus);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    ret = Py_BuildValue("k", (unsigned long) locus);
-out:
-    return ret;
-}
-
-
-static PyObject *
-RecombinationMap_get_per_locus_recombination_rate(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d",
-        recomb_map_get_per_locus_recombination_rate(self->recomb_map));
-out:
-    return ret;
-}
-
-static PyObject *
 RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -2136,20 +2043,6 @@ RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
     }
     ret = Py_BuildValue("d",
         recomb_map_get_total_recombination_rate(self->recomb_map));
-out:
-    return ret;
-}
-
-static PyObject *
-RecombinationMap_get_num_loci(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("k",
-        (unsigned long) recomb_map_get_num_loci(self->recomb_map));
 out:
     return ret;
 }
@@ -2246,22 +2139,9 @@ static PyMemberDef RecombinationMap_members[] = {
 };
 
 static PyMethodDef RecombinationMap_methods[] = {
-    {"genetic_to_physical", (PyCFunction) RecombinationMap_genetic_to_physical,
-        METH_VARARGS, "Converts the specified value into physical coordinates."},
-    {"physical_to_genetic", (PyCFunction) RecombinationMap_physical_to_genetic,
-        METH_VARARGS, "Converts the specified value into genetic coordinates."},
-    {"physical_to_discrete_genetic",
-        (PyCFunction) RecombinationMap_physical_to_discrete_genetic,
-        METH_VARARGS, "Converts the specified value into discete genetic coordinates."},
     {"get_total_recombination_rate",
         (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},
-    {"get_per_locus_recombination_rate",
-        (PyCFunction) RecombinationMap_get_per_locus_recombination_rate,
-        METH_NOARGS,
-        "Returns the recombination rate between loci implied by this map"},
-    {"get_num_loci", (PyCFunction) RecombinationMap_get_num_loci, METH_NOARGS,
-        "Returns the number discrete loci in the genetic map."},
     {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
         "Returns the number of physical  positions in this map."},
     {"get_sequence_length", (PyCFunction) RecombinationMap_get_sequence_length, METH_NOARGS,
@@ -2728,7 +2608,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
                 alpha, truncation_point);
     }
 
-    is_sweep_genic_selection = PyObject_RichCompareBool(py_name, sweep_genic_selection_s, Py_EQ);
+    is_sweep_genic_selection = PyObject_RichCompareBool(py_name,
+            sweep_genic_selection_s, Py_EQ);
     if (is_sweep_genic_selection == -1) {
         goto out;
     }
@@ -3247,7 +3128,7 @@ Simulator_get_model(Simulator *self)
         Py_DECREF(value);
         value = NULL;
     } else if (model->type == MSP_MODEL_SWEEP) {
-        value = Py_BuildValue("i", model->params.sweep.locus);
+        value = Py_BuildValue("d", model->params.sweep.locus);
         if (value == NULL) {
             goto out;
         }
@@ -3283,18 +3164,6 @@ Simulator_set_model(Simulator *self, PyObject *args)
         goto out;
     }
     ret = Py_BuildValue("");
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_loci(Simulator *self)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("k", (unsigned long) msp_get_num_loci(self->sim));
 out:
     return ret;
 }
@@ -3348,13 +3217,14 @@ out:
 }
 
 static PyObject *
-Simulator_get_recombination_rate(Simulator  *self)
+Simulator_get_sequence_length(Simulator *self)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", msp_get_recombination_rate(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) recomb_map_get_sequence_length(
+                self->sim->recomb_map));
 out:
     return ret;
 }
@@ -3622,7 +3492,7 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     u = ind;
     j = 0;
     while (u != NULL) {
-        t = Py_BuildValue("(I,I,I,I)", u->left, u->right, u->value,
+        t = Py_BuildValue("(d,d,I,I)", u->left, u->right, u->value,
                 u->population_id);
         if (t == NULL) {
             Py_DECREF(l);
@@ -4090,8 +3960,6 @@ static PyMethodDef Simulator_methods[] = {
             "Sets the simulation model." },
     {"get_model", (PyCFunction) Simulator_get_model, METH_NOARGS,
             "Returns the simulation model" },
-    {"get_num_loci", (PyCFunction) Simulator_get_num_loci, METH_NOARGS,
-            "Returns the number of loci" },
     {"get_store_migrations",
             (PyCFunction) Simulator_get_store_migrations, METH_NOARGS,
             "Returns True if the simulator should store migration records." },
@@ -4101,9 +3969,8 @@ static PyMethodDef Simulator_methods[] = {
             "Returns the number of populations." },
     {"get_num_labels", (PyCFunction) Simulator_get_num_labels, METH_NOARGS,
             "Returns the number of labels." },
-    {"get_recombination_rate",
-            (PyCFunction) Simulator_get_recombination_rate, METH_NOARGS,
-            "Returns the recombination rate." },
+    {"get_sequence_length", (PyCFunction) Simulator_get_sequence_length, METH_NOARGS,
+        "Returns the sequence length for this simulator."},
     {"get_segment_block_size",
             (PyCFunction) Simulator_get_segment_block_size, METH_NOARGS,
             "Returns segment block size." },

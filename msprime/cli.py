@@ -157,7 +157,7 @@ def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
         positions.append(seq_length)
         rates.append(0)
 
-    return msprime.RecombinationMap(positions, rates, int(positions[-1]))
+    return msprime.RecombinationMap(positions, rates, discrete=True)
 
 
 class SimulationRunner(object):
@@ -180,7 +180,7 @@ class SimulationRunner(object):
         # For strict ms-compability we want to have m non-recombining loci
         if hotspots is None:
             self._recomb_map = msprime.RecombinationMap.uniform_map(
-                num_loci, self._recombination_rate, num_loci)
+                num_loci, self._recombination_rate, discrete=True)
         else:
             self._recomb_map = hotspots_to_recomb_map(
                     hotspots, self._recombination_rate, num_loci)
