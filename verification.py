@@ -13,6 +13,7 @@ import time
 import ast
 
 import scipy.special
+import scipy.stats
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -2064,6 +2065,95 @@ class SimulationVerifier(object):
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
+    def verify_breakpoint_distribution(
+            self, basedir, name, sample_size, Ne, r, L, model, growth_rate=0):
+        """
+        Verifies that the number of recombination breakpoints is proportional to
+        the total branch length across all trees.
+        """
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        ts = msprime.simulate(
+            Ne=Ne, recombination_rate=r, length=L,
+            population_configurations=[
+                msprime.PopulationConfiguration(
+                    sample_size=sample_size, initial_size=Ne,
+                    growth_rate=growth_rate)],
+            model=model)
+        empirical = []
+        for tree in ts.trees():
+            area = tree.total_branch_length * tree.span
+            empirical.append(area)
+
+        scipy.stats.probplot(
+            empirical, dist=scipy.stats.expon(Ne * r), plot=pyplot)
+        path = os.path.join(basedir, f"{name}_growth={growth_rate}.png")
+        print("Writing", path)
+        pyplot.savefig(path)
+        pyplot.close('all')
+
+    def run_hudson_breakpoints(self):
+        basedir = "tmp__NOBACKUP__/hudson_breakpoints"
+        self.verify_breakpoint_distribution(
+            basedir, "single_pop_n_50", sample_size=50, Ne=10**4, r=1e-8, L=10**6,
+            model="hudson")
+        self.verify_breakpoint_distribution(
+            basedir, "single_pop_n_100", sample_size=100, Ne=10**4, r=1e-8, L=10**6,
+            model="hudson")
+        # Add a growth rate with a higher recombination rate so
+        # we still get decent numbers of trees
+        self.verify_breakpoint_distribution(
+            basedir, "single_pop_n_100_growth",
+            sample_size=100, Ne=10**4, r=1e-7, L=10**6,
+            model="hudson", growth_rate=0.05)
+
+    def run_xi_beta_breakpoints(self):
+        basedir = "tmp__NOBACKUP__/xi_beta_breakpoints"
+        for alpha in [1.01, 1.3, 1.6, 1.9]:
+            self.verify_breakpoint_distribution(
+                basedir, f"n=100_alpha={alpha}", sample_size=100, Ne=10**4, r=1e-8,
+                L=10**6, model=msprime.BetaCoalescent(alpha=alpha))
+            # Add a growth rate with a higher recombination rate so
+            # we still get decent numbers of trees
+            self.verify_breakpoint_distribution(
+                basedir, f"n=100_alpha={alpha}", sample_size=100, Ne=10**4, r=1e-7,
+                L=10**6, model=msprime.BetaCoalescent(alpha=alpha),
+                growth_rate=0.05)
+
+    def run_xi_dirac_breakpoints(self):
+        basedir = "tmp__NOBACKUP__/xi_dirac_breakpoints"
+        for psi in [0.1, 0.3, 0.6, 0.9]:
+            for c in [0.9, 0.5]:
+                self.verify_breakpoint_distribution(
+                    basedir, f"n=100_psi={psi}_c={c}",
+                    sample_size=100, Ne=10**4, r=1e-8,
+                    L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c))
+                # Add a growth rate with a higher recombination rate so
+                # we still get decent numbers of trees
+                self.verify_breakpoint_distribution(
+                    basedir, f"n=100_psi={psi}_c={c}",
+                    sample_size=100, Ne=10**4, r=1e-7,
+                    L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c),
+                    growth_rate=0.05)
+
+    def add_hudson_breakpoints(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["hudson_breakpoints"] = self.run_hudson_breakpoints
+
+    def add_xi_beta_breakpoints(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["xi_beta_breakpoints"] = self.run_xi_beta_breakpoints
+
+    def add_xi_dirac_breakpoints(self):
+        """
+        Adds a check for xi_dirac recombination breakpoints
+        """
+        self._instances["xi_dirac_breakpoints"] = self.run_xi_dirac_breakpoints
+
     def run_xi_beta_expected_sfs(self):
         self.compare_xi_beta_sfs(
             num_replicates=5000,
@@ -2526,6 +2616,11 @@ def run_tests(args):
         verifier.add_dtwf_vs_coalescent_random_instance(
             "dtwf_vs_coalescent_random_4",
             num_populations=1, num_replicates=200, num_demographic_events=8)
+
+    verifier.add_hudson_breakpoints()
+    # Check Xi coalesesent recombination breakpoint distributions
+    verifier.add_xi_beta_breakpoints()
+    verifier.add_xi_dirac_breakpoints()
 
     # DTWF checks against SLiM
     # TODO: Add back multi-pop tests of DTWF vs. SLiM when full diploid
