@@ -458,6 +458,58 @@ class SimulationVerifier(object):
             self._run_mutation_discoal_stats(key, command_line)
         self._instances[key] = f
 
+    def run_sweep_comparison(self, key, args):
+        """
+        does a comparison of sweep model vs discoal
+        """
+        df = pd.DataFrame()
+        refsize = 1e4
+        nreps = 1000
+        mod = msprime.SweepGenicSelection(refsize)
+        mod.start_frequency = 1.0 / (2 * refsize)
+        mod.end_frequency = 1.0 - (1.0 / (2 * refsize))
+        mod.alpha = 1000.0
+        mod.dt = 1.0/(40 * refsize)
+        seqlen = 1e4
+        mu = 2.5e-4
+        rho = 2.5e-4
+        mod.position = np.floor(seqlen/2)
+        data = collections.defaultdict(list)
+        replicates = msprime.simulate(10,  model=mod, length=seqlen,
+                                      num_labels=2, recombination_rate=rho,
+                                      num_replicates=nreps)
+        for x in replicates:
+            ts = msprime.simulate(from_ts=x, recombination_rate=rho)
+            tsm = msprime.mutate(ts, rate=mu)
+            data["pi"].append(tsm.diversity(span_normalise=False))
+            data["D"].append(tsm.Tajimas_D())
+            data["ss"].append(tsm.segregating_sites(span_normalise=False))
+        data["pi"] = np.array(data["pi"]).flatten()
+        data["D"] = np.array(data["D"]).flatten()
+        data["ss"] = np.array(data["ss"]).flatten()
+        df = pd.DataFrame.from_dict(data)
+        df = df.fillna(0)
+        df_d = self._run_discoal_mutation_stats(args)
+        df_df = df_d[["pi", "D", "ss"]]
+        print("msp pi mean: ", df['pi'].mean())
+        print("discoal pi mean: ", df_df['pi'].mean())
+        print("msp ss mean: ", df['ss'].mean())
+        print("discoal ss mean: ", df_df['ss'].mean())
+        print("msp D mean: ", df['D'].mean())
+        print("discoal D mean: ", df_df['D'].mean())
+        print(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
+        self._plot_stats(key, "mutation", df, df_df)
+
+    def add_sweep_vs_discoal_instance(self):
+        """
+        Checks sweeps against discoal.
+        """
+        def f():
+            self.run_sweep_comparison("sweep",
+                                      "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a \
+                                      500 -x 0.5 -N 10000")
+        self._instances["sweep"] = f
+
     def get_pairwise_coalescence_time(self, cmd, R):
         # print("\t", " ".join(cmd))
         output = subprocess.check_output(cmd)
@@ -2746,17 +2798,17 @@ def run_tests(args):
         "15 1000 100 -t 5.0")
     verifier.add_discoal_instance(
         "discoal-size-change1",
-        "15 1000 100 -t 10.0 -en 0.1 0 2.0")
+        "10 10000 100 -t 10.0 -en 0.1 0 2.0")
     verifier.add_discoal_instance(
         "discoal-size-change2",
-        "15 1000 100 -t 10.0 -en 0.1 0 0.1")
+        "10 10000 100 -t 10.0 -en 0.1 0 0.1")
     verifier.add_discoal_instance(
         "discoal-size-change3",
-        "50 1000 100 -t 10.0 -en 0.01 0 0.01")
+        "10 10000 100 -t 10.0 -en 0.01 0 0.01")
     verifier.add_discoal_instance(
         "discoal-size-change4",
-        "50 1000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0")
-
+        "10 10000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0")
+    verifier.add_sweep_vs_discoal_instance()
     # Add some random instances.
     verifier.add_random_instance("random1")
     verifier.add_random_instance(

@@ -4598,6 +4598,7 @@ verify_simple_genic_selection_trajectory(
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 0.25, 0.5, start_frequency, end_frequency, alpha, dt);
+    printf("%d\n",ret);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4634,7 +4635,6 @@ test_genic_selection_trajectory(void)
     verify_simple_genic_selection_trajectory(0.1, 0.9, 0.01, 0.00125);
     verify_simple_genic_selection_trajectory(0.8999, 0.9, 0.1, 0.2);
     verify_simple_genic_selection_trajectory(0.1, 0.9, 100, 0.1);
-    verify_simple_genic_selection_trajectory(0.1, 0.9, -100, 0.1);
     verify_simple_genic_selection_trajectory(0.1, 0.9, 1, 10);
 }
 
@@ -4699,6 +4699,9 @@ test_sweep_genic_selection_bad_parameters(void)
         &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, 1.0, 0.5, 0.1, 0.9, -666, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALPHA);
     /* The incorrect number of populations was specified */
     ret = msp_set_dimensions(&msp, 2, 2);
     CU_ASSERT_EQUAL(ret, 0);
