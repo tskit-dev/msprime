@@ -1597,6 +1597,9 @@ class SimulationModelChange(DemographicEvent):
     :param float time: The time at which the simulation model changes
         to the new model, in generations. After this time, all internal
         tree nodes, edges and migrations are the result of the new model.
+        If time is set to infinity using ``np.Inf`` this has the effect
+        of the model change occuring after all other model change events
+        have completed.
     :param model: The new simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.

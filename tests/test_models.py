@@ -630,7 +630,8 @@ class TestSweepGenicSelection(unittest.TestCase):
             num_labels=2, random_seed=2)
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
 
-    @unittest.skip("Can't get sweep to be incomplete")
+    # commenting out skip as test works
+    # @unittest.skip("Can't get sweep to be incomplete")
     def test_sweep_start_time_incomplete(self):
         # Short sweep that doesn't make complete coalescence.
         sweep_model = msprime.SweepGenicSelection(
@@ -644,3 +645,20 @@ class TestSweepGenicSelection(unittest.TestCase):
                 msprime.SimulationModelChange(t_start, sweep_model)],
             num_labels=2, random_seed=2)
         self.assertTrue(any(tree.num_roots > 1 for tree in ts.trees()))
+
+    def test_sweep_model_change_time_complete(self):
+        # Short sweep that doesn't coalesce folled
+        # by Hudson phase to finish up coalescent
+        sweep_model = msprime.SweepGenicSelection(
+            reference_size=0.25, position=0.5, start_frequency=0.69,
+            end_frequency=0.7, alpha=1e-5, dt=1)
+        t_start = 0.0
+        ts = msprime.simulate(
+            10, Ne=0.25,
+            recombination_rate=2,
+            demographic_events=[
+                msprime.SimulationModelChange(t_start, sweep_model),
+                msprime.SimulationModelChange(np.Inf, "hudson")],
+            num_labels=2,
+            random_seed=2)
+        self.assertFalse(any(tree.num_roots > 1 for tree in ts.trees()))
