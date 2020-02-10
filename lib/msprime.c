@@ -1843,7 +1843,7 @@ msp_init_segments_and_compute_breakpoint(msp_t *self, label_id_t label, segment_
     t = fenwick_get_cumulative_sum(tree, y->id);
     x = y->prev;
 
-    k = recomb_map_shift_left_by_mass(self->recomb_map, y->right, t - h);
+    k = recomb_map_shift_by_mass(self->recomb_map, y->right, h - t);
 
     /* Reject if fallen directly on y left when not allowed to */
     if (k == y->left && y->prev == NULL) {
@@ -1978,7 +1978,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
     y = msp_get_segment(self, segment_id, label);
 
     t = fenwick_get_cumulative_sum(&self->links[label], segment_id);
-    k = recomb_map_shift_left_by_mass(self->recomb_map, y->right, t - h);
+    k = recomb_map_shift_by_mass(self->recomb_map, y->right, h - t);
     assert(k >= 0 && k < self->sequence_length);
     /* Check if the gene conversion falls between segments and hence has no effect */
     if (y->left >= k + tl){

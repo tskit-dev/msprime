@@ -143,7 +143,7 @@ double
 recomb_map_mass_between(recomb_map_t *self, double left, double right)
 {
     double left_mass = recomb_map_position_to_mass(self, left);
-    double right_mass =recomb_map_position_to_mass(self, right);
+    double right_mass = recomb_map_position_to_mass(self, right);
     return right_mass - left_mass;
 }
 
@@ -152,12 +152,6 @@ recomb_map_mass_between_left_exclusive(recomb_map_t *self, double left, double r
 {
     double left_bound = self->discrete ? left + 1 : left;
     return recomb_map_mass_between(self, left_bound, right);
-}
-
-static double
-recomb_map_rate_between(recomb_map_t *self, double start, double end)
-{
-    return recomb_map_mass_between(self, start, end) / (end - start);
 }
 
 /* Translates a physical coordinate to the cumulative recombination
@@ -205,29 +199,25 @@ recomb_map_mass_to_position(recomb_map_t *self, double mass)
 }
 
 double
-recomb_map_shift_left_by_mass(recomb_map_t *self, double right_pos, double mass_to_shift_by)
+recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass)
 {
-    double right_pos_mass = recomb_map_position_to_mass(self, right_pos);
-    double result_mass = right_pos_mass - mass_to_shift_by;
+    double result_mass = recomb_map_position_to_mass(self, pos) + mass;
     return recomb_map_mass_to_position(self, result_mass);
 }
 
-/* Sample a position from [start, sequence_length) from a poisson
- * distribution with a rate equivalent to the average recombination rate
- * on that interval.
+/* Select a position from (start, sequence_length) by sampling
+ * a distance in mass to the next recombination site and finding the
+ * corresponding position that much after start.
  */
 double
 recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
 {
-    double lambda, x;
+    double left_bound, mass_to_next_recomb;
 
-    lambda = recomb_map_rate_between(self, start, self->sequence_length);
-    x = gsl_ran_exponential(rng, 1.0 / lambda);
-    if (self->discrete) {
-        x = x < 1 ? ceil(x) : floor(x);
-    }
+    left_bound = self->discrete ? start + 1 : start;
+    mass_to_next_recomb = gsl_ran_exponential(rng, 1.0);
 
-    return start + x;
+    return recomb_map_shift_by_mass(self, left_bound, mass_to_next_recomb);
 }
 
 

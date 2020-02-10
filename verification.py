@@ -130,6 +130,85 @@ def subsample_simplify_slim_treesequence(ts, sample_sizes):
     return ts
 
 
+def run_dtwf_coalescent_stats(**kwargs):
+    df = pd.DataFrame()
+    for model in ["hudson", "dtwf"]:
+        kwargs["model"] = model
+        print("Running: ", kwargs)
+        data = collections.defaultdict(list)
+        replicates = msprime.simulate(**kwargs)
+        for ts in replicates:
+            t_mrca = np.zeros(ts.num_trees)
+            t_intervals = []
+            for tree in ts.trees():
+                t_mrca[tree.index] = tree.time(tree.root)
+                t_intervals.append(tree.interval)
+            data["tmrca_mean"].append(np.mean(t_mrca))
+            data["num_trees"].append(ts.num_trees)
+            data["intervals"].append(t_intervals)
+            data["model"].append(model)
+        df = df.append(pd.DataFrame(data))
+    return df
+
+
+def make_test_dir(test_name):
+    basedir = os.path.join("tmp__NOBACKUP__", test_name)
+    if not os.path.exists(basedir):
+        os.mkdir(basedir)
+    return basedir
+
+
+def plot_qq(v1, v2):
+    sm.graphics.qqplot(v1)
+    sm.qqplot_2samples(v1, v2, line="45")
+
+
+def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
+    sns.kdeplot(v1, color='b', label=v1_name, shade=True, legend=False)
+    sns.kdeplot(v2, color='r', label=v2_name, shade=True, legend=False)
+    pyplot.legend(loc='upper right')
+
+
+def intervals_to_breakpoints(replicates):
+    return [right for intervals in replicates for left, right in intervals]
+
+
+def plot_dtwf_coalescent_stats(basedir, df):
+    df_hudson = df[df.model == "hudson"]
+    df_dtwf = df[df.model == "dtwf"]
+    for stat in ["tmrca_mean", "num_trees"]:
+        plot_qq(df_hudson[stat], df_dtwf[stat])
+        f = os.path.join(basedir, "{}.png".format(stat))
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
+
+    hudson_breakpoints = intervals_to_breakpoints(df_hudson["intervals"])
+    dtwf_breakpoints = intervals_to_breakpoints(df_dtwf["intervals"])
+    if len(hudson_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
+        plot_breakpoints_hist(
+            hudson_breakpoints, dtwf_breakpoints, "hudson", "dtwf")
+        f = os.path.join(basedir, "breakpoints.png")
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
+
+
+def plot_tree_intervals(basedir, df):
+    fig, ax_arr = pyplot.subplots(2, 1)
+    for subplot_idx, model in enumerate(["hudson", "dtwf"]):
+        intervals = df[df.model == model]["intervals"][0]
+        for i, interval in enumerate(intervals):
+            left, right = interval
+            ax_arr[subplot_idx].set_title(model)
+            ax_arr[subplot_idx].set_ylabel("tree index")
+            ax_arr[subplot_idx].plot([left, right], [i, i], c='grey')
+
+    ax_arr[1].set_xlabel("tree interval")
+    pyplot.tight_layout()
+    f = os.path.join(basedir, "breakpoints.png")
+    pyplot.savefig(f, dpi=72)
+    pyplot.close('all')
+
+
 class SimulationVerifier(object):
     """
     Class to compare msprime against ms to ensure that the same distributions
@@ -257,24 +336,15 @@ class SimulationVerifier(object):
             os.mkdir(output_dir)
         return os.path.join(output_dir, "_".join(args[1:]))
 
-    def _plot_qq(self, v1, v2):
-        sm.graphics.qqplot(v1)
-        sm.qqplot_2samples(v1, v2, line="45")
-
-    def _plot_breakpoints_hist(self, v1, v2, v1_name, v2_name):
-        sns.kdeplot(flatten(v1), color='b', label=v1_name, shade=True, legend=False)
-        sns.kdeplot(flatten(v2), color='r', label=v2_name, shade=True, legend=False)
-        pyplot.legend(loc='upper right')
-
     def _plot_stats(self, key, stats_type, df1, df2, df1_name, df2_name):
         assert set(df1.columns.values) == set(df2.columns.values)
         for stat in df1.columns.values:
             v1 = df1[stat]
             v2 = df2[stat]
             if stat == "breakpoints":
-                self._plot_breakpoints_hist(v1, v2, df1_name, df2_name)
+                plot_breakpoints_hist(flatten(v1), flatten(v2), df1_name, df2_name)
             else:
-                self._plot_qq(v1, v2)
+                plot_qq(v1, v2)
             f = self._build_filename(key, stats_type, stat)
             pyplot.savefig(f, dpi=72)
             pyplot.close('all')
@@ -1495,35 +1565,14 @@ class SimulationVerifier(object):
         self._instances["dtwf_vs_pedigree_long_region"] = f
 
     def run_dtwf_coalescent_comparison(self, test_name, **kwargs):
-        df = pd.DataFrame()
-        for model in ["hudson", "dtwf"]:
-            kwargs["model"] = model
-            print("Running: ", kwargs)
-            data = collections.defaultdict(list)
-            replicates = msprime.simulate(**kwargs)
-            for ts in replicates:
-                t_mrca = np.zeros(ts.num_trees)
-                for tree in ts.trees():
-                    t_mrca[tree.index] = tree.time(tree.root)
-                data["tmrca_mean"].append(np.mean(t_mrca))
-                data["num_trees"].append(ts.num_trees)
-                data["model"].append(model)
-            df = df.append(pd.DataFrame(data))
+        basedir = make_test_dir(test_name)
+        df = run_dtwf_coalescent_stats(**kwargs)
+        plot_dtwf_coalescent_stats(basedir, df)
 
-        basedir = os.path.join("tmp__NOBACKUP__", test_name)
-        if not os.path.exists(basedir):
-            os.mkdir(basedir)
-
-        df_hudson = df[df.model == "hudson"]
-        df_dtwf = df[df.model == "dtwf"]
-        for stat in ["tmrca_mean", "num_trees"]:
-            v1 = df_hudson[stat]
-            v2 = df_dtwf[stat]
-            sm.graphics.qqplot(v1)
-            sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, "{}.png".format(stat))
-            pyplot.savefig(f, dpi=72)
-            pyplot.close('all')
+    def run_dtwf_coalescent_tree_interval_comparison(self, test_name, **kwargs):
+        basedir = make_test_dir(test_name)
+        df = run_dtwf_coalescent_stats(**kwargs)
+        plot_tree_intervals(basedir, df)
 
     def add_dtwf_vs_coalescent_single_locus(self):
         """
@@ -1534,6 +1583,59 @@ class SimulationVerifier(object):
                 "dtwf_vs_coalescent_single_locus", sample_size=10, Ne=1000,
                 num_replicates=300)
         self._instances["dtwf_vs_coalescent_single_locus"] = f
+
+    def add_dtwf_vs_coalescent_recomb_discrete_hotspots(self):
+        """
+        Checks the DTWF against the standard coalescent with a
+        discrete recombination map with variable rates.
+        """
+        test_name = "dtwf_vs_coalescent_discrete_hotspots"
+
+        def f():
+            recombination_map = msprime.RecombinationMap(
+                positions=[0, 100, 500, 900, 1200, 1500, 2000],
+                rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+                discrete=True)
+
+            self.run_dtwf_coalescent_comparison(
+                test_name, sample_size=10, Ne=1000,
+                recombination_map=recombination_map,
+                num_replicates=300)
+        self._instances[test_name] = f
+
+    def add_dtwf_vs_coalescent_recomb_continuous_hotspots(self):
+        """
+        Checks the DTWF against the standard coalescent with a
+        continuous recombination map with variable rates.
+        """
+        test_name = "dtwf_vs_coalescent_continuous_hotspots"
+
+        def f():
+            recombination_map = msprime.RecombinationMap(
+                positions=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
+                rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0])
+
+            self.run_dtwf_coalescent_comparison(
+                test_name, sample_size=10, Ne=1000,
+                recombination_map=recombination_map,
+                num_replicates=300)
+        self._instances[test_name] = f
+
+    def add_dtwf_vs_coalescent_single_forced_recombination(self):
+        test_name = "dtwf_vs_coalescent_single_forced_recombination"
+
+        def f():
+            recombination_map = msprime.RecombinationMap(
+                positions=[0, 100, 101, 201],
+                rates=[0, 1, 0, 0],
+                discrete=True)
+
+            self.run_dtwf_coalescent_single_replicate(
+                    test_name, sample_size=10, Ne=10,
+                    num_replicates=1,
+                    recombination_map=recombination_map)
+
+        self._instances[test_name] = f
 
     def add_dtwf_vs_coalescent_low_recombination(self):
         """
@@ -1589,8 +1691,8 @@ class SimulationVerifier(object):
                         )
                     )
 
-        recombination_map = msprime.RecombinationMap(
-                [0, num_loci], [recombination_rate, 0], discrete=True)
+        recombination_map = msprime.RecombinationMap.uniform_map(
+                                num_loci, recombination_rate, discrete=True)
 
         if migration_matrix is None:
             default_mig_rate = 0.05
@@ -1621,15 +1723,17 @@ class SimulationVerifier(object):
             msprime.MassMigration(
                 time=300, source=1, destination=0, proportion=1.0)]
 
+        test_name = "dtwf_vs_coalescent_2_pops_massmigration"
+
         def f():
             self.run_dtwf_coalescent_comparison(
-                "dtwf_vs_coalescent_2_pops_massmigrations",
+                test_name,
                 population_configurations=population_configurations,
                 demographic_events=demographic_events,
                 # Ne=0.5,
                 num_replicates=300,
                 recombination_map=recombination_map)
-        self._instances["dtwf_vs_coalescent_2_pops_massmigration"] = f
+        self._instances[test_name] = f
 
     def add_dtwf_vs_coalescent_2_pop_growth(self):
         population_configurations = [
@@ -2572,6 +2676,9 @@ def run_tests(args):
 
     # DTWF checks against coalescent.
     verifier.add_dtwf_vs_coalescent_single_locus()
+    verifier.add_dtwf_vs_coalescent_recomb_discrete_hotspots()
+    verifier.add_dtwf_vs_coalescent_recomb_continuous_hotspots()
+    verifier.add_dtwf_vs_coalescent_single_forced_recombination()
     verifier.add_dtwf_vs_coalescent_low_recombination()
     verifier.add_dtwf_vs_coalescent_2_pops_massmigration()
     verifier.add_dtwf_vs_coalescent_2_pop_growth()

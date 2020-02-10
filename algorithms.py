@@ -529,9 +529,6 @@ class RecombinationMap(object):
         left_bound = left + 1 if self.discrete else left
         return self.mass_between(left_bound, right)
 
-    def rate_between(self, left, right):
-        return self.mass_between(left, right) / (right - left)
-
     def position_to_mass(self, pos):
         if pos == self.positions[0]:
             return 0
@@ -554,17 +551,14 @@ class RecombinationMap(object):
         pos = self.positions[index] + (mass_in_interval / self.rates[index])
         return math.floor(pos) if self.discrete else pos
 
-    def shift_left_by_mass(self, mass_to_shift_by, right):
-        right_mass = self.position_to_mass(right)
-        result_mass = right_mass - mass_to_shift_by
+    def shift_by_mass(self, pos, mass):
+        result_mass = self.position_to_mass(pos) + mass
         return self.mass_to_position(result_mass)
 
     def sample_poisson(self, start):
-        lambd = self.rate_between(start, self.sequence_length)
-        x = np.random.poisson(lambd)
-        if self.discrete:
-            x = math.ceil(x) if x < 1 else math.floor(x)
-        return start + x
+        left_bound = start + 1 if self.discrete else start
+        mass_to_next_recomb = np.random.poisson(1.0)
+        return self.shift_by_mass(left_bound, mass_to_next_recomb)
 
     def _search(self, values, query):
         left = 0
@@ -1203,7 +1197,7 @@ class Simulator(object):
         y = self.segments[self.L[label].find(h)]
 
         t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.shift_left_by_mass(t - h, y.right)
+        k = self.recomb_map.shift_by_mass(y.right, h - t)
         if k == y.left and y.prev is None:
             return self.pick_segments_and_breakpoint(label)
 
@@ -1268,7 +1262,7 @@ class Simulator(object):
         # Get the segment containing the h'th link
         y = self.segments[self.L[label].find(h)]
         t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.shift_left_by_mass(t - h, y.right)
+        k = self.recomb_map.shift_by_mass(y.right, h - t)
         # check if the gene conversion falls between segments --> no effect
         if y.left >= k+tl:
             # print("noneffective GCI EVENT")
