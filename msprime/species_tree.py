@@ -19,16 +19,16 @@
 """
 Module responsible for parsing species trees.
 """
-import sys
 import re
 
 import msprime
 
+
 class Tree(object):
     """
-    The tree object, consisting of multiple edges. Trees are checked for whether they are
-    ultrametric; only ultrametric trees are allowed. Species IDs are stored as node IDs of
-    extant edges.
+    The tree object, consisting of multiple edges. Trees are checked for
+    whether they are ultrametric; only ultrametric trees are allowed.
+    Species IDs are stored as node IDs of extant edges.
     """
     def __init__(self, newick_string):
         self.newick_string = newick_string
@@ -43,15 +43,16 @@ class Tree(object):
         number_of_edges = 0
 
         # Remove comments from the tree string.
-        pattern = re.compile("\[.*?\]")
+        pattern = re.compile("\\[.*?\\]")
         hit = "placeholder"
-        while hit != None:
+        while hit is not None:
             hit = pattern.search(working_newick_string)
-            if hit != None:
-                working_newick_string = working_newick_string.replace(hit.group(0),"")
+            if hit is not None:
+                working_newick_string = working_newick_string.replace(hit.group(0), "")
 
         # Check whether a branch above the root is present, and if so, remove it.
-        if working_newick_string[0:2] == "((" and working_newick_string[-1] == ")" and working_newick_string[-2] != ")":
+        if (working_newick_string[0:2] == "((" and working_newick_string[-1] == ")"
+                and working_newick_string[-2] != ")"):
             level = 0
             newick_string_tail_start_pos = 0
             newick_string_tail = ""
@@ -65,18 +66,22 @@ class Tree(object):
                     newick_string_tail = working_newick_string[pos+1:]
                     break
             if newick_string_tail.count(",") == 0:
-                working_newick_string = working_newick_string[1:newick_string_tail_start_pos+1]
+                nstsp = newick_string_tail_start_pos
+                working_newick_string = working_newick_string[1:nstsp+1]
 
         # Parse the bifurcating part of the tree.
-        assert ":" in working_newick_string, 'It appears that the tree string does not include branch lengths!'
-        pattern = re.compile("\(([a-zA-Z0-9_\.\-]+?):([\d\.Ee-]+?),([a-zA-Z0-9_\.\-]+?):([\d\.Ee-]+?)\)")
+        err = 'It appears that the tree string does not include branch lengths!'
+        assert ":" in working_newick_string, err
+        pattern = re.compile('\\(([a-zA-Z0-9_\\.\\-]+?):([\\d\\.Ee-]+?)'
+                             ',([a-zA-Z0-9_\\.\\-]+?):([\\d\\.Ee-]+?)\\)')
         hit = "placeholder"
-        while hit != None:
+        while hit is not None:
             hit = pattern.search(working_newick_string)
-            if hit != None:
+            if hit is not None:
                 number_of_internal_nodes += 1
                 number_of_edges += 2
-                internal_node_id = "internalNode" + str(number_of_internal_nodes) + "X"
+                internal_node_id = "internalNode"
+                internal_node_id += str(number_of_internal_nodes) + "X"
                 edge1 = Edge("edge" + str(number_of_edges-1) + "X")
                 edge1.set_node_ids([internal_node_id, hit.group(1)])
                 edge1.set_length(float(hit.group(2)))
@@ -85,14 +90,18 @@ class Tree(object):
                 edge2.set_length(float(hit.group(4)))
                 self.edges.append(edge1)
                 self.edges.append(edge2)
-                working_newick_string = working_newick_string.replace(hit.group(0), internal_node_id)
+                working_newick_string = working_newick_string.replace(hit.group(0),
+                                                                      internal_node_id)
 
-        # Make sure the remaining string includes a single node and use this node id to determine root edges.
-        pattern_rooted = re.compile("^internalNode\d+X$")
+        # Make sure the remaining string includes a single node and use
+        # this node id to determine root edges.
+        pattern_rooted = re.compile("^internalNode\\d+X$")
         hit_rooted = pattern_rooted.search(working_newick_string)
         err = 'The species tree string could not be parsed! '
-        err += 'This can occur when the species tree is not strictly bifurcating and contains polytomies. '
-        err += 'The remaining unparsed part of the newick string: \"{}\"'.format(working_newick_string)
+        err += 'This can occur when the species tree is not strictly '
+        err += 'bifurcating and contains polytomies. The remaining '
+        err += 'unparsed part of the newick string: '
+        err += '\"{}\"'.format(working_newick_string)
         assert hit_rooted, err
         root_node_id = hit_rooted.group(0)
         for edge in self.get_edges():
@@ -107,7 +116,8 @@ class Tree(object):
         number_of_edges = 0
 
         # Check whether a branch above the root is present, and if so, remove it.
-        if working_newick_string[0:2] == "((" and working_newick_string[-1] == ")" and working_newick_string[-2] != ")":
+        if (working_newick_string[0:2] == "((" and working_newick_string[-1] == ")"
+                and working_newick_string[-2] != ")"):
             level = 0
             newick_string_tail_start_pos = 0
             newick_string_tail = ""
@@ -121,16 +131,22 @@ class Tree(object):
                     newick_string_tail = working_newick_string[pos+1:]
                     break
             if newick_string_tail.count(",") == 0:
-                working_newick_string = working_newick_string[1:newick_string_tail_start_pos+1]
+                nstsp = newick_string_tail_start_pos
+                working_newick_string = working_newick_string[1:nstsp+1]
 
         # Parse the bifurcating part of the tree.
-        assert ":" in working_newick_string, 'It appears that the tree string does not include branch lengths!'
-        assert "[" in working_newick_string, 'It appears that the tree string does not include annotation!'
-        pattern = re.compile("\(([a-zA-Z0-9_\.\-]+?)\[\&dmv=\{([\d\.]+?)\}\]:([\d\.Ee-]+?),([a-zA-Z0-9_\.\-]+?)\[\&dmv=\{([\d\.]+?)\}\]:([\d\.Ee-]+?)\)")
+        err = 'It appears that the tree string does not include branch lengths!'
+        assert ":" in working_newick_string, err
+        err = 'It appears that the tree string does not include annotation!'
+        assert "[" in working_newick_string, err
+        pattern = re.compile('\\(([a-zA-Z0-9_\\.\\-]+?)\\[\\&dmv=\\{([\\d\\.]+?)\\}\\]:'
+                             '([\\d\\.Ee-]+?),'
+                             '([a-zA-Z0-9_\\.\\-]+?)\\[\\&dmv=\\{([\\d\\.]+?)\\}\\]:'
+                             '([\\d\\.Ee-]+?)\\)')
         hit = "placeholder"
-        while hit != None:
+        while hit is not None:
             hit = pattern.search(working_newick_string)
-            if hit != None:
+            if hit is not None:
                 number_of_internal_nodes += 1
                 number_of_edges += 2
                 internal_node_id = "internalNode" + str(number_of_internal_nodes) + "X"
@@ -144,12 +160,17 @@ class Tree(object):
                 edge2.set_length(float(hit.group(6)))
                 self.edges.append(edge1)
                 self.edges.append(edge2)
-                working_newick_string = working_newick_string.replace(hit.group(0), internal_node_id)
+                working_newick_string = working_newick_string.replace(hit.group(0),
+                                                                      internal_node_id)
 
-        # Make sure the remaining string includes a single node and use this node id to determine root edges.
-        pattern_rooted = re.compile("^internalNode\d+X$")
+        # Make sure the remaining string includes a single node and use
+        # this node id to determine root edges.
+        pattern_rooted = re.compile("^internalNode\\d+X$")
         hit_rooted = pattern_rooted.search(working_newick_string)
-        assert hit_rooted, 'The newick tree string could not be parsed! The remaining unparsed part of the newick string: \"{}\"'.format(working_newick_string)
+        err = 'The newick tree string could not be parsed! The remaining '
+        err += 'unparsed part of the newick string: '
+        err += '\"{}\"'.format(working_newick_string)
+        assert hit_rooted, err
         root_node_id = hit_rooted.group(0)
         for edge in self.get_edges():
             if edge.get_node_ids()[0] == root_node_id:
@@ -176,13 +197,14 @@ class Tree(object):
                 species_id = edge.get_node_ids()[1]
                 this_edge = edge
                 species_id_added_to_root_edge = False
-                while species_id_added_to_root_edge == False:
+                while species_id_added_to_root_edge is False:
                     this_edge.add_extant_progeny_id(species_id)
                     if this_edge.get_is_root_edge():
                         species_id_added_to_root_edge = True
                     else:
                         for other_edge in self.get_edges():
-                            if other_edge.get_node_ids()[1] == this_edge.get_node_ids()[0]:
+                            if (other_edge.get_node_ids()[1] ==
+                                    this_edge.get_node_ids()[0]):
                                 parent_edge = other_edge
                                 break
                     this_edge = parent_edge
@@ -198,46 +220,65 @@ class Tree(object):
                 else:
                     root_edge_found = False
                     this_edge = edge
-                    while root_edge_found == False:
+                    while root_edge_found is False:
                         for other_edge in self.get_edges():
-                            if other_edge.get_node_ids()[1] == this_edge.get_node_ids()[0]:
+                            if (other_edge.get_node_ids()[1] ==
+                                    this_edge.get_node_ids()[0]):
                                 parent_edge = other_edge
                                 break
-                        assert parent_edge, 'The parent edge for edge {} could not be found'.format(this_edge.get_id())
+                        err = 'The parent edge for edge '
+                        err += '{} could '.format(this_edge.get_id())
+                        err += 'not be found'
+                        assert parent_edge, err
                         total_edge_length += parent_edge.get_length()
                         if parent_edge.get_is_root_edge():
                             root_edge_found = True
                             total_edge_lengths.append(total_edge_length)
                         else:
                             this_edge = parent_edge
-        # Make sure that the tree is at least roughly ultrametric. A maximum difference of 1% between the shortest and longest root-to-tip distances is allowed.
+        # Make sure that the tree is at least roughly ultrametric.
+        # A maximum difference of 1% between the shortest and longest
+        # root-to-tip distances is allowed.
         max_total_edge_length = max(total_edge_lengths)
-        if max_total_edge_length - min(total_edge_lengths) > 0.01 * max_total_edge_length:
+        if (max_total_edge_length - min(total_edge_lengths) >
+                0.01 * max_total_edge_length):
             raise NotImplementedError(
                     'The tree appears not to be ultrametric. '
-                    'The use of non-ultrametric trees is not yet supported.')
+                    'The use of non-ultrametric trees is not '
+                    'yet supported.')
         # Extend terminal edges if necessary.
         for edge in self.get_edges():
             if edge.get_is_extant():
                 total_edge_length = edge.get_length()
                 if edge.get_is_root_edge():
-                    edge.set_length(edge.get_length() + max_total_edge_length - total_edge_length)
+                    new_length = edge.get_length()
+                    new_length += max_total_edge_length
+                    new_length -= total_edge_length
+                    edge.set_length(new_length)
                 else:
                     root_edge_found = False
                     this_edge = edge
-                    while root_edge_found == False:
+                    while root_edge_found is False:
                         for other_edge in self.get_edges():
-                            if other_edge.get_node_ids()[1] == this_edge.get_node_ids()[0]:
+                            if (other_edge.get_node_ids()[1] ==
+                                    this_edge.get_node_ids()[0]):
                                 parent_edge = other_edge
                                 break
-                        assert parent_edge, 'The parent edge for edge {} could not be found'.format(this_edge.get_id())
+                        err = 'The parent edge for edge '
+                        err += '{} could not '.format(this_edge.get_id())
+                        err += 'be found'
+                        assert parent_edge, err
                         total_edge_length += parent_edge.get_length()
                         if parent_edge.get_is_root_edge():
                             root_edge_found = True
-                            edge.set_length(round(edge.get_length() + max_total_edge_length - total_edge_length,8))
+                            new_length = edge.get_length()
+                            new_length += max_total_edge_length
+                            new_length -= total_edge_length
+                            edge.set_length(round(new_length, 8))
                         else:
                             this_edge = parent_edge
-        # First specify the edges for which the parents still need to be identified.
+        # First specify the edges for which the parents still need to
+        # be identified.
         for edge in self.get_edges():
             if edge.get_is_root_edge():
                 edge.set_parent_needs_times(False)
@@ -245,7 +286,7 @@ class Tree(object):
                 edge.set_parent_needs_times(True)
         # Set the times of all edges.
         for edge in self.get_edges():
-            if edge.get_is_extant() == True:
+            if edge.get_is_extant() is True:
                 edge.set_termination(0.0)
                 edge.set_origin(edge.get_length())
                 this_edge = edge
@@ -254,9 +295,12 @@ class Tree(object):
                         if other_edge.get_node_ids()[1] == this_edge.get_node_ids()[0]:
                             parent_edge = other_edge
                             break
-                    assert parent_edge, 'The parent edge for edge {} could not be found'.format(this_edge.get_id())
+                    err = 'The parent edge for edge '
+                    err += '{} could not be found'.format(this_edge.get_id())
+                    assert parent_edge, err
                     parent_edge.set_termination(this_edge.get_origin())
-                    parent_edge.set_origin(this_edge.get_origin() + parent_edge.get_length())
+                    parent_edge.set_origin(this_edge.get_origin() +
+                                           parent_edge.get_length())
                     this_edge.set_parent_needs_times = False
                     this_edge = parent_edge
 
@@ -277,8 +321,8 @@ class Tree(object):
 
 class Edge(object):
     """
-    The edge object, with two IDs corresponding to the nodes at both ends of the edge,
-    and ages of origin and termination.
+    The edge object, with two IDs corresponding to the nodes at both
+    ends of the edge, and ages of origin and termination.
     """
     def __init__(self, id):
         self.id = id
@@ -360,10 +404,10 @@ class Edge(object):
         info_string += 'Edge length:'.ljust(28)
         info_string += str(self.length)
         info_string += '\n'
-        if self.dmv != None:
+        if self.dmv is not None:
             info_string += 'Edge dmv:'.ljust(28)
             info_string += str(self.dmv)
-            info_string += '\n'            
+            info_string += '\n'
         info_string += 'Edge origin:'.ljust(28)
         info_string += str(self.origin)
         info_string += '\n'
@@ -391,42 +435,58 @@ def parse_species_tree(
         Ne=None,
         generation_time=None):
     """
-    Method to parse species trees from files in Newick https://en.wikipedia.org/wiki/Newick_format format or 
-    Nexus (https://en.wikipedia.org/wiki/Nexus_file) format with embedded Newick strings.
+    Method to parse species trees from files in Newick
+    https://en.wikipedia.org/wiki/Newick_format format or Nexus
+    (https://en.wikipedia.org/wiki/Nexus_file) format with embedded
+    Newick strings.
 
-    Trees must be rooted, binary, and ultrametric and branch lengths must be included and correspond to time,
-    either in units of millions of years ("myr"), years ("yr"), or generations ("gen"; default). Leafs must be
-    named. An example for an accepted tree string in Newick format is this:
+    Trees must be rooted, binary, and ultrametric and branch lengths
+    must be included and correspond to time, either in units of millions
+    of years ("myr"), years ("yr"), or generations ("gen"; default).
+    Leafs must be named. An example for an accepted tree string in
+    Newick format is this:
     (((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)
     The tree string can end with a semi-colon, but this is not required.
 
     We allow the following input:
     1) filename must be specified.
-    2) If and only if the tree is not in StarBEAST format, Ne should be specified.
-    3) If and only if the branch lengths are not in units of generations, the generation time should be specified.
+    2) If and only if the tree is not in StarBEAST format,
+        Ne should be specified.
+    3) If and only if the branch lengths are not in units of
+        generations, the generation time should be specified.
 
-    As msprime does not name populations and instead only assigns numbers to populations (starting with 0), the
-    species names stored in the species tree are not used when defining instances of PopulationConfiguration.
-    However, these instances will be sorted according to the alphabetical order of the corresponding species names,
-    allowing the user to link species from the species tree with populations in msprime.
+    As msprime does not name populations and instead only assigns
+    numbers to populations (starting with 0), the species names stored
+    in the species tree are not used when defining instances of
+    PopulationConfiguration. However, these instances will be sorted
+    according to the alphabetical order of the corresponding species
+    names, allowing the user to link species from the species tree with
+    populations in msprime.
 
-    The sample size is not used except that it is stored in the resulting instances of PopulationConfiguration.
+    The sample size is not used except that it is stored in the
+    resulting instances of PopulationConfiguration.
 
-    Introgression events, as stored in the extended Newick format by PhyloNet and possibly other programs, are not
-    parsed and therefore not used.
-    Rate matrices of continuous migration between co-existing lineages can not be stored in (extended) Newick or
-    Nexus format and are therefore also not used here. However, these can be added to the model after population
-    configurations and demographic events are defined with this function.
+    Introgression events, as stored in the extended Newick format by
+    PhyloNet and possibly other programs, are not parsed and therefore
+    not used.
+    Rate matrices of continuous migration between co-existing lineages
+    can not be stored in (extended) Newick or Nexus format and are
+    therefore also not used here. However, these can be added to the
+    model after population configurations and demographic events are
+    defined with this function.
     """
-    
+
     # Make sure a filename is specified.
-    assert filename, 'A filename must be specified when calling function parse_species_tree().'
+    err = 'A filename must be specified when calling function parse_species_tree().'
+    assert filename, err
 
     # Make sure that branch length units are either "myr", "yr", or "gen".
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
-    if not branch_length_units in allowed_branch_lenth_units:
-        err = 'The specified units for branch lengths ("{}") are not accepted. '.format(branch_length_units)
-        err += 'Accepted units are "myr" (millions of years), "yr" (years), and "gen" (generations).'
+    if branch_length_units not in allowed_branch_lenth_units:
+        err = 'The specified units for branch lengths ('
+        err += '"{}") are not accepted. '.format(branch_length_units)
+        err += 'Accepted units are "myr" (millions of years), "yr" (years), '
+        err += 'and "gen" (generations).'
         raise ValueError(err)
 
     # Make sure that the sample size is either None or non-negative.
@@ -441,11 +501,16 @@ def parse_species_tree(
     if generation_time is not None and generation_time <= 0:
         raise ValueError("Generation time must be > 0")
 
-    # Make sure that the generation time is specified if and only if branch lengths are not in units of generations.
+    # Make sure that the generation time is specified if and only if
+    # branch lengths are not in units of generations.
     if branch_length_units == "gen":
-        assert generation_time == None, 'With branch lengths in units of generations ("gen"), generation_time should not be specified.'
+        err = 'With branch lengths in units of generations ("gen"), generation_time '
+        err += 'should not be specified.'
+        assert generation_time is None, err
     else:
-        assert generation_time, 'With branch lengths in units of "{}", generation_time must be specified.'.format(branch_length_units)
+        err = 'With branch lengths in units of '
+        err += '"{}", generation_time must be specified.'.format(branch_length_units)
+        assert generation_time, err
 
     # Get the number of generations per branch length unit.
     if branch_length_units == "gen":
@@ -471,7 +536,7 @@ def parse_species_tree(
                 in_tree = True
             elif line.strip().lower() == 'end;':
                 in_tree = False
-            elif in_tree and line.strip() is not '':
+            elif in_tree and line.strip() != '':
                 clean_line = line.strip()
                 if clean_line.lower().split()[0] == "translate":
                     in_translation = True
@@ -518,67 +583,95 @@ def parse_species_tree(
                                     in_comment = True
                                 elif letter == ']':
                                     in_comment = False
-                                elif in_comment == False:
+                                elif in_comment is False:
                                     tree_string_raw += letter
                     if starbeast_format:
-                        tree_patterns = re.search('(\(.+\))\[\&dmv=\{([\d\.]+?)\}\]',tree_string_raw)
+                        find_pattern = '(\\(.+\\))\\[\\&dmv=\\{([\\d\\.]+?)\\}\\]'
+                        tree_patterns = re.search(find_pattern, tree_string_raw)
                         tree_string = tree_patterns.group(1)
-                        starbeast_root_pop_size = float(tree_patterns.group(2)) * generations_per_branch_length_unit
+                        starbeast_root_pop_size = float(tree_patterns.group(2))
+                        starbeast_root_pop_size *= generations_per_branch_length_unit
                     else:
-                        tree_patterns = re.search('\(.+\)',tree_string_raw)
+                        tree_patterns = re.search('\\(.+\\)', tree_string_raw)
                         tree_string = tree_patterns.group(0)
-                    # Use the translation block (if present) to back-translate species IDs in the tree string.
+                    # Use the translation block (if present) to
+                    # back-translate species IDs in the tree string.
                     if translate_string != "":
-                        translation_originals = []
-                        translation_replaceds = []
+                        transl_originals = []
+                        transl_replaceds = []
                         translation_list = translate_string.split(",")
                         for item in translation_list:
                             item_list = item.split()
-                            assert len(item_list) > 1, 'The translation block of file {} is malformed.'.format(filename)
-                            assert len(item_list) == 2, 'Species IDs in the translation block of file {} appear to include whitespace. This is not supported.'.format(filename)
-                            translation_originals.append(item_list[1])
-                            translation_replaceds.append(item_list[0])
-                        assert len(translation_originals) == len(set(translation_originals)), 'One or more species names in the translation block of file {} are duplicated.'.format(filename)
-                        assert len(translation_replaceds) == len(set(translation_replaceds)), 'One or more translations in the translation block of file {} are duplicated.'.format(filename)
-                        translation_originals_and_replaceds = translation_originals + translation_replaceds
-                        err = 'One or more of the species names are identical to one or more of the translations in the translation block of file {}.'.format(filename)
-                        assert len(translation_originals_and_replaceds) == len(set(translation_originals_and_replaceds)), err
-                        for x in range(len(translation_originals)):
-                            find_string = ',{}['.format(translation_replaceds[x])
-                            replace_string = ',{}['.format(translation_originals[x])
-                            tree_string = tree_string.replace(find_string,replace_string)
-                            find_string = '({}['.format(translation_replaceds[x])
-                            replace_string = '({}['.format(translation_originals[x])
-                            tree_string = tree_string.replace(find_string,replace_string)
+                            err = 'The translation block of file '
+                            err += '{} is malformed.'.format(filename)
+                            assert len(item_list) > 1, err
+                            err = 'Species IDs in the translation '
+                            err += 'block of file {} '.format(filename)
+                            err += 'appear to include whitespace. This '
+                            err += 'is not supported.'
+                            assert len(item_list) == 2, err
+                            transl_originals.append(item_list[1])
+                            transl_replaceds.append(item_list[0])
+                        err = 'One or more species names in the translation '
+                        err += 'block of file {} are duplicated.'.format(filename)
+                        assert len(transl_originals) == len(set(transl_originals)), err
+                        err = 'One or more translations in the translation '
+                        err += 'block of file {} are duplicated.'.format(filename)
+                        assert len(transl_replaceds) == len(set(transl_replaceds)), err
+                        transl_orireps = transl_originals + transl_replaceds
+                        err = 'One or more of the species names are identical '
+                        err += 'to one or more of the translations in the '
+                        err += 'translation block of file {}.'.format(filename)
+                        assert len(transl_orireps) == len(set(transl_orireps)), err
+                        for x in range(len(transl_originals)):
+                            find_str = ',{}['.format(transl_replaceds[x])
+                            replace_str = ',{}['.format(transl_originals[x])
+                            tree_string = tree_string.replace(find_str, replace_str)
+                            find_str = '({}['.format(transl_replaceds[x])
+                            replace_str = '({}['.format(transl_originals[x])
+                            tree_string = tree_string.replace(find_str, replace_str)
                     break
 
     else:
         # Test if the input is in newick format.
-        assert len(inlines) == 1, 'File {} does not appear to be in Nexus format but contains more than one line.'.format(filename)
-        assert inlines[0][0] == '(', 'Unexpected tree format in file {}. The first character should be "(".'.format(filename)
-        assert inlines[0].count('(') == inlines[0].count(')'), 'The number of opening and closing parentheses differ in the tree string!'
+        err = 'File {} does not appear to be in Nexus '.format(filename)
+        err += 'format but contains more than one line.'
+        assert len(inlines) == 1, err
+        err = 'Unexpected tree format in file {}. '.format(filename)
+        err += 'The first character should be "(".'
+        assert inlines[0][0] == '(', err
+        err = 'The number of opening and closing parentheses differ '
+        err += 'in the tree string!'
+        assert inlines[0].count('(') == inlines[0].count(')'), err
         tree_string_raw = inlines[0]
-        tree_patterns = re.search('\(.+\)',tree_string_raw)
+        tree_patterns = re.search('\\(.+\\)', tree_string_raw)
         tree_string = tree_patterns.group(0)
 
     # Make sure a tree string is found.
     assert tree_string, 'No tree could be found in file {}.'.format(filename)
 
-    # Make sure that between the beginning and the end of the tree string, there are always more parentheses opened than closed.
+    # Make sure that between the beginning and the end of the tree string,
+    # there are always more parentheses opened than closed.
     parentheses_open = 0
     for char in tree_string[:-2]:
         if char == "(":
             parentheses_open += 1
         elif char == ")":
             parentheses_open -= 1
-        assert parentheses_open > 0, 'The tree string in file {} appears to be malformed (possibly the first and last parentheses are missing).'.format(filename)
+        err = 'The tree string in file {} '.format(filename)
+        err += 'appears to be malformed (possibly the first and '
+        err += 'last parentheses are missing).'
+        assert parentheses_open > 0, err
 
-    # Now that we know if the tree is in starbeast format or not, make sure that Ne is specified if and only if the tree is not in starbeast format.
+    # Now that we know if the tree is in starbeast format or not, make
+    # sure that Ne is specified if and only if the tree is not in
+    # starbeast format.
     if starbeast_format:
-        assert Ne == None, 'With species trees in StarBEAST format, Ne should not be specified.'
+        err = 'With species trees in StarBEAST format, Ne should not be specified.'
+        assert Ne is None, err
     else:
         assert Ne, 'Ne should be specified.'
-    
+
     # Use the tree string to generate a tree object.
     species_tree = Tree(tree_string)
 
@@ -594,9 +687,6 @@ def parse_species_tree(
     # Set the origin and termination times of all branches.
     species_tree.set_times()
 
-    # Get the age of the species tree.
-    tree_origin = species_tree.get_origin()
-
     # Get a list of species IDs along with population sizes.
     species_ids = []
     terminal_pop_sizes = []
@@ -604,16 +694,18 @@ def parse_species_tree(
         if edge.get_is_extant():
             species_ids.append(edge.get_node_ids()[1])
             if starbeast_format:
-                terminal_pop_sizes.append(edge.get_pop_size(generations_per_branch_length_unit))
+                edge_ne = edge.get_pop_size(generations_per_branch_length_unit)
+                terminal_pop_sizes.append(edge_ne)
             else:
                 terminal_pop_sizes.append(Ne)
     lists_are_sorted = False
-    while lists_are_sorted == False:
+    while lists_are_sorted is False:
         lists_are_sorted = True
         for x in range(len(species_ids)-1):
             if species_ids[x] > species_ids[x+1]:
                 species_ids[x], species_ids[x+1] = species_ids[x+1], species_ids[x]
-                terminal_pop_sizes[x], terminal_pop_sizes[x+1] = terminal_pop_sizes[x+1], terminal_pop_sizes[x]
+                terminal_pop_sizes[x], terminal_pop_sizes[x+1] = \
+                    terminal_pop_sizes[x+1], terminal_pop_sizes[x]
                 lists_are_sorted = False
                 break
 
@@ -623,7 +715,7 @@ def parse_species_tree(
     internal_pop_sizes = []
     divergence_times = []
     for edge in species_tree.get_edges():
-        if edge.get_is_extant() == False:
+        if edge.get_is_extant() is False:
             d1_species = []
             d2_species = []
             for other_edge in species_tree.get_edges():
@@ -643,7 +735,8 @@ def parse_species_tree(
             indices2.append(index2)
             divergence_times.append(edge.get_termination())
             if starbeast_format:
-                internal_pop_sizes.append(edge.get_pop_size(generations_per_branch_length_unit))
+                edge_ne = edge.get_pop_size(generations_per_branch_length_unit)
+                internal_pop_sizes.append(edge_ne)
             else:
                 internal_pop_sizes.append(Ne)
     # Do the same for the root.
@@ -670,16 +763,19 @@ def parse_species_tree(
     indices1.append(index1)
     indices2.append(index2)
 
-    # Sort the arrays indices1, indices2, divergence_times, and population sizes according to divergence_time.
+    # Sort the arrays indices1, indices2, divergence_times, and
+    # population sizes according to divergence_time.
     lists_are_sorted = False
-    while lists_are_sorted == False:
+    while lists_are_sorted is False:
         lists_are_sorted = True
         for x in range(len(indices1)-1):
             if divergence_times[x] > divergence_times[x+1]:
                 indices1[x], indices1[x+1] = indices1[x+1], indices1[x]
                 indices2[x], indices2[x+1] = indices2[x+1], indices2[x]
-                divergence_times[x], divergence_times[x+1] = divergence_times[x+1], divergence_times[x]
-                internal_pop_sizes[x], internal_pop_sizes[x+1] = internal_pop_sizes[x+1], internal_pop_sizes[x]
+                divergence_times[x], divergence_times[x+1] = \
+                    divergence_times[x+1], divergence_times[x]
+                internal_pop_sizes[x], internal_pop_sizes[x+1] = \
+                    internal_pop_sizes[x+1], internal_pop_sizes[x]
                 lists_are_sorted = False
                 break
 
@@ -687,20 +783,52 @@ def parse_species_tree(
     population_configurations = []
     if starbeast_format:
         for x in range(species_tree.get_number_of_extant_edges()):
-            population_configurations.append(msprime.PopulationConfiguration(sample_size=sample_size, initial_size=terminal_pop_sizes[x]))
+            population_configurations.append(
+                msprime.PopulationConfiguration(
+                    sample_size=sample_size, initial_size=terminal_pop_sizes[x]))
         demographic_events = []
         for x in range(len(indices1)-1):
-            demographic_events.append(msprime.MassMigration(time=divergence_times[x]*generations_per_branch_length_unit, source=indices2[x], destination=indices1[x], proportion=1.0))
-            demographic_events.append(msprime.PopulationParametersChange(time=divergence_times[x]*generations_per_branch_length_unit, initial_size=internal_pop_sizes[x], population_id=indices1[x]))
-        demographic_events.append(msprime.MassMigration(time=divergence_times[-1]*generations_per_branch_length_unit, source=indices2[-1], destination=indices1[-1], proportion=1.0))
-        demographic_events.append(msprime.PopulationParametersChange(time=divergence_times[-1]*generations_per_branch_length_unit, initial_size=internal_pop_sizes[-1], population_id=indices1[-1]))
+            demographic_events.append(
+                msprime.MassMigration(
+                    time=divergence_times[x]*generations_per_branch_length_unit,
+                    source=indices2[x],
+                    destination=indices1[x],
+                    proportion=1.0))
+            demographic_events.append(
+                msprime.PopulationParametersChange(
+                    time=divergence_times[x]*generations_per_branch_length_unit,
+                    initial_size=internal_pop_sizes[x],
+                    population_id=indices1[x]))
+        demographic_events.append(
+            msprime.MassMigration(
+                time=divergence_times[-1]*generations_per_branch_length_unit,
+                source=indices2[-1],
+                destination=indices1[-1],
+                proportion=1.0))
+        demographic_events.append(
+            msprime.PopulationParametersChange(
+                time=divergence_times[-1]*generations_per_branch_length_unit,
+                initial_size=internal_pop_sizes[-1],
+                population_id=indices1[-1]))
     else:
         for _ in range(species_tree.get_number_of_extant_edges()):
-            population_configurations.append(msprime.PopulationConfiguration(sample_size=sample_size, initial_size=Ne))
+            population_configurations.append(
+                msprime.PopulationConfiguration(
+                    sample_size=sample_size, initial_size=Ne))
         demographic_events = []
         for x in range(len(indices1)-1):
-            demographic_events.append(msprime.MassMigration(time=divergence_times[x]*generations_per_branch_length_unit, source=indices2[x], destination=indices1[x], proportion=1.0))
-        demographic_events.append(msprime.MassMigration(time=divergence_times[-1]*generations_per_branch_length_unit, source=indices2[-1], destination=indices1[-1], proportion=1.0))
+            demographic_events.append(
+                msprime.MassMigration(
+                    time=divergence_times[x]*generations_per_branch_length_unit,
+                    source=indices2[x],
+                    destination=indices1[x],
+                    proportion=1.0))
+        demographic_events.append(
+            msprime.MassMigration(
+                time=divergence_times[-1]*generations_per_branch_length_unit,
+                source=indices2[-1],
+                destination=indices1[-1],
+                proportion=1.0))
 
     # Return a tuple of population_configurations and demographic_events.
     return (population_configurations, demographic_events)
