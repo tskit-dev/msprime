@@ -60,10 +60,7 @@ def unnormalised_log_mutation_likelihood(arg, mu):
     return ret
 
 
-def log_arg_likelihood(arg, recombination_rate, Ne=0.5):
-    # TODO: Ne should default to 1 for compatability with msprime.simulate. Setting
-    # to 1/2 now to keep the tests working.
-
+def log_arg_likelihood(arg, recombination_rate, Ne=1):
     # Get the tables into the format we need to interchange with the low-level code.
     lw_tables = _msprime.LightweightTableCollection()
     lw_tables.fromdict(arg.tables.asdict())

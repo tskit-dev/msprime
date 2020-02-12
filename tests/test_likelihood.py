@@ -44,7 +44,8 @@ def log_arg_likelihood(arg, r, Ne):
     ret = 0
     while edge < number_of_edges:
         parent = tables.edges[edge].parent
-        rate = number_of_lineages * (number_of_lineages - 1) / (4 * Ne) + number_of_links * r
+        rate = number_of_lineages * (number_of_lineages - 1) / (4 * Ne) \
+            + number_of_links * r
         ret -= rate * (tables.nodes[parent].time - time)
         time = tables.nodes[parent].time
         child = tables.edges[edge].child
@@ -63,6 +64,7 @@ def log_arg_likelihood(arg, r, Ne):
             else:
                 ret += math.log(r * gap)
         else:
+            ret -= math.log(2 * Ne)
             segment_length_in_children = -tables.edges.left[edge]
             while edge < number_of_edges and tables.edges[edge].child == child:
                 edge += 1
@@ -439,18 +441,27 @@ class TestSimulatedExamples(unittest.TestCase):
     Given some simulated ARGs test that the Python likelihood implementation
     computes the same likelihoods as the C code.
     """
-    # TODO Add Ne and mutation rate as parameters here.
-    def verify(self, ts, recombination_rate):
-        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate, Ne=0.5)
-        l2 = log_arg_likelihood(ts, recombination_rate, 0.5)
+    # TODO Add mutation rate as parameter here.
+    def verify(self, ts, recombination_rate, Ne):
+        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate,
+                                        Ne=Ne)
+        l2 = log_arg_likelihood(ts, recombination_rate, Ne)
         self.assertAlmostEqual(l1, l2)
 
     def test_no_recombination(self):
         ts = msprime.simulate(10, random_seed=2)
-        self.verify(ts, recombination_rate=1)
+        self.verify(ts, recombination_rate=1, Ne=0.5)
+        self.verify(ts, recombination_rate=0.5, Ne=0.5)
+        self.verify(ts, recombination_rate=2, Ne=0.5)
+        self.verify(ts, recombination_rate=1, Ne=1)
+        self.verify(ts, recombination_rate=1, Ne=2)
 
     def test_small_arg_no_mutation(self):
         ts = msprime.simulate(
             5, recombination_rate=1, random_seed=12, record_full_arg=True)
         self.assertGreater(ts.num_edges, 10)
-        self.verify(ts, recombination_rate=1)
+        self.verify(ts, recombination_rate=1, Ne=0.5)
+        self.verify(ts, recombination_rate=0.5, Ne=0.5)
+        self.verify(ts, recombination_rate=2, Ne=0.5)
+        self.verify(ts, recombination_rate=1, Ne=1)
+        self.verify(ts, recombination_rate=1, Ne=2)

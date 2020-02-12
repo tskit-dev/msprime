@@ -178,6 +178,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
                 lineages--;
                 material -= material_in_children - material_in_parent;
             }
+            lik -= log(2 * Ne);
         }
         if (lineages > 0) {
             edge++;
