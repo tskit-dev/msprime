@@ -286,6 +286,7 @@ class Edge(object):
         self.extant_progeny_ids = []
         self.origin = None
         self.termination = None
+        self.dmv = None
         self.parent_needs_times = True
 
     def get_id(self):
@@ -382,6 +383,7 @@ class Edge(object):
         info_string += '\n'
         return info_string
 
+
 def parse_species_tree(
         filename=None,
         branch_length_units="gen",
@@ -389,20 +391,29 @@ def parse_species_tree(
         Ne=None,
         generation_time=None):
     """
-    Method to parse species trees from files in Newick format or Nexus format with embedded Newick strings.
-    Trees must be ultrametric and branch lengths must correspond to time, either in units of millions of years
-    ("myr"; default) or years ("yr"), or generations ("gen"). We allow the following input:
+    Method to parse species trees from files in Newick https://en.wikipedia.org/wiki/Newick_format format or 
+    Nexus (https://en.wikipedia.org/wiki/Nexus_file) format with embedded Newick strings.
+
+    Trees must be rooted, binary, and ultrametric and branch lengths must be included and correspond to time,
+    either in units of millions of years ("myr"), years ("yr"), or generations ("gen"; default). Leafs must be
+    named. An example for an accepted tree string in Newick format is this:
+    (((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)
+    The tree string can end with a semi-colon, but this is not required.
+
+    We allow the following input:
     1) filename must be specified.
-    1a) If the tree is not in StarBEAST format:
-        If the units of branch lengths are "myr" or "yr":
-            Ne and generation_time are required
-        If the units of branch lengths are "gen":
-            Ne is required
-    1b) If the tree is in StarBEAST format:
-        If the units of branch lengths are "myr" or "yr":
-            Ne should not be given, generation_time is required
-        If the units of branch lengths are "gen":
-            Neither Ne nor generation_time should be given.
+    2) If and only if the tree is not in StarBEAST format, Ne should be specified.
+    3) If and only if the branch lengths are not in units of generations, the generation time should be specified.
+
+    As msprime does not name populations and instead only assigns numbers to populations (starting with 0), XXX
+
+    The sample size is not used except that it is stored in the resulting instances of PopulationConfiguration.
+
+    Introgression events, as stored in the extended Newick format by PhyloNet and possibly other programs, are not
+    parsed and therefore not used.
+    Rate matrices of continuous migration between co-existing lineages can not be stored in (extended) Newick or
+    Nexus format and are therefore also not used here. However, these can be added to the model after population
+    configurations and demographic events are defined with this function.
     """
     
     # Make sure a filename is specified.
@@ -451,6 +462,7 @@ def parse_species_tree(
     if inlines[0][0:6].lower() == '#nexus':
         # Assume the input is in nexus format. Maximally one tree string is read.
         in_tree = False
+        translate_string = ""
         for line in inlines:
             if line.strip().lower() == 'begin trees;':
                 in_tree = True
@@ -458,6 +470,15 @@ def parse_species_tree(
                 in_tree = False
             elif in_tree and line.strip() is not '':
                 clean_line = line.strip()
+                if clean_line.lower().split()[0] == "translate":
+                    in_translation = True
+                    translate_string += clean_line[9:]
+                elif in_translation:
+                    if ";" in clean_line:
+                        translate_string += clean_line.split(";")[0]
+                        in_translation = False
+                    else:
+                        translate_string += clean_line
                 if clean_line[0:4].lower() == "tree":
                     if '[' in clean_line and ']' in clean_line:
                         if "dmv=" in clean_line:
@@ -503,7 +524,31 @@ def parse_species_tree(
                     else:
                         tree_patterns = re.search('\(.+\)',tree_string_raw)
                         tree_string = tree_patterns.group(0)
+                    # Use the translation block (if present) to back-translate species IDs in the tree string.
+                    if translate_string != "":
+                        translation_originals = []
+                        translation_replaceds = []
+                        translation_list = translate_string.split(",")
+                        for item in translation_list:
+                            item_list = item.split()
+                            assert len(item_list) > 1, 'The translation block of file {} is malformed.'.format(filename)
+                            assert len(item_list) == 2, 'Species IDs in the translation block of file {} appear to include whitespace. This is not supported.'.format(filename)
+                            translation_originals.append(item_list[1])
+                            translation_replaceds.append(item_list[0])
+                        assert len(translation_originals) == len(set(translation_originals)), 'One or more species names in the translation block of file {} are duplicated.'.format(filename)
+                        assert len(translation_replaceds) == len(set(translation_replaceds)), 'One or more translations in the translation block of file {} are duplicated.'.format(filename)
+                        translation_originals_and_replaceds = translation_originals + translation_replaceds
+                        err = 'One or more of the species names are identical to one or more of the translations in the translation block of file {}.'.format(filename)
+                        assert len(translation_originals_and_replaceds) == len(set(translation_originals_and_replaceds)), err
+                        for x in range(len(translation_originals)):
+                            find_string = ',{}['.format(translation_replaceds[x])
+                            replace_string = ',{}['.format(translation_originals[x])
+                            tree_string = tree_string.replace(find_string,replace_string)
+                            find_string = '({}['.format(translation_replaceds[x])
+                            replace_string = '({}['.format(translation_originals[x])
+                            tree_string = tree_string.replace(find_string,replace_string)
                     break
+
     else:
         # Test if the input is in newick format.
         assert len(inlines) == 1, 'File {} does not appear to be in Nexus format but contains more than one line.'.format(filename)
