@@ -405,7 +405,10 @@ def parse_species_tree(
     2) If and only if the tree is not in StarBEAST format, Ne should be specified.
     3) If and only if the branch lengths are not in units of generations, the generation time should be specified.
 
-    As msprime does not name populations and instead only assigns numbers to populations (starting with 0), XXX
+    As msprime does not name populations and instead only assigns numbers to populations (starting with 0), the
+    species names stored in the species tree are not used when defining instances of PopulationConfiguration.
+    However, these instances will be sorted according to the alphabetical order of the corresponding species names,
+    allowing the user to link species from the species tree with populations in msprime.
 
     The sample size is not used except that it is stored in the resulting instances of PopulationConfiguration.
 
