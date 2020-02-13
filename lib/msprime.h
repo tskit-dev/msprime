@@ -467,7 +467,7 @@ double recomb_map_mass_between_left_exclusive(recomb_map_t *self, double left, d
 double recomb_map_mass_between(recomb_map_t *self, double left, double right);
 double recomb_map_mass_to_position(recomb_map_t *self, double mass);
 double recomb_map_position_to_mass(recomb_map_t *self, double position);
-double recomb_map_shift_left_by_mass(recomb_map_t *self, double right_pos, double recomb_mass);
+double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
 int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,

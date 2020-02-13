@@ -307,6 +307,27 @@ class TestDtwf(unittest.TestCase):
             10, Ne=1e2, model="dtwf", recombination_rate=1e-300, random_seed=2)
         self.assertEqual(ts.num_trees, 1)
 
+    def test_single_recombination(self):
+        recombination_map = msprime.RecombinationMap(
+                                [0, 100, 101, 200], [0, 1, 0, 0], discrete=True)
+        ts = msprime.simulate(10, Ne=10, model="dtwf", random_seed=2,
+                              recombination_map=recombination_map)
+        self.assertEqual(ts.num_trees, 2)
+        trees = ts.trees()
+        self.assertEqual(next(trees).interval, (0, 100))
+        self.assertEqual(next(trees).interval, (100, 200))
+
+    def test_no_recombination_interval(self):
+        positions = [0, 50, 100, 150, 200]
+        rates = [0.01, 0.0, 0.1, 0.005, 0.0]
+        recombination_map = msprime.RecombinationMap(positions, rates)
+        ts = msprime.simulate(10, Ne=10, model="dtwf", random_seed=2,
+                              recombination_map=recombination_map)
+        for tree in ts.trees():
+            left, right = tree.interval
+            self.assertTrue(left < 50 or left > 100)
+            self.assertTrue(right < 50 or right > 100)
+
 
 class TestUnsupportedFullArg(unittest.TestCase):
     """
