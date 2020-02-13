@@ -637,6 +637,38 @@ class TestSimulatorFactory(unittest.TestCase):
         mean_rr = recomb_map.mean_recombination_rate
         self.assertEqual(mean_rr, 0.0)
 
+        # Test mean_recombination_rate is correct after reading from
+        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
+        # field, so here we test against using the cM field directly.
+        def hapmap_rr(hapmap_file):
+            first_pos = 0
+            with open(hapmap_file) as f:
+                next(f)  # skip header
+                for line in f:
+                    pos, rate, cM = map(float, line.split()[1:4])
+                    if cM == 0:
+                        first_pos = pos
+            return cM / 100 / (pos - first_pos)
+
+        hapmap = """chr pos        rate                    cM
+                    1   4283592    3.79115663174456        0
+                    1   4361401    0.0664276817058413      0.294986106359414
+                    1   7979763   10.9082897515584         0.535345505591925
+                    1   8007051    0.0976780648822495      0.833010916332456
+                    1   8762788    0.0899929572085616      0.906829844052373
+                    1   9477943    0.0864382908650907      0.971188757364862
+                    1   9696341    4.76495005895746        0.990066707213216
+                    1   9752154    0.0864316558730679      1.25601286485381
+                    1   9881751    0.0                     1.26721414815999"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hapfile = os.path.join(temp_dir, "hapmap.txt")
+            with open(hapfile, "w") as f:
+                f.write(hapmap)
+            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
+            mean_rr = recomb_map.mean_recombination_rate
+            mean_rr2 = hapmap_rr(hapfile)
+        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
+
     def test_sample_combination_errors(self):
         # Make sure that the various ways we can specify the samples
         # operate correctly.
