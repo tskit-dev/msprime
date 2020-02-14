@@ -700,7 +700,7 @@ class SimulationVerifier(object):
             same_root_count_last = np.zeros(seq_length)
             low_recombination_rate = 0.000001
             recomb_map = msprime.RecombinationMap.uniform_map(
-                seq_length, low_recombination_rate)
+                seq_length, low_recombination_rate, discrete=True)
             replicates = msprime.simulate(
                 sample_size=sample_size,
                 recombination_map=recomb_map,
@@ -2659,6 +2659,9 @@ def run_tests(args):
         "admixture-2-pop4",
         "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 "
         "-em 0.02 3 1 1")
+    verifier.add_ms_instance(
+        "gene-conversion-1-r0",
+        "100 10000 -t 5.0 -r 0 2501 -c 10 1")
     verifier.add_ms_instance(
         "gene-conversion-1",
         "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")

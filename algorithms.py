@@ -935,7 +935,7 @@ class Simulator(object):
             if rate != 0:
                 t_re = random.expovariate(rate)
             # Gene conversion can occur within segments ..
-            rate = self.recomb_map.mass_to_position(self.g * recomb_mass)
+            rate = self.g * self.recomb_map.mass_to_position(recomb_mass)
             t_gcin = infinity
             if rate != 0:
                 t_gcin = random.expovariate(rate)

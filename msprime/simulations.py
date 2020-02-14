@@ -286,6 +286,11 @@ def simulator_factory(
     # have a non-trivial genetic map?
     if gene_conversion_rate is None:
         gene_conversion_rate = 0
+    else:
+        if not recomb_map.get_discrete():
+            raise ValueError(
+                "Cannot specify gene_conversion_rate along with "
+                "a nondiscrete recombination map")
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
 
@@ -983,6 +988,9 @@ class RecombinationMap(object):
 
     def get_sequence_length(self):
         return self._ll_recombination_map.get_sequence_length()
+
+    def get_discrete(self):
+        return self._ll_recombination_map.get_discrete()
 
     def get_length(self):
         # Deprecated: use sequence_length instead
