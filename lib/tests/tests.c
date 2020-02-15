@@ -3231,6 +3231,54 @@ test_simple_recomb_map(void)
 }
 
 static void
+verify_recomb_maps_equal(recomb_map_t *actual, recomb_map_t *expected)
+{
+    size_t i;
+
+    CU_ASSERT_EQUAL(actual->size, expected->size);
+    CU_ASSERT_EQUAL(actual->discrete, expected->discrete);
+    CU_ASSERT_EQUAL(actual->sequence_length, expected->sequence_length);
+    for (i = 0; i < actual->size; i++) {
+        CU_ASSERT_DOUBLE_EQUAL(actual->positions[i], expected->positions[i], 0.0);
+        CU_ASSERT_DOUBLE_EQUAL(actual->rates[i], expected->rates[i], 0.0);
+        CU_ASSERT_DOUBLE_EQUAL(actual->cumulative[i], expected->cumulative[i], 1e-6);
+    }
+}
+
+static double
+double_rate(void *_, double rate)
+{
+    return 2 * rate;
+}
+
+static void
+test_recomb_map_copy(void)
+{
+    int ret = 0;
+    recomb_map_t map, other, copy;
+    double positions[] = {0.0, 1.0, 2.0};
+    double rates[] = {1.0, 2.0, 0.0};
+    double other_rates[] = {2.0, 4.0, 0.0};
+
+    ret = recomb_map_alloc(&map, 2.0, positions, rates, 3, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = recomb_map_copy(&copy, &map);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    verify_recomb_maps_equal(&copy, &map);
+    recomb_map_free(&map);
+    recomb_map_free(&copy);
+
+    ret = recomb_map_alloc(&map, 2.0, positions, rates, 3, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = recomb_map_alloc(&other, 2.0, positions, other_rates, 3, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    recomb_map_convert_rates(&map, double_rate, NULL);
+    verify_recomb_maps_equal(&map, &other);
+    recomb_map_free(&map);
+    recomb_map_free(&other);
+}
+
+static void
 test_recomb_map_errors(void)
 {
     int ret;
@@ -3844,12 +3892,16 @@ test_simulate_init_errors(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(&msp, 0, samples, &recomb_map, NULL, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
     ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
     ret = msp_alloc(&msp, n, NULL, &recomb_map, NULL, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
     ret = msp_alloc(&msp, n, NULL, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    msp_free(&msp);
 
     tsk_table_collection_clear(&tables);
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
@@ -4595,6 +4647,7 @@ main(int argc, char **argv)
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_simple_recombination_map", test_simple_recomb_map},
+        {"test_recombination_map_copy", test_recomb_map_copy},
         {"test_recombination_map_errors", test_recomb_map_errors},
         {"test_recombination_map_examples", test_recomb_map_examples},
 

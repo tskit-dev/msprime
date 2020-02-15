@@ -39,6 +39,18 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
     }
 }
 
+static void
+recomb_map_init_cumulative_recomb_mass(recomb_map_t *self)
+{
+    size_t j;
+    double s = 0;
+    self->cumulative[0] = 0;
+    for (j = 1; j < self->size; j++) {
+        s += (self->positions[j] - self->positions[j - 1]) * self->rates[j - 1];
+        self->cumulative[j] = s;
+    }
+}
+
 int MSP_WARN_UNUSED
 recomb_map_alloc_uniform(recomb_map_t *self, double sequence_length,
         double rate, bool discrete)
@@ -54,7 +66,7 @@ recomb_map_alloc(recomb_map_t *self, double sequence_length,
         double *positions, double *rates, size_t size, bool discrete)
 {
     int ret = MSP_ERR_BAD_RECOMBINATION_MAP;
-    double length, s;
+    double length;
     size_t j;
 
     memset(self, 0, sizeof(recomb_map_t));
@@ -95,16 +107,17 @@ recomb_map_alloc(recomb_map_t *self, double sequence_length,
         self->rates[j] = rates[j];
         self->positions[j] = positions[j];
     }
-
-    s = 0;
-    self->cumulative[0] = 0;
-    for (j = 1; j < size; j++) {
-        s += (self->positions[j] - self->positions[j - 1]) * self->rates[j - 1];
-        self->cumulative[j] = s;
-    }
     ret = 0;
+    recomb_map_init_cumulative_recomb_mass(self);
 out:
     return ret;
+}
+
+int
+recomb_map_copy(recomb_map_t *to, recomb_map_t *from)
+{
+    return recomb_map_alloc(to, from->sequence_length,
+            from->positions, from->rates, from->size, from->discrete);
 }
 
 int
@@ -228,6 +241,15 @@ recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
     return recomb_map_shift_by_mass(self, left_bound, mass_to_next_recomb);
 }
 
+void
+recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj)
+{
+    size_t i;
+    for (i = 0; i < self->size; i++) {
+        self->rates[i] = convert(obj, self->rates[i]);
+    }
+    recomb_map_init_cumulative_recomb_mass(self);
+}
 
 size_t
 recomb_map_get_size(recomb_map_t *self)
