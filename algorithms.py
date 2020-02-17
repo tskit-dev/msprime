@@ -574,6 +574,66 @@ class RecombinationMap(object):
         return left
 
 
+class OverlapCounter(object):
+    def __init__(self, seq_length):
+        self.seq_length = seq_length
+        self.overlaps = self._make_segment(0, seq_length, 0)
+
+    def overlaps_at(self, pos):
+        assert 0 <= pos < self.seq_length
+        curr_interval = self.overlaps
+        while curr_interval is not None:
+            if curr_interval.left <= pos < curr_interval.right:
+                return curr_interval.node
+            curr_interval = curr_interval.next
+        raise ValueError("Bad overlap count chain")
+
+    def increment_interval(self, left, right):
+        """
+        Increment the count that spans the interval
+        [left, right), creating additional intervals in overlaps
+        if necessary.
+        """
+        curr_interval = self.overlaps
+        while left < right:
+            if curr_interval.left == left:
+                if curr_interval.right <= right:
+                    curr_interval.node += 1
+                    left = curr_interval.right
+                    curr_interval = curr_interval.next
+                else:
+                    self._split(curr_interval, right)
+                    curr_interval.node += 1
+                    break
+            else:
+                if curr_interval.right < left:
+                    curr_interval = curr_interval.next
+                else:
+                    self._split(curr_interval, left)
+                    curr_interval = curr_interval.next
+
+    def _split(self, seg, breakpoint):
+        """
+        Split the segment at breakpoint and add in another segment
+        from breakpoint to seg.right. Set the original segment's
+        right endpoint to breakpoint
+        """
+        right = self._make_segment(breakpoint, seg.right, seg.node)
+        if seg.next is not None:
+            seg.next.prev = right
+            right.next = seg.next
+        right.prev = seg
+        seg.next = right
+        seg.right = breakpoint
+
+    def _make_segment(self, left, right, count):
+        seg = Segment(0)
+        seg.left = left
+        seg.right = right
+        seg.node = count
+        return seg
+
+
 class Simulator(object):
     """
     A reference implementation of the multi locus simulation algorithm.
@@ -1856,10 +1916,24 @@ class Simulator(object):
         print(self.tables.edges)
         self.verify()
 
+    def verify_overlaps(self):
+        overlap_counter = OverlapCounter(self.m)
+        for pop_index, pop in enumerate(self.P):
+            for l in range(self.num_labels):
+                for u in pop.iter_label(l):
+                    while u is not None:
+                        overlap_counter.increment_interval(u.left, u.right)
+                        u = u.next
+
+        for pos, count in self.S.items():
+            if pos != self.m:
+                assert count == overlap_counter.overlaps_at(pos)
+
     def verify(self):
         """
         Checks that the state of the simulator is consistent.
         """
+        self.verify_overlaps()
         q = 0
         for pop_index, pop in enumerate(self.P):
             for l in range(self.num_labels):

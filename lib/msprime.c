@@ -815,38 +815,142 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     }
 }
 
-/* FIXME logic doesn't make sense in continuous space */
+typedef struct {
+    double seq_length;
+    segment_t *overlaps;
+} overlap_counter_t;
+
+static int
+overlap_counter_alloc(overlap_counter_t *self, double seq_length, int initial_count)
+{
+    int ret = 0;
+    memset(self, 0, sizeof(overlap_counter_t));
+
+    segment_t *overlaps = malloc(sizeof(segment_t));
+    if (overlaps == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    overlaps->prev = NULL;
+    overlaps->next = NULL;
+    overlaps->left = 0;
+    overlaps->right = seq_length;
+    overlaps->value = initial_count;
+    overlaps->population_id = 0;
+    overlaps->label = 0;
+
+    self->seq_length = seq_length;
+    self->overlaps = overlaps;
+
+out:
+    return ret;
+}
+
+static void
+overlap_counter_free(overlap_counter_t *self)
+{
+    segment_t *curr_overlap, *next_overlap;
+
+    assert(self->overlaps->prev == NULL);
+    curr_overlap = self->overlaps;
+    while (curr_overlap != NULL) {
+        next_overlap = curr_overlap->next;
+        free(curr_overlap);
+        curr_overlap = next_overlap;
+    }
+}
+
+/* Find the number of segments that overlap at the given position */
+static uint32_t
+overlap_counter_overlaps_at(overlap_counter_t *self, double pos)
+{
+    assert(pos >= 0 && pos < self->seq_length);
+    segment_t *curr_overlap = self->overlaps;
+    while (curr_overlap->next != NULL) {
+        if (curr_overlap->left <= pos && pos < curr_overlap->right) {
+            break;
+        }
+        curr_overlap = curr_overlap->next;
+    }
+
+    return (uint32_t) curr_overlap->value;
+}
+
+/* Split the segment at breakpoint and add in another segment
+ * from breakpoint to seg.right. Set the original segment's
+ * right endpoint to breakpoint.
+ */
+static void
+overlap_counter_split_segment(segment_t *seg, double breakpoint)
+{
+    segment_t *right_seg = malloc(sizeof(segment_t));
+    right_seg->prev = NULL;
+    right_seg->next = NULL;
+    right_seg->left = breakpoint;
+    right_seg->right = seg->right;
+    right_seg->value = seg->value;
+    right_seg->population_id = 0;
+    right_seg->label = 0;
+
+    if (seg->next != NULL) {
+        right_seg->next = seg->next;
+        seg->next->prev = right_seg;
+    }
+    right_seg->prev = seg;
+    seg->next = right_seg;
+    seg->right = breakpoint;
+}
+
+/* Increment the number of segments that span
+ * [left, right), creating additional intervals if necessary.
+ */
+static void
+overlap_counter_increment_interval(overlap_counter_t *self, double left, double right)
+{
+    segment_t *curr_interval = self->overlaps;
+    while (left < right) {
+        if (curr_interval->left == left) {
+            if (curr_interval->right <= right) {
+                curr_interval->value++;
+                left = curr_interval->right;
+                curr_interval = curr_interval->next;
+            } else {
+                overlap_counter_split_segment(curr_interval, right);
+                curr_interval->value++;
+                break;
+            }
+        } else {
+            if (curr_interval->right < left) {
+                curr_interval = curr_interval->next;
+            } else {
+                overlap_counter_split_segment(curr_interval, left);
+                curr_interval = curr_interval->next;
+            }
+        }
+    }
+}
+
 static void
 msp_verify_overlaps(msp_t *self)
 {
     avl_node_t *node;
     node_mapping_t *nm;
     segment_t *u;
-    uint32_t j, k, count, label;
-    double left, right;
-    size_t remaining_samples = self->num_sampling_events - self->next_sampling_event;
-    /* We check for every locus, so obviously this rules out large numbers
-     * of loci. This code should never be called except during testing,
-     * so we don't need to recover from malloc failure.
-     */
-    uint32_t *overlaps = calloc((uint32_t) self->sequence_length, sizeof(uint32_t));
+    uint32_t j, label, count;
+    overlap_counter_t counter;
+    int remaining_samples = (int) (self->num_sampling_events - self->next_sampling_event);
 
-    assert(overlaps != NULL);
-    /* Add in the counts for any historical samples that haven't been
-     * included yet.
-     */
-    for (k = 0; k < self->sequence_length; k++) {
-        overlaps[k] += (uint32_t) remaining_samples;
-    }
+    int ok = overlap_counter_alloc(&counter, self->sequence_length, remaining_samples);
+    assert(ok == 0);
+
     for (label = 0; label < self->num_labels; label++) {
         for (j = 0; j < self->num_populations; j++) {
             for (node = (&self->populations[j].ancestors[label])->head;
                     node != NULL; node = node->next) {
                 u = (segment_t *) node->item;
                 while (u != NULL) {
-                    for (k = (uint32_t) u->left; k < (uint32_t) u->right; k++) {
-                        overlaps[k]++;
-                    }
+                    overlap_counter_increment_interval(&counter, u->left, u->right);
                     u = u->next;
                 }
             }
@@ -854,14 +958,11 @@ msp_verify_overlaps(msp_t *self)
     }
     for (node = self->overlap_counts.head; node->next != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        left = nm->left;
-        right = ((node_mapping_t *) node->next->item)->left;
-        count = nm->value;
-        for (k = (uint32_t) left; k < (uint32_t) right; k++) { /* FIXME here too */
-            assert(overlaps[k] == count);
-        }
+        count = overlap_counter_overlaps_at(&counter, nm->left);
+        assert(nm->value == count);
     }
-    free(overlaps);
+
+    overlap_counter_free(&counter);
 }
 
 void
