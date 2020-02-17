@@ -374,7 +374,8 @@ out:
 }
 
 static segment_t * MSP_WARN_UNUSED
-msp_alloc_segment(msp_t *self, double left, double right, node_id_t value,
+msp_alloc_segment(msp_t *self, double left, double right,
+        double left_mass, double right_mass, node_id_t value,
         population_id_t population, label_id_t label,
         segment_t *prev, segment_t *next)
 {
@@ -396,6 +397,8 @@ msp_alloc_segment(msp_t *self, double left, double right, node_id_t value,
     seg->next = next;
     seg->left = left;
     seg->right = right;
+    seg->left_mass = left_mass;
+    seg->right_mass = right_mass;
     seg->value = value;
     seg->population_id = population;
     seg->label = label;
@@ -740,7 +743,7 @@ msp_print_segment_chain(msp_t * MSP_UNUSED(self), segment_t *head, FILE *out)
 static void
 msp_verify_segments(msp_t *self, bool verify_breakpoints)
 {
-    double left, right;
+    double left, right, l_mass, r_mass;
     double s, ss, total_mass, alt_total_mass;
     size_t j, k;
     size_t label_segments = 0;
@@ -764,6 +767,11 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                     assert(u->label == (label_id_t) k);
                     assert(u->left < u->right);
                     assert(u->right <= self->sequence_length);
+
+                    l_mass = recomb_map_position_to_mass(self->recomb_map, u->left);
+                    r_mass = recomb_map_position_to_mass(self->recomb_map, u->right);
+                    assert(u->left_mass == l_mass);
+                    assert(u->right_mass == r_mass);
                     if (u->prev != NULL) {
                         s = recomb_map_mass_between(
                                 self->recomb_map, u->prev->right, u->right);
@@ -1188,8 +1196,9 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         new_ind = NULL;
         y = NULL;
         for (x = ind; x != NULL; x = x->next) {
-            y = msp_alloc_segment(self, x->left, x->right, x->value, x->population_id,
-                    dest_label, y, NULL);
+            y = msp_alloc_segment(self, x->left, x->right,
+                    x->left_mass, x->right_mass, x->value,
+                    x->population_id, dest_label, y, NULL);
             if (new_ind == NULL) {
                 new_ind = y;
             } else {
@@ -1304,22 +1313,39 @@ out:
 }
 
 /* Updates the mass on the specified segment to account for the additional
- * mass incurred from the specified left and right physical coordinates.
+ * mass incurred between the left and right masses.
  */
 static void
-msp_increment_segment_mass(msp_t *self, segment_t *seg, double left, double right)
+msp_add_segment_mass_between(msp_t *self, segment_t *seg, double l_mass, double r_mass)
 {
-    double mass = recomb_map_mass_between(self->recomb_map, left, right);
-    fenwick_increment(&self->links[seg->label], seg->id, mass);
+    fenwick_increment(&self->links[seg->label], seg->id, r_mass - l_mass);
 }
 
-/* Set the mass of the specified segment to that between the supplied
- * left and right physical coordinates.
+/* Add the mass subtended by the endpoints of seg2 to that of seg1
  */
 static void
-msp_set_segment_mass(msp_t *self, segment_t *seg, double left, double right)
+msp_add_segment_mass(msp_t *self, segment_t *seg1, segment_t *seg2)
 {
-    double mass = recomb_map_mass_between(self->recomb_map, left, right);
+    double mass = seg2->right_mass - seg2->left_mass;
+    fenwick_increment(&self->links[seg1->label], seg1->id, mass);
+}
+
+/* Subtract the mass subtended by the endpoints of seg2 to that of seg1
+ */
+static void
+msp_subtract_segment_mass(msp_t *self, segment_t *seg1, segment_t *seg2)
+{
+    double mass = seg2->left_mass - seg2->right_mass;
+    fenwick_increment(&self->links[seg1->label], seg1->id, mass);
+}
+
+/* Set the mass of the specified segment to that between the segment's right endpoint
+ * and the right endpoint of the left tail segment.
+ */
+static void
+msp_set_segment_mass(msp_t *self, segment_t *seg, segment_t *tail_seg)
+{
+    double mass = seg->right_mass - tail_seg->right_mass;
     fenwick_set_value(&self->links[seg->label], seg->id, mass);
 }
 
@@ -1330,8 +1356,14 @@ msp_set_segment_mass(msp_t *self, segment_t *seg, double left, double right)
 static void
 msp_set_single_segment_mass(msp_t *self, segment_t *seg)
 {
-    double mass = recomb_map_mass_between_left_exclusive(
-        self->recomb_map, seg->left, seg->right);
+    double mass;
+    if (recomb_map_get_discrete(self->recomb_map)) {
+        /* Exclude the left endpoint because breakpoints can't happen there */
+        mass = recomb_map_mass_between(self->recomb_map, seg->left + 1, seg->right);
+    } else {
+        mass = seg->right_mass - seg->left_mass;
+    }
+
     fenwick_set_value(&self->links[seg->label], seg->id, mass);
 }
 
@@ -1347,11 +1379,12 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
         x = y->prev;
         if (x->right == y->left && x->value == y->value) {
             x->right = y->right;
+            x->right_mass = y->right_mass;
             x->next = y->next;
             if (y->next != NULL) {
                 y->next->prev = x;
             }
-            msp_increment_segment_mass(self, x, y->left, y->right);
+            msp_add_segment_mass(self, x, y);
             msp_free_segment(self, y);
         }
         y = x;
@@ -1760,6 +1793,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ret = 0;
     int ix;
     double k;
+    double k_mass;
     segment_t *y, *z;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
@@ -1779,9 +1813,11 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
         if (x->right > k) {
             // Make new segment
             assert(x->left <= k);
+            k_mass = recomb_map_position_to_mass(self->recomb_map, k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
-            z = msp_alloc_segment(self, k, x->right, x->value,
+            z = msp_alloc_segment(self, k, x->right,
+                    k_mass, x->right_mass, x->value,
                     x->population_id, x->label, seg_tails[ix], x->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -1795,7 +1831,8 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = z;
             x->next = NULL;
             x->right = k;
-            msp_increment_segment_mass(self, x, z->right, k);
+            x->right_mass = k_mass;
+            msp_subtract_segment_mass(self, x, z);
             assert(x->left < x->right);
             x = z;
             k = msp_dtwf_generate_breakpoint(self, k);
@@ -1843,7 +1880,7 @@ msp_init_segments_and_compute_breakpoint(msp_t *self, label_id_t label, segment_
     t = fenwick_get_cumulative_sum(tree, y->id);
     x = y->prev;
 
-    k = recomb_map_shift_by_mass(self->recomb_map, y->right, h - t);
+    k = recomb_map_mass_to_position(self->recomb_map, y->right_mass - (t - h));
 
     /* Reject if fallen directly on y left when not allowed to */
     if (k == y->left && y->prev == NULL) {
@@ -1860,13 +1897,15 @@ static int MSP_WARN_UNUSED
 msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_t **rhs)
 {
     int ret = 0;
-    double k;
+    double k, k_mass;
     segment_t *x, *y, *z, *lhs_tail;
 
     self->num_re_events++;
     k = msp_init_segments_and_compute_breakpoint(self, label, &x, &y);
+    k_mass = recomb_map_position_to_mass(self->recomb_map, k);
     if (y->left < k) {
-        z = msp_alloc_segment(self, k, y->right, y->value,
+        z = msp_alloc_segment(self, k, y->right,
+                k_mass, y->right_mass, y->value,
                 y->population_id, y->label, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -1877,7 +1916,8 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         }
         y->next = NULL;
         y->right = k;
-        msp_increment_segment_mass(self, y, z->right, k);
+        y->right_mass = k_mass;
+        msp_subtract_segment_mass(self, y, z);
         if (msp_has_breakpoint(self, k)) {
             self->num_multiple_re_events++;
         } else {
@@ -1939,15 +1979,17 @@ msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y, segment_t *n
         double track_end)
 {
     int ret = 0;
+    double track_end_mass = recomb_map_position_to_mass(self->recomb_map, track_end);
     assert(lhs_tail != NULL);
     lhs_tail->next = new_segment;
-    msp_set_segment_mass(self, new_segment, lhs_tail->right, new_segment->right);
+    msp_set_segment_mass(self, new_segment, lhs_tail);
     if (y->next != NULL){
         y->next->prev = new_segment;
     }
     y->next = NULL;
     y->right = track_end;
-    msp_increment_segment_mass(self, y, new_segment->right, track_end);
+    y->right_mass = track_end_mass;
+    msp_add_segment_mass_between(self, y, new_segment->right_mass, track_end_mass);
     if (!msp_has_breakpoint(self, track_end)) {
         ret = msp_insert_breakpoint(self, track_end);
         if (ret != 0) {
@@ -1964,7 +2006,8 @@ static int MSP_WARN_UNUSED
 msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 {
     int ret = 0;
-    double k, h, tl, t;
+    double h, t;
+    double k, k_mass, tl, k_plus_tl_mass;
     size_t segment_id;
     segment_t *x, *y, *y2, *z, *z2, *lhs_tail;
     double recomb_mass = fenwick_get_total(&self->links[label]);
@@ -1979,6 +2022,8 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 
     t = fenwick_get_cumulative_sum(&self->links[label], segment_id);
     k = recomb_map_shift_by_mass(self->recomb_map, y->right, h - t);
+    k_mass = recomb_map_position_to_mass(self->recomb_map, k);
+    k_plus_tl_mass = recomb_map_position_to_mass(self->recomb_map, k + tl);
     assert(k >= 0 && k < self->sequence_length);
     /* Check if the gene conversion falls between segments and hence has no effect */
     if (y->left >= k + tl){
@@ -1989,11 +2034,13 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
 
     self->num_gc_events++;
     x = y->prev;
+
     if (k + tl < y->right) {
         /* Both breaks are within the same segment */
         if (k <= y->left) {
             y->prev = NULL;
-            z2 = msp_alloc_segment(self, k + tl, y->right, y->value,
+            z2 = msp_alloc_segment(self, k + tl, y->right,
+                    k_plus_tl_mass, y->right_mass, y->value,
                     y->population_id, y->label, x, y->next);
             if (z2 == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -2006,9 +2053,11 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             }
             z = y;
         } else {
-            z = msp_alloc_segment(self, k, k + tl, y->value,
+            z = msp_alloc_segment(self, k, k + tl,
+                    k_mass, k_plus_tl_mass, y->value,
                     y->population_id, y->label, NULL, NULL);
-            z2 = msp_alloc_segment(self, k + tl, y->right, y->value,
+            z2 = msp_alloc_segment(self, k + tl, y->right,
+                    k_plus_tl_mass, y->right_mass, y->value,
                     y->population_id, y->label, y, y->next);
             if (z == NULL || z2 == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -2019,8 +2068,10 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             }
             y->next = z2;
             y->right = k;
-            msp_set_segment_mass(self, z2, y->right, z2->right);
-            msp_increment_segment_mass(self, y, z2->right, k);
+            y->right_mass = k_mass;
+            msp_set_segment_mass(self, z2, y);
+            msp_subtract_segment_mass(self, y, z);
+            msp_subtract_segment_mass(self, y, z2);
             if (!msp_has_breakpoint(self, k)) {
                 ret = msp_insert_breakpoint(self, k);
                 if (ret != 0) {
@@ -2053,19 +2104,21 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             z = y;
             lhs_tail = x;
         } else {
-            z = msp_alloc_segment(self, k, y->right, y->value,
+            z = msp_alloc_segment(self, k, y->right,
+                    k_mass, y->right_mass, y->value,
                     y->population_id, y->label, NULL, y->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
-            msp_set_segment_mass(self, z, z->left, z->right);
+            msp_set_single_segment_mass(self, z);
             if (y->next != NULL) {
                 y->next->prev = z;
             }
             y->next = NULL;
             y->right = k;
-            msp_increment_segment_mass(self, y, z->right, k);
+            y->right_mass = k_mass;
+            msp_subtract_segment_mass(self, y, z);
             if (!msp_has_breakpoint(self, k)) {
                 ret = msp_insert_breakpoint(self, k);
                 if (ret != 0) {
@@ -2078,7 +2131,9 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
         /* Process right break */
         if (y2 != NULL) {
             if (y2->left < k + tl) {
-                z2 = msp_alloc_segment(self, k + tl, y2->right, y2->value,
+                z2 = msp_alloc_segment(self, k + tl, y2->right,
+                        recomb_map_position_to_mass(self->recomb_map, k + tl),
+                        y2->right_mass, y2->value,
                         y2->population_id, y2->label, lhs_tail, y2->next);
                 if (z2 == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -2095,7 +2150,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
                 lhs_tail->next = y2;
                 y2->prev->next = NULL;
                 y2->prev = lhs_tail;
-                msp_set_segment_mass(self, y2, lhs_tail->right, y2->right);
+                msp_set_segment_mass(self, y2, lhs_tail);
             }
         }
     }
@@ -2188,7 +2243,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     int ret = 0;
     double h, length, p, logp, u;
     segment_t *x, *y, *z;
-    double k, tl;
+    double k, tl, k_mass;
     size_t segment_id;
     const double track_length = self->gene_conversion_track_length;
 
@@ -2209,6 +2264,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         tl = floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / logp);
     }
     k = y->left + tl;
+    k_mass = recomb_map_position_to_mass(self->recomb_map, k);
 
     while (y->right <= k){
         y = y->next;
@@ -2216,8 +2272,9 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     x = y->prev;
     if (y->left < k){
         /*make new segment*/
-        z = msp_alloc_segment(self, k, y->right, y->value, y->population_id,
-                y->label, NULL, y->next);
+        z = msp_alloc_segment(self, k, y->right,
+                k_mass, y->right_mass, y->value,
+                y->population_id, y->label, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -2227,7 +2284,8 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         }
         y->next = NULL;
         y->right = k;
-        msp_increment_segment_mass(self, y, z->right, k);
+        y->right_mass = k_mass;
+        msp_subtract_segment_mass(self, y, z);
         if (!msp_has_breakpoint(self, k)) {
             ret = msp_insert_breakpoint(self, k);
             if (ret != 0) {
@@ -2283,6 +2341,13 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
     return ret;
 }
 
+static void
+msp_set_segment_left_endpoint(msp_t *self, segment_t *seg, double left)
+{
+    seg->left = left;
+    seg->left_mass = recomb_map_position_to_mass(self->recomb_map, left);
+}
+
 static int MSP_WARN_UNUSED
 msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t label,
         segment_t *a, segment_t *b)
@@ -2326,13 +2391,15 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 x = x->next;
                 alpha->next = NULL;
             } else if (x->left != y->left) {
-                alpha = msp_alloc_segment(self, x->left, y->left, x->value,
+                alpha = msp_alloc_segment(self, x->left, y->left,
+                        x->left_mass, y->left_mass, x->value,
                         x->population_id, x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
                 x->left = y->left;
+                x->left_mass = y->left_mass;
             } else {
                 l = x->left;
                 r_max = GSL_MIN(x->right, y->right);
@@ -2382,7 +2449,10 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         nm = (node_mapping_t *) node->item;
                         r = nm->left;
                     }
-                    alpha = msp_alloc_segment(self, l, r, v, population_id, label,
+                    alpha = msp_alloc_segment(self, l, r,
+                            recomb_map_position_to_mass(self->recomb_map, l),
+                            recomb_map_position_to_mass(self->recomb_map, r),
+                            v, population_id, label,
                             NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
@@ -2404,14 +2474,14 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     x = x->next;
                     msp_free_segment(self, beta);
                 } else {
-                    x->left = r;
+                    msp_set_segment_left_endpoint(self, x, r);
                 }
                 if (y->right == r) {
                     beta = y;
                     y = y->next;
                     msp_free_segment(self, beta);
                 } else {
-                    y->left = r;
+                    msp_set_segment_left_endpoint(self, y, r);
                 }
             }
         }
@@ -2430,7 +2500,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     defrag_required |= z->right == alpha->left && z->value == alpha->value;
                 }
                 z->next = alpha;
-                msp_set_segment_mass(self, alpha, z->right, alpha->right);
+                msp_set_segment_mass(self, alpha, z);
             }
             alpha->prev = z;
             z = alpha;
@@ -2499,7 +2569,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool set_merged = false;
     node_id_t v;
     uint32_t j, h;
-    double l, r, r_max, next_l, l_min;
+    double l, r, r_max, next_l, next_l_mass, l_min;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -2529,19 +2599,23 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         next_l = 0;
         if (node != NULL) {
             next_l = ((segment_t *) node->item)->left;
+            next_l_mass = ((segment_t *) node->item)->left_mass;
             r_max = GSL_MIN(r_max, next_l);
         }
         alpha = NULL;
         if (h == 1) {
             x = H[0];
             if (node != NULL && next_l < x->right) {
-                alpha = msp_alloc_segment(self, x->left, next_l, x->value,
+                alpha = msp_alloc_segment(self, x->left, next_l,
+                        x->left_mass, next_l_mass,
+                        x->value,
                         x->population_id, x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
                 x->left = next_l;
+                x->left_mass = next_l_mass;
             } else {
                 alpha = x;
                 x = x->next;
@@ -2601,7 +2675,10 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     nm = (node_mapping_t *) node->item;
                     r = nm->left;
                 }
-                alpha = msp_alloc_segment(self, l, r, v, population_id,
+                alpha = msp_alloc_segment(self, l, r,
+                        recomb_map_position_to_mass(self->recomb_map, l),
+                        recomb_map_position_to_mass(self->recomb_map, r),
+                        v, population_id,
                         label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -2620,7 +2697,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     msp_free_segment(self, x);
                     x = x->next;
                 } else if (x->right > r) {
-                    x->left = r;
+                    msp_set_segment_left_endpoint(self, x, r);
                 }
                 if (x != NULL) {
                     ret = msp_priority_queue_insert(self, Q, x);
@@ -2665,7 +2742,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                         z->right == alpha->left && z->value == alpha->value;
                 }
                 z->next = alpha;
-                msp_set_segment_mass(self, alpha, z->right, alpha->right);
+                msp_set_segment_mass(self, alpha, z);
             }
             alpha->prev = z;
             z = alpha;
@@ -2766,9 +2843,12 @@ static int MSP_WARN_UNUSED
 msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
 {
     int ret = MSP_ERR_GENERIC;
+    double seq_len = self->sequence_length;
     segment_t *u;
 
-    u = msp_alloc_segment(self, 0, self->sequence_length, sample, population, 0, NULL, NULL);
+    u = msp_alloc_segment(self, 0, seq_len,
+            0, recomb_map_position_to_mass(self->recomb_map, seq_len),
+            sample, population, 0, NULL, NULL);
     if (u == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -2805,7 +2885,10 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree,
             goto out;
         }
         if (root_segments_head[root] == NULL) {
-            seg = msp_alloc_segment(self, left, right, root, population, label,
+            seg = msp_alloc_segment(self, left, right,
+                    recomb_map_position_to_mass(self->recomb_map, left),
+                    recomb_map_position_to_mass(self->recomb_map, right),
+                    root, population, label,
                     NULL, NULL);
             if (seg == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -2817,8 +2900,12 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree,
             tail = root_segments_tail[root];
             if (tail->right == left) {
                 tail->right = right;
+                tail->right_mass = recomb_map_position_to_mass(self->recomb_map, right);
             } else {
-                seg = msp_alloc_segment(self, left, right, root, population, label,
+                seg = msp_alloc_segment(self, left, right,
+                        recomb_map_position_to_mass(self->recomb_map, left),
+                        recomb_map_position_to_mass(self->recomb_map, right),
+                        root, population, label,
                         tail, NULL);
                 if (seg == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -2901,7 +2988,7 @@ msp_reset_from_ts(msp_t *self)
             }
             msp_set_single_segment_mass(self, seg);
             for (seg = seg->next; seg != NULL; seg = seg->next) {
-                msp_set_segment_mass(self, seg, seg->prev->right, seg->right);
+                msp_set_segment_mass(self, seg, seg->prev);
             }
         }
     }
