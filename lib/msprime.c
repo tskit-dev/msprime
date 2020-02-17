@@ -6575,7 +6575,7 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
 
     m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
     acceptance_rate = gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
-    scalar = exp(log(alpha) - alpha * log(m) - (alpha - 1) * reference_size)
+    scalar = exp(log(alpha) - alpha * log(m) - (alpha - 1) * log(reference_size))
              * acceptance_rate;
 
     assert(!isnan(m));
@@ -6584,6 +6584,7 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
     assert(!isinf(m));
     assert(!isinf(acceptance_rate));
     assert(!isinf(scalar));
+    assert(scalar > 0);
 
     self->model.params.beta_coalescent.alpha = alpha;
     self->model.params.beta_coalescent.truncation_point = truncation_point;
