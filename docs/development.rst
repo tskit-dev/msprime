@@ -233,7 +233,7 @@ On macOS, conda builds are generally done using ``clang`` packages that are kept
 
     $ conda install clang_osx-64  clangxx_osx-64
 
-In order do make sure that these compilers work correctly (*e.g.*, so that they can find
+In order to make sure that these compilers work correctly (*e.g.*, so that they can find
 other dependencies installed via ``conda``), you need to compile ``msprime`` with this command
 on versions of macOS older than "Mojave":
 
@@ -413,7 +413,7 @@ failure scenarios. The following pattern is used throughout for this purpose:
 
 .. code-block:: C
 
-        double x = NULL;
+        double *x = NULL;
 
         x = malloc(n * sizeof(double));
         if (x == NULL) {
@@ -533,9 +533,9 @@ any arguments. To run some specific tests, provide the required keys as command
 line arguments.
 
 Many of the tests involve creating an ``ms`` command line, running it
-line on ``ms`` and ``msprime`` and comparing the statistical properties of the
+with ``ms`` and ``msprime`` and comparing the statistical properties of the
 results. The output of each test is a series of plots, written to a directory
-named after test. For example, results for the ``admixture-1-pop2`` test are
+named after the test key. For example, results for the ``admixture-1-pop2`` test are
 written in the ``tmp__NOBACKUP__/admixture-1-pop2/`` directory (the prefix is
 not important here and can be changed). The majority of the results are
 QQ-plots of the statistics in question comparing ``ms`` and ``msprime``.
