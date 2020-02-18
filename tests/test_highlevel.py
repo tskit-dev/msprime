@@ -782,6 +782,13 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
 
+    def test_gene_conversion_continuous(self):
+        rm = msprime.RecombinationMap.uniform_map(10, 1, discrete=False)
+        with self.assertRaises(ValueError):
+            msprime.simulate(
+                10, gene_conversion_rate=1, gene_conversion_track_length=1,
+                recombination_map=rm)
+
     @unittest.skip("Cannot use GC with default recomb map")
     def test_gene_conversion_default_map(self):
         n = 10
@@ -851,3 +858,14 @@ class TestDefaultRandomSeeds(unittest.TestCase):
         self.assertEqual(len(set(seeds)), n)
         pool.terminate()
         pool.join()
+
+
+class TestRecombinationMap(unittest.TestCase):
+    """
+    Tests for the RecombinationMap class.
+    """
+    # TODO these are incomplete.
+    def test_discrete(self):
+        for truthy in [True, False, {}, None, "ser"]:
+            rm = msprime.RecombinationMap.uniform_map(1, 0, discrete=truthy)
+            self.assertEqual(rm.discrete, bool(truthy))

@@ -1849,6 +1849,15 @@ class TestRecombinationMap(LowLevelTestCase):
         rm = _msprime.RecombinationMap([0, 10, 20], [0.25, 0.5, 0], True)
         self.assertEqual(rm.get_total_recombination_rate(), 7.5)
 
+    def test_get_discrete(self):
+        for truthy in [[], "sd", None, ValueError]:
+            rm = _msprime.RecombinationMap([0, 10], [0.25, 0], discrete=truthy)
+            self.assertEqual(bool(truthy), rm.get_discrete())
+
+        for discrete in [True, False]:
+            rm = _msprime.RecombinationMap([0, 10], [0.25, 0], discrete)
+            self.assertEqual(rm.get_discrete(), discrete)
+
 
 class TestRandomGenerator(unittest.TestCase):
     """

@@ -287,7 +287,7 @@ def simulator_factory(
     if gene_conversion_rate is None:
         gene_conversion_rate = 0
     else:
-        if not recomb_map.get_discrete():
+        if not recomb_map.discrete:
             raise ValueError(
                 "Cannot specify gene_conversion_rate along with "
                 "a nondiscrete recombination map")
@@ -989,15 +989,16 @@ class RecombinationMap(object):
     def get_sequence_length(self):
         return self._ll_recombination_map.get_sequence_length()
 
-    def get_discrete(self):
-        return self._ll_recombination_map.get_discrete()
-
     def get_length(self):
         # Deprecated: use sequence_length instead
         return self.get_sequence_length()
 
     def get_rates(self):
         return self._ll_recombination_map.get_rates()
+
+    @property
+    def discrete(self):
+        return self._ll_recombination_map.get_discrete()
 
 
 class PopulationConfiguration(object):
