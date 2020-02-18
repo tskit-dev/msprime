@@ -3504,8 +3504,17 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
          * simulations */
         if (self->gene_conversion_rate > 0) {
             /* Gene conversion within segments */
-            lambda = recomb_map_mass_to_position(
-                self->recomb_map, recomb_mass) * self->gene_conversion_rate;
+            if (recomb_mass > 0.0) {
+                lambda = recomb_map_mass_to_position(
+                    self->recomb_map, recomb_mass) * self->gene_conversion_rate;
+            } else {
+                if (self->recomb_map->total_recombination_rate == 0.0) {
+                    printf("recombination rate zero and gene conversion rate > 0 currently not supported\n");
+                    assert(self->recomb_map->total_recombination_rate > 0.0);
+                } else {
+                    lambda = 0.0;
+                }
+            }
             gc_in_t_wait = DBL_MAX;
             if (lambda != 0.0) {
                 gc_in_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);

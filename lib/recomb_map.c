@@ -139,7 +139,10 @@ recomb_map_get_sequence_length(recomb_map_t *self)
     return self->sequence_length;
 }
 
-bool recomb_map_get_discrete(recomb_map_t *self)
+/* Returns a boolean indicating whether the recombination map is discrete.
+ */
+bool
+recomb_map_get_discrete(recomb_map_t *self)
 {
     return self->discrete;
 }

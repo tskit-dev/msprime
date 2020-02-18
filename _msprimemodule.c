@@ -2075,6 +2075,19 @@ out:
 }
 
 static PyObject *
+RecombinationMap_get_discrete(RecombinationMap *self)
+{
+    PyObject *ret = NULL;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", recomb_map_get_discrete(self->recomb_map));
+out:
+    return ret;
+}
+
+static PyObject *
 RecombinationMap_get_positions(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -2152,6 +2165,9 @@ static PyMethodDef RecombinationMap_methods[] = {
     {"get_rates",
         (PyCFunction) RecombinationMap_get_rates, METH_NOARGS,
         "Returns the rates in this recombination map."},
+    {"get_discrete",
+        (PyCFunction) RecombinationMap_get_discrete, METH_NOARGS,
+        "Returns the value of discrete in this recombination map."},
     {NULL}  /* Sentinel */
 };
 
