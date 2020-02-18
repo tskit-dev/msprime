@@ -36,6 +36,12 @@ def flatten(l):
     return [x for sublist in l for x in sublist]
 
 
+def scale_breakpoints(df, factor):
+    def scale(points):
+        return [factor * x for x in points]
+    df['breakpoints'] = df['breakpoints'].map(scale)
+
+
 def harmonic_number(n):
     return np.sum(1 / np.arange(1, n + 1))
 
@@ -169,7 +175,7 @@ def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
     pyplot.legend(loc='upper right')
 
 
-def intervals_to_breakpoints(replicates):
+def all_breakpoints_in_replicates(replicates):
     return [right for intervals in replicates for left, right in intervals]
 
 
@@ -182,8 +188,8 @@ def plot_dtwf_coalescent_stats(basedir, df):
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
-    hudson_breakpoints = intervals_to_breakpoints(df_hudson["intervals"])
-    dtwf_breakpoints = intervals_to_breakpoints(df_dtwf["intervals"])
+    hudson_breakpoints = all_breakpoints_in_replicates(df_hudson["intervals"])
+    dtwf_breakpoints = all_breakpoints_in_replicates(df_dtwf["intervals"])
     if len(hudson_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
         plot_breakpoints_hist(
             hudson_breakpoints, dtwf_breakpoints, "hudson", "dtwf")
@@ -295,8 +301,26 @@ class SimulationVerifier(object):
     def _run_mshot_coalescent_stats(self, args):
         return self._exec_coalescent_stats("./data/msHOT_summary_stats", args)
 
-    def _run_msprime_coalescent_stats(self, args):
-        print("\t msprime:", args)
+    def _run_msprime_coalescent_stats(self, **kwargs):
+        print("\t msprime:", kwargs)
+        if "num_replicates" in kwargs:
+            replicates = kwargs["num_replicates"]
+            num_trees = [0 for i in range(replicates)]
+            breakpoints = [0 for i in range(replicates)]
+            for i, ts in enumerate(msprime.simulate(**kwargs)):
+                num_trees[i] = ts.num_trees
+                breakpoints[i] = list(ts.breakpoints())
+        else:
+            ts = msprime.simulate(**kwargs)
+            num_trees = [ts.num_trees]
+            breakpoints = [list(ts.breakpoints)]
+
+        d = {"num_trees": num_trees, "breakpoints": breakpoints}
+        df = pd.DataFrame(d)
+        return df
+
+    def _run_mspms_coalescent_stats(self, args):
+        print("\t mspms:", args)
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
         rng = msprime.RandomGenerator(random.randint(1, 2**32 - 1))
@@ -350,12 +374,12 @@ class SimulationVerifier(object):
             pyplot.close('all')
 
     def _run_coalescent_stats(self, key, args):
-        df_msp = self._run_msprime_coalescent_stats(args)
+        df_msp = self._run_mspms_coalescent_stats(args)
         df_ms = self._run_ms_coalescent_stats(args)
         self._plot_stats(key, "coalescent", df_msp, df_ms, "msp", "ms")
 
     def _run_variable_recombination_coalescent_stats(self, key, args):
-        df_msp = self._run_msprime_coalescent_stats(args)
+        df_msp = self._run_mspms_coalescent_stats(args)
         df_mshot = self._run_mshot_coalescent_stats(args)
         self._plot_stats(
             key, "recomb map coalescent",
@@ -2240,6 +2264,97 @@ class SimulationVerifier(object):
                     L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c),
                     growth_rate=0.05)
 
+    def run_cont_discrete_comparison(self, key, model,
+                                     discrete_recomb_map,
+                                     cont_recomb_map):
+        sample_size = 10
+        num_replicates = 400
+        df_discrete = self._run_msprime_coalescent_stats(
+                        num_replicates=num_replicates, sample_size=sample_size,
+                        model=model, recombination_map=discrete_recomb_map)
+        df_cont = self._run_msprime_coalescent_stats(
+                        num_replicates=num_replicates, sample_size=sample_size,
+                        model=model, recombination_map=cont_recomb_map)
+
+        discrete_length = discrete_recomb_map.get_sequence_length()
+        cont_length = cont_recomb_map.get_sequence_length()
+        scale_breakpoints(df_cont, discrete_length / cont_length)
+        self._plot_stats(key, "compare continuous and discrete coordinates",
+                         df_discrete, df_cont, "discrete", "continuous")
+
+    def run_uniform_recomb_cont_discrete_comparison(self, key, model):
+        discrete_recomb_map = msprime.RecombinationMap.uniform_map(
+                                2000000, 1e-5, discrete=True)
+        cont_recomb_map = msprime.RecombinationMap.uniform_map(
+                                1, 2000000 * 1e-5, discrete=False)
+
+        self.run_cont_discrete_comparison(
+                key, model, discrete_recomb_map, cont_recomb_map)
+
+    def run_variable_recomb_cont_discrete_comparison(self, key, model):
+        r = 1e-5
+        discrete_positions = [0, 10000, 50000, 150000, 200000]
+        discrete_rates = [0.0, r, 5 * r, r / 2, 0.0]
+        cont_positions = [x / 200000 for x in discrete_positions]
+        cont_rates = [x * 200000 for x in discrete_rates]
+
+        discrete_recomb_map = msprime.RecombinationMap(
+                                discrete_positions, discrete_rates,
+                                discrete=True)
+
+        cont_recomb_map = msprime.RecombinationMap(
+                            cont_positions, cont_rates, discrete=False)
+
+        self.run_cont_discrete_comparison(
+                key, model, discrete_recomb_map, cont_recomb_map)
+
+    def run_continuous_discrete_same_scale(self, key, model):
+        discrete_recomb_map = msprime.RecombinationMap.uniform_map(
+                                2000000, 1e-5, discrete=True)
+        cont_recomb_map = msprime.RecombinationMap.uniform_map(
+                                2000000, 1e-5, discrete=False)
+        self.run_cont_discrete_comparison(
+                key, model, discrete_recomb_map, cont_recomb_map)
+
+    def add_cont_discrete_both_same_scale(self):
+        tests = [
+            ("hudson_cont_discrete_same_scale", "hudson"),
+            ("dtwf_cont_discrete_same_scale", "dtwf"),
+        ]
+
+        def make_runner(key, model):
+            return lambda: self.run_continuous_discrete_same_scale(key, model)
+
+        for key, model in tests:
+            self._instances[key] = make_runner(key, model)
+
+    def add_continuous_discrete_comparisons(self):
+        """
+        Adds checks comparing equivalent simulations in discrete space
+        and scaled up continuous space.
+        """
+        uniform_tests = [
+            ("hudson_uniform_recomb_cont_discrete", "hudson"),
+            ("dtwf_uniform_recomb_cont_discrete", "dtwf"),
+        ]
+
+        variable_tests = [
+            ("hudson_variable_recomb_cont_discrete", "hudson"),
+            ("dtwf_variable_recomb_cont_discrete", "dtwf"),
+        ]
+
+        def make_uniform_runner(key, model):
+            return lambda: self.run_uniform_recomb_cont_discrete_comparison(key, model)
+
+        def make_variable_runner(key, model):
+            return lambda: self.run_variable_recomb_cont_discrete_comparison(key, model)
+
+        for key, model in uniform_tests:
+            self._instances[key] = make_uniform_runner(key, model)
+
+        for key, model in variable_tests:
+            self._instances[key] = make_variable_runner(key, model)
+
     def add_hudson_breakpoints(self):
         """
         Adds a check for xi_beta recombination breakpoints
@@ -2644,6 +2759,10 @@ def run_tests(args):
     verifier.add_random_instance(
         "random2", num_replicates=10**4, num_demographic_events=10)
     # verifier.add_random_instance("random2", num_populations=3)
+
+    # Add tests comparing continuous and discrete coordinates
+    verifier.add_continuous_discrete_comparisons()
+    verifier.add_cont_discrete_both_same_scale()
 
     # Add analytical checks
     verifier.add_s_analytical_check()
