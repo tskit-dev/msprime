@@ -845,7 +845,7 @@ class RecombinationMap(object):
         values. To simulate a fixed number of loci, set this parameter to
         ``True`` and scale ``positions`` to span the desired number of loci.
     """
-    def __init__(self, positions, rates, num_loci=None, discrete=False):
+    def __init__(self, positions, rates, num_loci=None, discrete=False, map_start=0):
         if num_loci is not None:
             if num_loci == positions[-1]:
                 warnings.warn(
@@ -858,6 +858,7 @@ class RecombinationMap(object):
                         "and set discrete=True")
         self._ll_recombination_map = _msprime.RecombinationMap(
             positions, rates, discrete)
+        self.map_start = map_start
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None, discrete=False):
@@ -926,6 +927,7 @@ class RecombinationMap(object):
             for j, line in enumerate(f):
                 pos, rate, = map(float, line.split()[1:3])
                 if j == 0:
+                    map_start = pos
                     if pos != 0:
                         positions.append(0)
                         rates.append(0)
@@ -935,10 +937,10 @@ class RecombinationMap(object):
                 rates.append(rate * 1e-8)
             if rate != 0:
                 raise ValueError(
-                    "The last rate provided in the recombination map must zero")
+                    "The last rate provided in the recombination map must be zero")
         finally:
             f.close()
-        return cls(positions, rates)
+        return cls(positions, rates, map_start=map_start)
 
     @property
     def mean_recombination_rate(self):
@@ -955,6 +957,8 @@ class RecombinationMap(object):
         window_sizes = positions_diff - positions
 
         weights = window_sizes / chrom_length
+        if self.map_start != 0:
+            weights[0] = 0
         rates = self._ll_recombination_map.get_rates()
 
         return np.average(rates, weights=weights)
