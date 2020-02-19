@@ -252,6 +252,12 @@ class Population(object):
         """
         return self._ancestors[label].pop(index)
 
+    def remove_individual(self, individual, label=0):
+        """
+        Removes the given individual from its population.
+        """
+        return self._ancestors[label].remove(individual)
+
     def add(self, individual, label=0):
         """
         Inserts the specified individual into this population.
@@ -522,6 +528,10 @@ class RecombinationMap(object):
             cumulative.append(recomb_mass)
         return cumulative
 
+    @property
+    def total_recombination_rate(self):
+        return self.cumulative[-1]
+
     def mass_between(self, left, right):
         left_mass = self.position_to_mass(left)
         right_mass = self.position_to_mass(right)
@@ -559,7 +569,7 @@ class RecombinationMap(object):
 
     def sample_poisson(self, start):
         left_bound = start + 1 if self.discrete else start
-        mass_to_next_recomb = np.random.poisson(1.0)
+        mass_to_next_recomb = np.random.exponential(1.0)
         return self.shift_by_mass(left_bound, mass_to_next_recomb)
 
     def _search(self, values, query):
@@ -1122,11 +1132,7 @@ class Simulator(object):
             # Cluster haploid inds by parent
             cur_inds = pop.get_ind_range(self.t)
             offspring = bintrees.AVLTree()
-            for i in range(pop.get_num_ancestors()-1, -1, -1):
-                # Popping every ancestor every generation is inefficient.
-                # In the C implementation we store a pointer to the
-                # ancestor so we can pop only if we need to merge
-                anc = pop.remove(i)
+            for anc in pop.iter_label(0):
                 parent = np.random.choice(cur_inds)
                 if parent not in offspring:
                     offspring[parent] = []
@@ -1138,7 +1144,11 @@ class Simulator(object):
                 H = [[], []]
                 for child in children:
                     segs_pair = self.dtwf_recombine(child)
+                    for seg in segs_pair:
+                        if seg is not None and seg.index != child.index:
+                            pop.add(seg)
 
+                    self.verify()
                     # Collect segments inherited from the same individual
                     for i, seg in enumerate(segs_pair):
                         if seg is None:
@@ -1148,7 +1158,10 @@ class Simulator(object):
 
                 # Merge segments
                 for h in H:
+                    for _, individual in h:
+                        pop.remove_individual(individual)
                     self.merge_ancestors(h, pop_idx, 0)  # label 0 only
+            self.verify()
 
         # Migration events happen at the rates in the matrix.
         for j in range(len(self.P)):
@@ -1530,7 +1543,9 @@ class Simulator(object):
                 self.P[lhs.population].add(lhs, lhs.label)
 
     def dtwf_generate_breakpoint(self, start):
-        return self.recomb_map.sample_poisson(start)
+        k = self.recomb_map.sample_poisson(start)
+        assert k > start
+        return k
 
     def dtwf_recombine(self, x):
         """
@@ -1541,6 +1556,7 @@ class Simulator(object):
         v = self.alloc_segment(-1, -1, -1, -1, -1, -1, None, None)
         seg_tails = [u, v]
 
+        # TODO Should this be the recombination rate going foward from x.left?
         if self.recomb_map.total_recombination_rate > 0:
             k = self.dtwf_generate_breakpoint(x.left)
         else:
@@ -1548,22 +1564,29 @@ class Simulator(object):
 
         ix = np.random.randint(2)
         seg_tails[ix].next = x
-        seg_tails[ix] = x
 
         while x is not None:
             seg_tails[ix] = x
             y = x.next
 
             if x.right > k:
-                assert x.left <= k
+                assert x.left < k
                 k_mass = self.recomb_map.position_to_mass(k)
                 self.num_re_events += 1
                 ix = (ix + 1) % 2
                 # Make new segment
+                if seg_tails[ix] is u or seg_tails[ix] is v:
+                    tail = None
+                else:
+                    tail = seg_tails[ix]
                 z = self.alloc_segment(
                     k, x.right,
                     k_mass, x.right_mass,
-                    x.node, x.population, seg_tails[ix], x.next)
+                    x.node, x.population, tail, x.next)
+                if z.prev is None:
+                    self.set_single_segment_mass(z)
+                else:
+                    self.set_segment_mass(z, z.prev)
                 if x.next is not None:
                     x.next.prev = z
                 seg_tails[ix].next = z
@@ -1571,6 +1594,7 @@ class Simulator(object):
                 x.next = None
                 x.right = k
                 x.right_mass = k_mass
+                self.subtract_segment_mass(x, z)
                 x = z
                 k = self.dtwf_generate_breakpoint(k)
             elif x.right <= k and y is not None and y.left >= k:
@@ -1578,12 +1602,20 @@ class Simulator(object):
                 assert seg_tails[ix] == x
                 x.next = None
                 y.prev = None
-                while y.left > k:
+                while y.left >= k:
                     self.num_re_events += 1
                     ix = (ix + 1) % 2
                     k = self.dtwf_generate_breakpoint(k)
                 seg_tails[ix].next = y
-                y.prev = seg_tails[ix]
+                if seg_tails[ix] is u or seg_tails[ix] is v:
+                    tail = None
+                else:
+                    tail = seg_tails[ix]
+                y.prev = tail
+                if y.prev is None:
+                    self.set_single_segment_mass(y)
+                else:
+                    self.set_segment_mass(y, y.prev)
                 seg_tails[ix] = y
                 x = y
             else:
@@ -1592,14 +1624,10 @@ class Simulator(object):
 
         # Remove sentinal segments - this can be handled more simply
         # with pointers in C implemetation
-        if u.next is not None:
-            u.next.prev = None
         s = u
         u = s.next
         self.free_segment(s)
 
-        if v.next is not None:
-            v.next.prev = None
         s = v
         v = s.next
         self.free_segment(s)
@@ -1651,8 +1679,6 @@ class Simulator(object):
         alpha = None
         z = None
         while len(H) > 0:
-            # print("LOOP HEAD")
-            # self.print_heaps(H)
             alpha = None
             left = H[0][0]
             X = []
@@ -1781,13 +1807,16 @@ class Simulator(object):
         Implements a coancestry event.
         """
         pop = self.P[population_index]
-        self.num_ca_events += 1
         # Choose two ancestors uniformly.
         j = random.randint(0, pop.get_num_ancestors(label) - 1)
         x = pop.remove(j, label)
         j = random.randint(0, pop.get_num_ancestors(label) - 1)
         y = pop.remove(j, label)
+        self.merge_two_ancestors(population_index, label, x, y)
+
+    def merge_two_ancestors(self, population_index, label, x, y):
         pop = self.P[population_index]
+        self.num_ca_events += 1
         z = None
         coalescence = False
         defrag_required = False
@@ -1935,12 +1964,13 @@ class Simulator(object):
         """
         self.verify_overlaps()
         q = 0
-        for pop_index, pop in enumerate(self.P):
-            for l in range(self.num_labels):
+        for l in range(self.num_labels):
+            total_mass = 0
+            alt_total_mass = 0
+            for pop_index, pop in enumerate(self.P):
                 for u in pop.iter_label(l):
                     assert u.prev is None
                     left = u.left
-                    right = u.left
                     while u is not None:
                         assert u.population == pop_index
                         assert u.left < u.right
@@ -1955,9 +1985,10 @@ class Simulator(object):
                             s = self.recomb_map.mass_between_left_exclusive(
                                             u.left, u.right)
                         right = u.right
-                        if self.model != 'dtwf' and self.model != 'wf_ped':
+                        if self.model != 'wf_ped':
                             freq = self.L[l].get_frequency(u.index)
-                            assert math.isclose(s, freq, abs_tol=1e-6), f'{s} | {freq}'
+                            total_mass += freq
+                            assert math.isclose(s, freq, abs_tol=1e-6)
                         v = u.next
                         if v is not None:
                             assert v.prev == u
@@ -1965,12 +1996,16 @@ class Simulator(object):
                                 print("ERROR", u, v)
                             assert u.right <= v.left
                         u = v
-                    q += self.recomb_map.mass_between_left_exclusive(left, right)
+                    s = self.recomb_map.mass_between_left_exclusive(left, right)
+                    q += s
+                    alt_total_mass += s
+            assert math.isclose(total_mass, self.L[l].get_total(), abs_tol=1e-6)
+            assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
         # add check for dealing with labels
         lab_tot = 0
         for l in range(self.num_labels):
             lab_tot += self.L[l].get_total()
-        if self.model != 'dtwf' and self.model != 'wf_ped':
+        if self.model != 'wf_ped':
             assert math.isclose(q, lab_tot, abs_tol=1e-6)
 
         assert self.S[self.m] == -1
@@ -2077,7 +2112,7 @@ def run_simulate(args):
         args.population_size_change,
         args.migration_matrix_element_change,
         args.bottleneck, args.census_time, args.model, from_ts=args.from_ts,
-        max_segments=10000, num_labels=num_labels, full_arg=args.full_arg,
+        max_segments=100000, num_labels=num_labels, full_arg=args.full_arg,
         sweep_trajectory=sweep_trajectory, time_slice=args.time_slice,
         gene_conversion_rate=gamma, gene_conversion_length=mean_tracklength,
         pedigree=pedigree)
