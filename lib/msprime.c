@@ -5846,31 +5846,25 @@ out:
 static double
 beta_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * model->reference_size * t;
+    return 4 * model->params.beta_coalescent.scalar * t;
 }
 
 static double
 beta_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g / (4 * model->reference_size);
+    return g / (4 * model->params.beta_coalescent.scalar);
 }
 
 static double
 beta_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * 4 * model->reference_size;
+    return rate * 4 * model->params.beta_coalescent.scalar;
 }
 
 static double
 beta_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    double alpha = model->params.beta_coalescent.alpha;
-    double m = model->params.beta_coalescent.m;
-    double phi = model->params.beta_coalescent.phi;
-    double scalar = exp(log(alpha) - alpha * log(m)
-            + gsl_sf_beta_inc (2 - alpha, alpha, phi)
-            - (alpha - 1) * model->reference_size);
-    return rate / ( 4 * scalar );
+    return rate / ( 4 * model->params.beta_coalescent.scalar );
 }
 
 static void
@@ -5962,10 +5956,8 @@ msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, doubl
     double alpha = self->model.params.beta_coalescent.alpha;
 
     *result = 1;
-    if (self->model.params.beta_coalescent.truncation_point != 0) {
-        if (num_ancestors > 2) {
-            ret = msp_compute_beta_integral(self, num_ancestors, alpha, result);
-        }
+    if (num_ancestors > 2) {
+        ret = msp_compute_beta_integral(self, num_ancestors, alpha, result);
     }
     return ret;
 }
@@ -6511,19 +6503,38 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
         double truncation_point)
 {
     int ret = 0;
+    double m;
+    double scalar;
 
-    /* TODO bounds check alpha and truncation_point: what are legal values? */
+    /* Numerical instability occurs for values above 2 - 0.0005. */
+    if (alpha <= 1.0 || alpha >= 2.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
+    if (truncation_point <= 0.0 || truncation_point > 1.0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
     ret = msp_set_simulation_model(self, MSP_MODEL_BETA, reference_size);
     if (ret != 0) {
         goto out;
     }
+
+    m = 2.0 + exp(alpha * 0.6931472 + (1 - alpha) * 1.098612 - log(alpha - 1));
+    scalar = exp(log(alpha) - alpha * log(m)
+             + gsl_sf_beta_inc(2 - alpha, alpha, truncation_point)
+             - (alpha - 1) * reference_size);
+
+    assert(!isnan(m));
+    assert(!isnan(scalar));
+    assert(!isinf(m));
+    assert(!isinf(scalar));
+
     self->model.params.beta_coalescent.alpha = alpha;
     self->model.params.beta_coalescent.truncation_point = truncation_point;
-    self->model.params.beta_coalescent.m =
-        2.0 + exp(alpha * 0.6931472 + (1 - alpha) * 1.098612 - log(alpha - 1));
-    //self->model.params.beta_coalescent.phi = beta_compute_phi(reference_size,
-                        //truncation_point, self->model.params.beta_coalescent.m);
-    //self->model.params.beta_coalescent.K = truncation_point;
+    self->model.params.beta_coalescent.scalar = scalar;
 
     /* TODO we probably want to make these input parameters, as there will be situations
      * where integration fails and being able to tune them will be useful */

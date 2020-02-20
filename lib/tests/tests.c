@@ -3125,7 +3125,7 @@ test_gsl_error_handling_beta_coalescent(void)
     old_handler = gsl_set_error_handler_off();
     /* Redirect stderr to avoid spamming output */
     stderr = _devnull;
-    compute_beta_coalescence_rate_fails(1000, 1e20);
+    compute_beta_coalescence_rate_fails(1000, 2 - DBL_EPSILON);
     gsl_set_error_handler(old_handler);
     stderr = old_stderr;
 }
@@ -3166,7 +3166,7 @@ test_multiple_mergers_simulation(void)
                 // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
                 ret = msp_set_simulation_model_dirac(msp, 1, 0.5, 1);
             } else {
-                ret = msp_set_simulation_model_beta(msp, 1, 1.5, 10.0);
+                ret = msp_set_simulation_model_beta(msp, 1, 1.5, 1);
             }
             CU_ASSERT_EQUAL(ret, 0);
             /* TODO check for adding various complications like multiple populations etc

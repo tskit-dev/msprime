@@ -1927,13 +1927,14 @@ class BetaCoalescent(ParametricSimulationModel):
     # TODO document.
     name = "beta"
 
-    # TODO what is a meaningful value for this parameter? Ideally, the default
-    # would be the equivalent of the Kingman coalescent or something similar.
+    # Must have 1 < alpha < 2 and 0 < truncation_point <= 1.
+    # alpha = 2 and truncation_point = 1 is equivalent to the Kingman coalescent,
+    # but numerical instability occurs with alpha > 2.0 - 0.0005.
     def __init__(self, reference_size=1, alpha=1.5, truncation_point=None):
         self.reference_size = reference_size
         self.alpha = alpha
         if truncation_point is None:
-            truncation_point = sys.float_info.max
+            truncation_point = 1
         self.truncation_point = truncation_point
 
 

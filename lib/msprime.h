@@ -149,8 +149,7 @@ typedef struct {
     double alpha;
     double truncation_point;
     /* private state */
-    double m;
-    double phi;
+    double scalar;
     double integration_epsabs;
     double integration_epsrel;
     size_t integration_workspace_size;
