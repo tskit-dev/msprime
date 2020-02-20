@@ -569,6 +569,20 @@ class TestMixedModels(unittest.TestCase):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
+    def test_models_demographic_events(self):
+        Ne = 10000
+        ts = msprime.simulate(
+            Ne=Ne,
+            sample_size=10,
+            recombination_rate=0.1,
+            demographic_events=[
+                msprime.SimulationModelChange(10, msprime.StandardCoalescent(Ne)),
+                msprime.SimpleBottleneck(11, population=0, proportion=1.0)],
+            random_seed=10)
+        for tree in ts.trees():
+            self.assertEqual(tree.num_roots, 1)
+            self.assertEqual(ts.node(tree.root).time, 11)
+
 
 class TestSweepGenicSelection(unittest.TestCase):
     """
@@ -583,23 +597,21 @@ class TestSweepGenicSelection(unittest.TestCase):
                 msprime.simulate(
                     10, recombination_rate=1, model=model, num_labels=num_labels)
 
-    @unittest.skip("Not clear what's happening now")
     def test_sweep_coalescence_no_recomb(self):
         model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
+            position=0.5, start_frequency=0.1, end_frequency=0.99, alpha=0.01,
             dt=0.1)
-        ts = msprime.simulate(10, model=model, num_labels=2, random_seed=2)
+        ts = msprime.simulate(10, model=model, random_seed=2)
         self.assertEqual(ts.num_trees, 1)
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
-    @unittest.skip("Not clear what's happening now")
     def test_sweep_coalescence_recomb(self):
         model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
-            dt=0.1)
+            position=0.5, start_frequency=0.01, end_frequency=0.999, alpha=1.0,
+            dt=0.01)
         ts = msprime.simulate(
-            10, model=model, recombination_rate=0.1, num_labels=2, random_seed=2)
+            10, model=model, recombination_rate=1, random_seed=2)
         self.assertGreater(ts.num_trees, 1)
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
@@ -608,57 +620,77 @@ class TestSweepGenicSelection(unittest.TestCase):
         model = msprime.SweepGenicSelection(
             position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01,
             dt=0.1)
-        ts1 = msprime.simulate(5, model=model, num_labels=2, random_seed=2)
-        ts2 = msprime.simulate(5, model=model, num_labels=2, random_seed=2)
+        ts1 = msprime.simulate(5, model=model, random_seed=2)
+        ts2 = msprime.simulate(5, model=model, random_seed=2)
         t1 = ts1.dump_tables()
         t2 = ts2.dump_tables()
         t1.provenances.clear()
         t2.provenances.clear()
         self.assertEqual(t1, t2)
 
-    @unittest.skip("Not clear what's happening now")
     def test_sweep_start_time_complete(self):
         sweep_model = msprime.SweepGenicSelection(
-            reference_size=0.25, position=0.5, start_frequency=0.6,
-            end_frequency=0.7, alpha=0.9, dt=0.001)
+            reference_size=0.25, position=0.5, start_frequency=0.01,
+            end_frequency=0.99, alpha=0.9, dt=0.001)
         t_start = 0.1
         ts = msprime.simulate(
             10, Ne=0.25,
             recombination_rate=2,
             demographic_events=[
                 msprime.SimulationModelChange(t_start, sweep_model)],
-            num_labels=2, random_seed=2)
+            random_seed=2)
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
 
-    # commenting out skip as test works
-    # @unittest.skip("Can't get sweep to be incomplete")
     def test_sweep_start_time_incomplete(self):
         # Short sweep that doesn't make complete coalescence.
         sweep_model = msprime.SweepGenicSelection(
             reference_size=0.25, position=0.5, start_frequency=0.69,
-            end_frequency=0.7, alpha=1e-5, dt=1)
+            end_frequency=0.7, alpha=8, dt=0.001)
         t_start = 0.1
         ts = msprime.simulate(
             10, Ne=0.25,
             recombination_rate=2,
             demographic_events=[
                 msprime.SimulationModelChange(t_start, sweep_model)],
-            num_labels=2, random_seed=2)
+            random_seed=2)
         self.assertTrue(any(tree.num_roots > 1 for tree in ts.trees()))
 
     def test_sweep_model_change_time_complete(self):
-        # Short sweep that doesn't coalesce folled
+        # Short sweep that doesn't coalesce followed
         # by Hudson phase to finish up coalescent
         sweep_model = msprime.SweepGenicSelection(
             reference_size=0.25, position=0.5, start_frequency=0.69,
             end_frequency=0.7, alpha=1e-5, dt=1)
-        t_start = 0.0
         ts = msprime.simulate(
             10, Ne=0.25,
             recombination_rate=2,
             demographic_events=[
-                msprime.SimulationModelChange(t_start, sweep_model),
-                msprime.SimulationModelChange(np.Inf, "hudson")],
-            num_labels=2,
+                msprime.SimulationModelChange(0, sweep_model),
+                msprime.SimulationModelChange(None, "hudson")],
             random_seed=2)
-        self.assertFalse(any(tree.num_roots > 1 for tree in ts.trees()))
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
+        # Make sure that the Hudson phase did something.
+        ts = msprime.simulate(
+            10, Ne=0.25,
+            recombination_rate=2,
+            demographic_events=[
+                msprime.SimulationModelChange(0, sweep_model)],
+            random_seed=2)
+        self.assertTrue(any(tree.num_roots > 1 for tree in ts.trees()))
+
+    def test_many_sweeps(self):
+        sweep_models = [
+            msprime.SweepGenicSelection(
+                reference_size=0.25, position=j, start_frequency=0.69,
+                end_frequency=0.7, alpha=1e-5, dt=0.1)
+            for j in range(10)]
+        ts = msprime.simulate(
+            10, Ne=0.25, length=10,
+            recombination_rate=0.2,
+            demographic_events=[
+                msprime.SimulationModelChange(0.01, sweep_models[0])] + [
+                    msprime.SimulationModelChange(None, model)
+                    for model in sweep_models] + [
+                msprime.SimulationModelChange(None, "hudson")],
+            random_seed=2)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))

@@ -243,9 +243,7 @@ def simulator_factory(
     if start_time is not None and start_time < 0:
         raise ValueError("start_time cannot be negative")
 
-    if num_labels is None:
-        num_labels = 1
-    if num_labels < 1:
+    if num_labels is not None and num_labels < 1:
         raise ValueError("Must have at least one structured coalescent label")
 
     if from_ts is not None:
@@ -560,7 +558,7 @@ class Simulator(object):
         self.model_change_events = []
         self.store_migrations = False
         self.store_full_arg = False
-        self.num_labels = 1
+        self.num_labels = None
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
         num_samples = (
@@ -734,10 +732,24 @@ class Simulator(object):
             else:
                 self.demographic_events.append(event)
 
+    def __choose_num_labels(self):
+        """
+        Choose the number of labels appropriately, given the simulation
+        models that will be simulated.
+        """
+        self.num_labels = 1
+        models = [self.model] + [event.model for event in self.model_change_events]
+        for model in models:
+            if isinstance(model, SweepGenicSelection):
+                self.num_labels = 2
+
     def create_ll_instance(self):
+        if self.num_labels is None:
+            self.__choose_num_labels()
         # Now, convert the high-level values into their low-level
         # counterparts.
         ll_simulation_model = self.model.get_ll_representation()
+        logger.debug("Setting initial model %s", ll_simulation_model)
         d = len(self.population_configurations)
         # The migration matrix must be flattened.
         ll_migration_matrix = [0 for j in range(d**2)]
@@ -781,9 +793,14 @@ class Simulator(object):
         if self.ll_sim is None:
             self.ll_sim = self.create_ll_instance()
         for event in self.model_change_events:
-            self.ll_sim.run(event.time)
-            self.ll_sim.set_model(event.model.get_ll_representation())
-        end_time = sys.float_info.max if end_time is None else end_time
+            event_time = np.inf if event.time is None else event.time
+            logger.debug("Running simulation until maximum: %f", event_time)
+            self.ll_sim.run(event_time)
+            new_model = event.model.get_ll_representation()
+            logger.debug("Changing to model %s", new_model)
+            self.ll_sim.set_model(new_model)
+        end_time = np.inf if end_time is None else end_time
+        logger.debug("Running simulation until maximum: %f", end_time)
         self.ll_sim.run(end_time)
         self.ll_sim.finalise_tables()
 
@@ -1597,9 +1614,8 @@ class SimulationModelChange(DemographicEvent):
     :param float time: The time at which the simulation model changes
         to the new model, in generations. After this time, all internal
         tree nodes, edges and migrations are the result of the new model.
-        If time is set to infinity using ``np.Inf`` this has the effect
-        of the model change occuring after all other model change events
-        have completed.
+        If time is set to None, the model change will occur immediately
+        after the previous model has completed.
     :param model: The new simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
