@@ -29,6 +29,7 @@ import os
 import warnings
 import copy
 import logging
+import bisect
 
 import tskit
 import numpy as np
@@ -962,6 +963,72 @@ class RecombinationMap(object):
         rates = self._ll_recombination_map.get_rates()
 
         return np.average(rates, weights=weights)
+
+    def slice(self, start=None, end=None, trim=False):
+        """
+        Returns a subset of this recombination map between the specified end
+        points. If start is None, it defaults to 0. If end is None, it defaults
+        to the end of the map. If trim is True, remove the flanking
+        zero recombination rate regions such that the sequence length of the
+        new recombination map is end - start.
+        """
+        positions = self.get_positions()
+        rates = self.get_rates()
+
+        if start is None:
+            i = 0
+            start = 0
+        if end is None:
+            end = positions[-1]
+            j = len(positions)
+
+        if (start < 0 or end < 0 or start > positions[-1] or end > positions[-1]
+           or start > end):
+            raise IndexError(f"Invalid subset: start={start}, end={end}")
+
+        if start != 0:
+            i = bisect.bisect_left(positions, start)
+            if start < positions[i]:
+                i -= 1
+        if end != positions[-1]:
+            j = bisect.bisect_right(positions, end, lo=i)
+
+        new_positions = positions[i:j]
+        new_rates = rates[i:j]
+        new_positions[0] = start
+        if end > new_positions[-1]:
+            new_positions.append(end)
+            new_rates.append(0)
+        else:
+            new_rates[-1] = 0
+        if trim:
+            new_positions = [pos-start for pos in new_positions]
+        else:
+            if new_positions[0] != 0:
+                if new_rates[0] == 0:
+                    new_positions[0] = 0
+                else:
+                    new_positions.insert(0, 0)
+                    new_rates.insert(0, 0.0)
+            if new_positions[-1] != positions[-1]:
+                new_positions.append(positions[-1])
+                new_rates.append(0)
+        return self.__class__(
+                new_positions, new_rates, discrete=self.discrete)
+
+    def __getitem__(self, key):
+        """
+        Use slice syntax for obtaining a recombination map subset. E.g.
+            >>> recomb_map_4m_to_5m = recomb_map[4e6:5e6]
+        """
+        if not isinstance(key, slice) or key.step is not None:
+            raise TypeError("Only interval slicing is supported")
+        start, end = key.start, key.stop
+        if start is not None and start < 0:
+            start += self.get_sequence_length()
+        if end is not None and end < 0:
+            end += self.get_sequence_length()
+        return self.slice(start=start, end=end, trim=True)
 
     def get_ll_recombination_map(self):
         return self._ll_recombination_map
