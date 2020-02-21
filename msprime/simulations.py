@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -362,6 +362,8 @@ def simulate(
         ``samples`` must be specified.
     :param float Ne: The effective (diploid) population size for the reference
         population. This defaults to 1 if not specified.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models.
     :param float length: The length of the simulated region in bases.
         This parameter cannot be used along with ``recombination_map``.
         Defaults to 1 if not specified.
@@ -793,12 +795,26 @@ class Simulator(object):
         if self.ll_sim is None:
             self.ll_sim = self.create_ll_instance()
         for event in self.model_change_events:
-            event_time = np.inf if event.time is None else event.time
-            logger.debug("Running simulation until maximum: %f", event_time)
-            self.ll_sim.run(event_time)
-            new_model = event.model.get_ll_representation()
-            logger.debug("Changing to model %s", new_model)
-            self.ll_sim.set_model(new_model)
+            # If the event time is a callable, we compute the end_time
+            # as a function of the current simulation time.
+            current_time = self.ll_sim.get_time()
+            model_start_time = event.time
+            if callable(event.time):
+                model_start_time = event.time(current_time)
+            # If model_start_time is None, we run until the current
+            # model completes. Note that when event.time is a callable
+            # it can also return None for this behaviour.
+            if model_start_time is None:
+                model_start_time = np.inf
+            if model_start_time < current_time:
+                raise ValueError(
+                    "Model start times out of order or not computed correctly. "
+                    f"current time = {current_time}; start_time = {model_start_time}")
+            logger.debug("Running simulation until maximum: %f", model_start_time)
+            self.ll_sim.run(model_start_time)
+            ll_new_model = event.model.get_ll_representation()
+            logger.debug("Changing to model %s", ll_new_model)
+            self.ll_sim.set_model(ll_new_model)
         end_time = np.inf if end_time is None else end_time
         logger.debug("Running simulation until maximum: %f", end_time)
         self.ll_sim.run(end_time)
@@ -1614,16 +1630,20 @@ class SimulationModelChange(DemographicEvent):
     :param float time: The time at which the simulation model changes
         to the new model, in generations. After this time, all internal
         tree nodes, edges and migrations are the result of the new model.
-        If time is set to None, the model change will occur immediately
-        after the previous model has completed.
+        If time is set to None (the default), the model change will occur
+        immediately after the previous model has completed. If time is a
+        callable, the time at which the simulation model changes is the result
+        of calling this function with the time that the previous model
+        started with as a parameter.
     :param model: The new simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
         Please see the :ref:`sec_api_simulation_models` section for more details
         on specifying simulations models. If the argument is a string, the
         reference population size is set from the top level ``Ne`` parameter
-        to :func:`.simulate`. If this is None (the default) we revert to
-        the standard coalescent with the reference population size set by ``Ne``.
+        to :func:`.simulate`. If this is None (the default) the model is
+        changed to the standard coalescent with a reference_size of
+        Ne (if model was not specified).
     :type model: str or simulation model instance
     """
     # Implementation note: these are treated as demographic events for the
@@ -1632,9 +1652,8 @@ class SimulationModelChange(DemographicEvent):
     # this would add too much complexity to the main loops. Instead, we
     # detect these events at the high level, and insert calls to set_model
     # as appropriate.
-    def __init__(self, time, model=None):
+    def __init__(self, time=None, model=None):
         super().__init__("simulation_model_change", time)
-        # The model will be updated later during the call to simulate
         self.model = model
 
     def get_ll_representation(self, num_populations):

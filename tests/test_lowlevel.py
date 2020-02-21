@@ -1136,6 +1136,22 @@ class TestSimulator(LowLevelTestCase):
             # Because we have a flat map we should convert exactly.
             self.assertEqual(j, model["locus"])
 
+    def test_sweep_after_coalescence(self):
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_recombination_map(L=10, rate=1),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+            num_labels=2)
+        done = sim.run()
+        self.assertTrue(done)
+        t_before = sim.get_time()
+        for _ in range(100):
+            model = get_sweep_genic_selection_model(position=5)
+            sim.set_model(model)
+            self.assertTrue(sim.run())
+            self.assertEqual(t_before, sim.get_time())
+
     def test_store_migrations(self):
         def f(num_samples=10, random_seed=1, **kwargs):
             samples = [(j % 2, 0) for j in range(num_samples)]

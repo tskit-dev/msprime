@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -656,19 +656,74 @@ class TestSimulatorFactory(unittest.TestCase):
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)
 
+    def test_specify_model_and_Ne(self):
+        # When them model reference size and Ne are both specified,
+        # Ne is ignored.
+        for Ne in [0, 1234, None, "sdf"]:
+            sim = msprime.simulator_factory(
+                sample_size=2, Ne=Ne,
+                model=msprime.SmcPrimeApproxCoalescent(20))
+            self.assertEqual(sim.model.reference_size, 20)
+
     def test_model_change_event_sizes(self):
         models = [msprime.SweepGenicSelection(
             position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j,
             reference_size=j) for j in range(1, 10)]
         sim = msprime.simulator_factory(
-                sample_size=2, Ne=10,
-                demographic_events=[
-                    msprime.SimulationModelChange(None, model) for model in models])
+            sample_size=2, Ne=10,
+            demographic_events=[
+                msprime.SimulationModelChange(None, model) for model in models])
         self.assertEqual(sim.model.reference_size, 10)
         self.assertEqual(len(sim.model_change_events), len(models))
         for event, model in zip(sim.model_change_events, models):
             self.assertEqual(
                 event.model.get_ll_representation(), model.get_ll_representation())
+
+    def test_model_change_inherits_Ne(self):
+        K = 10
+        sim = msprime.simulator_factory(
+            sample_size=2, Ne=10,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    None, msprime.SmcApproxCoalescent()) for _ in range(K)])
+        self.assertEqual(sim.model.reference_size, 10)
+        self.assertEqual(len(sim.model_change_events), K)
+        for event in sim.model_change_events:
+            self.assertEqual(event.model.reference_size, 10)
+            self.assertEqual(event.time, None)
+
+    def test_model_change_no_model_inherits_model_size(self):
+        main_model = msprime.SmcApproxCoalescent(100)
+        sim = msprime.simulator_factory(
+            sample_size=2, model=main_model,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(2, None)])
+        self.assertEqual(sim.model.reference_size, 100)
+        self.assertEqual(len(sim.model_change_events), 2)
+        self.assertEqual(sim.model_change_events[0].time, 1)
+        self.assertEqual(sim.model_change_events[0].model.reference_size, 500)
+        # When model=None we change to the standard coalescent using the
+        # reference size set by the initial model.
+        self.assertEqual(sim.model_change_events[1].time, 2)
+        self.assertEqual(sim.model_change_events[1].model.reference_size, 100)
+        self.assertEqual(sim.model_change_events[1].model.name, "hudson")
+
+    def test_model_change_no_model_inherits_Ne(self):
+        sim = msprime.simulator_factory(
+            sample_size=2, Ne=1500,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(2, None)])
+        self.assertEqual(sim.model.reference_size, 1500)
+        self.assertEqual(len(sim.model_change_events), 2)
+        self.assertEqual(sim.model_change_events[0].time, 1)
+        self.assertEqual(sim.model_change_events[0].model.reference_size, 500)
+        self.assertEqual(sim.model_change_events[1].time, 2)
+        self.assertEqual(sim.model_change_events[1].model.reference_size, 1500)
+        self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
 
 class TestSimulateInterface(unittest.TestCase):

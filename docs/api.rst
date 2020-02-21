@@ -141,14 +141,14 @@ that are currently supported. Note that all times are measured in
 generations, all sizes are absolute (i.e., *not* relative to :math:`N_e`),
 and all rates are per-generation.
 
+Model change events are also considered to be demographic events;
+see the :ref:`sec_api_simulation_models_change_events` section for details.
+
 .. autoclass:: msprime.PopulationParametersChange
 .. autoclass:: msprime.MigrationRateChange
 .. autoclass:: msprime.MassMigration
-.. autoclass:: msprime.SimulationModelChange
-
-.. _sec_api_demographic_events_census:
-
 .. autoclass:: msprime.CensusEvent
+
 
 ++++++++++++++++++++++++++++
 Debugging demographic models
@@ -198,6 +198,11 @@ and
     msprime.simulate(10, model=msprime.DiscreteTimeWrightFisher(1000))
 
 define the same simulation.
+
+.. note:: When ``Ne`` and an instance of :class:`.SimulationModel` with
+    ``reference_size`` set are both provided as arguments to :func:`.simulate`,
+    the ``Ne`` parameter is ignored.
+
 
 .. todo:: Add a discussion of population sizes here, describing
     what Ne/model.reference_size really means, and how it interacts
@@ -272,6 +277,27 @@ To use this option, set the flag ``model="dtwf"`` as in the following example::
 All other parameters can be set as usual.
 
 .. autoclass:: msprime.DiscreteTimeWrightFisher
+
+
+.. _sec_api_simulation_models_selective_sweeps:
+
+++++++++++++++++
+Selective sweeps
+++++++++++++++++
+
+.. todo:: Document the selective sweep models.
+
+
+.. _sec_api_simulation_models_change_events:
+
+++++++++++++++++++++++++
+Simulation model changes
+++++++++++++++++++++++++
+
+.. todo:: Describe the subtleties of how simulation model changes work
+    along with how times are computed.
+
+.. autoclass:: msprime.SimulationModelChange
 
 
 .. _sec_api_simulate_from:

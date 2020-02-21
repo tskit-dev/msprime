@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 University of Oxford
+# Copyright (C) 2016-2020 University of Oxford
 
 #
 # This file is part of msprime.
@@ -569,6 +569,17 @@ class TestMixedModels(unittest.TestCase):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
+    def test_too_many_models(self):
+        # What happens when we have loads of models
+        demographic_events = []
+        models = ["hudson", "smc"]
+        for j in range(1000):
+            demographic_events.append(
+                msprime.SimulationModelChange(time=j, model=models[j % 2]))
+        ts = msprime.simulate(
+            10, demographic_events=demographic_events, random_seed=2)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
+
     def test_models_demographic_events(self):
         Ne = 10000
         ts = msprime.simulate(
@@ -582,6 +593,35 @@ class TestMixedModels(unittest.TestCase):
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
             self.assertEqual(ts.node(tree.root).time, 11)
+
+    def test_models_out_of_order(self):
+        with self.assertRaises(ValueError):
+            msprime.simulate(
+                Ne=10,
+                sample_size=10,
+                demographic_events=[
+                    msprime.SimulationModelChange(10, "hudson"),
+                    msprime.SimulationModelChange(8, "hudson")])
+
+    def test_model_change_negative_time(self):
+        with self.assertRaises(ValueError):
+            msprime.simulate(
+                Ne=10,
+                sample_size=10,
+                demographic_events=[
+                    msprime.SimulationModelChange(-10, "hudson")])
+
+    def test_model_change_time_bad_func(self):
+        def bad_func(t):
+            return t - 1
+
+        with self.assertRaises(ValueError):
+            msprime.simulate(
+                Ne=10,
+                sample_size=10,
+                demographic_events=[
+                    msprime.SimulationModelChange(1, "hudson"),
+                    msprime.SimulationModelChange(bad_func, "hudson")])
 
 
 class TestSweepGenicSelection(unittest.TestCase):
@@ -669,6 +709,21 @@ class TestSweepGenicSelection(unittest.TestCase):
                 msprime.SimulationModelChange(None, "hudson")],
             random_seed=2)
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
+
+        # Returning None from a function should be identical
+        ts2 = msprime.simulate(
+            10, Ne=0.25,
+            recombination_rate=2,
+            demographic_events=[
+                msprime.SimulationModelChange(0, sweep_model),
+                msprime.SimulationModelChange(lambda t: None, "hudson")],
+            random_seed=2)
+        t1 = ts.dump_tables()
+        t2 = ts2.dump_tables()
+        t1.provenances.clear()
+        t2.provenances.clear()
+        self.assertEqual(t1, t2)
+
         # Make sure that the Hudson phase did something.
         ts = msprime.simulate(
             10, Ne=0.25,
@@ -691,6 +746,42 @@ class TestSweepGenicSelection(unittest.TestCase):
                 msprime.SimulationModelChange(0.01, sweep_models[0])] + [
                     msprime.SimulationModelChange(None, model)
                     for model in sweep_models] + [
-                msprime.SimulationModelChange(None, "hudson")],
+                msprime.SimulationModelChange()],
+            random_seed=2)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
+
+    def test_many_sweeps_regular_times_model_change(self):
+        demographic_events = []
+        for j in range(10):
+            sweep_model = msprime.SweepGenicSelection(
+                position=j, start_frequency=0.69, end_frequency=0.7,
+                alpha=1000, dt=0.0125)
+            # Start the sweep after 0.01 generations of Hudson
+            demographic_events.append(msprime.SimulationModelChange(
+                time=lambda t: t + 0.01, model=sweep_model))
+            # Revert back to Hudson until the next sweep
+            demographic_events.append(msprime.SimulationModelChange())
+        ts = msprime.simulate(
+            10, Ne=0.25, length=10, recombination_rate=0.2,
+            demographic_events=demographic_events,
+            random_seed=2)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
+
+    def test_too_many_sweeps(self):
+        # What happens when we have loads of sweeps
+        demographic_events = []
+        for j in range(1000):
+            sweep_model = msprime.SweepGenicSelection(
+                position=0.5, start_frequency=0.69, end_frequency=0.7,
+                alpha=1000, dt=0.0125)
+            # Start the sweep after 0.1 generations of Hudson
+            demographic_events.append(msprime.SimulationModelChange(
+                time=lambda t: t + 0.1,
+                model=sweep_model))
+            # Revert back to Hudson until the next sweep
+            demographic_events.append(msprime.SimulationModelChange())
+        ts = msprime.simulate(
+            10, Ne=0.25, length=10, recombination_rate=0.2,
+            demographic_events=demographic_events,
             random_seed=2)
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
