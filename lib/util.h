@@ -76,6 +76,8 @@
 #define MSP_ERR_BAD_PROPORTION                                      -38
 #define MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES                            -39
 #define MSP_ERR_BAD_PEDIGREE_ID                                     -40
+#define MSP_ERR_BAD_ALPHA                                           -41
+#define MSP_ERR_BAD_TRUNCATION_POINT                                -42
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

@@ -163,6 +163,12 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_PROPORTION:
             ret = "Proportion values must have 0 <= x <= 1";
             break;
+        case MSP_ERR_BAD_ALPHA:
+            ret = "Bad alpha. Must have 1 < alpha < 2";
+            break;
+        case MSP_ERR_BAD_TRUNCATION_POINT:
+            ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                 "report!";

@@ -3118,6 +3118,46 @@ compute_beta_coalescence_rate_fails(unsigned int num_ancestors, double alpha)
 }
 
 static void
+test_beta_coalescent_bad_parameters(void)
+{
+    int j;
+    int ret;
+    msp_t msp;
+    unsigned int n = 10;
+    double alphas[] = {-1e6, 0, 0.001, 1.0, 2.0, 1e6};
+    double truncation_points[] = {-1e6, 0, 1.001, 1e6};
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
+        ret = msp_set_simulation_model_beta(&msp, 1, alphas[j], 1);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_ALPHA);
+    }
+    for (j = 0; j < sizeof(truncation_points) / sizeof(*truncation_points); j++) {
+        ret = msp_set_simulation_model_beta(&msp, 1, 1.5, truncation_points[j]);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TRUNCATION_POINT);
+    }
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    free(samples);
+    gsl_rng_free(rng);
+}
+
+static void
 test_gsl_error_handling_beta_coalescent(void)
 {
     FILE *old_stderr = stderr;
@@ -4643,6 +4683,7 @@ main(int argc, char **argv)
         {"test_compute_falling_factorial", test_compute_falling_factorial},
         {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
         {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
+        {"test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters},
         {"test_gsl_error_handling_beta_coalescent", test_gsl_error_handling_beta_coalescent},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},

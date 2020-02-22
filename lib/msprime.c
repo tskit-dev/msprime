@@ -6508,12 +6508,12 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
 
     /* Numerical instability occurs for values above 2 - 0.0005. */
     if (alpha <= 1.0 || alpha >= 2.0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_BAD_ALPHA;
         goto out;
     }
 
     if (truncation_point <= 0.0 || truncation_point > 1.0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_BAD_TRUNCATION_POINT;
         goto out;
     }
 
