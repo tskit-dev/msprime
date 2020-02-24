@@ -4406,6 +4406,63 @@ test_sweep_genic_selection_recomb(void)
     verify_sweep_genic_selection(100, 1.0);
     verify_sweep_genic_selection(100, -1.0);
 }
+
+
+static void
+test_sweep_genic_selection_time_change(void)
+{
+    int j, ret;
+    uint32_t n = 10;
+    uint32_t num_loci = 10;
+    unsigned long seed = 133234;
+    double t;
+    msp_t msp;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    recomb_map_t recomb_map;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, num_loci, 1, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    memset(samples, 0, n * sizeof(sample_t));
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    gsl_rng_set(rng, seed);
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_dimensions(&msp, 1, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* Run some time and then change the model */
+    ret = msp_run(&msp, 0.125, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
+    t = msp_get_time(&msp);
+
+    for (j = 0; j < 10; j++) {
+
+        ret = msp_set_simulation_model_sweep_genic_selection(
+                &msp, 10, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(msp_get_time(&msp), t);
+
+        ret = msp_set_simulation_model_hudson(&msp, 2);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(msp_get_time(&msp), t);
+    }
+    msp_free(&msp);
+
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+    recomb_map_free(&recomb_map);
+}
+
 static void
 test_strerror(void)
 {
@@ -4569,6 +4626,8 @@ main(int argc, char **argv)
         {"test_sweep_genic_selection_single_locus",
             test_sweep_genic_selection_single_locus},
         {"test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb},
+        {"test_sweep_genic_selection_time_change",
+            test_sweep_genic_selection_time_change},
 
         {"test_strerror", test_strerror},
         {"test_strerror_tskit", test_strerror_tskit},

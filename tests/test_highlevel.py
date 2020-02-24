@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -598,18 +598,6 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(
                 ll_sim.get_sequence_length(), recomb_map.get_sequence_length())
 
-    def test_zero_recombination_map(self):
-        # test that beginning and trailing zero recombination regions in the
-        # recomb map are included in the sequence
-        for n in range(3, 10):
-            positions = list(range(n))
-            rates = [0.0, 0.2] + [0.0] * (n - 2)
-            recomb_map = msprime.RecombinationMap(positions, rates)
-            ts = msprime.simulate(10, recombination_map=recomb_map)
-            self.assertEqual(ts.sequence_length, n - 1)
-            self.assertEqual(min(ts.tables.edges.left), 0.0)
-            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
-
     def test_combining_recomb_map_and_rate_length(self):
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
         self.assertRaises(
@@ -622,52 +610,6 @@ class TestSimulatorFactory(unittest.TestCase):
             ValueError, msprime.simulator_factory, 10,
             recombination_map=recomb_map, length=1,
             recombination_rate=1)
-
-    def test_mean_recombination_rate(self):
-        # Some quick sanity checks.
-        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 1.0)
-
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.5)
-
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.0)
-
-        # Test mean_recombination_rate is correct after reading from
-        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
-        # field, so here we test against using the cM field directly.
-        def hapmap_rr(hapmap_file):
-            first_pos = 0
-            with open(hapmap_file) as f:
-                next(f)  # skip header
-                for line in f:
-                    pos, rate, cM = map(float, line.split()[1:4])
-                    if cM == 0:
-                        first_pos = pos
-            return cM / 100 / (pos - first_pos)
-
-        hapmap = """chr pos        rate                    cM
-                    1   4283592    3.79115663174456        0
-                    1   4361401    0.0664276817058413      0.294986106359414
-                    1   7979763   10.9082897515584         0.535345505591925
-                    1   8007051    0.0976780648822495      0.833010916332456
-                    1   8762788    0.0899929572085616      0.906829844052373
-                    1   9477943    0.0864382908650907      0.971188757364862
-                    1   9696341    4.76495005895746        0.990066707213216
-                    1   9752154    0.0864316558730679      1.25601286485381
-                    1   9881751    0.0                     1.26721414815999"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            hapfile = os.path.join(temp_dir, "hapmap.txt")
-            with open(hapfile, "w") as f:
-                f.write(hapmap)
-            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
-            mean_rr = recomb_map.mean_recombination_rate
-            mean_rr2 = hapmap_rr(hapfile)
-        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
 
     def test_sample_combination_errors(self):
         # Make sure that the various ways we can specify the samples
@@ -713,6 +655,75 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertEqual(sim.samples, samples)
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)
+
+    def test_specify_model_and_Ne(self):
+        # When them model reference size and Ne are both specified,
+        # Ne is ignored.
+        for Ne in [0, 1234, None, "sdf"]:
+            sim = msprime.simulator_factory(
+                sample_size=2, Ne=Ne,
+                model=msprime.SmcPrimeApproxCoalescent(20))
+            self.assertEqual(sim.model.reference_size, 20)
+
+    def test_model_change_event_sizes(self):
+        models = [msprime.SweepGenicSelection(
+            position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j,
+            reference_size=j) for j in range(1, 10)]
+        sim = msprime.simulator_factory(
+            sample_size=2, Ne=10,
+            demographic_events=[
+                msprime.SimulationModelChange(None, model) for model in models])
+        self.assertEqual(sim.model.reference_size, 10)
+        self.assertEqual(len(sim.model_change_events), len(models))
+        for event, model in zip(sim.model_change_events, models):
+            self.assertEqual(
+                event.model.get_ll_representation(), model.get_ll_representation())
+
+    def test_model_change_inherits_Ne(self):
+        K = 10
+        sim = msprime.simulator_factory(
+            sample_size=2, Ne=10,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    None, msprime.SmcApproxCoalescent()) for _ in range(K)])
+        self.assertEqual(sim.model.reference_size, 10)
+        self.assertEqual(len(sim.model_change_events), K)
+        for event in sim.model_change_events:
+            self.assertEqual(event.model.reference_size, 10)
+            self.assertEqual(event.time, None)
+
+    def test_model_change_no_model_inherits_model_size(self):
+        main_model = msprime.SmcApproxCoalescent(100)
+        sim = msprime.simulator_factory(
+            sample_size=2, model=main_model,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(2, None)])
+        self.assertEqual(sim.model.reference_size, 100)
+        self.assertEqual(len(sim.model_change_events), 2)
+        self.assertEqual(sim.model_change_events[0].time, 1)
+        self.assertEqual(sim.model_change_events[0].model.reference_size, 500)
+        # When model=None we change to the standard coalescent using the
+        # reference size set by the initial model.
+        self.assertEqual(sim.model_change_events[1].time, 2)
+        self.assertEqual(sim.model_change_events[1].model.reference_size, 100)
+        self.assertEqual(sim.model_change_events[1].model.name, "hudson")
+
+    def test_model_change_no_model_inherits_Ne(self):
+        sim = msprime.simulator_factory(
+            sample_size=2, Ne=1500,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(2, None)])
+        self.assertEqual(sim.model.reference_size, 1500)
+        self.assertEqual(len(sim.model_change_events), 2)
+        self.assertEqual(sim.model_change_events[0].time, 1)
+        self.assertEqual(sim.model_change_events[0].model.reference_size, 500)
+        self.assertEqual(sim.model_change_events[1].time, 2)
+        self.assertEqual(sim.model_change_events[1].model.reference_size, 1500)
+        self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
 
 class TestSimulateInterface(unittest.TestCase):
@@ -901,3 +912,61 @@ class TestRecombinationMap(unittest.TestCase):
         for truthy in [True, False, {}, None, "ser"]:
             rm = msprime.RecombinationMap.uniform_map(1, 0, discrete=truthy)
             self.assertEqual(rm.discrete, bool(truthy))
+
+    def test_zero_recombination_map(self):
+        # test that beginning and trailing zero recombination regions in the
+        # recomb map are included in the sequence
+        for n in range(3, 10):
+            positions = list(range(n))
+            rates = [0.0, 0.2] + [0.0] * (n - 2)
+            recomb_map = msprime.RecombinationMap(positions, rates)
+            ts = msprime.simulate(10, recombination_map=recomb_map)
+            self.assertEqual(ts.sequence_length, n - 1)
+            self.assertEqual(min(ts.tables.edges.left), 0.0)
+            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
+
+    def test_mean_recombination_rate(self):
+        # Some quick sanity checks.
+        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 1.0)
+
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 0.5)
+
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 0.0)
+
+        # Test mean_recombination_rate is correct after reading from
+        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
+        # field, so here we test against using the cM field directly.
+        def hapmap_rr(hapmap_file):
+            first_pos = 0
+            with open(hapmap_file) as f:
+                next(f)  # skip header
+                for line in f:
+                    pos, rate, cM = map(float, line.split()[1:4])
+                    if cM == 0:
+                        first_pos = pos
+            return cM / 100 / (pos - first_pos)
+
+        hapmap = """chr pos        rate                    cM
+                    1   4283592    3.79115663174456        0
+                    1   4361401    0.0664276817058413      0.294986106359414
+                    1   7979763   10.9082897515584         0.535345505591925
+                    1   8007051    0.0976780648822495      0.833010916332456
+                    1   8762788    0.0899929572085616      0.906829844052373
+                    1   9477943    0.0864382908650907      0.971188757364862
+                    1   9696341    4.76495005895746        0.990066707213216
+                    1   9752154    0.0864316558730679      1.25601286485381
+                    1   9881751    0.0                     1.26721414815999"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hapfile = os.path.join(temp_dir, "hapmap.txt")
+            with open(hapfile, "w") as f:
+                f.write(hapmap)
+            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
+            mean_rr = recomb_map.mean_recombination_rate
+            mean_rr2 = hapmap_rr(hapfile)
+        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)

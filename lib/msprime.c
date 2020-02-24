@@ -4378,7 +4378,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    if (self->model.type == MSP_MODEL_DTWF) {
+
+    if (msp_is_completed(self)) {
+        /* If the simulation is completed, run() is a no-op for
+         * all models. */
+        ret = 0;
+    } else if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, scaled_time, max_events);
     } else if (self->model.type == MSP_MODEL_WF_PED) {
         if (self->pedigree == NULL ||
@@ -4399,11 +4404,12 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
     } else if (self->model.type == MSP_MODEL_SWEEP) {
-        /* FIXME making sweep atomic for now as it's non-renentrant */
+        /* FIXME making sweep atomic for now as it's non-rentrant */
         ret = msp_run_sweep(self);
     } else {
         ret = msp_run_coalescent(self, scaled_time, max_events);
     }
+
     if (ret < 0) {
         goto out;
     }
@@ -6461,6 +6467,8 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
     /* dt value is expressed in generations for consistency; translate to
      * model time. */
     trajectory->dt = self->model.generations_to_model_time(&self->model, dt);
+
+    ret = msp_rescale_model_times(self);
 out:
     return ret;
 }
