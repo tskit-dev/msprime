@@ -3240,7 +3240,7 @@ Simulator_get_sequence_length(Simulator *self)
         goto out;
     }
     ret = Py_BuildValue("n", (Py_ssize_t) recomb_map_get_sequence_length(
-                self->sim->recomb_map));
+                &self->sim->recomb_map));
 out:
     return ret;
 }
