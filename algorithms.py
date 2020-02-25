@@ -1130,10 +1130,11 @@ class Simulator(object):
         """
         for pop_idx, pop in enumerate(self.P):
             # Cluster haploid inds by parent
-            cur_inds = pop.get_ind_range(self.t)
+            parent_inds = pop.get_ind_range(self.t)
             offspring = bintrees.AVLTree()
             for anc in pop.iter_label(0):
-                parent = np.random.choice(cur_inds)
+                parent_index = np.random.choice(parent_inds.stop - parent_inds.start)
+                parent = parent_inds.start + parent_index
                 if parent not in offspring:
                     offspring[parent] = []
                 offspring[parent].append(anc)
@@ -1158,9 +1159,16 @@ class Simulator(object):
 
                 # Merge segments
                 for h in H:
-                    for _, individual in h:
-                        pop.remove_individual(individual)
-                    self.merge_ancestors(h, pop_idx, 0)  # label 0 only
+                    segments_to_merge = len(h)
+                    if segments_to_merge == 1:
+                        h = []
+                    elif segments_to_merge >= 2:
+                        for _, individual in h:
+                            pop.remove_individual(individual)
+                        if segments_to_merge == 2:
+                            self.merge_two_ancestors(pop_idx, 0, h[0][1], h[1][1])
+                        else:
+                            self.merge_ancestors(h, pop_idx, 0)  # label 0 only
             self.verify()
 
         # Migration events happen at the rates in the matrix.
