@@ -51,4 +51,4 @@ from msprime.simulations import *
 from msprime.exceptions import *
 from msprime.mutations import *
 from msprime.likelihood import *
-from msprime.species_tree import *
+from msprime.species_tree import parse_species_tree, parse_starbeast
