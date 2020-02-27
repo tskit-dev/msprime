@@ -370,7 +370,7 @@ def parse_starbeast(
         if len(transl_orireps) != len(set(transl_orireps)):
             err = 'One or more of the species names are identical '
             err += 'to one or more of the translations in the '
-            err += 'translation block of file {}.'.format(filename)
+            err += 'translation block.'
             raise ValueError(err)
 
         # Backtranslate to species names.
