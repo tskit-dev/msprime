@@ -42,6 +42,51 @@
 #define MSP_STATE_SIMULATING 2
 #define MSP_STATE_DEBUGGING 3
 
+/* Draw a random variable from a truncated Beta(a, b) distribution,
+ * by rejecting draws above the truncation point x.
+ */
+static double
+ran_inc_beta_rej(gsl_rng *r, double a, double b, double x)
+{
+    double ret;
+    do {
+        ret = gsl_ran_beta(r, a, b);
+    } while(ret > x);
+    return ret;
+}
+
+/* Draw a random variable from a truncated Beta(a, b) distribution,
+ * using the inverse transform sampling method. A uniform variable
+ * is drawn and then transformed into a Beta(a, b) distribution using
+ * the inverse CDF. Truncation is obtained by defining the upper bound
+ * of the uniform variable using the incomplete beta function. I.e.
+ *      upper_bound = gsl_sf_beta_inc(a, b, x),
+ * where x is the truncation point.
+ */
+static double
+ran_inc_beta_its(gsl_rng *r, double a, double b, double upper_bound)
+{
+    double u = gsl_ran_flat(r, 0, upper_bound);
+    return gsl_cdf_beta_Pinv(u, a, b);
+}
+
+/* Draw a random variable from a truncated Beta(a, b) distribution,
+ * using either the rejection method or the inverse transform sampling method.
+ * The rejection method is quicker for a moderate number of rejections, but if
+ * the acceptance probability is low, we instead choose inverse transform
+ * sampling. The acceptance probability for ran_inc_beta_rej() is equivalent to
+ * the upper bound used with ran_inc_beta_its().
+ */
+static double
+ran_inc_beta(gsl_rng *r, double a, double b, double x, double upper_bound)
+{
+    if (upper_bound < 0.1) {
+        return ran_inc_beta_its(r, a, b, upper_bound);
+    } else {
+        return ran_inc_beta_rej(r, a, b, x);
+    }
+}
+
 static bool
 doubles_almost_equal(double a, double b, double eps)
 {
@@ -5942,7 +5987,7 @@ msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha,
     F.function = &beta_integrand;
     F.params = &params;
     ret = gsl_integration_qags(&F, 0, truncation_point, epsabs, epsrel,
-		    workspace_size, w, result, &err);
+            workspace_size, w, result, &err);
     if (ret != 0) {
         /* It's ugly, but it should only happen while tuning models so we output
          * the GSL error to stderr */
@@ -6022,35 +6067,6 @@ msp_multi_merger_common_ancestor_event(msp_t *self, double x,
 
 out:
     return ret;
-}
-
-/* Rejection method. */
-static double
-ran_inc_beta_rej(gsl_rng *r, double a, double b, double x)
-{
-	double ret;
-	do {
-		ret = gsl_ran_beta(r, a, b);
-	} while(ret > x);
-	return ret;
-}
-
-/* Inverse transform sampling. */
-static double
-ran_inc_beta_its(gsl_rng *r, double a, double b, double upper_bound)
-{
-	double u = gsl_ran_flat(r, 0, upper_bound);
-	return gsl_cdf_beta_Pinv(u, a, b);
-}
-
-/* Choose between rejection or ITS based on the rejection probability. */
-static double
-ran_inc_beta(gsl_rng *r, double a, double b, double x, double upper_bound)
-{
-	if (upper_bound < 0.1)
-		return ran_inc_beta_its(r, a, b, upper_bound);
-	else
-		return ran_inc_beta_rej(r, a, b, x);
 }
 
 static int MSP_WARN_UNUSED
