@@ -297,7 +297,7 @@ def get_random_population_models(n):
     return models
 
 
-class LowLevelTestCase(tests.MsprimeTestCase):
+class LowLevelTestCase(tests.SequenceEqualityMixin, tests.MsprimeTestCase):
     """
     Superclass of tests for the low-level interface.
     """

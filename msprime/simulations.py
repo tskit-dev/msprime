@@ -984,10 +984,9 @@ class RecombinationMap(object):
         """
         chrom_length = self._ll_recombination_map.get_sequence_length()
 
-        positions = np.array(self._ll_recombination_map.get_positions())
+        positions = self._ll_recombination_map.get_positions()
         positions_diff = self._ll_recombination_map.get_positions()[1:]
-        positions_diff.append(chrom_length)
-        positions_diff = np.array(positions_diff)
+        positions_diff = np.append(positions_diff, chrom_length)
         window_sizes = positions_diff - positions
 
         weights = window_sizes / chrom_length
@@ -1026,8 +1025,8 @@ class RecombinationMap(object):
         if end != positions[-1]:
             j = bisect.bisect_right(positions, end, lo=i)
 
-        new_positions = positions[i:j]
-        new_rates = rates[i:j]
+        new_positions = list(positions[i:j])
+        new_rates = list(rates[i:j])
         new_positions[0] = start
         if end > new_positions[-1]:
             new_positions.append(end)

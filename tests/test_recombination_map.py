@@ -26,8 +26,9 @@ import os
 import gzip
 import warnings
 
-import msprime
 import numpy as np
+import msprime
+import tests
 
 
 class TestConstructorAndGetters(unittest.TestCase):
@@ -57,7 +58,7 @@ class TestConstructorAndGetters(unittest.TestCase):
         self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
 
 
-class TestReadHapmap(unittest.TestCase):
+class TestReadHapmap(tests.SequenceEqualityMixin, unittest.TestCase):
     """
     Tests file reading code.
     """
@@ -113,7 +114,7 @@ class TestReadHapmap(unittest.TestCase):
             os.unlink(filename)
 
 
-class TestSlice(unittest.TestCase):
+class TestSlice(tests.SequenceEqualityMixin, unittest.TestCase):
     def test_slice(self):
         """
         test RecombinationMap.slice(..., trim=False)

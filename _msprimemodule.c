@@ -218,31 +218,6 @@ out:
 }
 
 static PyObject *
-convert_float_list(double *list, size_t size)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_float = NULL;
-    size_t j;
-
-    l = PyList_New(size);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < size; j++) {
-        py_float = Py_BuildValue("d", list[j]);
-        if (py_float == NULL) {
-            Py_DECREF(l);
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, py_float);
-    }
-    ret = l;
-out:
-    return ret;
-}
-
-static PyObject *
 make_metadata(const char *metadata, Py_ssize_t length)
 {
     const char *m = metadata == NULL? "": metadata;
@@ -1970,47 +1945,46 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     static char *kwlist[] = {"positions", "rates", "discrete", NULL};
-    Py_ssize_t size, j;
+    Py_ssize_t size;
     PyObject *py_positions = NULL;
     PyObject *py_rates = NULL;
     double *positions = NULL;
     double *rates = NULL;
+    PyArrayObject *pyarray_positions = NULL;
+    PyArrayObject *pyarray_rates = NULL;
     int discrete = false;
-    PyObject *item;
 
     self->recomb_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!p", kwlist,
-            &PyList_Type, &py_positions, &PyList_Type,
-            &py_rates, &discrete)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOp", kwlist,
+            &py_positions, &py_rates, &discrete)) {
         goto out;
     }
 
-    if (PyList_Size(py_positions) != PyList_Size(py_rates)) {
+    size = PyObject_Size(py_positions);
+    if (size != PyObject_Size(py_rates)) {
         PyErr_SetString(PyExc_ValueError,
             "positions and rates list must be the same length");
         goto out;
     }
-    size = PyList_Size(py_positions);
-    positions = PyMem_Malloc(size * sizeof(double));
-    rates = PyMem_Malloc(size * sizeof(double));
-    if (positions == NULL || rates == NULL) {
-        PyErr_NoMemory();
+
+    pyarray_positions = (PyArrayObject *)PyArray_FromAny(
+            py_positions, PyArray_DescrFromType(NPY_DOUBLE),
+            1, 1, NPY_ARRAY_IN_ARRAY, NULL);
+    if (pyarray_positions == NULL) {
+        PyErr_SetString(PyExc_TypeError, "positions must be a sequence of numbers");
         goto out;
     }
-    for (j = 0; j < size; j++) {
-        item = PyList_GetItem(py_positions, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "position must be a number");
-            goto out;
-        }
-        positions[j] = PyFloat_AsDouble(item);
-        item = PyList_GetItem(py_rates, j);
-        if (!PyNumber_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "rates must be a number");
-            goto out;
-        }
-        rates[j] = PyFloat_AsDouble(item);
+    pyarray_rates = (PyArrayObject *)PyArray_FromAny(
+            py_rates, PyArray_DescrFromType(NPY_DOUBLE),
+            1, 1, NPY_ARRAY_IN_ARRAY, NULL);
+    if (pyarray_rates == NULL) {
+        PyErr_SetString(PyExc_TypeError, "rates must be a sequence of numbers");
+        goto out;
     }
+
+    positions = PyArray_DATA(pyarray_positions);
+    rates = PyArray_DATA(pyarray_rates);
+
     self->recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
     if (self->recomb_map == NULL) {
         PyErr_NoMemory();
@@ -2024,12 +1998,8 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
-    if (positions != NULL) {
-        PyMem_Free(positions);
-    }
-    if (rates != NULL) {
-        PyMem_Free(rates);
-    }
+    Py_XDECREF(pyarray_positions);
+    Py_XDECREF(pyarray_rates);
     return ret;
 }
 
@@ -2091,28 +2061,28 @@ static PyObject *
 RecombinationMap_get_positions(RecombinationMap *self)
 {
     PyObject *ret = NULL;
-    double *positions = NULL;
-    size_t size;
+    PyObject *arr = NULL;
+    npy_intp size;
     int err;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
     size = recomb_map_get_size(self->recomb_map);
-    positions = PyMem_Malloc(size * sizeof(double));
-    if (positions == NULL) {
-        PyErr_NoMemory();
+    arr = PyArray_SimpleNew(1, &size, NPY_FLOAT64);
+    if (arr == NULL) {
         goto out;
     }
-    err = recomb_map_get_positions(self->recomb_map, positions);
+    err = recomb_map_get_positions(self->recomb_map,
+            PyArray_DATA((PyArrayObject *)arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = convert_float_list(positions, size);
+    ret = arr;
 out:
-    if (positions != NULL) {
-        PyMem_Free(positions);
+    if (ret == NULL) {
+        Py_XDECREF(arr);
     }
     return ret;
 }
@@ -2121,28 +2091,28 @@ static PyObject *
 RecombinationMap_get_rates(RecombinationMap *self)
 {
     PyObject *ret = NULL;
-    double *rates = NULL;
-    size_t size;
+    PyObject *arr = NULL;
+    npy_intp size;
     int err;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
     size = recomb_map_get_size(self->recomb_map);
-    rates = PyMem_Malloc(size * sizeof(double));
-    if (rates == NULL) {
-        PyErr_NoMemory();
+    arr = PyArray_SimpleNew(1, &size, NPY_FLOAT64);
+    if (arr == NULL) {
         goto out;
     }
-    err = recomb_map_get_rates(self->recomb_map, rates);
+    err = recomb_map_get_rates(self->recomb_map,
+            PyArray_DATA((PyArrayObject *)arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = convert_float_list(rates, size);
+    ret = arr;
 out:
-    if (rates != NULL) {
-        PyMem_Free(rates);
+    if (ret == NULL) {
+        Py_XDECREF(arr);
     }
     return ret;
 }
@@ -3601,28 +3571,30 @@ static PyObject *
 Simulator_get_migration_matrix(Simulator *self)
 {
     PyObject *ret = NULL;
-    double *migration_matrix = NULL;
-    size_t N;
+    PyObject *arr = NULL;
+    npy_intp N2;
     int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    N = msp_get_num_populations(self->sim);
-    migration_matrix = PyMem_Malloc(N * N * sizeof(double));
-    if (migration_matrix == NULL) {
-        PyErr_NoMemory();
+    N2 = msp_get_num_populations(self->sim);
+    N2 *= N2;
+    // TODO return 2d numpy array and fix the breakage
+    arr = PyArray_SimpleNew(1, &N2, NPY_FLOAT64);
+    if (arr == NULL) {
         goto out;
     }
-    err = msp_get_migration_matrix(self->sim, migration_matrix);
+    err = msp_get_migration_matrix(self->sim,
+            PyArray_DATA((PyArrayObject *)arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = convert_float_list(migration_matrix, N * N);
+    ret = arr;
 out:
-    if (migration_matrix != NULL) {
-        PyMem_Free(migration_matrix);
+    if (ret == NULL) {
+        Py_XDECREF(arr);
     }
     return ret;
 }

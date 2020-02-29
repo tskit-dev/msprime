@@ -412,7 +412,7 @@ class TestSimulator(HighLevelTestCase):
         self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
 
 
-class TestSimulatorFactory(unittest.TestCase):
+class TestSimulatorFactory(tests.SequenceEqualityMixin, unittest.TestCase):
     """
     Tests that the simulator factory high-level function correctly
     creates simulators with the required parameter values.

@@ -32,6 +32,7 @@ import tskit
 
 import msprime
 import msprime.cli as cli
+import tests
 
 _h5py_available = True
 try:
@@ -313,7 +314,7 @@ class CustomExceptionForTesting(Exception):
     """
 
 
-class TestHotspotsToRecombMap(TestCli):
+class TestHotspotsToRecombMap(tests.SequenceEqualityMixin, TestCli):
 
     def verify_map(self, recomb_map, expected_positions, expected_rates):
         self.assertEqual(recomb_map.get_positions(), expected_positions)
@@ -593,7 +594,7 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
         self.assert_parser_error("10 1 -t 2.0 -eN 0.001 5.0 -es 0.01 1 0.0")
 
 
-class TestMspmsCreateSimulationRunner(unittest.TestCase):
+class TestMspmsCreateSimulationRunner(tests.SequenceEqualityMixin, unittest.TestCase):
     """
     Test that we correctly create a simulator instance based on the
     command line arguments.
