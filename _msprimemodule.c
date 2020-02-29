@@ -193,31 +193,6 @@ out:
 }
 
 static PyObject *
-convert_integer_list(size_t *list, size_t size)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *py_int = NULL;
-    size_t j;
-
-    l = PyList_New(size);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < size; j++) {
-        py_int = Py_BuildValue("n", (Py_ssize_t) list[j]);
-        if (py_int == NULL) {
-            Py_DECREF(l);
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, py_int);
-    }
-    ret = l;
-out:
-    return ret;
-}
-
-static PyObject *
 make_metadata(const char *metadata, Py_ssize_t length)
 {
     const char *m = metadata == NULL? "": metadata;
@@ -3331,30 +3306,29 @@ static PyObject *
 Simulator_get_num_migration_events(Simulator  *self)
 {
     PyObject *ret = NULL;
-    size_t *num_migration_events = NULL;
-    size_t num_populations;
+    PyObject *arr = NULL;
     int err;
+    npy_intp size;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    num_populations = msp_get_num_populations(self->sim);
-    num_migration_events = PyMem_Malloc(
-        num_populations * num_populations * sizeof(size_t));
-    if (num_migration_events == NULL) {
-        PyErr_NoMemory();
+    size = msp_get_num_populations(self->sim);
+    size *= size;
+    arr = PyArray_SimpleNew(1, &size, NPY_UINTP);
+    if (arr == NULL) {
         goto out;
     }
-    err = msp_get_num_migration_events(self->sim, num_migration_events);
+    err = msp_get_num_migration_events(self->sim,
+            PyArray_DATA((PyArrayObject *)arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = convert_integer_list(num_migration_events,
-            num_populations * num_populations);
+    ret = arr;
 out:
-    if (num_migration_events != NULL) {
-        PyMem_Free(num_migration_events);
+    if (ret == NULL) {
+        Py_XDECREF(arr);
     }
     return ret;
 }
@@ -3541,28 +3515,27 @@ static PyObject *
 Simulator_get_breakpoints(Simulator *self)
 {
     PyObject *ret = NULL;
-    size_t *breakpoints = NULL;
-    size_t num_breakpoints;
+    PyObject *arr = NULL;
+    npy_intp num_breakpoints;
     int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
     num_breakpoints = msp_get_num_breakpoints(self->sim);
-    breakpoints = PyMem_Malloc(num_breakpoints * sizeof(size_t));
-    if (breakpoints == NULL) {
-        PyErr_NoMemory();
+    arr = PyArray_SimpleNew(1, &num_breakpoints, NPY_UINTP);
+    if (arr == NULL) {
         goto out;
     }
-    err = msp_get_breakpoints(self->sim, breakpoints);
+    err = msp_get_breakpoints(self->sim, PyArray_DATA((PyArrayObject *)arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
-    ret = convert_integer_list(breakpoints, num_breakpoints);
+    ret = arr;
 out:
-    if (breakpoints != NULL) {
-        PyMem_Free(breakpoints);
+    if (ret == NULL) {
+        Py_XDECREF(arr);
     }
     return ret;
 }

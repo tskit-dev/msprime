@@ -368,7 +368,7 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertGreaterEqual(node, 0)
                 self.assertTrue(0 <= pop_id < N)
                 self.assertEqual(the_pop_id, pop_id)
-        breakpoints = [0] + sim.get_breakpoints() + [L]
+        breakpoints = [0] + list(sim.get_breakpoints()) + [L]
         self.assertEqual(len(breakpoints), sim.get_num_breakpoints() + 2)
         self.assertEqual(breakpoints, sorted(breakpoints))
         nodes = sim.get_nodes()
