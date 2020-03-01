@@ -137,55 +137,79 @@ static int
 parse_samples(PyObject *py_samples, Py_ssize_t *num_samples, sample_t **samples)
 {
     int ret = -1;
-    long tmp_long;
     Py_ssize_t j, n;
-    PyObject *sample, *value;
     sample_t *ret_samples = NULL;
+    PyObject *dtype = NULL;
+    PyObject *recarray = NULL;
+    PyObject *key, *value, *inner_descr1, *inner_descr2;
+    PyArray_Descr *descr;
+    Py_ssize_t population_offset, time_offset, pos = 0;
 
-    n = PyList_Size(py_samples);
+    dtype = Py_BuildValue("[(s, s), (s, s)]", "a", "i4", "b", "f8");
+    if (dtype == NULL) {
+        goto out;
+    }
+    if (PyArray_DescrConverter(dtype, &descr) == NPY_FAIL) {
+        goto out;
+    }
+    recarray = PyArray_FromAny(py_samples, descr, 1, 1, NPY_ARRAY_IN_ARRAY, NULL);
+    if (recarray == NULL) {
+        PyErr_SetString(PyExc_TypeError,
+                "samples must be a list of (population,time) tuples");
+        goto out;
+    }
+
+    PyDict_Next(PyArray_DESCR((PyArrayObject *)recarray)->fields,
+            &pos, &key, &value);
+    if (!PyArg_ParseTuple(value, "On|", &inner_descr1, &population_offset)) {
+        goto out;
+    }
+
+    PyDict_Next(PyArray_DESCR((PyArrayObject *)recarray)->fields,
+            &pos, &key, &value);
+    if (!PyArg_ParseTuple(value, "On|", &inner_descr2, &time_offset)) {
+        goto out;
+    }
+
+    /*printf("recarray pop_offset=%ld, time_offset=%ld, decr1=%c, descr2=%c\n",
+            population_offset, time_offset,
+            ((PyArray_Descr *)inner_descr1)->kind,
+            ((PyArray_Descr *)inner_descr2)->kind);*/
+
+    n = PyObject_Size(recarray);
     ret_samples = PyMem_Malloc(n * sizeof(sample_t));
     if (ret_samples == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     for (j = 0; j < n; j++) {
-        sample = PyList_GetItem(py_samples, j);
-        if (!PyTuple_Check(sample)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(sample) != 2) {
-            PyErr_SetString(PyExc_ValueError,
-                    "sample must be (population,time) tuple");
-            goto out;
-        }
-        value = PyTuple_GetItem(sample, 0);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'population' is not number");
-            goto out;
-        }
-        tmp_long = PyLong_AsLong(value);
-        if (tmp_long < 0) {
+        char *data = PyArray_GETPTR1((PyArrayObject *)recarray, j);
+        int32_t population = *(int32_t *)(data + population_offset);
+        double time = *(double *)(data + time_offset);
+
+        if (population < 0) {
             PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
             goto out;
         }
-        ret_samples[j].population_id = (population_id_t) tmp_long;
-        value = PyTuple_GetItem(sample, 1);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'time' is not number");
+        if (isnan(time)) {
+            PyErr_SetString(PyExc_TypeError, "'time' is not number");
             goto out;
         }
-        ret_samples[j].time = PyFloat_AsDouble(value);
-        if (ret_samples[j].time < 0) {
+        if (time < 0) {
             PyErr_SetString(PyExc_ValueError, "negative times not valid");
             goto out;
         }
+        /*printf("sample[%d] = (%d, %g)\n", j, population, time);*/
+        ret_samples[j].population_id = (population_id_t) population;
+        ret_samples[j].time = time;
     }
     *samples = ret_samples;
     *num_samples = n;
     ret = 0;
     ret_samples = NULL;
 out:
+    Py_XDECREF(dtype);
+    Py_XDECREF(recarray);
     if (ret_samples != NULL) {
         PyMem_Free(ret_samples);
     }

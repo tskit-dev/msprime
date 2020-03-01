@@ -1195,18 +1195,19 @@ class TestSimulator(LowLevelTestCase):
                 samples, uniform_recombination_map(), rng,
                 _msprime.LightweightTableCollection())
 
+        err = (TypeError, ValueError)
         for bad_type in [None, {}, _msprime.Simulator]:
-            self.assertRaises(TypeError, f, bad_type)
-            self.assertRaises(TypeError, f, [(0, 0), bad_type])
-            self.assertRaises(TypeError, f, [(0, 0), (bad_type, 0)])
-            self.assertRaises(TypeError, f, [(0, 0), (0, bad_type)])
+            self.assertRaises(err, f, bad_type)
+            self.assertRaises(err, f, [(0, 0), bad_type])
+            self.assertRaises(err, f, [(0, 0), (bad_type, 0)])
+            self.assertRaises(err, f, [(0, 0), (0, bad_type)])
         self.assertRaises(_msprime.InputError, f, [])
         self.assertRaises(_msprime.InputError, f, [(0, 0)])
-        self.assertRaises(ValueError, f, [(0, 0), (0, 0, 0)])
-        self.assertRaises(ValueError, f, [(0, 0), (-1, 0)])
-        self.assertRaises(ValueError, f, [(0, 0), (0, -1)])
+        self.assertRaises(err, f, [(0, 0), (0, 0, 0)])
+        self.assertRaises(err, f, [(0, 0), (-1, 0)])
+        self.assertRaises(err, f, [(0, 0), (0, -1)])
         # Only tuples are supported.
-        self.assertRaises(TypeError, f, [(0, 0), [0, 0]])
+        self.assertRaises(err, f, [(0, 0), [0, 0]])
 
     def test_get_samples(self):
         N = 4
