@@ -21,6 +21,7 @@ Module responsible for parsing species trees.
 """
 import re
 import newick
+import sys
 
 import msprime
 
@@ -145,12 +146,6 @@ def parse_species_tree(
     # Parse the newick tree string.
     root = newick.loads(species_tree_string)[0]
 
-    # Remove nodes that have only a single child if there should be any.
-    root.remove_redundant_nodes()
-
-    # Resolve polytomies by injecting zero-length branches.
-    root.resolve_polytomies()
-
     # Set node depths (distances from root).
     max_depth = 0
     for node in root.walk():
@@ -167,49 +162,30 @@ def parse_species_tree(
     for node in root.walk():
         node.height = max_depth - node.depth
 
-    # Get a list of species IDs along with terminal population sizes.
-    species_ids = []
-    terminal_nes = []
-    for leaf in root.get_leaves():
-        species_ids.append(leaf.name)
-        terminal_nes.append(Ne)
-    s = sorted(zip(species_ids, terminal_nes))
-    species_ids, terminal_nes = map(list, zip(*s))
+    # Get a list of species IDs.
+    species_ids = sorted(root.get_leaf_names())
 
     # Determine at which time which populations should merge.
-    indices1 = []
-    indices2 = []
-    internal_nes = []
+    sources = []
+    destinations = []
     divergence_times = []
     for node in root.walk():
-        if node is not root and node.is_leaf is False:
-            d1_species = node.descendants[0].get_leaf_names()
-            d2_species = node.descendants[1].get_leaf_names()
-            index1 = species_ids.index(sorted(d1_species)[0])
-            index2 = species_ids.index(sorted(d2_species)[0])
-            if index1 > index2:
-                index1, index2 = index2, index1
-            indices1.append(index1)
-            indices2.append(index2)
-            divergence_times.append(node.height)
-            internal_nes.append(Ne)
+        if node.is_leaf is False:
+            name_indices = []
+            for descendants in node.descendants:
+                leaf_names = (descendants.get_leaf_names())
+                name_indices.append(species_ids.index(sorted(leaf_names)[0]))
+            new_destination = sorted(name_indices)[0]
+            name_indices.remove(sorted(name_indices)[0])
+            for new_source in name_indices:
+                sources.append(new_source)
+                destinations.append(new_destination)
+                divergence_times.append(node.height)
 
-    # Add information for the root.
-    d1_species = root.descendants[0].get_leaf_names()
-    d2_species = root.descendants[1].get_leaf_names()
-    index1 = species_ids.index(sorted(d1_species)[0])
-    index2 = species_ids.index(sorted(d2_species)[0])
-    if index1 > index2:
-        index1, index2 = index2, index1
-    indices1.append(index1)
-    indices2.append(index2)
-    divergence_times.append(root.height)
-    internal_nes.append(Ne)
-
-    # Sort the arrays indices1, indices2, divergence_times, and
-    # population sizes according to divergence_time.
-    s = sorted(zip(divergence_times, indices1, indices2, internal_nes))
-    divergence_times, indices1, indices2, internal_nes = map(list, zip(*s))
+    # Sort the lists source_sets, destinations, and divergence_times
+    # according to divergence_time.
+    s = sorted(zip(divergence_times, sources, destinations))
+    divergence_times, sources, destinations = map(list, zip(*s))
 
     # Define the species/population tree for msprime.
     population_configurations = []
@@ -218,19 +194,12 @@ def parse_species_tree(
             msprime.PopulationConfiguration(
                 initial_size=Ne))
     demographic_events = []
-    for x in range(len(indices1)-1):
+    for x in range(len(divergence_times)):
         demographic_events.append(
             msprime.MassMigration(
                 time=divergence_times[x]*generations_per_branch_length_unit,
-                source=indices2[x],
-                destination=indices1[x],
-                proportion=1.0))
-    demographic_events.append(
-        msprime.MassMigration(
-            time=divergence_times[-1]*generations_per_branch_length_unit,
-            source=indices2[-1],
-            destination=indices1[-1],
-            proportion=1.0))
+                source=sources[x],
+                destination=destinations[x]))
 
     # Return a tuple of population_configurations and demographic_events.
     return population_configurations, demographic_events
@@ -417,42 +386,36 @@ def parse_starbeast(
     species_ids, terminal_nes = map(list, zip(*s))
 
     # Determine at which time which populations should merge.
-    indices1 = []
-    indices2 = []
-    internal_nes = []
+    sources = []
+    destinations = []
     divergence_times = []
+    internal_nes = []
     for node in root.walk():
-        if node is not root and node.is_leaf is False:
-            d1_species = [l.split("[")[0] for l in node.descendants[0].get_leaf_names()]
-            d2_species = [l.split("[")[0] for l in node.descendants[1].get_leaf_names()]
-            index1 = species_ids.index(sorted(d1_species)[0])
-            index2 = species_ids.index(sorted(d2_species)[0])
-            if index1 > index2:
-                index1, index2 = index2, index1
-            indices1.append(index1)
-            indices2.append(index2)
-            divergence_times.append(node.height)
-            edge_dmv = float(node.name.split("{")[1].split("}")[0])
-            assert edge_dmv > 0, 'Parsed Ne is zero.'
-            edge_ne = edge_dmv * generations_per_branch_length_unit
-            internal_nes.append(edge_ne)
+        if node.is_leaf is False:
+            name_indices = []
+            for descendants in node.descendants:
+                leaf_names = [l.split("[")[0] for l in descendants.get_leaf_names()]
+                # leaf_names = (descendants.get_leaf_names())
+                name_indices.append(species_ids.index(sorted(leaf_names)[0]))
+            new_destination = sorted(name_indices)[0]
+            name_indices.remove(sorted(name_indices)[0])
+            for new_source in name_indices:
+                sources.append(new_source)
+                destinations.append(new_destination)
+                divergence_times.append(node.height)
+                if node is root:
+                    internal_nes.append(starbeast_root_pop_size)
+                else:
+                    edge_dmv = float(node.name.split("{")[1].split("}")[0])
+                    assert edge_dmv > 0, 'Parsed Ne is zero.'
+                    edge_ne = edge_dmv * generations_per_branch_length_unit
+                    internal_nes.append(edge_ne)
 
-    # Add information for the root.
-    d1_species = [l.split("[")[0] for l in root.descendants[0].get_leaf_names()]
-    d2_species = [l.split("[")[0] for l in root.descendants[1].get_leaf_names()]
-    index1 = species_ids.index(sorted(d1_species)[0])
-    index2 = species_ids.index(sorted(d2_species)[0])
-    if index1 > index2:
-        index1, index2 = index2, index1
-    indices1.append(index1)
-    indices2.append(index2)
-    divergence_times.append(root.height)
-    internal_nes.append(starbeast_root_pop_size)
 
-    # Sort the arrays indices1, indices2, divergence_times, and
+    # Sort the lists indices1, indices2, divergence_times, and
     # population sizes according to divergence_time.
-    s = sorted(zip(divergence_times, indices1, indices2, internal_nes))
-    divergence_times, indices1, indices2, internal_nes = map(list, zip(*s))
+    s = sorted(zip(divergence_times, sources, destinations, internal_nes))
+    divergence_times, sources, destinations, internal_nes = map(list, zip(*s))
 
     # Define the species/population tree for msprime.
     population_configurations = []
@@ -461,29 +424,17 @@ def parse_starbeast(
             msprime.PopulationConfiguration(
                 initial_size=terminal_nes[x]))
     demographic_events = []
-    for x in range(len(indices1)-1):
+    for x in range(len(divergence_times)):
         demographic_events.append(
             msprime.MassMigration(
                 time=divergence_times[x]*generations_per_branch_length_unit,
-                source=indices2[x],
-                destination=indices1[x],
-                proportion=1.0))
+                source=sources[x],
+                destination=destinations[x]))
         demographic_events.append(
             msprime.PopulationParametersChange(
                 time=divergence_times[x]*generations_per_branch_length_unit,
                 initial_size=internal_nes[x],
-                population_id=indices1[x]))
-    demographic_events.append(
-        msprime.MassMigration(
-            time=divergence_times[-1]*generations_per_branch_length_unit,
-            source=indices2[-1],
-            destination=indices1[-1],
-            proportion=1.0))
-    demographic_events.append(
-        msprime.PopulationParametersChange(
-            time=divergence_times[-1]*generations_per_branch_length_unit,
-            initial_size=internal_nes[-1],
-            population_id=indices1[-1]))
+                population_id=destinations[x]))
 
     # Return a tuple of population_configurations and demographic_events.
     return population_configurations, demographic_events
