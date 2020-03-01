@@ -9,7 +9,7 @@ import sys
 # Parse the tree from file primates.tre, written in plain Newick format,
 # generate a tree sequence based on this species tree, and inspect the
 # demography.
-print("\n\nSimple newick tree with branch lengths in units of millions of years:")
+print("Simple newick tree with branch lengths in units of millions of years:")
 parsed_tuple = msprime.parse_species_tree(
         species_tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
         branch_length_units="myr",
@@ -34,7 +34,6 @@ dd = msprime.DemographyDebugger(
         demographic_events=parsed_tuple[1])
 dd.print_history()
 
-
 # Do the same with the species tree from file primates_simultaneous.tre,
 # a modified version of primates.tre in which two divergence events are
 # simultaneous.
@@ -50,31 +49,29 @@ dd = msprime.DemographyDebugger(
 dd.print_history()
 
 
-# Try parsing the species tree primates_polytomy.tre with a polytomy.
+# Parse the species tree primates_polytomy.tre with a polytomy.
 print("\n\nSimple newick tree with polytomy:")
-try:
-    parsed_tuple = msprime.parse_species_tree(
-            species_tree="((human:8.6,chimpanzee:8.6,gorilla:8.6):9.4,orangutan:18.0)",
-            branch_length_units="myr",
-            Ne=10000,
-            generation_time=28)
-    print("The species tree primates_polytomy.tre could be parsed.")
-except:
-    print("The species tree primates_polytomy.tre could not be parsed.")
+parsed_tuple = msprime.parse_species_tree(
+        species_tree="((human:8.6,chimpanzee:8.6,gorilla:8.6):9.4,orangutan:18.0)",
+        branch_length_units="myr",
+        Ne=10000,
+        generation_time=28)
+dd = msprime.DemographyDebugger(
+        population_configurations=parsed_tuple[0],
+        demographic_events=parsed_tuple[1])
+dd.print_history()
 
-
-# Try parsing the non-ultrametric species tree in file.
+# Parse the non-ultrametric species tree in file.
 print("\n\nNon-ultrametric newick tree:")
-try:
-    parsed_tuple = msprime.parse_species_tree(
-            species_tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:7.6):9.4,orangutan:18.0)",
-            branch_length_units="myr",
-            Ne=10000,
-            generation_time=28)
-    print("The species tree primates_nonultrametric.tre could be parsed.")
-except:
-    print("The species tree primates_nonultrametric.tre could not be parsed.")
-
+parsed_tuple = msprime.parse_species_tree(
+        species_tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:7.6):9.4,orangutan:18.0)",
+        branch_length_units="myr",
+        Ne=10000,
+        generation_time=28)
+dd = msprime.DemographyDebugger(
+        population_configurations=parsed_tuple[0],
+        demographic_events=parsed_tuple[1])
+dd.print_history()
 
 # Parse the tree from file 91genes_species_rev.tre, written in StarBEAST
 # format and including a translation block and population sizes for each

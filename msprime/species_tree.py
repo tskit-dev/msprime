@@ -21,7 +21,6 @@ Module responsible for parsing species trees.
 """
 import re
 import newick
-import sys
 
 import msprime
 
@@ -40,34 +39,6 @@ def get_generations_per_branch_length_unit(
     else:
         generations_per_branch_length_unit = 1/generation_time
     return generations_per_branch_length_unit
-
-
-def get_species_tree_string(species_tree_line=None):
-    """
-    Method to check the Newick tree string.
-    """
-    tree_patterns = re.search('\\(.+\\)', species_tree_line)
-    # Make sure the pattern is found.
-    if tree_patterns is None:
-        raise ValueError("No species tree string found.")
-    species_tree_string = tree_patterns.group(0)
-    # Make sure that the numbers of opening and closing parentheses are
-    # identical.
-    if species_tree_string.count('(') != species_tree_string.count(')'):
-        err = "The numbers of opening and closing parentheses in the species "
-        err += "tree string must be identical."
-        raise ValueError(err)
-    # Make sure that between the beginning and the end of the tree string,
-    # there are always more parentheses opened than closed.
-    parentheses_open = 0
-    for char in species_tree_string[:-2]:
-        if char == "(":
-            parentheses_open += 1
-        elif char == ")":
-            parentheses_open -= 1
-        if parentheses_open <= 0:
-            raise ValueError("The string seems to include multiple trees.")
-    return species_tree_string
 
 
 def parse_species_tree(
@@ -141,7 +112,10 @@ def parse_species_tree(
     species_tree_lines = species_tree.splitlines(False)
     if len(species_tree_lines) > 1:
         raise ValueError("The species tree has multiple lines.")
-    species_tree_string = get_species_tree_string(species_tree_lines[0])
+    tree_patterns = re.search('\\(.+\\)', species_tree_lines[0])
+    if tree_patterns is None:
+        raise ValueError("No species tree string found.")
+    species_tree_string = tree_patterns.group(0)
 
     # Parse the newick tree string.
     root = newick.loads(species_tree_string)[0]
@@ -267,14 +241,26 @@ def parse_starbeast(
                 else:
                     translate_string += clean_line
             if clean_line[0:4].lower() == "tree":
-                species_tree_string = get_species_tree_string(clean_line)
                 break
 
+    # species_tree_string = get_species_tree_string(clean_line)
+    tree_patterns = re.search('\\(.+\\)', clean_line)
+    if tree_patterns is None:
+        raise ValueError("No species tree string found.")
+    species_tree_string = tree_patterns.group(0)
+
     # Make sure the annotation can be read.
-    if '[' not in species_tree_string or ']' not in species_tree_string:
-        raise ValueError("Could not read annotation from species tree")
-    if "dmv=" not in species_tree_string:
-        raise ValueError("Could not find dmv tag in annotation.")
+    assert '[' in species_tree_string, "Could not read annotation."
+    assert ']' in species_tree_string, "Could not read annotation."
+    assert "dmv=" in species_tree_string, "Could not find dmv tag in annotation."
+
+    # Get the population size at the root.
+    last_annotation = "[" + clean_line.split("[")[-1].split("]")[0] + "]"
+    find_pattern = '\\&dmv=\\{([\\d\\.]+?)\\}'
+    dmv_patterns = re.search(find_pattern, last_annotation)
+    assert dmv_patterns, "Could not read dmv annotation."
+    starbeast_root_pop_size = float(dmv_patterns.group(1))
+    starbeast_root_pop_size *= generations_per_branch_length_unit
 
     # Remove all annotation except for dmv.
     clean_species_tree_string = ''
@@ -299,12 +285,6 @@ def parse_starbeast(
                 in_dmv = False
         else:
             clean_species_tree_string += species_tree_string[x]
-
-    # Get the population size at the root.
-    find_pattern = '(\\(.+\\))\\[\\&dmv=\\{([\\d\\.]+?)\\}\\]'
-    tree_patterns = re.search(find_pattern, clean_species_tree_string)
-    starbeast_root_pop_size = float(tree_patterns.group(2))
-    starbeast_root_pop_size *= generations_per_branch_length_unit
 
     # Use the translation block (if present) to
     # back-translate species IDs in the tree string.
@@ -410,7 +390,6 @@ def parse_starbeast(
                     assert edge_dmv > 0, 'Parsed Ne is zero.'
                     edge_ne = edge_dmv * generations_per_branch_length_unit
                     internal_nes.append(edge_ne)
-
 
     # Sort the lists indices1, indices2, divergence_times, and
     # population sizes according to divergence_time.
