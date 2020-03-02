@@ -1939,6 +1939,18 @@ RecombinationMap_dealloc(RecombinationMap* self)
 }
 
 static int
+double_PyArray_converter(PyObject *in, PyObject **out)
+{
+    PyObject *ret = PyArray_FromAny(in, PyArray_DescrFromType(NPY_DOUBLE),
+            1, 1, NPY_ARRAY_CARRAY, NULL);
+    if (ret == NULL) {
+        return NPY_FAIL;
+    }
+    *out = ret;
+    return NPY_SUCCEED;
+}
+
+static int
 RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
@@ -1947,15 +1959,15 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
     Py_ssize_t size;
     PyObject *py_positions = NULL;
     PyObject *py_rates = NULL;
-    double *positions = NULL;
-    double *rates = NULL;
-    PyArrayObject *pyarray_positions = NULL;
-    PyArrayObject *pyarray_rates = NULL;
+    double *positions;
+    double *rates;
     int discrete = false;
 
     self->recomb_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OOp", kwlist,
-            &py_positions, &py_rates, &discrete)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&p", kwlist,
+            double_PyArray_converter, &py_positions,
+            double_PyArray_converter, &py_rates,
+            &discrete)) {
         goto out;
     }
 
@@ -1966,23 +1978,8 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    pyarray_positions = (PyArrayObject *)PyArray_FromAny(
-            py_positions, PyArray_DescrFromType(NPY_DOUBLE),
-            1, 1, NPY_ARRAY_IN_ARRAY, NULL);
-    if (pyarray_positions == NULL) {
-        PyErr_SetString(PyExc_TypeError, "positions must be a sequence of numbers");
-        goto out;
-    }
-    pyarray_rates = (PyArrayObject *)PyArray_FromAny(
-            py_rates, PyArray_DescrFromType(NPY_DOUBLE),
-            1, 1, NPY_ARRAY_IN_ARRAY, NULL);
-    if (pyarray_rates == NULL) {
-        PyErr_SetString(PyExc_TypeError, "rates must be a sequence of numbers");
-        goto out;
-    }
-
-    positions = PyArray_DATA(pyarray_positions);
-    rates = PyArray_DATA(pyarray_rates);
+    positions = PyArray_DATA((PyArrayObject *)py_positions);
+    rates = PyArray_DATA((PyArrayObject *)py_rates);
 
     self->recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
     if (self->recomb_map == NULL) {
@@ -1997,8 +1994,8 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
-    Py_XDECREF(pyarray_positions);
-    Py_XDECREF(pyarray_rates);
+    Py_XDECREF(py_positions);
+    Py_XDECREF(py_rates);
     return ret;
 }
 

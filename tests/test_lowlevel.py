@@ -1841,9 +1841,9 @@ class TestRecombinationMap(LowLevelTestCase):
     """
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.RecombinationMap)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, None)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, None, None)
-        self.assertRaises(TypeError, _msprime.RecombinationMap, {}, {}, False)
+        self.assertRaises(ValueError, _msprime.RecombinationMap, None)
+        self.assertRaises(ValueError, _msprime.RecombinationMap, None, None)
+        self.assertRaises(ValueError, _msprime.RecombinationMap, {}, {}, False)
         self.assertRaises(
                 ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3], False)
         self.assertRaises(
