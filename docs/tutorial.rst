@@ -474,14 +474,19 @@ Running this example we get::
 Demography
 **********
 
-Msprime provides a flexible and simple way to model past demographic events
+``msprime`` provides a flexible and simple way to model past demographic events
 in arbitrary combinations. Here is an example describing the
 `Gutenkunst et al. <http://dx.doi.org/10.1371/journal.pgen.1000695>`_
-out-of-Africa model. See
+out-of-Africa model. 
 `Figure 2B <http://dx.doi.org/10.1371/journal.pgen.1000695.g002>`_
-for a schematic of this model, and
-`Table 1 <http://dx.doi.org/10.1371/journal.pgen.1000695.t001>`_ for
-the values used.
+of that paper provides a schematic, with the values below taken from
+`Table 1 <http://dx.doi.org/10.1371/journal.pgen.1000695.t001>`_.
+Note that the code reproduced below is provided by way of illustration:
+to use this exact model for your own purposes, we recommend that you try the
+:ref:`version <stdpopsim:sec_catalog_homsap_models_outofafrica_3g09>`
+that is :ref:`catalogued <stdpopsim:sec_catalog>` in the
+:ref:`stdpopsim project <stdpopsim:sec_introduction>` of standard simulation models.
+
 Coalescent simulation moves from the present back into the past,
 so times are in units of generations *ago*, and we build the model
 with most recent events first.
@@ -491,30 +496,32 @@ with most recent events first.
 .. code-block:: python
 
     import math
+    import msprime
     def out_of_africa():
         # First we set out the maximum likelihood values of the various parameters
         # given in Table 1.
         N_A = 7300
-        N_B = 2100
         N_AF = 12300
+        N_B = 2100
         N_EU0 = 1000
         N_AS0 = 510
-        # Times are provided in years, so we convert into generations.
+        r_EU = 0.004   # 0.4% EU growth
+        r_AS = 0.0055  # 0.55% AS growth
+        # Migration rates during the various epochs.
+        m_AF_B = 25e-5
+        m_AF_EU = 3e-5
+        m_AF_AS = 1.9e-5
+        m_EU_AS = 9.6e-5
+        # Times in Table 1 are provided in years, calculated on the assumption
+        # of 25 years per generation: we need to convert back into generations.
         generation_time = 25
         T_AF = 220e3 / generation_time
         T_B = 140e3 / generation_time
         T_EU_AS = 21.2e3 / generation_time
         # We need to work out the starting (diploid) population sizes based on
         # the growth rates provided for these two populations
-        r_EU = 0.004
-        r_AS = 0.0055
         N_EU = N_EU0 / math.exp(-r_EU * T_EU_AS)
         N_AS = N_AS0 / math.exp(-r_AS * T_EU_AS)
-        # Migration rates during the various epochs.
-        m_AF_B = 25e-5
-        m_AF_EU = 3e-5
-        m_AF_AS = 1.9e-5
-        m_EU_AS = 9.6e-5
         # Population IDs correspond to their indexes in the population
         # configuration array. Therefore, we have 0=YRI, 1=CEU and 2=CHB
         # initially.
@@ -549,13 +556,15 @@ with most recent events first.
             msprime.PopulationParametersChange(
                 time=T_AF, initial_size=N_A, population_id=0)
         ]
-        # Use the demography debugger to print out the demographic history
-        # that we have just described.
-        dd = msprime.DemographyDebugger(
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
-            demographic_events=demographic_events)
-        dd.print_history()
+        return {
+            'population_configurations':population_configurations,
+            'migration_matrix':migration_matrix,
+            'demographic_events':demographic_events}
+
+    # Use the demography debugger to print out the demographic history
+    # that we have just described.
+    dd = msprime.DemographyDebugger(**out_of_africa())
+    dd.print_history()
 
 
 The :class:`.DemographyDebugger` provides a method to debug the history that
@@ -616,7 +625,11 @@ sizes and growth rates are all as you intend during each epoch::
 
 Once you are satisfied that the demographic history that you have built
 is correct, it can then be simulated by calling the :func:`.simulate`
-function.
+function:
+
+.. code-block:: python
+
+    ts = msprime.simulate(**out_of_africa())
 
 .. _sec_tutorial_demography_census:
 
