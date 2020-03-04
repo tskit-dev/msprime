@@ -22,6 +22,7 @@ Common code for the msprime test cases.
 import random
 import unittest
 
+import numpy as np
 import msprime
 
 NULL_NODE = -1
@@ -36,6 +37,21 @@ class MsprimeTestCase(unittest.TestCase):
     """
     Superclass of all tests msprime simulator test cases.
     """
+
+
+class SequenceEqualityMixin(object):
+    """
+    Overwrites unittest.TestCase.assertEqual to work with numpy arrays.
+
+    Note: unittest.TestCase.assertSequenceEqual also fails to work with
+    numpy arrays, and assertEqual works with ordinary lists/tuples anyway.
+    """
+    def assertEqual(self, it1, it2, msg=None):
+        if isinstance(it1, np.ndarray):
+            it1 = list(it1)
+        if isinstance(it2, np.ndarray):
+            it2 = list(it2)
+        unittest.TestCase.assertEqual(self, it1, it2, msg=msg)
 
 
 class PythonSparseTree(object):

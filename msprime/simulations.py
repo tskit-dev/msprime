@@ -984,10 +984,9 @@ class RecombinationMap(object):
         """
         chrom_length = self._ll_recombination_map.get_sequence_length()
 
-        positions = np.array(self._ll_recombination_map.get_positions())
+        positions = self._ll_recombination_map.get_positions()
         positions_diff = self._ll_recombination_map.get_positions()[1:]
-        positions_diff.append(chrom_length)
-        positions_diff = np.array(positions_diff)
+        positions_diff = np.append(positions_diff, chrom_length)
         window_sizes = positions_diff - positions
 
         weights = window_sizes / chrom_length
@@ -1026,8 +1025,8 @@ class RecombinationMap(object):
         if end != positions[-1]:
             j = bisect.bisect_right(positions, end, lo=i)
 
-        new_positions = positions[i:j]
-        new_rates = rates[i:j]
+        new_positions = list(positions[i:j])
+        new_rates = list(rates[i:j])
         new_positions[0] = start
         if end > new_positions[-1]:
             new_positions.append(end)
@@ -1088,7 +1087,12 @@ class RecombinationMap(object):
         raise ValueError("num_loci is no longer supported")
 
     def get_positions(self):
-        return self._ll_recombination_map.get_positions()
+        # For compatability with existing code we convert to a list
+        return list(self._ll_recombination_map.get_positions())
+
+    def get_rates(self):
+        # For compatability with existing code we convert to a list
+        return list(self._ll_recombination_map.get_rates())
 
     def get_sequence_length(self):
         return self._ll_recombination_map.get_sequence_length()
@@ -1096,9 +1100,6 @@ class RecombinationMap(object):
     def get_length(self):
         # Deprecated: use sequence_length instead
         return self.get_sequence_length()
-
-    def get_rates(self):
-        return self._ll_recombination_map.get_rates()
 
     @property
     def discrete(self):
