@@ -27,8 +27,8 @@ import gzip
 import warnings
 
 import numpy as np
+
 import msprime
-import tests
 
 
 class TestConstructorAndGetters(unittest.TestCase):
@@ -58,7 +58,7 @@ class TestConstructorAndGetters(unittest.TestCase):
         self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
 
 
-class TestReadHapmap(tests.SequenceEqualityMixin, unittest.TestCase):
+class TestReadHapmap(unittest.TestCase):
     """
     Tests file reading code.
     """
@@ -114,11 +114,9 @@ class TestReadHapmap(tests.SequenceEqualityMixin, unittest.TestCase):
             os.unlink(filename)
 
 
-class TestSlice(tests.SequenceEqualityMixin, unittest.TestCase):
+class TestSlice(unittest.TestCase):
     def test_slice(self):
-        """
-        test RecombinationMap.slice(..., trim=False)
-        """
+        # test RecombinationMap.slice(..., trim=False)
         a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
         b = a.slice()
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
@@ -171,9 +169,7 @@ class TestSlice(tests.SequenceEqualityMixin, unittest.TestCase):
         self.assertTrue(np.array_equal([0, 1, 0, 0], b.get_rates()))
 
     def test_slice_with_floats(self):
-        """
-        test RecombinationMap.slice(..., trim=False) with floats
-        """
+        #  test RecombinationMap.slice(..., trim=False) with floats
         a = msprime.RecombinationMap(
                 [np.pi*x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3, 0])
         b = a.slice(start=50*np.pi)
@@ -225,9 +221,7 @@ class TestSlice(tests.SequenceEqualityMixin, unittest.TestCase):
             recomb_map.slice(start=20, end=10)
 
     def test_getitem_slice(self):
-        """
-        test RecombinationMap slice syntax
-        """
+        # test RecombinationMap slice syntax
         a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
         b = a[:]
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
@@ -280,9 +274,7 @@ class TestSlice(tests.SequenceEqualityMixin, unittest.TestCase):
         self.assertTrue(np.array_equal([1, 0], b.get_rates()))
 
     def test_getitem_slice_with_negative_indexes_and_floats(self):
-        """
-        test RecombinationMap slice syntax with negative indexes and floats
-        """
+        # test RecombinationMap slice syntax with negative indexes and floats
         a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
 
         b = a[150:250]

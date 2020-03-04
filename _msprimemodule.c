@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2014-2018 University of Oxford
+** Copyright (C) 2014-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -137,79 +137,55 @@ static int
 parse_samples(PyObject *py_samples, Py_ssize_t *num_samples, sample_t **samples)
 {
     int ret = -1;
+    long tmp_long;
     Py_ssize_t j, n;
+    PyObject *sample, *value;
     sample_t *ret_samples = NULL;
-    PyObject *dtype = NULL;
-    PyObject *recarray = NULL;
-    PyObject *key, *value, *inner_descr1, *inner_descr2;
-    PyArray_Descr *descr;
-    Py_ssize_t population_offset, time_offset, pos = 0;
 
-    dtype = Py_BuildValue("[(s, s), (s, s)]", "a", "i4", "b", "f8");
-    if (dtype == NULL) {
-        goto out;
-    }
-    if (PyArray_DescrConverter(dtype, &descr) == NPY_FAIL) {
-        goto out;
-    }
-    recarray = PyArray_FromAny(py_samples, descr, 1, 1, NPY_ARRAY_IN_ARRAY, NULL);
-    if (recarray == NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                "samples must be a list of (population,time) tuples");
-        goto out;
-    }
-
-    PyDict_Next(PyArray_DESCR((PyArrayObject *)recarray)->fields,
-            &pos, &key, &value);
-    if (!PyArg_ParseTuple(value, "On|", &inner_descr1, &population_offset)) {
-        goto out;
-    }
-
-    PyDict_Next(PyArray_DESCR((PyArrayObject *)recarray)->fields,
-            &pos, &key, &value);
-    if (!PyArg_ParseTuple(value, "On|", &inner_descr2, &time_offset)) {
-        goto out;
-    }
-
-    /*printf("recarray pop_offset=%ld, time_offset=%ld, decr1=%c, descr2=%c\n",
-            population_offset, time_offset,
-            ((PyArray_Descr *)inner_descr1)->kind,
-            ((PyArray_Descr *)inner_descr2)->kind);*/
-
-    n = PyObject_Size(recarray);
+    n = PyList_Size(py_samples);
     ret_samples = PyMem_Malloc(n * sizeof(sample_t));
     if (ret_samples == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     for (j = 0; j < n; j++) {
-        char *data = PyArray_GETPTR1((PyArrayObject *)recarray, j);
-        int32_t population = *(int32_t *)(data + population_offset);
-        double time = *(double *)(data + time_offset);
-
-        if (population < 0) {
+        sample = PyList_GetItem(py_samples, j);
+        if (!PyTuple_Check(sample)) {
+            PyErr_SetString(PyExc_TypeError, "not a tuple");
+            goto out;
+        }
+        if (PyTuple_Size(sample) != 2) {
+            PyErr_SetString(PyExc_ValueError,
+                    "sample must be (population,time) tuple");
+            goto out;
+        }
+        value = PyTuple_GetItem(sample, 0);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'population' is not number");
+            goto out;
+        }
+        tmp_long = PyLong_AsLong(value);
+        if (tmp_long < 0) {
             PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
             goto out;
         }
-        if (isnan(time)) {
-            PyErr_SetString(PyExc_TypeError, "'time' is not number");
+        ret_samples[j].population_id = (population_id_t) tmp_long;
+        value = PyTuple_GetItem(sample, 1);
+        if (!PyNumber_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'time' is not number");
             goto out;
         }
-        if (time < 0) {
+        ret_samples[j].time = PyFloat_AsDouble(value);
+        if (ret_samples[j].time < 0) {
             PyErr_SetString(PyExc_ValueError, "negative times not valid");
             goto out;
         }
-        /*printf("sample[%d] = (%d, %g)\n", j, population, time);*/
-        ret_samples[j].population_id = (population_id_t) population;
-        ret_samples[j].time = time;
     }
     *samples = ret_samples;
     *num_samples = n;
     ret = 0;
     ret_samples = NULL;
 out:
-    Py_XDECREF(dtype);
-    Py_XDECREF(recarray);
     if (ret_samples != NULL) {
         PyMem_Free(ret_samples);
     }
@@ -1941,8 +1917,7 @@ RecombinationMap_dealloc(RecombinationMap* self)
 static int
 double_PyArray_converter(PyObject *in, PyObject **out)
 {
-    PyObject *ret = PyArray_FromAny(in, PyArray_DescrFromType(NPY_DOUBLE),
-            1, 1, NPY_ARRAY_CARRAY, NULL);
+    PyObject *ret = PyArray_FROMANY(in, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (ret == NULL) {
         return NPY_FAIL;
     }
@@ -1978,8 +1953,8 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    positions = PyArray_DATA((PyArrayObject *)py_positions);
-    rates = PyArray_DATA((PyArrayObject *)py_rates);
+    positions = PyArray_DATA((PyArrayObject *) py_positions);
+    rates = PyArray_DATA((PyArrayObject *) py_rates);
 
     self->recomb_map = PyMem_Malloc(sizeof(recomb_map_t));
     if (self->recomb_map == NULL) {
@@ -2070,16 +2045,15 @@ RecombinationMap_get_positions(RecombinationMap *self)
         goto out;
     }
     err = recomb_map_get_positions(self->recomb_map,
-            PyArray_DATA((PyArrayObject *)arr));
+            PyArray_DATA((PyArrayObject *) arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = arr;
+    arr = NULL;
 out:
-    if (ret == NULL) {
-        Py_XDECREF(arr);
-    }
+    Py_XDECREF(arr);
     return ret;
 }
 
@@ -2099,17 +2073,15 @@ RecombinationMap_get_rates(RecombinationMap *self)
     if (arr == NULL) {
         goto out;
     }
-    err = recomb_map_get_rates(self->recomb_map,
-            PyArray_DATA((PyArrayObject *)arr));
+    err = recomb_map_get_rates(self->recomb_map, PyArray_DATA((PyArrayObject *) arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = arr;
+    arr = NULL;
 out:
-    if (ret == NULL) {
-        Py_XDECREF(arr);
-    }
+    Py_XDECREF(arr);
     return ret;
 }
 
@@ -3340,17 +3312,15 @@ Simulator_get_num_migration_events(Simulator  *self)
     if (arr == NULL) {
         goto out;
     }
-    err = msp_get_num_migration_events(self->sim,
-            PyArray_DATA((PyArrayObject *)arr));
+    err = msp_get_num_migration_events(self->sim, PyArray_DATA((PyArrayObject *) arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = arr;
+    arr = NULL;
 out:
-    if (ret == NULL) {
-        Py_XDECREF(arr);
-    }
+    Py_XDECREF(arr);
     return ret;
 }
 
@@ -3548,16 +3518,15 @@ Simulator_get_breakpoints(Simulator *self)
     if (arr == NULL) {
         goto out;
     }
-    err = msp_get_breakpoints(self->sim, PyArray_DATA((PyArrayObject *)arr));
+    err = msp_get_breakpoints(self->sim, PyArray_DATA((PyArrayObject *) arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = arr;
+    arr = NULL;
 out:
-    if (ret == NULL) {
-        Py_XDECREF(arr);
-    }
+    Py_XDECREF(arr);
     return ret;
 }
 
@@ -3579,17 +3548,15 @@ Simulator_get_migration_matrix(Simulator *self)
     if (arr == NULL) {
         goto out;
     }
-    err = msp_get_migration_matrix(self->sim,
-            PyArray_DATA((PyArrayObject *)arr));
+    err = msp_get_migration_matrix(self->sim, PyArray_DATA((PyArrayObject *)arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
     }
     ret = arr;
+    arr = NULL;
 out:
-    if (ret == NULL) {
-        Py_XDECREF(arr);
-    }
+    Py_XDECREF(arr);
     return ret;
 }
 

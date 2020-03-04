@@ -412,7 +412,7 @@ class TestSimulator(HighLevelTestCase):
         self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
 
 
-class TestSimulatorFactory(tests.SequenceEqualityMixin, unittest.TestCase):
+class TestSimulatorFactory(unittest.TestCase):
     """
     Tests that the simulator factory high-level function correctly
     creates simulators with the required parameter values.
@@ -518,7 +518,7 @@ class TestSimulatorFactory(tests.SequenceEqualityMixin, unittest.TestCase):
             ll_sim = sim.create_ll_instance()
             # If we don't specify a matrix, it's 0 everywhere.
             matrix = [0 for j in range(N * N)]
-            self.assertEqual(ll_sim.get_migration_matrix(), matrix)
+            np.testing.assert_array_equal(ll_sim.get_migration_matrix(), matrix)
 
             def f(hl_matrix):
                 return msprime.simulator_factory(
@@ -533,7 +533,7 @@ class TestSimulatorFactory(tests.SequenceEqualityMixin, unittest.TestCase):
             self.assertEqual(sim.migration_matrix, hl_matrix)
             ll_sim = sim.create_ll_instance()
             ll_matrix = [v for row in hl_matrix for v in row]
-            self.assertEqual(ll_sim.get_migration_matrix(), ll_matrix)
+            np.testing.assert_array_equal(ll_sim.get_migration_matrix(), ll_matrix)
             for bad_type in [234, 1.2]:
                 self.assertRaises(TypeError, f, bad_type)
             # Iterables should raise a value error.
@@ -551,7 +551,7 @@ class TestSimulatorFactory(tests.SequenceEqualityMixin, unittest.TestCase):
             hl_matrix = np.ones((N, N))
             np.fill_diagonal(hl_matrix, 0)
             sim = f(hl_matrix)
-            self.assertTrue(np.array_equal(np.array(sim.migration_matrix), hl_matrix))
+            np.testing.assert_array_equal(np.array(sim.migration_matrix), hl_matrix)
             sim.run()
             events = np.array(sim.num_migration_events)
             self.assertEqual(events.shape, (N, N))

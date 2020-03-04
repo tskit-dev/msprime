@@ -15,6 +15,7 @@ import tests.test_demography as test_demography
 import tests.test_highlevel as test_highlevel
 import tests.test_lowlevel as test_lowlevel
 import tests.test_dict_encoding as test_dict_encoding
+import tests.test_recombination_map as test_recombination_map
 
 
 def main():
@@ -23,6 +24,7 @@ def main():
         "highlevel": test_highlevel,
         "lowlevel": test_lowlevel,
         "dict_encoding": test_dict_encoding,
+        "recombination_map": test_recombination_map,
     }
     parser = argparse.ArgumentParser(
         description="Run tests in a loop to stress low-level interface")

@@ -1835,6 +1835,64 @@ class TestSimulator(LowLevelTestCase):
             self.assertEqual(sim.get_time(), 0)
 
 
+class TestSampleParsing(unittest.TestCase):
+    """
+    Tests for the numpy record array parsing of sample values in Simulator init.
+    """
+
+    def test_good_cases(self):
+        examples = [
+            get_samples(10), get_samples(2),
+            [(0, 0.1), (1, 0.2)],
+            [(j, j) for j in range(4)],
+            [(j % 4, j) for j in range(100)]
+        ]
+        for samples in examples:
+            sim = _msprime.Simulator(
+                samples, uniform_recombination_map(), _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                migration_matrix=[0 for _ in range(4**2)],
+                population_configuration=[
+                    get_population_configuration() for j in range(4)])
+            self.assertEqual(samples, sim.get_samples())
+
+    def test_type_errors(self):
+        examples = [
+            "asdf", None, {}, tuple(),
+            [0, 1],
+            [(0, 0), None],
+            [[1, 2], [1, 2]],  # Values must be tuples
+            [[1, 2, 3]],
+            [0, 1],
+            ["sesdf"],
+            [("sesdf", 0)],
+            [(None, 0)],
+            [(0, None)],
+        ]
+        for samples in examples:
+            with self.assertRaises(TypeError):
+                _msprime.Simulator(
+                    samples, uniform_recombination_map(), _msprime.RandomGenerator(1),
+                    _msprime.LightweightTableCollection())
+
+    def test_value_errors(self):
+        examples = [
+            [tuple()],
+            [tuple(), tuple()],
+            [(1,), (0, 1)],
+            [(0, -1)],
+            [(-1, 0)],
+            [(1, 2, 3)],
+            [(1, 2), (1, 2, 3)],
+            [(1, 2, 3), (1, 2, 3)],
+        ]
+        for samples in examples:
+            with self.assertRaises(ValueError):
+                _msprime.Simulator(
+                    samples, uniform_recombination_map(), _msprime.RandomGenerator(1),
+                    _msprime.LightweightTableCollection())
+
+
 class TestRecombinationMap(LowLevelTestCase):
     """
     Tests for the low-level Recombination Map.
@@ -1859,6 +1917,24 @@ class TestRecombinationMap(LowLevelTestCase):
             [0, 1, 0.5], [0, 0, 0], False)
         self.assertRaises(
             _msprime.LibraryError, _msprime.RecombinationMap, [0, .5], [0.1, 0], True)
+
+    def test_arrays(self):
+        test_values = [
+            ([0, 1], [0.1, 0.2]),
+            (np.arange(1000), np.zeros(1000)),
+            (np.linspace(0, 1, 1000), np.linspace(10, 100, 1000))
+        ]
+        for positions, rates in test_values:
+            rmap = _msprime.RecombinationMap(
+                positions=positions, rates=rates, discrete=False)
+            np.testing.assert_array_equal(rmap.get_positions(), positions)
+            np.testing.assert_array_equal(rmap.get_rates(), rates)
+
+    def test_bad_arrays(self):
+        for bad_array in ["sadf", [[], []], None]:
+            with self.assertRaises(ValueError):
+                _msprime.RecombinationMap(
+                    positions=bad_array, rates=[0, 1], discrete=False)
 
     def test_total_rate(self):
         rm = _msprime.RecombinationMap([0, 10], [0.25, 0], True)

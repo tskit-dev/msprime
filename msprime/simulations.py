@@ -1087,7 +1087,12 @@ class RecombinationMap(object):
         raise ValueError("num_loci is no longer supported")
 
     def get_positions(self):
-        return self._ll_recombination_map.get_positions()
+        # For compatability with existing code we convert to a list
+        return list(self._ll_recombination_map.get_positions())
+
+    def get_rates(self):
+        # For compatability with existing code we convert to a list
+        return list(self._ll_recombination_map.get_rates())
 
     def get_sequence_length(self):
         return self._ll_recombination_map.get_sequence_length()
@@ -1095,9 +1100,6 @@ class RecombinationMap(object):
     def get_length(self):
         # Deprecated: use sequence_length instead
         return self.get_sequence_length()
-
-    def get_rates(self):
-        return self._ll_recombination_map.get_rates()
 
     @property
     def discrete(self):
