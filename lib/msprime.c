@@ -680,6 +680,12 @@ msp_free_segment(msp_t *self, segment_t *seg)
     fenwick_set_value(&self->links[seg->label], seg->id, 0);
 }
 
+static inline avl_tree_t *
+msp_get_segment_population(msp_t *self, segment_t *u)
+{
+    return &self->populations[u->population_id].ancestors[u->label];
+}
+
 static inline int MSP_WARN_UNUSED
 msp_insert_individual(msp_t *self, segment_t *u)
 {
@@ -693,11 +699,23 @@ msp_insert_individual(msp_t *self, segment_t *u)
         goto out;
     }
     avl_init_node(node, u);
-    node = avl_insert_node(
-        &self->populations[u->population_id].ancestors[u->label], node);
+    node = avl_insert_node(msp_get_segment_population(self, u), node);
     assert(node != NULL);
 out:
     return ret;
+}
+
+static inline void
+msp_remove_individual(msp_t *self, segment_t *u)
+{
+    avl_node_t *node;
+    avl_tree_t *pop = msp_get_segment_population(self, u);
+
+    assert(u != NULL);
+    node = avl_search(pop, u);
+    assert(node != NULL);
+    avl_unlink_node(pop, node);
+    msp_free_avl_node(self, node);
 }
 
 /* Returns true if the specified breakpoint exists */
@@ -803,7 +821,8 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                 node = node->next;
             }
         }
-        assert(doubles_almost_equal(total_mass, fenwick_get_total(&self->links[k]), 1e-6));
+        assert(doubles_almost_equal(
+                    total_mass, fenwick_get_total(&self->links[k]), 1e-6));
         assert(doubles_almost_equal(total_mass, alt_total_mass, 1e-6));
         assert(label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
@@ -1901,7 +1920,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ix;
     double k;
     double k_mass;
-    segment_t *y, *z;
+    segment_t *y, *z, *tail;
     segment_t s1, s2;
     segment_t *seg_tails[] = {&s1, &s2};
 
@@ -1911,7 +1930,6 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     ix = (int) gsl_rng_uniform_int(self->rng, 2);
     seg_tails[ix]->next = x;
     assert(x->prev == NULL);
-    x->prev = seg_tails[ix];
 
     while (x != NULL) {
         seg_tails[ix] = x;
@@ -1919,16 +1937,27 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 
         if (x->right > k) {
             // Make new segment
-            assert(x->left <= k);
             k_mass = recomb_map_position_to_mass(&self->recomb_map, k);
+            assert(x->left < k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
+
+            if (seg_tails[ix] == &s1 || seg_tails[ix] == &s2) {
+                tail = NULL;
+            } else {
+                tail = seg_tails[ix];
+            }
             z = msp_alloc_segment(self, k, x->right,
                     k_mass, x->right_mass, x->value,
-                    x->population_id, x->label, seg_tails[ix], x->next);
+                    x->population_id, x->label, tail, x->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
+            }
+            if (z->prev == NULL) {
+                msp_set_single_segment_mass(self, z);
+            } else {
+                msp_set_segment_mass(self, z, z->prev);
             }
             assert(z->left < z->right);
             if (x->next != NULL) {
@@ -1954,22 +1983,27 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
                 k = msp_dtwf_generate_breakpoint(self, k);
             }
             seg_tails[ix]->next = y;
-            y->prev = seg_tails[ix];
+            if (seg_tails[ix] == &s1 || seg_tails[ix] == &s2) {
+                tail = NULL;
+            } else {
+                tail = seg_tails[ix];
+            }
+            y->prev = tail;
+            if (y->prev == NULL) {
+                msp_set_single_segment_mass(self, y);
+            } else {
+                msp_set_segment_mass(self, y, y->prev);
+            }
             seg_tails[ix] = y;
             x = y;
-            z = y;
-            msp_set_single_segment_mass(self, z);
-
         } else {
             // Breakpoint in later segment
             x = y;
-            z = y;
         }
     }
     // Remove sentinal segments
     *u = s1.next;
     *v = s2.next;
-
 out:
     return ret;
 }
@@ -3858,14 +3892,20 @@ msp_dtwf_generation(msp_t *self)
             for (s = parents[k]; s != NULL; s = s->next) {
                 node = s->node;
                 x = (segment_t *) node->item;
-                avl_unlink_node(&pop->ancestors[label], node);
-                msp_free_avl_node(self, node);
-
                 // Recombine ancestor
+                // TODO Should this be the recombination rate going foward from x.left?
                 if (recomb_map_get_total_recombination_rate(&self->recomb_map) > 0) {
                     ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
                     if (ret != 0) {
                         goto out;
+                    }
+                    for (i = 0; i < 2; i++) {
+                        if (u[i] != NULL && u[i] != x) {
+                            ret = msp_insert_individual(self, u[i]);
+                            if (ret != 0) {
+                                goto out;
+                            }
+                        }
                     }
                 } else {
                     ix = (int) gsl_rng_uniform_int(self->rng, 2);
@@ -3885,7 +3925,11 @@ msp_dtwf_generation(msp_t *self)
             }
             // Merge segments in each parental chromosome
             for (i = 0; i < 2; i ++) {
-                ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j, label, NULL, TSK_NULL);
+                for (node = Q[i].head; node != NULL; node = node->next) {
+                    msp_remove_individual(self, (segment_t *) node->item);
+                }
+                ret = msp_merge_ancestors(self,
+                        &Q[i], (population_id_t) j, label, NULL, TSK_NULL);
                 if (ret != 0) {
                     goto out;
                 }
