@@ -65,7 +65,7 @@ def parse_species_tree(
     """
 
     # Make sure a species tree is specified.
-    if species_tree is None:
+    if type(species_tree) is not str:
         raise ValueError("A species tree must be specified.")
 
     # Make sure that branch length units are either "myr", "yr", or "gen".
@@ -78,12 +78,22 @@ def parse_species_tree(
         raise ValueError(err)
 
     # Make sure that the population size is either None or positive.
-    if Ne is not None and Ne <= 0:
-        raise ValueError("Population size Ne must be > 0")
+    if Ne is not None:
+        try:
+            Ne = float(Ne)
+        except ValueError:
+            raise ValueError("Population size Ne must be numeric.")
+        if Ne <= 0:
+            raise ValueError("Population size Ne must be > 0.")
 
     # Make sure that the generation time is either None or positive.
-    if generation_time is not None and generation_time <= 0:
-        raise ValueError("Generation time must be > 0")
+    if generation_time is not None:
+        try:
+            generation_time = float(generation_time)
+        except ValueError:
+            raise ValueError("Generation time must be numeric.")
+        if generation_time <= 0:
+            raise ValueError("Generation time must be > 0.")
 
     # Make sure that the generation time is specified if and only if
     # branch lengths are not in units of generations.
@@ -198,7 +208,7 @@ def parse_starbeast(
     """
 
     # Make sure a species tree is specified.
-    if species_tree is None:
+    if type(species_tree) is not str:
         raise ValueError("A species tree must be specified.")
 
     # Make sure that branch length units are either "myr" or "yr".
@@ -210,8 +220,14 @@ def parse_starbeast(
         raise ValueError(err)
 
     # Make sure that the generation time is positive.
+    if generation_time is None:
+        raise TypeError("Generation time must not be None.")
+    try:
+        generation_time = float(generation_time)
+    except ValueError:
+        raise ValueError("Generation time must be numeric.")
     if generation_time <= 0:
-        raise ValueError("Generation time must be > 0")
+        raise ValueError("Generation time must be > 0.")
 
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
