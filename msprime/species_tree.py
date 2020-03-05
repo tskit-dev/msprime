@@ -41,10 +41,43 @@ def get_generations_per_branch_length_unit(
     return generations_per_branch_length_unit
 
 
+def parse_newick(tree, branch_length_multiplier):
+    """
+    Parses the newick tree and annotates the resulting nodes with their
+    time values, appropriately scaled.
+    """
+    # Parse the newick tree string.
+    parsed = newick.loads(tree)
+    if len(parsed) == 0:
+        raise ValueError(f"Not a valid newick tree: '{tree}'")
+    root = parsed[0]
+
+    # Set node depths (distances from root).
+    stack = [(root, 0)]
+    num_nodes = 0
+    max_depth = 0
+    while len(stack) > 0:
+        node, depth = stack.pop()
+        if depth > max_depth:
+            max_depth = depth
+        num_nodes += 1
+        node.depth = depth
+        for child in node.descendants:
+            stack.append((child, depth + child.length))
+    if num_nodes < 3:
+        raise ValueError("Newick tree must have at least three nodes")
+
+    # Set node times (distances from present).
+    for node in root.walk():
+        node.time = (max_depth - node.depth) * branch_length_multiplier
+
+    return root
+
+
 def parse_species_tree(
-        species_tree=None,
-        branch_length_units="gen",
+        tree=None,
         Ne=None,
+        branch_length_units="gen",
         generation_time=None):
     """
     Method to parse species trees in Newick
@@ -63,10 +96,8 @@ def parse_species_tree(
     - If and only if the branch lengths are not in units of
         generations, the generation time should be specified.
     """
-
-    # Make sure a species tree is specified.
-    if type(species_tree) is not str:
-        raise ValueError("A species tree must be specified.")
+    if not isinstance(tree, str):
+        raise TypeError("The species tree must be a string")
 
     # Make sure that branch length units are either "myr", "yr", or "gen".
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
@@ -77,8 +108,9 @@ def parse_species_tree(
         err += 'and "gen" (generations).'
         raise ValueError(err)
 
-    # Make sure that the population size is either None or positive.
-    if Ne is not None:
+    if Ne is None:
+        raise ValueError("Ne should be specified.")
+    else:
         try:
             Ne = float(Ne)
         except ValueError:
@@ -109,83 +141,36 @@ def parse_species_tree(
             err += 'specified additionally.'
             raise ValueError(err)
 
-    # Make sure that a population size is specified.
-    if Ne is None:
-        raise ValueError("Ne should be specified.")
-
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
-        branch_length_units, generation_time
-        )
+        branch_length_units, generation_time)
 
-    # Read the input file.
-    species_tree_lines = species_tree.splitlines(False)
-    if len(species_tree_lines) > 1:
-        raise ValueError("The species tree has multiple lines.")
-    tree_patterns = re.search('\\(.+\\)', species_tree_lines[0])
-    if tree_patterns is None:
-        raise ValueError("No species tree string found.")
-    species_tree_string = tree_patterns.group(0)
+    root = parse_newick(tree, generations_per_branch_length_unit)
 
-    # Parse the newick tree string.
-    root = newick.loads(species_tree_string)[0]
-
-    # Set node depths (distances from root).
-    max_depth = 0
-    for node in root.walk():
-        depth = 0
-        moving_node = node
-        while moving_node.ancestor:
-            depth += moving_node.length
-            moving_node = moving_node.ancestor
-        node.depth = depth
-        if depth > max_depth:
-            max_depth = depth
-
-    # Set node heights (distances from present).
-    for node in root.walk():
-        node.height = max_depth - node.depth
-
-    # Get a list of species IDs.
-    species_ids = sorted(root.get_leaf_names())
-
-    # Determine at which time which populations should merge.
-    sources = []
-    destinations = []
-    divergence_times = []
-    for node in root.walk():
-        if node.is_leaf is False:
-            name_indices = []
-            for descendants in node.descendants:
-                leaf_names = (descendants.get_leaf_names())
-                name_indices.append(species_ids.index(sorted(leaf_names)[0]))
-            new_destination = sorted(name_indices)[0]
-            name_indices.remove(sorted(name_indices)[0])
-            for new_source in name_indices:
-                sources.append(new_source)
-                destinations.append(new_destination)
-                divergence_times.append(node.height)
-
-    # Sort the lists source_sets, destinations, and divergence_times
-    # according to divergence_time.
-    s = sorted(zip(divergence_times, sources, destinations))
-    divergence_times, sources, destinations = map(list, zip(*s))
-
-    # Define the species/population tree for msprime.
     population_configurations = []
-    for _ in range(len(root.get_leaves())):
-        population_configurations.append(
-            msprime.PopulationConfiguration(
-                initial_size=Ne))
     demographic_events = []
-    for x in range(len(divergence_times)):
-        demographic_events.append(
-            msprime.MassMigration(
-                time=divergence_times[x]*generations_per_branch_length_unit,
-                source=sources[x],
-                destination=destinations[x]))
+    # The destination is the left-most leaf for each node. Because we are
+    # using the n leaf populations, we map each node back to the leaf
+    # population that it corresponds to.
+    leaf_map = {}
+    for node in root.walk("postorder"):
+        if len(node.descendants) == 0:
+            population_configurations.append(
+                msprime.PopulationConfiguration(initial_size=Ne))
+            leaf_map[node] = len(population_configurations) - 1
+        else:
+            # The parent species maps implicitly to the left-most child
+            # species, so we don't generate any MassMigrations for that.
+            leaf_map[node] = leaf_map[node.descendants[0]]
+            # For each child species after the left-most one, we create
+            # a MassMigration into the left-most species.
+            for child in node.descendants[1:]:
+                demographic_events.append(
+                    msprime.MassMigration(
+                        source=leaf_map[child], dest=leaf_map[node], time=node.time))
 
-    # Return a tuple of population_configurations and demographic_events.
+    demographic_events.sort(key=lambda de: de.time)
+
     return population_configurations, demographic_events
 
 
@@ -201,9 +186,7 @@ def parse_starbeast(
     Species trees written by StarBEAST are rooted, bi-furcating, and
     ultrametric. Branch lengths usually are in units of millions
     of years ("myr"), but the use of years ("yr") as units is also
-    possible. Leafs must be named. The population size is not required
-    as input since StarBEAST stores estimates for population sizes
-    in branch annotation. However, to convert these estimates to
+    possible. Leafs must be named. However, to convert these estimates to
     absolute population sizes, a generation time is required.
     """
 
@@ -231,13 +214,13 @@ def parse_starbeast(
 
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
-        branch_length_units, generation_time
-        )
+        branch_length_units, generation_time)
 
     # Read the input file.
     species_tree_lines = species_tree.splitlines(False)
     if species_tree_lines[0][0:6].lower() != '#nexus':
         raise ValueError("The species tree does not appear to be in Nexus format")
+    in_translation = False
     in_tree = False
     translate_string = ""
     for line in species_tree_lines:
@@ -259,26 +242,19 @@ def parse_starbeast(
             if clean_line[0:4].lower() == "tree":
                 break
 
-    # species_tree_string = get_species_tree_string(clean_line)
-    tree_patterns = re.search('\\(.+\\)', clean_line)
-    if tree_patterns is None:
-        raise ValueError("No species tree string found.")
-    species_tree_string = tree_patterns.group(0)
+    # Skip forward until the newick string starts
+    species_tree_string = clean_line[clean_line.find("("):]
+
+    # TODO these need to be made into ValueErrors and tested.
 
     # Make sure the annotation can be read.
     assert '[' in species_tree_string, "Could not read annotation."
     assert ']' in species_tree_string, "Could not read annotation."
     assert "dmv=" in species_tree_string, "Could not find dmv tag in annotation."
 
-    # Get the population size at the root.
-    last_annotation = "[" + clean_line.split("[")[-1].split("]")[0] + "]"
-    find_pattern = '\\&dmv=\\{([\\d\\.]+?)\\}'
-    dmv_patterns = re.search(find_pattern, last_annotation)
-    assert dmv_patterns, "Could not read dmv annotation."
-    starbeast_root_pop_size = float(dmv_patterns.group(1))
-    starbeast_root_pop_size *= generations_per_branch_length_unit
-
-    # Remove all annotation except for dmv.
+    # Because the newick module doesn't support parsing extended newick attributes
+    # in general, we have to clean thing up manually before parsing the tree. Here,
+    # we get rid of all annotations except for dmv.
     clean_species_tree_string = ''
     in_comment = False
     in_dmv = False
@@ -349,87 +325,39 @@ def parse_starbeast(
             work_string = work_string.replace(find_str, replace_str)
         species_tree_string = work_string
 
-    # Parse the newick tree string.
-    root = newick.loads(species_tree_string)[0]
+    root = parse_newick(species_tree_string, generations_per_branch_length_unit)
 
-    # Set node depths (distances from root).
-    max_depth = 0
-    for node in root.walk():
-        depth = 0
-        moving_node = node
-        while moving_node.ancestor:
-            depth += moving_node.length
-            moving_node = moving_node.ancestor
-        node.depth = depth
-        if depth > max_depth:
-            max_depth = depth
-
-    # Set node heights (distances from present).
-    for node in root.walk():
-        node.height = max_depth - node.depth
-
-    # Get a list of species IDs along with terminal population sizes.
-    species_ids = []
-    terminal_nes = []
-    for leaf in root.get_leaves():
-        species_id = leaf.name.split("[")[0]
-        species_ids.append(species_id)
-        edge_dmv = float(leaf.name.split("{")[1].split("}")[0])
-        assert edge_dmv > 0, 'Parsed Ne is zero.'
-        edge_ne = edge_dmv * generations_per_branch_length_unit
-        terminal_nes.append(edge_ne)
-    s = sorted(zip(species_ids, terminal_nes))
-    species_ids, terminal_nes = map(list, zip(*s))
-
-    # Determine at which time which populations should merge.
-    sources = []
-    destinations = []
-    divergence_times = []
-    internal_nes = []
-    for node in root.walk():
-        if node.is_leaf is False:
-            name_indices = []
-            for descendants in node.descendants:
-                leaf_names = [l.split("[")[0] for l in descendants.get_leaf_names()]
-                # leaf_names = (descendants.get_leaf_names())
-                name_indices.append(species_ids.index(sorted(leaf_names)[0]))
-            new_destination = sorted(name_indices)[0]
-            name_indices.remove(sorted(name_indices)[0])
-            for new_source in name_indices:
-                sources.append(new_source)
-                destinations.append(new_destination)
-                divergence_times.append(node.height)
-                if node is root:
-                    internal_nes.append(starbeast_root_pop_size)
-                else:
-                    edge_dmv = float(node.name.split("{")[1].split("}")[0])
-                    assert edge_dmv > 0, 'Parsed Ne is zero.'
-                    edge_ne = edge_dmv * generations_per_branch_length_unit
-                    internal_nes.append(edge_ne)
-
-    # Sort the lists indices1, indices2, divergence_times, and
-    # population sizes according to divergence_time.
-    s = sorted(zip(divergence_times, sources, destinations, internal_nes))
-    divergence_times, sources, destinations, internal_nes = map(list, zip(*s))
-
-    # Define the species/population tree for msprime.
     population_configurations = []
-    for x in range(len(root.get_leaves())):
-        population_configurations.append(
-            msprime.PopulationConfiguration(
-                initial_size=terminal_nes[x]))
     demographic_events = []
-    for x in range(len(divergence_times)):
-        demographic_events.append(
-            msprime.MassMigration(
-                time=divergence_times[x]*generations_per_branch_length_unit,
-                source=sources[x],
-                destination=destinations[x]))
-        demographic_events.append(
-            msprime.PopulationParametersChange(
-                time=divergence_times[x]*generations_per_branch_length_unit,
-                initial_size=internal_nes[x],
-                population_id=destinations[x]))
+    # The destination is the left-most leaf for each node. Because we are
+    # using the n leaf populations, we map each node back to the leaf
+    # population that it corresponds to.
+    leaf_map = {}
+    for node in root.walk("postorder"):
+        find_pattern = '\\&dmv=\\{([\\d\\.]+?)\\}'
+        dmv_patterns = re.search(find_pattern, node.name)
+        if dmv_patterns is None:
+            raise ValueError("No dmv annotation for node")
+        pop_size = float(dmv_patterns.group(1)) * generations_per_branch_length_unit
 
-    # Return a tuple of population_configurations and demographic_events.
+        if len(node.descendants) == 0:
+            population_configurations.append(
+                msprime.PopulationConfiguration(initial_size=pop_size))
+            leaf_map[node] = len(population_configurations) - 1
+        else:
+            # The parent species maps implicitly to the left-most child
+            # species, so we don't generate any MassMigrations for that.
+            leaf_map[node] = leaf_map[node.descendants[0]]
+            # For each child species after the left-most one, we create
+            # a MassMigration into the left-most species.
+            for child in node.descendants[1:]:
+                demographic_events.append(
+                    msprime.MassMigration(
+                        source=leaf_map[child], dest=leaf_map[node], time=node.time))
+            demographic_events.append(
+                msprime.PopulationParametersChange(
+                    node.time,
+                    initial_size=pop_size,
+                    population_id=leaf_map[node]))
+    demographic_events.sort(key=lambda de: de.time)
     return population_configurations, demographic_events

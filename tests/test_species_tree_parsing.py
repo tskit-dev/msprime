@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -24,18 +24,240 @@ import unittest
 import msprime
 
 
+def get_non_binary_tree(n):
+    demographic_events = [
+        msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.5)]
+    ts = msprime.simulate(
+        n, demographic_events=demographic_events, random_seed=1)
+    tree = ts.first()
+    found = False
+    for u in tree.nodes():
+        if len(tree.children(u)) > 2:
+            found = True
+    assert found
+    return tree
+
+
+class TestSpeciesTreeRoundTrip(unittest.TestCase):
+    """
+    Tests that we get what we expect when we parse trees produced from
+    msprime/tskit.
+    """
+    def verify(self, tree, newick=None, Ne=1):
+        if newick is None:
+            newick = tree.newick()
+        population_configurations, demographic_events = msprime.parse_species_tree(
+            newick, Ne=Ne)
+        self.assertEqual(len(population_configurations), tree.num_samples())
+        for pop_config in population_configurations:
+            self.assertEqual(pop_config.initial_size, Ne)
+            self.assertEqual(pop_config.growth_rate, 0)
+            # TODO check the metadata: we should be encoding the species name
+
+        # Population IDs are mapped to leaves as they are encountered in a postorder
+        # traversal.
+        pop_id_map = {}
+        k = 0
+        for u in tree.nodes(order="postorder"):
+            if tree.is_leaf(u):
+                pop_id_map[u] = k
+                k += 1
+            else:
+                pop_id_map[u] = pop_id_map[tree.left_child(u)]
+
+        # We should have demographic events for every non-unary internal node, and
+        # events should be output in increasing time order.
+        j = 0
+        for node in [u for u in tree.nodes(order="timeasc")]:
+            children = tree.children(node)
+            if len(children) > 1:
+                dest = pop_id_map[node]
+                for child in children[1:]:
+                    event = demographic_events[j]
+                    j += 1
+                    self.assertIsInstance(event, msprime.MassMigration)
+                    self.assertAlmostEqual(event.time, tree.time(node))
+                    source = pop_id_map[child]
+                    self.assertEqual(event.source, source)
+                    self.assertEqual(event.dest, dest)
+        self.assertEqual(j, len(demographic_events))
+
+    def test_n2_binary(self):
+        tree = msprime.simulate(2, random_seed=2).first()
+        self.verify(tree)
+
+    def test_n2_binary_non_ultrametric(self):
+        ts = msprime.simulate(samples=[(0, 0), (0, 1)], random_seed=2)
+        self.verify(ts.first(), Ne=5)
+
+    def test_n5_binary(self):
+        ts = msprime.simulate(5, random_seed=2)
+        tree = ts.first()
+        self.verify(tree, Ne=1)
+
+    def test_n5_binary_non_ultrametric(self):
+        ts = msprime.simulate(samples=[(0, j) for j in range(5)], random_seed=2)
+        self.verify(ts.first(), Ne=10)
+
+    def test_n7_binary(self):
+        ts = msprime.simulate(7, random_seed=2)
+        tree = ts.first()
+        self.verify(tree, Ne=11)
+
+    def test_n7_binary_embedded_whitespace(self):
+        # Check for embedded whitespace in the newick string
+        tree = msprime.simulate(7, random_seed=2).first()
+        newick = tree.newick()
+        self.verify(tree, newick="    " + newick)
+        self.verify(tree, newick=newick + "        ")
+        self.verify(tree, newick=newick + "\n")
+        self.verify(tree, newick=newick.replace("(", "( "))
+        self.verify(tree, newick=newick.replace("(", "(\n"))
+        self.verify(tree, newick=newick.replace(")", ") "))
+        self.verify(tree, newick=newick.replace(")", ")\n"))
+        self.verify(tree, newick=newick.replace(":", " : "))
+        self.verify(tree, newick=newick.replace(":", "\n:\n"))
+        self.verify(tree, newick=newick.replace(":", "\t:\t"))
+        self.verify(tree, newick=newick.replace(",", "\t,\t"))
+        self.verify(tree, newick=newick.replace(",", "\n,\n"))
+        self.verify(tree, newick=newick.replace(",", "     ,  "))
+
+    def test_n100_binary(self):
+        ts = msprime.simulate(100, random_seed=2)
+        tree = ts.first()
+        self.verify(tree, Ne=11)
+
+    def test_n10_non_binary(self):
+        tree = get_non_binary_tree(10)
+        self.verify(tree, Ne=3.1234)
+
+
+def make_nexus(tree, pop_size_map):
+    """
+    Returns the specified tree formatted as starbeast compatable nexus.
+    """
+    node_labels = {}
+    for u in tree.nodes():
+        name = ""
+        if tree.is_leaf(u):
+            name = str(u)
+        node_labels[u] = f"{name}[&dmv={{{pop_size_map[u]}}}]"
+    newick = tree.newick(node_labels=node_labels)
+    out = "#NEXUS\n"
+    out += "Begin trees;\n"
+    out += "tree TREE1 = " + newick
+    out += "End;"
+    return out
+
+
+class TestStarbeastRoundTrip(unittest.TestCase):
+    """
+    Tests that we get what we expect when we parse trees produced from
+    msprime/tskit.
+    """
+    def verify(self, tree, pop_size_map, nexus=None):
+        nexus = make_nexus(tree, pop_size_map)
+
+        population_configurations, demographic_events = msprime.parse_starbeast(
+            nexus, "yr", 1)
+        self.assertEqual(len(population_configurations), tree.num_samples())
+
+        # Population IDs are mapped to leaves as they are encountered in a postorder
+        # traversal.
+        pop_id_map = {}
+        k = 0
+        for u in tree.nodes(order="postorder"):
+            if tree.is_leaf(u):
+                pop_id_map[u] = k
+                k += 1
+            else:
+                pop_id_map[u] = pop_id_map[tree.left_child(u)]
+
+        for u in tree.leaves():
+            pop_config = population_configurations[pop_id_map[u]]
+            self.assertEqual(pop_config.initial_size, pop_size_map[u])
+            self.assertEqual(pop_config.growth_rate, 0)
+            # TODO check the metadata: we should be encoding the species name
+
+        # We should have demographic events for every non-unary internal node, and
+        # events should be output in increasing time order.
+        j = 0
+        for node in [u for u in tree.nodes(order="timeasc")]:
+            children = tree.children(node)
+            if len(children) > 1:
+                dest = pop_id_map[node]
+                for child in children[1:]:
+                    event = demographic_events[j]
+                    j += 1
+                    self.assertIsInstance(event, msprime.MassMigration)
+                    self.assertAlmostEqual(event.time, tree.time(node))
+                    source = pop_id_map[child]
+                    self.assertEqual(event.source, source)
+                    self.assertEqual(event.dest, dest)
+                event = demographic_events[j]
+                j += 1
+                self.assertIsInstance(event, msprime.PopulationParametersChange)
+                self.assertAlmostEqual(event.time, tree.time(node))
+                self.assertEqual(event.population, dest)
+                self.assertEqual(event.growth_rate, None)
+                self.assertEqual(event.initial_size, pop_size_map[node])
+
+        self.assertEqual(j, len(demographic_events))
+
+    def test_n2_binary(self):
+        tree = msprime.simulate(2, random_seed=2).first()
+        self.verify(tree, {u: 1 for u in tree.nodes()})
+
+    def test_n2_binary_non_ultrametric(self):
+        ts = msprime.simulate(samples=[(0, 0), (0, 1)], random_seed=2)
+        tree = ts.first()
+        self.verify(tree, {u: 2.123 for u in tree.nodes()})
+
+    def test_n5_binary(self):
+        ts = msprime.simulate(5, random_seed=2)
+        tree = ts.first()
+        self.verify(tree, {u: 1 + u for u in tree.nodes()})
+
+    def test_n5_binary_non_ultrametric(self):
+        ts = msprime.simulate(samples=[(0, j) for j in range(5)], random_seed=2)
+        tree = ts.first()
+        self.verify(tree, {u: 1 / (1 + u) for u in tree.nodes()})
+
+    def test_n7_binary(self):
+        ts = msprime.simulate(7, random_seed=2)
+        tree = ts.first()
+        self.verify(tree, {u: 7 for u in tree.nodes()})
+
+    def test_n100_binary(self):
+        ts = msprime.simulate(100, random_seed=2)
+        tree = ts.first()
+        self.verify(tree, {u: 1e-4 for u in tree.nodes()})
+
+    def test_n10_non_binary(self):
+        tree = get_non_binary_tree(10)
+        self.verify(tree, {u: 0.1 for u in tree.nodes()})
+
+
 class TestSpeciesTreeParsingErrors(unittest.TestCase):
     """
     Tests for parsing of species trees in newick format.
     """
     def test_bad_tree(self):
-        good_ne = 10000
-        for bad_tree in [None, {}, 123, "(((h:5,c:5):3,g:8)\n:10,o:18)", "asdf"]:
+        for bad_type in [None, {}, 123]:
+            with self.assertRaises(TypeError):
+                msprime.parse_species_tree(tree=bad_type, Ne=1)
+
+        bad_trees = [
+            "", ";",  "abcd", ";;;", "___", "∞",
+            "(", ")", "()", "( )", "(()())",
+            "((3:0.39,5:0.39]:1.39,(4:0.47,(1:0.18,2:0.18):0.29):1.31);",
+            "((3:0.39,5:0.39(:1.39,(4:0.47,(1:0.18,2:0.18):0.29):1.31);",
+            "((3:0.39,5:0.39,:1.39,(4:0.47,(1:0.18,2:0.18):0.29):1.31);",
+            "(4:0.47,(1:0.18,2:0.18):0.29):1.31);",
+        ]
+        for bad_tree in bad_trees:
             with self.assertRaises(ValueError):
-                msprime.parse_species_tree(
-                    species_tree=bad_tree,
-                    Ne=good_ne
-                    )
+                msprime.parse_species_tree(tree=bad_tree, Ne=1)
 
     def test_bad_parameter(self):
         good_tree = "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)"
@@ -45,7 +267,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
         for bad_branch_length_units in [-3, "asdf", ["myr"]]:
             with self.assertRaises(ValueError):
                 msprime.parse_species_tree(
-                    species_tree=good_tree,
+                    good_tree,
                     branch_length_units=bad_branch_length_units,
                     Ne=good_ne,
                     generation_time=good_generation_time
@@ -53,7 +275,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
         for bad_ne in [None, -3]:
             with self.assertRaises(ValueError):
                 msprime.parse_species_tree(
-                    species_tree=good_tree,
+                    good_tree,
                     branch_length_units=good_branch_length_units,
                     Ne=bad_ne,
                     generation_time=good_generation_time
@@ -61,7 +283,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
         for bad_generation_time in [None, -3]:
             with self.assertRaises(ValueError):
                 msprime.parse_species_tree(
-                    species_tree=good_tree,
+                    good_tree,
                     branch_length_units=good_branch_length_units,
                     Ne=good_ne,
                     generation_time=bad_generation_time
@@ -69,7 +291,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
         for bad_branch_length_units in ["gen"]:
             with self.assertRaises(ValueError):
                 msprime.parse_species_tree(
-                    species_tree=good_tree,
+                    good_tree,
                     branch_length_units=bad_branch_length_units,
                     Ne=good_ne,
                     generation_time=good_generation_time
@@ -81,7 +303,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
         good_ne = 10000
         good_generation_time = 20
         parsed_tuple = msprime.parse_species_tree(
-                species_tree=good_tree,
+                good_tree,
                 branch_length_units=good_branch_length_units,
                 Ne=good_ne,
                 generation_time=good_generation_time
