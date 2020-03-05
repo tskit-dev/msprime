@@ -32,7 +32,7 @@ jobs:
       - run:
           name: Lint Python
           command: |
-            flake8 --max-line-length 89 setup.py msprime tests verification.py algorithms.py
+            flake8
 
       - run:
           name: Compile Python

@@ -119,13 +119,13 @@ part of the continuous integration tests. In particular, lines must be no longer
 
 To avoid failing CI tests, it's a good idea to install a local `commit hook
 <http://git-scm.com/book/gr/v2/Customizing-Git-Git-Hooks>`_ to automatically check
-that code conforms to PEP8 before committing. Adding this to your ``.git/hooks/pre-commit``
-should do the trick:
+that code conforms to PEP8 before committing. The following commands install the hook
+and configure git to prevent commits that violate the checks:
 
 .. code-block:: bash
 
-    # Run flake8 to check for lint errors.
-    exec flake8 --max-line-length 89 setup.py msprime tests
+    flake8 --install-hook git
+    git config --bool flake8.strict true
 
 +++++++++
 Packaging
