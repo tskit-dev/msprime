@@ -158,10 +158,6 @@ def _replicate_generator(
     Generator function for the many-replicates case of the simulate
     function.
     """
-    # TODO We should encode the replicate index in here with the rest of the
-    # parameters. This will provide sufficient information to reproduce the
-    # simulation if necessary. Much simpler than encoding the details of
-    # the random number generator.
 
     encoded_provenance = None
     # The JSON is modified for each replicate to insert the replicate number.
@@ -357,6 +353,7 @@ def simulate(
         random_seed=None,
         mutation_generator=None,
         num_replicates=None,
+        replicate_index=None,
         from_ts=None,
         start_time=None,
         end_time=None,
@@ -438,6 +435,11 @@ def simulate(
         returned. If :obj:`num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
+    :param int replicate_index: Return only a specific tree
+        sequence from the set of replicates. This is used to recreate a specific tree
+        sequence from e.g. provenance. This argument only makes sense when used with
+        `random seed`, and is not compatible with `num_replicates`. Note also that
+        msprime will have to create and discard all the tree sequences up to this index.
     :param tskit.TreeSequence from_ts: If specified, initialise the simulation
         from the root segments of this tree sequence and return the
         completed tree sequence. Please see :ref:`here
@@ -490,9 +492,12 @@ def simulate(
     provenance_dict = None
     if record_provenance:
         argspec = inspect.getargvalues(inspect.currentframe())
+        # num_replicates is excluded as provenance is per replicate
+        # replicate index is excluded as it is inserted for each replicate
         parameters = {
             "command": "simulate",
-            **{arg: argspec.locals[arg] for arg in argspec.args}
+            **{arg: argspec.locals[arg] for arg in argspec.args
+                if arg not in ["num_replicates", "replicate_index"]}
         }
         parameters['random_seed'] = seed
         provenance_dict = provenance.get_provenance_dict(parameters)
@@ -545,9 +550,24 @@ def simulate(
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
         mutation_generator = MutationGenerator(rng, mutation_rate)
-    if num_replicates is None:
-        return next(_replicate_generator(
-            sim, mutation_generator, 1, provenance_dict, end_time))
+
+    if replicate_index is not None and random_seed is None:
+        raise ValueError("Cannot specify replicate_index without random_seed as this "
+                         "has the same effect as not specifying replicate_index i.e. a "
+                         "random tree sequence")
+    if replicate_index is not None and num_replicates is not None:
+        raise ValueError("Cannot specify replicate_index with num_replicates as only "
+                         "the replicate_index specified will be returned.")
+    if num_replicates is None and replicate_index is None:
+        replicate_index = 0
+    if replicate_index is not None:
+        iterator = _replicate_generator(
+            sim, mutation_generator, replicate_index + 1, provenance_dict, end_time)
+        # Return the last element of the iterator
+        ts = next(iterator)
+        for ts in iterator:
+            continue
+        return ts
     else:
         return _replicate_generator(
             sim, mutation_generator, num_replicates, provenance_dict, end_time)

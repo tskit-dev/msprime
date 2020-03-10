@@ -9,6 +9,9 @@
   provenances to be disabled, for example when they are large.
   (:user:`benjeffery` :pr:`914`).
 
+- Add replicate_index to simulate, allowing output of a single tree sequence
+  from a set of replicates. (:user:`benjeffery` :pr:`914`).
+
 ********************
 [0.7.4] - 2019-12-05
 ********************

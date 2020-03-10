@@ -165,6 +165,11 @@ class TestBuildObjects(unittest.TestCase):
                 random_seed=1,
                 demographic_events=[msprime.SimulationModelChange(time=BadClass)])
 
+    def test_replicate_index(self):
+        for i, ts in enumerate(msprime.simulate(5, num_replicates=3)):
+            decoded = self.decode(ts.provenance(0).record)
+            self.assertEqual(decoded.parameters['replicate_index'], i)
+
     def test_large_provenance_warning(self):
         with self.assertLogs('msprime.provenance', level='WARNING') as cm:
             msprime.provenance.json_encode_provenance(
