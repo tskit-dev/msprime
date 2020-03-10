@@ -718,6 +718,15 @@ msp_remove_individual(msp_t *self, segment_t *u)
     msp_free_avl_node(self, node);
 }
 
+static void
+msp_remove_individuals_from_population(msp_t *self, avl_tree_t *Q)
+{
+    avl_node_t *node;
+    for (node = Q->head; node != NULL; node = node->next) {
+        msp_remove_individual(self, (segment_t *) node->item);
+    }
+}
+
 /* Returns true if the specified breakpoint exists */
 static bool
 msp_has_breakpoint(msp_t *self, double x)
@@ -2695,6 +2704,17 @@ out:
     return ret;
 }
 
+static segment_t *
+msp_priority_queue_pop(msp_t *self, avl_tree_t *Q)
+{
+    avl_node_t *node = Q->head;
+    segment_t *seg = (segment_t *) node->item;
+    msp_free_avl_node(self, node);
+    avl_unlink_node(Q, node);
+
+    return seg;
+}
+
 /* Merge the specified set of ancestors into a single ancestor. This is a
  * generalisation of the msp_common_ancestor_event method where we allow
  * any number of ancestors to merge. The AVL tree is a priority queue in
@@ -3831,10 +3851,11 @@ msp_dtwf_generation(msp_t *self)
 {
     int ret = 0;
     int ix;
+    unsigned int segments_to_merge;
     uint32_t N, i, j, k, p;
     size_t segment_mem_offset;
     population_t *pop;
-    segment_t *x;
+    segment_t *x, *ind1, *ind2;
     segment_t *u[2];
     segment_list_t **parents = NULL;
     segment_list_t *segment_mem = NULL;
@@ -3925,11 +3946,21 @@ msp_dtwf_generation(msp_t *self)
             }
             // Merge segments in each parental chromosome
             for (i = 0; i < 2; i ++) {
-                for (node = Q[i].head; node != NULL; node = node->next) {
-                    msp_remove_individual(self, (segment_t *) node->item);
+                segments_to_merge = avl_count(&Q[i]);
+                if (segments_to_merge == 1) {
+                    msp_priority_queue_pop(self, &Q[i]);
+                } else if (segments_to_merge >= 2) {
+                    msp_remove_individuals_from_population(self, &Q[i]);
+                    if (segments_to_merge == 2) {
+                        ind1 = msp_priority_queue_pop(self, &Q[i]);
+                        ind2 = msp_priority_queue_pop(self, &Q[i]);
+                        ret = msp_merge_two_ancestors(self,
+                                (population_id_t) j, label, ind1, ind2);
+                    } else {
+                        ret = msp_merge_ancestors(self,
+                                &Q[i], (population_id_t) j, label, NULL, TSK_NULL);
+                    }
                 }
-                ret = msp_merge_ancestors(self,
-                        &Q[i], (population_id_t) j, label, NULL, TSK_NULL);
                 if (ret != 0) {
                     goto out;
                 }
