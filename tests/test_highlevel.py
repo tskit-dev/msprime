@@ -760,13 +760,11 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(provenance.timestamp[k], "T")
         d = json.loads(provenance.record)
         self.assertGreater(len(d), 0)
-        # TODO check the format of the dictionary.
 
     def test_provenance(self):
         ts = msprime.simulate(10)
         self.assertEqual(ts.num_provenances, 1)
         self.verify_provenance(ts.provenance(0))
-        # TODO check the form of the dictionary
         for ts in msprime.simulate(10, num_replicates=10):
             self.assertEqual(ts.num_provenances, 1)
             self.verify_provenance(ts.provenance(0))
@@ -854,6 +852,29 @@ class TestSimulateInterface(unittest.TestCase):
             t.provenances.clear()
         for t in tables:
             self.assertEqual(t, tables[0])
+
+    def test_replicate_index(self):
+        tables_1 = list(msprime.simulate(10, num_replicates=5, random_seed=1))[4].tables
+        tables_2 = msprime.simulate(10, replicate_index=4, random_seed=1).tables
+        tables_1.provenances.clear()
+        tables_2.provenances.clear()
+        self.assertEqual(tables_1, tables_2)
+
+        with self.assertRaises(ValueError) as cm:
+            msprime.simulate(5, replicate_index=5)
+        self.assertEqual(
+            "Cannot specify replicate_index without random_seed as this "
+            "has the same effect as not specifying replicate_index i.e. a "
+            "random tree sequence",
+            str(cm.exception)
+        )
+        with self.assertRaises(ValueError) as cm:
+            msprime.simulate(5, random_seed=1, replicate_index=5, num_replicates=26)
+        self.assertEqual(
+            "Cannot specify replicate_index with num_replicates as only "
+            "the replicate_index specified will be returned.",
+            str(cm.exception)
+        )
 
 
 # Convenience method for getting seeds in a subprocess.

@@ -19,7 +19,7 @@
 """
 Module responsible for generating mutations on a given tree sequence.
 """
-import json
+import inspect
 import sys
 import tskit
 
@@ -54,6 +54,13 @@ class InfiniteSites(object):
         if alphabet not in [BINARY, NUCLEOTIDES]:
             raise ValueError("Bad alphabet")
         self.alphabet = alphabet
+
+    def asdict(self):
+        """
+        Returns a dict of arguments to recreate this class
+        """
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
 
 
 def mutate(
@@ -113,11 +120,12 @@ def mutate(
         tables = tree_sequence.tables
     except AttributeError:
         raise ValueError("First argument must be a TreeSequence instance.")
+    seed = random_seed
     if random_seed is None:
-        random_seed = simulations._get_random_seed()
-    random_seed = int(random_seed)
+        seed = simulations._get_random_seed()
+    seed = int(seed)
+    rng = _msprime.RandomGenerator(seed)
 
-    rng = _msprime.RandomGenerator(random_seed)
     if model is None:
         model = InfiniteSites()
     try:
@@ -129,25 +137,28 @@ def mutate(
     rate = float(rate)
     keep = bool(keep)
 
-    parameters = {
-        "command": "mutate", "rate": rate, "random_seed": random_seed, "keep": keep}
-
     if start_time is None:
         start_time = -sys.float_info.max
     else:
         start_time = float(start_time)
-        parameters["start_time"] = start_time
 
     if end_time is None:
         end_time = sys.float_info.max
     else:
         end_time = float(end_time)
-        parameters["end_time"] = end_time
-    # TODO Add a JSON representation of the model to the provenance.
-    provenance_dict = provenance.get_provenance_dict(parameters)
 
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
+
+    argspec = inspect.getargvalues(inspect.currentframe())
+    parameters = {
+        "command": "mutate",
+        **{arg: argspec.locals[arg] for arg in argspec.args
+           if arg not in ["tree_sequence"]}
+    }
+    parameters['random_seed'] = seed
+    encoded_provenance = provenance.json_encode_provenance(
+        provenance.get_provenance_dict(parameters))
 
     mutation_generator = _msprime.MutationGenerator(
         rng, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
@@ -156,5 +167,5 @@ def mutate(
     mutation_generator.generate(lwt, keep=keep)
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())
-    tables.provenances.add_row(json.dumps(provenance_dict))
+    tables.provenances.add_row(encoded_provenance)
     return tables.tree_sequence()

@@ -19,17 +19,18 @@
 """
 Module responsible for running simulations.
 """
+import bisect
 import collections
+import copy
 import gzip
+import inspect
 import json
+import logging
 import math
 import random
 import sys
 import os
 import warnings
-import copy
-import logging
-import bisect
 
 import tskit
 import numpy as np
@@ -157,14 +158,25 @@ def _replicate_generator(
     Generator function for the many-replicates case of the simulate
     function.
     """
-    # TODO We should encode the replicate index in here with the rest of the
-    # parameters. This will provide sufficient information to reproduce the
-    # simulation if necessary. Much simpler than encoding the details of
-    # the random number generator.
-    provenance_record = json.dumps(provenance_dict)
+
+    encoded_provenance = None
+    # The JSON is modified for each replicate to insert the replicate number.
+    # To avoid repeatedly encoding the same JSON (which can take milliseconds)
+    # we insert a replaceable string.
+    placeholder = '@@_MSPRIME_REPLICATE_INDEX_@@'
+    if provenance_dict is not None:
+        provenance_dict['parameters']['replicate_index'] = placeholder
+        encoded_provenance = provenance.json_encode_provenance(
+            provenance_dict, num_replicates)
+
     for j in range(num_replicates):
         sim.run(end_time)
-        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
+        replicate_provenance = None
+        if encoded_provenance is not None:
+            replicate_provenance = encoded_provenance.replace(f'"{placeholder}"', str(j))
+        tree_sequence = sim.get_tree_sequence(
+            mutation_generator,
+            replicate_provenance)
         yield tree_sequence
         sim.reset()
 
@@ -341,11 +353,13 @@ def simulate(
         random_seed=None,
         mutation_generator=None,
         num_replicates=None,
+        replicate_index=None,
         from_ts=None,
         start_time=None,
         end_time=None,
         record_full_arg=False,
         num_labels=None,
+        record_provenance=True,
         # FIXME add documentation for these.
         gene_conversion_rate=None,
         gene_conversion_track_length=None):
@@ -421,6 +435,11 @@ def simulate(
         returned. If :obj:`num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
+    :param int replicate_index: Return only a specific tree
+        sequence from the set of replicates. This is used to recreate a specific tree
+        sequence from e.g. provenance. This argument only makes sense when used with
+        `random seed`, and is not compatible with `num_replicates`. Note also that
+        msprime will have to create and discard all the tree sequences up to this index.
     :param tskit.TreeSequence from_ts: If specified, initialise the simulation
         from the root segments of this tree sequence and return the
         completed tree sequence. Please see :ref:`here
@@ -449,6 +468,9 @@ def simulate(
         Please see the :ref:`sec_api_simulation_models` section for more details
         on specifying simulations models.
     :type model: str or simulation model instance
+    :param bool record_provenance: If True, record all configuration and parameters
+        required to recreate the tree sequence. These can be accessed
+        via ``TreeSequence.provenances()``).
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -460,13 +482,26 @@ def simulate(
         underlying object may be used for every TreeSequence
         returned which will most likely lead to unexpected behaviour.
     """
+
     seed = random_seed
     if random_seed is None:
         seed = _get_random_seed()
-    # TODO We need to be careful with input parameters that may not be JSON
-    # serialisable or usable by lower-levels because they are numpy values.
     seed = int(seed)
     rng = RandomGenerator(seed)
+
+    provenance_dict = None
+    if record_provenance:
+        argspec = inspect.getargvalues(inspect.currentframe())
+        # num_replicates is excluded as provenance is per replicate
+        # replicate index is excluded as it is inserted for each replicate
+        parameters = {
+            "command": "simulate",
+            **{arg: argspec.locals[arg] for arg in argspec.args
+                if arg not in ["num_replicates", "replicate_index"]}
+        }
+        parameters['random_seed'] = seed
+        provenance_dict = provenance.get_provenance_dict(parameters)
+
     sim = simulator_factory(
         sample_size=sample_size,
         random_generator=rng,
@@ -487,13 +522,6 @@ def simulate(
         num_labels=num_labels,
         gene_conversion_rate=gene_conversion_rate,
         gene_conversion_track_length=gene_conversion_track_length)
-
-    parameters = {
-        "command": "simulate",
-        "random_seed": seed,
-        "TODO": "add other simulation parameters"
-    }
-    provenance_dict = provenance.get_provenance_dict(parameters)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
@@ -522,9 +550,24 @@ def simulate(
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
         mutation_generator = MutationGenerator(rng, mutation_rate)
-    if num_replicates is None:
-        return next(_replicate_generator(
-            sim, mutation_generator, 1, provenance_dict, end_time))
+
+    if replicate_index is not None and random_seed is None:
+        raise ValueError("Cannot specify replicate_index without random_seed as this "
+                         "has the same effect as not specifying replicate_index i.e. a "
+                         "random tree sequence")
+    if replicate_index is not None and num_replicates is not None:
+        raise ValueError("Cannot specify replicate_index with num_replicates as only "
+                         "the replicate_index specified will be returned.")
+    if num_replicates is None and replicate_index is None:
+        replicate_index = 0
+    if replicate_index is not None:
+        iterator = _replicate_generator(
+            sim, mutation_generator, replicate_index + 1, provenance_dict, end_time)
+        # Return the last element of the iterator
+        ts = next(iterator)
+        for ts in iterator:
+            continue
+        return ts
     else:
         return _replicate_generator(
             sim, mutation_generator, num_replicates, provenance_dict, end_time)
@@ -765,7 +808,10 @@ class Simulator(object):
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
         self.ll_tables = _msprime.LightweightTableCollection()
         if self.from_ts is not None:
-            self.ll_tables.fromdict(self.from_ts.tables.asdict())
+            from_ts_tables = self.from_ts.tables.asdict()
+            # Clear the provenance as it's included in the new ts's provenance
+            from_ts_tables['provenances'] = tskit.TableCollection(1).provenances.asdict()
+            self.ll_tables.fromdict(from_ts_tables)
         start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
@@ -1105,6 +1151,14 @@ class RecombinationMap(object):
     def discrete(self):
         return self._ll_recombination_map.get_discrete()
 
+    def asdict(self):
+        return {
+            'positions': self.get_positions(),
+            'rates': self.get_rates(),
+            'discrete': self.discrete,
+            'map_start': self.map_start
+        }
+
 
 class PopulationConfiguration(object):
     """
@@ -1147,6 +1201,14 @@ class PopulationConfiguration(object):
             "initial_size": self.initial_size,
             "growth_rate": self.growth_rate
         }
+
+    def asdict(self):
+        """
+        Returns a dict of arguments to recreate this PopulationConfiguration
+        """
+        ret = dict(self.__dict__)
+        del ret['encoded_metadata']
+        return ret
 
 
 class Pedigree(object):
@@ -1464,6 +1526,13 @@ class Pedigree(object):
         pedarray = self.build_array()
         np.save(os.path.expanduser(fname), pedarray)
 
+    def asdict(self):
+        """
+        Returns a dict of arguments to recreate this pedigree
+        """
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
+
 
 class DemographicEvent(object):
     """
@@ -1475,6 +1544,10 @@ class DemographicEvent(object):
 
     def __repr__(self):
         return repr(self.__dict__)
+
+    def asdict(self):
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
 
 
 class PopulationParametersChange(DemographicEvent):
@@ -1761,6 +1834,10 @@ class SimulationModel(object):
 
     def __str__(self):
         return "{}(reference_size={})".format(self.name, self.reference_size)
+
+    def asdict(self):
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
 
 
 class StandardCoalescent(SimulationModel):
