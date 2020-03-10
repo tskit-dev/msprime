@@ -19,17 +19,18 @@
 """
 Module responsible for running simulations.
 """
+import bisect
 import collections
+import copy
 import gzip
+import inspect
 import json
+import logging
 import math
 import random
 import sys
 import os
 import warnings
-import copy
-import logging
-import bisect
 
 import tskit
 import numpy as np
@@ -161,10 +162,25 @@ def _replicate_generator(
     # parameters. This will provide sufficient information to reproduce the
     # simulation if necessary. Much simpler than encoding the details of
     # the random number generator.
-    provenance_record = json.dumps(provenance_dict)
+
+    encoded_provenance = None
+    # The JSON is modified for each replicate to insert the replicate number.
+    # To avoid repeatedly encoding the same JSON (which can take milliseconds)
+    # we insert a replaceable string.
+    placeholder = '@@_MSPRIME_REPLICATE_INDEX_@@'
+    if provenance_dict is not None:
+        provenance_dict['parameters']['replicate_index'] = placeholder
+        encoded_provenance = provenance.json_encode_provenance(
+            provenance_dict, num_replicates)
+
     for j in range(num_replicates):
         sim.run(end_time)
-        tree_sequence = sim.get_tree_sequence(mutation_generator, provenance_record)
+        replicate_provenance = None
+        if encoded_provenance is not None:
+            replicate_provenance = encoded_provenance.replace(f'"{placeholder}"', str(j))
+        tree_sequence = sim.get_tree_sequence(
+            mutation_generator,
+            replicate_provenance)
         yield tree_sequence
         sim.reset()
 
@@ -346,6 +362,7 @@ def simulate(
         end_time=None,
         record_full_arg=False,
         num_labels=None,
+        record_provenance=True,
         # FIXME add documentation for these.
         gene_conversion_rate=None,
         gene_conversion_track_length=None):
@@ -449,6 +466,9 @@ def simulate(
         Please see the :ref:`sec_api_simulation_models` section for more details
         on specifying simulations models.
     :type model: str or simulation model instance
+    :param bool record_provenance: If True, record all configuration and parameters
+        required to recreate the tree sequence. These can be accessed
+        via ``TreeSequence.provenances()``).
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -460,13 +480,23 @@ def simulate(
         underlying object may be used for every TreeSequence
         returned which will most likely lead to unexpected behaviour.
     """
+
     seed = random_seed
     if random_seed is None:
         seed = _get_random_seed()
-    # TODO We need to be careful with input parameters that may not be JSON
-    # serialisable or usable by lower-levels because they are numpy values.
     seed = int(seed)
     rng = RandomGenerator(seed)
+
+    provenance_dict = None
+    if record_provenance:
+        argspec = inspect.getargvalues(inspect.currentframe())
+        parameters = {
+            "command": "simulate",
+            **{arg: argspec.locals[arg] for arg in argspec.args}
+        }
+        parameters['random_seed'] = seed
+        provenance_dict = provenance.get_provenance_dict(parameters)
+
     sim = simulator_factory(
         sample_size=sample_size,
         random_generator=rng,
@@ -487,13 +517,6 @@ def simulate(
         num_labels=num_labels,
         gene_conversion_rate=gene_conversion_rate,
         gene_conversion_track_length=gene_conversion_track_length)
-
-    parameters = {
-        "command": "simulate",
-        "random_seed": seed,
-        "TODO": "add other simulation parameters"
-    }
-    provenance_dict = provenance.get_provenance_dict(parameters)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
@@ -765,7 +788,10 @@ class Simulator(object):
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
         self.ll_tables = _msprime.LightweightTableCollection()
         if self.from_ts is not None:
-            self.ll_tables.fromdict(self.from_ts.tables.asdict())
+            from_ts_tables = self.from_ts.tables.asdict()
+            # Clear the provenance as it's included in the new ts's provenance
+            from_ts_tables['provenances'] = tskit.TableCollection(1).provenances.asdict()
+            self.ll_tables.fromdict(from_ts_tables)
         start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
             samples=self.samples,
@@ -1105,6 +1131,14 @@ class RecombinationMap(object):
     def discrete(self):
         return self._ll_recombination_map.get_discrete()
 
+    def asdict(self):
+        return {
+            'positions': self.get_positions(),
+            'rates': self.get_rates(),
+            'discrete': self.discrete,
+            'map_start': self.map_start
+        }
+
 
 class PopulationConfiguration(object):
     """
@@ -1147,6 +1181,14 @@ class PopulationConfiguration(object):
             "initial_size": self.initial_size,
             "growth_rate": self.growth_rate
         }
+
+    def asdict(self):
+        """
+        Returns a dict of arguments to recreate this PopulationConfiguration
+        """
+        ret = dict(self.__dict__)
+        del ret['encoded_metadata']
+        return ret
 
 
 class Pedigree(object):
@@ -1464,6 +1506,13 @@ class Pedigree(object):
         pedarray = self.build_array()
         np.save(os.path.expanduser(fname), pedarray)
 
+    def asdict(self):
+        """
+        Returns a dict of arguments to recreate this pedigree
+        """
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
+
 
 class DemographicEvent(object):
     """
@@ -1475,6 +1524,10 @@ class DemographicEvent(object):
 
     def __repr__(self):
         return repr(self.__dict__)
+
+    def asdict(self):
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
 
 
 class PopulationParametersChange(DemographicEvent):
@@ -1761,6 +1814,10 @@ class SimulationModel(object):
 
     def __str__(self):
         return "{}(reference_size={})".format(self.name, self.reference_size)
+
+    def asdict(self):
+        return {key: getattr(self, key) for key in inspect.signature(
+            self.__init__).parameters.keys() if hasattr(self, key)}
 
 
 class StandardCoalescent(SimulationModel):

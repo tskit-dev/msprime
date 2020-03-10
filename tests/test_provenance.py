@@ -19,6 +19,8 @@
 """
 Tests for the provenance information attached to tree sequences.
 """
+import base64
+import marshal
 import unittest
 import json
 
@@ -28,6 +30,7 @@ import python_jsonschema_objects as pjs
 
 import _msprime
 import msprime
+from tests import tsutil
 
 
 class TestProvenance(unittest.TestCase):
@@ -85,14 +88,94 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.command, "simulate")
         self.assertEqual(decoded.parameters.random_seed, 1)
 
-    def test_simulation_numpy(self):
+    def test_no_provenance(self):
+        ts = msprime.simulate(5, record_provenance=False)
+        self.assertEqual(len(list(ts.provenances())), 0)
+
+    def test_encode_numpy_functions_and_classes(self):
         seeds = np.ones(1, dtype=int)
-        ts = msprime.simulate(5, random_seed=seeds[0])
+        pop_configs = [msprime.PopulationConfiguration(5) for _ in range(2)]
+
+        def time(t):
+            return t + 0.01
+
+        def bad_func(t):
+            if msprime:
+                pass
+            return t
+
+        with self.assertLogs('msprime.provenance', level='WARNING') as cm:
+            ts = msprime.simulate(
+                random_seed=seeds[0],
+                population_configurations=pop_configs,
+                migration_matrix=[[0, 1], [1, 0]],
+                demographic_events=[
+                    msprime.SimulationModelChange(time=time),
+                    msprime.SimulationModelChange(time=bad_func),
+                    msprime.SimulationModelChange(time=lambda t: t + seeds[0])
+                ])
+        self.assertIn(
+            "WARNING:msprime.provenance:Configuration function bad_func refers"
+            " to global variables ('msprime',) which are not currently"
+            " serialized", cm.output)
+        self.assertIn(
+            "WARNING:msprime.provenance:Configuration function <lambda> refers"
+            " to outer scope variables which are not currently serialized",
+            cm.output)
         prov = ts.provenance(0).record
         decoded = self.decode(prov)
         self.assertEqual(decoded.schema_version, "1.0.0")
         self.assertEqual(decoded.parameters.command, "simulate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
+        parameters = decoded.parameters
+        self.assertEqual(parameters.random_seed, 1)
+        self.assertEqual(parameters.population_configurations, [
+            {'sample_size': 5, 'initial_size': 1, 'growth_rate': 0.0, 'metadata': None,
+                '__class__': 'msprime.simulations.PopulationConfiguration'},
+            {'sample_size': 5, 'initial_size': 1, 'growth_rate': 0.0, 'metadata': None,
+                '__class__': 'msprime.simulations.PopulationConfiguration'}])
+        self.assertEqual(parameters.migration_matrix, [[0, 1], [1, 0]])
+        self.assertDictEqual(
+            parameters.demographic_events[0],
+            {'time':
+                {'__function__': base64.b64encode(
+                    marshal.dumps(time.__code__)).decode("utf-8"), 'defaults': None},
+             'model': None, '__class__': 'msprime.simulations.SimulationModelChange'})
+        self.assertDictEqual(
+            parameters.demographic_events[1],
+            {'time': {
+                '__error__': "Configuration function bad_func refers to global variables"
+                             " ('msprime',) which are not currently serialized"},
+                'model': None, '__class__': 'msprime.simulations.SimulationModelChange'}
+        ),
+        self.assertDictEqual(
+            parameters.demographic_events[2],
+            {'time': {
+                '__error__': 'Configuration function <lambda> refers to outer scope'
+                             ' variables which are not currently serialized'},
+                'model': None, '__class__': 'msprime.simulations.SimulationModelChange'})
+
+    def test_unencodable_function(self):
+        class BadClass:
+            def __call__(self, t):
+                return t
+
+        with self.assertRaises(TypeError):
+            msprime.simulate(
+                5,
+                random_seed=1,
+                demographic_events=[msprime.SimulationModelChange(time=BadClass)])
+
+    def test_large_provenance_warning(self):
+        with self.assertLogs('msprime.provenance', level='WARNING') as cm:
+            msprime.provenance.json_encode_provenance(
+                {"test": np.zeros(shape=(500_000,))}, 5)
+        self.assertIn(
+            "WARNING:msprime.provenance:The provenance information for the resulting"
+            " tree sequence is 2.38MB. This is nothing to worry about as"
+            " provenance is a good thing to have, but if you want to save this"
+            " memory/storage space you can disable provenance recording by setting"
+            " record_provenance=False",
+            cm.output)
 
     def test_mutate(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -106,6 +189,11 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.start_time, 0)
         self.assertEqual(decoded.parameters.end_time, 100)
         self.assertEqual(decoded.parameters.keep, False)
+        self.assertEqual(decoded.parameters.model['alphabet'], 0)
+        self.assertEqual(
+            decoded.parameters.model['__class__'],
+            'msprime.mutations.InfiniteSites'
+        )
 
     def test_mutate_numpy(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -124,3 +212,111 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.start_time, 0)
         self.assertEqual(decoded.parameters.end_time, 100)
         self.assertEqual(decoded.parameters.keep, False)
+
+
+class TestParseProvenance(unittest.TestCase):
+    def test_parse_non_msprime(self):
+        # Most testing of parsing is in the round tripping below
+        with self.assertRaises(ValueError):
+            ts = msprime.simulate(5)
+            prov = json.loads(ts.provenance(0).record)
+            prov['software']['name'] = 'skynet'
+            tables = ts.tables
+            tables.provenances.clear()
+            tables.provenances.add_row(json.dumps(prov))
+            command, prov = msprime.provenance.parse_provenance(tables.tree_sequence())
+
+    def test_parse_index(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(ts)
+        command, prov = msprime.provenance.parse_provenance(ts)
+        self.assertEquals(command, 'mutate')
+        command, prov = msprime.provenance.parse_provenance(ts, 0)
+        self.assertEquals(command, 'simulate')
+        command, prov = msprime.provenance.parse_provenance(ts, 1)
+        self.assertEquals(command, 'mutate')
+
+
+class TestRoundTrip(unittest.TestCase):
+    """
+    Check that we can recreate tree sequences from their provenances
+    """
+    def verify_equal(self, ts1, ts2):
+        ts1_tables = ts1.dump_tables()
+        ts2_tables = ts2.dump_tables()
+        # We clear the provenances as they are not equal due to timestamps
+        ts1_tables.provenances.clear()
+        ts2_tables.provenances.clear()
+        self.assertEqual(ts1_tables, ts2_tables)
+
+    def verify(self, ts, recurse=True):
+        recreated = None
+        for i, _ in enumerate(ts.provenances()):
+            command, parsed_prov = msprime.provenance.parse_provenance(ts, i)
+            if recreated:
+                parsed_prov["tree_sequence"] = recreated
+            recreated = getattr(msprime, command)(**parsed_prov)
+        self.verify_equal(ts, recreated)
+        # We verify again to check that the recreated provenace is also good.
+        if recurse:
+            self.verify(recreated, recurse=False)
+
+
+class TestSimulateRoundTrip(TestRoundTrip):
+    def test_sample_size(self):
+        ts = msprime.simulate(10)
+        self.verify(ts)
+
+    def test_random_seed(self):
+        ts = msprime.simulate(10, random_seed=1234)
+        self.verify(ts)
+
+    def test_population_configuration(self):
+        pop_configs = [msprime.PopulationConfiguration(5) for _ in range(2)]
+        ts = msprime.simulate(population_configurations=pop_configs,
+                              migration_matrix=[[0, 1], [1, 0]],
+                              demographic_events=[msprime.SimulationModelChange(
+                                  time=lambda t: t+0.1),
+                              ])
+        self.verify(ts)
+
+    def test_pedigree(self):
+        inds = np.array([1, 2, 3, 4, 5, 6])
+        parent_indices = np.array([
+            4, 5,
+            4, 5,
+            4, 5,
+            4, 5,
+            -1, -1,
+            -1, -1]).reshape(-1, 2)
+        times = np.array([0, 0, 0, 0, 1, 1])
+        is_sample = np.array([1, 1, 1, 1, 0, 0])
+        t = max(times)
+        model = msprime.WrightFisherPedigree()
+        ped = msprime.Pedigree(inds, parent_indices, times, is_sample,
+                               sex=None, ploidy=2)
+        ts = msprime.simulate(
+            sample_size=4,
+            pedigree=ped,
+            demographic_events=[
+                msprime.SimulationModelChange(
+                    t, msprime.DiscreteTimeWrightFisher(2))],
+            model=model)
+        self.verify(ts)
+
+    def test_from_ts(self):
+        from_ts = msprime.simulate(10, random_seed=5)
+        from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 2)
+        start_time = from_ts.tables.nodes.time.max()
+        ts = msprime.simulate(
+            from_ts=from_ts, start_time=start_time, random_seed=2)
+        print(list(ts.provenances()))
+        self.verify(ts)
+
+
+class TestMutateRoundTrip(TestRoundTrip):
+    def test_mutate_round_trip(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(
+            ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False)
+        self.verify(ts)

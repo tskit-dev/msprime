@@ -160,11 +160,12 @@ class TestBasicFunctionality(unittest.TestCase):
         self.assertEqual(final_tables.mutations, from_tables.mutations)
 
         # Afterwards, the other tables should be equal up to the length of the
-        # input tables.
+        # input tables, apart from the provenance.
         final_tables.nodes.truncate(len(from_tables.nodes))
         final_tables.edges.truncate(len(from_tables.edges))
         final_tables.migrations.truncate(len(from_tables.migrations))
-        final_tables.provenances.truncate(len(from_tables.provenances))
+        final_tables.provenances.clear()
+        from_tables.provenances.clear()
         self.assertEqual(final_tables, from_tables)
 
         if final_ts.num_migrations == 0:
@@ -831,8 +832,6 @@ class TestSlimOutput(unittest.TestCase):
         # should always have the same set of mutations before and after.
         self.assertEqual(final_tables.sites, from_tables.sites)
         self.assertEqual(final_tables.mutations, from_tables.mutations)
-        final_tables.provenances.truncate(len(from_tables.provenances))
-        self.assertEqual(final_tables.provenances, from_tables.provenances)
         self.assertEqual(max(tree.num_roots for tree in final_ts.trees()), 1)
 
     def test_minimal_example_no_recombination(self):

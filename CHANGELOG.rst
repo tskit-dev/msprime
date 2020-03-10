@@ -1,3 +1,14 @@
+***************************
+[UPCOMING.X.X] - XXXX-XX-XX
+***************************
+
+**New features**:
+
+- Complete provenance recording of all arguments to simulate and mutate.
+  Adds argument record_provenance to simulate, which allows recording of
+  provenances to be disabled, for example when they are large.
+  (:user:`benjeffery` :pr:`914`).
+
 ********************
 [0.7.4] - 2019-12-05
 ********************
