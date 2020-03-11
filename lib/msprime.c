@@ -25,6 +25,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_cdf.h>
 #include <gsl/gsl_statistics_int.h>
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_integration.h>
@@ -40,6 +41,51 @@
 #define MSP_STATE_INITIALISED 1
 #define MSP_STATE_SIMULATING 2
 #define MSP_STATE_DEBUGGING 3
+
+/* Draw a random variable from a truncated Beta(a, b) distribution,
+ * by rejecting draws above the truncation point x.
+ */
+static double
+ran_inc_beta_rej(gsl_rng *r, double a, double b, double x)
+{
+    double ret;
+    do {
+        ret = gsl_ran_beta(r, a, b);
+    } while(ret > x);
+    return ret;
+}
+
+/* Draw a random variable from a truncated Beta(a, b) distribution,
+ * using the inverse transform sampling method. A uniform variable
+ * is drawn and then transformed into a Beta(a, b) distribution using
+ * the inverse CDF. Truncation is obtained by defining the upper bound
+ * of the uniform variable using the incomplete beta function. I.e.
+ *      upper_bound = gsl_sf_beta_inc(a, b, x),
+ * where x is the truncation point.
+ */
+static double
+ran_inc_beta_its(gsl_rng *r, double a, double b, double upper_bound)
+{
+    double u = gsl_ran_flat(r, 0, upper_bound);
+    return gsl_cdf_beta_Pinv(u, a, b);
+}
+
+/* Draw a random variable from a truncated Beta(a, b) distribution,
+ * using either the rejection method or the inverse transform sampling method.
+ * The rejection method is quicker for a moderate number of rejections, but if
+ * the acceptance probability is low, we instead choose inverse transform
+ * sampling. The acceptance probability for ran_inc_beta_rej() is equivalent to
+ * the upper bound used with ran_inc_beta_its().
+ */
+static double
+ran_inc_beta(gsl_rng *r, double a, double b, double x, double upper_bound)
+{
+    if (upper_bound < 0.1) {
+        return ran_inc_beta_its(r, a, b, upper_bound);
+    } else {
+        return ran_inc_beta_rej(r, a, b, x);
+    }
+}
 
 static bool
 doubles_almost_equal(double a, double b, double eps)
@@ -5846,31 +5892,25 @@ out:
 static double
 beta_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * model->reference_size * t;
+    return 4 * model->params.beta_coalescent.scalar * t;
 }
 
 static double
 beta_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g / (4 * model->reference_size);
+    return g / (4 * model->params.beta_coalescent.scalar);
 }
 
 static double
 beta_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * 4 * model->reference_size;
+    return rate * 4 * model->params.beta_coalescent.scalar;
 }
 
 static double
 beta_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    double alpha = model->params.beta_coalescent.alpha;
-    double m = model->params.beta_coalescent.m;
-    double phi = model->params.beta_coalescent.phi;
-    double scalar = exp(log(alpha) - alpha * log(m)
-            + gsl_sf_beta_inc (2 - alpha, alpha, phi)
-            - (alpha - 1) * model->reference_size);
-    return rate / ( 4 * scalar );
+    return rate / ( 4 * model->params.beta_coalescent.scalar );
 }
 
 static void
@@ -5900,18 +5940,19 @@ beta_integrand(double x, void *p)
     double b = num_ancestors;
     double log_x = gsl_sf_log(x);
     double log_1_minus_x = gsl_sf_log(1 - x);
+    double exponent;
 
     m = GSL_MIN(num_ancestors, 4);
     /* An underflow error occurs because of the large exponent (b-l). We use the
      * LSE trick to approximate this calculation. For details, see at
      * https://en.wikipedia.org/wiki/LogSumExp
      */
-    r[0] = b * gsl_sf_log(1 - x);
+    r[0] = b * log_1_minus_x;
     r_max = r[0];
     for (l = 1; l <= m; l++){
         r[l] = gsl_sf_lnchoose(num_ancestors, l)
                 + compute_falling_factorial_log(l)
-                - l * 1.386294      /* log(4) = 1.386294 */
+                - l * log(4)
                 + l * log_x
                 + (b - l) * log_1_minus_x;
         r_max = GSL_MAX(r_max, r[l]);
@@ -5920,9 +5961,9 @@ beta_integrand(double x, void *p)
     for (l = 0; l <= m; l++)  {
         ret += exp(r[l] - r_max);
     }
-    ret = 1 - exp(r_max + log(ret));
-    ret *= exp((-1 - alpha) * log_x + (alpha - 1) * log_1_minus_x);
-    ret *= 4 / gsl_sf_beta(2 - alpha, alpha);
+    exponent = (-1 - alpha) * log_x + (alpha - 1) * log_1_minus_x
+                + log(4) - gsl_sf_lnbeta(2 - alpha, alpha);
+    ret = exp(exponent) - exp(exponent + r_max + log(ret));
     return ret;
 }
 
@@ -5936,6 +5977,7 @@ msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha,
     size_t workspace_size = self->model.params.beta_coalescent.integration_workspace_size;
     double epsrel = self->model.params.beta_coalescent.integration_epsrel;
     double epsabs = self->model.params.beta_coalescent.integration_epsabs;
+    double truncation_point = self->model.params.beta_coalescent.truncation_point;
     struct beta_integral_params params = {num_ancestors, alpha};
 
     if (w == NULL) {
@@ -5944,7 +5986,8 @@ msp_compute_beta_integral(msp_t *self, unsigned int num_ancestors, double alpha,
     }
     F.function = &beta_integrand;
     F.params = &params;
-    ret = gsl_integration_qags(&F, 0, 1, epsabs, epsrel, workspace_size, w, result, &err);
+    ret = gsl_integration_qags(&F, 0, truncation_point, epsabs, epsrel,
+            workspace_size, w, result, &err);
     if (ret != 0) {
         /* It's ugly, but it should only happen while tuning models so we output
          * the GSL error to stderr */
@@ -5962,10 +6005,8 @@ msp_beta_compute_coalescence_rate(msp_t *self, unsigned int num_ancestors, doubl
     double alpha = self->model.params.beta_coalescent.alpha;
 
     *result = 1;
-    if (self->model.params.beta_coalescent.truncation_point != 0) {
-        if (num_ancestors > 2) {
-            ret = msp_compute_beta_integral(self, num_ancestors, alpha, result);
-        }
+    if (num_ancestors > 2) {
+        ret = msp_compute_beta_integral(self, num_ancestors, alpha, result);
     }
     return ret;
 }
@@ -5985,7 +6026,6 @@ msp_beta_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id,
         /* An error occured, and we signal this back using a negative waiting time */
         result = ret;
     } else {
-        lambda *= 2; /* JK: Why do we multiply lambda by 2 here? */
         result = msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
     }
     return result;
@@ -6028,7 +6068,6 @@ msp_multi_merger_common_ancestor_event(msp_t *self, double x,
 out:
     return ret;
 }
-
 
 static int MSP_WARN_UNUSED
 msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t label)
@@ -6075,9 +6114,12 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     }
     avl_init_node(q_node, y);
     q_node = avl_insert_node(&Q[4], q_node);
-    beta_x = gsl_ran_beta(self->rng,
+
+    beta_x = ran_inc_beta(self->rng,
                  2.0 - self->model.params.beta_coalescent.alpha,
-                 self->model.params.beta_coalescent.alpha);
+                 self->model.params.beta_coalescent.alpha,
+                 self->model.params.beta_coalescent.truncation_point,
+                 self->model.params.beta_coalescent.acceptance_rate);
 
     ret = msp_multi_merger_common_ancestor_event(self, beta_x, ancestors, Q);
     if (ret < 0) {
@@ -6511,19 +6553,42 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
         double truncation_point)
 {
     int ret = 0;
+    double m;
+    double scalar;
+    double acceptance_rate;
 
-    /* TODO bounds check alpha and truncation_point: what are legal values? */
+    /* Numerical instability occurs for values above 2 - 0.0005. */
+    if (alpha <= 1.0 || alpha >= 2.0) {
+        ret = MSP_ERR_BAD_ALPHA;
+        goto out;
+    }
+
+    if (truncation_point <= 0.0 || truncation_point > 1.0) {
+        ret = MSP_ERR_BAD_TRUNCATION_POINT;
+        goto out;
+    }
+
     ret = msp_set_simulation_model(self, MSP_MODEL_BETA, reference_size);
     if (ret != 0) {
         goto out;
     }
+
+    m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
+    acceptance_rate = gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
+    scalar = exp(log(alpha) - alpha * log(m) - (alpha - 1) * reference_size)
+             * acceptance_rate;
+
+    assert(!isnan(m));
+    assert(!isnan(acceptance_rate));
+    assert(!isnan(scalar));
+    assert(!isinf(m));
+    assert(!isinf(acceptance_rate));
+    assert(!isinf(scalar));
+
     self->model.params.beta_coalescent.alpha = alpha;
     self->model.params.beta_coalescent.truncation_point = truncation_point;
-    self->model.params.beta_coalescent.m =
-        2.0 + exp(alpha * 0.6931472 + (1 - alpha) * 1.098612 - log(alpha - 1));
-    //self->model.params.beta_coalescent.phi = beta_compute_phi(reference_size,
-                        //truncation_point, self->model.params.beta_coalescent.m);
-    //self->model.params.beta_coalescent.K = truncation_point;
+    self->model.params.beta_coalescent.scalar = scalar;
+    self->model.params.beta_coalescent.acceptance_rate = acceptance_rate;
 
     /* TODO we probably want to make these input parameters, as there will be situations
      * where integration fails and being able to tune them will be useful */

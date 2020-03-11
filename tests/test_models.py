@@ -21,7 +21,6 @@
 Test cases for simulation models to see if they have the correct
 basic properties.
 """
-import sys
 import unittest
 
 import numpy as np
@@ -183,20 +182,19 @@ class TestParametricModels(unittest.TestCase):
     """
     def test_beta_coalescent_parameters(self):
         N = 1000
-        dbl_max = sys.float_info.max
         for alpha in [1.01, 1.5, 1.99]:
             model = msprime.BetaCoalescent(N, alpha)
             self.assertEqual(model.reference_size, N)
             self.assertEqual(model.alpha, alpha)
-            self.assertEqual(model.truncation_point, dbl_max)
+            self.assertEqual(model.truncation_point, 1)
             d = model.get_ll_representation()
             self.assertEqual(d, {
                 "name": "beta",
                 "reference_size": N,
                 "alpha": alpha,
-                "truncation_point": dbl_max})
+                "truncation_point": 1})
         alpha = 1.5
-        for truncation_point in [0, 3, 1e6]:
+        for truncation_point in [0.01, 0.5, 1]:
             model = msprime.BetaCoalescent(N, alpha, truncation_point)
             self.assertEqual(model.reference_size, N)
             self.assertEqual(model.alpha, alpha)
@@ -262,14 +260,14 @@ class TestMultipleMergerModels(unittest.TestCase):
 
     def test_beta_coalescent(self):
         model = msprime.BetaCoalescent(
-            reference_size=5, alpha=1.5, truncation_point=10)
+            reference_size=5, alpha=1.5, truncation_point=1)
         ts = msprime.simulate(sample_size=10, model=model)
         # TODO real tests
         self.assertTrue(ts is not None)
 
     def test_beta_coalescent_integration_fails(self):
         model = msprime.BetaCoalescent(
-            reference_size=5, alpha=1e-10, truncation_point=10)
+            reference_size=5, alpha=2 - 1e-9, truncation_point=1)
         with self.assertRaises(_msprime.LibraryError):
             msprime.simulate(sample_size=10, model=model)
 

@@ -1058,13 +1058,24 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(ValueError, f, model=model)
         model = get_simulation_model("beta", truncation_point=1)
         self.assertRaises(ValueError, f, model=model)
-        # TODO check for bad values when range checking is done.
-        for alpha in [1.0, 2.2, 1e-4]:
-            for truncation_point in [0.1, 1.5, 1e9]:
+        # should have 1 < alpha < 2 and 0 < truncation_point <= 1
+        for alpha in np.arange(1.01, 2, 0.01):
+            for truncation_point in np.arange(0, 1, 0.01)+0.01:
                 model = get_simulation_model(
                     "beta", 2, alpha=alpha, truncation_point=truncation_point)
                 sim = f(model=model)
                 self.assertEqual(sim.get_model(), model)
+        # bad values
+        for alpha in (-1e9, -1, 0, 1, 2, 5, 1e9):
+            model = get_simulation_model(
+                "beta", 2, alpha=alpha, truncation_point=1)
+            with self.assertRaises(_msprime.InputError):
+                sim = f(model=model)
+        for truncation_point in [-1e9, -1, 0, 1.1, 2, 1e9]:
+            model = get_simulation_model(
+                "beta", 2, alpha=1.5, truncation_point=truncation_point)
+            with self.assertRaises(_msprime.InputError):
+                sim = f(model=model)
 
     def test_sweep_genic_selection_simulation_model_errors(self):
         L = 10

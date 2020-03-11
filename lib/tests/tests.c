@@ -3118,6 +3118,46 @@ compute_beta_coalescence_rate_fails(unsigned int num_ancestors, double alpha)
 }
 
 static void
+test_beta_coalescent_bad_parameters(void)
+{
+    int j;
+    int ret;
+    msp_t msp;
+    unsigned int n = 10;
+    double alphas[] = {-1e6, 0, 0.001, 1.0, 2.0, 1e6};
+    double truncation_points[] = {-1e6, 0, 1.001, 1e6};
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
+        ret = msp_set_simulation_model_beta(&msp, 1, alphas[j], 1);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_ALPHA);
+    }
+    for (j = 0; j < sizeof(truncation_points) / sizeof(*truncation_points); j++) {
+        ret = msp_set_simulation_model_beta(&msp, 1, 1.5, truncation_points[j]);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TRUNCATION_POINT);
+    }
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    free(samples);
+    gsl_rng_free(rng);
+}
+
+static void
 test_gsl_error_handling_beta_coalescent(void)
 {
     FILE *old_stderr = stderr;
@@ -3125,7 +3165,7 @@ test_gsl_error_handling_beta_coalescent(void)
     old_handler = gsl_set_error_handler_off();
     /* Redirect stderr to avoid spamming output */
     stderr = _devnull;
-    compute_beta_coalescence_rate_fails(1000, 1e20);
+    compute_beta_coalescence_rate_fails(1000, 2 - DBL_EPSILON);
     gsl_set_error_handler(old_handler);
     stderr = old_stderr;
 }
@@ -3134,11 +3174,15 @@ static void
 test_multiple_mergers_simulation(void)
 {
     int ret;
-    size_t j, k;
+    size_t j, k, o, p;
     uint32_t n = 100;
     uint32_t m = 100;
     long seed = 10;
-    bool store_full_arg[] = {true, true};
+    bool store_full_arg[] = {true, false};
+    /* These simulations can be slow, so just choose a few param combinations */
+    double beta_params[][2] = {{1.1, 0.5}, {1.9, 1}};
+    /* TODO what are good psi parameters here? */
+    double psi_params[][2] = {{0.5, 1}, };
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -3154,49 +3198,56 @@ test_multiple_mergers_simulation(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < 2; j++) {
+        if (j == 0) {
+            o = sizeof(psi_params) / sizeof(*psi_params);
+        } else if (j == 1) {
+            o = sizeof(beta_params) / sizeof(*beta_params);
+        }
         for (k = 0; k < sizeof(store_full_arg) / sizeof(bool); k++) {
-            gsl_rng_set(rng, seed);
-            /* TODO check non-zero sample times here to make sure they fail. */
-            memset(samples, 0, n * sizeof(sample_t));
-            tsk_table_collection_clear(&tables);
-            ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-            CU_ASSERT_EQUAL(ret, 0);
-            /* TODO what are good parameters here?? */
-            if (j == 0) {
-                // Use psi = 0.5 for now, but should definitely test for 0 and 1 cases
-                ret = msp_set_simulation_model_dirac(msp, 1, 0.5, 1);
-            } else {
-                ret = msp_set_simulation_model_beta(msp, 1, 1.5, 10.0);
-            }
-            CU_ASSERT_EQUAL(ret, 0);
-            /* TODO check for adding various complications like multiple populations etc
-             * to ensure they fail.
-             */
-            ret = msp_set_store_full_arg(msp, store_full_arg[k]);
-            CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_initialise(msp);
-            CU_ASSERT_EQUAL(ret, 0);
-            msp_print_state(msp, _devnull);
-
-            ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-            if (store_full_arg[k]) {
-                /* Can't support this for now. */
-                CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-            } else {
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
-                CU_ASSERT_TRUE(msp_is_completed(msp));
-                CU_ASSERT_TRUE(msp->time > 0);
-                msp_verify(msp, 0);
-
-                msp_reset(msp);
-                while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-                    msp_verify(msp, 0);
+            for (p = 0; p < o; p++) {
+                gsl_rng_set(rng, seed);
+                /* TODO check non-zero sample times here to make sure they fail. */
+                memset(samples, 0, n * sizeof(sample_t));
+                tsk_table_collection_clear(&tables);
+                ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+                CU_ASSERT_EQUAL(ret, 0);
+                if (j == 0) {
+                    ret = msp_set_simulation_model_dirac(msp, 1,
+                            psi_params[p][0], psi_params[p][1]);
+                } else {
+                    ret = msp_set_simulation_model_beta(msp, 1,
+                            beta_params[p][0], beta_params[p][1]);
                 }
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
-                CU_ASSERT_TRUE(msp_is_completed(msp));
+                CU_ASSERT_EQUAL(ret, 0);
+                /* TODO check for adding various complications like multiple
+                 * populations etc to ensure they fail.
+                 */
+                ret = msp_set_store_full_arg(msp, store_full_arg[k]);
+                CU_ASSERT_EQUAL(ret, 0);
+                ret = msp_initialise(msp);
+                CU_ASSERT_EQUAL(ret, 0);
+                msp_print_state(msp, _devnull);
+
+                ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+                if (store_full_arg[k]) {
+                    /* Can't support this for now. */
+                    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+                } else {
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    CU_ASSERT_TRUE(msp_is_completed(msp));
+                    CU_ASSERT_TRUE(msp->time > 0);
+                    msp_verify(msp, 0);
+
+                    msp_reset(msp);
+                    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                        msp_verify(msp, 0);
+                    }
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    CU_ASSERT_TRUE(msp_is_completed(msp));
+                }
+                ret = msp_free(msp);
+                CU_ASSERT_EQUAL(ret, 0);
             }
-            ret = msp_free(msp);
-            CU_ASSERT_EQUAL(ret, 0);
         }
     }
     gsl_rng_free(rng);
@@ -4643,6 +4694,7 @@ main(int argc, char **argv)
         {"test_compute_falling_factorial", test_compute_falling_factorial},
         {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
         {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
+        {"test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters},
         {"test_gsl_error_handling_beta_coalescent", test_gsl_error_handling_beta_coalescent},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
