@@ -5961,9 +5961,9 @@ beta_integrand(double x, void *p)
     for (l = 0; l <= m; l++)  {
         ret += exp(r[l] - r_max);
     }
-    exponent = (-1 - alpha) * log_x + (alpha - 1) * log_1_minus_x;
+    exponent = (-1 - alpha) * log_x + (alpha - 1) * log_1_minus_x
+                + log(4) - gsl_sf_lnbeta(2 - alpha, alpha);
     ret = exp(exponent) - exp(exponent + r_max + log(ret));
-    ret *= 4 / gsl_sf_beta(2 - alpha, alpha);
     return ret;
 }
 
