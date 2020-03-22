@@ -2794,7 +2794,8 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutgen_alloc(&mutgen, rng, 0, 3);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, mutation_rate, recomb_map.sequence_length);
+    ret = mutgen_set_rate(&mutgen, mutation_rate,
+            recomb_map_get_sequence_length(&recomb_map));
 
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -3372,8 +3373,7 @@ test_simple_recomb_map(void)
 
     for (j = 0; j < 3; j++) {
         seq_length = positions[j][1];
-        ret = recomb_map_alloc(
-            &recomb_map, seq_length, positions[j], rates, 2, true);
+        ret = recomb_map_alloc(&recomb_map, 2, positions[j], rates, true);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         recomb_map_print_state(&recomb_map, _devnull);
         CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), 2);
@@ -3388,12 +3388,12 @@ verify_recomb_maps_equal(recomb_map_t *actual, recomb_map_t *expected)
 {
     size_t i;
 
-    CU_ASSERT_EQUAL(actual->size, expected->size);
+    CU_ASSERT_EQUAL(actual->map.size, expected->map.size);
     CU_ASSERT_EQUAL(actual->discrete, expected->discrete);
-    CU_ASSERT_EQUAL(actual->sequence_length, expected->sequence_length);
-    for (i = 0; i < actual->size; i++) {
-        CU_ASSERT_DOUBLE_EQUAL(actual->positions[i], expected->positions[i], 0.0);
-        CU_ASSERT_DOUBLE_EQUAL(actual->rates[i], expected->rates[i], 0.0);
+    for (i = 0; i < actual->map.size; i++) {
+        CU_ASSERT_DOUBLE_EQUAL(actual->map.position[i],
+                expected->map.position[i], 0.0);
+        CU_ASSERT_DOUBLE_EQUAL(actual->map.value[i], expected->map.value[i], 0.0);
         CU_ASSERT_DOUBLE_EQUAL(actual->cumulative[i], expected->cumulative[i], 1e-6);
     }
 }
@@ -3413,7 +3413,7 @@ test_recomb_map_copy(void)
     double rates[] = {1.0, 2.0, 0.0};
     double other_rates[] = {2.0, 4.0, 0.0};
 
-    ret = recomb_map_alloc(&map, 2.0, positions, rates, 3, true);
+    ret = recomb_map_alloc(&map, 3, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = recomb_map_copy(&copy, &map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3421,9 +3421,9 @@ test_recomb_map_copy(void)
     recomb_map_free(&map);
     recomb_map_free(&copy);
 
-    ret = recomb_map_alloc(&map, 2.0, positions, rates, 3, true);
+    ret = recomb_map_alloc(&map, 3, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = recomb_map_alloc(&other, 2.0, positions, other_rates, 3, true);
+    ret = recomb_map_alloc(&other, 3, positions, other_rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     recomb_map_convert_rates(&map, double_rate, NULL);
     verify_recomb_maps_equal(&map, &other);
@@ -3440,51 +3440,47 @@ test_recomb_map_errors(void)
     double rates[] = {1.0, 2.0, 0.0};
     double short_positions[] = {0.0, 0.25, 0.5};
 
-    ret = recomb_map_alloc(&recomb_map, 1.0, positions, rates, 0, true);
+    ret = recomb_map_alloc(&recomb_map, 0, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
+    recomb_map_free(&recomb_map);
+
+    ret = recomb_map_alloc(&recomb_map, 3, short_positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
     recomb_map_free(&recomb_map);
 
-    ret = recomb_map_alloc(&recomb_map, 0.5, short_positions, rates, 3, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
-    recomb_map_free(&recomb_map);
-
-    ret = recomb_map_alloc(&recomb_map, 1.0, positions, rates, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
-    recomb_map_free(&recomb_map);
-
-    ret = recomb_map_alloc(&recomb_map, 2.0, positions, rates, 2, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    ret = recomb_map_alloc(&recomb_map, 1, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
     recomb_map_free(&recomb_map);
 
     positions[0] = 1;
-    ret = recomb_map_alloc(&recomb_map, 1.0, positions, rates, 2, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    ret = recomb_map_alloc(&recomb_map, 2, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_MAP_START_NON_ZERO);
     recomb_map_free(&recomb_map);
     positions[0] = 0;
 
     positions[1] = 3.0;
-    ret = recomb_map_alloc(&recomb_map, 2.0, positions, rates, 3, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_POSITIONS_UNSORTED);
     recomb_map_free(&recomb_map);
     positions[1] = 1.0;
 
     positions[0] = -1;
-    ret = recomb_map_alloc(&recomb_map, 2.0, positions, rates, 3, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_MAP_START_NON_ZERO);
     recomb_map_free(&recomb_map);
     positions[0] = 0.0;
 
     rates[0] = -1;
-    ret = recomb_map_alloc(&recomb_map, 2.0, positions, rates, 3, true);
+    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
     recomb_map_free(&recomb_map);
     rates[0] = 1.0;
 
-    ret = recomb_map_alloc(&recomb_map, 2.0, positions, rates, 3, true);
+    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     recomb_map_free(&recomb_map);
 
-    ret = recomb_map_alloc(&recomb_map, 0.5, short_positions, rates, 3, false);
+    ret = recomb_map_alloc(&recomb_map, 3, short_positions, rates, false);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     recomb_map_free(&recomb_map);
 }
@@ -3504,8 +3500,7 @@ verify_recomb_map(double length, double *positions, double *rates, size_t size)
     CU_ASSERT_FATAL(ret_rates != NULL);
     CU_ASSERT_FATAL(ret_positions != NULL);
 
-    ret = recomb_map_alloc(&recomb_map, length,
-           positions, rates, size, true);
+    ret = recomb_map_alloc(&recomb_map, size, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     recomb_map_print_state(&recomb_map, _devnull);
     CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), size);
@@ -3545,10 +3540,9 @@ static void
 test_translate_position_and_recomb_mass(void)
 {
     recomb_map_t map;
-    double seq_length = 20;
     double p1[] = {0, 6, 13, 20};
     double r1[] = {3, 0, 1, 0};
-    recomb_map_alloc(&map, seq_length, p1, r1, 4, true);
+    recomb_map_alloc(&map, 4, p1, r1, true);
 
     /* interval edges */
     CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 0), 0);
@@ -3578,12 +3572,12 @@ test_recomb_map_mass_between(void)
 {
     recomb_map_t discrete_map;
     recomb_map_t cont_map;
-    double seq_length = 20;
     double p1[] = {0, 6, 13, 20};
     double r1[] = {3, 0, 1, 0};
-    recomb_map_alloc(&discrete_map, seq_length, p1, r1, 4, true);
-    recomb_map_alloc(&cont_map, seq_length, p1, r1, 4, false);
     double tol = 1e-9;
+
+    recomb_map_alloc(&discrete_map, 4, p1, r1, true);
+    recomb_map_alloc(&cont_map, 4, p1, r1, false);
 
     CU_ASSERT_DOUBLE_EQUAL_FATAL(recomb_map_mass_between(&discrete_map, 0, 2), 6, tol);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(recomb_map_mass_between(&cont_map, 0, 2), 6, tol);
@@ -4816,6 +4810,7 @@ test_interval_map(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL(interval_map_get_size(&imap), j);
         CU_ASSERT_EQUAL(interval_map_get_sequence_length(&imap), j - 1);
+        interval_map_print_state(&imap, _devnull);
         interval_map_free(&imap);
     }
 }

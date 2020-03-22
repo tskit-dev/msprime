@@ -97,6 +97,6 @@ void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
-size_t msp_binary_interval_search(double query, double *values, size_t n_values);
+size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
 
 #endif /*__UTIL_H__*/

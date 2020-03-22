@@ -203,23 +203,24 @@ typedef struct _simulation_model_t {
     double (*model_rate_to_generation_rate)(struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
-/* Recombination map */
-
-typedef struct {
-    double sequence_length; /* size of the physical coordinate space */
-    double total_recombination_rate;
-    size_t size;            /* the total number of values in the map */
-    double *positions;
-    double *rates;
-    double *cumulative;
-    bool discrete;
-} recomb_map_t;
-
 typedef struct {
     double *position;
     double *value;
     size_t size;
 } interval_map_t;
+
+/* Recombination map */
+
+typedef struct {
+    interval_map_t map;
+    double total_recombination_rate;
+    /* double sequence_length; /1* size of the physical coordinate space *1/ */
+    /* size_t size;            /1* the total number of values in the map *1/ */
+    /* double *positions; */
+    /* double *rates; */
+    double *cumulative;
+    bool discrete;
+} recomb_map_t;
 
 typedef struct _msp_t {
     gsl_rng *rng;
@@ -469,9 +470,13 @@ typedef double (*msp_convert_func) (void *obj, double rate);
 
 int recomb_map_alloc_uniform(recomb_map_t *self,
         double sequence_length, double rate, bool discrete);
+
 int recomb_map_alloc(recomb_map_t *self,
-        double sequence_length, double *positions, double *rates,
-        size_t size, bool discrete);
+        size_t size, double *position, double *rate, bool discrete);
+
+        /* double sequence_length, double *positions, double *rates, */
+        /* size_t size, bool discrete); */
+
 int recomb_map_copy(recomb_map_t *to, recomb_map_t *from);
 int recomb_map_free(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);

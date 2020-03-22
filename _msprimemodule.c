@@ -2079,8 +2079,7 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = recomb_map_alloc(self->recomb_map,
-            positions[size - 1], positions, rates, size, discrete);
+    err = recomb_map_alloc(self->recomb_map, size, positions, rates, discrete);
     if (err != 0) {
         handle_library_error(err);
         goto out;

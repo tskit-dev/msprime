@@ -240,7 +240,7 @@ __msp_safe_free(void **ptr) {
  * Assumes `values` are sorted
  */
 size_t
-msp_binary_interval_search(double query, double *values, size_t n_values)
+msp_binary_interval_search(double query, const double *values, size_t n_values)
 {
     if (n_values == 0) {
         return 0;

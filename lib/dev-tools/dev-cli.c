@@ -602,8 +602,7 @@ read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
         rates[j] = config_setting_get_float(s);
     }
     // TODO Read discrete flag from recombination map
-    ret = recomb_map_alloc(recomb_map, coordinates[size - 1],
-            coordinates, rates, size, true);
+    ret = recomb_map_alloc(recomb_map, size, coordinates, rates, true);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
@@ -779,8 +778,9 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
-    ret = mutgen_set_rate(&mutgen, mutation_params.mutation_rate,
-            recomb_map.sequence_length);
+    assert(false); /* FIXME */
+    /* ret = mutgen_set_rate(&mutgen, mutation_params.mutation_rate, */
+    /*         recomb_map.sequence_length); */
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
