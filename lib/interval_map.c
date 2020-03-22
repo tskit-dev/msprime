@@ -23,6 +23,18 @@
 #include "util.h"
 #include "msprime.h"
 
+void
+interval_map_print_state(interval_map_t *self, FILE *out)
+{
+    size_t j;
+
+    fprintf(out, "interval_map (%p):: size = %d\n", (void *) self, (int) self->size);
+    fprintf(out, "\tsequence_length = %f\n", interval_map_get_sequence_length(self));
+    fprintf(out, "\tindex\tposition\tvalue\n");
+    for (j = 0; j < self->size; j++) {
+        fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->position[j], self->value[j]);
+    }
+}
 
 int MSP_WARN_UNUSED
 interval_map_alloc(interval_map_t *self, size_t size, double *position, double *value)
@@ -65,6 +77,13 @@ out:
     return ret;
 }
 
+int MSP_WARN_UNUSED
+interval_map_alloc_single(interval_map_t *self, double sequence_length, double value)
+{
+    double position[2] = {0, sequence_length};
+    return interval_map_alloc(self, 2, position, &value);
+}
+
 int
 interval_map_free(interval_map_t *self)
 {
@@ -91,15 +110,13 @@ interval_map_get_num_intervals(interval_map_t *self)
     return self->size - 1;
 }
 
-void
-interval_map_print_state(interval_map_t *self, FILE *out)
+size_t
+interval_map_get_index(interval_map_t *self, double x)
 {
-    size_t j;
+    size_t index = tsk_search_sorted(self->position, self->size, x);
 
-    fprintf(out, "interval_map (%p):: size = %d\n", (void *) self, (int) self->size);
-    fprintf(out, "\tsequence_length = %f\n", interval_map_get_sequence_length(self));
-    fprintf(out, "\tindex\tposition\tvalue\n");
-    for (j = 0; j < self->size; j++) {
-        fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->position[j], self->value[j]);
+    if (self->position[index] > x) {
+        index--;
     }
+    return index;
 }

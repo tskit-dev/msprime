@@ -169,14 +169,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRUNCATION_POINT:
             ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
             break;
-        case MSP_ERR_BAD_MUTATION_MAP_SIZE:
-            ret = "Bad mutation map size; must be >= 1.";
-            break;
         case MSP_ERR_BAD_MUTATION_MAP_RATE:
             ret = "Bad mutation rate; must be >= 0.";
-            break;
-        case MSP_ERR_BAD_MUTATION_MAP_POSITION:
-            ret = "Bad mutation map; must have pos[0] = 0 and pos[j] < pos[j + 1]";
             break;
         case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
             ret = "Mutation map is not compatible with specified tables.";
@@ -198,7 +192,6 @@ msp_strerror_internal(int err)
 out:
     return ret;
 }
-
 
 int
 msp_set_tsk_error(int err)

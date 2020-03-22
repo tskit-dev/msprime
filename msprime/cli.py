@@ -213,10 +213,12 @@ class SimulationRunner(object):
         self._random_generator = msprime.RandomGenerator(seed)
         self._ms_random_seeds = ms_seeds
         self._simulator.random_generator = self._random_generator
-        self._mutation_generator = msprime.MutationGenerator(
-            self._random_generator,
+        rate_map = msprime.IntervalMap(
             position=[0, self._simulator.sequence_length],
-            rate=[self._mutation_rate, 0]
+            value=[self._mutation_rate, 0]
+        )
+        self._mutation_generator = msprime.MutationGenerator(
+            self._random_generator, rate_map
         )
 
     def get_num_replicates(self):

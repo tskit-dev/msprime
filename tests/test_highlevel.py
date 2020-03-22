@@ -797,7 +797,8 @@ class TestSimulateInterface(unittest.TestCase):
 
     def test_mutation_generator_unsupported(self):
         n = 10
-        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), [0], [1])
+        rate_map = msprime.IntervalMap([0, 1], [1, 0])
+        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), rate_map)
         with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)
 

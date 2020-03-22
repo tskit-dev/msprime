@@ -48,6 +48,7 @@ from _msprime import NODE_IS_CEN_EVENT  # NOQA
 # and may be removed in future versions.
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
+from _msprime import IntervalMap
 
 # Make sure the GSL error handler is turned off so that we can be sure that
 # we don't abort on errors. This can be reset by using the function
@@ -549,11 +550,11 @@ def simulate(
                 "Cannot specify mutation rate combined with a non-zero "
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
-        mutation_generator = MutationGenerator(
-            rng,
+        rate_map = IntervalMap(
             position=[0, sim.sequence_length],
-            rate=[mutation_rate, 0]
+            value=[mutation_rate, 0]
         )
+        mutation_generator = MutationGenerator(rng, rate_map)
 
     if replicate_index is not None and random_seed is None:
         raise ValueError("Cannot specify replicate_index without random_seed as this "

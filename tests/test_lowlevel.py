@@ -2024,6 +2024,41 @@ class TestRandomGenerator(unittest.TestCase):
                 self.assertEqual(rng1.uniform_int(n), rng2.uniform_int(n))
 
 
+class TestIntervalMap(unittest.TestCase):
+    """
+    Tests for the IntervalMap class.
+    """
+    def test_basic_constructor(self):
+        self.assertRaises(TypeError, _msprime.IntervalMap)
+        self.assertRaises(TypeError, _msprime.IntervalMap, [])
+        im = _msprime.IntervalMap([0, 1], [0, 0])
+        self.assertTrue(np.array_equal(im.position, [0, 1]))
+        self.assertTrue(np.array_equal(im.value, [0, 0]))
+
+    def test_input_errors(self):
+        for bad_value in [-1, 0]:
+            self.assertRaises(
+                _msprime.LibraryError, _msprime.IntervalMap, [0, bad_value], [0, 0])
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.IntervalMap([], [])
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.IntervalMap([0], [0])
+        with self.assertRaises(ValueError):
+            _msprime.IntervalMap([0], [1, 2])
+        with self.assertRaises(ValueError):
+            _msprime.IntervalMap([0, 1], [1])
+
+    def test_good_inputs(self):
+        good_values = [
+            ([0, 1], [0, 2]), ([0, 0.1, 10], [0, 2, 0]),
+            (np.arange(10), np.arange(10)),
+            (np.arange(100), np.zeros(100))]
+        for pos, value in good_values:
+            im = _msprime.IntervalMap(pos, value)
+            self.assertTrue(np.array_equal(pos, im.position))
+            self.assertTrue(np.array_equal(value, im.value))
+
+
 class TestMutationGenerator(unittest.TestCase):
     """
     Tests for the mutation generator class.
@@ -2031,9 +2066,8 @@ class TestMutationGenerator(unittest.TestCase):
     def test_basic_constructor(self):
         self.assertRaises(TypeError, _msprime.MutationGenerator)
         self.assertRaises(TypeError, _msprime.MutationGenerator, [])
-        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), [0], [0])
-        self.assertTrue(np.array_equal(mg.position, [0]))
-        self.assertTrue(np.array_equal(mg.rate, [0]))
+        imap = _msprime.IntervalMap([0, 1], [0, 0])
+        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), imap)
         self.assertEqual(mg.alphabet, 0)
 
     def test_rng(self):
@@ -2046,64 +2080,41 @@ class TestMutationGenerator(unittest.TestCase):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None, [[], []]]:
             self.assertRaises(
-                ValueError, _msprime.MutationGenerator, rng, position=bad_type, rate=[0])
-            self.assertRaises(
-                ValueError, _msprime.MutationGenerator, rng, position=[0], rate=bad_type)
-        for bad_value in [-1, -1e-3]:
-            self.assertRaises(
-                _msprime.LibraryError, _msprime.MutationGenerator, rng, [0], [bad_value])
-        for bad_value in [-1, 1, 0.001]:
-            self.assertRaises(
-                _msprime.LibraryError, _msprime.MutationGenerator, rng, [bad_value], [0])
-        with self.assertRaises(ValueError):
-            _msprime.MutationGenerator(rng, [], [])
-        with self.assertRaises(ValueError):
-            _msprime.MutationGenerator(rng, [0], [1, 2])
-        with self.assertRaises(ValueError):
-            _msprime.MutationGenerator(rng, [0, 1], [1])
-        for bad_value in [0, -1, 2, 3]:
-            with self.assertRaises(_msprime.LibraryError):
-                _msprime.MutationGenerator(rng, [0, bad_value, 2], [1, 1, 1])
-
-        good_values = [
-            ([0], [0]), ([0, 1], [0, 2]), ([0, 0.1, 10], [0, 2, 0]),
-            (np.arange(10), np.arange(10)),
-            (np.arange(100), np.zeros(100))]
-        for pos, rate in good_values:
-            mg = _msprime.MutationGenerator(rng, pos, rate)
-            self.assertTrue(np.array_equal(pos, mg.position))
-            self.assertTrue(np.array_equal(rate, mg.rate))
+                TypeError, _msprime.MutationGenerator, rng, rate_map=bad_type)
 
     def test_time_interval(self):
         rng = _msprime.RandomGenerator(1)
+        imap = _msprime.IntervalMap([0, 1], [0, 0])
         for bad_type in ["x", {}, None]:
             with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, [0], [0], start_time=bad_type)
+                _msprime.MutationGenerator(rng, imap, start_time=bad_type)
             with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, [0], [0], end_time=bad_type)
+                _msprime.MutationGenerator(rng, imap, end_time=bad_type)
         for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
             with self.assertRaises(_msprime.LibraryError):
                 _msprime.MutationGenerator(
-                    rng, [0], [0], start_time=start_time, end_time=end_time)
+                    rng, imap, start_time=start_time, end_time=end_time)
 
     def test_alphabet(self):
         rng = _msprime.RandomGenerator(1)
+        rate_map = _msprime.IntervalMap([0, 1], [2, 0])
         for bad_type in ["x", {}, None]:
             self.assertRaises(
                 TypeError, _msprime.MutationGenerator, random_generator=rng,
-                position=[0], rate=[0], alphabet=bad_type)
+                rate_map=rate_map, alphabet=bad_type)
         for bad_value in [-1, 2, 10**6]:
             self.assertRaises(
                 ValueError, _msprime.MutationGenerator, random_generator=rng,
-                position=[0], rate=[0], alphabet=bad_value)
+                rate_map=rate_map, alphabet=bad_value)
         for alphabet in [0, 1]:
             mg = _msprime.MutationGenerator(
-                random_generator=rng, position=[0], rate=[0], alphabet=alphabet)
+                random_generator=rng, rate_map=rate_map, alphabet=alphabet)
             self.assertEqual(alphabet, mg.alphabet)
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)
-        mutgen = _msprime.MutationGenerator(rng, [0, 1], [0, 1])
+        imap = _msprime.IntervalMap([0, 1], [1, 0])
+        mutgen = _msprime.MutationGenerator(rng, imap)
         tables = _msprime.LightweightTableCollection(1)
         for bad_type in [None, [], {}]:
             self.assertRaises(TypeError, mutgen.generate, bad_type)
@@ -2114,7 +2125,8 @@ class TestMutationGenerator(unittest.TestCase):
 
     def verify_block_size(self, tables):
         rng = _msprime.RandomGenerator(1)
-        mutgen = _msprime.MutationGenerator(rng, [0, tables.sequence_length], [2, 0])
+        rate_map = _msprime.IntervalMap([0, tables.sequence_length], [2, 0])
+        mutgen = _msprime.MutationGenerator(rng, rate_map)
         ll_tables = _msprime.LightweightTableCollection()
         ll_tables.fromdict(tables.asdict())
         mutgen.generate(ll_tables, keep=True)
@@ -2194,7 +2206,8 @@ class TestLikelihood(unittest.TestCase):
             get_samples(5), uniform_recombination_map(L=L, rate=2),
             rng, tables, store_full_arg=True)
         sim.run()
-        mutgen = _msprime.MutationGenerator(rng, position=[0, L], rate=[2, 0])
+        rate_map = _msprime.IntervalMap(position=[0, L], value=[2, 0])
+        mutgen = _msprime.MutationGenerator(rng, rate_map)
         mutgen.generate(tables)
         t = tskit.TableCollection.fromdict(tables.asdict())
         self.assertGreater(len(t.edges), 10)
