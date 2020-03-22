@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -214,7 +214,10 @@ class SimulationRunner(object):
         self._ms_random_seeds = ms_seeds
         self._simulator.random_generator = self._random_generator
         self._mutation_generator = msprime.MutationGenerator(
-            self._random_generator, position=[0], rate=[self._mutation_rate])
+            self._random_generator,
+            position=[0, self._simulator.sequence_length],
+            rate=[self._mutation_rate, 0]
+        )
 
     def get_num_replicates(self):
         """

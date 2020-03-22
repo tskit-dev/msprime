@@ -1833,7 +1833,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     shape = PyArray_DIMS(rate_array);
-    if (shape[0] != map_size) {
+    if (shape[0] != (npy_intp) map_size) {
         PyErr_Format(PyExc_ValueError,
                 "Mutation map rate and position arrays must be same size.");
         goto out;

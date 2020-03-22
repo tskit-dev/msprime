@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -27,7 +27,6 @@ import unittest
 import numpy as np
 
 import tskit
-import numpy as np
 
 import tests
 import _msprime
@@ -1980,6 +1979,14 @@ class TestRandomGenerator(unittest.TestCase):
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
 
+    def test_flat_errors(self):
+        rng = _msprime.RandomGenerator(1)
+        self.assertRaises(TypeError, rng.flat)
+        self.assertRaises(TypeError, rng.flat, 0)
+        for bad_type in ["as", [], None]:
+            self.assertRaises(TypeError, rng.flat, bad_type, 1)
+            self.assertRaises(TypeError, rng.flat, 0, bad_type)
+
     def test_flat(self):
         for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
@@ -1988,6 +1995,12 @@ class TestRandomGenerator(unittest.TestCase):
             for a, b in itertools.product(values, repeat=2):
                 self.assertEqual(rng1.flat(a, b), rng2.flat(a, b))
 
+    def test_poisson_errors(self):
+        rng = _msprime.RandomGenerator(1)
+        self.assertRaises(TypeError, rng.poisson)
+        for bad_type in ["as", [], None]:
+            self.assertRaises(TypeError, rng.poisson, bad_type)
+
     def test_poisson(self):
         for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
@@ -1995,6 +2008,12 @@ class TestRandomGenerator(unittest.TestCase):
             values = [0.001, 1e-6, 0, 1, 10, -10, 100]
             for mu in values:
                 self.assertEqual(rng1.poisson(mu), rng2.poisson(mu))
+
+    def test_uniform_int_errors(self):
+        rng = _msprime.RandomGenerator(1)
+        self.assertRaises(TypeError, rng.uniform_int)
+        for bad_type in ["as", [], None]:
+            self.assertRaises(TypeError, rng.uniform_int, bad_type)
 
     def test_uniform_int(self):
         for seed in [1, 2, 2**32 - 1]:
@@ -2084,18 +2103,18 @@ class TestMutationGenerator(unittest.TestCase):
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)
-        mutgen = _msprime.MutationGenerator(rng, 2)
-        tables = _msprime.LightweightTableCollection()
+        mutgen = _msprime.MutationGenerator(rng, [0, 1], [0, 1])
+        tables = _msprime.LightweightTableCollection(1)
         for bad_type in [None, [], {}]:
             self.assertRaises(TypeError, mutgen.generate, bad_type)
             self.assertRaises(TypeError, mutgen.generate, tables, bad_type)
         for _ in range(10):
-            tables = _msprime.LightweightTableCollection()
+            tables = _msprime.LightweightTableCollection(1)
             mutgen.generate(tables)
 
     def verify_block_size(self, tables):
         rng = _msprime.RandomGenerator(1)
-        mutgen = _msprime.MutationGenerator(rng, 2)
+        mutgen = _msprime.MutationGenerator(rng, [0, tables.sequence_length], [2, 0])
         ll_tables = _msprime.LightweightTableCollection()
         ll_tables.fromdict(tables.asdict())
         mutgen.generate(ll_tables, keep=True)
@@ -2103,28 +2122,32 @@ class TestMutationGenerator(unittest.TestCase):
         self.assertEqual(tables, after_tables)
 
     def test_keep_mutations_block_size_mutations(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
         for j in range(8192):
             tables.mutations.add_row(0, node=0, derived_state="b")
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_ancestral_state(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
         big_alloc = 64 * 1024
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a" * big_alloc)
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_derived_state(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
         big_alloc = 64 * 1024
         tables.mutations.add_row(0, node=0, derived_state="b" * big_alloc)
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_metadata(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
         big_alloc = 64 * 1024
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a", metadata=b"x" * big_alloc)
         self.verify_block_size(tables)
         tables.mutations.add_row(0, node=0, derived_state="b" * 2 * big_alloc)
@@ -2164,13 +2187,14 @@ class TestLikelihood(unittest.TestCase):
     Tests for the low-level likelihood calculation interface.
     """
     def get_arg(self):
+        L = 20
         rng = _msprime.RandomGenerator(1)
-        tables = _msprime.LightweightTableCollection()
+        tables = _msprime.LightweightTableCollection(L)
         sim = _msprime.Simulator(
-            get_samples(5), uniform_recombination_map(L=20, rate=2),
+            get_samples(5), uniform_recombination_map(L=L, rate=2),
             rng, tables, store_full_arg=True)
         sim.run()
-        mutgen = _msprime.MutationGenerator(rng, 2)
+        mutgen = _msprime.MutationGenerator(rng, position=[0, L], rate=[2, 0])
         mutgen.generate(tables)
         t = tskit.TableCollection.fromdict(tables.asdict())
         self.assertGreater(len(t.edges), 10)

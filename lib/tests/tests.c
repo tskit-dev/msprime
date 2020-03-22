@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2018 University of Oxford
+** Copyright (C) 2016-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -2794,7 +2794,8 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutgen_alloc(&mutgen, rng, 0, 3);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, mutation_rate);
+    ret = mutgen_set_rate(&mutgen, mutation_rate, recomb_map.sequence_length);
+
     CU_ASSERT_EQUAL(ret, 0);
 
     for (j = 0; j < num_replicates; j++) {
@@ -4150,8 +4151,8 @@ test_mutgen_simple_map(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    double pos[] = {0, 0.1, 0.2, 0.3, 0.4};
-    double rate[] = {0, 0.01, 0.02, 0.03, 0.04};
+    double pos[] = {0, 0.1, 0.2, 0.3, 0.4, 1.0};
+    double rate[] = {0, 0.01, 0.02, 0.03, 0.04, 0.0};
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
@@ -4159,28 +4160,28 @@ test_mutgen_simple_map(void)
     insert_single_tree(&tables);
     ret = mutgen_alloc(&mutgen, rng, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_map(&mutgen, 5, pos, rate);
+    ret = mutgen_set_map(&mutgen, 6, pos, rate);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.map.size, 5);
+    CU_ASSERT_EQUAL_FATAL(mutgen.map.size, 6);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.position[0], 0);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.position[1], 0.1);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.position[2], 0.2);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.position[3], 0.3);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.position[4], 0.4);
+    CU_ASSERT_EQUAL_FATAL(mutgen.map.position[5], 1.0);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.rate[0], 0);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.rate[1], 0.01);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.rate[2], 0.02);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.rate[3], 0.03);
     CU_ASSERT_EQUAL_FATAL(mutgen.map.rate[4], 0.04);
+    CU_ASSERT_EQUAL_FATAL(mutgen.map.rate[5], 0);
 
     ret = mutgen_generate(&mutgen, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.map.position[5], 1.0);
 
     tables.sequence_length = 2.0;
     ret = mutgen_generate(&mutgen, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.map.position[5], 2.0);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_MUTATION_MAP);
 
     mutgen_free(&mutgen);
     tsk_table_collection_free(&tables);
@@ -4204,7 +4205,7 @@ test_mutgen_errors(void)
 
     ret = mutgen_alloc(&mutgen, rng, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, -1);
+    ret = mutgen_set_rate(&mutgen, -1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_MUTATION_MAP_RATE);
     ret = mutgen_set_map(&mutgen, 0, pos, rate);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_MUTATION_MAP_SIZE);
@@ -4264,7 +4265,10 @@ test_single_tree_mutgen(void)
 
     ret = mutgen_alloc(&mutgen, rng, 0, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables1, 0);
+
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables1.mutations.num_rows == 0);
     mutgen_print_state(&mutgen, _devnull);
@@ -4274,7 +4278,7 @@ test_single_tree_mutgen(void)
     gsl_rng_set(rng, 1);
     ret = mutgen_alloc(&mutgen, rng, 0, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 10);
+    ret = mutgen_set_rate(&mutgen, 10, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4297,7 +4301,7 @@ test_single_tree_mutgen(void)
     gsl_rng_set(rng, 1);
     ret = mutgen_alloc(&mutgen, rng, 0, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 10);
+    ret = mutgen_set_rate(&mutgen, 10, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables2, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4331,6 +4335,8 @@ test_single_tree_mutgen_keep_sites(void)
      * of mutations */
     ret = mutgen_alloc(&mutgen, rng, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 0, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
@@ -4339,7 +4345,7 @@ test_single_tree_mutgen_keep_sites(void)
     gsl_rng_set(rng, 2);
     ret = mutgen_alloc(&mutgen, rng, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 10);
+    ret = mutgen_set_rate(&mutgen, 10, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4352,7 +4358,7 @@ test_single_tree_mutgen_keep_sites(void)
     gsl_rng_set(rng, 2);
     ret = mutgen_alloc(&mutgen, rng, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 10);
+    ret = mutgen_set_rate(&mutgen, 10, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4392,7 +4398,7 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
     gsl_rng_set(rng, 2);
     ret = mutgen_alloc(&mutgen, rng, 0, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 10);
+    ret = mutgen_set_rate(&mutgen, 10, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < 10; j++) {
@@ -4425,7 +4431,7 @@ test_single_tree_mutgen_interval(void)
 
     ret = mutgen_alloc(&mutgen, rng, 0, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 10);
+    ret = mutgen_set_rate(&mutgen, 10, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, &tables1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

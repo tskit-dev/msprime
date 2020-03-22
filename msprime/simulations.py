@@ -549,7 +549,11 @@ def simulate(
                 "Cannot specify mutation rate combined with a non-zero "
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
-        mutation_generator = MutationGenerator(rng, position=[0], rate=[mutation_rate])
+        mutation_generator = MutationGenerator(
+            rng,
+            position=[0, sim.sequence_length],
+            rate=[mutation_rate, 0]
+        )
 
     if replicate_index is not None and random_seed is None:
         raise ValueError("Cannot specify replicate_index without random_seed as this "
@@ -806,7 +810,8 @@ class Simulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        self.ll_tables = _msprime.LightweightTableCollection()
+        self.ll_tables = _msprime.LightweightTableCollection(
+            self.recombination_map.get_sequence_length())
         if self.from_ts is not None:
             from_ts_tables = self.from_ts.tables.asdict()
             # Clear the provenance as it's included in the new ts's provenance

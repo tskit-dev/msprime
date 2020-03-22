@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -484,7 +484,7 @@ double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
 int mutgen_alloc(mutgen_t *self, gsl_rng *rng, int alphabet, size_t mutation_block_size);
-int mutgen_set_rate(mutgen_t *self, double rate);
+int mutgen_set_rate(mutgen_t *self, double rate, double sequence_length);
 int mutgen_set_map(mutgen_t *self, size_t size, double *position, double *rate);
 int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
 int mutgen_free(mutgen_t *self);

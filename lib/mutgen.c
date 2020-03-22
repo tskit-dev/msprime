@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -115,19 +115,21 @@ mutgen_alloc(mutgen_t *self, gsl_rng *rng, int alphabet, size_t block_size)
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-    /* Set a default mutation rate of 0 */
-    ret = mutgen_set_rate(self, 0);
 out:
     return ret;
 }
 
+/* FIXME remove these two methods and change to use an interval_map
+ * as an argument to mutgen_alloc. */
+
 /* Sets a single rate over the whole region. */
 int MSP_WARN_UNUSED
-mutgen_set_rate(mutgen_t *self, double rate)
+mutgen_set_rate(mutgen_t *self, double rate, double sequence_length)
 {
-    double position = 0;
+    double positions[] = {0, sequence_length};
+    double rates[] = {rate, 0};
 
-    return mutgen_set_map(self, 1, &position, &rate);
+    return mutgen_set_map(self, 2, positions, rates);
 }
 
 int MSP_WARN_UNUSED
@@ -442,9 +444,7 @@ mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-    /* Insert the sentinel at the end of the position map. */
-    self->map.position[self->map.size] = tables->sequence_length;
-    if (self->map.position[self->map.size - 1] >= tables->sequence_length) {
+    if (self->map.position[self->map.size - 1] != tables->sequence_length) {
         ret = MSP_ERR_INCOMPATIBLE_MUTATION_MAP;
         goto out;
     }

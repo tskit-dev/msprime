@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2018-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -169,8 +169,8 @@ def mutate(
     encoded_provenance = provenance.json_encode_provenance(
         provenance.get_provenance_dict(parameters))
 
-    position = [0]
-    rate = [rate]
+    position = [0, tree_sequence.sequence_length]
+    rate = [rate, 0]
     mutation_generator = _msprime.MutationGenerator(
         rng, position, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
     lwt = _msprime.LightweightTableCollection()
