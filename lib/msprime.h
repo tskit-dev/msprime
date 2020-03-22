@@ -215,6 +215,12 @@ typedef struct {
     bool discrete;
 } recomb_map_t;
 
+typedef struct {
+    double *position;
+    double *value;
+    size_t size;
+} interval_map_t;
+
 typedef struct _msp_t {
     gsl_rng *rng;
     /* input parameters */
@@ -451,6 +457,14 @@ size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
 
+int interval_map_alloc(interval_map_t *self, size_t size,
+        double *position, double *value);
+int interval_map_free(interval_map_t *self);
+void interval_map_print_state(interval_map_t *self, FILE *out);
+double interval_map_get_sequence_length(interval_map_t *self);
+size_t interval_map_get_size(interval_map_t *self);
+size_t interval_map_get_num_intervals(interval_map_t *self);
+
 typedef double (*msp_convert_func) (void *obj, double rate);
 
 int recomb_map_alloc_uniform(recomb_map_t *self,
@@ -460,15 +474,9 @@ int recomb_map_alloc(recomb_map_t *self,
         size_t size, bool discrete);
 int recomb_map_copy(recomb_map_t *to, recomb_map_t *from);
 int recomb_map_free(recomb_map_t *self);
-uint32_t recomb_map_get_num_loci(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);
 bool recomb_map_get_discrete(recomb_map_t *self);
-double recomb_map_get_per_locus_recombination_rate(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
-double recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x);
-double recomb_map_phys_to_genetic(recomb_map_t *self, double phys_x);
-int recomb_map_phys_to_discrete_genetic(recomb_map_t *self, double phys_x,
-        uint32_t *locus);
 void recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj);
 size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);

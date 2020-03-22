@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -123,21 +123,12 @@ recomb_map_copy(recomb_map_t *to, recomb_map_t *from)
 int
 recomb_map_free(recomb_map_t *self)
 {
-    if (self->positions != NULL) {
-        free(self->positions);
-    }
-    if (self->rates != NULL) {
-        free(self->rates);
-    }
-    if (self->cumulative != NULL) {
-        free(self->cumulative);
-    }
+    msp_safe_free(self->positions);
+    msp_safe_free(self->rates);
+    msp_safe_free(self->cumulative);
     return 0;
 }
 
-/* Returns the equivalent recombination rate between pairs of
- * adjacent loci.
- */
 double
 recomb_map_get_total_recombination_rate(recomb_map_t *self)
 {
@@ -268,5 +259,4 @@ int recomb_map_get_rates(recomb_map_t *self, double *rates)
 {
     memcpy(rates, self->rates, sizeof(double) * self->size);
     return 0;
-
 }

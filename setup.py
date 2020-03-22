@@ -87,7 +87,7 @@ configurator = PathConfigurator()
 msp_source_files = [
     "msprime.c", "fenwick.c", "avl.c", "util.c",
     "object_heap.c", "recomb_map.c", "mutgen.c",
-    "likelihood.c"
+    "likelihood.c", "interval_map.c"
 ]
 tsk_source_files = ["core.c", "tables.c", "trees.c"]
 kas_source_files = ["kastore.c"]

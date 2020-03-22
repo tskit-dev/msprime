@@ -4795,6 +4795,32 @@ test_sweep_genic_selection_time_change(void)
 }
 
 static void
+test_interval_map(void)
+{
+    int ret;
+    size_t j;
+    interval_map_t imap;
+    double position[] = {0, 1, 2, 3, 4, 5};
+    double value[] = {0.1, 1.1, 2.1, 3.1, 4.1, 5.1};
+
+    ret = interval_map_alloc(&imap, 0, NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
+    interval_map_free(&imap);
+
+    ret = interval_map_alloc(&imap, 1, NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
+    interval_map_free(&imap);
+
+    for (j = 2; j < 6; j++) {
+        ret = interval_map_alloc(&imap, j, position, value);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        CU_ASSERT_EQUAL(interval_map_get_size(&imap), j);
+        CU_ASSERT_EQUAL(interval_map_get_sequence_length(&imap), j - 1);
+        interval_map_free(&imap);
+    }
+}
+
+static void
 test_strerror(void)
 {
     int j;
@@ -4964,6 +4990,8 @@ main(int argc, char **argv)
         {"test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb},
         {"test_sweep_genic_selection_time_change",
             test_sweep_genic_selection_time_change},
+
+        {"test_interval_map", test_interval_map},
 
         {"test_strerror", test_strerror},
         {"test_strerror_tskit", test_strerror_tskit},

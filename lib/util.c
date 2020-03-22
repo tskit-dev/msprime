@@ -181,6 +181,15 @@ msp_strerror_internal(int err)
         case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
             ret = "Mutation map is not compatible with specified tables.";
             break;
+        case MSP_ERR_INSUFFICIENT_INTERVALS:
+            ret = "At least one interval must be specified.";
+            break;
+        case MSP_ERR_INTERVAL_MAP_START_NON_ZERO:
+            ret = "The first interval must start with zero";
+            break;
+        case MSP_ERR_INTERVAL_POSITIONS_UNSORTED:
+            ret = "Interval positions must be listed in increasing order";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                 "report!";
