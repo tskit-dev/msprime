@@ -83,3 +83,4 @@ from msprime.pedigrees import *
 from msprime.mutations import *
 from msprime.likelihood import *
 from msprime.species_trees import parse_species_tree, parse_starbeast
+from msprime.intervals import *
