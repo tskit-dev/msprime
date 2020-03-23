@@ -9,9 +9,9 @@ import msprime
 # sequence based on this species tree, and inspect the demography.
 print("Simple newick tree with branch lengths in units of millions of years:")
 parsed_tuple = msprime.parse_species_tree(
-        species_tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
-        branch_length_units="myr",
+        tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
         Ne=10000,
+        branch_length_units="myr",
         generation_time=28)
 dd = msprime.DemographyDebugger(
         population_configurations=parsed_tuple[0],
@@ -24,9 +24,9 @@ print("\n\nSimple newick tree with branch lengths in units of years:")
 species_tree = "(((human:5600000,chimpanzee:5600000):3000000,\
         gorilla:8600000):9400000,orangutan:18000000)"
 parsed_tuple = msprime.parse_species_tree(
-        species_tree=species_tree,
-        branch_length_units="yr",
+        tree=species_tree,
         Ne=10000,
+        branch_length_units="yr",
         generation_time=28)
 dd = msprime.DemographyDebugger(
         population_configurations=parsed_tuple[0],
@@ -37,9 +37,9 @@ dd.print_history()
 # divergence events are simultaneous.
 print("\n\nSimple newick tree with two simultaneous divergence events:")
 parsed_tuple = msprime.parse_species_tree(
-        species_tree="((human:5,chimpanzee:5):3,(gorilla:5,orangutan:5):3)",
-        branch_length_units="myr",
+        tree="((human:5,chimpanzee:5):3,(gorilla:5,orangutan:5):3)",
         Ne=10000,
+        branch_length_units="myr",
         generation_time=28)
 dd = msprime.DemographyDebugger(
         population_configurations=parsed_tuple[0],
@@ -50,9 +50,9 @@ dd.print_history()
 # Parse a species tree with a polytomy.
 print("\n\nSimple newick tree with polytomy:")
 parsed_tuple = msprime.parse_species_tree(
-        species_tree="((human:8.6,chimpanzee:8.6,gorilla:8.6):9.4,orangutan:18.0)",
-        branch_length_units="myr",
+        tree="((human:8.6,chimpanzee:8.6,gorilla:8.6):9.4,orangutan:18.0)",
         Ne=10000,
+        branch_length_units="myr",
         generation_time=28)
 dd = msprime.DemographyDebugger(
         population_configurations=parsed_tuple[0],
@@ -62,9 +62,9 @@ dd.print_history()
 # Parse a non-ultrametric species tree.
 print("\n\nNon-ultrametric newick tree:")
 parsed_tuple = msprime.parse_species_tree(
-        species_tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:7.6):9.4,orangutan:18.0)",
-        branch_length_units="myr",
+        tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:7.6):9.4,orangutan:18.0)",
         Ne=10000,
+        branch_length_units="myr",
         generation_time=28)
 dd = msprime.DemographyDebugger(
         population_configurations=parsed_tuple[0],
@@ -80,7 +80,7 @@ dd.print_history()
 print("\n\nStarBEAST species tree with annotation for population sizes:")
 with open("tests/data/species_trees/91genes_species_rev.tre", "r") as f:
     parsed_tuple = msprime.parse_starbeast(
-            species_tree=f.read(),
+            tree=f.read(),
             branch_length_units="myr",
             generation_time=5)
 population_configurations = parsed_tuple[0]
@@ -105,9 +105,9 @@ print("number of trees: ", tree_sequence.num_trees)
 print("\n\nLarge newick tree with over 100 species:")
 with open("tests/data/species_trees/101g_nucl_conc_unconst.combined.nwk.tre", "r") as f:
     parsed_tuple = msprime.parse_species_tree(
-            species_tree=f.read(),
-            branch_length_units="myr",
+            tree=f.read(),
             Ne=1000,
+            branch_length_units="myr",
             generation_time=5)
 population_configurations = parsed_tuple[0]
 demographic_events = parsed_tuple[1]

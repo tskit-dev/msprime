@@ -108,6 +108,7 @@ def parse_species_tree(
         err += 'and "gen" (generations).'
         raise ValueError(err)
 
+    # Make sure that Ne is specified and positive.
     if Ne is None:
         raise ValueError("Ne should be specified.")
     else:
@@ -156,7 +157,7 @@ def parse_species_tree(
     for node in root.walk("postorder"):
         if len(node.descendants) == 0:
             population_configurations.append(
-                msprime.PopulationConfiguration(initial_size=Ne))
+                msprime.PopulationConfiguration(initial_size=Ne, metadata={"species_name": node.name.strip()}))
             leaf_map[node] = len(population_configurations) - 1
         else:
             # The parent species maps implicitly to the left-most child
@@ -175,7 +176,7 @@ def parse_species_tree(
 
 
 def parse_starbeast(
-        species_tree=None,
+        tree=None,
         branch_length_units="myr",
         generation_time=None):
     """
@@ -191,7 +192,7 @@ def parse_starbeast(
     """
 
     # Make sure a species tree is specified.
-    if type(species_tree) is not str:
+    if type(tree) is not str:
         raise ValueError("A species tree must be specified.")
 
     # Make sure that branch length units are either "myr" or "yr".
@@ -217,13 +218,13 @@ def parse_starbeast(
         branch_length_units, generation_time)
 
     # Read the input file.
-    species_tree_lines = species_tree.splitlines(False)
-    if species_tree_lines[0][0:6].lower() != '#nexus':
+    tree_lines = tree.splitlines(False)
+    if tree_lines[0][0:6].lower() != '#nexus':
         raise ValueError("The species tree does not appear to be in Nexus format")
     in_translation = False
     in_tree = False
     translate_string = ""
-    for line in species_tree_lines:
+    for line in tree_lines:
         if line.strip().lower() == 'begin trees;':
             in_tree = True
         elif line.strip().lower() == 'end;':
@@ -243,40 +244,40 @@ def parse_starbeast(
                 break
 
     # Skip forward until the newick string starts
-    species_tree_string = clean_line[clean_line.find("("):]
+    tree_string = clean_line[clean_line.find("("):]
 
     # TODO these need to be made into ValueErrors and tested.
 
     # Make sure the annotation can be read.
-    assert '[' in species_tree_string, "Could not read annotation."
-    assert ']' in species_tree_string, "Could not read annotation."
-    assert "dmv=" in species_tree_string, "Could not find dmv tag in annotation."
+    assert '[' in tree_string, "Could not read annotation."
+    assert ']' in tree_string, "Could not read annotation."
+    assert "dmv=" in tree_string, "Could not find dmv tag in annotation."
 
     # Because the newick module doesn't support parsing extended newick attributes
     # in general, we have to clean thing up manually before parsing the tree. Here,
     # we get rid of all annotations except for dmv.
-    clean_species_tree_string = ''
+    clean_tree_string = ''
     in_comment = False
     in_dmv = False
-    for x in range(len(species_tree_string)):
-        if species_tree_string[x] == '[':
+    for x in range(len(tree_string)):
+        if tree_string[x] == '[':
             in_comment = True
-            clean_species_tree_string += species_tree_string[x]
-        elif species_tree_string[x] == ']':
+            clean_tree_string += tree_string[x]
+        elif tree_string[x] == ']':
             in_comment = False
-            clean_species_tree_string += species_tree_string[x]
+            clean_tree_string += tree_string[x]
         elif in_comment:
-            if species_tree_string[x-1] == "[" and species_tree_string[x] == "&":
-                clean_species_tree_string += "&"
-            if species_tree_string[x-5:x] == "dmv={":
+            if tree_string[x-1] == "[" and tree_string[x] == "&":
+                clean_tree_string += "&"
+            if tree_string[x-5:x] == "dmv={":
                 in_dmv = True
-                clean_species_tree_string += "dmv={"
+                clean_tree_string += "dmv={"
             if in_dmv:
-                clean_species_tree_string += species_tree_string[x]
-            if species_tree_string[x] == "}":
+                clean_tree_string += tree_string[x]
+            if tree_string[x] == "}":
                 in_dmv = False
         else:
-            clean_species_tree_string += species_tree_string[x]
+            clean_tree_string += tree_string[x]
 
     # Use the translation block (if present) to
     # back-translate species IDs in the tree string.
@@ -315,7 +316,7 @@ def parse_starbeast(
             raise ValueError(err)
 
         # Backtranslate to species names.
-        work_string = clean_species_tree_string
+        work_string = clean_tree_string
         for x in range(len(transl_originals)):
             find_str = ',{}['.format(transl_replaceds[x])
             replace_str = ',{}['.format(transl_originals[x])
@@ -323,9 +324,9 @@ def parse_starbeast(
             find_str = '({}['.format(transl_replaceds[x])
             replace_str = '({}['.format(transl_originals[x])
             work_string = work_string.replace(find_str, replace_str)
-        species_tree_string = work_string
+        tree_string = work_string
 
-    root = parse_newick(species_tree_string, generations_per_branch_length_unit)
+    root = parse_newick(tree_string, generations_per_branch_length_unit)
 
     population_configurations = []
     demographic_events = []

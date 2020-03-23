@@ -43,16 +43,19 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
     Tests that we get what we expect when we parse trees produced from
     msprime/tskit.
     """
-    def verify(self, tree, newick=None, Ne=1):
+    def verify(self, tree, newick=None, Ne=1, branch_length_units="gen",
+               generation_time=None):
         if newick is None:
             newick = tree.newick()
         population_configurations, demographic_events = msprime.parse_species_tree(
-            newick, Ne=Ne)
+            newick, Ne=Ne, branch_length_units=branch_length_units,
+            generation_time=generation_time)
         self.assertEqual(len(population_configurations), tree.num_samples())
         for pop_config in population_configurations:
             self.assertEqual(pop_config.initial_size, Ne)
             self.assertEqual(pop_config.growth_rate, 0)
-            # TODO check the metadata: we should be encoding the species name
+            self.assertIn("species_name", pop_config.metadata)
+            self.assertTrue(pop_config.metadata["species_name"].isdigit())
 
         # Population IDs are mapped to leaves as they are encountered in a postorder
         # traversal.
@@ -71,6 +74,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
         for node in [u for u in tree.nodes(order="timeasc")]:
             children = tree.children(node)
             if len(children) > 1:
+                self.assertEqual(node, tree.mrca(children[0], children[1]))
                 dest = pop_id_map[node]
                 for child in children[1:]:
                     event = demographic_events[j]
@@ -80,6 +84,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
                     source = pop_id_map[child]
                     self.assertEqual(event.source, source)
                     self.assertEqual(event.dest, dest)
+
         self.assertEqual(j, len(demographic_events))
 
     def test_n2_binary(self):
@@ -130,6 +135,35 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
     def test_n10_non_binary(self):
         tree = get_non_binary_tree(10)
         self.verify(tree, Ne=3.1234)
+
+    def test_n10_binary_years(self):
+        ts = msprime.simulate(10, random_seed=2)
+        generation_time = 5
+        tree = ts.first()
+        self.verify(tree, Ne=1, branch_length_units="yr", generation_time=1)
+        tables = ts.dump_tables()
+        times = tables.nodes.time
+        flags = tables.nodes.flags
+        scaled_times = [generation_time * time for time in times]
+        tables.nodes.set_columns(flags=flags, time=scaled_times)
+        ts = tables.tree_sequence()
+        scaled_tree = ts.first()
+        self.verify(tree, newick=scaled_tree.newick(), Ne=1,
+                    branch_length_units="yr", generation_time=generation_time)
+
+    def test_n10_binary_million_years(self):
+        ts = msprime.simulate(10, random_seed=2)
+        generation_time = 5
+        tree = ts.first()
+        tables = ts.dump_tables()
+        times = tables.nodes.time
+        flags = tables.nodes.flags
+        scaled_times = [generation_time * time for time in times]
+        tables.nodes.set_columns(flags=flags, time=scaled_times)
+        ts = tables.tree_sequence()
+        scaled_tree = ts.first()
+        self.verify(tree, newick=scaled_tree.newick(), Ne=1,
+                    branch_length_units="myr", generation_time=generation_time)
 
 
 def make_nexus(tree, pop_size_map):
@@ -332,7 +366,7 @@ class TestStarBeastParsingErrors(unittest.TestCase):
         for bad_tree in [None, {}, 123, nwk]:
             with self.assertRaises(ValueError):
                 msprime.parse_starbeast(
-                        species_tree=bad_tree,
+                        tree=bad_tree,
                         generation_time=good_generation_time
                         )
 
@@ -343,20 +377,20 @@ class TestStarBeastParsingErrors(unittest.TestCase):
             for bad_branch_length_units in [-3, "asdf", ["myr"], "gen"]:
                 with self.assertRaises(ValueError):
                     msprime.parse_starbeast(
-                            species_tree=f.read(),
+                            tree=f.read(),
                             branch_length_units=bad_branch_length_units,
                             generation_time=5)
             for bad_generation_time in [-3]:
                 with self.assertRaises(ValueError):
                     msprime.parse_starbeast(
-                        species_tree=good_tree,
+                        tree=good_tree,
                         branch_length_units=good_branch_length_units,
                         generation_time=bad_generation_time
                         )
             for bad_generation_time in [None, {}]:
                 with self.assertRaises(TypeError):
                     msprime.parse_starbeast(
-                        species_tree=good_tree,
+                        tree=good_tree,
                         branch_length_units=good_branch_length_units,
                         generation_time=bad_generation_time
                         )
@@ -367,7 +401,7 @@ class TestStarBeastParsingErrors(unittest.TestCase):
             good_branch_length_units = "myr"
             good_generation_time = 5
             parsed_tuple = msprime.parse_starbeast(
-                    species_tree=good_tree,
+                    tree=good_tree,
                     branch_length_units=good_branch_length_units,
                     generation_time=good_generation_time
                     )
