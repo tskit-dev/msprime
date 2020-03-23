@@ -2085,6 +2085,122 @@ test_gene_conversion_simulation(void)
 }
 
 static void
+test_likelihood_errors(void)
+{
+    int ret;
+    double lik = 0;
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
+
+    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
+            TSK_NULL, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
+            TSK_NULL, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_node_table_add_row(&tables.nodes, 0, 1.0, TSK_NULL, TSK_NULL, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1.0, 2, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1.0, 2, 1);
+    CU_ASSERT_FATAL(ret >= 0);
+
+    ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    /* Site has two mutations */
+    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 1, -1, "C", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+
+    /* Ne <= 0 is an error */
+    ret = msp_log_likelihood_arg(&ts, 1, 0, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_POPULATION_SIZE);
+    ret = msp_log_likelihood_arg(&ts, -1, 0, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_POPULATION_SIZE);
+
+    ret = msp_unnormalised_log_likelihood_mut(&ts, 0, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(lik, -DBL_MAX);
+
+    ret = msp_unnormalised_log_likelihood_mut(&ts, 1, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    tsk_treeseq_free(&ts);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_likelihood_zero_edges(void)
+{
+    int ret;
+    double lik = 0;
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
+
+    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
+            TSK_NULL, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
+            TSK_NULL, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+
+    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Zero edges should give a likelihood of zero */
+    ret = msp_log_likelihood_arg(&ts, 1, 1, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(lik, 0);
+
+    /* Zero mutations, so we get zero. */
+    ret = msp_unnormalised_log_likelihood_mut(&ts, 0, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(lik, 0);
+    ret = msp_unnormalised_log_likelihood_mut(&ts, 1, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(lik, 0);
+
+    tsk_treeseq_free(&ts);
+
+    /* Add in a site and a mutation */
+    ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+    CU_ASSERT_FATAL(ret >= 0);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Zero edges should give a likelihood of zero */
+    ret = msp_log_likelihood_arg(&ts, 1, 1, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(lik, 0);
+    ret = msp_log_likelihood_arg(&ts, 0, 1, &lik);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(lik, 0);
+
+    /* TODO why do we need this special case? Is it an error or does this
+     * return value have some significance? */
+    ret = msp_unnormalised_log_likelihood_mut(&ts, 0, &lik);
+    CU_ASSERT_EQUAL_FATAL(lik, -DBL_MAX);
+    ret = msp_unnormalised_log_likelihood_mut(&ts, 1, &lik);
+    CU_ASSERT_EQUAL_FATAL(lik, -DBL_MAX);
+
+    tsk_treeseq_free(&ts);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_likelihood_three_leaves(void)
 {
     int i;
@@ -4929,12 +5045,17 @@ main(int argc, char **argv)
         {"test_pedigree_single_locus_simulation", test_pedigree_single_locus_simulation},
         {"test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation},
         {"test_pedigree_specification", test_pedigree_specification},
+
+        /* TODO we should move the likelihood tests to their own file */
+        {"test_likelihood_errors", test_likelihood_errors},
+        {"test_likelihood_zero_edges", test_likelihood_zero_edges},
         {"test_likelihood_three_leaves", test_likelihood_three_leaves},
         {"test_likelihood_two_mrcas", test_likelihood_two_mrcas},
         {"test_likelihood_material_overhang", test_likelihood_material_overhang},
         {"test_likelihood_material_gap", test_likelihood_material_gap},
         {"test_likelihood_recombination_in_material_gap",
             test_likelihood_recombination_in_material_gap},
+
         {"test_multi_locus_simulation", test_multi_locus_simulation},
         {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
         {"test_gene_conversion_simulation", test_gene_conversion_simulation},

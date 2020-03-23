@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2019 University of Oxford
+** Copyright (C) 2019-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -31,8 +31,8 @@ static double
 get_total_material(tsk_treeseq_t *ts) {
     double ret = 0;
     tsk_size_t j;
-    tsk_edge_table_t *edges = &ts->tables->edges;
-    tsk_node_table_t *nodes = &ts->tables->nodes;
+    const tsk_edge_table_t *edges = &ts->tables->edges;
+    const tsk_node_table_t *nodes = &ts->tables->nodes;
     tsk_id_t parent;
     tsk_id_t child;
 
@@ -48,7 +48,7 @@ get_total_material(tsk_treeseq_t *ts) {
 int
 msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu,
                                     double *r_lik) {
-    int ret = 1;
+    int ret = 0;
     tsk_size_t j;
     tsk_mutation_t mut;
     tsk_size_t num_mutations = tsk_treeseq_get_num_mutations(ts);
@@ -62,9 +62,8 @@ msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu,
     if (ret != 0) {
         goto out;
     }
-    if (mu > 0) {
-        lik = num_mutations * log(total_material * mu) -
-            total_material * mu;
+    if (total_material > 0 && mu > 0) {
+        lik = num_mutations * log(total_material * mu) - total_material * mu;
         for (it = tsk_tree_first(&tree); it == 1; it = tsk_tree_next(&tree)) {
             for (j = 0; j < tree.sites_length; j++) {
                 if (tree.sites[j].mutations_length != 1) {
@@ -121,12 +120,17 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
     double material = lineages * tsk_treeseq_get_sequence_length(ts);
     double material_in_children, material_in_parent, rate, gap;
     double lik = 0;
-    tsk_edge_table_t *edges = &ts->tables->edges;
-    tsk_node_table_t *nodes = &ts->tables->nodes;
+    const tsk_edge_table_t *edges = &ts->tables->edges;
+    const tsk_node_table_t *nodes = &ts->tables->nodes;
     tsk_id_t *first_parent_edge = NULL;
     tsk_id_t *last_parent_edge = NULL;
     tsk_id_t edge = 0;
     tsk_id_t parent;
+
+    if (Ne <= 0) {
+        ret = MSP_ERR_BAD_POPULATION_SIZE;
+        goto out;
+    }
 
     first_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
     last_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
@@ -142,7 +146,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
         }
         last_parent_edge[edges->child[i]] = i;
     }
-    while (lineages > 0) {
+    while (edge < (tsk_id_t) edges->num_rows && lineages > 0) {
         rate = lineages * (lineages - 1) / (4 * Ne) + material * r;
         parent = edges->parent[edge];
         lik -= rate * (nodes->time[parent] - sim_time);
