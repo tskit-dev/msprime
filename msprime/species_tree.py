@@ -89,7 +89,9 @@ def parse_species_tree(
     Leafs must be named. An example for an accepted tree string in
     Newick format is:
     (((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)
-    The tree string can end with a semi-colon, but this is not required.
+    The newick library (https://pypi.org/project/newick/) is used for
+    tree parsing. The tree string can end with a semi-colon, but this is
+    not required.
 
     - An estimate of the effective population size Ne should be
         specified.
@@ -146,22 +148,31 @@ def parse_species_tree(
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
         branch_length_units, generation_time)
 
+    # Parse the tree with the newick library.
     root = parse_newick(tree, generations_per_branch_length_unit)
 
+    # Define population configuratons and demographic events according to the
+    # specified population size and the divergence times in the species tree.
+    # Per divergence event (node in the tree), a mass migration with a proportion
+    # of 1 of the population is used. The destination is the left-most leaf for
+    # each node. Because we are using the n leaf populations, we map each node back
+    # to the leaf population that it corresponds to.
     population_configurations = []
     demographic_events = []
-    # The destination is the left-most leaf for each node. Because we are
-    # using the n leaf populations, we map each node back to the leaf
-    # population that it corresponds to.
     leaf_map = {}
     for node in root.walk("postorder"):
         if len(node.descendants) == 0:
+            # Per extant species (= leaf node) in the tree, add a population with
+            # size Ne. Species names are stored as metadata with the "species_name"
+            # tag.
             population_configurations.append(msprime.PopulationConfiguration(
                     initial_size=Ne, metadata={"species_name": node.name.strip()}))
             leaf_map[node] = len(population_configurations) - 1
         else:
-            # The parent species maps implicitly to the left-most child
-            # species, so we don't generate any MassMigrations for that.
+            # Per internal node, add one (if the node is bifurcating) or multiple
+            # (if the node is multi-furcating) MassMigrations. The parent species
+            # maps implicitly to the left-most child species, so we don't generate
+            # any MassMigrations for that.
             leaf_map[node] = leaf_map[node.descendants[0]]
             # For each child species after the left-most one, we create
             # a MassMigration into the left-most species.
@@ -170,6 +181,7 @@ def parse_species_tree(
                     msprime.MassMigration(
                         source=leaf_map[child], dest=leaf_map[node], time=node.time))
 
+    # Sort demographic events by time.
     demographic_events.sort(key=lambda de: de.time)
 
     return population_configurations, demographic_events
@@ -186,8 +198,9 @@ def parse_starbeast(
 
     Species trees written by StarBEAST are rooted, bi-furcating, and
     ultrametric. Branch lengths usually are in units of millions
-    of years ("myr"), but the use of years ("yr") as units is also
-    possible. Leafs must be named. However, to convert these estimates to
+    of years ("myr"), but the use of other units is permitted by
+    StarBEAST. Here, we allow only units of millions of years ("myr") or
+    years ("yr"). Leafs must be named. However, to convert these estimates to
     absolute population sizes, a generation time is required.
     """
 
