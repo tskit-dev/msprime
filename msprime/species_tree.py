@@ -156,8 +156,8 @@ def parse_species_tree(
     leaf_map = {}
     for node in root.walk("postorder"):
         if len(node.descendants) == 0:
-            population_configurations.append(
-                msprime.PopulationConfiguration(initial_size=Ne, metadata={"species_name": node.name.strip()}))
+            population_configurations.append(msprime.PopulationConfiguration(
+                    initial_size=Ne, metadata={"species_name": node.name.strip()}))
             leaf_map[node] = len(population_configurations) - 1
         else:
             # The parent species maps implicitly to the left-most child
