@@ -158,7 +158,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
         tables = ts.dump_tables()
         times = tables.nodes.time
         flags = tables.nodes.flags
-        scaled_times = [generation_time * time for time in times]
+        scaled_times = [generation_time * time * 1E-6 for time in times]
         tables.nodes.set_columns(flags=flags, time=scaled_times)
         ts = tables.tree_sequence()
         scaled_tree = ts.first()
