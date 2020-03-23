@@ -25,6 +25,14 @@ import newick
 import msprime
 
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
 def get_generations_per_branch_length_unit(
         branch_length_units=None,
         generation_time=None):
@@ -200,8 +208,12 @@ def parse_starbeast(
     ultrametric. Branch lengths usually are in units of millions
     of years ("myr"), but the use of other units is permitted by
     StarBEAST. Here, we allow only units of millions of years ("myr") or
-    years ("yr"). Leafs must be named. However, to convert these estimates to
-    absolute population sizes, a generation time is required.
+    years ("yr"). Leafs must be named and the tree must include
+    information on population sizes of leaf and ancestral species
+    in the form of annotation with the "dmv" tag, which is the case for
+    trees written by StarBEAST. However, to convert these "dmv" values
+    into absolute population sizes, a generation time is required and
+    must be provided separately to the tree.
     """
 
     # Make sure a species tree is specified.
@@ -216,7 +228,7 @@ def parse_starbeast(
         err += 'Accepted units are "myr" (millions of years) or "yr" (years).'
         raise ValueError(err)
 
-    # Make sure that the generation time is positive.
+    # Make sure that the generation time is specified and positive.
     if generation_time is None:
         raise TypeError("Generation time must not be None.")
     try:
@@ -230,7 +242,8 @@ def parse_starbeast(
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
         branch_length_units, generation_time)
 
-    # Read the input file.
+    # Read the input file and identify the translation block as well as the tree
+    # string.
     tree_lines = tree.splitlines(False)
     if tree_lines[0][0:6].lower() != '#nexus':
         raise ValueError("The species tree does not appear to be in Nexus format")
@@ -253,33 +266,77 @@ def parse_starbeast(
                     in_translation = False
                 else:
                     translate_string += clean_line
-            if clean_line[0:4].lower() == "tree":
+            if clean_line[0:5].lower() == "tree ":
                 break
 
-    # Skip forward until the newick string starts
+    # As the input is machine-generated, we verify correct parsing
+    # with assert statements rather than ValueErrors.
+    assert clean_line is not None, "No tree string found"
+    assert in_translation is False, "Translation part is not closed"
+    assert "(" in clean_line, "No parentheses in tree string"
+    assert clean_line[-1] == ";" in clean_line, "No semicolon at end of tree string"
+
+    # Skip forward until the newick string starts.
     tree_string = clean_line[clean_line.find("("):]
 
-    # TODO these need to be made into ValueErrors and tested.
+    # Make sure that annotation in included and has the dmv tag, which specifies
+    # StarBEAST's mean estimate of the population size scaled by the number of
+    # generation per time unit.
+    assert "[" in tree_string, "Could not read annotation"
+    assert "]" in tree_string, "Could not read annotation"
+    assert tree_string.count("[") == tree_string.count("]"), "Could not read annotation"
+    assert "&dmv={" in tree_string, "Could not find dmv tag in annotation"
+    assert "}" in tree_string, "Could not read dmv annotation"
+    assert tree_string.count("{") == tree_string.count("}"), "Could not read annotation"
 
-    # Make sure the annotation can be read.
-    assert '[' in tree_string, "Could not read annotation."
-    assert ']' in tree_string, "Could not read annotation."
-    assert "dmv=" in tree_string, "Could not find dmv tag in annotation."
+    # Make sure that each substring that begins with an opening square bracket and ends
+    # with a closing square bracket does not contain any further square or round brackets
+    # in it and that it does include the dmv tag.
+    in_annotation = False
+    annotation_string = ""
+    for x in range(len(tree_string)):
+        if tree_string[x] == "[":
+            in_annotation = True
+            annotation_string += tree_string[x]
+        elif tree_string[x] == "]":
+            in_annotation = False
+            annotation_string += tree_string[x]
+            assert "[" not in annotation_string[1:-1], "Square bracket in annotation"
+            assert "]" not in annotation_string[1:-1], "Square bracket in annotation"
+            assert annotation_string.count("&dmv=") == 1, "Multiple or no dmv tags"
+            # Make sure that the dmv tag is followed by a closing curly bracket.
+            # Also ensure that the dmv tag is the first in the annotation.
+            dmv_string = ""
+            in_dmv = False
+            for y in range(len(annotation_string)):
+                dmv_string += annotation_string[y]
+                if annotation_string[y] == "}":
+                    break
+            err = "Uneven curly parentheses in dmv annotation"
+            assert dmv_string.count("{") == dmv_string.count("}"), err
+            assert dmv_string.count("{") == 1, "Multiple or no values in dmv annotation"
+            annotation_string = ""
+            # Make sure that a positive number is found between curly brackets.
+            clean_dmv_string = dmv_string.split("{")[1][0:-1]
+            assert is_number(clean_dmv_string), "dmv annotation is not a number"
+            assert float(clean_dmv_string) >= 0, "dmv annotation is negative"
+        elif in_annotation:
+            annotation_string += tree_string[x]
 
     # Because the newick module doesn't support parsing extended newick attributes
     # in general, we have to clean thing up manually before parsing the tree. Here,
     # we get rid of all annotations except for dmv.
-    clean_tree_string = ''
-    in_comment = False
+    clean_tree_string = ""
+    in_annotation = False
     in_dmv = False
     for x in range(len(tree_string)):
-        if tree_string[x] == '[':
-            in_comment = True
+        if tree_string[x] == "[":
+            in_annotation = True
             clean_tree_string += tree_string[x]
-        elif tree_string[x] == ']':
-            in_comment = False
+        elif tree_string[x] == "]":
+            in_annotation = False
             clean_tree_string += tree_string[x]
-        elif in_comment:
+        elif in_annotation:
             if tree_string[x-1] == "[" and tree_string[x] == "&":
                 clean_tree_string += "&"
             if tree_string[x-5:x] == "dmv={":
@@ -291,6 +348,24 @@ def parse_starbeast(
                 in_dmv = False
         else:
             clean_tree_string += tree_string[x]
+
+    # Make sure that only dmv annotation remains in the tree string.
+    in_annotation = False
+    annotation_string = ""
+    for x in range(len(clean_tree_string)):
+        if clean_tree_string[x] == "[":
+            in_annotation = True
+            annotation_string += clean_tree_string[x]
+        elif clean_tree_string[x] == "]":
+            in_annotation = False
+            annotation_string += clean_tree_string[x]
+            assert annotation_string[0:7] == "[&dmv={", "Annotation could not be read"
+            assert annotation_string[-2:] == "}]", "Annotation could not be read"
+            assert is_number(annotation_string[7:-2]), "dmv annotation is not a number"
+            assert float(annotation_string[7:-2]) >= 0, "dmv annotation is negative"
+            annotation_string = ""
+        elif in_annotation:
+            annotation_string += clean_tree_string[x]
 
     # Use the translation block (if present) to
     # back-translate species IDs in the tree string.
