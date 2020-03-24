@@ -1217,6 +1217,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(err, f, [(0, 0), (0, 0, 0)])
         self.assertRaises(err, f, [(0, 0), (-1, 0)])
         self.assertRaises(err, f, [(0, 0), (0, -1)])
+        self.assertRaises(ValueError, f, [(0, 0), (2, 0)])
         # Only tuples are supported.
         self.assertRaises(err, f, [(0, 0), [0, 0]])
 

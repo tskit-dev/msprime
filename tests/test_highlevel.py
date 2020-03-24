@@ -725,6 +725,33 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertEqual(sim.model_change_events[1].model.reference_size, 1500)
         self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
+    def test_bad_sample_population_reference(self):
+        # What happens when we reference a population that doesn't exist?
+        with self.assertRaises(ValueError) as ve:
+            msprime.simulate(
+                samples=[
+                    msprime.Sample(population=0, time=0),
+                    msprime.Sample(population=1, time=0)
+                ]
+            )
+        self.assertEqual(
+            str(ve.exception),
+            "Invalid population reference '1' in sample at index 1"
+        )
+
+        with self.assertRaises(ValueError) as ve:
+            msprime.simulate(
+                samples=[
+                    msprime.Sample(population=0, time=0),
+                    msprime.Sample(population=0, time=0),
+                    msprime.Sample(population=-1, time=0),
+                ]
+            )
+        self.assertEqual(
+            str(ve.exception),
+            "Negative population ID in sample at index 2"
+        )
+
 
 class TestSimulateInterface(unittest.TestCase):
     """
