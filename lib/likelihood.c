@@ -152,6 +152,11 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
         lik -= rate * (nodes->time[parent] - sim_time);
         sim_time = nodes->time[parent];
         if (nodes->flags[parent] & MSP_NODE_IS_RE_EVENT) {
+            if (r <= 0) {
+                *r_lik = -DBL_MAX;
+                ret = 0;
+                goto out;
+            }
             while (edge < (tsk_id_t)edges->num_rows
                     && edges->parent[edge] == parent) {
                 edge++;

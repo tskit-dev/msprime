@@ -2189,8 +2189,8 @@ test_likelihood_zero_edges(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(lik, 0);
 
-    /* TODO why do we need this special case? Is it an error or does this
-     * return value have some significance? */
+    /* Zero mutation rate gives a likelihood of zero when there are mutations in
+     * the ARG */
     ret = msp_unnormalised_log_likelihood_mut(&ts, 0, &lik);
     CU_ASSERT_EQUAL_FATAL(lik, -DBL_MAX);
     ret = msp_unnormalised_log_likelihood_mut(&ts, 1, &lik);

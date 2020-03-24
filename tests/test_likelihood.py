@@ -31,8 +31,8 @@ import tskit
 
 
 def log_arg_likelihood(arg, recombination_rate, Ne=1):
-    if recombination_rate <= 0:
-        raise ValueError("Recombination rate must be > 0")
+    if recombination_rate < 0:
+        raise ValueError("Recombination rate must be >= 0")
     tables = arg.tables
     number_of_lineages = arg.num_samples
     number_of_links = number_of_lineages * arg.sequence_length
@@ -51,6 +51,9 @@ def log_arg_likelihood(arg, recombination_rate, Ne=1):
         time = tables.nodes[parent].time
         child = tables.edges[edge].child
         if tables.nodes[parent].flags == msprime.NODE_IS_RE_EVENT:
+            if recombination_rate == 0:
+                ret = -float("inf")
+                break
             while tables.edges[edge].child == child:
                 if tables.edges[edge].parent != tables.edges[edge - 1].parent:
                     gap = tables.edges[edge].left - tables.edges[edge - 1].right
@@ -464,13 +467,13 @@ class TestSimulatedExamples(unittest.TestCase):
         self.verify(ts, recombination_rate=1, Ne=1)
         self.verify(ts, recombination_rate=1, Ne=2)
 
-    def test_zero_rec_rate(self):
+    def test_negative_rec_rate(self):
         ts = msprime.simulate(
             5, recombination_rate=1, random_seed=12, record_full_arg=True)
         with self.assertRaises(ValueError):
-            msprime.log_arg_likelihood(ts, recombination_rate=0)
+            msprime.log_arg_likelihood(ts, recombination_rate=-1)
         with self.assertRaises(ValueError):
-            log_arg_likelihood(ts, recombination_rate=0)
+            log_arg_likelihood(ts, recombination_rate=-1)
 
     def test_zero_mut_rate(self):
         # No mutations

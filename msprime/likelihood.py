@@ -42,21 +42,22 @@ def unnormalised_log_mutation_likelihood(arg, mu):
     else:
         ret = (number_of_mutations * math.log(total_material * mu) -
                total_material * mu)
-    for tree in arg.trees():
-        for site in tree.sites():
-            mutation = site.mutations[0]
-            child = mutation.node
-            parent = tree.parent(child)
-            potential_branch_length = tree.branch_length(child)
-            while tree.parent(parent) is not None and len(tree.children(parent)) == 1:
-                child = parent
+        for tree in arg.trees():
+            for site in tree.sites():
+                mutation = site.mutations[0]
+                child = mutation.node
                 parent = tree.parent(child)
-                potential_branch_length += tree.branch_length(child)
-            child = mutation.node
-            while len(tree.children(child)) == 1:
-                child = tree.children(child)[0]
-                potential_branch_length += tree.branch_length(child)
-            ret += math.log(potential_branch_length / total_material)
+                potential_branch_length = tree.branch_length(child)
+                while tree.parent(parent) is not None \
+                        and len(tree.children(parent)) == 1:
+                    child = parent
+                    parent = tree.parent(child)
+                    potential_branch_length += tree.branch_length(child)
+                child = mutation.node
+                while len(tree.children(child)) == 1:
+                    child = tree.children(child)[0]
+                    potential_branch_length += tree.branch_length(child)
+                ret += math.log(potential_branch_length / total_material)
     return ret
 
 
