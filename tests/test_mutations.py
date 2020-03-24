@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2018-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -25,6 +25,7 @@ import json
 import numpy as np
 
 import msprime
+import _msprime
 from tests import tsutil
 import tests.wright_fisher as wf
 
@@ -140,8 +141,10 @@ class TestMutate(unittest.TestCase):
         ts = msprime.simulate(2, random_seed=2)
         for bad_type in [{}, [], ts]:
             self.assertRaises(TypeError, msprime.mutate, ts, rate=bad_type)
-        for bad_rate in ["abc", -1, -1e-6, -1e7]:
+        for bad_rate in ["abc", "xxx"]:
             self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
+        for bad_rate in [-1, -1e-6, -1e7]:
+            self.assertRaises(_msprime.LibraryError, msprime.mutate, ts, bad_rate)
 
     def test_bad_models(self):
         ts = msprime.simulate(2, random_seed=2)
@@ -467,3 +470,59 @@ class TestKeep(unittest.TestCase):
         t1.provenances.clear()
         t2.provenances.clear()
         self.assertEqual(t1, t2)
+
+
+def mutate_map(tables, mutation_map, seed):
+    """
+    Parallel implementation of the C code which should produce precisely the same
+    results.
+    """
+    # Insert a sentinel into the map for convenience.
+    map_position = np.hstack([mutation_map.position, [tables.sequence_length]])
+    rng = msprime.RandomGenerator(seed)
+    time = tables.nodes.time
+    for edge in tables.edges:
+        branch_length = time[edge.parent] - time[edge.child]
+        index = np.searchsorted(map_position, edge.left)
+        if map_position[index] > edge.left:
+            index -= 1
+        left = edge.left
+        right = 0
+        while right != edge.right:
+            right = min(edge.right, map_position[index + 1])
+            assert left < right
+            assert mutation_map.position[index] <= left
+            assert right <= map_position[index + 1]
+            assert right <= edge.right
+            # Generate the mutations.
+            mu = mutation_map.rate[index] * (right - left) * branch_length
+            for _ in range(rng.poisson(mu)):
+                position = rng.flat(left, right)
+                site_id = tables.sites.add_row(position, ancestral_state="0")
+                tables.mutations.add_row(site_id, node=edge.child, derived_state="1")
+                # Sample from this to duplicate the behaviour in the C implementation.
+                rng.uniform_int(1)
+            index += 1
+            left = right
+    tables.sort()
+    return tables.tree_sequence()
+
+
+class TestMap(unittest.TestCase):
+    """
+    Tests for the mutation map.
+    """
+
+    def test_single_rate(self):
+        random_seed = 2
+        rate = 0.5
+        for random_seed in range(1, 5):
+            for rate in [0, 0.1, 0.5, 1.0]:
+                ts = msprime.simulate(10, recombination_rate=2, random_seed=random_seed)
+                mutmap = msprime.MutationMap([0], [rate])
+                tables1 = ts.dump_tables()
+                mutate_map(tables1, mutmap, random_seed)
+                ts = msprime.mutate(ts, rate=rate, random_seed=random_seed)
+                tables2 = ts.dump_tables()
+                self.assertEqual(tables1.sites, tables2.sites)
+                self.assertEqual(tables1.mutations, tables2.mutations)

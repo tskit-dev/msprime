@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -65,7 +65,8 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     tsk_size_t j;
 
     fprintf(out, "Mutgen state\n");
-    fprintf(out, "\tmutation_rate = %f\n", self->mutation_rate);
+    fprintf(out, "\trate_map:\n");
+    interval_map_print_state(self->rate_map, out);
     fprintf(out, "\tstart_time = %f\n", self->start_time);
     fprintf(out, "\tend_time = %f\n", self->end_time);
     tsk_blkalloc_print_state(&self->allocator, out);
@@ -85,10 +86,11 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 }
 
 int MSP_WARN_UNUSED
-mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
-        size_t block_size)
+mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
+        int alphabet, size_t block_size)
 {
     int ret = 0;
+    size_t j;
 
     assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
@@ -97,13 +99,29 @@ mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng, int alphabet,
         goto out;
     }
     self->alphabet = alphabet;
-    self->mutation_rate = mutation_rate;
     self->rng = rng;
+    self->rate_map = rate_map;
     self->start_time = -DBL_MAX;
     self->end_time = DBL_MAX;
     self->block_size = block_size;
 
     avl_init_tree(&self->sites, cmp_site, NULL);
+    if (block_size == 0) {
+        block_size = 8192;
+    }
+    /* In practice this is the minimum we can support */
+    block_size = GSL_MAX(block_size, 128);
+    ret = tsk_blkalloc_init(&self->allocator, block_size);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
+    for (j = 0; j < rate_map->size - 1; j++) {
+        if (rate_map->value[j] < 0) {
+            ret = MSP_ERR_BAD_MUTATION_MAP_RATE;
+            goto out;
+        }
+    }
 out:
     return ret;
 }
@@ -355,8 +373,10 @@ mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
     int ret = 0;
     tsk_node_table_t *nodes = &tables->nodes;
     tsk_edge_table_t *edges = &tables->edges;
-    size_t j, l, branch_mutations;
-    double left, right, branch_length, distance, mu, position;
+    const double *map_position = self->rate_map->position;
+    const double *map_rate = self->rate_map->value;
+    size_t j, l, branch_mutations, map_index;
+    double left, right, edge_right, branch_length, mu, position;
     node_id_t parent, child;
     const mutation_type_t *mutation_types;
     unsigned long num_mutation_types;
@@ -373,22 +393,23 @@ mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
     if (ret != 0) {
         goto out;
     }
+    ret = tsk_table_collection_check_integrity(tables, TSK_CHECK_OFFSETS);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
+    if (interval_map_get_sequence_length(self->rate_map) != tables->sequence_length) {
+        ret = MSP_ERR_INCOMPATIBLE_MUTATION_MAP;
+        goto out;
+    }
     if (flags & MSP_KEEP_SITES) {
         ret = mutget_initialise_sites(self, tables);
         if (ret != 0) {
             goto out;
         }
     }
-    ret = tsk_site_table_clear(&tables->sites);
-    if (ret != 0) {
-        ret = msp_set_tsk_error(ret);
-        goto out;
-    }
-    ret = tsk_mutation_table_clear(&tables->mutations);
-    if (ret != 0) {
-        ret = msp_set_tsk_error(ret);
-        goto out;
-    }
+    tsk_site_table_clear(&tables->sites);
+    tsk_mutation_table_clear(&tables->mutations);
 
     if (self->alphabet == 0) {
         mutation_types = binary_mutation_types;
@@ -400,32 +421,38 @@ mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
 
     for (j = 0; j < edges->num_rows; j++) {
         left = edges->left[j];
-        right = edges->right[j];
-        distance = right - left;
+        edge_right = edges->right[j];
         parent = edges->parent[j];
         child = edges->child[j];
         assert(child >= 0 && child < (node_id_t) nodes->num_rows);
         branch_start = GSL_MAX(start_time, nodes->time[child]);
         branch_end = GSL_MIN(end_time, nodes->time[parent]);
         branch_length = branch_end - branch_start;
-        mu = branch_length * distance * self->mutation_rate;
-        branch_mutations = gsl_ran_poisson(self->rng, mu);
-        for (l = 0; l < branch_mutations; l++) {
-            /* Rejection sample positions until we get one we haven't seen before. */
-            /* TODO add a maximum number of rejections here */
-            do {
-                position = gsl_ran_flat(self->rng, left, right);
-                search.position = position;
-                avl_node = avl_search(&self->sites, &search);
-            } while (avl_node != NULL);
-            assert(left <= position && position < right);
-            type = gsl_rng_uniform_int(self->rng, num_mutation_types);
-            ret = mutgen_add_mutation(self, child, position,
-                    mutation_types[type].ancestral_state,
-                    mutation_types[type].derived_state);
-            if (ret != 0) {
-                goto out;
+
+        map_index = interval_map_get_index(self->rate_map, left);
+        right = 0;
+        while (right != edge_right) {
+            right = GSL_MIN(edge_right, map_position[map_index + 1]);
+            mu = branch_length * (right - left) * map_rate[map_index];
+            branch_mutations = gsl_ran_poisson(self->rng, mu);
+            for (l = 0; l < branch_mutations; l++) {
+                /* Rejection sample positions until we get one we haven't seen before. */
+                /* TODO add a maximum number of rejections here */
+                do {
+                    position = gsl_ran_flat(self->rng, left, right);
+                    search.position = position;
+                    avl_node = avl_search(&self->sites, &search);
+                } while (avl_node != NULL);
+                assert(left <= position && position < right);
+                type = gsl_rng_uniform_int(self->rng, num_mutation_types);
+                ret = mutgen_add_mutation(self, child, position,
+                        mutation_types[type].ancestral_state,
+                        mutation_types[type].derived_state);
+                if (ret != 0) {
+                    goto out;
+                }
             }
+            map_index++;
         }
     }
     ret = mutgen_populate_tables(self, &tables->sites, &tables->mutations);

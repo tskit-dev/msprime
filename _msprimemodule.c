@@ -28,6 +28,7 @@
 #include <gsl/gsl_version.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_errno.h>
+#include <gsl/gsl_randist.h>
 
 #include "msprime.h"
 #include "likelihood.h"
@@ -57,8 +58,14 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    interval_map_t *interval_map;
+} IntervalMap;
+
+typedef struct {
+    PyObject_HEAD
     mutgen_t *mutgen;
     RandomGenerator *random_generator;
+    IntervalMap *rate_map;
 } MutationGenerator;
 
 typedef struct {
@@ -90,6 +97,17 @@ static void
 handle_input_error(const char *section, int err)
 {
     PyErr_Format(MsprimeInputError, "Input error in %s: %s", section, msp_strerror(err));
+}
+
+static int
+double_PyArray_converter(PyObject *in, PyObject **out)
+{
+    PyObject *ret = PyArray_FROMANY(in, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
+    if (ret == NULL) {
+        return NPY_FAIL;
+    }
+    *out = ret;
+    return NPY_SUCCEED;
 }
 
 /*
@@ -1579,8 +1597,6 @@ static PyTypeObject LightweightTableCollectionType = {
     (initproc)LightweightTableCollection_init,      /* tp_init */
 };
 
-
-
 /*===================================================================
  * RandomGenerator
  *===================================================================
@@ -1644,6 +1660,57 @@ out:
     return ret;
 }
 
+static PyObject *
+RandomGenerator_flat(RandomGenerator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double a, b;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "dd", &a, &b)) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", gsl_ran_flat(self->rng, a, b));
+out:
+    return ret;
+}
+
+static PyObject *
+RandomGenerator_poisson(RandomGenerator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double mu;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &mu)) {
+        goto out;
+    }
+    ret = Py_BuildValue("I", gsl_ran_poisson(self->rng, mu));
+out:
+    return ret;
+}
+
+static PyObject *
+RandomGenerator_uniform_int(RandomGenerator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    unsigned long n;
+
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "k", &n)) {
+        goto out;
+    }
+    ret = Py_BuildValue("k", gsl_rng_uniform_int(self->rng, n));
+out:
+    return ret;
+}
+
 static PyMemberDef RandomGenerator_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -1651,6 +1718,12 @@ static PyMemberDef RandomGenerator_members[] = {
 static PyMethodDef RandomGenerator_methods[] = {
     {"get_seed", (PyCFunction) RandomGenerator_get_seed,
         METH_NOARGS, "Returns the random seed for this generator."},
+    {"flat", (PyCFunction) RandomGenerator_flat,
+        METH_VARARGS, "Interface for gsl_ran_flat"},
+    {"poisson", (PyCFunction) RandomGenerator_poisson,
+        METH_VARARGS, "Interface for gsl_ran_poisson"},
+    {"uniform_int", (PyCFunction) RandomGenerator_uniform_int,
+        METH_VARARGS, "Interface for gsl_rng_uniform_int"},
     {NULL}  /* Sentinel */
 };
 
@@ -1694,6 +1767,167 @@ static PyTypeObject RandomGeneratorType = {
 };
 
 /*===================================================================
+ * IntervalMap
+ *===================================================================
+ */
+
+static int
+IntervalMap_check_state(IntervalMap *self)
+{
+    int ret = 0;
+    if (self->interval_map == NULL) {
+        PyErr_SetString(PyExc_SystemError, "IntervalMap not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+IntervalMap_dealloc(IntervalMap* self)
+{
+    if (self->interval_map != NULL) {
+        interval_map_free(self->interval_map);
+        PyMem_Free(self->interval_map);
+        self->interval_map = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+IntervalMap_init(IntervalMap *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"position", "value", NULL};
+    Py_ssize_t size;
+    PyObject *py_position = NULL;
+    PyObject *py_value = NULL;
+
+    self->interval_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&", kwlist,
+            double_PyArray_converter, &py_position,
+            double_PyArray_converter, &py_value)) {
+        goto out;
+    }
+
+    size = PyObject_Size(py_position);
+    if (size != PyObject_Size(py_value)) {
+        PyErr_SetString(PyExc_ValueError,
+            "position and  list must be the same length");
+        goto out;
+    }
+    self->interval_map = PyMem_Malloc(sizeof(interval_map_t));
+    if (self->interval_map == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = interval_map_alloc(self->interval_map, size,
+            PyArray_DATA((PyArrayObject *) py_position),
+            PyArray_DATA((PyArrayObject *) py_value));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(py_position);
+    Py_XDECREF(py_value);
+    return ret;
+}
+
+static PyObject *
+IntervalMap_get_position(IntervalMap *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    size_t size = self->interval_map->size;
+    npy_intp dims = (npy_intp) size;
+
+    array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->interval_map->position, size * sizeof(double));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyObject *
+IntervalMap_get_value(IntervalMap *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    size_t size = self->interval_map->size;
+    npy_intp dims = (npy_intp) size;
+
+    array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->interval_map->value, size * sizeof(double));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyGetSetDef IntervalMap_getsetters[] = {
+    {"position", (getter) IntervalMap_get_position, NULL,
+        "A copy of the position array"},
+    {"value", (getter) IntervalMap_get_value, NULL,
+        "A copy of the value array"},
+    {NULL}  /* Sentinel */
+};
+
+static PyMemberDef IntervalMap_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef IntervalMap_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject IntervalMapType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.IntervalMap",             /* tp_name */
+    sizeof(IntervalMap),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)IntervalMap_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "IntervalMap objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    IntervalMap_methods,             /* tp_methods */
+    IntervalMap_members,             /* tp_members */
+    IntervalMap_getsetters,          /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)IntervalMap_init,      /* tp_init */
+};
+
+
+/*===================================================================
  * MutationGenerator
  *===================================================================
  */
@@ -1721,6 +1955,7 @@ MutationGenerator_dealloc(MutationGenerator* self)
         self->mutgen = NULL;
     }
     Py_XDECREF(self->random_generator);
+    Py_XDECREF(self->rate_map);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -1730,17 +1965,19 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     int ret = -1;
     int err;
     int alphabet = 0;
-    static char *kwlist[] = {"random_generator", "mutation_rate", "alphabet",
+    static char *kwlist[] = {"random_generator", "rate_map", "alphabet",
         "start_time", "end_time", NULL};
-    double mutation_rate = 0;
     double start_time = -DBL_MAX;
     double end_time = DBL_MAX;
     RandomGenerator *random_generator = NULL;
+    IntervalMap *rate_map = NULL;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!d|idd", kwlist,
-            &RandomGeneratorType, &random_generator, &mutation_rate,
+    self->rate_map = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|idd", kwlist,
+            &RandomGeneratorType, &random_generator,
+            &IntervalMapType, &rate_map,
             &alphabet, &start_time, &end_time)) {
         goto out;
     }
@@ -1749,12 +1986,13 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     if (RandomGenerator_check_state(self->random_generator) != 0) {
         goto out;
     }
-    if (alphabet != MSP_ALPHABET_BINARY && alphabet != MSP_ALPHABET_NUCLEOTIDE) {
-        PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
+    self->rate_map = rate_map;
+    Py_INCREF(self->rate_map);
+    if (IntervalMap_check_state(self->rate_map) != 0) {
         goto out;
     }
-    if (mutation_rate < 0) {
-        PyErr_Format(PyExc_ValueError, "mutation_rate must be >= 0");
+    if (alphabet != MSP_ALPHABET_BINARY && alphabet != MSP_ALPHABET_NUCLEOTIDE) {
+        PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
         goto out;
     }
     self->mutgen = PyMem_Malloc(sizeof(mutgen_t));
@@ -1762,8 +2000,8 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = mutgen_alloc(self->mutgen, mutation_rate, random_generator->rng,
-            alphabet, 0);
+    err = mutgen_alloc(self->mutgen, random_generator->rng,
+            rate_map->interval_map, alphabet, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -1774,32 +2012,6 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     ret = 0;
-out:
-    return ret;
-}
-
-static PyObject *
-MutationGenerator_get_mutation_rate(MutationGenerator *self)
-{
-    PyObject *ret = NULL;
-
-    if (MutationGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("d", self->mutgen->mutation_rate);
-out:
-    return ret;
-}
-
-static PyObject *
-MutationGenerator_get_alphabet(MutationGenerator *self)
-{
-    PyObject *ret = NULL;
-
-    if (MutationGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("i", self->mutgen->alphabet);
 out:
     return ret;
 }
@@ -1834,15 +2046,25 @@ out:
     return ret;
 }
 
-static PyMemberDef MutationGenerator_members[] = {
+static PyObject *
+MutationGenerator_get_alphabet(MutationGenerator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (MutationGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->mutgen->alphabet);
+out:
+    return ret;
+}
+
+static PyGetSetDef MutationGenerator_getsetters[] = {
+    {"alphabet", (getter) MutationGenerator_get_alphabet, NULL,
+        "The alphabet for this generator"},
     {NULL}  /* Sentinel */
 };
 
 static PyMethodDef MutationGenerator_methods[] = {
-    {"get_mutation_rate", (PyCFunction) MutationGenerator_get_mutation_rate,
-        METH_NOARGS, "Returns the mutation rate for this mutation generator."},
-    {"get_alphabet", (PyCFunction) MutationGenerator_get_alphabet,
-        METH_NOARGS, "Returns the alphabet for this mutation generator."},
     {"generate", (PyCFunction) MutationGenerator_generate,
         METH_VARARGS|METH_KEYWORDS,
         "Generate mutations and write to the specified table."},
@@ -1878,8 +2100,8 @@ static PyTypeObject MutationGeneratorType = {
     0,                     /* tp_iter */
     0,                     /* tp_iternext */
     MutationGenerator_methods,             /* tp_methods */
-    MutationGenerator_members,             /* tp_members */
-    0,                         /* tp_getset */
+    0,                         /* tp_members */
+    MutationGenerator_getsetters,          /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
@@ -1887,6 +2109,7 @@ static PyTypeObject MutationGeneratorType = {
     0,                         /* tp_dictoffset */
     (initproc)MutationGenerator_init,      /* tp_init */
 };
+
 /*===================================================================
  * RecombinationMap
  *===================================================================
@@ -1912,17 +2135,6 @@ RecombinationMap_dealloc(RecombinationMap* self)
         self->recomb_map = NULL;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-static int
-double_PyArray_converter(PyObject *in, PyObject **out)
-{
-    PyObject *ret = PyArray_FROMANY(in, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
-    if (ret == NULL) {
-        return NPY_FAIL;
-    }
-    *out = ret;
-    return NPY_SUCCEED;
 }
 
 static int
@@ -1961,8 +2173,7 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = recomb_map_alloc(self->recomb_map,
-            positions[size - 1], positions, rates, size, discrete);
+    err = recomb_map_alloc(self->recomb_map, size, positions, rates, discrete);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -4191,6 +4402,15 @@ PyInit__msprime(void)
     }
     Py_INCREF(&RecombinationMapType);
     PyModule_AddObject(module, "RecombinationMap", (PyObject *) &RecombinationMapType);
+
+    /* IntervalMap type */
+    IntervalMapType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&IntervalMapType) < 0) {
+        return NULL;;
+    }
+    Py_INCREF(&IntervalMapType);
+    PyModule_AddObject(module, "IntervalMap", (PyObject *) &IntervalMapType);
+
 
     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);

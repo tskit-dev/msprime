@@ -602,8 +602,7 @@ read_recomb_map(uint32_t num_loci, recomb_map_t *recomb_map, config_t *config)
         rates[j] = config_setting_get_float(s);
     }
     // TODO Read discrete flag from recombination map
-    ret = recomb_map_alloc(recomb_map, coordinates[size - 1],
-            coordinates, rates, size, true);
+    ret = recomb_map_alloc(recomb_map, size, coordinates, rates, true);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
@@ -762,11 +761,12 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     mutation_params_t mutation_params;
     msp_t msp;
     recomb_map_t recomb_map;
+    interval_map_t mut_map;
     mutgen_t mutgen;
     tsk_table_collection_t tables;
     tsk_treeseq_t tree_seq;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     if (rng == NULL) {
         fatal_error("No memory");
     }
@@ -775,8 +775,15 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
         fatal_tskit_error(ret, __LINE__);
     }
     get_configuration(rng, &msp, &tables, &mutation_params, &recomb_map, conf_file);
-    ret = mutgen_alloc(&mutgen, mutation_params.mutation_rate, rng,
-            mutation_params.alphabet, 0);
+    ret = interval_map_alloc_single(&mut_map,
+            recomb_map_get_sequence_length(&recomb_map), mutation_params.mutation_rate);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    ret = mutgen_alloc(&mutgen, rng, &mut_map, mutation_params.alphabet, 0);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
@@ -839,6 +846,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
 
     msp_free(&msp);
     recomb_map_free(&recomb_map);
+    interval_map_free(&mut_map);
     mutgen_free(&mutgen);
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);

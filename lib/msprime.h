@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -96,7 +96,6 @@ typedef struct segment_t_t {
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
-
 
 typedef struct {
     double left; /* TODO CHANGE THIS - not a good name! */
@@ -203,14 +202,16 @@ typedef struct _simulation_model_t {
     double (*model_rate_to_generation_rate)(struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
-/* Recombination map */
-
 typedef struct {
-    double sequence_length; /* size of the physical coordinate space */
+    double *position;
+    double *value;
+    size_t size;
+} interval_map_t;
+
+/* Recombination map */
+typedef struct {
+    interval_map_t map;
     double total_recombination_rate;
-    size_t size;            /* the total number of values in the map */
-    double *positions;
-    double *rates;
     double *cumulative;
     bool discrete;
 } recomb_map_t;
@@ -337,9 +338,9 @@ typedef struct {
 typedef struct {
     int alphabet;
     gsl_rng *rng;
+    interval_map_t *rate_map;
     double start_time;
     double end_time;
-    double mutation_rate;
     size_t block_size;
     avl_tree_t sites;
     tsk_blkalloc_t allocator;
@@ -445,24 +446,28 @@ size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
 
+int interval_map_alloc(interval_map_t *self, size_t size,
+        double *position, double *value);
+int interval_map_alloc_single(interval_map_t *self,
+        double sequence_length, double value);
+int interval_map_free(interval_map_t *self);
+void interval_map_print_state(interval_map_t *self, FILE *out);
+double interval_map_get_sequence_length(interval_map_t *self);
+size_t interval_map_get_size(interval_map_t *self);
+size_t interval_map_get_num_intervals(interval_map_t *self);
+size_t interval_map_get_index(interval_map_t *self, double x);
+
 typedef double (*msp_convert_func) (void *obj, double rate);
 
 int recomb_map_alloc_uniform(recomb_map_t *self,
         double sequence_length, double rate, bool discrete);
 int recomb_map_alloc(recomb_map_t *self,
-        double sequence_length, double *positions, double *rates,
-        size_t size, bool discrete);
+        size_t size, double *position, double *rate, bool discrete);
 int recomb_map_copy(recomb_map_t *to, recomb_map_t *from);
 int recomb_map_free(recomb_map_t *self);
-uint32_t recomb_map_get_num_loci(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);
 bool recomb_map_get_discrete(recomb_map_t *self);
-double recomb_map_get_per_locus_recombination_rate(recomb_map_t *self);
 double recomb_map_get_total_recombination_rate(recomb_map_t *self);
-double recomb_map_genetic_to_phys(recomb_map_t *self, double genetic_x);
-double recomb_map_phys_to_genetic(recomb_map_t *self, double phys_x);
-int recomb_map_phys_to_discrete_genetic(recomb_map_t *self, double phys_x,
-        uint32_t *locus);
 void recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj);
 size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
@@ -477,8 +482,10 @@ double recomb_map_position_to_mass(recomb_map_t *self, double position);
 double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
-int mutgen_alloc(mutgen_t *self, double mutation_rate, gsl_rng *rng,
+int mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
         int alphabet, size_t mutation_block_size);
+int mutgen_set_rate(mutgen_t *self, double rate, double sequence_length);
+int mutgen_set_map(mutgen_t *self, size_t size, double *position, double *rate);
 int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags);

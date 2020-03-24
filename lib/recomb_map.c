@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -29,26 +29,30 @@
 void
 recomb_map_print_state(recomb_map_t *self, FILE *out)
 {
-    size_t j;
-
-    fprintf(out, "recombination_map (%p):: size = %d\n", (void *) self, (int) self->size);
-    fprintf(out, "\tsequence_length = %f\n", recomb_map_get_sequence_length(self));
-    fprintf(out, "\tindex\tlocation\trate\n");
-    for (j = 0; j < self->size; j++) {
-        fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->positions[j], self->rates[j]);
-    }
+    fprintf(out, "recombination_map (%p)\n", (void *) self);
+    interval_map_print_state(&self->map, out);
 }
 
-static void
+static int
 recomb_map_init_cumulative_recomb_mass(recomb_map_t *self)
 {
+    int ret = 0;
     size_t j;
     double s = 0;
+    const double *position = self->map.position;
+    const double *rate = self->map.value;
+
     self->cumulative[0] = 0;
-    for (j = 1; j < self->size; j++) {
-        s += (self->positions[j] - self->positions[j - 1]) * self->rates[j - 1];
+    for (j = 1; j < self->map.size; j++) {
+        if (rate[j - 1] < 0) {
+            ret = MSP_ERR_BAD_RECOMBINATION_MAP;
+            goto out;
+        }
+        s += (position[j] - position[j - 1]) * rate[j - 1];
         self->cumulative[j] = s;
     }
+out:
+    return ret;
 }
 
 int MSP_WARN_UNUSED
@@ -58,57 +62,32 @@ recomb_map_alloc_uniform(recomb_map_t *self, double sequence_length,
     double positions[] = {0.0, sequence_length};
     double rates[] = {rate, 0.0};
 
-    return recomb_map_alloc(self, sequence_length, positions, rates, 2, discrete);
+    return recomb_map_alloc(self, 2, positions, rates, discrete);
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc(recomb_map_t *self, double sequence_length,
-        double *positions, double *rates, size_t size, bool discrete)
+recomb_map_alloc(recomb_map_t *self, size_t size, double *position, double *rate,
+        bool discrete)
 {
-    int ret = MSP_ERR_BAD_RECOMBINATION_MAP;
-    double length;
-    size_t j;
+    int ret = 0;
 
     memset(self, 0, sizeof(recomb_map_t));
-    if (size < 2) {
-        goto out;
-    }
-    /* Check the framing positions */
-    if (positions[0] != 0.0 || positions[size - 1] != sequence_length) {
-        goto out;
-    }
-    if (sequence_length < 1 && discrete) {
-        goto out;
-    }
-    self->positions = malloc(size * sizeof(double));
-    self->rates = malloc(size * sizeof(double));
-    self->cumulative = malloc(size * sizeof(double));
+    self->discrete = discrete;
 
-    if (self->positions == NULL || self->rates == NULL || self->cumulative == NULL) {
+    ret = interval_map_alloc(&self->map, size, position, rate);
+    if (ret != 0) {
+        goto out;
+    }
+    if (interval_map_get_sequence_length(&self->map) < 1 && discrete) {
+        ret = MSP_ERR_BAD_RECOMBINATION_MAP;
+        goto out;
+    }
+    self->cumulative = malloc(size * sizeof(double));
+    if (self->cumulative == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->total_recombination_rate = 0.0;
-    self->size = size;
-    self->sequence_length = sequence_length;
-    self->discrete = discrete;
-    for (j = 0; j < size; j++) {
-        if (rates[j] < 0 || positions[j] < 0) {
-            goto out;
-        }
-        if (j > 0) {
-            /* Coordinates must be sorted */
-            if (positions[j] <= positions[j - 1]) {
-                goto out;
-            }
-            length = positions[j] - positions[j - 1];
-            self->total_recombination_rate += length * rates[j - 1];
-        }
-        self->rates[j] = rates[j];
-        self->positions[j] = positions[j];
-    }
-    ret = 0;
-    recomb_map_init_cumulative_recomb_mass(self);
+    ret = recomb_map_init_cumulative_recomb_mass(self);
 out:
     return ret;
 }
@@ -116,32 +95,22 @@ out:
 int
 recomb_map_copy(recomb_map_t *to, recomb_map_t *from)
 {
-    return recomb_map_alloc(to, from->sequence_length,
-            from->positions, from->rates, from->size, from->discrete);
+    return recomb_map_alloc(to, from->map.size,
+            from->map.position, from->map.value, from->discrete);
 }
 
 int
 recomb_map_free(recomb_map_t *self)
 {
-    if (self->positions != NULL) {
-        free(self->positions);
-    }
-    if (self->rates != NULL) {
-        free(self->rates);
-    }
-    if (self->cumulative != NULL) {
-        free(self->cumulative);
-    }
+    interval_map_free(&self->map);
+    msp_safe_free(self->cumulative);
     return 0;
 }
 
-/* Returns the equivalent recombination rate between pairs of
- * adjacent loci.
- */
 double
 recomb_map_get_total_recombination_rate(recomb_map_t *self)
 {
-    return self->total_recombination_rate;
+    return self->cumulative[self->map.size - 1];
 }
 
 /* Returns the total physical length of the sequence.
@@ -149,7 +118,7 @@ recomb_map_get_total_recombination_rate(recomb_map_t *self)
 double
 recomb_map_get_sequence_length(recomb_map_t *self)
 {
-    return self->sequence_length;
+    return interval_map_get_sequence_length(&self->map);
 }
 
 /* Returns a boolean indicating whether the recombination map is discrete.
@@ -181,21 +150,24 @@ recomb_map_mass_between_left_exclusive(recomb_map_t *self, double left, double r
 double
 recomb_map_position_to_mass(recomb_map_t *self, double pos)
 {
+    const double *position = self->map.position;
+    const double *rate = self->map.value;
     double offset;
     size_t index;
 
-    if (pos == self->positions[0]) {
+    if (pos == position[0]) {
         return 0;
     }
-    if (pos >= self->positions[self->size - 1]) {
-        return self->cumulative[self->size - 1];
+    if (pos >= position[self->map.size - 1]) {
+        return self->cumulative[self->map.size - 1];
     }
-    index = msp_binary_interval_search(pos, self->positions, self->size);
+    /* TODO replace this with tsk_search_sorted */
+    index = msp_binary_interval_search(pos, position, self->map.size);
     assert(index > 0);
     index--;
-    offset = pos - self->positions[index];
+    offset = pos - position[index];
 
-    return self->cumulative[index] + offset * self->rates[index];
+    return self->cumulative[index] + offset * rate[index];
 }
 
 /* Finds the physical coordinate such that the sequence up to (but not
@@ -204,17 +176,19 @@ recomb_map_position_to_mass(recomb_map_t *self, double pos)
 double
 recomb_map_mass_to_position(recomb_map_t *self, double mass)
 {
+    const double *position = self->map.position;
+    const double *rate = self->map.value;
     double mass_in_interval, pos;
     size_t index;
 
     if (mass == 0.0) {
-        return self->positions[0];
+        return position[0];
     }
-    index = msp_binary_interval_search(mass, self->cumulative, self->size);
+    index = msp_binary_interval_search(mass, self->cumulative, self->map.size);
     assert(index > 0);
     index--;
     mass_in_interval = mass - self->cumulative[index];
-    pos =  self->positions[index] + mass_in_interval / self->rates[index];
+    pos = position[index] + mass_in_interval / rate[index];
 
     return self->discrete ? floor(pos) : pos;
 }
@@ -245,8 +219,8 @@ void
 recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj)
 {
     size_t i;
-    for (i = 0; i < self->size; i++) {
-        self->rates[i] = convert(obj, self->rates[i]);
+    for (i = 0; i < self->map.size; i++) {
+        self->map.value[i] = convert(obj, self->map.value[i]);
     }
     recomb_map_init_cumulative_recomb_mass(self);
 }
@@ -254,19 +228,18 @@ recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj
 size_t
 recomb_map_get_size(recomb_map_t *self)
 {
-    return self->size;
+    return interval_map_get_size(&self->map);
 }
 
 int
-recomb_map_get_positions(recomb_map_t *self, double *positions)
+recomb_map_get_positions(recomb_map_t *self, double *position)
 {
-    memcpy(positions, self->positions, sizeof(double) * self->size);
+    memcpy(position, self->map.position, sizeof(double) * self->map.size);
     return 0;
 }
 
-int recomb_map_get_rates(recomb_map_t *self, double *rates)
+int recomb_map_get_rates(recomb_map_t *self, double *rate)
 {
-    memcpy(rates, self->rates, sizeof(double) * self->size);
+    memcpy(rate, self->map.value, sizeof(double) * self->map.size);
     return 0;
-
 }

@@ -23,7 +23,7 @@ extra_c_args = [
     
 msprime_sources =[
     'msprime.c', 'fenwick.c', 'util.c', 'mutgen.c', 'object_heap.c',
-    'likelihood.c', 'recomb_map.c']
+    'likelihood.c', 'recomb_map.c', 'interval_map.c']
 
 avl_lib = static_library('avl', sources: ['avl.c'])
 msprime_lib = static_library('msprime', 

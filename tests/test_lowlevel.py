@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -1979,6 +1979,85 @@ class TestRandomGenerator(unittest.TestCase):
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
 
+    def test_flat_errors(self):
+        rng = _msprime.RandomGenerator(1)
+        self.assertRaises(TypeError, rng.flat)
+        self.assertRaises(TypeError, rng.flat, 0)
+        for bad_type in ["as", [], None]:
+            self.assertRaises(TypeError, rng.flat, bad_type, 1)
+            self.assertRaises(TypeError, rng.flat, 0, bad_type)
+
+    def test_flat(self):
+        for seed in [1, 2, 2**32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            values = [0, 1, 10, -10, 1e200, -1e200]
+            for a, b in itertools.product(values, repeat=2):
+                self.assertEqual(rng1.flat(a, b), rng2.flat(a, b))
+
+    def test_poisson_errors(self):
+        rng = _msprime.RandomGenerator(1)
+        self.assertRaises(TypeError, rng.poisson)
+        for bad_type in ["as", [], None]:
+            self.assertRaises(TypeError, rng.poisson, bad_type)
+
+    def test_poisson(self):
+        for seed in [1, 2, 2**32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            values = [0.001, 1e-6, 0, 1, 10, -10, 100]
+            for mu in values:
+                self.assertEqual(rng1.poisson(mu), rng2.poisson(mu))
+
+    def test_uniform_int_errors(self):
+        rng = _msprime.RandomGenerator(1)
+        self.assertRaises(TypeError, rng.uniform_int)
+        for bad_type in ["as", [], None]:
+            self.assertRaises(TypeError, rng.uniform_int, bad_type)
+
+    def test_uniform_int(self):
+        for seed in [1, 2, 2**32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            values = [-1, 0, 1, 2, 10, 100, 2**31]
+            for n in values:
+                self.assertEqual(rng1.uniform_int(n), rng2.uniform_int(n))
+
+
+class TestIntervalMap(unittest.TestCase):
+    """
+    Tests for the IntervalMap class.
+    """
+    def test_basic_constructor(self):
+        self.assertRaises(TypeError, _msprime.IntervalMap)
+        self.assertRaises(TypeError, _msprime.IntervalMap, [])
+        im = _msprime.IntervalMap([0, 1], [0, 0])
+        self.assertTrue(np.array_equal(im.position, [0, 1]))
+        self.assertTrue(np.array_equal(im.value, [0, 0]))
+
+    def test_input_errors(self):
+        for bad_value in [-1, 0]:
+            self.assertRaises(
+                _msprime.LibraryError, _msprime.IntervalMap, [0, bad_value], [0, 0])
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.IntervalMap([], [])
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.IntervalMap([0], [0])
+        with self.assertRaises(ValueError):
+            _msprime.IntervalMap([0], [1, 2])
+        with self.assertRaises(ValueError):
+            _msprime.IntervalMap([0, 1], [1])
+
+    def test_good_inputs(self):
+        good_values = [
+            ([0, 1], [0, 2]), ([0, 0.1, 10], [0, 2, 0]),
+            (np.arange(10), np.arange(10)),
+            (np.arange(100), np.zeros(100))]
+        for pos, value in good_values:
+            im = _msprime.IntervalMap(pos, value)
+            self.assertTrue(np.array_equal(pos, im.position))
+            self.assertTrue(np.array_equal(value, im.value))
+
 
 class TestMutationGenerator(unittest.TestCase):
     """
@@ -1986,65 +2065,68 @@ class TestMutationGenerator(unittest.TestCase):
     """
     def test_basic_constructor(self):
         self.assertRaises(TypeError, _msprime.MutationGenerator)
-        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), 0)
-        self.assertEqual(mg.get_mutation_rate(), 0)
+        self.assertRaises(TypeError, _msprime.MutationGenerator, [])
+        imap = _msprime.IntervalMap([0, 1], [0, 0])
+        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), imap)
+        self.assertEqual(mg.alphabet, 0)
 
     def test_rng(self):
         for bad_type in ["x", {}, None]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, random_generator=bad_type)
+                TypeError, _msprime.MutationGenerator, random_generator=bad_type,
+                rate=[0], position=[0])
 
-    def test_mutation_rate(self):
+    def test_mutation_map(self):
         rng = _msprime.RandomGenerator(1)
-        for bad_type in ["x", {}, None]:
-            self.assertRaises(TypeError, _msprime.MutationGenerator, rng, bad_type)
-        for bad_value in [-1, -1e-3]:
-            self.assertRaises(ValueError, _msprime.MutationGenerator, rng, bad_value)
-        for rate in [0, 1e-12, 1e12, 1000, 0.01]:
-            mutgen = _msprime.MutationGenerator(rng, rate)
-            self.assertEqual(mutgen.get_mutation_rate(), rate)
+        for bad_type in ["x", {}, None, [[], []]]:
+            self.assertRaises(
+                TypeError, _msprime.MutationGenerator, rng, rate_map=bad_type)
 
     def test_time_interval(self):
         rng = _msprime.RandomGenerator(1)
+        imap = _msprime.IntervalMap([0, 1], [0, 0])
         for bad_type in ["x", {}, None]:
             with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, 0, start_time=bad_type)
+                _msprime.MutationGenerator(rng, imap, start_time=bad_type)
             with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, 0, end_time=bad_type)
+                _msprime.MutationGenerator(rng, imap, end_time=bad_type)
         for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
             with self.assertRaises(_msprime.LibraryError):
                 _msprime.MutationGenerator(
-                    rng, 0, start_time=start_time, end_time=end_time)
+                    rng, imap, start_time=start_time, end_time=end_time)
 
     def test_alphabet(self):
         rng = _msprime.RandomGenerator(1)
+        rate_map = _msprime.IntervalMap([0, 1], [2, 0])
         for bad_type in ["x", {}, None]:
             self.assertRaises(
                 TypeError, _msprime.MutationGenerator, random_generator=rng,
-                mutation_rate=0, alphabet=bad_type)
+                rate_map=rate_map, alphabet=bad_type)
         for bad_value in [-1, 2, 10**6]:
             self.assertRaises(
                 ValueError, _msprime.MutationGenerator, random_generator=rng,
-                mutation_rate=0, alphabet=bad_value)
+                rate_map=rate_map, alphabet=bad_value)
         for alphabet in [0, 1]:
             mg = _msprime.MutationGenerator(
-                random_generator=rng, mutation_rate=0, alphabet=alphabet)
-            self.assertEqual(alphabet, mg.get_alphabet())
+                random_generator=rng, rate_map=rate_map, alphabet=alphabet)
+            self.assertEqual(alphabet, mg.alphabet)
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)
-        mutgen = _msprime.MutationGenerator(rng, 2)
-        tables = _msprime.LightweightTableCollection()
+        imap = _msprime.IntervalMap([0, 1], [1, 0])
+        mutgen = _msprime.MutationGenerator(rng, imap)
+        tables = _msprime.LightweightTableCollection(1)
         for bad_type in [None, [], {}]:
             self.assertRaises(TypeError, mutgen.generate, bad_type)
             self.assertRaises(TypeError, mutgen.generate, tables, bad_type)
         for _ in range(10):
-            tables = _msprime.LightweightTableCollection()
+            tables = _msprime.LightweightTableCollection(1)
             mutgen.generate(tables)
 
     def verify_block_size(self, tables):
         rng = _msprime.RandomGenerator(1)
-        mutgen = _msprime.MutationGenerator(rng, 2)
+        rate_map = _msprime.IntervalMap([0, tables.sequence_length], [2, 0])
+        mutgen = _msprime.MutationGenerator(rng, rate_map)
         ll_tables = _msprime.LightweightTableCollection()
         ll_tables.fromdict(tables.asdict())
         mutgen.generate(ll_tables, keep=True)
@@ -2052,28 +2134,32 @@ class TestMutationGenerator(unittest.TestCase):
         self.assertEqual(tables, after_tables)
 
     def test_keep_mutations_block_size_mutations(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
         for j in range(8192):
             tables.mutations.add_row(0, node=0, derived_state="b")
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_ancestral_state(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
         big_alloc = 64 * 1024
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a" * big_alloc)
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_derived_state(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
         big_alloc = 64 * 1024
         tables.mutations.add_row(0, node=0, derived_state="b" * big_alloc)
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_metadata(self):
-        tables = tskit.TableCollection()
+        tables = tskit.TableCollection(1)
         big_alloc = 64 * 1024
+        tables.nodes.add_row(0)
         tables.sites.add_row(0, "a", metadata=b"x" * big_alloc)
         self.verify_block_size(tables)
         tables.mutations.add_row(0, node=0, derived_state="b" * 2 * big_alloc)
@@ -2113,13 +2199,15 @@ class TestLikelihood(unittest.TestCase):
     Tests for the low-level likelihood calculation interface.
     """
     def get_arg(self):
+        L = 20
         rng = _msprime.RandomGenerator(1)
-        tables = _msprime.LightweightTableCollection()
+        tables = _msprime.LightweightTableCollection(L)
         sim = _msprime.Simulator(
-            get_samples(5), uniform_recombination_map(L=20, rate=2),
+            get_samples(5), uniform_recombination_map(L=L, rate=2),
             rng, tables, store_full_arg=True)
         sim.run()
-        mutgen = _msprime.MutationGenerator(rng, 2)
+        rate_map = _msprime.IntervalMap(position=[0, L], value=[2, 0])
+        mutgen = _msprime.MutationGenerator(rng, rate_map)
         mutgen.generate(tables)
         t = tskit.TableCollection.fromdict(tables.asdict())
         self.assertGreater(len(t.edges), 10)

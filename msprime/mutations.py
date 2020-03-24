@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2018-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -61,6 +61,15 @@ class InfiniteSites(object):
         """
         return {key: getattr(self, key) for key in inspect.signature(
             self.__init__).parameters.keys() if hasattr(self, key)}
+
+
+class MutationMap(object):
+    """
+    TODO document
+    """
+    def __init__(self, position, rate):
+        self.position = position
+        self.rate = rate
 
 
 def mutate(
@@ -160,8 +169,12 @@ def mutate(
     encoded_provenance = provenance.json_encode_provenance(
         provenance.get_provenance_dict(parameters))
 
+    rate_map = simulations.IntervalMap(
+        position=[0, tree_sequence.sequence_length],
+        value=[rate, 0]
+    )
     mutation_generator = _msprime.MutationGenerator(
-        rng, rate, alphabet=alphabet, start_time=start_time, end_time=end_time)
+        rng, rate_map, alphabet=alphabet, start_time=start_time, end_time=end_time)
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
     mutation_generator.generate(lwt, keep=keep)

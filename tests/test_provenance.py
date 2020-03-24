@@ -315,7 +315,6 @@ class TestSimulateRoundTrip(TestRoundTrip):
         start_time = from_ts.tables.nodes.time.max()
         ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2)
-        print(list(ts.provenances()))
         self.verify(ts)
 
 

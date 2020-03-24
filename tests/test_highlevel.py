@@ -797,14 +797,16 @@ class TestSimulateInterface(unittest.TestCase):
 
     def test_mutation_generator_unsupported(self):
         n = 10
-        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), 1)
+        rate_map = msprime.IntervalMap([0, 1], [1, 0])
+        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), rate_map)
         with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)
 
     def test_mutation_interface(self):
-        for bad_type in ["x", [], {}]:
-            self.assertRaises(
-                TypeError, msprime.simulate, 10, mutation_rate=bad_type)
+        for bad_type in [{}, self]:
+            self.assertRaises(TypeError, msprime.simulate, 10, mutation_rate=bad_type)
+        for bad_value in ["x", [], [[], []]]:
+            self.assertRaises(ValueError, msprime.simulate, 10, mutation_rate=bad_value)
 
     def test_recombination(self):
         n = 10

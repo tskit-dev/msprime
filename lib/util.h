@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -78,6 +78,12 @@
 #define MSP_ERR_BAD_PEDIGREE_ID                                     -40
 #define MSP_ERR_BAD_ALPHA                                           -41
 #define MSP_ERR_BAD_TRUNCATION_POINT                                -42
+#define MSP_ERR_BAD_MUTATION_MAP_RATE                               -43
+#define MSP_ERR_INCOMPATIBLE_MUTATION_MAP                           -44
+#define MSP_ERR_INSUFFICIENT_INTERVALS                              -45
+#define MSP_ERR_INTERVAL_MAP_START_NON_ZERO                         -46
+#define MSP_ERR_NEGATIVE_INTERVAL_POSITION                          -47
+#define MSP_ERR_INTERVAL_POSITIONS_UNSORTED                         -48
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13
@@ -89,6 +95,6 @@ void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
-size_t msp_binary_interval_search(double query, double *values, size_t n_values);
+size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
 
 #endif /*__UTIL_H__*/

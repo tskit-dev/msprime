@@ -48,6 +48,7 @@ from _msprime import NODE_IS_CEN_EVENT  # NOQA
 # and may be removed in future versions.
 from _msprime import RandomGenerator
 from _msprime import MutationGenerator
+from _msprime import IntervalMap
 
 # Make sure the GSL error handler is turned off so that we can be sure that
 # we don't abort on errors. This can be reset by using the function
@@ -549,7 +550,11 @@ def simulate(
                 "Cannot specify mutation rate combined with a non-zero "
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
-        mutation_generator = MutationGenerator(rng, mutation_rate)
+        rate_map = IntervalMap(
+            position=[0, sim.sequence_length],
+            value=[mutation_rate, 0]
+        )
+        mutation_generator = MutationGenerator(rng, rate_map)
 
     if replicate_index is not None and random_seed is None:
         raise ValueError("Cannot specify replicate_index without random_seed as this "
@@ -806,7 +811,8 @@ class Simulator(object):
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        self.ll_tables = _msprime.LightweightTableCollection()
+        self.ll_tables = _msprime.LightweightTableCollection(
+            self.recombination_map.get_sequence_length())
         if self.from_ts is not None:
             from_ts_tables = self.from_ts.tables.asdict()
             # Clear the provenance as it's included in the new ts's provenance

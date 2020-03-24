@@ -3218,12 +3218,9 @@ msp_reset_from_samples(msp_t *self)
     node_id_t u;
     tsk_id_t tsk_ind;
 
-    tsk_population_table_clear(&self->tables->populations);
-    tsk_edge_table_clear(&self->tables->edges);
-    tsk_node_table_clear(&self->tables->nodes);
-    tsk_migration_table_clear(&self->tables->migrations);
+    tsk_table_collection_clear(self->tables);
 
-    self->tables->sequence_length = self->recomb_map.sequence_length;
+    self->tables->sequence_length = recomb_map_get_sequence_length(&self->recomb_map);
     for (j = 0; j < self->num_populations; j++) {
         ret = tsk_population_table_add_row(&self->tables->populations, NULL, 0);
         if (ret < 0) {
