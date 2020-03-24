@@ -152,7 +152,8 @@ out:
 }
 
 static int
-parse_samples(PyObject *py_samples, Py_ssize_t *num_samples, sample_t **samples)
+parse_samples(PyObject *py_samples, Py_ssize_t num_populations,
+        Py_ssize_t *num_samples, sample_t **samples)
 {
     int ret = -1;
     long tmp_long;
@@ -184,7 +185,14 @@ parse_samples(PyObject *py_samples, Py_ssize_t *num_samples, sample_t **samples)
         }
         tmp_long = PyLong_AsLong(value);
         if (tmp_long < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative population IDs not valid");
+            PyErr_Format(PyExc_ValueError,
+                "Negative population ID in sample at index %d", (int) j);
+            goto out;
+        }
+        if (tmp_long >= num_populations) {
+            PyErr_Format(PyExc_ValueError,
+                "Invalid population reference '%d' in sample at index %d",
+                (int) tmp_long, (int) j);
             goto out;
         }
         ret_samples[j].population_id = (population_id_t) tmp_long;
@@ -3108,7 +3116,14 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     if (RecombinationMap_check_recomb_map(recombination_map) != 0) {
         goto out;
     }
-    if (parse_samples(py_samples, &num_samples, &samples) != 0) {
+    if (population_configuration != NULL) {
+        num_populations = PyList_Size(population_configuration);
+        if (num_populations == 0) {
+            PyErr_SetString(PyExc_ValueError, "Empty population configuration");
+            goto out;
+        }
+    }
+    if (parse_samples(py_samples, num_populations, &num_samples, &samples) != 0) {
         goto out;
     }
     self->sim = PyMem_Malloc(sizeof(msp_t));
@@ -3165,13 +3180,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    if (population_configuration != NULL) {
-        num_populations = PyList_Size(population_configuration);
-        if (num_populations == 0) {
-            PyErr_SetString(PyExc_ValueError, "Empty population configuration");
-            goto out;
-        }
-    }
     sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
     if (sim_ret != 0) {
         handle_input_error("set_dimensions", sim_ret);
