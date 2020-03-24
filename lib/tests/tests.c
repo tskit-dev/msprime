@@ -852,8 +852,8 @@ test_demographic_events(void)
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
 
         CU_ASSERT_EQUAL(
-        	msp_add_census_event(&msp, -0.5),
-        	MSP_ERR_BAD_PARAM_VALUE);
+            msp_add_census_event(&msp, -0.5),
+            MSP_ERR_BAD_PARAM_VALUE);
 
         ret = msp_add_census_event(&msp, 0.05);
         CU_ASSERT_EQUAL(ret, 0);
@@ -3117,6 +3117,101 @@ compute_beta_coalescence_rate_fails(unsigned int num_ancestors, double alpha)
     return 0;
 }
 
+#define check_time_change(msp, t) \
+    do { \
+        const double tol = 1e-4; \
+        double g, g2, t2; \
+        g = (msp)->model.model_time_to_generations(&(msp)->model, t); \
+        t2 = (msp)->model.generations_to_model_time(&(msp)->model, g); \
+        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol); \
+        g2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, t); \
+        CU_ASSERT_DOUBLE_EQUAL(g, g2, tol); \
+        g = (msp)->model.model_rate_to_generation_rate(&(msp)->model, t); \
+        t2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, g); \
+        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol); \
+    } while(0)
+
+static void
+check_model_time_change_consistency(double population_size, double t)
+{
+    int ret;
+    int j, k;
+    msp_t msp;
+    const unsigned int n = 10;
+    const double N2 = population_size * population_size;
+    const double psis[] = {1e-6, 0.01, 0.5, 0.9, 1};
+    const double cs[] = {0.01*N2, 0.5*N2, 0.99*N2};
+    const double alphas[] = {1.1, 1.5, 1.9};
+    const double truncation_points[] = {0.1, 0.5, 0.9, 1};
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(*samples));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_set_simulation_model_hudson(&msp, population_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    check_time_change(&msp, t);
+    ret = msp_set_simulation_model_smc(&msp, population_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    check_time_change(&msp, t);
+    ret = msp_set_simulation_model_smc_prime(&msp, population_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    check_time_change(&msp, t);
+    ret = msp_set_simulation_model_dtwf(&msp, population_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    check_time_change(&msp, t);
+    ret = msp_set_simulation_model_wf_ped(&msp, population_size);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    check_time_change(&msp, t);
+
+    for (j = 0; j < sizeof(psis) / sizeof(*psis); j++) {
+        for (k = 0; k < sizeof(cs) / sizeof(*cs); k++) {
+            ret = msp_set_simulation_model_dirac(&msp, population_size, psis[j], cs[k]);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            /* TODO: enable this check once the dirac rate/time scaling is fixed.
+            check_time_change(&msp, t); */
+        }
+    }
+
+    for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
+        for (k = 0; k < sizeof(truncation_points) / sizeof(*truncation_points); k++) {
+            ret = msp_set_simulation_model_beta(&msp, population_size,
+                    alphas[j], truncation_points[k]);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            check_time_change(&msp, t);
+        }
+    }
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    free(samples);
+    gsl_rng_free(rng);
+}
+
+static void
+test_model_time_change_consistency(void)
+{
+    double Ns[] = {1e-6, 1, 10, 1e4, 1e9};
+    int i;
+    for (i = 0; i < sizeof(Ns) / sizeof(*Ns); i++) {
+        check_model_time_change_consistency(Ns[i], 0.0);
+        check_model_time_change_consistency(Ns[i], 1.0 / Ns[i]);
+        check_model_time_change_consistency(Ns[i], Ns[i]);
+        check_model_time_change_consistency(Ns[i], 100.0 * Ns[i]);
+    }
+}
+
 static void
 test_beta_coalescent_bad_parameters(void)
 {
@@ -3215,7 +3310,7 @@ test_multiple_mergers_simulation(void)
                     ret = msp_set_simulation_model_dirac(msp, 1,
                             psi_params[p][0], psi_params[p][1]);
                 } else {
-                    ret = msp_set_simulation_model_beta(msp, 1,
+                    ret = msp_set_simulation_model_beta(msp, 1e6,
                             beta_params[p][0], beta_params[p][1]);
                 }
                 CU_ASSERT_EQUAL(ret, 0);
@@ -4695,6 +4790,7 @@ main(int argc, char **argv)
         {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
         {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
         {"test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters},
+        {"test_model_time_change_consistency", test_model_time_change_consistency},
         {"test_gsl_error_handling_beta_coalescent", test_gsl_error_handling_beta_coalescent},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
