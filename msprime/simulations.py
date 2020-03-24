@@ -815,8 +815,6 @@ class Simulator(object):
             self.recombination_map.get_sequence_length())
         if self.from_ts is not None:
             from_ts_tables = self.from_ts.tables.asdict()
-            # Clear the provenance as it's included in the new ts's provenance
-            from_ts_tables['provenances'] = tskit.TableCollection(1).provenances.asdict()
             self.ll_tables.fromdict(from_ts_tables)
         start_time = -1 if self.start_time is None else self.start_time
         ll_sim = _msprime.Simulator(
