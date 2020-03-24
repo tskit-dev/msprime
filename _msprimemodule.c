@@ -4271,7 +4271,7 @@ msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
     PyObject *ret = NULL;
     int err;
     LightweightTableCollection *tables = NULL;
-    double recombination_rate, Ne, ret_likelihood, rho;
+    double recombination_rate, Ne, ret_likelihood;
     static char *kwlist[] = {"tables", "Ne", "recombination_rate", NULL};
     tsk_treeseq_t ts;
 
@@ -4293,12 +4293,8 @@ msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
         handle_tskit_library_error(err);
         goto out;
     }
-    /* Note: this should be done within the library probably because we'll
-     * need to rescale the branch lengths according to Ne also, right?
-     */
-    rho = 4 * Ne * recombination_rate;
 
-    err = msp_log_likelihood_arg(&ts, rho, &ret_likelihood);
+    err = msp_log_likelihood_arg(&ts, recombination_rate, Ne, &ret_likelihood);
     if (err != 0) {
         handle_library_error(err);
         goto out;

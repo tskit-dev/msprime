@@ -24,7 +24,7 @@ import math
 import _msprime
 
 
-def unnormalised_log_mutation_likelihood(arg, theta):
+def unnormalised_log_mutation_likelihood(arg, mu):
     # log_likelihood of mutations on a given ARG up to a normalising constant
     # that depends on the pattern of observed mutations, but not on the ARG
     # or the mutation rate
@@ -34,36 +34,34 @@ def unnormalised_log_mutation_likelihood(arg, theta):
     for e in tables.edges:
         total_material += (e.right - e.left) * (time[e.parent] - time[e.child])
     number_of_mutations = len(tables.mutations)
-    if theta == 0:
+    if mu == 0:
         if number_of_mutations == 0:
             ret = 0
         else:
             ret = -float("inf")
     else:
-        ret = (number_of_mutations * math.log(total_material * theta) -
-               total_material * theta)
-    for tree in arg.trees():
-        for site in tree.sites():
-            mutation = site.mutations[0]
-            child = mutation.node
-            parent = tree.parent(child)
-            potential_branch_length = tree.branch_length(child)
-            while tree.parent(parent) is not None and len(tree.children(parent)) == 1:
-                child = parent
+        ret = (number_of_mutations * math.log(total_material * mu) -
+               total_material * mu)
+        for tree in arg.trees():
+            for site in tree.sites():
+                mutation = site.mutations[0]
+                child = mutation.node
                 parent = tree.parent(child)
-                potential_branch_length += tree.branch_length(child)
-            child = mutation.node
-            while len(tree.children(child)) == 1:
-                child = tree.children(child)[0]
-                potential_branch_length += tree.branch_length(child)
-            ret += math.log(potential_branch_length / total_material)
+                potential_branch_length = tree.branch_length(child)
+                while tree.parent(parent) is not None \
+                        and len(tree.children(parent)) == 1:
+                    child = parent
+                    parent = tree.parent(child)
+                    potential_branch_length += tree.branch_length(child)
+                child = mutation.node
+                while len(tree.children(child)) == 1:
+                    child = tree.children(child)[0]
+                    potential_branch_length += tree.branch_length(child)
+                ret += math.log(potential_branch_length / total_material)
     return ret
 
 
-def log_arg_likelihood(arg, recombination_rate, Ne=0.25):
-    # TODO: Ne should default to 1 for compatability with msprime.simulate. Setting
-    # to 1/4 now to keep the tests working.
-
+def log_arg_likelihood(arg, recombination_rate, Ne=1):
     # Get the tables into the format we need to interchange with the low-level code.
     lw_tables = _msprime.LightweightTableCollection()
     lw_tables.fromdict(arg.tables.asdict())
