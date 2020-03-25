@@ -330,12 +330,18 @@ def parse_starbeast(
     # Make sure that annotation is included and has the dmv tag, which specifies
     # StarBEAST's mean estimate of the population size scaled by the number of
     # generation per time unit.
-    assert "[" in tree_string, "Could not read annotation"
-    assert "]" in tree_string, "Could not read annotation"
-    assert tree_string.count("[") == tree_string.count("]"), "Could not read annotation"
-    assert "&dmv={" in tree_string, "Could not find dmv tag in annotation"
-    assert "}" in tree_string, "Could not read dmv annotation"
-    assert tree_string.count("{") == tree_string.count("}"), "Could not read annotation"
+    if "[" not in tree_string:
+        raise ValueError("No annotation in tree string.")
+    if "]" not in tree_string:
+        raise ValueError("No annotation in tree string.")
+    if tree_string.count("[") != tree_string.count("]"):
+        raise ValueError("Unbalanced square brackets in annotation.")
+    if "&dmv={" not in tree_string:
+        raise ValueError("No dmv tag in annotation.")
+    if "}" not in tree_string:
+        raise ValueError("No closing curly brackets in annotation.")
+    if "{" not in tree_string:
+        raise ValueError("No opening curly brackets in annotation.")
 
     # Make sure that each substring that begins with an opening square bracket and ends
     # with a closing square bracket does not contain any further square or round brackets
@@ -415,6 +421,7 @@ def parse_starbeast(
         elif in_annotation:
             annotation_string += clean_tree_string[x]
 
+    # Make sure that dmv annotation is found for each node.
     # First, we trim the "translate" tag from the beginning.
     assert translate_command[0:10] == "translate "
     translate_command = translate_command[10:]
@@ -426,7 +433,8 @@ def parse_starbeast(
     translation_list = translate_command.split(",")
     for item in translation_list:
         item_list = item.split()
-        assert len(item_list) > 1, "The translation block is malformed."
+        if len(item_list) <= 1:
+            raise ValueError("Missing translation in translation block.")
         if len(item_list) != 2:
             err = "Species IDs in the translation block appear to include "
             err += "whitespace. This is not supported."
@@ -464,7 +472,8 @@ def parse_starbeast(
         # Make sure that exactly one of the two find patterns is found.
         count1 = work_string.count(find_str1)
         count2 = work_string.count(find_str2)
-        assert count1 + count2 == 1, "Ambiguous back-translation"
+        if count1 + count2 != 1:
+            raise ValueError("Ambiguous back-translation.")
         if count1 == 1:
             work_string = work_string.replace(find_str1, replace_str1)
         else:
@@ -480,6 +489,8 @@ def parse_starbeast(
     # population that it corresponds to.
     leaf_map = {}
     for node in root.walk("postorder"):
+        if node.name is None:
+            raise ValueError("Annotation missing for one or more nodes.")
         find_pattern = '\\&dmv=\\{([\\d\\.]+?)\\}'
         dmv_patterns = re.search(find_pattern, node.name)
         if dmv_patterns is None:

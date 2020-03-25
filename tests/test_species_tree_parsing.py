@@ -414,11 +414,53 @@ class TestStarbeastParsingErrors(unittest.TestCase):
     StarBEAST.
     """
     def test_bad_tree(self):
+        bad_trees = [None, {}, 123]
         tree_file = "tests/data/species_trees/101g_nucl_conc_unconst.combined.nwk.tre"
         with open(tree_file) as f:
-            nwk = f.read()
+            bad_trees.append(f.read())
+        good_nexus = "#NEXUS\n\n"
+        good_nexus += "Begin taxa;\n"
+        good_nexus += "    Dimensions ntax=3;\n"
+        good_nexus += "    Taxlabels\n"
+        good_nexus += "           spc01\n"
+        good_nexus += "           spc02\n"
+        good_nexus += "           spc03\n"
+        good_nexus += "           ;\n"
+        good_nexus += "End;\n"
+        good_nexus += "Begin trees;\n"
+        good_nexus += "    Translate\n"
+        good_nexus += "     1 spc01,\n"
+        good_nexus += "     2 spc02,\n"
+        good_nexus += "     3 spc03\n"
+        good_nexus += "     ;\n"
+        good_nwk = "((1[&dmv={0.1}]:1,2[&dmv={0.2}]:1)[&dmv={0.3}]"
+        good_nwk += ":1,3[&dmv={0.4}]:2)[&dmv={0.5}]:0.0;"
+        good_nexus += "tree TREE1 = " + good_nwk + "\n"
+        good_nexus += "End;\n"
+        bad_trees.append(good_nexus.replace("#NEXUS", "#NEXU"))
+        bad_trees.append(good_nexus.replace("#NEXUS", "NEXUS"))
+        bad_trees.append(good_nexus.replace("tree TREE1", "tre TREE1"))
+        bad_trees.append(good_nexus.replace("End;", ""))
+        bad_trees.append(good_nexus.replace("Translate", "T"))
+        bad_trees.append(good_nexus.replace("2 spc02,", "2 spc02"))
+        bad_trees.append(good_nexus.replace("2 spc02,", "2 spc02 asdf,"))
+        bad_trees.append(good_nexus.replace("2 spc02,", "2 spc03,"))
+        bad_trees.append(good_nexus.replace("2 spc02,", "spc02 2,"))
+        bad_trees.append(good_nexus.replace("2 spc02,", "asdf2 spc02,"))
+        bad_trees.append(good_nexus.replace("2 spc02,", "spc02; 2,"))
+        bad_trees.append(good_nexus.replace(";\n", ""))
+        bad_trees.append(good_nexus.replace("Taxlabels", "Begin trees;"))
+        bad_trees.append(good_nexus.replace("dmv", "emv"))
+        bad_trees.append(good_nexus.replace("[", ""))
+        bad_trees.append(good_nexus.replace("[", "").replace("]", ""))
+        bad_trees.append(good_nexus.replace("=", ""))
+        bad_trees.append(good_nexus.replace("Begin taxa", "Begin trees"))
+        bad_trees.append(good_nexus.replace("Begin trees", "Begin taxa"))
+        bad_trees.append(good_nexus.replace("[&dmv={0.5}]", ""))
+        bad_trees.append(good_nexus.replace("[&dmv={0.1}]", ""))
+        bad_trees.append(good_nexus.replace(":1,2[&dmv", ":1, 2[&dmv"))
         good_generation_time = 5
-        for bad_tree in [None, {}, 123, nwk]:
+        for bad_tree in bad_trees:
             with self.assertRaises(ValueError):
                 msprime.parse_starbeast(
                         tree=bad_tree,
