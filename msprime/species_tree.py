@@ -19,8 +19,8 @@
 """
 Module responsible for parsing species trees.
 """
-import re
 import newick
+import re
 
 import msprime
 
@@ -200,20 +200,23 @@ def parse_starbeast(
         branch_length_units="myr",
         generation_time=None):
     """
-    Method to parse species trees produced by the program StarBEAST,
-    (https://academic.oup.com/mbe/article/34/8/2101/3738283)
-    written in Nexus (https://en.wikipedia.org/wiki/Nexus_file) format.
+    Method to parse species trees produced by the program TreeAnnotator
+    based on posterior tree distributions generated with StarBEAST
+    (https://academic.oup.com/mbe/article/34/8/2101/3738283).
+    Species trees produced by TreeAnnotator are written in Nexus
+    (https://en.wikipedia.org/wiki/Nexus_file) format.
 
-    Species trees written by StarBEAST are rooted, bi-furcating, and
+    Species trees written by TreeAnnotator are rooted, bi-furcating, and
     ultrametric. Branch lengths usually are in units of millions
     of years ("myr"), but the use of other units is permitted by
-    StarBEAST. Here, we allow only units of millions of years ("myr") or
-    years ("yr"). Leafs must be named and the tree must include
-    information on population sizes of leaf and ancestral species
-    in the form of annotation with the "dmv" tag, which is the case for
-    trees written by StarBEAST. However, to convert these "dmv" values
-    into absolute population sizes, a generation time is required and
-    must be provided separately to the tree.
+    StarBEAST (and thus TreeAnnotator). Here, we allow only units of
+    millions of years ("myr") or years ("yr"). Leafs must be named and
+    the tree must include information on population sizes of leaf and
+    ancestral species in the form of annotation with the "dmv" tag,
+    which is the case for trees written by StarBEAST and TreeAnnotator.
+    However, to convert these "dmv" values into absolute population
+    sizes, a generation time is required and must be provided separately
+    to the tree.
     """
 
     # Make sure a species tree is specified.
@@ -242,44 +245,89 @@ def parse_starbeast(
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
         branch_length_units, generation_time)
 
-    # Read the input file and identify the translation block as well as the tree
-    # string.
-    tree_lines = tree.splitlines(False)
-    if tree_lines[0][0:6].lower() != '#nexus':
-        raise ValueError("The species tree does not appear to be in Nexus format")
-    in_translation = False
-    in_tree = False
-    translate_string = ""
-    for line in tree_lines:
-        if line.strip().lower() == 'begin trees;':
-            in_tree = True
-        elif line.strip().lower() == 'end;':
-            in_tree = False
-        elif in_tree and line.strip() != '':
-            clean_line = line.strip()
-            if clean_line.lower().split()[0] == "translate":
-                in_translation = True
-                translate_string += clean_line[9:]
-            elif in_translation:
-                if ";" in clean_line:
-                    translate_string += clean_line.split(";")[0]
-                    in_translation = False
-                else:
-                    translate_string += clean_line
-            if clean_line[0:5].lower() == "tree ":
-                break
+    # From the Nexus format definition (Maddison et al. 1997):
+    # "For the most part, whitespace, inluding newline characters, is ignored,
+    # with two exceptions: (1) whitespace indicates boundaries between words;
+    # (2) in interleaved matrices, newline characters indicate the boundary
+    # between data of different taxa."
+    # As we do not parse matrices (we're only interested in taxa and trees
+    # blocks), we ignore (2), replace newline characters with spaces and
+    # replace multiple whitespaces with a single one.
+    nexus_string = tree.replace("\n", " ")
+    nexus_string = ' '.join(nexus_string.split())
 
-    # As the input is machine-generated, we verify correct parsing
-    # with assert statements rather than ValueErrors.
-    assert clean_line is not None, "No tree string found"
-    assert in_translation is False, "Translation part is not closed"
-    assert "(" in clean_line, "No parentheses in tree string"
-    assert clean_line[-1] == ";" in clean_line, "No semicolon at end of tree string"
+    # From the Nexus format definition (Maddison et al. 1997):
+    # "Commands or subcommands that differ only in case are homonymous."
+    # We turn the whole nexus string into lowercase.
+    nexus_string = nexus_string.lower()
+
+    # Make sure that the string is in Nexus format.
+    if nexus_string[0:6] != '#nexus':
+        raise ValueError("The species tree does not appear to be in Nexus format.")
+
+    # From the Nexus format definition (Maddison et al. 1997):
+    # "Blocks are series of commands, beginning with a Begin command and ending
+    # with an End command."
+    # As semicolons are used only to terminate commands, potentially present
+    # whitespace before semicolons has no meaning; we remove it for easier
+    # parsing.
+    # Then we identify the trees block and raise a ValueError if none is found.
+    # This could be done with a regexp instead.
+    nexus_string = nexus_string.replace(" ;", ";")
+    tree_block_string = ""
+    in_tree_block = False
+    for x in range(len(nexus_string)):
+        if nexus_string[x:x+12] == "begin trees;":
+            in_tree_block = True
+            tree_block_string += nexus_string[x]
+        elif in_tree_block and nexus_string[x:x+4] == "end;":
+            tree_block_string += nexus_string[x:x+4]
+            break
+        elif in_tree_block:
+            tree_block_string += nexus_string[x]
+    if tree_block_string == "" or tree_block_string[-4:] != "end;":
+        raise ValueError("The Nexus string does not include a complete trees block.")
+
+    # From the Nexus format definition (Maddison et al. 1997):
+    # "Commands follow a simple format: the first token in the command
+    # is the command name, which is followed by a series of tokens and
+    # whitespace; the command is terminated by a semicolon."
+    # Get the commands from the tree block, ignoring the begin and end
+    # statements of the block.
+    tree_block_commands = tree_block_string.split(";")
+    tree_block_commands = [c.strip() for c in tree_block_commands]
+    assert tree_block_commands[0] == "begin trees", "Tree block malformed"
+    assert tree_block_commands[-1] == "", "Tree block malformed"
+    assert tree_block_commands[-2] == "end", "Tree block malformed"
+    assert len(tree_block_commands) > 3, "Tree block malformed"
+    tree_block_commands = tree_block_commands[1:-2]
+
+    # Ensure that exactly one of the commands is a translate command and
+    # exactly one is a tree command, which is the case when the Nexus file
+    # is written with TreeAnnotator based on a posterior tree distribution
+    # generated with StarBEAST.
+    translate_commands = []
+    tree_commands = []
+    for command in tree_block_commands:
+        command_list = command.split()
+        if command_list[0] == "translate":
+            translate_commands.append(command)
+        elif command_list[0] == "tree":
+            tree_commands.append(command)
+    if len(translate_commands) != 1:
+        err = "The Nexus string does not contain exactly one translate command."
+        raise ValueError(err)
+    if len(tree_commands) != 1:
+        err = "The Nexus string does not contain exactly one tree command."
+        raise ValueError(err)
+    translate_command = translate_commands[0]
+    tree_command = tree_commands[0]
+    assert "(" in tree_command, "No parentheses in tree string"
 
     # Skip forward until the newick string starts.
-    tree_string = clean_line[clean_line.find("("):]
+    tree_string = tree_command[tree_command.find("("):]
 
-    # Make sure that annotation in included and has the dmv tag, which specifies
+    # Make sure that annotation is included and has the dmv tag, which specifies
     # StarBEAST's mean estimate of the population size scaled by the number of
     # generation per time unit.
     assert "[" in tree_string, "Could not read annotation"
@@ -367,54 +415,63 @@ def parse_starbeast(
         elif in_annotation:
             annotation_string += clean_tree_string[x]
 
-    # Use the translation block (if present) to
-    # back-translate species IDs in the tree string.
-    if translate_string != "":
-        transl_originals = []
-        transl_replaceds = []
-        translation_list = translate_string.split(",")
-        for item in translation_list:
-            item_list = item.split()
-            assert len(item_list) > 1, "The translation block is malformed."
-            if len(item_list) != 2:
-                err = "Species IDs in the translation block appear to include "
-                err += "whitespace. This is not supported."
-                raise ValueError(err)
-            transl_originals.append(item_list[1])
-            transl_replaceds.append(item_list[0])
+    # First, we trim the "translate" tag from the beginning.
+    assert translate_command[0:10] == "translate "
+    translate_command = translate_command[10:]
 
-        # Make sure both the species names and their translations
-        # are unique.
-        if len(transl_originals) != len(set(transl_originals)):
-            err = 'One or more species names in the translation '
-            err += 'block are duplicated.'
+    # Use the translation block to back-translate species IDs in
+    # the tree string.
+    transl_originals = []
+    transl_replaceds = []
+    translation_list = translate_command.split(",")
+    for item in translation_list:
+        item_list = item.split()
+        assert len(item_list) > 1, "The translation block is malformed."
+        if len(item_list) != 2:
+            err = "Species IDs in the translation block appear to include "
+            err += "whitespace. This is not supported."
             raise ValueError(err)
-        if len(transl_replaceds) != len(set(transl_replaceds)):
-            err = 'One or more translations in the translation '
-            err += 'block are duplicated.'
-            raise ValueError(err)
+        transl_originals.append(item_list[1])
+        transl_replaceds.append(item_list[0])
 
-        # Make sure no species names are identical with any
-        # translations.
-        transl_orireps = transl_originals + transl_replaceds
-        if len(transl_orireps) != len(set(transl_orireps)):
-            err = 'One or more of the species names are identical '
-            err += 'to one or more of the translations in the '
-            err += 'translation block.'
-            raise ValueError(err)
+    # Make sure both the species names and their translations
+    # are unique.
+    if len(transl_originals) != len(set(transl_originals)):
+        err = 'One or more species names in the translation '
+        err += 'block are duplicated.'
+        raise ValueError(err)
+    if len(transl_replaceds) != len(set(transl_replaceds)):
+        err = 'One or more translations in the translation '
+        err += 'block are duplicated.'
+        raise ValueError(err)
 
-        # Backtranslate to species names.
-        work_string = clean_tree_string
-        for x in range(len(transl_originals)):
-            find_str = ',{}['.format(transl_replaceds[x])
-            replace_str = ',{}['.format(transl_originals[x])
-            work_string = work_string.replace(find_str, replace_str)
-            find_str = '({}['.format(transl_replaceds[x])
-            replace_str = '({}['.format(transl_originals[x])
-            work_string = work_string.replace(find_str, replace_str)
-        tree_string = work_string
+    # Make sure no species names are identical with any
+    # translations.
+    transl_orireps = transl_originals + transl_replaceds
+    if len(transl_orireps) != len(set(transl_orireps)):
+        err = 'One or more of the species names are identical '
+        err += 'to one or more of the translations in the '
+        err += 'translation block.'
+        raise ValueError(err)
 
-    root = parse_newick(tree_string, generations_per_branch_length_unit)
+    # Backtranslate to species names.
+    work_string = clean_tree_string
+    for x in range(len(transl_originals)):
+        find_str1 = ',{}['.format(transl_replaceds[x])
+        replace_str1 = ',{}['.format(transl_originals[x])
+        find_str2 = '({}['.format(transl_replaceds[x])
+        replace_str2 = '({}['.format(transl_originals[x])
+        # Make sure that exactly one of the two find patterns is found.
+        count1 = work_string.count(find_str1)
+        count2 = work_string.count(find_str2)
+        assert count1 + count2 == 1, "Ambiguous back-translation"
+        if count1 == 1:
+            work_string = work_string.replace(find_str1, replace_str1)
+        else:
+            work_string = work_string.replace(find_str2, replace_str2)
+    clean_tree_string = work_string
+
+    root = parse_newick(clean_tree_string, generations_per_branch_length_unit)
 
     population_configurations = []
     demographic_events = []
@@ -430,12 +487,19 @@ def parse_starbeast(
         pop_size = float(dmv_patterns.group(1)) * generations_per_branch_length_unit
 
         if len(node.descendants) == 0:
+            # Per extant species (= leaf node) in the tree, add a population with
+            # size pop_size. Species names are stored as metadata with the "species_name"
+            # tag.
+            metadata = {"species_name": node.name.strip()}
             population_configurations.append(
-                msprime.PopulationConfiguration(initial_size=pop_size))
+                msprime.PopulationConfiguration(initial_size=pop_size,
+                                                metadata=metadata))
             leaf_map[node] = len(population_configurations) - 1
         else:
-            # The parent species maps implicitly to the left-most child
-            # species, so we don't generate any MassMigrations for that.
+            # Per internal node, add one (if the node is bifurcating) or multiple
+            # (if the node is multi-furcating) MassMigrations. The parent species
+            # maps implicitly to the left-most child species, so we don't generate
+            # any MassMigrations for that.
             leaf_map[node] = leaf_map[node.descendants[0]]
             # For each child species after the left-most one, we create
             # a MassMigration into the left-most species.

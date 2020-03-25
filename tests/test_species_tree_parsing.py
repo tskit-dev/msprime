@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Tests for the parsing of species trees in newick and starbeast format.
+Tests for the parsing of species trees in newick and StarBEAST format.
 """
 import unittest
 
@@ -43,6 +43,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
     Tests that we get what we expect when we parse trees produced from
     msprime/tskit.
     """
+
     def verify(self, tree, newick=None, Ne=1, branch_length_units="gen",
                generation_time=None):
         if newick is None:
@@ -148,7 +149,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
         tables.nodes.set_columns(flags=flags, time=scaled_times)
         ts = tables.tree_sequence()
         scaled_tree = ts.first()
-        self.verify(tree, newick=scaled_tree.newick(), Ne=1,
+        self.verify(tree, newick=scaled_tree.newick(),
                     branch_length_units="yr", generation_time=generation_time)
 
     def test_n10_binary_million_years(self):
@@ -158,29 +159,61 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
         tables = ts.dump_tables()
         times = tables.nodes.time
         flags = tables.nodes.flags
-        scaled_times = [generation_time * time * 1E-6 for time in times]
+        scaled_times = [time / (1E6/generation_time) for time in times]
         tables.nodes.set_columns(flags=flags, time=scaled_times)
         ts = tables.tree_sequence()
         scaled_tree = ts.first()
-        self.verify(tree, newick=scaled_tree.newick(), Ne=1,
+        self.verify(tree, newick=scaled_tree.newick(),
                     branch_length_units="myr", generation_time=generation_time)
 
 
 def make_nexus(tree, pop_size_map):
     """
-    Returns the specified tree formatted as starbeast compatable nexus.
+    Returns the specified tree formatted as StarBEAST compatible nexus.
     """
     node_labels = {}
+    leaf_names = []
+    count = 0
     for u in tree.nodes():
         name = ""
         if tree.is_leaf(u):
+            count += 1
             name = str(u)
-        node_labels[u] = f"{name}[&dmv={{{pop_size_map[u]}}}]"
+            leaf_names.append(name)
+            node_labels[u] = f"{count}[&dmv={{{pop_size_map[u]}}},"
+            node_labels[u] += "dmv1=0.260,dmv1_95%_HPD={0.003,0.625},"
+            node_labels[u] += "dmv1_median=0.216,dmv1_range={0.001,1.336},"
+            node_labels[u] += "height=1.310E-15,height_95%_HPD={0.0,3.552E-15},"
+            node_labels[u] += "height_median=0.0,height_range={0.0,7.105E-15},"
+            node_labels[u] += "length=2.188,length_95%_HPD={1.725,2.634},"
+            node_labels[u] += "length_median=2.182,length_range={1.307,3.236}]"
+        else:
+            node_labels[u] = f"[&dmv={{{pop_size_map[u]}}},"
+            node_labels[u] += "dmv1=0.260,dmv1_95%_HPD={0.003,0.625},"
+            node_labels[u] += "dmv1_median=0.216,dmv1_range={0.001,1.336},"
+            node_labels[u] += "height=1.310E-15,height_95%_HPD={0.0,3.552E-15},"
+            node_labels[u] += "height_median=0.0,height_range={0.0,7.105E-15},"
+            node_labels[u] += "length=2.188,length_95%_HPD={1.725,2.634},"
+            node_labels[u] += "length_median=2.182,length_range={1.307,3.236}]"
     newick = tree.newick(node_labels=node_labels)
-    out = "#NEXUS\n"
+    out = "#NEXUS\n\n"
+    out += "Begin taxa;\n"
+    out += "    Dimensions ntax=" + str(len(leaf_names)) + ";\n"
+    out += "    Taxlabels\n"
+    for name in leaf_names:
+        out += "        spc" + str(name) + "\n"
+    out += "        ;\n"
+    out += "End;\n"
     out += "Begin trees;\n"
-    out += "tree TREE1 = " + newick
-    out += "End;"
+    out += "    Translate\n"
+    count = 0
+    for name in leaf_names:
+        count += 1
+        out += "             " + str(count) + " spc" + name + ",\n"
+    out = out[:-2]
+    out += "\n;\n"
+    out += "tree TREE1 = " + newick + "\n"
+    out += "End;\n"
     return out
 
 
@@ -189,12 +222,17 @@ class TestStarbeastRoundTrip(unittest.TestCase):
     Tests that we get what we expect when we parse trees produced from
     msprime/tskit.
     """
-    def verify(self, tree, pop_size_map, nexus=None):
-        nexus = make_nexus(tree, pop_size_map)
-
+    def verify(self, tree, pop_size_map, nexus=None, branch_length_units="yr",
+               generation_time=1):
+        if nexus is None:
+            nexus = make_nexus(tree, pop_size_map)
         population_configurations, demographic_events = msprime.parse_starbeast(
-            nexus, "yr", 1)
+            nexus, branch_length_units, generation_time)
         self.assertEqual(len(population_configurations), tree.num_samples())
+        for pop_config in population_configurations:
+            # self.assertEqual(pop_config.initial_size, Ne)
+            self.assertEqual(pop_config.growth_rate, 0)
+            self.assertIn("species_name", pop_config.metadata)
 
         # Population IDs are mapped to leaves as they are encountered in a postorder
         # traversal.
@@ -209,7 +247,7 @@ class TestStarbeastRoundTrip(unittest.TestCase):
 
         for u in tree.leaves():
             pop_config = population_configurations[pop_id_map[u]]
-            self.assertEqual(pop_config.initial_size, pop_size_map[u])
+            # self.assertEqual(pop_config.initial_size, pop_size_map[u])
             self.assertEqual(pop_config.growth_rate, 0)
             # TODO check the metadata: we should be encoding the species name
 
@@ -270,6 +308,23 @@ class TestStarbeastRoundTrip(unittest.TestCase):
     def test_n10_non_binary(self):
         tree = get_non_binary_tree(10)
         self.verify(tree, {u: 0.1 for u in tree.nodes()})
+
+    def test_n10_binary_million_years(self):
+        ts = msprime.simulate(10, random_seed=2)
+        generation_time = 5
+        tree = ts.first()
+        pop_size_map = {u: 0.1 for u in tree.nodes()}
+        nexus = make_nexus(tree, pop_size_map)
+        tables = ts.dump_tables()
+        times = tables.nodes.time
+        flags = tables.nodes.flags
+        scaled_times = [time * (1E6/generation_time) for time in times]
+        tables.nodes.set_columns(flags=flags, time=scaled_times)
+        ts = tables.tree_sequence()
+        scaled_tree = ts.first()
+        scaled_pop_size_map = {u: 0.1 * (1E6/generation_time) for u in pop_size_map}
+        self.verify(scaled_tree, nexus=nexus, pop_size_map=scaled_pop_size_map,
+                    branch_length_units="myr", generation_time=generation_time)
 
 
 class TestSpeciesTreeParsingErrors(unittest.TestCase):
@@ -353,7 +408,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
             self.assertIs(type(mm), msprime.simulations.MassMigration)
 
 
-class TestStarBeastParsingErrors(unittest.TestCase):
+class TestStarbeastParsingErrors(unittest.TestCase):
     """
     Tests for parsing of species trees in nexus format, written by
     StarBEAST.
