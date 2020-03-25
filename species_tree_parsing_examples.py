@@ -121,34 +121,3 @@ tree_sequence = msprime.simulate(
 print("number of trees: ", tree_sequence.num_trees)
 for tree in tree_sequence.trees():
     print("interval: ", tree.interval)
-
-
-# Parse a tree with minimal dmv annotation.
-good_nexus = "#NEXUS\n\n"
-good_nexus += "Begin taxa;\n"
-good_nexus += "    Dimensions ntax=3;\n"
-good_nexus += "    Taxlabels\n"
-good_nexus += "           spc01\n"
-good_nexus += "           spc02\n"
-good_nexus += "           spc03\n"
-good_nexus += "           ;\n"
-good_nexus += "End;\n"
-good_nexus += "Begin trees;\n"
-good_nexus += "    Translate\n"
-good_nexus += "     1 spc01,\n"
-good_nexus += "     2 spc02,\n"
-good_nexus += "     3 spc03\n"
-good_nexus += "     ;\n"
-good_nwk = "((1[&dmv={0.1}]:1,2[&dmv={0.1}]:1)[&dmv={0.1}]:1,3[&dmv={0.1}]:2)[&dmv={0.1}]:0;"
-good_nexus += "tree TREE1 = " + good_nwk + "\n"
-good_nexus += "End;\n"
-parsed_tuple = msprime.parse_starbeast(
-        tree=good_nexus,
-        branch_length_units="myr",
-        generation_time=5)
-population_configurations = parsed_tuple[0]
-demographic_events = parsed_tuple[1]
-dd = msprime.DemographyDebugger(
-        population_configurations=parsed_tuple[0],
-        demographic_events=parsed_tuple[1])
-dd.print_history()
