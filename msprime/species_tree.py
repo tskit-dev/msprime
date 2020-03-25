@@ -421,13 +421,17 @@ def parse_starbeast(
         elif in_annotation:
             annotation_string += clean_tree_string[x]
 
-    # Make sure that dmv annotation is found for each node.
+    # Use the translation block to back-translate species IDs in
+    # the tree string. The Nexus format definition does not
+    # define the format of the translate block. Here, we only
+    # allow comma-separated translation pairs with the species
+    # name used in the tree string to the left and the translation
+    # to the right.
+    # An example of an allowed translation is:
+    # "translate 1 spc1, 2 spc2, 3 spc3;"
     # First, we trim the "translate" tag from the beginning.
     assert translate_command[0:10] == "translate "
     translate_command = translate_command[10:]
-
-    # Use the translation block to back-translate species IDs in
-    # the tree string.
     transl_originals = []
     transl_replaceds = []
     translation_list = translate_command.split(",")

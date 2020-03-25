@@ -433,9 +433,7 @@ class TestStarbeastParsingErrors(unittest.TestCase):
         good_nexus += "     2 spc02,\n"
         good_nexus += "     3 spc03\n"
         good_nexus += "     ;\n"
-        good_nwk = "((1[&dmv={0.1}]:1,2[&dmv={0.2}]:1)[&dmv={0.3}]"
-        good_nwk += ":1,3[&dmv={0.4}]:2)[&dmv={0.5}]:0.0;"
-        good_nexus += "tree TREE1 = " + good_nwk + "\n"
+        good_nwk = "tree TREE1 = ((1[&dmv={0.1}]:1,2[&dmv={0.2}]:1)[&dmv={0.3}]"
         good_nexus += "End;\n"
         bad_trees.append(good_nexus.replace("#NEXUS", "#NEXU"))
         bad_trees.append(good_nexus.replace("#NEXUS", "NEXUS"))
@@ -458,7 +456,9 @@ class TestStarbeastParsingErrors(unittest.TestCase):
         bad_trees.append(good_nexus.replace("Begin trees", "Begin taxa"))
         bad_trees.append(good_nexus.replace("[&dmv={0.5}]", ""))
         bad_trees.append(good_nexus.replace("[&dmv={0.1}]", ""))
+        bad_trees.append(good_nexus.replace("[&dmv={0.1}]", "[&dmv={asdf}]"))
         bad_trees.append(good_nexus.replace(":1,2[&dmv", ":1, 2[&dmv"))
+        bad_trees.append(good_nexus.replace(good_nwk, good_nwk + good_nwk))
         good_generation_time = 5
         for bad_tree in bad_trees:
             with self.assertRaises(ValueError):
