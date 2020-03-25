@@ -30,7 +30,6 @@ import python_jsonschema_objects as pjs
 
 import _msprime
 import msprime
-from tests import tsutil
 
 
 class TestProvenance(unittest.TestCase):
@@ -258,7 +257,7 @@ class TestRoundTrip(unittest.TestCase):
         recreated = None
         for i, _ in enumerate(ts.provenances()):
             command, parsed_prov = msprime.provenance.parse_provenance(ts, i)
-            if recreated:
+            if recreated is not None and command != 'simulate':
                 parsed_prov["tree_sequence"] = recreated
             recreated = getattr(msprime, command)(**parsed_prov)
         self.verify_equal(ts, recreated)
@@ -310,11 +309,8 @@ class TestSimulateRoundTrip(TestRoundTrip):
         self.verify(ts)
 
     def test_from_ts(self):
-        from_ts = msprime.simulate(10, random_seed=5)
-        from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 2)
-        start_time = from_ts.tables.nodes.time.max()
-        ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2)
+        from_ts = msprime.simulate(10, random_seed=5, end_time=0.5)
+        ts = msprime.simulate(from_ts=from_ts, random_seed=2)
         self.verify(ts)
 
 
@@ -324,3 +320,11 @@ class TestMutateRoundTrip(TestRoundTrip):
         ts = msprime.mutate(
             ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False)
         self.verify(ts)
+
+
+class TestRetainsProvenance(unittest.TestCase):
+    def test_simulate_retains_provenance(self):
+        from_ts = msprime.simulate(10, random_seed=5, end_time=0.5)
+        ts = msprime.simulate(from_ts=from_ts, random_seed=2)
+        self.assertEqual(ts.num_provenances, from_ts.num_provenances + 1)
+        self.assertEqual(ts.provenance(0), from_ts.provenance(0))
