@@ -113,9 +113,14 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             }
 
         if isinstance(obj, tskit.TreeSequence):
-            # Store the tree sequence as the tables deserialised with
-            # tskit.TableCollection.fromdict(tables).tree_sequence()
-            return {'__ts__': obj.tables.asdict()}
+            # This is a special case in which we know that the input tree sequence
+            # is strictly a subset of the current ts. Therefore, we can reproduce
+            # the input by storing the offsets within tables.
+
+            # Note: depends on current semantics of __iter__ in TableCollection.
+            # See https://github.com/tskit-dev/tskit/issues/500
+            offsets = {name: len(table) for name, table in obj.tables}
+            return {'__from_ts__': offsets}
 
         elif isinstance(obj, numpy.ndarray):
             # The most failsafe way would be be to `base64.b64encode(obj.tostring())`
@@ -144,14 +149,14 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
                             f'that gives the objects args')
 
     @staticmethod
-    def decode(s):
+    def decode(s, ts):
         def hook(obj):
             if '__function__' in obj:
                 return types.FunctionType(
                     marshal.loads(base64.b64decode(obj['__function__'])),
                     {}, 'func', obj['defaults'], ())
-            elif '__ts__' in obj:
-                return tskit.TableCollection.fromdict(obj['__ts__']).tree_sequence()
+            elif '__from_ts__' in obj:
+                return subset_tree_sequence(ts, obj['__from_ts__'])
             elif '__ndarray__' in obj:
                 return numpy.asarray(obj['__ndarray__'], dtype=obj['dtype'])
             elif '__npgeneric__' in obj:
@@ -165,6 +170,19 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
         return json.JSONDecoder(object_hook=hook).decode(s)
 
 
+def subset_tree_sequence(ts, offsets):
+    tables = ts.dump_tables()
+    # Note: depends on current semantics of __iter__ in TableCollection.
+    # See https://github.com/tskit-dev/tskit/issues/500
+    table_map = {name: table for name, table in tables}
+    for name in ["individuals", "nodes", "edges", "provenances"]:
+        table_map[name].truncate(offsets[name])
+    for name in ["sites", "mutations", "migrations"]:
+        if len(table_map[name]) != offsets[name]:
+            raise ValueError(f"Table {name} in from_ts has been modified")
+    return tables.tree_sequence()
+
+
 def parse_provenance(ts, index=None):
     """
     Convert the specified provenance to tuple of the command used and dict suitable
@@ -173,7 +191,7 @@ def parse_provenance(ts, index=None):
     if index is None:
         index = ts.num_provenances - 1
     prov = ts.provenance(index).record
-    ret = ProvenanceEncoderDecoder.decode(prov)
+    ret = ProvenanceEncoderDecoder.decode(prov, ts)
     if ret['software']['name'] != 'msprime':
         raise ValueError(f'Only msprime provanances can be parsed,'
                          f' found {ret["software"]["name"]}')
