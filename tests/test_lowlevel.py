@@ -2238,7 +2238,7 @@ class TestLikelihood(unittest.TestCase):
             with self.assertRaises(TypeError):
                 _msprime.log_likelihood_arg(tables, 1, bad_float)
 
-        for bad_rec_rate in [0, -1]:
+        for bad_rec_rate in [-0.1, -1]:
             with self.assertRaises(ValueError):
                 _msprime.log_likelihood_arg(tables, 1, recombination_rate=bad_rec_rate)
 
