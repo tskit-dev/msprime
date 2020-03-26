@@ -18,6 +18,9 @@ question to fellow ``msprime`` users, please send an email to the
 questions on the mailing list, you can help to build a searchable knowledge
 base.
 
+We are currently working towards our 1.0 release, the roadmap of issues 
+are in this [github milestone](https://github.com/tskit-dev/msprime/milestone/9).
+
 If you use ``msprime`` in your work, please cite the [PLOS Computational
 Biology](http://dx.doi.org/10.1371/journal.pcbi.1004842) paper.
 See [here](https://msprime.readthedocs.org/en/latest/CITATION.html) for
