@@ -4289,8 +4289,8 @@ msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    if (recombination_rate <= 0) {
-        PyErr_SetString(PyExc_ValueError, "recombination_rate must be > 0");
+    if (recombination_rate < 0) {
+        PyErr_SetString(PyExc_ValueError, "recombination_rate must be >= 0");
         goto out;
     }
 
