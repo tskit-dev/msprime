@@ -1240,3 +1240,36 @@ argument.
 Migrations nodes are also recording in the ARG using the
 :data:`.NODE_IS_MIG_EVENT` flag. See the :ref:`sec_api_node_flags`
 section for more details.
+
+**********************
+Evaluating likelihoods
+**********************
+
+``msprime`` can be used to evaluate the sampling probability of a tree sequence
+for a given effective population size and per-site, per-generation recombination
+rate, as well as the probability of a configuration of infinite sites mutations
+given a tree sequence and a per-site, per-generation mutation probability. In
+both cases, the tree sequence must conform to the ``record_full_arg`` option of
+the :func:`.simulate` function. The following example illustrates the evaluation
+of these log likelihoods:
+
+.. code-block:: python
+
+    def likelihood_example():
+        ts = msprime.simulate(
+            sample_size=5, recombination_rate=0.1, mutation_rate=0.1, record_full_arg=True, random_seed=42)
+        print(msprime.log_arg_likelihood(ts, recombination_rate=0.1, Ne=1))
+        print(msprime.log_arg_likelihood(ts, recombination_rate=1, Ne=1))
+        print(msprime.log_arg_likelihood(ts, recombination_rate=1, Ne=10))
+        print(msprime.unnormalised_log_mutation_likelihood(ts, mu=0))
+        print(msprime.unnormalised_log_mutation_likelihood(ts, mu=0.1))
+        print(msprime.unnormalised_log_mutation_likelihood(ts, mu=1))
+
+Running this code we get::
+
+    -11.22279995534112
+    -14.947399100839986
+    -22.154011926066893
+    -inf
+    -5.665181028073889
+    -7.087195080578711
