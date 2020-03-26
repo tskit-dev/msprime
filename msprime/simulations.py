@@ -2477,3 +2477,20 @@ class DemographyDebugger(object):
         Returns the number of epochs defined by the demographic model.
         """
         return len(self.epochs)
+
+
+def rerun(ts):
+    """
+    Reruns the simulations encoded in the provenance of the specified tree
+    sequence.
+    """
+    # TODO We can imagine passing in extra software/cmd arguments which map to a
+    # callable.
+    # TODO figure out how to workaround the circular import problems. Possibly
+    # this should just be in it's own module or something.
+    cmd_map = {"simulate": simulate}  # , "mutate": mutations.mutate}
+    current_ts = None
+    for prov in ts.provenances():
+        cmd, args = provenance.parse_provenance(prov, current_ts)
+        current_ts = cmd_map[cmd](**args)
+    return current_ts

@@ -113,9 +113,7 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             }
 
         if isinstance(obj, tskit.TreeSequence):
-            # Store the tree sequence as the tables deserialised with
-            # tskit.TableCollection.fromdict(tables).tree_sequence()
-            return {'__ts__': obj.tables.asdict()}
+            return "__current_ts__"
 
         elif isinstance(obj, numpy.ndarray):
             # The most failsafe way would be be to `base64.b64encode(obj.tostring())`
@@ -150,8 +148,6 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
                 return types.FunctionType(
                     marshal.loads(base64.b64decode(obj['__function__'])),
                     {}, 'func', obj['defaults'], ())
-            elif '__ts__' in obj:
-                return tskit.TableCollection.fromdict(obj['__ts__']).tree_sequence()
             elif '__ndarray__' in obj:
                 return numpy.asarray(obj['__ndarray__'], dtype=obj['dtype'])
             elif '__npgeneric__' in obj:
@@ -165,21 +161,25 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
         return json.JSONDecoder(object_hook=hook).decode(s)
 
 
-def parse_provenance(ts, index=None):
+def parse_provenance(provenance, current_ts):
     """
     Convert the specified provenance to tuple of the command used and dict suitable
     for calling the command again e.g `msprime.simulate(**parse_provenance(ts)[1])`
     """
-    if index is None:
-        index = ts.num_provenances - 1
-    prov = ts.provenance(index).record
-    ret = ProvenanceEncoderDecoder.decode(prov)
+    ret = ProvenanceEncoderDecoder.decode(provenance.record)
     if ret['software']['name'] != 'msprime':
         raise ValueError(f'Only msprime provanances can be parsed,'
                          f' found {ret["software"]["name"]}')
-    command = ret['parameters']['command']
-    del ret['parameters']['command']
-    return command, ret['parameters']
+    parameters = ret['parameters']
+    command = parameters.pop('command')
+    updated_parameters = {}
+    for key, value in parameters.items():
+        # TODO This is potentially unsafe. What if we had another argument to
+        # the function that happened to be "__current_ts__"?
+        if value == "__current_ts__":
+            value = current_ts
+        updated_parameters[key] = value
+    return command, updated_parameters
 
 
 def _human_readable_size(size, decimal_places=2):
