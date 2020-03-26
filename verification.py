@@ -2220,6 +2220,47 @@ class SimulationVerifier(object):
         pyplot.savefig(path)
         pyplot.close('all')
 
+    def verify_recombination(
+            self, basedir, name, sample_size, Ne, r, L, model, growth_rate=0):
+        """
+        Verifies that the number of recombination equals the number of mutation.
+        """
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        empirical_theta = []
+        empirical_rho = []
+        for i in range(1,200):
+                ts = msprime.simulate(
+                    Ne=Ne, recombination_rate=r, mutation_rate=r ,length=L,
+                    population_configurations=[
+                    msprime.PopulationConfiguration(
+                    sample_size=sample_size, initial_size=Ne,
+                    growth_rate=growth_rate)],
+                    model=model)
+                empirical_theta.append(ts.get_num_sites())
+                ts = msprime.simulator_factory(
+                    Ne=Ne, recombination_rate=r,length=L,
+            	    population_configurations=[
+                    msprime.PopulationConfiguration(
+                    sample_size=sample_size, initial_size=Ne,
+                    growth_rate=growth_rate)],
+            	    model=model)
+                ts.runs()
+                empirical_rho.append(ts.num_breakpoints)
+        empirical_rho.sort()
+        empirical_theta.sort()
+        pyplot.plot(empirical_rho, empirical_theta)
+        pyplot.plot(empirical_theta, empirical_theta, color='red')  
+        pyplot.xlabel('breakpoint number')
+        pyplot.ylabel('segregating site number')
+        pyplot.axis('square')
+        path = os.path.join(basedir, f"{name}_growth={growth_rate}_rec_check.png")
+        print("Writing", path)
+        pyplot.savefig(path)
+        pyplot.close('all')	
+	
+
+
     def run_hudson_breakpoints(self):
         basedir = "tmp__NOBACKUP__/hudson_breakpoints"
         self.verify_breakpoint_distribution(
@@ -2251,11 +2292,11 @@ class SimulationVerifier(object):
     def run_xi_dirac_breakpoints(self):
         basedir = "tmp__NOBACKUP__/xi_dirac_breakpoints"
         for psi in [0.1, 0.3, 0.6, 0.9]:
-            for c in [0.9, 0.5]:
+            for c in [10,100]:
                 self.verify_breakpoint_distribution(
                     basedir, f"n=100_psi={psi}_c={c}",
                     sample_size=100, Ne=10**4, r=1e-8,
-                    L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c))
+                    L=10**7, model=msprime.DiracCoalescent(psi=psi, c=c))
                 # Add a growth rate with a higher recombination rate so
                 # we still get decent numbers of trees
                 self.verify_breakpoint_distribution(
@@ -2263,6 +2304,37 @@ class SimulationVerifier(object):
                     sample_size=100, Ne=10**4, r=1e-7,
                     L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c),
                     growth_rate=0.05)
+
+    def run_xi_beta_recombinations(self):
+        basedir = "tmp__NOBACKUP__/xi_beta_recombinations"
+        for alpha in [1.1, 1.3, 1.6, 1.9]:
+            self.verify_recombination(
+                basedir, f"n=100_alpha={alpha}", sample_size=100, Ne=10**4, r=1e-8,
+                L=10**6, model=msprime.BetaCoalescent(alpha=alpha))
+
+
+    def run_xi_dirac_recombinations(self):
+        basedir = "tmp__NOBACKUP__/xi_dirac_recombinations"
+        for psi in [0.01, 0.1, 0.3, 0.6, 0.9]:
+            for c in [0.01, 1, 10, 100]:
+                self.verify_recombination(
+                    basedir, f"n=100_psi={psi}_c={c}",
+                    sample_size=100, Ne=10**4, r=1e-8,
+                    L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c))
+
+    def run_Hudson_recombinations(self):
+        basedir = "tmp__NOBACKUP__/hudson_recombinations"
+        self.verify_recombination(
+            basedir, f"n=10_hudson",
+            sample_size=10, Ne=10**4, r=1e-9,
+            L=10**7, model="hudson")
+
+    def run_DTWF_recombinations(self):
+        basedir = "tmp__NOBACKUP__/DTWF_recombinations"
+        self.verify_recombination(
+            basedir, f"n=4_dtwf",
+            sample_size=4, Ne=10**4, r=1e-9,
+            L=10**7, model="dtwf")
 
     def run_cont_discrete_comparison(self, key, model,
                                      discrete_recomb_map,
@@ -2361,17 +2433,41 @@ class SimulationVerifier(object):
         """
         self._instances["hudson_breakpoints"] = self.run_hudson_breakpoints
 
+    def add_hudson_recombination(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["hudson_recombinations"] = self.run_Hudson_recombinations
+
+    def add_dtwf_recombination(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["dtwf_recombinations"] = self.run_DTWF_recombinations
+
     def add_xi_beta_breakpoints(self):
         """
         Adds a check for xi_beta recombination breakpoints
         """
         self._instances["xi_beta_breakpoints"] = self.run_xi_beta_breakpoints
 
+    def add_xi_beta_recombination(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["xi_beta_recombinations"] = self.run_xi_beta_recombinations
+
     def add_xi_dirac_breakpoints(self):
         """
         Adds a check for xi_dirac recombination breakpoints
         """
         self._instances["xi_dirac_breakpoints"] = self.run_xi_dirac_breakpoints
+
+    def add_xi_dirac_recombination(self):
+        """
+        Adds a check for xi_dirac recombination breakpoints
+        """
+        self._instances["xi_dirac_recombinations"] = self.run_xi_dirac_recombinations
 
     def run_xi_beta_expected_sfs(self):
         self.compare_xi_beta_sfs(
@@ -2571,6 +2667,8 @@ class SimulationVerifier(object):
 
 
 def run_tests(args):
+
+
     # random.seed(2)
     verifier = SimulationVerifier("tmp__NOBACKUP__")
 
@@ -2847,9 +2945,16 @@ def run_tests(args):
             num_populations=1, num_replicates=200, num_demographic_events=8)
 
     verifier.add_hudson_breakpoints()
-    # Check Xi coalesesent recombination breakpoint distributions
+    # Check Xi coalescent recombination breakpoint distributions
+
     verifier.add_xi_beta_breakpoints()
     verifier.add_xi_dirac_breakpoints()
+
+    # Check mutation and recombination have same distribution when mutation equals recombination rate
+    verifier.add_xi_beta_recombination()
+    verifier.add_xi_dirac_recombination()
+    verifier.add_hudson_recombination()
+    #verifier.add_dtwf_recombination()
 
     # DTWF checks against SLiM
     # TODO: Add back multi-pop tests of DTWF vs. SLiM when full diploid
