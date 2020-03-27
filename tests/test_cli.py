@@ -67,15 +67,15 @@ class TestRandomSeeds(unittest.TestCase):
     """
     Test the random seed generation for the ms compatability layer.
     """
+
     def test_seed_conversion(self):
         num_random_tests = 100
-        for max_seed in [1024, 2**16 - 1, 2**32 - 1]:
+        for max_seed in [1024, 2 ** 16 - 1, 2 ** 32 - 1]:
             input_seeds = set()
             python_seeds = set()
             values = set()
             for j in range(num_random_tests):
-                input_seed = tuple(
-                    [random.randint(1, max_seed) for k in range(3)])
+                input_seed = tuple([random.randint(1, max_seed) for k in range(3)])
                 python_seed = cli.get_single_seed(input_seed)
                 self.assertNotIn(input_seed, input_seeds)
                 self.assertNotIn(python_seed, python_seeds)
@@ -117,6 +117,7 @@ class TestCli(unittest.TestCase):
     """
     Superclass of tests for the CLI needing temp files.
     """
+
     def setUp(self):
         fd, self.temp_file = tempfile.mkstemp(prefix="msp_cli_testcase_")
         os.close(fd)
@@ -130,6 +131,7 @@ class TestMspmsRoundTrip(unittest.TestCase):
     Tests the mspms argument parsing to ensure that we correctly round-trip
     to the ms arguments.
     """
+
     @unittest.skip
     # Skip these tests until we've got the ms cmd line generation code
     # reimplemented.
@@ -147,19 +149,20 @@ class TestMspmsRoundTrip(unittest.TestCase):
         arg_list = "15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split()
         simulator = cli.get_mspms_runner(arg_list).get_simulator()
         line = simulator.get_ms_command_line(
-            num_replicates=1000, scaled_mutation_rate=2.0)
+            num_replicates=1000, scaled_mutation_rate=2.0
+        )
         parser = cli.get_mspms_parser()
         args = parser.parse_args(line[1:])
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 2.0)
-        self.assertEqual(
-            args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
+        self.assertEqual(args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
 
         arg_list = "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split()
         simulator = cli.get_mspms_runner(arg_list).get_simulator()
         line = simulator.get_ms_command_line(
-            num_replicates=1000, scaled_mutation_rate=6.4)
+            num_replicates=1000, scaled_mutation_rate=6.4
+        )
         parser = cli.get_mspms_parser()
         args = parser.parse_args(line[1:])
         self.assertEqual(args.sample_size, 15)
@@ -174,6 +177,7 @@ class TestMspmsArgumentParser(unittest.TestCase):
     """
     Tests the parser to ensure it works correctly and is ms compatible.
     """
+
     def parse_args(self, args):
         parser = cli.get_mspms_parser()
         return parser.parse_args(args)
@@ -198,16 +202,13 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.trees, False)
         self.assertEqual(args.recombination, [100, 2501])
 
-        args = self.parse_args(
-            "15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split())
+        args = self.parse_args("15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split())
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 2.0)
-        self.assertEqual(
-            args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
+        self.assertEqual(args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
 
-        args = self.parse_args(
-            "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split())
+        args = self.parse_args("15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split())
         self.assertEqual(args.sample_size, 15)
         self.assertEqual(args.num_replicates, 1000)
         self.assertEqual(args.mutation_rate, 6.4)
@@ -263,8 +264,7 @@ class TestMspmsArgumentParser(unittest.TestCase):
         args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
         self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
         args = self.parse_args("10 1 -I 2 10 0 -en 1 2 3".split())
-        self.assertEqual(
-            args.population_size_change, [(0, [1, 2, 3])])
+        self.assertEqual(args.population_size_change, [(0, [1, 2, 3])])
 
     def test_growth_rates(self):
         args = self.parse_args(["40", "20"])
@@ -280,25 +280,18 @@ class TestMspmsArgumentParser(unittest.TestCase):
         self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25])])
         args = self.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10".split())
         self.assertEqual(args.growth_rate, None)
-        self.assertEqual(
-            args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
-        args = self.parse_args(
-            "15 1000 -eG 1.0 5.25 -eG 2.0 10 -G 4".split())
+        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        args = self.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10 -G 4".split())
         self.assertEqual(args.growth_rate, 4.0)
-        self.assertEqual(
-            args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
         args = self.parse_args("10 1 -I 2 10 0 -eg 1 2 3".split())
-        self.assertEqual(
-            args.population_growth_rate_change, [(0, [1, 2, 3])])
+        self.assertEqual(args.population_growth_rate_change, [(0, [1, 2, 3])])
 
     def test_migration_rates(self):
         args = self.parse_args("15 1 -I 2 15 0 -eM 2 3 ".split())
-        self.assertEqual(
-            args.migration_rate_change, [(0, [2, 3])])
-        args = self.parse_args(
-            "15 1 -I 2 15 0 -eM 2 3 -eG 3 4 -eM 4 5".split())
-        self.assertEqual(
-            args.migration_rate_change, [(0, [2, 3]), (2, [4, 5])])
+        self.assertEqual(args.migration_rate_change, [(0, [2, 3])])
+        args = self.parse_args("15 1 -I 2 15 0 -eM 2 3 -eG 3 4 -eM 4 5".split())
+        self.assertEqual(args.migration_rate_change, [(0, [2, 3]), (2, [4, 5])])
 
     def test_gene_conversion(self):
         args = self.parse_args("10 1 -r 1 100 -c 5 12".split())
@@ -314,7 +307,6 @@ class CustomExceptionForTesting(Exception):
 
 
 class TestHotspotsToRecombMap(TestCli):
-
     def verify_map(self, recomb_map, expected_positions, expected_rates):
         self.assertEqual(recomb_map.get_positions(), expected_positions)
         self.assertEqual(recomb_map.get_rates(), expected_rates)
@@ -381,15 +373,21 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
     def assert_parser_error(self, command_line):
         split_cmd = command_line.split()
         self.assertRaises(
-            CustomExceptionForTesting, cli.create_simulation_runner,
-            self.parser, split_cmd)
+            CustomExceptionForTesting,
+            cli.create_simulation_runner,
+            self.parser,
+            split_cmd,
+        )
         with open(self.temp_file, "w") as f:
             # We're assuming the first two args are always the sample size
             # and num_replicates here.
             f.write(" ".join(split_cmd[2:]))
         self.assertRaises(
-            CustomExceptionForTesting, cli.create_simulation_runner,
-            self.parser, split_cmd[:2] + ["-f", self.temp_file])
+            CustomExceptionForTesting,
+            cli.create_simulation_runner,
+            self.parser,
+            split_cmd[:2] + ["-f", self.temp_file],
+        )
 
     def test_trees_or_mutations(self):
         self.assert_parser_error("10 1")
@@ -475,8 +473,7 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
         self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 2 0 0 0 0")
         # Change in migration matrix size.
         self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 1 0")
-        self.assert_parser_error(
-            "10 1 -T -I 2 5 5 -ema x 3 0 0 0 0 0 0 0 0 0")
+        self.assert_parser_error("10 1 -T -I 2 5 5 -ema x 3 0 0 0 0 0 0 0 0 0")
 
     def test_migration_rate_change(self):
         # -eM without -I raises error
@@ -497,8 +494,7 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
         self.assert_parser_error("10 1 -T -eG 0.2 1 -eG 0.1 1")
         self.assert_parser_error("10 1 -T -eG 0.1 1 -eN 0.21 1 -eG 0.2 1")
         self.assert_parser_error("10 1 -T -eG 0.1 1 -eG 0.21 1 -eG 0.2 1")
-        self.assert_parser_error(
-            "10 1 -T -I 2 10 0 -eG 0.1 1 -eM 0.21 1 -eG 0.2 1")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -eG 0.1 1 -eM 0.21 1 -eG 0.2 1")
 
     def test_recombination(self):
         self.assert_parser_error("10 1 -T -r x 20")
@@ -587,8 +583,7 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
         self.assert_parser_error("10 1 -T -I 2 10 0 -es -1 1 1")
         # We don't support -es and any options that affect all pops.
         self.assert_parser_error("10 1 -T -I 2 10 0 -es 1 1 1 -eM 1 2")
-        self.assert_parser_error(
-            "10 1 -T -I 2 10 0 -es 1 1 1 -ema 0.5 2 1 2 3 4")
+        self.assert_parser_error("10 1 -T -I 2 10 0 -es 1 1 1 -ema 0.5 2 1 2 3 4")
         self.assert_parser_error("10 1 -t 2.0 -eG 0.001 5.0 -es 0.01 1 0.0")
         self.assert_parser_error("10 1 -t 2.0 -eN 0.001 5.0 -es 0.01 1 0.0")
 
@@ -715,46 +710,49 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             sim = self.create_simulator(args)
             return [
                 (c.initial_size * 4, c.growth_rate)
-                for c in sim.population_configurations]
-        self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 -1"),
-            [(1, -1), (1, 0), (1, 0)])
+                for c in sim.population_configurations
+            ]
+
+        self.assertEqual(f("2 1 -T -I 3 2 0 0 -g 1 -1"), [(1, -1), (1, 0), (1, 0)])
         self.assertEqual(
             f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3"),
-            [(1, 1), (1, 2), (1, 3), (1, 0)])
+            [(1, 1), (1, 2), (1, 3), (1, 0)],
+        )
         # A -g should override a -G
         self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"),
-            [(1, 2), (1, -1), (1, -1)])
+            f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"), [(1, 2), (1, -1), (1, -1)]
+        )
         # The last -g should be effective
         self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"),
-            [(1, -1), (1, 0), (1, 0)])
+            f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"), [(1, -1), (1, 0), (1, 0)]
+        )
 
     def test_population_size(self):
         def f(args):
             sim = self.create_simulator(args)
             return [
                 (c.initial_size * 4, c.growth_rate)
-                for c in sim.population_configurations]
-        self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -n 1 2"),
-            [(2, 0), (1, 0), (1, 0)])
+                for c in sim.population_configurations
+            ]
+
+        self.assertEqual(f("2 1 -T -I 3 2 0 0 -n 1 2"), [(2, 0), (1, 0), (1, 0)])
         self.assertEqual(
             f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3"),
-            [(1, 0), (2, 0), (3, 0), (1, 0)])
+            [(1, 0), (2, 0), (3, 0), (1, 0)],
+        )
         # The last -n should be effective
         self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"),
-            [(0.1, 0), (1, 0), (1, 0)])
+            f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"), [(0.1, 0), (1, 0), (1, 0)]
+        )
         self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"),
-            [(0.1, 2), (1, 0), (1, 0)])
+            f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"), [(0.1, 2), (1, 0), (1, 0)]
+        )
 
     def test_population_growth_rate_change(self):
         def f(args):
             sim = self.create_simulator(args)
             return sim.demographic_events
+
         events = f("2 1 -T -eg 0.1 1 2")
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "population_parameters_change")
@@ -776,6 +774,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def f(args):
             sim = self.create_simulator(args)
             return sim.demographic_events
+
         events = f("2 1 -T -en 0.1 1 2")
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "population_parameters_change")
@@ -806,10 +805,9 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual(event.matrix_index, result[2])
+
         check("2 1 -T -I 3 2 0 0 -eM 2.2 2", [(2.2, 1, None)])
-        check(
-            "2 1 -T -I 3 2 0 0 -eM 2.2 2 -eM 3.3 4",
-            [(2.2, 1, None), (3.3, 2, None)])
+        check("2 1 -T -I 3 2 0 0 -eM 2.2 2 -eM 3.3 4", [(2.2, 1, None), (3.3, 2, None)])
 
     def test_migration_matrix_entry_change(self):
         def check(args, results):
@@ -822,10 +820,12 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual(event.matrix_index, result[2])
+
         check("2 1 -T -I 3 2 0 0 -em 2.2 1 2 2", [(2.2, 2, (0, 1))])
         check(
             "2 1 -T -I 3 2 0 0 -eM 2.2 2 -em 3.3 3 1 5.5",
-            [(2.2, 1, None), (3.3, 5.5, (2, 0))])
+            [(2.2, 1, None), (3.3, 5.5, (2, 0))],
+        )
 
     def test_migration_matrix_change(self):
         def check(args, results):
@@ -843,16 +843,21 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual(event.matrix_index, result[2])
+
         check(
-            "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x",
-            [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))])
+            "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x", [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))]
+        )
         check(
             "2 1 -T -I 3 2 0 0 -ema 2.2 3 x 1 2 3 x 4 5 6 x",
             [
-                (2.2, 1, (0, 1)), (2.2, 2, (0, 2)),
-                (2.2, 3, (1, 0)), (2.2, 4, (1, 2)),
-                (2.2, 5, (2, 0)), (2.2, 6, (2, 1)),
-            ])
+                (2.2, 1, (0, 1)),
+                (2.2, 2, (0, 2)),
+                (2.2, 3, (1, 0)),
+                (2.2, 4, (1, 2)),
+                (2.2, 5, (2, 0)),
+                (2.2, 6, (2, 1)),
+            ],
+        )
 
     def test_population_split(self):
         def check(N, args, results):
@@ -878,13 +883,14 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                         self.assertEqual(event.rate, 0.0)
                         self.assertEqual(event.matrix_index, (j, source))
                         k += 1
+
         check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
         check(
-            3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
-            [(2.2, 0, 1), (2.3, 0, 2)])
+            3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3", [(2.2, 0, 1), (2.3, 0, 2)]
+        )
         check(
-            4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3",
-            [(2.2, 0, 1), (2.3, 0, 2)])
+            4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3", [(2.2, 0, 1), (2.3, 0, 2)]
+        )
 
     def test_admixture(self):
         def check(N, args, results):
@@ -900,13 +906,14 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 self.assertEqual(event.source, result[1])
                 self.assertEqual(event.dest, result[2])
                 self.assertEqual(event.proportion, result[3])
+
         check(2, "2 1 -T -es 2.2 1 1", [(2.2, 0, 1, 0)])
+        check(3, "2 1 -T -es 2.2 1 1 -es 3.3 2 0", [(2.2, 0, 1, 0), (3.3, 1, 2, 1.0)])
         check(
-            3, "2 1 -T -es 2.2 1 1 -es 3.3 2 0",
-            [(2.2, 0, 1, 0), (3.3, 1, 2, 1.0)])
-        check(
-            4, "2 1 -T -I 2 2 0 -es 2.2 1 1 -es 3.3 2 0",
-            [(2.2, 0, 2, 0), (3.3, 1, 3, 1.0)])
+            4,
+            "2 1 -T -I 2 2 0 -es 2.2 1 1 -es 3.3 2 0",
+            [(2.2, 0, 2, 0), (3.3, 1, 3, 1.0)],
+        )
 
 
 class TestMspmsArgsFromFile(TestCli):
@@ -914,6 +921,7 @@ class TestMspmsArgsFromFile(TestCli):
     Test that parsing command line arguments from a file results gives
     the same results.
     """
+
     # We need to keep the arguments grouped together because they must be
     # complete when split between the file and command line.
     cmd_lines = [
@@ -922,19 +930,21 @@ class TestMspmsArgsFromFile(TestCli):
         ["2", "1", "-T", "-I 3 2 0 0", "-ema 2.2 3 x 1 2 3 x 4 5 6 x"],
         ["2", "1", "-T", "-eN 1 2.0", "-eG 1.0 3", "-eN 1 4"],
         ["2", "1", "-T", "-I 3 2 0 0", "-ej 2.2 1 2", "-ej 2.3 1 3"],
-        ["3",  "10", "-I 2 3 0", "-m 1 2 1.1", "-m 2 1 9.0", "-t 5"],
+        ["3", "10", "-I 2 3 0", "-m 1 2 1.1", "-m 2 1 9.0", "-t 5"],
     ]
 
     def verify_parsing(self, cmd_line_args, file_args):
         parser = cli.get_mspms_parser()
-        cmd_line_result = vars(parser.parse_args(
-            cmd_line_args.split() + file_args.split()))
+        cmd_line_result = vars(
+            parser.parse_args(cmd_line_args.split() + file_args.split())
+        )
         parser = cli.get_mspms_parser()
         with open(self.temp_file, "w") as f:
             f.write(file_args)
             f.flush()
         file_result = vars(
-            parser.parse_args(cmd_line_args.split() + ["-f", self.temp_file]))
+            parser.parse_args(cmd_line_args.split() + ["-f", self.temp_file])
+        )
         self.assertEqual(cmd_line_result, file_result)
 
     def test_empty_file(self):
@@ -957,14 +967,16 @@ class TestMspmsArgsFromFileErrors(TestCli):
     """
 
     def assert_parser_error(self, command_line):
-
         def error_handler(message):
             raise CustomExceptionForTesting()
 
         parser = cli.get_mspms_parser(error_handler)
         self.assertRaises(
-            CustomExceptionForTesting, cli.create_simulation_runner,
-            parser, command_line.split())
+            CustomExceptionForTesting,
+            cli.create_simulation_runner,
+            parser,
+            command_line.split(),
+        )
 
     def test_file_arg_in_file(self):
         with open(self.temp_file, "w") as f:
@@ -988,13 +1000,20 @@ class TestMspmsOutput(TestCli):
         newick_tree = newick.loads(tree)[0]
         leaf_names = newick_tree.get_leaf_names()
         self.assertEqual(
-            sorted(leaf_names),
-            sorted([str(u + 1) for u in range(sample_size)]))
+            sorted(leaf_names), sorted([str(u + 1) for u in range(sample_size)])
+        )
 
     def verify_output(
-            self, sample_size=2, num_loci=1, recombination_rate=0,
-            num_replicates=1, mutation_rate=0.0, print_trees=True,
-            precision=3, random_seeds=[1, 2, 3]):
+        self,
+        sample_size=2,
+        num_loci=1,
+        recombination_rate=0,
+        num_replicates=1,
+        mutation_rate=0.0,
+        print_trees=True,
+        precision=3,
+        random_seeds=[1, 2, 3],
+    ):
         """
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
@@ -1003,11 +1022,15 @@ class TestMspmsOutput(TestCli):
         # rate, as we can't convert between physical and genetic coords
         # in this case.
         sr = cli.SimulationRunner(
-            sample_size=sample_size, num_loci=num_loci,
+            sample_size=sample_size,
+            num_loci=num_loci,
             scaled_recombination_rate=recombination_rate,
-            num_replicates=num_replicates, scaled_mutation_rate=mutation_rate,
-            print_trees=print_trees, precision=precision,
-            random_seeds=random_seeds)
+            num_replicates=num_replicates,
+            scaled_mutation_rate=mutation_rate,
+            print_trees=print_trees,
+            precision=precision,
+            random_seeds=random_seeds,
+        )
         with open(self.temp_file, "w+") as f:
             sr.run(f)
             f.seek(0)
@@ -1045,7 +1068,7 @@ class TestMspmsOutput(TestCli):
                         length = int(line[1:j])
                         self.assertGreater(length, 0)
                         total_length += length
-                        tree = line[j + 1:].rstrip()
+                        tree = line[j + 1 :].rstrip()
                     self.verify_newick_tree(tree, sample_size, precision)
                     line = next(f, None)
                 self.assertEqual(total_length, num_loci)
@@ -1086,32 +1109,54 @@ class TestMspmsOutput(TestCli):
 
     def test_zero_recombination_rate(self):
         self.verify_output(
-            sample_size=10, mutation_rate=1, num_loci=10,
-            recombination_rate=0, num_replicates=2)
+            sample_size=10,
+            mutation_rate=1,
+            num_loci=10,
+            recombination_rate=0,
+            num_replicates=2,
+        )
 
     def test_invisible_recombinations(self):
         self.verify_output(
-            sample_size=10, mutation_rate=0, num_loci=100,
-            recombination_rate=1, num_replicates=1)
+            sample_size=10,
+            mutation_rate=0,
+            num_loci=100,
+            recombination_rate=1,
+            num_replicates=1,
+        )
 
     def test_num_replicates(self):
         for j in range(1, 10):
+            self.verify_output(sample_size=10, mutation_rate=0, num_replicates=j)
+            self.verify_output(sample_size=10, mutation_rate=10, num_replicates=j)
             self.verify_output(
-                sample_size=10, mutation_rate=0, num_replicates=j)
+                sample_size=10,
+                mutation_rate=0,
+                num_loci=10,
+                recombination_rate=100,
+                num_replicates=j,
+            )
             self.verify_output(
-                sample_size=10, mutation_rate=10, num_replicates=j)
+                sample_size=10,
+                mutation_rate=0,
+                num_loci=1,
+                recombination_rate=1,
+                num_replicates=j,
+            )
             self.verify_output(
-                sample_size=10, mutation_rate=0, num_loci=10,
-                recombination_rate=100, num_replicates=j)
+                sample_size=10,
+                mutation_rate=10,
+                num_loci=1,
+                recombination_rate=1,
+                num_replicates=j,
+            )
             self.verify_output(
-                sample_size=10, mutation_rate=0, num_loci=1,
-                recombination_rate=1, num_replicates=j)
-            self.verify_output(
-                sample_size=10, mutation_rate=10, num_loci=1,
-                recombination_rate=1, num_replicates=j)
-            self.verify_output(
-                sample_size=10, mutation_rate=10, num_loci=10,
-                recombination_rate=10, num_replicates=j)
+                sample_size=10,
+                mutation_rate=10,
+                num_loci=10,
+                recombination_rate=10,
+                num_replicates=j,
+            )
 
     def test_mutation_output(self):
         for n in [2, 3, 10]:
@@ -1127,11 +1172,11 @@ class TestMspmsOutput(TestCli):
         for n in [2, 3, 10]:
             self.verify_output(sample_size=n, print_trees=True)
             self.verify_output(
-                sample_size=n, num_loci=10, recombination_rate=10,
-                print_trees=True)
+                sample_size=n, num_loci=10, recombination_rate=10, print_trees=True
+            )
             self.verify_output(
-                sample_size=n, num_loci=100, recombination_rate=10,
-                print_trees=True)
+                sample_size=n, num_loci=100, recombination_rate=10, print_trees=True
+            )
 
     def test_seeds_output(self):
         self.verify_output(random_seeds=None)
@@ -1150,7 +1195,8 @@ class TestMspmsOutput(TestCli):
         mutation_rate = 10
         # Run without seeds to get automatically generated seeds
         sr = cli.SimulationRunner(
-            sample_size=sample_size, scaled_mutation_rate=mutation_rate)
+            sample_size=sample_size, scaled_mutation_rate=mutation_rate
+        )
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
             f.seek(0)
@@ -1159,8 +1205,10 @@ class TestMspmsOutput(TestCli):
         seeds = list(map(int, output1.splitlines()[1].split()))
         # Run with the same seeds to get the same output.
         sr = cli.SimulationRunner(
-            sample_size=sample_size, scaled_mutation_rate=mutation_rate,
-            random_seeds=seeds)
+            sample_size=sample_size,
+            scaled_mutation_rate=mutation_rate,
+            random_seeds=seeds,
+        )
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
             f.seek(0)
@@ -1189,9 +1237,24 @@ class TestMspArgumentParser(unittest.TestCase):
     def test_simulate_short_args(self):
         parser = cli.get_msp_parser()
         cmd = "simulate"
-        args = parser.parse_args([
-            cmd, "100", "out2.trees", "-L", "1e3", "-r", "5", "-u", "2",
-            "-s", "1234", "-z", "-N", "11"])
+        args = parser.parse_args(
+            [
+                cmd,
+                "100",
+                "out2.trees",
+                "-L",
+                "1e3",
+                "-r",
+                "5",
+                "-u",
+                "2",
+                "-s",
+                "1234",
+                "-z",
+                "-N",
+                "11",
+            ]
+        )
         self.assertEqual(args.sample_size, 100)
         self.assertEqual(args.tree_sequence, "out2.trees")
         self.assertEqual(args.recombination_rate, 5)
@@ -1203,19 +1266,29 @@ class TestMspArgumentParser(unittest.TestCase):
     def test_simulate_long_args(self):
         parser = cli.get_msp_parser()
         cmd = "simulate"
-        args = parser.parse_args([
-            cmd, "1000", "out3.trees",
-            "--length", "1e4",
-            "--recombination-rate", "6",
-            "--effective-population-size", "1e5",
-            "--mutation-rate", "1",
-            "--random-seed", "123",
-            "--compress"])
+        args = parser.parse_args(
+            [
+                cmd,
+                "1000",
+                "out3.trees",
+                "--length",
+                "1e4",
+                "--recombination-rate",
+                "6",
+                "--effective-population-size",
+                "1e5",
+                "--mutation-rate",
+                "1",
+                "--random-seed",
+                "123",
+                "--compress",
+            ]
+        )
         self.assertEqual(args.sample_size, 1000)
         self.assertEqual(args.tree_sequence, "out3.trees")
         self.assertEqual(args.recombination_rate, 6)
         self.assertEqual(args.length, 10000)
-        self.assertEqual(args.effective_population_size, 10**5)
+        self.assertEqual(args.effective_population_size, 10 ** 5)
         self.assertEqual(args.random_seed, 123)
         self.assertEqual(args.compress, True)
 
@@ -1239,8 +1312,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "nodes"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "--precision", "5"])
+        args = parser.parse_args([cmd, tree_sequence, "--precision", "5"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
@@ -1264,8 +1336,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "edges"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "--precision", "5"])
+        args = parser.parse_args([cmd, tree_sequence, "--precision", "5"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
@@ -1289,8 +1360,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "sites"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "--precision", "5"])
+        args = parser.parse_args([cmd, tree_sequence, "--precision", "5"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
@@ -1354,8 +1424,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "vcf"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "-P", "2"])
+        args = parser.parse_args([cmd, tree_sequence, "-P", "2"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.ploidy, 2)
 
@@ -1363,8 +1432,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "vcf"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "--ploidy", "5"])
+        args = parser.parse_args([cmd, tree_sequence, "--ploidy", "5"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.ploidy, 5)
 
@@ -1401,8 +1469,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "newick"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "-p", "10"])
+        args = parser.parse_args([cmd, tree_sequence, "-p", "10"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 10)
 
@@ -1410,8 +1477,7 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "newick"
         tree_sequence = "test.trees"
-        args = parser.parse_args([
-            cmd, tree_sequence, "--precision=5"])
+        args = parser.parse_args([cmd, tree_sequence, "--precision=5"])
         self.assertEqual(args.tree_sequence, tree_sequence)
         self.assertEqual(args.precision, 5)
 
@@ -1430,6 +1496,7 @@ class TestMspSimulateOutput(unittest.TestCase):
     """
     Tests the output of msp to ensure it's correct.
     """
+
     def setUp(self):
         fd, self._tree_sequence = tempfile.mkstemp(prefix="msp_cli", suffix=".trees")
         os.close(fd)
@@ -1440,8 +1507,9 @@ class TestMspSimulateOutput(unittest.TestCase):
     def test_run_defaults(self):
         cmd = "simulate"
         sample_size = 10
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, str(sample_size), self._tree_sequence])
+        stdout, stderr = capture_output(
+            cli.msp_main, [cmd, str(sample_size), self._tree_sequence]
+        )
         self.assertEqual(len(stderr), 0)
         self.assertEqual(len(stdout), 0)
 
@@ -1452,8 +1520,10 @@ class TestMspSimulateOutput(unittest.TestCase):
 
     def test_simulate_short_args(self):
         cmd = "simulate"
-        stdout, stdearr = capture_output(cli.msp_main, [
-            cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"])
+        stdout, stdearr = capture_output(
+            cli.msp_main,
+            [cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"],
+        )
         tree_sequence = tskit.load(self._tree_sequence)
         self.assertEqual(tree_sequence.get_sample_size(), 100)
         self.assertEqual(tree_sequence.get_sequence_length(), 100)
@@ -1464,13 +1534,15 @@ class TestMspConversionOutput(unittest.TestCase):
     """
     Tests the output of msp to ensure it's correct.
     """
+
     @classmethod
     def setUpClass(cls):
         cls._tree_sequence = msprime.simulate(
-            10, length=10, recombination_rate=10,
-            mutation_rate=10, random_seed=1)
+            10, length=10, recombination_rate=10, mutation_rate=10, random_seed=1
+        )
         fd, cls._tree_sequence_file = tempfile.mkstemp(
-            prefix="msp_cli", suffix=".trees")
+            prefix="msp_cli", suffix=".trees"
+        )
         os.close(fd)
         cls._tree_sequence.dump(cls._tree_sequence_file)
 
@@ -1488,8 +1560,9 @@ class TestMspConversionOutput(unittest.TestCase):
     def test_nodes(self):
         cmd = "nodes"
         precision = 8
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._tree_sequence_file, "-p", str(precision)])
+        stdout, stderr = capture_output(
+            cli.msp_main, [cmd, self._tree_sequence_file, "-p", str(precision)]
+        )
         self.assertEqual(len(stderr), 0)
         output_nodes = stdout.splitlines()
         self.verify_nodes(output_nodes, precision)
@@ -1504,8 +1577,9 @@ class TestMspConversionOutput(unittest.TestCase):
     def test_edges(self):
         cmd = "edges"
         precision = 8
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._tree_sequence_file, "-p", str(precision)])
+        stdout, stderr = capture_output(
+            cli.msp_main, [cmd, self._tree_sequence_file, "-p", str(precision)]
+        )
         self.assertEqual(len(stderr), 0)
         output_edges = stdout.splitlines()
         self.verify_edges(output_edges, precision)
@@ -1520,8 +1594,9 @@ class TestMspConversionOutput(unittest.TestCase):
     def test_sites(self):
         cmd = "sites"
         precision = 8
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._tree_sequence_file, "-p", str(precision)])
+        stdout, stderr = capture_output(
+            cli.msp_main, [cmd, self._tree_sequence_file, "-p", str(precision)]
+        )
         self.assertEqual(len(stderr), 0)
         output_sites = stdout.splitlines()
         self.verify_sites(output_sites, precision)
@@ -1536,8 +1611,9 @@ class TestMspConversionOutput(unittest.TestCase):
     def test_mutations(self):
         cmd = "mutations"
         precision = 8
-        stdout, stderr = capture_output(cli.msp_main, [
-            cmd, self._tree_sequence_file, "-p", str(precision)])
+        stdout, stderr = capture_output(
+            cli.msp_main, [cmd, self._tree_sequence_file, "-p", str(precision)]
+        )
         self.assertEqual(len(stderr), 0)
         output_mutations = stdout.splitlines()
         self.verify_mutations(output_mutations, precision)
@@ -1559,7 +1635,8 @@ class TestMspConversionOutput(unittest.TestCase):
     def test_provenances_human(self):
         cmd = "provenances"
         stdout, stderr = capture_output(
-            cli.msp_main, [cmd, "-H", self._tree_sequence_file])
+            cli.msp_main, [cmd, "-H", self._tree_sequence_file]
+        )
         self.assertEqual(len(stderr), 0)
         output_provenances = stdout.splitlines()
         # TODO Check the actual output here.
@@ -1594,7 +1671,8 @@ class TestMspConversionOutput(unittest.TestCase):
     def verify_variants(self, output_variants):
         variants = [
             (v.position, v.genotypes.decode())
-            for v in self._tree_sequence.variants(as_bytes=True)]
+            for v in self._tree_sequence.variants(as_bytes=True)
+        ]
         self.assertEqual(len(variants), len(output_variants))
         for (pos, v), line in zip(variants, output_variants):
             self.assertEqual("{}\t{}".format(pos, v), line)
@@ -1626,8 +1704,7 @@ class TestMspConversionOutput(unittest.TestCase):
         output = stdout.splitlines()
         self.assertTrue(output[0].startswith("COMMAND:"))
         self.assertTrue(output[1].startswith("SEED:"))
-        self.assertEqual(
-            len(output), 2 + self._tree_sequence.get_num_mutations())
+        self.assertEqual(len(output), 2 + self._tree_sequence.get_num_mutations())
         n = self._tree_sequence.get_sample_size()
         m = self._tree_sequence.get_sequence_length()
         sites = list(self._tree_sequence.sites())
@@ -1650,6 +1727,7 @@ class TestUpgrade(TestCli):
     Tests the results of the upgrade operation to ensure they are
     correct.
     """
+
     def setUp(self):
         fd, self.legacy_file_name = tempfile.mkstemp(prefix="msp_cli", suffix=".trees")
         os.close(fd)
@@ -1665,7 +1743,8 @@ class TestUpgrade(TestCli):
         for version in [2, 3]:
             tskit.dump_legacy(ts1, self.legacy_file_name, version=version)
             stdout, stderr = capture_output(
-                cli.msp_main, ["upgrade", self.legacy_file_name, self.current_file_name])
+                cli.msp_main, ["upgrade", self.legacy_file_name, self.current_file_name]
+            )
             ts2 = tskit.load(self.current_file_name)
             self.assertEqual(stdout, "")
             # We get some cruft on stderr that comes from h5py. This only happens
@@ -1683,11 +1762,12 @@ class TestUpgrade(TestCli):
         for version in [2, 3]:
             tskit.dump_legacy(ts, self.legacy_file_name, version=version)
             root = h5py.File(self.legacy_file_name, "r+")
-            root['mutations/position'][:] = 0
+            root["mutations/position"][:] = 0
             root.close()
             stdout, stderr = capture_output(
                 cli.msp_main,
-                ["upgrade", "-d", self.legacy_file_name, self.current_file_name])
+                ["upgrade", "-d", self.legacy_file_name, self.current_file_name],
+            )
             self.assertEqual(stdout, "")
             tsp = tskit.load(self.current_file_name)
             self.assertEqual(tsp.sample_size, ts.sample_size)

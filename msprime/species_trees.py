@@ -90,7 +90,7 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     # Make sure that branch length units are either "myr" or "yr".
     allowed_branch_lenth_units = ["myr", "yr"]
     if branch_length_units not in allowed_branch_lenth_units:
-        err = 'The specified units for branch lengths ('
+        err = "The specified units for branch lengths ("
         err += '"{}") are not accepted. '.format(branch_length_units)
         err += 'Accepted units are "myr" (millions of years) or "yr" (years).'
         raise ValueError(err)
@@ -98,13 +98,15 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     generation_time = check_generation_time(generation_time)
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
-        branch_length_units, generation_time)
+        branch_length_units, generation_time
+    )
 
     translate_string, tree_string = parse_nexus(tree)
     species_name_map = parse_translate_command(translate_string)
     clean_tree_string = strip_extra_annotations(tree_string)
     return process_starbeast_tree(
-        clean_tree_string, generations_per_branch_length_unit, species_name_map)
+        clean_tree_string, generations_per_branch_length_unit, species_name_map
+    )
 
 
 def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None):
@@ -164,7 +166,7 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
     # Make sure that branch length units are either "myr", "yr", or "gen".
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
     if branch_length_units not in allowed_branch_lenth_units:
-        err = 'The specified units for branch lengths ('
+        err = "The specified units for branch lengths ("
         err += '"{}") are not accepted. '.format(branch_length_units)
         err += 'Accepted units are "myr" (millions of years), "yr" (years), '
         err += 'and "gen" (generations).'
@@ -186,18 +188,19 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
     if branch_length_units == "gen":
         if generation_time is not None:
             err = 'With branch lengths in units of generations ("gen"), '
-            err += 'a generation time should not be specified additionally.'
+            err += "a generation time should not be specified additionally."
             raise ValueError(err)
     else:
         if generation_time is None:
-            err = 'With branch lengths in units of '
+            err = "With branch lengths in units of "
             err += '"{}", a generation time must be '.format(branch_length_units)
-            err += 'specified additionally.'
+            err += "specified additionally."
             raise ValueError(err)
 
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
-        branch_length_units, generation_time)
+        branch_length_units, generation_time
+    )
 
     # Parse the tree with the newick library.
     root = parse_newick(tree, generations_per_branch_length_unit)
@@ -216,8 +219,11 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
             # Per extant species (= leaf node) in the tree, add a population with
             # size Ne. Species names are stored as metadata with the "species_name"
             # tag.
-            population_configurations.append(msprime.PopulationConfiguration(
-                    initial_size=Ne, metadata={"species_name": node.name.strip()}))
+            population_configurations.append(
+                msprime.PopulationConfiguration(
+                    initial_size=Ne, metadata={"species_name": node.name.strip()}
+                )
+            )
             leaf_map[node] = len(population_configurations) - 1
         else:
             # Per internal node, add one (if the node is bifurcating) or multiple
@@ -230,7 +236,9 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
             for child in node.descendants[1:]:
                 demographic_events.append(
                     msprime.MassMigration(
-                        source=leaf_map[child], dest=leaf_map[node], time=node.time))
+                        source=leaf_map[child], dest=leaf_map[node], time=node.time
+                    )
+                )
 
     # Sort demographic events by time.
     demographic_events.sort(key=lambda de: de.time)
@@ -239,7 +247,8 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
 
 
 def process_starbeast_tree(
-        tree_string, generations_per_branch_length_unit, species_name_map):
+    tree_string, generations_per_branch_length_unit, species_name_map
+):
     """
     Process the specified starbeast newick string with embedded dmv annotations
     (but no others) and return the resulting population_configurations and
@@ -255,7 +264,7 @@ def process_starbeast_tree(
     for node in root.walk("postorder"):
         if node.name is None:
             raise ValueError("Annotation missing for one or more nodes.")
-        find_pattern = '\\&dmv=\\{([\\d\\.]+?)\\}'
+        find_pattern = "\\&dmv=\\{([\\d\\.]+?)\\}"
         dmv_patterns = re.search(find_pattern, node.name)
         if dmv_patterns is None:
             raise ValueError("No dmv annotation for node")
@@ -269,8 +278,10 @@ def process_starbeast_tree(
             species_name = species_name_map[newick_id]
             metadata = {"species_name": species_name}
             population_configurations.append(
-                msprime.PopulationConfiguration(initial_size=pop_size,
-                                                metadata=metadata))
+                msprime.PopulationConfiguration(
+                    initial_size=pop_size, metadata=metadata
+                )
+            )
             leaf_map[node] = len(population_configurations) - 1
         else:
             # Per internal node, add one (if the node is bifurcating) or multiple
@@ -283,12 +294,14 @@ def process_starbeast_tree(
             for child in node.descendants[1:]:
                 demographic_events.append(
                     msprime.MassMigration(
-                        source=leaf_map[child], dest=leaf_map[node], time=node.time))
+                        source=leaf_map[child], dest=leaf_map[node], time=node.time
+                    )
+                )
             demographic_events.append(
                 msprime.PopulationParametersChange(
-                    node.time,
-                    initial_size=pop_size,
-                    population_id=leaf_map[node]))
+                    node.time, initial_size=pop_size, population_id=leaf_map[node]
+                )
+            )
     demographic_events.sort(key=lambda de: de.time)
     return population_configurations, demographic_events
 
@@ -319,9 +332,9 @@ def get_generations_per_branch_length_unit(branch_length_units, generation_time)
     if branch_length_units == "gen":
         generations_per_branch_length_unit = 1
     elif branch_length_units == "myr":
-        generations_per_branch_length_unit = 10**6/generation_time
+        generations_per_branch_length_unit = 10 ** 6 / generation_time
     else:
-        generations_per_branch_length_unit = 1/generation_time
+        generations_per_branch_length_unit = 1 / generation_time
     return generations_per_branch_length_unit
 
 
@@ -420,9 +433,9 @@ def strip_extra_annotations(tree_string):
             in_annotation = False
             clean_tree_string += tree_string[x]
         elif in_annotation:
-            if tree_string[x-1] == "[" and tree_string[x] == "&":
+            if tree_string[x - 1] == "[" and tree_string[x] == "&":
                 clean_tree_string += "&"
-            if tree_string[x-5:x] == "dmv={":
+            if tree_string[x - 5 : x] == "dmv={":
                 in_dmv = True
                 clean_tree_string += "dmv={"
             if in_dmv:
@@ -483,7 +496,8 @@ def parse_translate_command(translate_command):
         newick_id, species_name = item_list
         if newick_id in mapping:
             raise ValueError(
-                f"Newick ID {newick_id} defined multiple times in translation")
+                f"Newick ID {newick_id} defined multiple times in translation"
+            )
         mapping[newick_id] = species_name
     if len(set(mapping.values())) != len(mapping):
         raise ValueError("Duplicate species names in translation")
@@ -512,7 +526,7 @@ def parse_nexus(nexus):
     # blocks), we ignore (2), replace newline characters with spaces and
     # replace multiple whitespaces with a single one.
     nexus_string = nexus.replace("\n", " ")
-    nexus_string = ' '.join(nexus_string.split())
+    nexus_string = " ".join(nexus_string.split())
 
     # From the Nexus format definition (Maddison et al. 1997):
     # "Commands or subcommands that differ only in case are homonymous."
@@ -520,7 +534,7 @@ def parse_nexus(nexus):
     nexus_string = nexus_string.lower()
 
     # Make sure that the string is in Nexus format.
-    if nexus_string[0:6] != '#nexus':
+    if nexus_string[0:6] != "#nexus":
         raise ValueError("The species tree does not appear to be in Nexus format.")
 
     # From the Nexus format definition (Maddison et al. 1997):
@@ -535,11 +549,11 @@ def parse_nexus(nexus):
     tree_block_string = ""
     in_tree_block = False
     for x in range(len(nexus_string)):
-        if nexus_string[x:x+12] == "begin trees;":
+        if nexus_string[x : x + 12] == "begin trees;":
             in_tree_block = True
             tree_block_string += nexus_string[x]
-        elif in_tree_block and nexus_string[x:x+4] == "end;":
-            tree_block_string += nexus_string[x:x+4]
+        elif in_tree_block and nexus_string[x : x + 4] == "end;":
+            tree_block_string += nexus_string[x : x + 4]
             break
         elif in_tree_block:
             tree_block_string += nexus_string[x]
@@ -583,5 +597,5 @@ def parse_nexus(nexus):
 
     tree_command = tree_commands[0]
     assert "(" in tree_command, "No parentheses in tree string"
-    tree_string = tree_command[tree_command.find("("):]
+    tree_string = tree_command[tree_command.find("(") :]
     return translate_command, tree_string

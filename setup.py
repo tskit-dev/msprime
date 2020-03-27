@@ -35,6 +35,7 @@ class PathConfigurator(object):
     A class to attempt configuration of the compile search paths
     on various platforms.
     """
+
     def __init__(self):
         self.include_dirs = []
         self.library_dirs = []
@@ -71,9 +72,11 @@ class local_build_ext(build_ext):
     def finalize_options(self):
         build_ext.finalize_options(self)
         import builtins
+
         # Prevent numpy from thinking it is still in its setup process:
         builtins.__NUMPY_SETUP__ = False
         import numpy
+
         self.include_dirs.append(numpy.get_include())
 
 
@@ -85,17 +88,25 @@ includes = [libdir, tskroot, tskdir, kasdir]
 
 configurator = PathConfigurator()
 msp_source_files = [
-    "msprime.c", "fenwick.c", "avl.c", "util.c",
-    "object_heap.c", "recomb_map.c", "mutgen.c",
-    "likelihood.c", "interval_map.c"
+    "msprime.c",
+    "fenwick.c",
+    "avl.c",
+    "util.c",
+    "object_heap.c",
+    "recomb_map.c",
+    "mutgen.c",
+    "likelihood.c",
+    "interval_map.c",
 ]
 tsk_source_files = ["core.c", "tables.c", "trees.c"]
 kas_source_files = ["kastore.c"]
 
-sources = ["_msprimemodule.c"] + [
-    os.path.join(libdir, f) for f in msp_source_files] + [
-    os.path.join(tskdir, f) for f in tsk_source_files] + [
-    os.path.join(kasdir, f) for f in kas_source_files]
+sources = (
+    ["_msprimemodule.c"]
+    + [os.path.join(libdir, f) for f in msp_source_files]
+    + [os.path.join(tskdir, f) for f in tsk_source_files]
+    + [os.path.join(kasdir, f) for f in kas_source_files]
+)
 
 libraries = ["gsl", "gslcblas"]
 defines = []
@@ -105,10 +116,12 @@ if IS_WINDOWS:
     defines += [
         # These two are required for GSL to compile and link against the
         # conda-forge version.
-        ("GSL_DLL", None), ("WIN32", None)]
+        ("GSL_DLL", None),
+        ("WIN32", None),
+    ]
 
 _msprime_module = Extension(
-    '_msprime',
+    "_msprime",
     sources=sources,
     # Enable asserts by default.
     undef_macros=["NDEBUG"],
@@ -133,10 +146,7 @@ setup(
     author_email="jerome.kelleher@well.ox.ac.uk",
     url="https://pypi.org/project/msprime/",
     entry_points={
-        'console_scripts': [
-            'mspms=msprime.cli:mspms_main',
-            'msp=msprime.cli:msp_main',
-        ]
+        "console_scripts": ["mspms=msprime.cli:mspms_main", "msp=msprime.cli:msp_main",]
     },
     include_package_data=True,
     install_requires=[numpy_ver, "tskit"],
@@ -164,7 +174,7 @@ setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    setup_requires=[numpy_ver, 'setuptools_scm'],
+    setup_requires=[numpy_ver, "setuptools_scm"],
     use_scm_version={"write_to": "msprime/_version.py"},
     cmdclass={"build_ext": local_build_ext},
 )

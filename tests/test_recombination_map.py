@@ -37,6 +37,7 @@ class PythonRecombinationMap(object):
     """
     A Python implementation of the RecombinationMap interface.
     """
+
     def __init__(self, positions, rates, discrete=False):
         assert len(positions) == len(rates)
         assert len(positions) >= 2
@@ -94,8 +95,8 @@ class TestCoordinateConversion(unittest.TestCase):
         other_rm = PythonRecombinationMap(positions, rates, discrete=discrete)
 
         self.assertEqual(
-            rm.get_total_recombination_rate(),
-            other_rm.get_total_recombination_rate())
+            rm.get_total_recombination_rate(), other_rm.get_total_recombination_rate()
+        )
         num_random_trials = 10
         num_systematic_trials = 10
         values = [L * random.random() for j in range(num_random_trials)]
@@ -121,7 +122,8 @@ class TestCoordinateConversion(unittest.TestCase):
         rates = [200, 0, 200, 0, 0]
         maps = [
             msprime.RecombinationMap(positions, rates),
-            PythonRecombinationMap(positions, rates)]
+            PythonRecombinationMap(positions, rates),
+        ]
         for rm in maps:
             total_recomb = rm.get_total_recombination_rate()
             self.assertEqual(100, total_recomb)
@@ -138,7 +140,8 @@ class TestCoordinateConversion(unittest.TestCase):
         rates = [0, 1, 0]
         maps = [
             msprime.RecombinationMap(positions, rates, discrete=True),
-            PythonRecombinationMap(positions, rates, discrete=True)]
+            PythonRecombinationMap(positions, rates, discrete=True),
+        ]
         for rm in maps:
             # Anything <= 50 maps to 0
             for x in [0, 10, 49, 50]:
@@ -155,7 +158,8 @@ class TestCoordinateConversion(unittest.TestCase):
         rates = [1, 0, 0]
         maps = [
             msprime.RecombinationMap(positions, rates),
-            PythonRecombinationMap(positions, rates)]
+            PythonRecombinationMap(positions, rates),
+        ]
         for rm in maps:
             # Anything < 50 maps to x
             for x in [0, 10, 49]:
@@ -182,8 +186,7 @@ class TestCoordinateConversion(unittest.TestCase):
 
     def test_random_map(self):
         for size in [2, 3, 4, 100]:
-            positions = [0] + sorted(
-                random.random() for _ in range(size - 2)) + [1]
+            positions = [0] + sorted(random.random() for _ in range(size - 2)) + [1]
             rates = [random.random() for _ in range(size - 1)] + [0]
             self.verify_coordinate_conversion(positions, rates)
 
@@ -197,14 +200,14 @@ class TestCoordinateConversion(unittest.TestCase):
         for L in [1, 10, 100]:
             maps = [
                 msprime.RecombinationMap.uniform_map(L, 1, discrete=True),
-                PythonRecombinationMap([0, L], [1, 0], discrete=True)]
+                PythonRecombinationMap([0, L], [1, 0], discrete=True),
+            ]
             for rm in maps:
                 for x in range(L + 1):
                     self.assertAlmostEqual(x, rm.genetic_to_physical(x))
 
 
 class TestConstructorAndGetters(unittest.TestCase):
-
     def verify_warning(self, f):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -213,18 +216,20 @@ class TestConstructorAndGetters(unittest.TestCase):
 
     def test_warn_on_num_loci_equal_seq_len(self):
         self.verify_warning(
-                lambda: msprime.RecombinationMap([0, 100], [0.1, 0], num_loci=100))
+            lambda: msprime.RecombinationMap([0, 100], [0.1, 0], num_loci=100)
+        )
         self.verify_warning(
-                lambda: msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100))
+            lambda: msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100)
+        )
 
     def test_unsupported_methods(self):
-        recomb_map = msprime.RecombinationMap([0, 10], [.2, 0])
+        recomb_map = msprime.RecombinationMap([0, 10], [0.2, 0])
         self.assertRaises(ValueError, recomb_map.get_num_loci)
         self.assertRaises(ValueError, recomb_map.physical_to_discrete_genetic, 8)
         self.assertRaises(ValueError, recomb_map.get_per_locus_recombination_rate)
 
     def test_total_recombination_rate(self):
-        recomb_map = msprime.RecombinationMap([0, 10], [.1, 0])
+        recomb_map = msprime.RecombinationMap([0, 10], [0.1, 0])
         self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
 
 
@@ -232,6 +237,7 @@ class TestReadHapmap(unittest.TestCase):
     """
     Tests file reading code.
     """
+
     def setUp(self):
         fd, self.temp_file = tempfile.mkstemp(suffix="msp_recomb_map")
         os.close(fd)
@@ -267,7 +273,8 @@ class TestReadHapmap(unittest.TestCase):
             print("chr1 0 5 x", file=f)
             print("s    2 1 x x x", file=f)
         self.assertRaises(
-            ValueError, msprime.RecombinationMap.read_hapmap, self.temp_file)
+            ValueError, msprime.RecombinationMap.read_hapmap, self.temp_file
+        )
 
     def test_read_hapmap_gzipped(self):
         try:
@@ -341,40 +348,54 @@ class TestSlice(unittest.TestCase):
     def test_slice_with_floats(self):
         #  test RecombinationMap.slice(..., trim=False) with floats
         a = msprime.RecombinationMap(
-                [np.pi*x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3, 0])
-        b = a.slice(start=50*np.pi)
+            [np.pi * x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3, 0]
+        )
+        b = a.slice(start=50 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
         self.assertTrue(np.array_equal(a.get_positions(), b.get_positions()))
         self.assertTrue(np.array_equal(a.get_rates(), b.get_rates()))
 
-        b = a.slice(start=150*np.pi)
+        b = a.slice(start=150 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(
-            [np.pi*x for x in [0, 150, 200, 300, 400]], b.get_positions()))
+        self.assertTrue(
+            np.array_equal(
+                [np.pi * x for x in [0, 150, 200, 300, 400]], b.get_positions()
+            )
+        )
         self.assertTrue(np.array_equal([0, 1, 2, 3, 0], b.get_rates()))
 
-        b = a.slice(end=300*np.pi)
+        b = a.slice(end=300 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(
-            [np.pi*x for x in [0, 100, 200, 300, 400]], b.get_positions()))
+        self.assertTrue(
+            np.array_equal(
+                [np.pi * x for x in [0, 100, 200, 300, 400]], b.get_positions()
+            )
+        )
         self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
 
-        b = a.slice(end=250*np.pi)
+        b = a.slice(end=250 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(
-            [np.pi*x for x in [0, 100, 200, 250, 400]], b.get_positions()))
+        self.assertTrue(
+            np.array_equal(
+                [np.pi * x for x in [0, 100, 200, 250, 400]], b.get_positions()
+            )
+        )
         self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
 
-        b = a.slice(start=50*np.pi, end=300*np.pi)
+        b = a.slice(start=50 * np.pi, end=300 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(
-            [np.pi*x for x in [0, 100, 200, 300, 400]], b.get_positions()))
+        self.assertTrue(
+            np.array_equal(
+                [np.pi * x for x in [0, 100, 200, 300, 400]], b.get_positions()
+            )
+        )
         self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
 
-        b = a.slice(start=150*np.pi, end=160*np.pi)
+        b = a.slice(start=150 * np.pi, end=160 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(
-            [np.pi*x for x in [0, 150, 160, 400]], b.get_positions()))
+        self.assertTrue(
+            np.array_equal([np.pi * x for x in [0, 150, 160, 400]], b.get_positions())
+        )
         self.assertTrue(np.array_equal([0, 1, 0, 0], b.get_rates()))
 
     def test_slice_error(self):
@@ -462,13 +483,13 @@ class TestSlice(unittest.TestCase):
         self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
         self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
 
-        b = a[:-np.pi]
-        c = a[:400 - np.pi]
+        b = a[: -np.pi]
+        c = a[: 400 - np.pi]
         self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
         self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
 
-        b = a[-50*np.pi:-np.pi]
-        c = a[400 - 50*np.pi:400 - np.pi]
+        b = a[-50 * np.pi : -np.pi]
+        c = a[400 - 50 * np.pi : 400 - np.pi]
         self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
         self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
 

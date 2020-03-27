@@ -48,13 +48,14 @@ mscompat_description = (
     "It simulates the coalescent with recombination for a variety of "
     "demographic models and outputs the results in a text-based format. "
     "It supports a subset of the functionality available in ms and aims "
-    "for full compatibility.")
+    "for full compatibility."
+)
 mscompat_recombination_help = (
     "Recombination at rate rho=4*N0*r where r is the rate of recombination "
     "between the ends of the region being simulated; num_loci is the number "
-    "of sites between which recombination can occur")
-mscompat_gene_conversion_help = (
-    "TODO")
+    "of sites between which recombination can occur"
+)
+mscompat_gene_conversion_help = "TODO"
 mshotcompat_hotspot_help = (
     "Recombination hotspots defined according to the msHOT format. This is "
     "defined as a sequence: n (start stop scale)+ where n is the number of "
@@ -62,7 +63,7 @@ mshotcompat_hotspot_help = (
     "rate is the background recombination rate times scale. Adjacent hotspots "
     "may stop and start at the same position but must otherwise be non-overlapping "
     "and specified in ascending order."
-        )
+)
 
 msprime_citation_text = """
 If you use msprime in your work, please cite the following paper:
@@ -82,19 +83,22 @@ def positive_int(value):
 
 def add_sample_size_argument(parser):
     parser.add_argument(
-        "sample_size", type=positive_int,
-        help="The number of genomes in the sample")
+        "sample_size", type=positive_int, help="The number of genomes in the sample"
+    )
 
 
 def add_tree_sequence_argument(parser):
-    parser.add_argument(
-        "tree_sequence", help="The msprime tree sequence file")
+    parser.add_argument("tree_sequence", help="The msprime tree sequence file")
 
 
 def add_precision_argument(parser):
     parser.add_argument(
-        "--precision", "-p", type=int, default=6,
-        help="The number of decimal places to print in records")
+        "--precision",
+        "-p",
+        type=int,
+        default=6,
+        help="The number of decimal places to print in records",
+    )
 
 
 def generate_seeds():
@@ -103,7 +107,7 @@ def generate_seeds():
     """
     # Pull three numbers from the SystemRandom generator
     rng = random.SystemRandom()
-    return [rng.randint(0, 2**31) for _ in range(3)]
+    return [rng.randint(0, 2 ** 31) for _ in range(3)]
 
 
 def get_single_seed(seeds):
@@ -119,7 +123,7 @@ def get_single_seed(seeds):
         m.update("{}:".format(s).encode())
     # Now take the integer value of this modulo 2^32, as this is
     # the largest seed value we'll accept.
-    return int(m.hexdigest(), 16) % (2**32)
+    return int(m.hexdigest(), 16) % (2 ** 32)
 
 
 def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
@@ -142,12 +146,12 @@ def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
         positions.append(0)
         rates.append(background_rate)
     for i in range(1, len(hotspots) - 2, 3):
-        [start, stop, factor] = hotspots[i:i+3]
+        [start, stop, factor] = hotspots[i : i + 3]
         # Beginning hotspot
         positions.append(start)
         rates.append(factor * background_rate)
 
-        if i == len(hotspots) - 3 or stop != hotspots[i+3]:
+        if i == len(hotspots) - 3 or stop != hotspots[i + 3]:
             # Ending hotspot, back to normal recombination rate
             positions.append(stop)
             if stop != seq_length:
@@ -166,14 +170,24 @@ class SimulationRunner(object):
     """
     Class to run msprime simulation and output the results.
     """
+
     def __init__(
-            self, sample_size=1, num_loci=1, scaled_recombination_rate=0,
-            num_replicates=1, migration_matrix=None,
-            population_configurations=None, demographic_events=None,
-            scaled_mutation_rate=0, print_trees=False,
-            precision=3, random_seeds=None,
-            scaled_gene_conversion_rate=0, gene_conversion_track_length=1,
-            hotspots=None):
+        self,
+        sample_size=1,
+        num_loci=1,
+        scaled_recombination_rate=0,
+        num_replicates=1,
+        migration_matrix=None,
+        population_configurations=None,
+        demographic_events=None,
+        scaled_mutation_rate=0,
+        print_trees=False,
+        precision=3,
+        random_seeds=None,
+        scaled_gene_conversion_rate=0,
+        gene_conversion_track_length=1,
+        hotspots=None,
+    ):
         self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
@@ -182,10 +196,12 @@ class SimulationRunner(object):
         # For strict ms-compability we want to have m non-recombining loci
         if hotspots is None:
             self._recomb_map = msprime.RecombinationMap.uniform_map(
-                num_loci, self._recombination_rate, discrete=True)
+                num_loci, self._recombination_rate, discrete=True
+            )
         else:
             self._recomb_map = hotspots_to_recomb_map(
-                    hotspots, self._recombination_rate, num_loci)
+                hotspots, self._recombination_rate, num_loci
+            )
 
         # If we have specified any population_configurations we don't want
         # to give the overall sample size.
@@ -203,7 +219,8 @@ class SimulationRunner(object):
             migration_matrix=migration_matrix,
             demographic_events=demographic_events,
             gene_conversion_rate=scaled_gene_conversion_rate,
-            gene_conversion_track_length=gene_conversion_track_length)
+            gene_conversion_track_length=gene_conversion_track_length,
+        )
 
         self._precision = precision
         self._print_trees = print_trees
@@ -216,9 +233,8 @@ class SimulationRunner(object):
         self._ms_random_seeds = ms_seeds
         self._simulator.random_generator = self._random_generator
         self._mutation_generator = mutations._simple_mutation_generator(
-            self._mutation_rate,
-            self._simulator.sequence_length,
-            self._random_generator)
+            self._mutation_rate, self._simulator.sequence_length, self._random_generator
+        )
 
     def get_num_replicates(self):
         """
@@ -292,13 +308,16 @@ class SimulationRunner(object):
                 if s != 0:
                     print("positions: ", end="", file=output)
                     positions = [
-                        mutation.position / self._num_loci for mutation in
-                        tree_sequence.mutations()]
+                        mutation.position / self._num_loci
+                        for mutation in tree_sequence.mutations()
+                    ]
                     positions.sort()
                     for position in positions:
                         print(
                             "{0:.{1}f}".format(position, self._precision),
-                            end=" ", file=output)
+                            end=" ",
+                            file=output,
+                        )
                     print(file=output)
                     for h in tree_sequence.haplotypes():
                         print(h, file=output)
@@ -365,16 +384,15 @@ def convert_migration_matrix(parser, input_matrix, num_populations):
     """
     Converts the specified migration matrix into the internal format.
     """
-    if len(input_matrix) != num_populations**2:
-        parser.error(
-            "Must be num_populations^2 migration matrix entries")
-    migration_matrix = [[
-        0 for j in range(num_populations)] for k in range(num_populations)]
+    if len(input_matrix) != num_populations ** 2:
+        parser.error("Must be num_populations^2 migration matrix entries")
+    migration_matrix = [
+        [0 for j in range(num_populations)] for k in range(num_populations)
+    ]
     for j in range(num_populations):
         for k in range(num_populations):
             if j != k:
-                rate = convert_float(
-                    input_matrix[j * num_populations + k], parser)
+                rate = convert_float(input_matrix[j * num_populations + k], parser)
                 check_migration_rate(parser, rate)
                 migration_matrix[j][k] = rate
     return migration_matrix
@@ -389,7 +407,8 @@ def raise_admixture_incompatability_error(parser, other_option):
     parser.error(
         "Cannot currently use the -es and {} options together. "
         "Please open an issue on GitHub if this functionality is "
-        "important to you.".format(other_option))
+        "important to you.".format(other_option)
+    )
 
 
 def create_simulation_runner(parser, arg_list):
@@ -432,38 +451,45 @@ def create_simulation_runner(parser, arg_list):
         population_configurations = [None for j in range(num_populations)]
         for j in range(num_populations):
             population_configurations[j] = msprime.PopulationConfiguration(
-                convert_int(args.structure[j + 1], parser))
+                convert_int(args.structure[j + 1], parser)
+            )
         total = sum(conf.sample_size for conf in population_configurations)
         if total != args.sample_size:
             parser.error("Population sample sizes must sum to sample_size")
         # We optionally have the overall migration_rate here
         if len(args.structure) == num_populations + 2:
             symmetric_migration_rate = convert_float(
-                args.structure[num_populations + 1], parser)
+                args.structure[num_populations + 1], parser
+            )
             check_migration_rate(parser, symmetric_migration_rate)
         elif len(args.structure) > num_populations + 2:
             parser.error("Too many arguments to --structure/-I")
         if num_populations > 1:
-            migration_matrix = [[
-                symmetric_migration_rate / (num_populations - 1) * int(j != k)
-                for j in range(num_populations)]
-                for k in range(num_populations)]
+            migration_matrix = [
+                [
+                    symmetric_migration_rate / (num_populations - 1) * int(j != k)
+                    for j in range(num_populations)
+                ]
+                for k in range(num_populations)
+            ]
     else:
         if len(args.migration_matrix_entry) > 0:
             parser.error(
                 "Cannot specify migration matrix entries without "
-                "first providing a -I option")
+                "first providing a -I option"
+            )
         if args.migration_matrix is not None:
             parser.error(
                 "Cannot specify a migration matrix without "
-                "first providing a -I option")
+                "first providing a -I option"
+            )
     if args.migration_matrix is not None:
         migration_matrix = convert_migration_matrix(
-            parser, args.migration_matrix, num_populations)
+            parser, args.migration_matrix, num_populations
+        )
     for matrix_entry in args.migration_matrix_entry:
         dest = convert_population_id(parser, matrix_entry[0], num_populations)
-        source = convert_population_id(
-            parser, matrix_entry[1], num_populations)
+        source = convert_population_id(parser, matrix_entry[1], num_populations)
         rate = matrix_entry[2]
         if dest == source:
             parser.error("Cannot set diagonal elements in migration matrix")
@@ -493,8 +519,7 @@ def create_simulation_runner(parser, arg_list):
             parser.error("Proportion value must be 0 <= p <= 1.")
         # In ms, the probability of staying in source is p and the probabilty
         # of moving to the new population is 1 - p.
-        event = (index, msprime.MassMigration(
-            t, pid, num_populations, 1 - proportion))
+        event = (index, msprime.MassMigration(t, pid, num_populations, 1 - proportion))
         demographic_events.append(event)
 
         num_populations += 1
@@ -513,33 +538,49 @@ def create_simulation_runner(parser, arg_list):
             raise_admixture_incompatability_error(parser, "-eG")
         check_event_time(parser, t)
         demographic_events.append(
-            (index, msprime.PopulationParametersChange(
-                time=t, growth_rate=alpha)))
+            (index, msprime.PopulationParametersChange(time=t, growth_rate=alpha))
+        )
     for index, (t, population_id, alpha) in args.population_growth_rate_change:
         pid = convert_population_id(parser, population_id, num_populations)
         check_event_time(parser, t)
         demographic_events.append(
-            (index, msprime.PopulationParametersChange(
-                time=t, growth_rate=alpha, population_id=pid)))
+            (
+                index,
+                msprime.PopulationParametersChange(
+                    time=t, growth_rate=alpha, population_id=pid
+                ),
+            )
+        )
     for index, (t, x) in args.size_change:
         if len(args.admixture) != 0:
             raise_admixture_incompatability_error(parser, "-eN")
         check_event_time(parser, t)
         demographic_events.append(
-            (index, msprime.PopulationParametersChange(
-                time=t, initial_size=x, growth_rate=0)))
+            (
+                index,
+                msprime.PopulationParametersChange(
+                    time=t, initial_size=x, growth_rate=0
+                ),
+            )
+        )
     for index, (t, population_id, x) in args.population_size_change:
         check_event_time(parser, t)
         pid = convert_population_id(parser, population_id, num_populations)
         demographic_events.append(
-            (index, msprime.PopulationParametersChange(
-                time=t, initial_size=x, growth_rate=0, population_id=pid)))
+            (
+                index,
+                msprime.PopulationParametersChange(
+                    time=t, initial_size=x, growth_rate=0, population_id=pid
+                ),
+            )
+        )
     for index, (t, source, dest) in args.population_split:
         check_event_time(parser, t)
         source_id = convert_population_id(parser, source, num_populations)
         dest_id = convert_population_id(parser, dest, num_populations)
         demographic_events.append(
-            (index, msprime.MassMigration(t, source_id, dest_id, 1.0)))
+            (index, msprime.MassMigration(t, source_id, dest_id, 1.0))
+        )
         # Set the migration rates for source to 0
         for j in range(num_populations):
             if j != source_id:
@@ -549,9 +590,10 @@ def create_simulation_runner(parser, arg_list):
     # Demographic events that affect the migration matrix
     if num_populations == 1:
         condition = (
-            len(args.migration_rate_change) > 0 or
-            len(args.migration_matrix_entry_change) > 0 or
-            len(args.migration_matrix_change) > 0)
+            len(args.migration_rate_change) > 0
+            or len(args.migration_matrix_entry_change) > 0
+            or len(args.migration_matrix_change) > 0
+        )
         if condition:
             parser.error("Cannot change migration rates for 1 population")
     for index, (t, x) in args.migration_rate_change:
@@ -559,8 +601,7 @@ def create_simulation_runner(parser, arg_list):
             raise_admixture_incompatability_error(parser, "-eM")
         check_migration_rate(parser, x)
         check_event_time(parser, t)
-        event = msprime.MigrationRateChange(
-            t, x / (num_populations - 1))
+        event = msprime.MigrationRateChange(t, x / (num_populations - 1))
         demographic_events.append((index, event))
     for index, event in args.migration_matrix_entry_change:
         t = event[0]
@@ -581,14 +622,12 @@ def create_simulation_runner(parser, arg_list):
         t = convert_float(event[0], parser)
         check_event_time(parser, t)
         if convert_int(event[1], parser) != num_populations:
-            parser.error(
-                "num_populations must be equal for new migration matrix")
+            parser.error("num_populations must be equal for new migration matrix")
         matrix = convert_migration_matrix(parser, event[2:], num_populations)
         for j in range(num_populations):
             for k in range(num_populations):
                 if j != k:
-                    msp_event = msprime.MigrationRateChange(
-                        t, matrix[j][k], (j, k))
+                    msp_event = msprime.MigrationRateChange(t, matrix[j][k], (j, k))
                     demographic_events.append((index, msp_event))
 
     # We've created all the events and PopulationConfiguration objects. Because
@@ -606,8 +645,8 @@ def create_simulation_runner(parser, arg_list):
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
         parser.error(
-            "Demographic events must be supplied in non-decreasing "
-            "time order")
+            "Demographic events must be supplied in non-decreasing " "time order"
+        )
     runner = SimulationRunner(
         sample_size=args.sample_size,
         num_loci=num_loci,
@@ -622,7 +661,8 @@ def create_simulation_runner(parser, arg_list):
         precision=args.precision,
         print_trees=args.trees,
         random_seeds=args.random_seeds,
-        hotspots=args.hotspots)
+        hotspots=args.hotspots,
+    )
     return runner
 
 
@@ -633,11 +673,13 @@ class IndexedAction(argparse._AppendAction):
     events, as the order in which the events are applied matters for
     ms compatability.
     """
+
     index = 0
 
     def __call__(self, parser, namespace, values, option_string=None):
         super().__call__(
-            parser, namespace, (IndexedAction.index, values), option_string)
+            parser, namespace, (IndexedAction.index, values), option_string
+        )
         IndexedAction.index += 1
 
 
@@ -655,6 +697,7 @@ def make_load_file_action(next_parser):
     and
         http://stackoverflow.com/q/40060571
     """
+
     class LoadFromFile(argparse.Action):
         def __call__(self, parser, namespace, values, option_string=None):
             try:
@@ -664,6 +707,7 @@ def make_load_file_action(next_parser):
                     next_parser.parse_args(f.read().split(), namespace)
             except IOError as ioe:
                 parser.error(ioe)
+
     return LoadFromFile
 
 
@@ -676,119 +720,223 @@ def get_mspms_parser(error_handler=None):
     # create this one first, then at the end make the parser that
     # includes the positional arguments.
     parser = argparse.ArgumentParser(
-        description=mscompat_description,
-        epilog=msprime_citation_text)
+        description=mscompat_description, epilog=msprime_citation_text
+    )
     parser.convert_arg_line_to_args = convert_arg_line_to_args
 
     group = parser.add_argument_group("Behaviour")
     group.add_argument(
-        "--mutation-rate", "-t", type=float, metavar="theta",
-        help="Mutation rate theta=4*N0*mu", default=0)
+        "--mutation-rate",
+        "-t",
+        type=float,
+        metavar="theta",
+        help="Mutation rate theta=4*N0*mu",
+        default=0,
+    )
     group.add_argument(
-        "--trees", "-T", action="store_true",
-        help="Print out trees in Newick format")
+        "--trees", "-T", action="store_true", help="Print out trees in Newick format"
+    )
     group.add_argument(
-        "--recombination", "-r", type=float, nargs=2, default=(0, 1),
-        metavar=("rho", "num_loci"), help=mscompat_recombination_help)
+        "--recombination",
+        "-r",
+        type=float,
+        nargs=2,
+        default=(0, 1),
+        metavar=("rho", "num_loci"),
+        help=mscompat_recombination_help,
+    )
     group.add_argument(
-        "--gene-conversion", "-c", type=float, nargs=2, default=(0, 1),
+        "--gene-conversion",
+        "-c",
+        type=float,
+        nargs=2,
+        default=(0, 1),
         metavar=("gc_recomb_ratio", "track_length"),
-        help=mscompat_gene_conversion_help)
+        help=mscompat_gene_conversion_help,
+    )
     group.add_argument(
-            "--hotspots", "-v", type=float, nargs="+",
-            default=None, help=mshotcompat_hotspot_help)
+        "--hotspots",
+        "-v",
+        type=float,
+        nargs="+",
+        default=None,
+        help=mshotcompat_hotspot_help,
+    )
 
     group = parser.add_argument_group("Structure and migration")
     group.add_argument(
-        "--structure", "-I", nargs='+', metavar="value",
+        "--structure",
+        "-I",
+        nargs="+",
+        metavar="value",
         help=(
             "Sample from populations with the specified deme structure. "
             "The arguments are of the form 'num_populations "
             "n1 n2 ... [4N0m]', specifying the number of populations, "
             "the sample configuration, and optionally, the migration "
-            "rate for a symmetric island model"))
+            "rate for a symmetric island model"
+        ),
+    )
     group.add_argument(
-        "--migration-matrix-entry", "-m", action="append",
+        "--migration-matrix-entry",
+        "-m",
+        action="append",
         metavar=("dest", "source", "rate"),
-        nargs=3, type=float, default=[],
+        nargs=3,
+        type=float,
+        default=[],
         help=(
             "Sets an entry M[dest, source] in the migration matrix to the "
             "specified rate. source and dest are (1-indexed) population "
-            "IDs. Multiple options can be specified."))
+            "IDs. Multiple options can be specified."
+        ),
+    )
     group.add_argument(
-        "--migration-matrix", "-ma", nargs='+', default=None, metavar="entry",
+        "--migration-matrix",
+        "-ma",
+        nargs="+",
+        default=None,
+        metavar="entry",
         help=(
             "Sets the migration matrix to the specified value. The "
             "entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
-            "M[2, 2], ..., M[N, N], where N is the number of populations."))
+            "M[2, 2], ..., M[N, N], where N is the number of populations."
+        ),
+    )
     group.add_argument(
-        "--migration-rate-change", "-eM", nargs=2, action=IndexedAction,
-        type=float, default=[], metavar=("t", "x"),
+        "--migration-rate-change",
+        "-eM",
+        nargs=2,
+        action=IndexedAction,
+        type=float,
+        default=[],
+        metavar=("t", "x"),
         help=(
             "Set the symmetric island model migration rate to "
-            "x / (npop - 1) at time t"))
+            "x / (npop - 1) at time t"
+        ),
+    )
     group.add_argument(
-        "--migration-matrix-entry-change", "-em", action=IndexedAction,
+        "--migration-matrix-entry-change",
+        "-em",
+        action=IndexedAction,
         metavar=("time", "dest", "source", "rate"),
-        nargs=4, type=float, default=[],
+        nargs=4,
+        type=float,
+        default=[],
         help=(
             "Sets an entry M[dest, source] in the migration matrix to the "
             "specified rate at the specified time. source and dest are "
-            "(1-indexed) population IDs."))
+            "(1-indexed) population IDs."
+        ),
+    )
     group.add_argument(
-        "--migration-matrix-change", "-ema", nargs='+', default=[],
-        action=IndexedAction, metavar="entry", help=(
+        "--migration-matrix-change",
+        "-ema",
+        nargs="+",
+        default=[],
+        action=IndexedAction,
+        metavar="entry",
+        help=(
             "Sets the migration matrix to the specified value at time t."
             "The entries are in the order M[1,1], M[1, 2], ..., M[2, 1],"
-            "M[2, 2], ..., M[N, N], where N is the number of populations."))
+            "M[2, 2], ..., M[N, N], where N is the number of populations."
+        ),
+    )
 
     group = parser.add_argument_group("Demography")
     group.add_argument(
-        "--growth-rate", "-G", metavar="alpha", type=float,
-        help="Set the growth rate to alpha for all populations.")
+        "--growth-rate",
+        "-G",
+        metavar="alpha",
+        type=float,
+        help="Set the growth rate to alpha for all populations.",
+    )
     group.add_argument(
-        "--population-growth-rate", "-g", action="append", default=[],
-        nargs=2, metavar=("population_id", "alpha"), type=float,
-        help="Set the growth rate to alpha for a specific population.")
+        "--population-growth-rate",
+        "-g",
+        action="append",
+        default=[],
+        nargs=2,
+        metavar=("population_id", "alpha"),
+        type=float,
+        help="Set the growth rate to alpha for a specific population.",
+    )
     group.add_argument(
-        "--population-size", "-n", action="append", default=[],
-        nargs=2, metavar=("population_id", "size"), type=float,
-        help="Set the size of a specific population to size*N0.")
+        "--population-size",
+        "-n",
+        action="append",
+        default=[],
+        nargs=2,
+        metavar=("population_id", "size"),
+        type=float,
+        help="Set the size of a specific population to size*N0.",
+    )
 
     group.add_argument(
-        "--growth-rate-change", "-eG", nargs=2, action=IndexedAction,
-        type=float, default=[], metavar=("t", "alpha"),
-        help="Set the growth rate for all populations to alpha at time t")
+        "--growth-rate-change",
+        "-eG",
+        nargs=2,
+        action=IndexedAction,
+        type=float,
+        default=[],
+        metavar=("t", "alpha"),
+        help="Set the growth rate for all populations to alpha at time t",
+    )
     group.add_argument(
-        "--population-growth-rate-change", "-eg", nargs=3,
-        action=IndexedAction, type=float, default=[],
+        "--population-growth-rate-change",
+        "-eg",
+        nargs=3,
+        action=IndexedAction,
+        type=float,
+        default=[],
         metavar=("t", "population_id", "alpha"),
-        help=(
-            "Set the growth rate for a specific population to "
-            "alpha at time t"))
+        help=("Set the growth rate for a specific population to " "alpha at time t"),
+    )
     group.add_argument(
-        "--size-change", "-eN", nargs=2, action=IndexedAction,
-        type=float, default=[], metavar=("t", "x"),
-        help="Set the population size for all populations to x * N0 at time t")
+        "--size-change",
+        "-eN",
+        nargs=2,
+        action=IndexedAction,
+        type=float,
+        default=[],
+        metavar=("t", "x"),
+        help="Set the population size for all populations to x * N0 at time t",
+    )
     group.add_argument(
-        "--population-size-change", "-en", nargs=3,
-        action=IndexedAction, type=float, default=[],
+        "--population-size-change",
+        "-en",
+        nargs=3,
+        action=IndexedAction,
+        type=float,
+        default=[],
         metavar=("t", "population_id", "x"),
         help=(
-            "Set the population size for a specific population to "
-            "x * N0 at time t"))
+            "Set the population size for a specific population to " "x * N0 at time t"
+        ),
+    )
     group.add_argument(
-        "--population-split", "-ej", nargs=3,
-        action=IndexedAction, type=float, default=[],
+        "--population-split",
+        "-ej",
+        nargs=3,
+        action=IndexedAction,
+        type=float,
+        default=[],
         metavar=("t", "dest", "source"),
         help=(
             "Move all lineages in population dest to source at time t. "
             "Forwards in time, this corresponds to a population split "
             "in which lineages in source split into dest. All migration "
-            "rates for population source are set to zero."))
+            "rates for population source are set to zero."
+        ),
+    )
     group.add_argument(
-        "--admixture", "-es", nargs=3,
-        action=IndexedAction, type=float, default=[],
+        "--admixture",
+        "-es",
+        nargs=3,
+        action=IndexedAction,
+        type=float,
+        default=[],
         metavar=("t", "population_id", "proportion"),
         help=(
             "Split the specified population into a new population, such "
@@ -797,35 +945,52 @@ def get_mspms_parser(error_handler=None):
             "corresponds to an admixture event. The new population has ID "
             "num_populations + 1. Migration rates to and from the new "
             "population are set to 0, and growth rate is 0 and the "
-            "population size for the new population is N0."))
+            "population size for the new population is N0."
+        ),
+    )
 
     group = parser.add_argument_group("Miscellaneous")
     group.add_argument(
-        "--random-seeds", "-seeds", nargs=3, type=positive_int,
+        "--random-seeds",
+        "-seeds",
+        nargs=3,
+        type=positive_int,
         metavar=("x1", "x2", "x3"),
-        help="Random seeds (must be three integers)")
+        help="Random seeds (must be three integers)",
+    )
     group.add_argument(
-        "--precision", "-p", type=positive_int, default=3,
-        help="Number of values after decimal place to print")
+        "--precision",
+        "-p",
+        type=positive_int,
+        default=3,
+        help="Number of values after decimal place to print",
+    )
 
     # now for the parser that gets called first
     init_parser = argparse.ArgumentParser(
         description=mscompat_description,
         epilog=msprime_citation_text,
         add_help=False,
-        parents=[parser])
+        parents=[parser],
+    )
     init_parser.convert_arg_line_to_args = convert_arg_line_to_args
 
     add_sample_size_argument(init_parser)
     init_parser.add_argument(
-        "num_replicates", type=positive_int,
-        help="Number of independent replicates")
+        "num_replicates", type=positive_int, help="Number of independent replicates"
+    )
     init_parser.add_argument(
-        "-V", "--version", action='version',
-        version='%(prog)s {}'.format(msprime.__version__))
+        "-V",
+        "--version",
+        action="version",
+        version="%(prog)s {}".format(msprime.__version__),
+    )
     init_parser.add_argument(
-        "-f", "--filename", action=make_load_file_action(parser),
-        help="Insert commands from a file at this point in the command line.")
+        "-f",
+        "--filename",
+        action=make_load_file_action(parser),
+        help="Insert commands from a file at this point in the command line.",
+    )
 
     # Set the optional error handler (used for testing)
     if error_handler is not None:
@@ -861,9 +1026,10 @@ def run_upgrade(args):
     except tskit.DuplicatePositionsError:
         exit(
             "Error: Duplicate mutation positions in the source file detected.\n\n"
-            "This is not supported in the current file format. Running \"upgrade -d\" "
+            'This is not supported in the current file format. Running "upgrade -d" '
             "will remove these duplicate positions. However, this will result in loss "
-            "of data from the original file!")
+            "of data from the original file!"
+        )
     tree_sequence.dump(args.destination)
 
 
@@ -912,8 +1078,11 @@ def run_dump_provenances(args):
     if args.human:
         for provenance in tree_sequence.provenances():
             d = json.loads(provenance.record)
-            print("id={}, timestamp={}, record={}".format(
-                provenance.id, provenance.timestamp, json.dumps(d, indent=4)))
+            print(
+                "id={}, timestamp={}, record={}".format(
+                    provenance.id, provenance.timestamp, json.dumps(d, indent=4)
+                )
+            )
     else:
         tree_sequence.dump_text(provenances=sys.stdout)
 
@@ -934,8 +1103,13 @@ def run_dump_macs(args):
     print("SEED:\tASEED")
     for variant in tree_sequence.variants(as_bytes=True):
         print(
-            "SITE:", variant.index, variant.position / m, 0.0,
-            "{}".format(variant.genotypes.decode()), sep="\t")
+            "SITE:",
+            variant.index,
+            variant.position / m,
+            0.0,
+            "{}".format(variant.genotypes.decode()),
+            sep="\t",
+        )
 
 
 def run_simulate(args):
@@ -945,128 +1119,147 @@ def run_simulate(args):
         length=args.length,
         recombination_rate=args.recombination_rate,
         mutation_rate=args.mutation_rate,
-        random_seed=args.random_seed)
+        random_seed=args.random_seed,
+    )
     tree_sequence.dump(args.tree_sequence, zlib_compression=args.compress)
 
 
 def get_msp_parser():
     top_parser = argparse.ArgumentParser(
-        description="Command line interface for msprime.",
-        epilog=msprime_citation_text)
+        description="Command line interface for msprime.", epilog=msprime_citation_text
+    )
     top_parser.add_argument(
-        "-V", "--version", action='version',
-        version='%(prog)s {}'.format(msprime.__version__))
+        "-V",
+        "--version",
+        action="version",
+        version="%(prog)s {}".format(msprime.__version__),
+    )
     subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 
-    parser = subparsers.add_parser(
-        "simulate",
-        help="Run the simulation")
+    parser = subparsers.add_parser("simulate", help="Run the simulation")
     add_sample_size_argument(parser)
     add_tree_sequence_argument(parser)
     parser.add_argument(
-        "--length", "-L", type=float, default=1,
-        help="The length of the simulated region in base pairs.")
+        "--length",
+        "-L",
+        type=float,
+        default=1,
+        help="The length of the simulated region in base pairs.",
+    )
     parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0,
-        help="The recombination rate per base per generation")
+        "--recombination-rate",
+        "-r",
+        type=float,
+        default=0,
+        help="The recombination rate per base per generation",
+    )
     parser.add_argument(
-        "--mutation-rate", "-u", type=float, default=0,
-        help="The mutation rate per base per generation")
+        "--mutation-rate",
+        "-u",
+        type=float,
+        default=0,
+        help="The mutation rate per base per generation",
+    )
     parser.add_argument(
-        "--effective-population-size", "-N", type=float, default=1,
-        help="The diploid effective population size Ne")
+        "--effective-population-size",
+        "-N",
+        type=float,
+        default=1,
+        help="The diploid effective population size Ne",
+    )
     parser.add_argument(
-        "--random-seed", "-s", type=int, default=None,
-        help="The random seed. If not specified one is chosen randomly")
+        "--random-seed",
+        "-s",
+        type=int,
+        default=None,
+        help="The random seed. If not specified one is chosen randomly",
+    )
     parser.add_argument(
-        "--compress", "-z", action="store_true",
-        help="Enable zlib compression")
+        "--compress", "-z", action="store_true", help="Enable zlib compression"
+    )
     parser.set_defaults(runner=run_simulate)
 
     parser = subparsers.add_parser(
-        "vcf",
-        help="Write the tree sequence out in VCF format.")
+        "vcf", help="Write the tree sequence out in VCF format."
+    )
     add_tree_sequence_argument(parser)
     parser.add_argument(
-        "--ploidy", "-P", type=int, default=1,
-        help="The ploidy level of samples")
+        "--ploidy", "-P", type=int, default=1, help="The ploidy level of samples"
+    )
     parser.set_defaults(runner=run_dump_vcf)
 
-    parser = subparsers.add_parser(
-        "nodes",
-        help="Dump nodes in tabular format.")
+    parser = subparsers.add_parser("nodes", help="Dump nodes in tabular format.")
     add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_nodes)
 
-    parser = subparsers.add_parser(
-        "edges",
-        help="Dump edges in tabular format.")
+    parser = subparsers.add_parser("edges", help="Dump edges in tabular format.")
     add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_edges)
 
-    parser = subparsers.add_parser(
-        "sites",
-        help="Dump sites in tabular format.")
+    parser = subparsers.add_parser("sites", help="Dump sites in tabular format.")
     add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_sites)
 
     parser = subparsers.add_parser(
-        "mutations",
-        help="Dump mutations in tabular format.")
+        "mutations", help="Dump mutations in tabular format."
+    )
     add_tree_sequence_argument(parser)
     add_precision_argument(parser)
     parser.set_defaults(runner=run_dump_mutations)
 
     parser = subparsers.add_parser(
-        "provenances",
-        help="Dump provenance information in tabular format.")
+        "provenances", help="Dump provenance information in tabular format."
+    )
     add_tree_sequence_argument(parser)
     parser.add_argument(
-        "-H", "--human", action="store_true",
-        help="Print out the provenances in a human readable format")
+        "-H",
+        "--human",
+        action="store_true",
+        help="Print out the provenances in a human readable format",
+    )
     parser.set_defaults(runner=run_dump_provenances)
 
-    parser = subparsers.add_parser(
-        "haplotypes",
-        help="Dump haplotypes in text format.")
+    parser = subparsers.add_parser("haplotypes", help="Dump haplotypes in text format.")
     add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_haplotypes)
 
-    parser = subparsers.add_parser(
-        "variants",
-        help="Dump variants in text format.")
+    parser = subparsers.add_parser("variants", help="Dump variants in text format.")
     add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_variants)
 
-    parser = subparsers.add_parser(
-        "macs",
-        help="Dump results in MaCS format.")
+    parser = subparsers.add_parser("macs", help="Dump results in MaCS format.")
     add_tree_sequence_argument(parser)
     parser.set_defaults(runner=run_dump_macs)
 
-    parser = subparsers.add_parser(
-        "newick",
-        help="Dump results in newick format.")
+    parser = subparsers.add_parser("newick", help="Dump results in newick format.")
     add_tree_sequence_argument(parser)
     parser.add_argument(
-        "--precision", "-p", type=int, default=3,
-        help="The number of decimal places in branch lengths")
+        "--precision",
+        "-p",
+        type=int,
+        default=3,
+        help="The number of decimal places in branch lengths",
+    )
     parser.set_defaults(runner=run_dump_newick)
 
     parser = subparsers.add_parser(
-        "upgrade",
-        help="Upgrade legacy tree sequence files to the latest version.")
+        "upgrade", help="Upgrade legacy tree sequence files to the latest version."
+    )
     parser.add_argument(
-        "source", help="The source msprime tree sequence file in legacy format")
+        "source", help="The source msprime tree sequence file in legacy format"
+    )
+    parser.add_argument("destination", help="The filename of the upgraded copy.")
     parser.add_argument(
-        "destination", help="The filename of the upgraded copy.")
-    parser.add_argument(
-        "--remove-duplicate-positions", "-d", action="store_true", default=False,
-        help="Remove any duplicated mutation positions in the source file. ")
+        "--remove-duplicate-positions",
+        "-d",
+        action="store_true",
+        default=False,
+        help="Remove any duplicated mutation positions in the source file. ",
+    )
     parser.set_defaults(runner=run_upgrade)
 
     return top_parser

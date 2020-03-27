@@ -46,11 +46,15 @@ def subsample_sites(ts, num_sites):
         if site.id in sites_to_keep:
             site_id = len(t.sites)
             t.sites.add_row(
-                position=site.position, ancestral_state=site.ancestral_state)
+                position=site.position, ancestral_state=site.ancestral_state
+            )
             for mutation in site.mutations:
                 t.mutations.add_row(
-                    site=site_id, derived_state=mutation.derived_state,
-                    node=mutation.node, parent=mutation.parent)
+                    site=site_id,
+                    derived_state=mutation.derived_state,
+                    node=mutation.node,
+                    parent=mutation.parent,
+                )
     add_provenance(t.provenances, "subsample_sites")
     return t.tree_sequence()
 
@@ -62,8 +66,11 @@ def decapitate(ts, num_edges):
     """
     t = ts.dump_tables()
     t.edges.set_columns(
-        left=t.edges.left[:num_edges], right=t.edges.right[:num_edges],
-        parent=t.edges.parent[:num_edges], child=t.edges.child[:num_edges])
+        left=t.edges.left[:num_edges],
+        right=t.edges.right[:num_edges],
+        parent=t.edges.parent[:num_edges],
+        child=t.edges.child[:num_edges],
+    )
     add_provenance(t.provenances, "decapitate")
     return t.tree_sequence()
 
@@ -77,7 +84,7 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
     tables.sites.clear()
     tables.mutations.clear()
     for tree in ts.trees():
-        site = tables.sites.add_row(position=tree.interval[0], ancestral_state='0')
+        site = tables.sites.add_row(position=tree.interval[0], ancestral_state="0")
         for root in tree.roots:
             state = {root: 0}
             mutation = {root: -1}
@@ -92,8 +99,11 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                     for j in range(mutations_per_branch):
                         state[u] = (state[u] + 1) % 2
                         mutation[u] = tables.mutations.add_row(
-                            site=site, node=u, derived_state=str(state[u]),
-                            parent=parent)
+                            site=site,
+                            node=u,
+                            derived_state=str(state[u]),
+                            parent=parent,
+                        )
                         parent = mutation[u]
     add_provenance(tables.provenances, "insert_branch_mutations")
     return tables.tree_sequence()
@@ -113,8 +123,8 @@ def insert_branch_sites(ts):
         x = left
         for u in tree.nodes():
             if tree.parent(u) != msprime.NULL_NODE:
-                site = tables.sites.add_row(position=x, ancestral_state='0')
-                tables.mutations.add_row(site=site, node=u, derived_state='1')
+                site = tables.sites.add_row(position=x, ancestral_state="0")
+                tables.mutations.add_row(site=site, node=u, derived_state="1")
                 x += delta
     add_provenance(tables.provenances, "insert_branch_sites")
     return tables.tree_sequence()
@@ -126,9 +136,7 @@ def insert_site(ts):
     and no mutation.
     """
     tables = ts.dump_tables()
-    tables.sites.add_row(
-            position=ts.sequence_length/2,
-            ancestral_state="XX")
+    tables.sites.add_row(position=ts.sequence_length / 2, ancestral_state="XX")
     add_provenance(tables.provenances, "insert_site")
     return tables.tree_sequence()
 
@@ -146,7 +154,8 @@ def insert_multichar_mutations(ts, seed=1, max_len=10):
     for tree in ts.trees():
         ancestral_state = rng.choice(letters) * rng.randint(0, max_len)
         site = tables.sites.add_row(
-            position=tree.interval[0], ancestral_state=ancestral_state)
+            position=tree.interval[0], ancestral_state=ancestral_state
+        )
         nodes = list(tree.nodes())
         nodes.remove(tree.root)
         u = rng.choice(nodes)
@@ -172,7 +181,7 @@ def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
     individual[:] = msprime.NULL_INDIVIDUAL
     while j < len(samples):
         ploidy = rng.randint(0, max_ploidy)
-        nodes = samples[j: min(j + ploidy, len(samples))]
+        nodes = samples[j : min(j + ploidy, len(samples))]
         dimension = rng.randint(0, max_dimension)
         location = [rng.random() for _ in range(dimension)]
         ind_id = tables.individuals.add_row(location=location)
@@ -199,17 +208,26 @@ def permute_nodes(ts, node_map):
     for j in range(ts.num_nodes):
         old_node = old_nodes[reverse_map[j]]
         tables.nodes.add_row(
-            flags=old_node.flags, metadata=old_node.metadata,
-            population=old_node.population, time=old_node.time)
+            flags=old_node.flags,
+            metadata=old_node.metadata,
+            population=old_node.population,
+            time=old_node.time,
+        )
     for edge in ts.edges():
         tables.edges.add_row(
-            left=edge.left, right=edge.right, parent=node_map[edge.parent],
-            child=node_map[edge.child])
+            left=edge.left,
+            right=edge.right,
+            parent=node_map[edge.parent],
+            child=node_map[edge.child],
+        )
     for site in ts.sites():
         for mutation in site.mutations:
             tables.mutations.add_row(
-                site=site.id, derived_state=mutation.derived_state,
-                node=node_map[mutation.node], metadata=mutation.metadata)
+                site=site.id,
+                derived_state=mutation.derived_state,
+                node=node_map[mutation.node],
+                metadata=mutation.metadata,
+            )
     tables.sort()
     add_provenance(tables.provenances, "permute_nodes")
     return tables.tree_sequence()
@@ -245,9 +263,11 @@ def single_childify(ts):
         t = time[edge.child] + (time[edge.parent] - time[edge.child]) / 2
         u = tables.nodes.add_row(time=t)
         tables.edges.add_row(
-            left=edge.left, right=edge.right, parent=u, child=edge.child)
+            left=edge.left, right=edge.right, parent=u, child=edge.child
+        )
         tables.edges.add_row(
-            left=edge.left, right=edge.right, parent=edge.parent, child=u)
+            left=edge.left, right=edge.right, parent=edge.parent, child=u
+        )
     tables.sort()
     add_provenance(tables.provenances, "insert_redundant_breakpoints")
     return tables.tree_sequence()
@@ -268,9 +288,13 @@ def add_random_metadata(ts, seed=1, max_length=10):
     metadata = np.random.randint(-127, 127, offset[-1]).astype(np.int8)
     nodes = tables.nodes
     nodes.set_columns(
-        flags=nodes.flags, population=nodes.population, time=nodes.time,
-        metadata_offset=offset, metadata=metadata,
-        individual=nodes.individual)
+        flags=nodes.flags,
+        population=nodes.population,
+        time=nodes.time,
+        metadata_offset=offset,
+        metadata=metadata,
+        individual=nodes.individual,
+    )
 
     length = np.random.randint(0, max_length, ts.num_sites)
     offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
@@ -280,7 +304,9 @@ def add_random_metadata(ts, seed=1, max_length=10):
         position=sites.position,
         ancestral_state=sites.ancestral_state,
         ancestral_state_offset=sites.ancestral_state_offset,
-        metadata_offset=offset, metadata=metadata)
+        metadata_offset=offset,
+        metadata=metadata,
+    )
 
     length = np.random.randint(0, max_length, ts.num_mutations)
     offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
@@ -292,7 +318,9 @@ def add_random_metadata(ts, seed=1, max_length=10):
         parent=mutations.parent,
         derived_state=mutations.derived_state,
         derived_state_offset=mutations.derived_state_offset,
-        metadata_offset=offset, metadata=metadata)
+        metadata_offset=offset,
+        metadata=metadata,
+    )
 
     length = np.random.randint(0, max_length, ts.num_individuals)
     offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
@@ -302,7 +330,9 @@ def add_random_metadata(ts, seed=1, max_length=10):
         flags=individuals.flags,
         location=individuals.location,
         location_offset=individuals.location_offset,
-        metadata_offset=offset, metadata=metadata)
+        metadata_offset=offset,
+        metadata=metadata,
+    )
 
     length = np.random.randint(0, max_length, ts.num_populations)
     offset = np.cumsum(np.hstack(([0], length)), dtype=np.uint32)
@@ -326,15 +356,16 @@ def jiggle_samples(ts):
     flags = nodes.flags
     oldest_parent = tables.edges.parent[-1]
     n = ts.sample_size
-    flags[:n // 2] = 0
-    flags[oldest_parent - n // 2: oldest_parent] = 1
+    flags[: n // 2] = 0
+    flags[oldest_parent - n // 2 : oldest_parent] = 1
     nodes.set_columns(flags, nodes.time)
     add_provenance(tables.provenances, "jiggle_samples")
     return tables.tree_sequence()
 
 
-def generate_site_mutations(tree, position, mu, site_table, mutation_table,
-                            multiple_per_node=True):
+def generate_site_mutations(
+    tree, position, mu, site_table, mutation_table, multiple_per_node=True
+):
     """
     Generates mutations for the site at the specified position on the specified
     tree. Mutations happen at rate mu along each branch. The site and mutation
@@ -385,8 +416,14 @@ def jukes_cantor(ts, num_sites, mu, multiple_per_node=True, seed=None):
     for position in positions:
         while position >= t.interval[1]:
             t = next(trees)
-        generate_site_mutations(t, position, mu, tables.sites, tables.mutations,
-                                multiple_per_node=multiple_per_node)
+        generate_site_mutations(
+            t,
+            position,
+            mu,
+            tables.sites,
+            tables.mutations,
+            multiple_per_node=multiple_per_node,
+        )
     add_provenance(tables.provenances, "jukes_cantor")
     new_ts = tables.tree_sequence()
     return new_ts
@@ -421,8 +458,10 @@ def compute_mutation_parent(ts):
                 if mutation_parent[mutation.id] == msprime.NULL_MUTATION:
                     v = tree.parent(mutation.node)
                     # Traverse upwards until we find a another mutation or root.
-                    while v != msprime.NULL_NODE \
-                            and bottom_mutation[v] == msprime.NULL_MUTATION:
+                    while (
+                        v != msprime.NULL_NODE
+                        and bottom_mutation[v] == msprime.NULL_MUTATION
+                    ):
                         v = tree.parent(v)
                     if v != msprime.NULL_NODE:
                         mutation_parent[mutation.id] = bottom_mutation[v]
@@ -442,10 +481,14 @@ def algorithm_T(ts):
     edges = list(ts.edges())
     M = len(edges)
     time = [ts.node(edge.parent).time for edge in edges]
-    in_order = sorted(range(M), key=lambda j: (
-        edges[j].left, time[j], edges[j].parent, edges[j].child))
-    out_order = sorted(range(M), key=lambda j: (
-        edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
+    in_order = sorted(
+        range(M),
+        key=lambda j: (edges[j].left, time[j], edges[j].parent, edges[j].child),
+    )
+    out_order = sorted(
+        range(M),
+        key=lambda j: (edges[j].right, -time[j], -edges[j].parent, -edges[j].child),
+    )
     j = 0
     k = 0
     left = 0
@@ -476,6 +519,7 @@ class LinkedTree(object):
     NOTE: The interface is pretty awkward; it's not intended for anything other
     than testing.
     """
+
     def __init__(self, tree_sequence, tracked_samples=None):
         self.tree_sequence = tree_sequence
         num_nodes = tree_sequence.num_nodes
@@ -503,14 +547,28 @@ class LinkedTree(object):
     def __str__(self):
         fmt = "{:<5}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}{:>8}\n"
         s = fmt.format(
-            "node", "parent", "lsib", "rsib", "lchild", "rchild",
-            "nsamp", "lsamp", "rsamp")
+            "node",
+            "parent",
+            "lsib",
+            "rsib",
+            "lchild",
+            "rchild",
+            "nsamp",
+            "lsamp",
+            "rsamp",
+        )
         for u in range(self.tree_sequence.num_nodes):
             s += fmt.format(
-                u, self.parent[u],
-                self.left_sib[u], self.right_sib[u],
-                self.left_child[u], self.right_child[u],
-                self.next_sample[u], self.left_sample[u], self.right_sample[u])
+                u,
+                self.parent[u],
+                self.left_sib[u],
+                self.right_sib[u],
+                self.left_child[u],
+                self.right_child[u],
+                self.next_sample[u],
+                self.left_sample[u],
+                self.right_sample[u],
+            )
         # Strip off trailing newline
         return s[:-1]
 
@@ -594,10 +652,14 @@ class LinkedTree(object):
         edges = list(ts.edges())
         M = len(edges)
         time = [ts.node(edge.parent).time for edge in edges]
-        in_order = sorted(range(M), key=lambda j: (
-            edges[j].left, time[j], edges[j].parent, edges[j].child))
-        out_order = sorted(range(M), key=lambda j: (
-            edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
+        in_order = sorted(
+            range(M),
+            key=lambda j: (edges[j].left, time[j], edges[j].parent, edges[j].child),
+        )
+        out_order = sorted(
+            range(M),
+            key=lambda j: (edges[j].right, -time[j], -edges[j].parent, -edges[j].child),
+        )
         j = 0
         k = 0
         left = 0

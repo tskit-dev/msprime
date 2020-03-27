@@ -60,7 +60,8 @@ def get_mutation_model(model=0):
     return _msprime.MutationModel(
         alleles=alleles,
         root_distribution=root_distribution,
-        transition_matrix=transition_matrix)
+        transition_matrix=transition_matrix,
+    )
 
 
 def get_simulation_model(name="hudson", reference_size=0.25, **kwargs):
@@ -73,15 +74,25 @@ def get_simulation_model(name="hudson", reference_size=0.25, **kwargs):
 
 
 def get_sweep_genic_selection_model(
-        reference_size=0.25, position=0.5, start_frequency=0.1, end_frequency=0.9,
-        alpha=0.1, dt=0.1):
+    reference_size=0.25,
+    position=0.5,
+    start_frequency=0.1,
+    end_frequency=0.9,
+    alpha=0.1,
+    dt=0.1,
+):
     """
     Returns a sweep model for the specified parameters.
     """
     return get_simulation_model(
-            name="sweep_genic_selection", reference_size=reference_size,
-            position=position, start_frequency=start_frequency,
-            end_frequency=end_frequency, alpha=alpha, dt=dt)
+        name="sweep_genic_selection",
+        reference_size=reference_size,
+        position=position,
+        start_frequency=start_frequency,
+        end_frequency=end_frequency,
+        alpha=alpha,
+        dt=dt,
+    )
 
 
 def get_population_configuration(growth_rate=0.0, initial_size=1.0):
@@ -89,10 +100,7 @@ def get_population_configuration(growth_rate=0.0, initial_size=1.0):
     Returns a population configuration dictionary suitable for passing
     to the low-level API.
     """
-    return {
-        "growth_rate": growth_rate,
-        "initial_size": initial_size
-    }
+    return {"growth_rate": growth_rate, "initial_size": initial_size}
 
 
 def get_samples(num_samples):
@@ -117,14 +125,15 @@ def get_population_samples(*args):
 
 
 def get_population_parameters_change_event(
-        time=0.0, population=-1, initial_size=None, growth_rate=None):
+    time=0.0, population=-1, initial_size=None, growth_rate=None
+):
     """
     Returns a population change event for the specified values.
     """
     ret = {
         "type": "population_parameters_change",
         "time": time,
-        "population": population
+        "population": population,
     }
     if initial_size is not None:
         ret["initial_size"] = initial_size
@@ -138,7 +147,8 @@ def get_size_change_event(time=0.0, size=1.0, population=-1):
     Returns a size change demographic event.
     """
     return get_population_parameters_change_event(
-        time, population, initial_size=size, growth_rate=0)
+        time, population, initial_size=size, growth_rate=0
+    )
 
 
 def get_growth_rate_change_event(time=0.0, growth_rate=1.0, population=-1):
@@ -146,11 +156,11 @@ def get_growth_rate_change_event(time=0.0, growth_rate=1.0, population=-1):
     Returns a growth_rate change demographic event.
     """
     return get_population_parameters_change_event(
-        time, population, growth_rate=growth_rate)
+        time, population, growth_rate=growth_rate
+    )
 
 
-def get_migration_rate_change_event(
-        time=0.0, migration_rate=1.0, matrix_index=-1):
+def get_migration_rate_change_event(time=0.0, migration_rate=1.0, matrix_index=-1):
     """
     Returns a migration_rate change demographic event.
     """
@@ -158,7 +168,7 @@ def get_migration_rate_change_event(
         "type": "migration_rate_change",
         "migration_rate": migration_rate,
         "time": time,
-        "matrix_index": matrix_index
+        "matrix_index": matrix_index,
     }
 
 
@@ -171,12 +181,11 @@ def get_mass_migration_event(time=0.0, source=0, dest=1, proportion=1):
         "time": time,
         "source": source,
         "dest": dest,
-        "proportion": proportion
+        "proportion": proportion,
     }
 
 
-def get_simple_bottleneck_event(
-        time=0.0, population=0, proportion=1):
+def get_simple_bottleneck_event(time=0.0, population=0, proportion=1):
     """
     Returns a simple bottleneck demographic event.
     """
@@ -184,12 +193,11 @@ def get_simple_bottleneck_event(
         "type": "simple_bottleneck",
         "time": time,
         "population": population,
-        "proportion": proportion
+        "proportion": proportion,
     }
 
 
-def get_instantaneous_bottleneck_event(
-        time=0.0, population=0, strength=10):
+def get_instantaneous_bottleneck_event(time=0.0, population=0, strength=10):
     """
     Returns a instantaneous bottleneck demographic event.
     """
@@ -197,7 +205,7 @@ def get_instantaneous_bottleneck_event(
         "type": "instantaneous_bottleneck",
         "time": time,
         "population": population,
-        "strength": strength
+        "strength": strength,
     }
 
 
@@ -206,20 +214,21 @@ def get_migration_matrix(num_populations, value=1.0):
     Returns a simple migration matrix.
     """
     return [
-        value * (j != k) for j in range(num_populations)
-        for k in range(num_populations)]
+        value * (j != k) for j in range(num_populations) for k in range(num_populations)
+    ]
 
 
 def get_example_simulator(
-        num_samples=10, Ne=0.25, random_seed=1, num_populations=1,
-        store_migrations=False):
+    num_samples=10, Ne=0.25, random_seed=1, num_populations=1, store_migrations=False
+):
     tables = _msprime.LightweightTableCollection()
     samples = [(j % num_populations, 0) for j in range(num_samples)]
-    migration_matrix = [1 for _ in range(num_populations**2)]
+    migration_matrix = [1 for _ in range(num_populations ** 2)]
     for j in range(num_populations):
         migration_matrix[j * num_populations + j] = 0
     population_configuration = [
-        get_population_configuration() for j in range(num_populations)]
+        get_population_configuration() for j in range(num_populations)
+    ]
     sim = _msprime.Simulator(
         samples,
         uniform_recombination_map(10, 0.1),
@@ -228,7 +237,8 @@ def get_example_simulator(
         population_configuration=population_configuration,
         migration_matrix=migration_matrix,
         store_migrations=store_migrations,
-        model=get_simulation_model(reference_size=Ne))
+        model=get_simulation_model(reference_size=Ne),
+    )
     return sim, tables
 
 
@@ -239,12 +249,20 @@ def get_random_demographic_events(num_populations, num_events):
     """
     events = []
     for j in range(num_events):
-        events.append(get_size_change_event(
-            time=random.random(), size=random.random(),
-            population=random.randint(-1, num_populations - 1)))
-        events.append(get_growth_rate_change_event(
-            time=random.random(), growth_rate=random.random(),
-            population=random.randint(-1, num_populations - 1)))
+        events.append(
+            get_size_change_event(
+                time=random.random(),
+                size=random.random(),
+                population=random.randint(-1, num_populations - 1),
+            )
+        )
+        events.append(
+            get_growth_rate_change_event(
+                time=random.random(),
+                growth_rate=random.random(),
+                population=random.randint(-1, num_populations - 1),
+            )
+        )
         if num_populations > 1:
             matrix_index = 0
             if random.random() < 0.5:
@@ -252,26 +270,43 @@ def get_random_demographic_events(num_populations, num_events):
             else:
                 # Don't pick diagonal elements
                 while matrix_index % (num_populations + 1) == 0:
-                    matrix_index = random.randint(0, num_populations**2 - 1)
-            events.append(get_migration_rate_change_event(
-                time=random.random(), migration_rate=random.random(),
-                matrix_index=matrix_index))
+                    matrix_index = random.randint(0, num_populations ** 2 - 1)
+            events.append(
+                get_migration_rate_change_event(
+                    time=random.random(),
+                    migration_rate=random.random(),
+                    matrix_index=matrix_index,
+                )
+            )
             # Add a mass migration event.
             source = random.randint(0, num_populations - 1)
             dest = source
             while dest == source:
                 dest = random.randint(0, num_populations - 1)
             # We use proportion of 0 or 1 so that we can test deterministically
-            events.append(get_mass_migration_event(
-                time=random.random(), proportion=random.choice([0, 1]),
-                source=source, dest=dest))
+            events.append(
+                get_mass_migration_event(
+                    time=random.random(),
+                    proportion=random.choice([0, 1]),
+                    source=source,
+                    dest=dest,
+                )
+            )
             # Add some bottlenecks
-            events.append(get_simple_bottleneck_event(
-                time=random.random(), proportion=random.uniform(0, 0.25),
-                population=random.randint(0, num_populations - 1)))
-            events.append(get_instantaneous_bottleneck_event(
-                time=random.random(), strength=random.uniform(0, 0.01),
-                population=random.randint(0, num_populations - 1)))
+            events.append(
+                get_simple_bottleneck_event(
+                    time=random.random(),
+                    proportion=random.uniform(0, 0.25),
+                    population=random.randint(0, num_populations - 1),
+                )
+            )
+            events.append(
+                get_instantaneous_bottleneck_event(
+                    time=random.random(),
+                    strength=random.uniform(0, 0.01),
+                    population=random.randint(0, num_populations - 1),
+                )
+            )
 
     sorted_events = sorted(events, key=lambda x: x["time"])
     return sorted_events
@@ -281,6 +316,7 @@ class TestModule(tests.MsprimeTestCase):
     """
     Tests for module level stuff.
     """
+
     def test_library_versions(self):
         major, minor = _msprime.get_gsl_version()
         self.assertIsInstance(major, int)
@@ -320,6 +356,7 @@ class LowLevelTestCase(tests.SequenceEqualityMixin, tests.MsprimeTestCase):
     """
     Superclass of tests for the low-level interface.
     """
+
     def verify_sparse_tree_dict(self, n, pi):
         """
         Verifies that the specified sparse tree in dict format is a
@@ -358,6 +395,7 @@ class TestSimulationState(LowLevelTestCase):
     Longer running tests that examine the simulation state in detail for a
     variety of parameters.
     """
+
     def verify_running_simulation(self, sim):
         """
         Verifies the state of the specified simulation that has run
@@ -432,7 +470,8 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(len(migrations), sim.get_num_migrations())
         if sim.get_store_migrations():
             self.assertGreaterEqual(
-                sim.get_num_migrations(), sum(sim.get_num_migration_events()))
+                sim.get_num_migrations(), sum(sim.get_num_migration_events())
+            )
 
     def verify_trees_equal(self, n, pi, sparse_tree):
         """
@@ -560,20 +599,19 @@ class TestSimulationState(LowLevelTestCase):
     def verify_random_parameters(self, seed):
         rng = random.Random(seed)
         n = rng.randint(2, 100)
-        m = rng.randint(1, 10**6)
+        m = rng.randint(1, 10 ** 6)
         rho = rng.uniform(0, 1000)
         N = rng.randint(1, 4)
         store_migrations = rng.choice([True, False])
-        migration_matrix = [
-            rng.random() * (j != k) for j in range(N) for k in range(N)]
+        migration_matrix = [rng.random() * (j != k) for j in range(N) for k in range(N)]
         population_configuration = [
-            get_population_configuration(rng.random(), rng.random())
-            for j in range(N)]
+            get_population_configuration(rng.random(), rng.random()) for j in range(N)
+        ]
         demographic_events = get_random_demographic_events(N, rng.randint(1, 5))
         start_time = rng.uniform(0, demographic_events[0]["time"])
         num_sampless = [0 for j in range(N)]
         num_sampless[0] = n
-        random_seed = rng.randint(0, 2**31)
+        random_seed = rng.randint(0, 2 ** 31)
         segment_block_size = rng.randint(1, 100)
         node_mapping_block_size = rng.randint(1, 100)
         avl_node_block_size = rng.randint(1, 100)
@@ -589,7 +627,8 @@ class TestSimulationState(LowLevelTestCase):
             migration_matrix=migration_matrix,
             segment_block_size=segment_block_size,
             avl_node_block_size=avl_node_block_size,
-            node_mapping_block_size=node_mapping_block_size)
+            node_mapping_block_size=node_mapping_block_size,
+        )
         for _ in range(3):
             # Check initial state
             self.assertEqual(0, sim.get_num_breakpoints())
@@ -607,7 +646,8 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(n, len(sim.get_ancestors()))
             self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
-                sim.get_population_configuration(), population_configuration)
+                sim.get_population_configuration(), population_configuration
+            )
             a = 0
             nodes = set()
             samples = sim.get_samples()
@@ -634,7 +674,8 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(segment_block_size, sim.get_segment_block_size())
                 self.assertEqual(avl_node_block_size, sim.get_avl_node_block_size())
                 self.assertEqual(
-                    node_mapping_block_size, sim.get_node_mapping_block_size())
+                    node_mapping_block_size, sim.get_node_mapping_block_size()
+                )
                 # Run this for a tiny amount of time and check the state
                 self.assertFalse(sim.run(start_time + 2e-8))
                 self.verify_running_simulation(sim)
@@ -678,27 +719,34 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(len(diff[2]), len(py_diff[2]))
             for edge, py_edge in zip(diff[1], py_diff[1]):
                 self.assertEqual(
-                    edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child))
+                    edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child)
+                )
             for edge, py_edge in zip(diff[2], py_diff[2]):
                 self.assertEqual(
-                    edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child))
+                    edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child)
+                )
 
     def verify_simulation(
-            self, n, m, r, demographic_events=[], model=get_simulation_model()):
+        self, n, m, r, demographic_events=[], model=get_simulation_model()
+    ):
         """
         Runs the specified simulation and verifies its state.
         """
         # These tests don't work for n == 2
         assert n > 2
-        random_seed = random.randint(0, 2**31)
+        random_seed = random.randint(0, 2 ** 31)
         tables = _msprime.LightweightTableCollection()
         sim = _msprime.Simulator(
             samples=get_samples(n),
             recombination_map=uniform_recombination_map(L=m, rate=r),
             random_generator=_msprime.RandomGenerator(random_seed),
-            tables=tables, demographic_events=demographic_events,
-            segment_block_size=1000, avl_node_block_size=1000,
-            node_mapping_block_size=1000, model=model)
+            tables=tables,
+            demographic_events=demographic_events,
+            segment_block_size=1000,
+            avl_node_block_size=1000,
+            node_mapping_block_size=1000,
+            model=model,
+        )
         for _ in range(3):
             # Run the sim for a tiny amount of time and check.
             if not sim.run():
@@ -723,9 +771,11 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_simulation(3, 10, 1000.0)
         self.verify_simulation(5, 10, 10.0)
         self.verify_simulation(
-            5, 10, 10.0,
-            demographic_events=[
-                get_simple_bottleneck_event(time=0.2, proportion=1)])
+            5,
+            10,
+            10.0,
+            demographic_events=[get_simple_bottleneck_event(time=0.2, proportion=1)],
+        )
         self.verify_simulation(3, 10, 1.0, model=get_simulation_model("smc"))
         self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
 
@@ -736,7 +786,8 @@ class TestSimulationState(LowLevelTestCase):
             samples=get_samples(n),
             recombination_map=uniform_recombination_map(L=m, rate=1),
             random_generator=_msprime.RandomGenerator(1),
-            tables=_msprime.LightweightTableCollection())
+            tables=_msprime.LightweightTableCollection(),
+        )
         # We run until time 0 to for initialisation
         sim.run(0)
         self.assertEqual(sim.get_time(), 0)
@@ -755,9 +806,10 @@ class TestSimulationState(LowLevelTestCase):
         while not sim.run_event():
             events += 1
             total_events = (
-                sim.get_num_common_ancestor_events() +
-                sim.get_num_recombination_events() +
-                sum(sim.get_num_migration_events()))
+                sim.get_num_common_ancestor_events()
+                + sim.get_num_recombination_events()
+                + sum(sim.get_num_migration_events())
+            )
             self.assertEqual(events, total_events)
 
     def test_demographic_events(self):
@@ -765,10 +817,12 @@ class TestSimulationState(LowLevelTestCase):
         n = 10
         N = 3
         migration_matrix = [
-            random.random() * (j != k) for j in range(N) for k in range(N)]
+            random.random() * (j != k) for j in range(N) for k in range(N)
+        ]
         population_configuration = [
             get_population_configuration(random.random(), random.random())
-            for j in range(N)]
+            for j in range(N)
+        ]
         demographic_events = get_random_demographic_events(N, 10)
         start_times = [0 for j in range(N)]
         # Rescale time back to very small values so we know that they
@@ -782,22 +836,25 @@ class TestSimulationState(LowLevelTestCase):
             _msprime.LightweightTableCollection(),
             migration_matrix=migration_matrix,
             population_configuration=population_configuration,
-            demographic_events=demographic_events)
+            demographic_events=demographic_events,
+        )
         # Use a second instance to track the demographic events debugger.
         sim2 = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(), _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(), migration_matrix=migration_matrix,
+            get_samples(n),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+            migration_matrix=migration_matrix,
             population_configuration=population_configuration,
-            demographic_events=demographic_events)
+            demographic_events=demographic_events,
+        )
         self.assertEqual(sim.get_migration_matrix(), migration_matrix)
-        self.assertEqual(
-            sim.get_population_configuration(), population_configuration)
+        self.assertEqual(sim.get_population_configuration(), population_configuration)
 
         # Now run the demography debug forward.
         next_event_time = sim2.debug_demography()
         self.assertEqual(sim2.get_migration_matrix(), migration_matrix)
-        self.assertEqual(
-            sim2.get_population_configuration(), population_configuration)
+        self.assertEqual(sim2.get_population_configuration(), population_configuration)
         self.assertRaises(_msprime.LibraryError, sim.compute_population_size, N + 1, 0)
         # For each event we now run the simulator forward until this time
         # and make sure that the internal state is what it should be.
@@ -858,7 +915,8 @@ class TestSimulationState(LowLevelTestCase):
                     start_times[j] = t
             self.assertEqual(sim.get_migration_matrix(), migration_matrix)
             self.assertEqual(
-                sim.get_population_configuration(), population_configuration)
+                sim.get_population_configuration(), population_configuration
+            )
             next_event_time = sim2.debug_demography()
         self.assertTrue(math.isinf(next_event_time))
 
@@ -867,6 +925,7 @@ class TestSimulator(LowLevelTestCase):
     """
     Tests for the low-level interface to the simulator.
     """
+
     def test_bad_parameters(self):
         rng = _msprime.RandomGenerator(1)
         recomb_map = uniform_recombination_map()
@@ -874,19 +933,28 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                recomb_map, _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
+                recomb_map,
+                _msprime.RandomGenerator(random_seed),
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
+
         # samples recomb_map and random_seed are mandatory
         self.assertRaises(TypeError, _msprime.Simulator)
         self.assertRaises(TypeError, _msprime.Simulator, get_samples(10))
         self.assertRaises(
-                TypeError, _msprime.Simulator, get_samples(10), random_generator=rng)
+            TypeError, _msprime.Simulator, get_samples(10), random_generator=rng
+        )
         self.assertRaises(
-                TypeError, _msprime.Simulator, get_samples(10),
-                recombination_map=recomb_map)
+            TypeError, _msprime.Simulator, get_samples(10), recombination_map=recomb_map
+        )
         self.assertRaises(
-                TypeError, _msprime.Simulator, get_samples(10),
-                recombination_map=recomb_map, random_generator=rng)
+            TypeError,
+            _msprime.Simulator,
+            get_samples(10),
+            recombination_map=recomb_map,
+            random_generator=rng,
+        )
         # check types
         for bad_type in ["1", None, {}, int]:
             self.assertRaises(TypeError, f, tables=bad_type)
@@ -910,46 +978,53 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, gene_conversion_rate=-1)
         # Track length is ignored if gene_conversion_rate is 0
         self.assertRaises(
-            _msprime.InputError, f, gene_conversion_rate=1,
-            gene_conversion_track_length=-100)
+            _msprime.InputError,
+            f,
+            gene_conversion_rate=1,
+            gene_conversion_track_length=-100,
+        )
 
         # Check for other type specific errors.
-        self.assertRaises(OverflowError, f, avl_node_block_size=2**65)
+        self.assertRaises(OverflowError, f, avl_node_block_size=2 ** 65)
 
     def test_pedigree_simulation_model(self):
         recomb_map = uniform_recombination_map()
         base_ped = {
             "individual": np.array([1, 2, 3, 4], dtype=np.int32),
-            "parents": np.array([2, 3, 2, 3, -1, -1, -1, -1],
-                                dtype=np.int32).reshape(-1, 2),
+            "parents": np.array([2, 3, 2, 3, -1, -1, -1, -1], dtype=np.int32).reshape(
+                -1, 2
+            ),
             "time": np.array([0, 0, 1, 1], dtype=np.float64),
-            "is_sample": np.array([1, 1, 0, 0], dtype=np.uint32)
+            "is_sample": np.array([1, 1, 0, 0], dtype=np.uint32),
         }
         bad_ped_too_many_samples = base_ped.copy()
         bad_ped_too_many_samples["is_sample"] = 1
         bad_ped_bad_inds = base_ped.copy()
-        bad_ped_bad_inds["individual"] = np.array([0, 1, 2, 3], dtype=np.int32),
+        bad_ped_bad_inds["individual"] = (np.array([0, 1, 2, 3], dtype=np.int32),)
         bad_ped_bad_is_sample = base_ped.copy()
-        bad_ped_bad_is_sample["is_sample"] = np.array([0, 1, 0, 0], dtype=np.int32),
+        bad_ped_bad_is_sample["is_sample"] = (np.array([0, 1, 0, 0], dtype=np.int32),)
 
-        def f(num_samples=4, random_seed=1, model='wf_ped', **kwargs):
+        def f(num_samples=4, random_seed=1, model="wf_ped", **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                recomb_map, _msprime.RandomGenerator(random_seed),
+                recomb_map,
+                _msprime.RandomGenerator(random_seed),
                 _msprime.LightweightTableCollection(),
-                model=get_simulation_model(model), **kwargs)
+                model=get_simulation_model(model),
+                **kwargs,
+            )
 
         for bad_type in ["1", [], int, set()]:
             self.assertRaises(TypeError, f, pedigree=bad_type)
         for bad_value in [{}]:
             self.assertRaises(ValueError, f, pedigree=bad_value)
         for bad_model in ["dtwf", "hudson"]:
-            self.assertRaises(ValueError, f, pedigree=base_ped,
-                              model=bad_model)
+            self.assertRaises(ValueError, f, pedigree=base_ped, model=bad_model)
         for bad_ped in [
-                bad_ped_too_many_samples,
-                bad_ped_bad_inds,
-                bad_ped_bad_is_sample]:
+            bad_ped_too_many_samples,
+            bad_ped_bad_inds,
+            bad_ped_bad_is_sample,
+        ]:
             self.assertRaises(ValueError, f, pedigree=bad_ped)
         for good_ped in [base_ped]:
             sim = f(pedigree=good_ped)
@@ -962,8 +1037,11 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                recomb_map, _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
+                recomb_map,
+                _msprime.RandomGenerator(random_seed),
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
 
         for num_labels in range(1, 10):
             sim = f(num_labels=num_labels)
@@ -974,7 +1052,8 @@ class TestSimulator(LowLevelTestCase):
     def test_record_scaling(self):
         for Ne in [0.25, 1, 10, 1e6]:
             sim, ll_tables = get_example_simulator(
-                10, Ne=Ne, num_populations=2, store_migrations=True)
+                10, Ne=Ne, num_populations=2, store_migrations=True
+            )
             sim.run()
             tables = tskit.TableCollection.fromdict(ll_tables.asdict())
             sim_times = [node[1] for node in sim.get_nodes()]
@@ -997,7 +1076,8 @@ class TestSimulator(LowLevelTestCase):
 
     def test_migrations(self):
         sim, ll_tables = get_example_simulator(
-            10, num_populations=3, store_migrations=True)
+            10, num_populations=3, store_migrations=True
+        )
         sim.run()
         tables = tskit.TableCollection.fromdict(ll_tables.asdict())
         self.assertGreater(sim.get_num_migrations(), 0)
@@ -1015,13 +1095,15 @@ class TestSimulator(LowLevelTestCase):
             self.assertAlmostEqual(sim_r[5], ts_r.time)
 
     def test_non_parametric_simulation_models(self):
-
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
                 uniform_recombination_map(),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
+
         for bad_type in [0, None, str]:
             self.assertRaises(TypeError, f, model=bad_type)
         for bad_dict in [{}, {"noname": 1}]:
@@ -1034,14 +1116,15 @@ class TestSimulator(LowLevelTestCase):
             self.assertEqual(sim.get_model(), model)
 
     def test_dirac_simulation_model(self):
-
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
                 uniform_recombination_map(),
                 _msprime.RandomGenerator(random_seed),
                 _msprime.LightweightTableCollection(),
-                **kwargs)
+                **kwargs,
+            )
+
         for bad_type in [None, str, "sdf"]:
             model = get_simulation_model("dirac", psi=bad_type, c=1.0)
             self.assertRaises(TypeError, f, model=model)
@@ -1050,10 +1133,12 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(ValueError, f, model=get_simulation_model("dirac"))
         for bad_psi in [-1, 0, -1e-6, 1, 1e6]:
             self.assertRaises(
-                ValueError, f, model=get_simulation_model("dirac", c=1, psi=bad_psi))
+                ValueError, f, model=get_simulation_model("dirac", c=1, psi=bad_psi)
+            )
         for bad_c in [-1, -1e-6]:
             self.assertRaises(
-                ValueError, f, model=get_simulation_model("dirac", psi=0.5, c=bad_c))
+                ValueError, f, model=get_simulation_model("dirac", psi=0.5, c=bad_c)
+            )
         for psi in [0.99, 0.2, 1e-4]:
             for c in [5.0, 1e2, 1e-4]:
                 model = get_simulation_model("dirac", psi=psi, c=c)
@@ -1061,13 +1146,15 @@ class TestSimulator(LowLevelTestCase):
                 self.assertEqual(sim.get_model(), model)
 
     def test_beta_simulation_model(self):
-
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
                 uniform_recombination_map(),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
+
         for bad_type in [None, str, "sdf"]:
             model = get_simulation_model("beta", alpha=bad_type, truncation_point=1)
             self.assertRaises(TypeError, f, model=model)
@@ -1079,20 +1166,21 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(ValueError, f, model=model)
         # should have 1 < alpha < 2 and 0 < truncation_point <= 1
         for alpha in np.arange(1.01, 2, 0.01):
-            for truncation_point in np.arange(0, 1, 0.01)+0.01:
+            for truncation_point in np.arange(0, 1, 0.01) + 0.01:
                 model = get_simulation_model(
-                    "beta", 2, alpha=alpha, truncation_point=truncation_point)
+                    "beta", 2, alpha=alpha, truncation_point=truncation_point
+                )
                 sim = f(model=model)
                 self.assertEqual(sim.get_model(), model)
         # bad values
         for alpha in (-1e9, -1, 0, 1, 2, 5, 1e9):
-            model = get_simulation_model(
-                "beta", 2, alpha=alpha, truncation_point=1)
+            model = get_simulation_model("beta", 2, alpha=alpha, truncation_point=1)
             with self.assertRaises(_msprime.InputError):
                 sim = f(model=model)
         for truncation_point in [-1e9, -1, 0, 1.1, 2, 1e9]:
             model = get_simulation_model(
-                "beta", 2, alpha=1.5, truncation_point=truncation_point)
+                "beta", 2, alpha=1.5, truncation_point=truncation_point
+            )
             with self.assertRaises(_msprime.InputError):
                 sim = f(model=model)
 
@@ -1104,7 +1192,9 @@ class TestSimulator(LowLevelTestCase):
                 get_samples(num_samples),
                 uniform_recombination_map(L=L),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
 
         # Partialy specified models.
         model = get_simulation_model("sweep_genic_selection")
@@ -1112,19 +1202,31 @@ class TestSimulator(LowLevelTestCase):
         model = get_simulation_model("sweep_genic_selection", position=0.5)
         self.assertRaises(ValueError, f, model=model)
         model = get_simulation_model(
-            "sweep_genic_selection", position=0.5, start_frequency=0.1)
+            "sweep_genic_selection", position=0.5, start_frequency=0.1
+        )
         self.assertRaises(ValueError, f, model=model)
         model = get_simulation_model(
-            "sweep_genic_selection", position=0.5, start_frequency=0.1,
-            end_frequency=0.5)
+            "sweep_genic_selection",
+            position=0.5,
+            start_frequency=0.1,
+            end_frequency=0.5,
+        )
         self.assertRaises(ValueError, f, model=model)
         model = get_simulation_model(
-            "sweep_genic_selection", position=0.5, start_frequency=0.1,
-            end_frequency=0.5, alpha=0.1)
+            "sweep_genic_selection",
+            position=0.5,
+            start_frequency=0.1,
+            end_frequency=0.5,
+            alpha=0.1,
+        )
         self.assertRaises(ValueError, f, model=model)
         model = get_simulation_model(
-            "sweep_genic_selection", position=0.5, start_frequency=0.1,
-            end_frequency=0.5, dt=0.1)
+            "sweep_genic_selection",
+            position=0.5,
+            start_frequency=0.1,
+            end_frequency=0.5,
+            dt=0.1,
+        )
         self.assertRaises(ValueError, f, model=model)
 
         for bad_type in [None, str, "sdf"]:
@@ -1157,7 +1259,9 @@ class TestSimulator(LowLevelTestCase):
                 get_samples(num_samples),
                 uniform_recombination_map(L=L, rate=1),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(), **kwargs)
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
 
         for j in range(L):
             model = get_sweep_genic_selection_model(position=j)
@@ -1172,7 +1276,8 @@ class TestSimulator(LowLevelTestCase):
             uniform_recombination_map(L=10, rate=1),
             _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
-            num_labels=2)
+            num_labels=2,
+        )
         done = sim.run()
         self.assertTrue(done)
         t_before = sim.get_time()
@@ -1187,13 +1292,18 @@ class TestSimulator(LowLevelTestCase):
             samples = [(j % 2, 0) for j in range(num_samples)]
             migration_matrix = [0, 1, 1, 0]
             population_configuration = [
-                get_population_configuration() for j in range(2)]
+                get_population_configuration() for j in range(2)
+            ]
             return _msprime.Simulator(
-                samples, uniform_recombination_map(),
+                samples,
+                uniform_recombination_map(),
                 _msprime.RandomGenerator(random_seed),
                 _msprime.LightweightTableCollection(),
                 population_configuration=population_configuration,
-                migration_matrix=migration_matrix, **kwargs)
+                migration_matrix=migration_matrix,
+                **kwargs,
+            )
+
         for bad_type in [[], "False", None, {}, str]:
             self.assertRaises(TypeError, f, store_migrations=bad_type)
         for store_records in [True, False]:
@@ -1222,8 +1332,11 @@ class TestSimulator(LowLevelTestCase):
 
         def f(samples):
             return _msprime.Simulator(
-                samples, uniform_recombination_map(), rng,
-                _msprime.LightweightTableCollection())
+                samples,
+                uniform_recombination_map(),
+                rng,
+                _msprime.LightweightTableCollection(),
+            )
 
         err = (TypeError, ValueError)
         for bad_type in [None, {}, _msprime.Simulator]:
@@ -1242,32 +1355,37 @@ class TestSimulator(LowLevelTestCase):
 
     def test_get_samples(self):
         N = 4
-        samples = [
-            (random.randint(0, N - 1), random.random()) for _ in range(10)]
+        samples = [(random.randint(0, N - 1), random.random()) for _ in range(10)]
         # There must be at least one sample at the present time.
         samples[-1] = (0, 0)
         rng = _msprime.RandomGenerator(1)
         sim = _msprime.Simulator(
-            samples, uniform_recombination_map(), rng,
+            samples,
+            uniform_recombination_map(),
+            rng,
             _msprime.LightweightTableCollection(),
-            population_configuration=[
-                get_population_configuration() for _ in range(N)],
-            migration_matrix=[0 for j in range(N * N)])
+            population_configuration=[get_population_configuration() for _ in range(N)],
+            migration_matrix=[0 for j in range(N * N)],
+        )
         self.assertEqual(samples, sim.get_samples())
 
     def test_deleting_tables(self):
         rng = _msprime.RandomGenerator(1)
         tables = _msprime.LightweightTableCollection()
         sim = _msprime.Simulator(
-            get_samples(10), uniform_recombination_map(), rng, tables)
+            get_samples(10), uniform_recombination_map(), rng, tables
+        )
         del tables
         sim.run()
 
     def test_deleting_rng(self):
         rng = _msprime.RandomGenerator(1)
         sim = _msprime.Simulator(
-            get_samples(10), uniform_recombination_map(), rng,
-            _msprime.LightweightTableCollection())
+            get_samples(10),
+            uniform_recombination_map(),
+            rng,
+            _msprime.LightweightTableCollection(),
+        )
         del rng
         sim.run()
 
@@ -1275,26 +1393,35 @@ class TestSimulator(LowLevelTestCase):
         rng = _msprime.RandomGenerator(1)
         recomb_map = uniform_recombination_map()
         sim = _msprime.Simulator(
-            get_samples(10), recomb_map, rng, _msprime.LightweightTableCollection())
+            get_samples(10), recomb_map, rng, _msprime.LightweightTableCollection()
+        )
         del recomb_map
         sim.run()
 
     def test_defaults(self):
         n = 10
         sim = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(), _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection())
+            get_samples(n),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
         self.assertEqual(sim.get_migration_matrix(), [0.0])
         self.assertEqual(
             sim.get_population_configuration(),
-            [get_population_configuration(initial_size=0.25)])
+            [get_population_configuration(initial_size=0.25)],
+        )
 
     def test_bad_population_configurations(self):
         def f(population_configuration):
             return _msprime.Simulator(
-                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
+                get_samples(2),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
                 _msprime.LightweightTableCollection(),
-                population_configuration=population_configuration)
+                population_configuration=population_configuration,
+            )
+
         self.assertRaises(TypeError, f, "")
         self.assertRaises(TypeError, f, [""])
         self.assertRaises(ValueError, f, [{}])
@@ -1308,62 +1435,83 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(ValueError, f, [{"start_time": 1, "type": -1000}])
         for bad_number in ["", None, [], {}]:
             self.assertRaises(
-                TypeError, f,
-                [get_population_configuration(initial_size=bad_number)])
+                TypeError, f, [get_population_configuration(initial_size=bad_number)]
+            )
             self.assertRaises(
-                TypeError, f,
-                [get_population_configuration(growth_rate=bad_number)])
+                TypeError, f, [get_population_configuration(growth_rate=bad_number)]
+            )
         # Cannot have negative for initial_size
         for bad_size in [-1, 0]:
             self.assertRaises(
-                _msprime.InputError, f,
-                [get_population_configuration(initial_size=bad_size)])
+                _msprime.InputError,
+                f,
+                [get_population_configuration(initial_size=bad_size)],
+            )
 
     def test_bad_sample_configurations(self):
         rng = _msprime.RandomGenerator(1)
 
         def f(num_samples, pop_num_sampless):
             population_configuration = [
-                get_population_configuration(n) for n in pop_num_sampless]
+                get_population_configuration(n) for n in pop_num_sampless
+            ]
             N = len(pop_num_sampless)
             migration_matrix = [0 for j in range(N) for k in range(N)]
             _msprime.Simulator(
-                get_samples(num_samples), uniform_recombination_map(), rng,
+                get_samples(num_samples),
+                uniform_recombination_map(),
+                rng,
                 _msprime.LightweightTableCollection(),
                 population_configuration=population_configuration,
-                migration_matrix=migration_matrix)
+                migration_matrix=migration_matrix,
+            )
+
         for bad_type in [{}, None, 2, [""], [[]], [None]]:
             self.assertRaises(
-                TypeError, _msprime.Simulator, get_samples(2),
-                uniform_recombination_map(), rng, population_configuration=bad_type)
+                TypeError,
+                _msprime.Simulator,
+                get_samples(2),
+                uniform_recombination_map(),
+                rng,
+                population_configuration=bad_type,
+            )
         # Cannot have empty list
         self.assertRaises(ValueError, f, 2, [])
         # Must provide population_configuration if a migration_matrix
         # is supplied.
         self.assertRaises(
-            ValueError, _msprime.Simulator, get_samples(2),
-            uniform_recombination_map(), rng, _msprime.LightweightTableCollection(),
-            migration_matrix=[0, 0, 0, 0])
+            ValueError,
+            _msprime.Simulator,
+            get_samples(2),
+            uniform_recombination_map(),
+            rng,
+            _msprime.LightweightTableCollection(),
+            migration_matrix=[0, 0, 0, 0],
+        )
 
     def test_get_population_configurations(self):
         def f(num_samples, conf_tuples):
             population_configuration = [
                 get_population_configuration(initial_size=p, growth_rate=a)
-                for p, a in conf_tuples]
+                for p, a in conf_tuples
+            ]
             N = len(population_configuration)
             migration_matrix = [0 for j in range(N) for k in range(N)]
             s = _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(), _msprime.RandomGenerator(1),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
                 _msprime.LightweightTableCollection(),
                 population_configuration=population_configuration,
-                migration_matrix=migration_matrix)
+                migration_matrix=migration_matrix,
+            )
             conf_dicts = s.get_population_configuration()
             self.assertEqual(len(conf_dicts), len(conf_tuples))
             for conf_dict, conf_tuple in zip(conf_dicts, conf_tuples):
                 self.assertEqual(len(conf_dict), 2)
                 self.assertEqual(conf_dict["initial_size"], conf_tuple[0])
                 self.assertEqual(conf_dict["growth_rate"], conf_tuple[1])
+
         f(2, [(1, 1)])
         f(2, [(2, 0), (0.5, 0.1)])
         f(5, [(1, 0.25), (2, 0.5), (3, 0.75), (4, 1)])
@@ -1371,14 +1519,18 @@ class TestSimulator(LowLevelTestCase):
     def test_bad_migration_matrix(self):
         def f(num_populations, migration_matrix):
             population_configuration = [
-                get_population_configuration()
-                for j in range(num_populations)]
+                get_population_configuration() for j in range(num_populations)
+            ]
             population_configuration[0]["num_samples"] = 2
             return _msprime.Simulator(
-                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
+                get_samples(2),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
                 _msprime.LightweightTableCollection(),
                 population_configuration=population_configuration,
-                migration_matrix=migration_matrix)
+                migration_matrix=migration_matrix,
+            )
+
         for bad_type in ["", {}, None, 2, [""], [[]], [None]]:
             self.assertRaises(TypeError, f, 1, bad_type)
         for bad_value in [[1, 2], [-1], [1, 2, 3]]:
@@ -1394,60 +1546,72 @@ class TestSimulator(LowLevelTestCase):
 
         bad_matrices = [
             # Non-zero diagonal gives a InputError
-            [[1, 1],
-             [1, 1]],
-            [[0, 1],
-             [1, 1]],
-            [[0, 1, 1],
-             [1, 0, 1],
-             [1, 0, 1]],
+            [[1, 1], [1, 1]],
+            [[0, 1], [1, 1]],
+            [[0, 1, 1], [1, 0, 1], [1, 0, 1]],
         ]
         for matrix in bad_matrices:
             num_populations = len(matrix[0])
             flattened = [v for row in matrix for v in row]
-            self.assertRaises(
-                _msprime.InputError, f, num_populations, flattened)
+            self.assertRaises(_msprime.InputError, f, num_populations, flattened)
         # Must provide migration_matrix when a population config is
         # provided.
         for N in range(1, 5):
             pop_conf = [get_population_configuration(2)] + [
-                get_population_configuration(0) for j in range(N - 1)]
+                get_population_configuration(0) for j in range(N - 1)
+            ]
             self.assertRaises(
-                ValueError, _msprime.Simulator,
-                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(), population_configuration=pop_conf)
+                ValueError,
+                _msprime.Simulator,
+                get_samples(2),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                population_configuration=pop_conf,
+            )
 
     def test_get_migration_matrix(self):
         for N in range(1, 10):
             population_configuration = [get_population_configuration(2)] + [
-                get_population_configuration(0) for _ in range(N - 1)]
+                get_population_configuration(0) for _ in range(N - 1)
+            ]
             random_matrix = [
-                random.random() * (j != k) for j in range(N)
-                for k in range(N)]
+                random.random() * (j != k) for j in range(N) for k in range(N)
+            ]
             # Deliberately stress the JSON encoding code.
             nasty_matrix = [
-                random.random() * 1e9 * (j != k) for j in range(N)
-                for k in range(N)]
+                random.random() * 1e9 * (j != k) for j in range(N) for k in range(N)
+            ]
             matrices = [random_matrix, nasty_matrix]
             for migration_matrix in matrices:
                 sim = _msprime.Simulator(
-                    get_samples(2), uniform_recombination_map(),
+                    get_samples(2),
+                    uniform_recombination_map(),
                     _msprime.RandomGenerator(1),
                     _msprime.LightweightTableCollection(),
                     migration_matrix=migration_matrix,
-                    population_configuration=population_configuration)
+                    population_configuration=population_configuration,
+                )
                 self.assertEqual(migration_matrix, sim.get_migration_matrix())
 
     def test_bad_demographic_event_types(self):
         def f(events):
             _msprime.Simulator(
-                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(), demographic_events=events)
+                get_samples(2),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                demographic_events=events,
+            )
+
         event_generators = [
-            get_size_change_event, get_growth_rate_change_event,
+            get_size_change_event,
+            get_growth_rate_change_event,
             get_migration_rate_change_event,
-            get_mass_migration_event, get_simple_bottleneck_event,
-            get_instantaneous_bottleneck_event]
+            get_mass_migration_event,
+            get_simple_bottleneck_event,
+            get_instantaneous_bottleneck_event,
+        ]
         for bad_type in [None, {}, "", 1]:
             self.assertRaises(TypeError, f, bad_type)
         for bad_type in [None, "", 1, []]:
@@ -1457,7 +1621,7 @@ class TestSimulator(LowLevelTestCase):
                 event = generator()
                 event["type"] = bad_type
                 self.assertRaises(ValueError, f, [event])
-        for bad_event in [b'', b'1', b'x' * 1000, b'Size_change', 2, 'none']:
+        for bad_event in [b"", b"1", b"x" * 1000, b"Size_change", 2, "none"]:
             for generator in event_generators:
                 event["type"] = bad_event
                 self.assertRaises(ValueError, f, [event])
@@ -1484,14 +1648,14 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, [event])
             event = get_mass_migration_event(source=0, dest=bad_type)
             self.assertRaises(TypeError, f, [event])
-            event = get_mass_migration_event(
-                source=0, dest=1, proportion=bad_type)
+            event = get_mass_migration_event(source=0, dest=1, proportion=bad_type)
             self.assertRaises(TypeError, f, [event])
 
             event = get_migration_rate_change_event(matrix_index=bad_type)
             self.assertRaises(TypeError, f, [event])
             event = get_migration_rate_change_event(
-                matrix_index=0, migration_rate=bad_type)
+                matrix_index=0, migration_rate=bad_type
+            )
             self.assertRaises(TypeError, f, [event])
 
             event = get_growth_rate_change_event(population=bad_type)
@@ -1502,36 +1666,42 @@ class TestSimulator(LowLevelTestCase):
     def test_bad_demographic_event_values(self):
         def f(events, num_populations=1):
             population_configuration = [get_population_configuration(2)] + [
-                get_population_configuration(0)
-                for _ in range(num_populations - 1)]
+                get_population_configuration(0) for _ in range(num_populations - 1)
+            ]
             _msprime.Simulator(
-                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(), demographic_events=events,
+                get_samples(2),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                demographic_events=events,
                 population_configuration=population_configuration,
-                migration_matrix=get_migration_matrix(num_populations))
+                migration_matrix=get_migration_matrix(num_populations),
+            )
+
         event_generators = [
-            get_size_change_event, get_growth_rate_change_event,
+            get_size_change_event,
+            get_growth_rate_change_event,
             get_migration_rate_change_event,
-            get_mass_migration_event, get_simple_bottleneck_event,
-            get_instantaneous_bottleneck_event]
+            get_mass_migration_event,
+            get_simple_bottleneck_event,
+            get_instantaneous_bottleneck_event,
+        ]
         for event_generator in event_generators:
             # Negative times not allowed.
             event = event_generator(time=-1)
             self.assertRaises(ValueError, f, [event])
-        event_generators = [
-            get_size_change_event, get_growth_rate_change_event]
+        event_generators = [get_size_change_event, get_growth_rate_change_event]
         # Check for bad population ids.
         for event_generator in event_generators:
-            for bad_pop_id in [-2, 1, 10**6]:
-                event = event_generator(
-                    population=bad_pop_id)
+            for bad_pop_id in [-2, 1, 10 ** 6]:
+                event = event_generator(population=bad_pop_id)
                 self.assertRaises(_msprime.InputError, f, [event])
             for k in range(1, 4):
                 event = event_generator(population=k)
                 self.assertRaises(_msprime.InputError, f, [event], k)
                 events = [event_generator(), event]
                 self.assertRaises(_msprime.InputError, f, events, k)
-        for bad_pop_id in [-2, 1, 10**6]:
+        for bad_pop_id in [-2, 1, 10 ** 6]:
             event = get_mass_migration_event(source=bad_pop_id)
             self.assertRaises(_msprime.InputError, f, [event])
             event = get_mass_migration_event(dest=bad_pop_id)
@@ -1547,7 +1717,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(_msprime.InputError, f, [event])
         # Check for bad matrix indexes
         event_generator = get_migration_rate_change_event
-        for bad_index in [-2, 1, 10**6]:
+        for bad_index in [-2, 1, 10 ** 6]:
             event = event_generator(matrix_index=bad_index)
             self.assertRaises(_msprime.InputError, f, [event])
         for k in range(1, 4):
@@ -1571,13 +1741,17 @@ class TestSimulator(LowLevelTestCase):
     def test_bad_demographic_event_messages(self):
         def f(events, num_populations=1):
             population_configuration = [get_population_configuration(2)] + [
-                get_population_configuration(0)
-                for _ in range(num_populations - 1)]
+                get_population_configuration(0) for _ in range(num_populations - 1)
+            ]
             _msprime.Simulator(
-                get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(), demographic_events=events,
+                get_samples(2),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                demographic_events=events,
                 population_configuration=population_configuration,
-                migration_matrix=get_migration_matrix(num_populations))
+                migration_matrix=get_migration_matrix(num_populations),
+            )
 
         # Make sure we're getting the right index in error message.
         events = [get_size_change_event(), get_size_change_event(size=-1)]
@@ -1585,14 +1759,16 @@ class TestSimulator(LowLevelTestCase):
             f(events)
         except _msprime.InputError as e:
             message = str(e)
-        self.assertTrue(
-            message.startswith("Input error in demographic_events[1]"))
+        self.assertTrue(message.startswith("Input error in demographic_events[1]"))
 
     def test_unsorted_demographic_events(self):
         event_generators = [
-            get_size_change_event, get_growth_rate_change_event,
-            get_migration_rate_change_event, get_mass_migration_event,
-            get_simple_bottleneck_event]
+            get_size_change_event,
+            get_growth_rate_change_event,
+            get_migration_rate_change_event,
+            get_mass_migration_event,
+            get_simple_bottleneck_event,
+        ]
         events = []
         for event_generator in event_generators:
             for _ in range(3):
@@ -1600,36 +1776,42 @@ class TestSimulator(LowLevelTestCase):
         sorted_events = sorted(events, key=lambda x: x["time"])
         self.assertNotEqual(events, sorted_events)
         self.assertRaises(
-            _msprime.InputError, _msprime.Simulator, get_samples(10),
-            uniform_recombination_map(), _msprime.RandomGenerator(1),
+            _msprime.InputError,
+            _msprime.Simulator,
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
-            demographic_events=events)
+            demographic_events=events,
+        )
 
     def test_seed_equality(self):
         simulations = [
+            {"samples": get_samples(10),},
+            {
+                "samples": get_samples(100),
+                "demographic_events": [get_simple_bottleneck_event(0.01, 0, 1.0)],
+            },
             {
                 "samples": get_samples(10),
-            }, {
-                "samples": get_samples(100),
-                "demographic_events": [
-                    get_simple_bottleneck_event(0.01, 0, 1.0)],
-            }, {
-                "samples": get_samples(10),
-                "recombination_map": uniform_recombination_map(L=10, rate=1)
-            }, {
+                "recombination_map": uniform_recombination_map(L=10, rate=1),
+            },
+            {
                 "samples": get_population_samples(3, 3, 4),
                 "population_configuration": [
                     get_population_configuration(),
                     get_population_configuration(),
-                    get_population_configuration()],
+                    get_population_configuration(),
+                ],
                 "migration_matrix": get_migration_matrix(3, 3),
                 "demographic_events": [
                     get_size_change_event(0.1, 0.5),
                     get_migration_rate_change_event(0.2, 2),
                     get_growth_rate_change_event(0.3, 2),
                     get_mass_migration_event(0.4, 0, 1, 0.5),
-                    get_simple_bottleneck_event(0.5, 0.5)]
-            }
+                    get_simple_bottleneck_event(0.5, 0.5),
+                ],
+            },
         ]
         seed = 10
         for params in simulations:
@@ -1653,19 +1835,26 @@ class TestSimulator(LowLevelTestCase):
         # With no migration we should have an infinite waiting time.
         population_configuration = [
             get_population_configuration(),
-            get_population_configuration()]
+            get_population_configuration(),
+        ]
         sim = _msprime.Simulator(
-            get_population_samples(5, 5), uniform_recombination_map(),
-            _msprime.RandomGenerator(1), _msprime.LightweightTableCollection(),
+            get_population_samples(5, 5),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
-            migration_matrix=[0, 0, 0, 0])
+            migration_matrix=[0, 0, 0, 0],
+        )
         self.assertRaises(_msprime.LibraryError, sim.run)
 
     def test_simple_event_counters(self):
         for n in [2, 10, 20]:
             sim = _msprime.Simulator(
-                get_samples(n), uniform_recombination_map(), _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection())
+                get_samples(n),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+            )
             sim.run()
             self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
             self.assertEqual(0, sim.get_num_recombination_events())
@@ -1676,31 +1865,36 @@ class TestSimulator(LowLevelTestCase):
         # No migration at all
         population_configuration = [
             get_population_configuration(n),
-            get_population_configuration(0)]
+            get_population_configuration(0),
+        ]
         sim = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(), _msprime.RandomGenerator(1),
+            get_samples(n),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
-            migration_matrix=[0.0, 0.0, 0.0, 0.0])
+            migration_matrix=[0.0, 0.0, 0.0, 0.0],
+        )
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
         self.assertEqual(0, sim.get_num_recombination_events())
         self.assertEqual([0, 0, 0, 0], sim.get_num_migration_events())
         # Migration between only pops 0 and 1
-        matrix = [
-            [0, 5, 0],
-            [5, 0, 0],
-            [0, 0, 0]]
+        matrix = [[0, 5, 0], [5, 0, 0], [0, 0, 0]]
         flattened = [x for row in matrix for x in row]
         population_configuration = [
             get_population_configuration(5),
             get_population_configuration(5),
-            get_population_configuration(0)]
+            get_population_configuration(0),
+        ]
         sim = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(), _msprime.RandomGenerator(1),
+            get_samples(n),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
-            migration_matrix=flattened)
+            migration_matrix=flattened,
+        )
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
         self.assertEqual(0, sim.get_num_recombination_events())
@@ -1716,8 +1910,8 @@ class TestSimulator(LowLevelTestCase):
         n = 10
         num_populations = 10
         migration_matrix = [
-            [0 for j in range(num_populations)]
-            for k in range(num_populations)]
+            [0 for j in range(num_populations)] for k in range(num_populations)
+        ]
         active_pops = [3, 5, 7]
         for index in range(len(active_pops) - 1):
             j = active_pops[index]
@@ -1725,7 +1919,8 @@ class TestSimulator(LowLevelTestCase):
             migration_matrix[j][k] = 2
             migration_matrix[k][j] = 2
         population_configuration = [
-            get_population_configuration() for _ in range(num_populations)]
+            get_population_configuration() for _ in range(num_populations)
+        ]
         num_sampless = [0 for _ in range(num_populations)]
         num_sampless[active_pops[0]] = 2
         num_sampless[active_pops[1]] = 2
@@ -1733,10 +1928,12 @@ class TestSimulator(LowLevelTestCase):
         flattened = [x for row in migration_matrix for x in row]
         sim = _msprime.Simulator(
             get_population_samples(*num_sampless),
-            uniform_recombination_map(), _msprime.RandomGenerator(1),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
-            migration_matrix=flattened)
+            migration_matrix=flattened,
+        )
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
         self.assertEqual(0, sim.get_num_recombination_events())
@@ -1753,16 +1950,20 @@ class TestSimulator(LowLevelTestCase):
         t = 0.01
         dt = 0.0000001
         sim = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(), _msprime.RandomGenerator(1),
+            get_samples(n),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
             population_configuration=[
                 get_population_configuration(),
-                get_population_configuration()],
+                get_population_configuration(),
+            ],
             demographic_events=[
                 get_migration_rate_change_event(t),
-                get_mass_migration_event(
-                    t + dt, source=0, dest=1, proportion=1)],
-            migration_matrix=[0, 0, 0, 0])
+                get_mass_migration_event(t + dt, source=0, dest=1, proportion=1),
+            ],
+            migration_matrix=[0, 0, 0, 0],
+        )
         sim.run(t)
         pop_sizes_before = [0, 0]
         for ind in sim.get_ancestors():
@@ -1783,16 +1984,20 @@ class TestSimulator(LowLevelTestCase):
         dt = 1e-9
         sim = _msprime.Simulator(
             get_population_samples(n, n),
-            uniform_recombination_map(), _msprime.RandomGenerator(1),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
             population_configuration=[
                 get_population_configuration(),
-                get_population_configuration()],
+                get_population_configuration(),
+            ],
             demographic_events=[
                 get_simple_bottleneck_event(t1, population=0, proportion=1),
                 get_simple_bottleneck_event(t2, population=1, proportion=1),
-                get_mass_migration_event(t3, source=0, dest=1, proportion=1)],
-            migration_matrix=[0, 0, 0, 0])
+                get_mass_migration_event(t3, source=0, dest=1, proportion=1),
+            ],
+            migration_matrix=[0, 0, 0, 0],
+        )
         sim.run(t1 + dt)
         pop_sizes = [0, 0]
         for ind in sim.get_ancestors():
@@ -1813,12 +2018,16 @@ class TestSimulator(LowLevelTestCase):
         # No migration
         population_configuration = [
             get_population_configuration(n),
-            get_population_configuration(0)]
+            get_population_configuration(0),
+        ]
         sim = _msprime.Simulator(
-            get_samples(n), uniform_recombination_map(L=10, rate=10),
-            _msprime.RandomGenerator(1), _msprime.LightweightTableCollection(),
+            get_samples(n),
+            uniform_recombination_map(L=10, rate=10),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
-            migration_matrix=[0.0, 0.0, 0.0, 0.0])
+            migration_matrix=[0.0, 0.0, 0.0, 0.0],
+        )
         sim.run()
         self.assertLessEqual(n - 1, sim.get_num_common_ancestor_events())
         self.assertLess(0, sim.get_num_recombination_events())
@@ -1827,21 +2036,21 @@ class TestSimulator(LowLevelTestCase):
     def test_single_sink_population_counters(self):
         n = 10
         # Migration only into population 2.
-        matrix = [
-            [0, 0, 1],
-            [0, 0, 1],
-            [0, 0, 0]]
+        matrix = [[0, 0, 1], [0, 0, 1], [0, 0, 0]]
         flattened = [x for row in matrix for x in row]
         population_configuration = [
             get_population_configuration(),
             get_population_configuration(),
-            get_population_configuration()]
+            get_population_configuration(),
+        ]
         sim = _msprime.Simulator(
             get_population_samples(5, 5, 0),
-            uniform_recombination_map(), _msprime.RandomGenerator(1),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
             _msprime.LightweightTableCollection(),
             population_configuration=population_configuration,
-            migration_matrix=flattened)
+            migration_matrix=flattened,
+        )
         sim.run()
         self.assertEqual(n - 1, sim.get_num_common_ancestor_events())
         self.assertEqual(0, sim.get_num_recombination_events())
@@ -1854,8 +2063,11 @@ class TestSimulator(LowLevelTestCase):
 
     def test_reset(self):
         sim = _msprime.Simulator(
-            get_samples(10), uniform_recombination_map(), _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection())
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
         times = set()
         for _ in range(10):
             sim.run()
@@ -1873,23 +2085,31 @@ class TestSampleParsing(unittest.TestCase):
 
     def test_good_cases(self):
         examples = [
-            get_samples(10), get_samples(2),
+            get_samples(10),
+            get_samples(2),
             [(0, 0.1), (1, 0.2)],
             [(j, j) for j in range(4)],
-            [(j % 4, j) for j in range(100)]
+            [(j % 4, j) for j in range(100)],
         ]
         for samples in examples:
             sim = _msprime.Simulator(
-                samples, uniform_recombination_map(), _msprime.RandomGenerator(1),
+                samples,
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
                 _msprime.LightweightTableCollection(),
-                migration_matrix=[0 for _ in range(4**2)],
+                migration_matrix=[0 for _ in range(4 ** 2)],
                 population_configuration=[
-                    get_population_configuration() for j in range(4)])
+                    get_population_configuration() for j in range(4)
+                ],
+            )
             self.assertEqual(samples, sim.get_samples())
 
     def test_type_errors(self):
         examples = [
-            "asdf", None, {}, tuple(),
+            "asdf",
+            None,
+            {},
+            tuple(),
             [0, 1],
             [(0, 0), None],
             [[1, 2], [1, 2]],  # Values must be tuples
@@ -1903,8 +2123,11 @@ class TestSampleParsing(unittest.TestCase):
         for samples in examples:
             with self.assertRaises(TypeError):
                 _msprime.Simulator(
-                    samples, uniform_recombination_map(), _msprime.RandomGenerator(1),
-                    _msprime.LightweightTableCollection())
+                    samples,
+                    uniform_recombination_map(),
+                    _msprime.RandomGenerator(1),
+                    _msprime.LightweightTableCollection(),
+                )
 
     def test_value_errors(self):
         examples = [
@@ -1920,44 +2143,57 @@ class TestSampleParsing(unittest.TestCase):
         for samples in examples:
             with self.assertRaises(ValueError):
                 _msprime.Simulator(
-                    samples, uniform_recombination_map(), _msprime.RandomGenerator(1),
-                    _msprime.LightweightTableCollection())
+                    samples,
+                    uniform_recombination_map(),
+                    _msprime.RandomGenerator(1),
+                    _msprime.LightweightTableCollection(),
+                )
 
 
 class TestRecombinationMap(LowLevelTestCase):
     """
     Tests for the low-level Recombination Map.
     """
+
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.RecombinationMap)
         self.assertRaises(ValueError, _msprime.RecombinationMap, None)
         self.assertRaises(ValueError, _msprime.RecombinationMap, None, None)
         self.assertRaises(ValueError, _msprime.RecombinationMap, {}, {}, False)
         self.assertRaises(
-                ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3], False)
+            ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3], False
+        )
+        self.assertRaises(ValueError, _msprime.RecombinationMap, [], [0, 0], False)
         self.assertRaises(
-                ValueError, _msprime.RecombinationMap, [], [0, 0], False)
+            _msprime.LibraryError, _msprime.RecombinationMap, [], [], False
+        )
         self.assertRaises(
-                _msprime.LibraryError, _msprime.RecombinationMap, [], [], False)
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0], False
+        )
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0], False)
+            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0], False
+        )
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0], False)
+            _msprime.LibraryError,
+            _msprime.RecombinationMap,
+            [0, 1, 0.5],
+            [0, 0, 0],
+            False,
+        )
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap,
-            [0, 1, 0.5], [0, 0, 0], False)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, .5], [0.1, 0], True)
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, 0.5], [0.1, 0], True
+        )
 
     def test_arrays(self):
         test_values = [
             ([0, 1], [0.1, 0.2]),
             (np.arange(1000), np.zeros(1000)),
-            (np.linspace(0, 1, 1000), np.linspace(10, 100, 1000))
+            (np.linspace(0, 1, 1000), np.linspace(10, 100, 1000)),
         ]
         for positions, rates in test_values:
             rmap = _msprime.RecombinationMap(
-                positions=positions, rates=rates, discrete=False)
+                positions=positions, rates=rates, discrete=False
+            )
             np.testing.assert_array_equal(rmap.get_positions(), positions)
             np.testing.assert_array_equal(rmap.get_rates(), rates)
 
@@ -1965,7 +2201,8 @@ class TestRecombinationMap(LowLevelTestCase):
         for bad_array in ["sadf", [[], []], None]:
             with self.assertRaises(ValueError):
                 _msprime.RecombinationMap(
-                    positions=bad_array, rates=[0, 1], discrete=False)
+                    positions=bad_array, rates=[0, 1], discrete=False
+                )
 
     def test_total_rate(self):
         rm = _msprime.RecombinationMap([0, 10], [0.25, 0], True)
@@ -1999,15 +2236,16 @@ class TestRandomGenerator(unittest.TestCase):
     """
     Tests for the random generator class.
     """
+
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.RandomGenerator)
         for bad_type in ["x", 1.0, {}]:
             self.assertRaises(TypeError, _msprime.RandomGenerator, bad_type)
-        for bad_value in [-1, 0, 2**32]:
+        for bad_value in [-1, 0, 2 ** 32]:
             self.assertRaises(ValueError, _msprime.RandomGenerator, bad_value)
 
     def test_seed(self):
-        for s in [1, 10, 2**32 - 1]:
+        for s in [1, 10, 2 ** 32 - 1]:
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
 
@@ -2020,7 +2258,7 @@ class TestRandomGenerator(unittest.TestCase):
             self.assertRaises(TypeError, rng.flat, 0, bad_type)
 
     def test_flat(self):
-        for seed in [1, 2, 2**32 - 1]:
+        for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             values = [0, 1, 10, -10, 1e200, -1e200]
@@ -2034,7 +2272,7 @@ class TestRandomGenerator(unittest.TestCase):
             self.assertRaises(TypeError, rng.poisson, bad_type)
 
     def test_poisson(self):
-        for seed in [1, 2, 2**32 - 1]:
+        for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             values = [0.001, 1e-6, 0, 1, 10, -10, 100]
@@ -2048,10 +2286,10 @@ class TestRandomGenerator(unittest.TestCase):
             self.assertRaises(TypeError, rng.uniform_int, bad_type)
 
     def test_uniform_int(self):
-        for seed in [1, 2, 2**32 - 1]:
+        for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
-            values = [-1, 0, 1, 2, 10, 100, 2**31]
+            values = [-1, 0, 1, 2, 10, 100, 2 ** 31]
             for n in values:
                 self.assertEqual(rng1.uniform_int(n), rng2.uniform_int(n))
 
@@ -2060,6 +2298,7 @@ class TestIntervalMap(unittest.TestCase):
     """
     Tests for the IntervalMap class.
     """
+
     def test_basic_constructor(self):
         self.assertRaises(TypeError, _msprime.IntervalMap)
         self.assertRaises(TypeError, _msprime.IntervalMap, [])
@@ -2070,7 +2309,8 @@ class TestIntervalMap(unittest.TestCase):
     def test_input_errors(self):
         for bad_value in [-1, 0]:
             self.assertRaises(
-                _msprime.LibraryError, _msprime.IntervalMap, [0, bad_value], [0, 0])
+                _msprime.LibraryError, _msprime.IntervalMap, [0, bad_value], [0, 0]
+            )
         with self.assertRaises(_msprime.LibraryError):
             _msprime.IntervalMap([], [])
         with self.assertRaises(_msprime.LibraryError):
@@ -2082,9 +2322,11 @@ class TestIntervalMap(unittest.TestCase):
 
     def test_good_inputs(self):
         good_values = [
-            ([0, 1], [0, 2]), ([0, 0.1, 10], [0, 2, 0]),
+            ([0, 1], [0, 2]),
+            ([0, 0.1, 10], [0, 2, 0]),
             (np.arange(10), np.arange(10)),
-            (np.arange(100), np.zeros(100))]
+            (np.arange(100), np.zeros(100)),
+        ]
         for pos, value in good_values:
             im = _msprime.IntervalMap(pos, value)
             self.assertTrue(np.array_equal(pos, im.position))
@@ -2095,6 +2337,7 @@ class TestMutationModel(unittest.TestCase):
     """
     Tests for the mutation model class.
     """
+
     def test_constructor(self):
         self.assertRaises(TypeError, _msprime.MutationModel)
         self.assertRaises(TypeError, _msprime.MutationModel, [])
@@ -2127,15 +2370,25 @@ class TestMutationModel(unittest.TestCase):
             matrix = np.zeros((num_alleles, num_alleles))
             self.assertRaises(ValueError, _msprime.MutationModel, alleles, [], matrix)
             self.assertRaises(
-                ValueError, _msprime.MutationModel, alleles, distribution[:-1], matrix)
+                ValueError, _msprime.MutationModel, alleles, distribution[:-1], matrix
+            )
             self.assertRaises(
-                ValueError, _msprime.MutationModel, alleles, distribution, [])
+                ValueError, _msprime.MutationModel, alleles, distribution, []
+            )
             self.assertRaises(
-                ValueError, _msprime.MutationModel, alleles, distribution,
-                matrix[:, :-1])
+                ValueError,
+                _msprime.MutationModel,
+                alleles,
+                distribution,
+                matrix[:, :-1],
+            )
             self.assertRaises(
-                ValueError, _msprime.MutationModel, alleles, distribution,
-                matrix[:-1, :-1])
+                ValueError,
+                _msprime.MutationModel,
+                alleles,
+                distribution,
+                matrix[:-1, :-1],
+            )
 
     def test_bad_alleles(self):
         for alleles in [["A", "B"], [b"0", b"1", "2"], [b"x", None]]:
@@ -2200,6 +2453,7 @@ class TestMutationGenerator(unittest.TestCase):
     """
     Tests for the mutation generator class.
     """
+
     def test_basic_constructor(self):
         imap = _msprime.IntervalMap([0, 1], [0, 0])
         model = get_mutation_model()
@@ -2211,23 +2465,35 @@ class TestMutationGenerator(unittest.TestCase):
         imap = _msprime.IntervalMap([0, 1], [0, 0])
         for bad_type in ["x", {}, None]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, random_generator=bad_type,
-                rate_map=imap, model=get_mutation_model())
+                TypeError,
+                _msprime.MutationGenerator,
+                random_generator=bad_type,
+                rate_map=imap,
+                model=get_mutation_model(),
+            )
 
     def test_mutation_map(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None, [[], []]]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, rng, rate_map=bad_type,
-                model=get_mutation_model())
+                TypeError,
+                _msprime.MutationGenerator,
+                rng,
+                rate_map=bad_type,
+                model=get_mutation_model(),
+            )
 
     def test_model(self):
         rng = _msprime.RandomGenerator(1)
         imap = _msprime.IntervalMap([0, 1], [0, 0])
         for bad_type in ["x", {}, None, [[], []]]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, rng, rate_map=imap,
-                model=bad_type)
+                TypeError,
+                _msprime.MutationGenerator,
+                rng,
+                rate_map=imap,
+                model=bad_type,
+            )
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)
@@ -2304,10 +2570,15 @@ class TestDemographyDebugger(unittest.TestCase):
     """
     Tests for the demography debugging interface.
     """
+
     def get_simulator(self, events):
         return _msprime.Simulator(
-            get_samples(2), uniform_recombination_map(), _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(), demographic_events=events)
+            get_samples(2),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+            demographic_events=events,
+        )
 
     def test_zero_events(self):
         sim = self.get_simulator([])
@@ -2332,13 +2603,18 @@ class TestLikelihood(unittest.TestCase):
     """
     Tests for the low-level likelihood calculation interface.
     """
+
     def get_arg(self):
         L = 20
         rng = _msprime.RandomGenerator(1)
         tables = _msprime.LightweightTableCollection(L)
         sim = _msprime.Simulator(
-            get_samples(5), uniform_recombination_map(L=L, rate=2),
-            rng, tables, store_full_arg=True)
+            get_samples(5),
+            uniform_recombination_map(L=L, rate=2),
+            rng,
+            tables,
+            store_full_arg=True,
+        )
         sim.run()
         rate_map = _msprime.IntervalMap(position=[0, L], value=[2, 0])
         mutgen = _msprime.MutationGenerator(rng, rate_map, get_mutation_model())
@@ -2359,7 +2635,8 @@ class TestLikelihood(unittest.TestCase):
         self.assertRaises(TypeError, _msprime.log_likelihood_arg, tables)
         self.assertRaises(TypeError, _msprime.log_likelihood_arg, tables, 1)
         self.assertRaises(
-            TypeError, _msprime.log_likelihood_arg, tables, recombination_rate=1)
+            TypeError, _msprime.log_likelihood_arg, tables, recombination_rate=1
+        )
 
         for bad_tables in [None, {}, "SDf"]:
             with self.assertRaises(TypeError):

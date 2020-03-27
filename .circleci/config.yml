@@ -30,9 +30,9 @@ jobs:
             - "/home/circleci/.local"
 
       - run:
-          name: Lint Python
+          name: Lint Python (pre-commit)
           command: |
-            flake8
+            pre-commit run --all-files --show-diff-on-failure
 
       - run:
           name: Compile Python

@@ -35,6 +35,7 @@ import _msprime
 __version__ = "undefined"
 try:
     from . import _version
+
     __version__ = _version.version
 except ImportError:
     pass
@@ -52,12 +53,9 @@ def get_provenance_dict(parameters=None):
     """
     document = {
         "schema_version": "1.0.0",
-        "software": {
-            "name": "msprime",
-            "version": __version__,
-        },
+        "software": {"name": "msprime", "version": __version__,},
         "parameters": parameters,
-        "environment": get_environment()
+        "environment": get_environment(),
     }
     return document
 
@@ -100,20 +98,25 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             # We can deserialize these later with
             # FunctionType(fcode, fglobals, fname, fdefaults, fclosure)
             if len(obj.__code__.co_names) > 0:
-                error = (f'Configuration function {obj.__code__.co_name} refers to'
-                         f' global variables {obj.__code__.co_names} which are not'
-                         f' currently serialized')
+                error = (
+                    f"Configuration function {obj.__code__.co_name} refers to"
+                    f" global variables {obj.__code__.co_names} which are not"
+                    f" currently serialized"
+                )
                 logger.warning(error)
-                return {'__error__': error}
+                return {"__error__": error}
             if obj.__closure__ is not None and len(obj.__closure__) > 0:
-                error = (f'Configuration function {obj.__code__.co_name} refers to outer'
-                         f' scope variables which are not currently serialized')
+                error = (
+                    f"Configuration function {obj.__code__.co_name} refers to outer"
+                    f" scope variables which are not currently serialized"
+                )
                 logger.warning(error)
-                return {'__error__': error}
+                return {"__error__": error}
             return {
-                '__function__': base64.b64encode(
-                    marshal.dumps(obj.__code__)).decode("utf-8"),
-                'defaults': obj.__defaults__
+                "__function__": base64.b64encode(marshal.dumps(obj.__code__)).decode(
+                    "utf-8"
+                ),
+                "defaults": obj.__defaults__,
             }
 
         if isinstance(obj, tskit.TreeSequence):
@@ -121,55 +124,57 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             # can be recreated from its provenance, which will be the provenance record
             # before the one produced by the function being called. Hence we do not
             # store the tree sequence in provenance.
-            return {'__constant__': '__current_ts__'}
+            return {"__constant__": "__current_ts__"}
 
         elif isinstance(obj, numpy.ndarray):
             # The most failsafe way would be be to `base64.b64encode(obj.tostring())`
             # but as we expect only simple arrays we make this trade-off so that
             # the array is human readable
-            return {
-                '__ndarray__': obj.tolist(),
-                'dtype': obj.dtype.str
-            }
+            return {"__ndarray__": obj.tolist(), "dtype": obj.dtype.str}
 
         elif isinstance(obj, numpy.number):
             # Some numbers come through as numpy types
             return {
-                '__npgeneric__': str(obj),
-                'dtype': obj.dtype.str,
+                "__npgeneric__": str(obj),
+                "dtype": obj.dtype.str,
             }
 
         try:
             ret = obj.asdict()
             cls = obj.__class__
-            ret['__class__'] = f'{cls.__module__}.{cls.__name__}'
+            ret["__class__"] = f"{cls.__module__}.{cls.__name__}"
             return ret
         except AttributeError:
-            raise TypeError(f'Object of type {obj.__class__.__name__} '
-                            f'is not JSON serializable, provide an `asdict` method '
-                            f'that gives the objects args')
+            raise TypeError(
+                f"Object of type {obj.__class__.__name__} "
+                f"is not JSON serializable, provide an `asdict` method "
+                f"that gives the objects args"
+            )
 
     @staticmethod
     def decode(s):
         def hook(obj):
-            if '__function__' in obj:
+            if "__function__" in obj:
                 return types.FunctionType(
-                    marshal.loads(base64.b64decode(obj['__function__'])),
-                    {}, 'func', obj['defaults'], ())
-            elif '__constant__' in obj:
-                return {
-                    '__current_ts__': CURRENT_TREE_SEQUENCE,
-                }[obj['__constant__']]
-            elif '__ndarray__' in obj:
-                return numpy.asarray(obj['__ndarray__'], dtype=obj['dtype'])
-            elif '__npgeneric__' in obj:
-                return numpy.array([obj['__npgeneric__']]).astype(obj['dtype'])[0]
-            elif '__class__' in obj:
-                module, cls = obj['__class__'].rsplit('.', 1)
+                    marshal.loads(base64.b64decode(obj["__function__"])),
+                    {},
+                    "func",
+                    obj["defaults"],
+                    (),
+                )
+            elif "__constant__" in obj:
+                return {"__current_ts__": CURRENT_TREE_SEQUENCE,}[obj["__constant__"]]
+            elif "__ndarray__" in obj:
+                return numpy.asarray(obj["__ndarray__"], dtype=obj["dtype"])
+            elif "__npgeneric__" in obj:
+                return numpy.array([obj["__npgeneric__"]]).astype(obj["dtype"])[0]
+            elif "__class__" in obj:
+                module, cls = obj["__class__"].rsplit(".", 1)
                 module = importlib.import_module(module)
-                del obj['__class__']
+                del obj["__class__"]
                 return getattr(module, cls)(**obj)
             return obj
+
         return json.JSONDecoder(object_hook=hook).decode(s)
 
 
@@ -180,11 +185,13 @@ def parse_provenance(provenance, current_ts):
     `msprime.simulate(**parse_provenance(provenance, None)[1])`
     """
     ret = ProvenanceEncoderDecoder.decode(provenance.record)
-    if ret['software']['name'] != 'msprime':
-        raise ValueError(f'Only msprime provanances can be parsed,'
-                         f' found {ret["software"]["name"]}')
-    parameters = ret['parameters']
-    command = parameters.pop('command')
+    if ret["software"]["name"] != "msprime":
+        raise ValueError(
+            f"Only msprime provanances can be parsed,"
+            f' found {ret["software"]["name"]}'
+        )
+    parameters = ret["parameters"]
+    command = parameters.pop("command")
     updated_parameters = {}
     for key, value in parameters.items():
         if value == CURRENT_TREE_SEQUENCE:
@@ -194,7 +201,7 @@ def parse_provenance(provenance, current_ts):
 
 
 def _human_readable_size(size, decimal_places=2):
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024.0:
             break
         size /= 1024.0
@@ -207,10 +214,12 @@ def json_encode_provenance(provenance_dict, num_replicates=1):
     """
     prov = ProvenanceEncoderDecoder().encode(provenance_dict)
     if len(prov) > 2_097_152:
-        logger.warning(f'The provenance information for the resulting tree sequence is'
-                       f' {_human_readable_size(len(prov))}.'
-                       f' This is nothing to worry about as provenance is a good thing'
-                       f' to have, but if you want to save this memory/storage space'
-                       f' you can disable provenance recording by setting'
-                       f' record_provenance=False')
+        logger.warning(
+            f"The provenance information for the resulting tree sequence is"
+            f" {_human_readable_size(len(prov))}."
+            f" This is nothing to worry about as provenance is a good thing"
+            f" to have, but if you want to save this memory/storage space"
+            f" you can disable provenance recording by setting"
+            f" record_provenance=False"
+        )
     return prov

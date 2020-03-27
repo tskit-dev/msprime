@@ -36,20 +36,24 @@ class MutationModel(_msprime.MutationModel):
 
     TODO document properly.
     """
+
     def asdict(self):
         # This version of asdict makes sure that we have sufficient parameters
         # to call the contructor and recreate the class. However, this means
         # that subclasses *must* have an instance variable of the same name.
         # This is essential for Provenance round-tripping to work.
         return {
-            key: getattr(self, key) for key in inspect.signature(
-                self.__init__).parameters.keys() if hasattr(self, key)}
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
 
     def __str__(self):
         alleles = " ".join([x.decode() for x in self.alleles])
         s = "Mutation model with alleles {}\n".format(alleles)
         s += "  root distribution: {}\n".format(
-                " ".join(map(str, self.root_distribution)))
+            " ".join(map(str, self.root_distribution))
+        )
         s += "  transition matrix:\n"
         for row in self.transition_matrix:
             s += "     {}\n".format(" ".join(map(str, row)))
@@ -62,6 +66,7 @@ class BinaryMutations(MutationModel):
 
     TODO document properly.
     """
+
     def __init__(self):
         alleles = [b"0", b"1"]
         root_distribution = [1, 0]
@@ -76,6 +81,7 @@ class JukesCantor(MutationModel):
 
     .. todo: documentation
     """
+
     def __init__(self):
         alleles = [b"A", b"C", b"T", b"G"]
         root_distribution = [0.25, 0.25, 0.25, 0.25]
@@ -98,14 +104,13 @@ class InfiniteSites(MutationModel):
     # some point.
     def __init__(self, alphabet=BINARY):
         self.alphabet = alphabet
-        models = {
-            BINARY: BinaryMutations(),
-            NUCLEOTIDES: JukesCantor()
-        }
+        models = {BINARY: BinaryMutations(), NUCLEOTIDES: JukesCantor()}
         if alphabet not in models:
             raise ValueError("Bad alphabet")
         model = models[alphabet]
-        super().__init__(model.alleles, model.root_distribution, model.transition_matrix)
+        super().__init__(
+            model.alleles, model.root_distribution, model.transition_matrix
+        )
 
 
 class MutationMap(object):
@@ -132,16 +137,20 @@ def _simple_mutation_generator(rate, sequence_length, rng):
     # constructor.
     if rate is None:
         return None
-    rate_map = MutationMap(
-        position=[0, sequence_length],
-        rate=[rate, 0]
-    )
+    rate_map = MutationMap(position=[0, sequence_length], rate=[rate, 0])
     return _msprime.MutationGenerator(rng, rate_map._ll_map, BinaryMutations())
 
 
 def mutate(
-        tree_sequence, rate=None, random_seed=None, model=None, keep=False,
-        start_time=None, end_time=None, discrete=False):
+    tree_sequence,
+    rate=None,
+    random_seed=None,
+    model=None,
+    keep=False,
+    start_time=None,
+    end_time=None,
+    discrete=False,
+):
     """
     Simulates mutations on the specified ancestry and returns the resulting
     :class:`tskit.TreeSequence`. Mutations are generated at the specified rate in
@@ -211,8 +220,9 @@ def mutate(
         rate = 0
     try:
         rate = float(rate)
-        rate_map = MutationMap(position=[0.0, tree_sequence.sequence_length],
-                               rate=[rate, 0.0])
+        rate_map = MutationMap(
+            position=[0.0, tree_sequence.sequence_length], rate=[rate, 0.0]
+        )
     except TypeError:
         rate_map = rate
     if not isinstance(rate_map, MutationMap):
@@ -239,21 +249,22 @@ def mutate(
     argspec = inspect.getargvalues(inspect.currentframe())
     parameters = {
         "command": "mutate",
-        **{arg: argspec.locals[arg] for arg in argspec.args}
+        **{arg: argspec.locals[arg] for arg in argspec.args},
     }
-    parameters['random_seed'] = seed
+    parameters["random_seed"] = seed
     encoded_provenance = provenance.json_encode_provenance(
-        provenance.get_provenance_dict(parameters))
+        provenance.get_provenance_dict(parameters)
+    )
 
     rng = _msprime.RandomGenerator(seed)
     mutation_generator = _msprime.MutationGenerator(
-        random_generator=rng,
-        rate_map=rate_map._ll_map,
-        model=model)
+        random_generator=rng, rate_map=rate_map._ll_map, model=model
+    )
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
     mutation_generator.generate(
-        lwt, keep=keep, start_time=start_time, end_time=end_time, discrete=discrete)
+        lwt, keep=keep, start_time=start_time, end_time=end_time, discrete=discrete
+    )
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())
     tables.provenances.add_row(encoded_provenance)

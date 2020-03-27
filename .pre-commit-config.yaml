@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.5.0
+    hooks:
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+      - id: check-case-conflict
+      - id: check-yaml
+  - repo: https://github.com/psf/black
+    rev: 19.10b0
+    hooks:
+      - id: black
+        language_version: python3

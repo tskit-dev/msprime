@@ -80,9 +80,7 @@ class TestAlmostEqual(unittest.TestCase):
 
     def test_defaults(self):
         eps = sys.float_info.epsilon
-        equal = [
-            (1, 1), (0, 0), (1 + eps, 1), (1, 1 - eps),
-            (10.000000000001, 10.0)]
+        equal = [(1, 1), (0, 0), (1 + eps, 1), (1, 1 - eps), (10.000000000001, 10.0)]
         for a, b in equal:
             self.assertAlmostEqual(a, b)
             self.assertTrue(utils.almost_equal(a, b))
@@ -92,10 +90,8 @@ class TestAlmostEqual(unittest.TestCase):
         equal = [(0, 0), (eps, 0), (0, -eps), (-eps, eps)]
         for a, b in equal:
             self.assertAlmostEqual(a, b)
-            self.assertTrue(
-                utils.almost_equal(a, b, abs_tol=1e-9))
+            self.assertTrue(utils.almost_equal(a, b, abs_tol=1e-9))
         not_equal = [(0, 0.0000001), (-0.0000001, 0)]
         for a, b in not_equal:
             self.assertNotAlmostEqual(a, b)
-            self.assertFalse(
-                utils.almost_equal(a, b, abs_tol=1e-9))
+            self.assertFalse(utils.almost_equal(a, b, abs_tol=1e-9))

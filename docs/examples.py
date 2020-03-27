@@ -3,15 +3,17 @@ The examples used in the tutorial section.
 """
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+
+sys.path.insert(0, os.path.abspath(".."))
 
 import math
 import msprime
 import numpy as np
 import scipy.stats
 import matplotlib
+
 # Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 import matplotlib.pyplot as pyplot
 import matplotlib.collections
 
@@ -23,15 +25,14 @@ import threading
 def segregating_sites_example(n, theta, num_replicates):
     S = np.zeros(num_replicates)
     replicates = msprime.simulate(
-        sample_size=n,
-        mutation_rate=theta / 4,
-        num_replicates=num_replicates)
+        sample_size=n, mutation_rate=theta / 4, num_replicates=num_replicates
+    )
     for j, tree_sequence in enumerate(replicates):
         S[j] = tree_sequence.get_num_mutations()
     S_mean_a = np.sum(1 / np.arange(1, n)) * theta
-    S_var_a = (
-        theta * np.sum(1 / np.arange(1, n)) +
-        theta**2 * np.sum(1 / np.arange(1, n)**2))
+    S_var_a = theta * np.sum(1 / np.arange(1, n)) + theta ** 2 * np.sum(
+        1 / np.arange(1, n) ** 2
+    )
     print("              mean              variance")
     print("Observed      {}\t\t{}".format(np.mean(S), np.var(S)))
     print("Analytical    {:.5f}\t\t{:.5f}".format(S_mean_a, S_var_a))
@@ -50,21 +51,20 @@ def migration_example():
     population_configurations = [
         msprime.PopulationConfiguration(sample_size=1),
         msprime.PopulationConfiguration(sample_size=1),
-        msprime.PopulationConfiguration(sample_size=0)]
+        msprime.PopulationConfiguration(sample_size=0),
+    ]
     # Now we set up the migration matrix. Since this is a symmetric
     # island model, we have the same rate of migration between all
     # pairs of subpopulations. Diagonal elements must be zero.
-    migration_matrix = [
-        [0, m, m],
-        [m, 0, m],
-        [m, m, 0]]
+    migration_matrix = [[0, m, m], [m, 0, m], [m, m, 0]]
     # We pass these values to the simulate function, and ask it
     # to run the required number of replicates.
     num_replicates = 1e6
     replicates = msprime.simulate(
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
-        num_replicates=num_replicates)
+        num_replicates=num_replicates,
+    )
     # And then iterate over these replicates
     T = np.zeros(num_replicates)
     for i, tree_sequence in enumerate(replicates):
@@ -76,6 +76,7 @@ def migration_example():
     analytical = d / 2 + (d - 1) / (2 * M)
     print("Observed  =", np.mean(T))
     print("Predicted =", analytical)
+
 
 def single_locus_example():
     tree_sequence = msprime.simulate(sample_size=5, Ne=1000, random_seed=1)
@@ -89,21 +90,28 @@ def single_locus_example():
     print(tree.get_branch_length(6))
     print(tree.get_total_branch_length())
 
+
 def multi_locus_example():
     tree_sequence = msprime.simulate(
-        sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8,
-        random_seed=19)
+        sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8, random_seed=19
+    )
     j = 0
     for tree in tree_sequence.trees():
         print(tree.get_interval(), str(tree), sep="\t")
         tree.draw("_static/simple-tree-sequence-{}.svg".format(j))
         j += 1
 
+
 def mutations_example():
 
     tree_sequence = msprime.simulate(
-        sample_size=5, Ne=1000, length=1e4, recombination_rate=2e-8,
-        mutation_rate=2e-8, random_seed=19)
+        sample_size=5,
+        Ne=1000,
+        length=1e4,
+        recombination_rate=2e-8,
+        mutation_rate=2e-8,
+        random_seed=19,
+    )
     print("Total mutations = ", tree_sequence.get_num_mutations())
     j = 0
     for tree in tree_sequence.trees():
@@ -113,9 +121,12 @@ def mutations_example():
 
     for tree in tree_sequence.trees():
         for mutation in tree.mutations():
-            print("Mutation @ position {} has frequency {}".format(
-                mutation.position,
-                tree.get_num_leaves(mutation.node) / tree.get_sample_size()))
+            print(
+                "Mutation @ position {} has frequency {}".format(
+                    mutation.position,
+                    tree.get_num_leaves(mutation.node) / tree.get_sample_size(),
+                )
+            )
 
 
 def out_of_africa():
@@ -146,35 +157,34 @@ def out_of_africa():
     # configuration array. Therefore, we have 0=YRI, 1=CEU and 2=CHB
     # initially.
     population_configurations = [
+        msprime.PopulationConfiguration(sample_size=0, initial_size=N_AF),
         msprime.PopulationConfiguration(
-            sample_size=0, initial_size=N_AF),
+            sample_size=1, initial_size=N_EU, growth_rate=r_EU
+        ),
         msprime.PopulationConfiguration(
-            sample_size=1, initial_size=N_EU, growth_rate=r_EU),
-        msprime.PopulationConfiguration(
-            sample_size=1, initial_size=N_AS, growth_rate=r_AS)
+            sample_size=1, initial_size=N_AS, growth_rate=r_AS
+        ),
     ]
     migration_matrix = [
-        [      0, m_AF_EU, m_AF_AS],
-        [m_AF_EU,       0, m_EU_AS],
-        [m_AF_AS, m_EU_AS,       0],
+        [0, m_AF_EU, m_AF_AS],
+        [m_AF_EU, 0, m_EU_AS],
+        [m_AF_AS, m_EU_AS, 0],
     ]
     demographic_events = [
         # CEU and CHB merge into B with rate changes at T_EU_AS
-        msprime.MassMigration(
-            time=T_EU_AS, source=2, destination=1, proportion=1.0),
+        msprime.MassMigration(time=T_EU_AS, source=2, destination=1, proportion=1.0),
         msprime.MigrationRateChange(time=T_EU_AS, rate=0),
-        msprime.MigrationRateChange(
-            time=T_EU_AS, rate=m_AF_B, matrix_index=(0, 1)),
-        msprime.MigrationRateChange(
-            time=T_EU_AS, rate=m_AF_B, matrix_index=(1, 0)),
+        msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(0, 1)),
+        msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(1, 0)),
         msprime.PopulationParametersChange(
-            time=T_EU_AS, initial_size=N_B, growth_rate=0, population_id=1),
+            time=T_EU_AS, initial_size=N_B, growth_rate=0, population_id=1
+        ),
         # Population B merges into YRI at T_B
-        msprime.MassMigration(
-            time=T_B, source=1, destination=0, proportion=1.0),
+        msprime.MassMigration(time=T_B, source=1, destination=0, proportion=1.0),
         # Size changes to N_A at T_AF
         msprime.PopulationParametersChange(
-            time=T_AF, initial_size=N_A, population_id=0)
+            time=T_AF, initial_size=N_A, population_id=0
+        ),
     ]
     # Use the demography debugger to print out the demographic history
     # that we have just described.
@@ -182,7 +192,8 @@ def out_of_africa():
         Ne=N_A,
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
-        demographic_events=demographic_events)
+        demographic_events=demographic_events,
+    )
     dp.print_history()
 
 
@@ -196,8 +207,7 @@ def variable_recomb_example():
     positions = np.array(recomb_map.get_positions()[1:])
     rates = np.array(recomb_map.get_rates()[1:])
     num_bins = 500
-    v, bin_edges, _ = scipy.stats.binned_statistic(
-        positions, rates, bins=num_bins)
+    v, bin_edges, _ = scipy.stats.binned_statistic(positions, rates, bins=num_bins)
     x = bin_edges[:-1][np.logical_not(np.isnan(v))]
     y = v[np.logical_not(np.isnan(v))]
     fig, ax1 = pyplot.subplots(figsize=(16, 6))
@@ -208,9 +218,8 @@ def variable_recomb_example():
     # Now we run the simulation for this map. We assume Ne=10^4
     # and have a sample of 100 individuals
     tree_sequence = msprime.simulate(
-        sample_size=100,
-        Ne=10**4,
-        recombination_map=recomb_map)
+        sample_size=100, Ne=10 ** 4, recombination_map=recomb_map
+    )
     # Now plot the density of breakpoints along the chromosome
     breakpoints = np.array(list(tree_sequence.breakpoints()))
     ax2 = ax1.twinx()
@@ -222,27 +231,26 @@ def variable_recomb_example():
 
 
 def ld_matrix_example():
-    ts = msprime.simulate(100, recombination_rate=10, mutation_rate=20,
-            random_seed=1)
+    ts = msprime.simulate(100, recombination_rate=10, mutation_rate=20, random_seed=1)
     ld_calc = msprime.LdCalculator(ts)
     A = ld_calc.get_r2_matrix()
     # Now plot this matrix.
-    x = A.shape[0] / pyplot.rcParams['savefig.dpi']
-    x = max(x, pyplot.rcParams['figure.figsize'][0])
+    x = A.shape[0] / pyplot.rcParams["savefig.dpi"]
+    x = max(x, pyplot.rcParams["figure.figsize"][0])
     fig, ax = pyplot.subplots(figsize=(x, x))
     fig.tight_layout(pad=0)
     im = ax.imshow(A, interpolation="none", vmin=0, vmax=1, cmap="Blues")
     ax.set_xticks([])
     ax.set_yticks([])
-    for s in 'top', 'bottom', 'left', 'right':
+    for s in "top", "bottom", "left", "right":
         ax.spines[s].set_visible(False)
-    pyplot.gcf().colorbar(im, shrink=.5, pad=0)
+    pyplot.gcf().colorbar(im, shrink=0.5, pad=0)
     pyplot.savefig("_static/ld.svg")
 
 
 def find_ld_sites(
-        tree_sequence, focal_mutations, max_distance=1e6, r2_threshold=0.5,
-        num_threads=8):
+    tree_sequence, focal_mutations, max_distance=1e6, r2_threshold=0.5, num_threads=8
+):
     """
     Finds all mutations within a given distance that are in approximate LD
     with a given set of mutations in a TreeSequence.
@@ -255,22 +263,22 @@ def find_ld_sites(
         ld_calc = msprime.LdCalculator(tree_sequence)
         chunk_size = int(math.ceil(len(focal_mutations) / num_threads))
         start = thread_index * chunk_size
-        for focal_mutation in focal_mutations[start: start + chunk_size]:
+        for focal_mutation in focal_mutations[start : start + chunk_size]:
             a = ld_calc.get_r2_array(
-                focal_mutation, max_distance=max_distance,
-                direction=msprime.REVERSE)
+                focal_mutation, max_distance=max_distance, direction=msprime.REVERSE
+            )
             rev_indexes = focal_mutation - np.nonzero(a >= r2_threshold)[0] - 1
             a = ld_calc.get_r2_array(
-                focal_mutation, max_distance=max_distance,
-                direction=msprime.FORWARD)
+                focal_mutation, max_distance=max_distance, direction=msprime.FORWARD
+            )
             fwd_indexes = focal_mutation + np.nonzero(a >= r2_threshold)[0] + 1
             indexes = np.concatenate((rev_indexes[::-1], fwd_indexes))
             results[focal_mutation] = indexes
             progress_bar.update()
 
     threads = [
-        threading.Thread(target=thread_worker, args=(j,))
-        for j in range(num_threads)]
+        threading.Thread(target=thread_worker, args=(j,)) for j in range(num_threads)
+    ]
     for t in threads:
         t.start()
     for t in threads:
@@ -278,10 +286,15 @@ def find_ld_sites(
     progress_bar.close()
     return results
 
+
 def threads_example():
     ts = msprime.simulate(
-        sample_size=1000, Ne=1e4, length=1e7, recombination_rate=2e-8,
-        mutation_rate=2e-8)
+        sample_size=1000,
+        Ne=1e4,
+        length=1e7,
+        recombination_rate=2e-8,
+        mutation_rate=2e-8,
+    )
     counts = np.zeros(ts.get_num_mutations())
     for t in ts.trees():
         for mutation in t.mutations():
@@ -289,13 +302,21 @@ def threads_example():
     doubletons = np.nonzero(counts == 2)[0]
     results = find_ld_sites(ts, doubletons, num_threads=8)
     print(
-        "Found LD sites for", len(results), "doubleton mutations out of",
-        ts.get_num_mutations())
+        "Found LD sites for",
+        len(results),
+        "doubleton mutations out of",
+        ts.get_num_mutations(),
+    )
+
 
 def set_mutations_example():
     tree_sequence = msprime.simulate(
-        sample_size=10000, Ne=1e4, length=1e7, recombination_rate=2e-8,
-        mutation_rate=2e-8)
+        sample_size=10000,
+        Ne=1e4,
+        length=1e7,
+        recombination_rate=2e-8,
+        mutation_rate=2e-8,
+    )
     print("Simulated ", tree_sequence.get_num_mutations(), "mutations")
     common_mutations = []
     for tree in tree_sequence.trees():
@@ -306,30 +327,43 @@ def set_mutations_example():
     tree_sequence.set_mutations(common_mutations)
     print("Reduced to ", tree_sequence.get_num_mutations(), "common mutations")
 
+
 def variants_example():
     tree_sequence = msprime.simulate(
-        sample_size=20, Ne=1e4, length=5e3, recombination_rate=2e-8,
-        mutation_rate=2e-8, random_seed=10)
+        sample_size=20,
+        Ne=1e4,
+        length=5e3,
+        recombination_rate=2e-8,
+        mutation_rate=2e-8,
+        random_seed=10,
+    )
     print("Simulated ", tree_sequence.get_num_mutations(), "mutations")
     for variant in tree_sequence.variants():
         print(variant.index, variant.position, variant.genotypes, sep="\t")
 
+
 def variant_matrix_example():
     print("\nCreating full variant matrix")
     tree_sequence = msprime.simulate(
-        sample_size=20, Ne=1e4, length=5e3, recombination_rate=2e-8,
-        mutation_rate=2e-8, random_seed=10)
+        sample_size=20,
+        Ne=1e4,
+        length=5e3,
+        recombination_rate=2e-8,
+        mutation_rate=2e-8,
+        random_seed=10,
+    )
     shape = tree_sequence.get_num_mutations(), tree_sequence.get_sample_size()
     A = np.empty(shape, dtype="u1")
     for variant in tree_sequence.variants():
         A[variant.index] = variant.genotypes
     print(A)
 
+
 def historical_samples_example():
     samples = [
         msprime.Sample(population=0, time=0),
         msprime.Sample(0, 0),  # Or, we can use positional arguments.
-        msprime.Sample(0, 1.0)
+        msprime.Sample(0, 1.0),
     ]
     tree_seq = msprime.simulate(samples=samples, random_seed=5)
     tree = next(tree_seq.trees())
@@ -385,8 +419,8 @@ def wright_fisher(N, T, L=100, random_seed=None):
     # the samples are assigned to
     tables.populations.add_row()
     tables.nodes.set_columns(
-        flags=flags, time=time,
-        population=np.zeros_like(tables.nodes.population))
+        flags=flags, time=time, population=np.zeros_like(tables.nodes.population)
+    )
     return tables.tree_sequence()
 
 
@@ -399,7 +433,8 @@ def simulate_from_example():
 
     recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1, num_loci)
     coalesced_ts = msprime.simulate(
-        from_ts=wf_ts, recombination_map=recomb_map, random_seed=5)
+        from_ts=wf_ts, recombination_map=recomb_map, random_seed=5
+    )
 
     for tree in coalesced_ts.trees():
         tree.draw(path="_static/simulate_from_coalesced_{}.svg".format(tree.index))
@@ -413,22 +448,24 @@ def simulate_from_example():
 
 def full_arg_example():
     ts = msprime.simulate(
-        sample_size=5, recombination_rate=0.1, record_full_arg=True,
-        random_seed=42)
+        sample_size=5, recombination_rate=0.1, record_full_arg=True, random_seed=42
+    )
     print(ts.tables.nodes)
     print()
     for tree in ts.trees():
         print("interval:", tree.interval)
         print(tree.draw(format="unicode"))
 
+
 def hybrid_sim_example():
     ts = msprime.simulate(
-        sample_size=6, Ne=1000, model="dtwf", random_seed=2,
-        demographic_events=[
-            msprime.SimulationModelChange(time=500, model="hudson")])
+        sample_size=6,
+        Ne=1000,
+        model="dtwf",
+        random_seed=2,
+        demographic_events=[msprime.SimulationModelChange(time=500, model="hudson")],
+    )
     print(ts.tables.nodes)
-
-
 
 
 if __name__ == "__main__":

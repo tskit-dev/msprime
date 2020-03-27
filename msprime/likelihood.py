@@ -40,16 +40,16 @@ def unnormalised_log_mutation_likelihood(arg, mu):
         else:
             ret = -float("inf")
     else:
-        ret = (number_of_mutations * math.log(total_material * mu) -
-               total_material * mu)
+        ret = number_of_mutations * math.log(total_material * mu) - total_material * mu
         for tree in arg.trees():
             for site in tree.sites():
                 mutation = site.mutations[0]
                 child = mutation.node
                 parent = tree.parent(child)
                 potential_branch_length = tree.branch_length(child)
-                while tree.parent(parent) is not None \
-                        and len(tree.children(parent)) == 1:
+                while (
+                    tree.parent(parent) is not None and len(tree.children(parent)) == 1
+                ):
                     child = parent
                     parent = tree.parent(child)
                     potential_branch_length += tree.branch_length(child)
@@ -66,4 +66,5 @@ def log_arg_likelihood(arg, recombination_rate, Ne=1):
     lw_tables = _msprime.LightweightTableCollection()
     lw_tables.fromdict(arg.tables.asdict())
     return _msprime.log_likelihood_arg(
-        lw_tables, Ne=Ne, recombination_rate=recombination_rate)
+        lw_tables, Ne=Ne, recombination_rate=recombination_rate
+    )

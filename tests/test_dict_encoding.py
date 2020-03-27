@@ -26,7 +26,8 @@ def get_example_tables():
         migration_matrix=migration_matrix,
         mutation_rate=1,
         record_migrations=True,
-        random_seed=1)
+        random_seed=1,
+    )
 
     tables = ts.dump_tables()
     for j in range(ts.num_samples):
@@ -34,23 +35,36 @@ def get_example_tables():
     tables.nodes.clear()
     for node in ts.nodes():
         tables.nodes.add_row(
-            flags=node.flags, time=node.time, population=node.population,
+            flags=node.flags,
+            time=node.time,
+            population=node.population,
             individual=node.id if node.id < ts.num_samples else -1,
-            metadata=b"y" * node.id)
+            metadata=b"y" * node.id,
+        )
     tables.sites.clear()
     for site in ts.sites():
         tables.sites.add_row(
-            position=site.position, ancestral_state="A" * site.id,
-            metadata=b"q" * site.id)
+            position=site.position,
+            ancestral_state="A" * site.id,
+            metadata=b"q" * site.id,
+        )
     tables.mutations.clear()
     for mutation in ts.mutations():
         mut_id = tables.mutations.add_row(
-            site=mutation.site, node=mutation.node, parent=-1,
-            derived_state="C" * mutation.id, metadata=b"x" * mutation.id)
+            site=mutation.site,
+            node=mutation.node,
+            parent=-1,
+            derived_state="C" * mutation.id,
+            metadata=b"x" * mutation.id,
+        )
         # Add another mutation on the same branch.
         tables.mutations.add_row(
-            site=mutation.site, node=mutation.node, parent=mut_id,
-            derived_state="G" * mutation.id, metadata=b"y" * mutation.id)
+            site=mutation.site,
+            node=mutation.node,
+            parent=mut_id,
+            derived_state="G" * mutation.id,
+            metadata=b"y" * mutation.id,
+        )
     for j in range(10):
         tables.populations.add_row(metadata=b"p" * j)
         tables.provenances.add_row(timestamp="x" * j, record="y" * j)
@@ -62,6 +76,7 @@ class TestEncodingMatchesTskit(unittest.TestCase):
     Checks that the dict encoding that we have matches what we have in
     tskit.
     """
+
     def test_top_keys_match(self):
         tables = get_example_tables()
         d1 = tables.asdict()
@@ -96,6 +111,7 @@ class TestRoundTrip(unittest.TestCase):
     """
     Tests if we can do a simple round trip on simulated data.
     """
+
     def verify(self, tables):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(tables.asdict())
@@ -120,7 +136,8 @@ class TestRoundTrip(unittest.TestCase):
 
     def test_sequence_length(self):
         ts = msprime.simulate(
-            10, recombination_rate=0.1, mutation_rate=1, length=0.99, random_seed=2)
+            10, recombination_rate=0.1, mutation_rate=1, length=0.99, random_seed=2
+        )
         self.verify(ts.tables)
 
     def test_migration(self):
@@ -131,7 +148,8 @@ class TestRoundTrip(unittest.TestCase):
             migration_matrix=migration_matrix,
             mutation_rate=1,
             record_migrations=True,
-            random_seed=1)
+            random_seed=1,
+        )
         self.verify(ts.tables)
 
     def test_example(self):
@@ -142,6 +160,7 @@ class TestMissingData(unittest.TestCase):
     """
     Tests what happens when we have missing data in the encoded dict.
     """
+
     def test_missing_sequence_length(self):
         tables = get_example_tables()
         d = tables.asdict()
@@ -219,6 +238,7 @@ class TestBadLengths(unittest.TestCase):
     """
     Tests for setting each column to a length incompatible with the table.
     """
+
     def verify(self, num_rows):
 
         tables = get_example_tables()
@@ -247,6 +267,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
     Tests that specifying None for some columns will give the intended
     outcome.
     """
+
     def verify_required_columns(self, tables, table_name, required_cols):
         d = tables.asdict()
         table_dict = {col: None for col in d[table_name].keys()}
@@ -276,9 +297,11 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         out = lwt.asdict()
-        self.assertTrue(np.array_equal(
-            out[table_name][col_name],
-            np.zeros(table_len, dtype=np.int32) - 1))
+        self.assertTrue(
+            np.array_equal(
+                out[table_name][col_name], np.zeros(table_len, dtype=np.int32) - 1
+            )
+        )
 
     def verify_offset_pair(self, tables, table_len, table_name, col_name):
         offset_col = col_name + "_offset"
@@ -291,9 +314,11 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt.fromdict(d)
         out = lwt.asdict()
         self.assertEqual(out[table_name][col_name].shape, (0,))
-        self.assertTrue(np.array_equal(
-            out[table_name][offset_col],
-            np.zeros(table_len + 1, dtype=np.uint32)))
+        self.assertTrue(
+            np.array_equal(
+                out[table_name][offset_col], np.zeros(table_len + 1, dtype=np.uint32)
+            )
+        )
 
         # Setting one or the other raises a ValueError
         d = tables.asdict()
@@ -324,9 +349,11 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         tables = get_example_tables()
         self.verify_required_columns(tables, "individuals", ["flags"])
         self.verify_offset_pair(
-            tables, len(tables.individuals), "individuals", "location")
+            tables, len(tables.individuals), "individuals", "location"
+        )
         self.verify_offset_pair(
-            tables, len(tables.individuals), "individuals", "metadata")
+            tables, len(tables.individuals), "individuals", "metadata"
+        )
 
     def test_nodes(self):
         tables = get_example_tables()
@@ -338,33 +365,41 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
     def test_edges(self):
         tables = get_example_tables()
         self.verify_required_columns(
-            tables, "edges", ["left", "right", "parent", "child"])
+            tables, "edges", ["left", "right", "parent", "child"]
+        )
 
     def test_migrations(self):
         tables = get_example_tables()
         self.verify_required_columns(
-            tables, "migrations", ["left", "right", "node", "source", "dest", "time"])
+            tables, "migrations", ["left", "right", "node", "source", "dest", "time"]
+        )
 
     def test_sites(self):
         tables = get_example_tables()
         self.verify_required_columns(
-            tables, "sites", ["position", "ancestral_state", "ancestral_state_offset"])
+            tables, "sites", ["position", "ancestral_state", "ancestral_state_offset"]
+        )
         self.verify_offset_pair(tables, len(tables.sites), "sites", "metadata")
 
     def test_mutations(self):
         tables = get_example_tables()
         self.verify_required_columns(
-            tables, "mutations",
-            ["site", "node", "derived_state", "derived_state_offset"])
+            tables,
+            "mutations",
+            ["site", "node", "derived_state", "derived_state_offset"],
+        )
         self.verify_offset_pair(tables, len(tables.mutations), "mutations", "metadata")
 
     def test_populations(self):
         tables = get_example_tables()
         self.verify_required_columns(
-            tables, "populations", ["metadata", "metadata_offset"])
+            tables, "populations", ["metadata", "metadata_offset"]
+        )
 
     def test_provenances(self):
         tables = get_example_tables()
         self.verify_required_columns(
-            tables, "provenances",
-            ["record", "record_offset", "timestamp", "timestamp_offset"])
+            tables,
+            "provenances",
+            ["record", "record_offset", "timestamp", "timestamp_offset"],
+        )

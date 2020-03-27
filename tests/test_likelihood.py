@@ -45,8 +45,10 @@ def log_arg_likelihood(arg, recombination_rate, Ne=1):
     ret = 0
     while edge < number_of_edges:
         parent = tables.edges[edge].parent
-        rate = number_of_lineages * (number_of_lineages - 1) / (4 * Ne) \
+        rate = (
+            number_of_lineages * (number_of_lineages - 1) / (4 * Ne)
             + number_of_links * recombination_rate
+        )
         ret -= rate * (tables.nodes[parent].time - time)
         time = tables.nodes[parent].time
         child = tables.edges[edge].child
@@ -69,15 +71,17 @@ def log_arg_likelihood(arg, recombination_rate, Ne=1):
             segment_length_in_children = -tables.edges.left[edge]
             while edge < number_of_edges and tables.edges[edge].child == child:
                 edge += 1
-            segment_length_in_children += (tables.edges.right[edge - 1] -
-                                           tables.edges.left[edge])
+            segment_length_in_children += (
+                tables.edges.right[edge - 1] - tables.edges.left[edge]
+            )
             child = tables.edges[edge].child
             while edge < number_of_edges and tables.edges[edge].child == child:
                 edge += 1
             segment_length_in_children += tables.edges.right[edge - 1]
             if parent in edges_above:
-                segment_length_in_parent = (edges_above[parent][-1].right -
-                                            edges_above[parent][0].left)
+                segment_length_in_parent = (
+                    edges_above[parent][-1].right - edges_above[parent][0].left
+                )
                 number_of_lineages -= 1
                 number_of_links -= segment_length_in_children - segment_length_in_parent
             else:
@@ -91,21 +95,27 @@ class TestKnownExamples(unittest.TestCase):
     Tests for likelihood evaluation with the full ARG in cases where we've
     calculated the exact values beforehand.
     """
+
     def test_log_likelihoods(self):
         tables = tskit.TableCollection(sequence_length=1)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
 
         tables.edges.add_row(left=0, right=0.5, parent=3, child=2)
         tables.edges.add_row(left=0.5, right=1, parent=4, child=2)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
 
         tables.edges.add_row(left=0, right=1, parent=5, child=1)
         tables.edges.add_row(left=0, right=0.5, parent=5, child=3)
@@ -141,41 +151,54 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 3 * r) * 0.15
             log_arg_likelihood_exact -= (3 + 2.5 * r) * 0.25
             log_arg_likelihood_exact -= (1 + 2 * r) * 0.5
-            self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r, 0.5)))
+            self.assertTrue(
+                math.isclose(
+                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
+                )
+            )
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 19 / 8
         for t in theta:
-            unnormalised_mutation_ll_exact = (5 * math.log(tree_length * t) -
-                                              tree_length * t)
+            unnormalised_mutation_ll_exact = (
+                5 * math.log(tree_length * t) - tree_length * t
+            )
             unnormalised_mutation_ll_exact -= 2 * math.log(4 * tree_length)
             unnormalised_mutation_ll_exact -= 2 * math.log(tree_length)
             unnormalised_mutation_ll_exact += math.log(3 / (4 * tree_length))
-            self.assertTrue(math.isclose(
-                            unnormalised_mutation_ll_exact,
-                            msprime.unnormalised_log_mutation_likelihood(arg, t)))
+            self.assertTrue(
+                math.isclose(
+                    unnormalised_mutation_ll_exact,
+                    msprime.unnormalised_log_mutation_likelihood(arg, t),
+                )
+            )
 
     def test_multiple_mrcas(self):
         tables = tskit.TableCollection(sequence_length=1)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
 
         tables.edges.add_row(left=0, right=0.5, parent=2, child=1)
         tables.edges.add_row(left=0.5, right=1, parent=3, child=1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
 
         tables.edges.add_row(left=0, right=0.5, parent=4, child=0)
         tables.edges.add_row(left=0.5, right=1, parent=5, child=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.15)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.15)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
+        )
 
         tables.edges.add_row(left=0, right=0.5, parent=6, child=2)
         tables.edges.add_row(left=0, right=0.5, parent=6, child=4)
@@ -203,40 +226,53 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact += math.log(r) - (3 + 2 * r) * 0.05
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.35
             log_arg_likelihood_exact -= (1 + r) * 0.5
-            self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r, 0.5)))
+            self.assertTrue(
+                math.isclose(
+                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
+                )
+            )
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 1.5
         for t in theta:
-            unnormalised_mutation_ll_exact = (3 * math.log(tree_length * t) -
-                                              tree_length * t)
+            unnormalised_mutation_ll_exact = (
+                3 * math.log(tree_length * t) - tree_length * t
+            )
             unnormalised_mutation_ll_exact -= math.log(tree_length)
             unnormalised_mutation_ll_exact -= 2 * math.log(2 * tree_length)
-            self.assertTrue(math.isclose(
-                            unnormalised_mutation_ll_exact,
-                            msprime.unnormalised_log_mutation_likelihood(arg, t)))
+            self.assertTrue(
+                math.isclose(
+                    unnormalised_mutation_ll_exact,
+                    msprime.unnormalised_log_mutation_likelihood(arg, t),
+                )
+            )
 
     def test_merger_with_overhang(self):
         tables = tskit.TableCollection(sequence_length=1)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
 
         tables.edges.add_row(left=0, right=0.5, parent=2, child=1)
         tables.edges.add_row(left=0.5, right=1, parent=3, child=1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
 
         tables.edges.add_row(left=0, right=0.7, parent=4, child=0)
         tables.edges.add_row(left=0.7, right=1, parent=5, child=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.15)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.15)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
+        )
 
         tables.edges.add_row(left=0, right=0.5, parent=6, child=2)
         tables.edges.add_row(left=0, right=0.7, parent=6, child=4)
@@ -269,41 +305,54 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.35
             log_arg_likelihood_exact -= (3 + r) * 0.5
             log_arg_likelihood_exact -= (1 + 0.4 * r) * 0.3
-            self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r, 0.5)))
+            self.assertTrue(
+                math.isclose(
+                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
+                )
+            )
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 81 / 50
         for t in theta:
-            unnormalised_mutation_ll_exact = (3 * math.log(tree_length * t) -
-                                              tree_length * t)
+            unnormalised_mutation_ll_exact = (
+                3 * math.log(tree_length * t) - tree_length * t
+            )
             unnormalised_mutation_ll_exact -= math.log(2 * tree_length)
             unnormalised_mutation_ll_exact += math.log(1.3 / tree_length)
             unnormalised_mutation_ll_exact -= math.log(tree_length)
-            self.assertTrue(math.isclose(
-                            unnormalised_mutation_ll_exact,
-                            msprime.unnormalised_log_mutation_likelihood(arg, t)))
+            self.assertTrue(
+                math.isclose(
+                    unnormalised_mutation_ll_exact,
+                    msprime.unnormalised_log_mutation_likelihood(arg, t),
+                )
+            )
 
     def test_gap_in_ancestral_material(self):
         tables = tskit.TableCollection(sequence_length=1)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
 
         tables.edges.add_row(left=0, right=0.3, parent=2, child=0)
         tables.edges.add_row(left=0.3, right=1, parent=3, child=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
 
         tables.edges.add_row(left=0.3, right=0.5, parent=4, child=3)
         tables.edges.add_row(left=0.5, right=1, parent=5, child=3)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.2)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.2)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
+        )
 
         tables.edges.add_row(left=0, right=0.3, parent=6, child=2)
         tables.edges.add_row(left=0.5, right=1, parent=6, child=5)
@@ -341,40 +390,53 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (3 + 2.2 * r) * 0.1
             log_arg_likelihood_exact -= (1 + 0.4 * r) * 0.1
-            self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r, 0.5)))
+            self.assertTrue(
+                math.isclose(
+                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
+                )
+            )
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 0.84
         for t in theta:
-            unnormalised_mutation_ll_exact = (5 * math.log(tree_length * t) -
-                                              tree_length * t)
+            unnormalised_mutation_ll_exact = (
+                5 * math.log(tree_length * t) - tree_length * t
+            )
             unnormalised_mutation_ll_exact += 3 * math.log(0.4 / tree_length)
             unnormalised_mutation_ll_exact += 2 * math.log(0.5 / tree_length)
-            self.assertTrue(math.isclose(
-                            unnormalised_mutation_ll_exact,
-                            msprime.unnormalised_log_mutation_likelihood(arg, t)))
+            self.assertTrue(
+                math.isclose(
+                    unnormalised_mutation_ll_exact,
+                    msprime.unnormalised_log_mutation_likelihood(arg, t),
+                )
+            )
 
     def test_recombination_in_material_gap(self):
         tables = tskit.TableCollection(sequence_length=1)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0,
-                             individual=-1, time=0)
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
 
         tables.edges.add_row(left=0, right=0.3, parent=2, child=0)
         tables.edges.add_row(left=0.3, right=1, parent=3, child=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.1)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
 
         tables.edges.add_row(left=0.3, right=0.5, parent=4, child=3)
         tables.edges.add_row(left=0.5, right=1, parent=5, child=3)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.2)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.2)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
+        )
 
         tables.edges.add_row(left=0, right=0.3, parent=6, child=2)
         tables.edges.add_row(left=0.5, right=1, parent=6, child=5)
@@ -382,10 +444,12 @@ class TestKnownExamples(unittest.TestCase):
 
         tables.edges.add_row(left=0, right=0.3, parent=7, child=6)
         tables.edges.add_row(left=0.5, right=1, parent=8, child=6)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.4)
-        tables.nodes.add_row(flags=msprime.NODE_IS_RE_EVENT, population=0,
-                             individual=-1, time=0.4)
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.4
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.4
+        )
 
         tables.edges.add_row(left=0.3, right=0.5, parent=9, child=4)
         tables.edges.add_row(left=0.5, right=1, parent=9, child=8)
@@ -422,19 +486,26 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (3 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (1 + 1.4 * r) * 0.1
-            self.assertTrue(math.isclose(log_arg_likelihood_exact,
-                                         msprime.log_arg_likelihood(arg, r, 0.5)))
+            self.assertTrue(
+                math.isclose(
+                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
+                )
+            )
 
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 1.34
         for t in theta:
-            unnormalised_mutation_ll_exact = (4 * math.log(tree_length * t) -
-                                              tree_length * t)
+            unnormalised_mutation_ll_exact = (
+                4 * math.log(tree_length * t) - tree_length * t
+            )
             unnormalised_mutation_ll_exact += math.log(0.6 / tree_length)
             unnormalised_mutation_ll_exact += 3 * math.log(0.7 / tree_length)
-            self.assertTrue(math.isclose(
-                            unnormalised_mutation_ll_exact,
-                            msprime.unnormalised_log_mutation_likelihood(arg, t)))
+            self.assertTrue(
+                math.isclose(
+                    unnormalised_mutation_ll_exact,
+                    msprime.unnormalised_log_mutation_likelihood(arg, t),
+                )
+            )
 
 
 class TestSimulatedExamples(unittest.TestCase):
@@ -442,10 +513,12 @@ class TestSimulatedExamples(unittest.TestCase):
     Given some simulated ARGs test that the Python likelihood implementation
     computes the same likelihoods as the C code.
     """
+
     # TODO Add mutation rate as parameter here.
     def verify(self, ts, recombination_rate, Ne):
-        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate,
-                                        Ne=Ne)
+        l1 = msprime.log_arg_likelihood(
+            ts, recombination_rate=recombination_rate, Ne=Ne
+        )
         l2 = log_arg_likelihood(ts, recombination_rate, Ne)
         self.assertAlmostEqual(l1, l2)
 
@@ -459,7 +532,8 @@ class TestSimulatedExamples(unittest.TestCase):
 
     def test_small_arg_no_mutation(self):
         ts = msprime.simulate(
-            5, recombination_rate=1, random_seed=12, record_full_arg=True)
+            5, recombination_rate=1, random_seed=12, record_full_arg=True
+        )
         self.assertGreater(ts.num_edges, 10)
         self.verify(ts, recombination_rate=1, Ne=0.5)
         self.verify(ts, recombination_rate=0.5, Ne=0.5)
@@ -469,7 +543,8 @@ class TestSimulatedExamples(unittest.TestCase):
 
     def test_negative_rec_rate(self):
         ts = msprime.simulate(
-            5, recombination_rate=1, random_seed=12, record_full_arg=True)
+            5, recombination_rate=1, random_seed=12, record_full_arg=True
+        )
         with self.assertRaises(ValueError):
             msprime.log_arg_likelihood(ts, recombination_rate=-1)
         with self.assertRaises(ValueError):
@@ -478,14 +553,19 @@ class TestSimulatedExamples(unittest.TestCase):
     def test_zero_mut_rate(self):
         # No mutations
         ts = msprime.simulate(
-            5, recombination_rate=1, random_seed=12, record_full_arg=True)
+            5, recombination_rate=1, random_seed=12, record_full_arg=True
+        )
         lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
         self.assertEqual(lik, 0)
 
         # With mutations
         ts = msprime.simulate(
-            5, recombination_rate=1, mutation_rate=1, random_seed=12,
-            record_full_arg=True)
+            5,
+            recombination_rate=1,
+            mutation_rate=1,
+            random_seed=12,
+            record_full_arg=True,
+        )
         lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
         self.assertEqual(lik, float("-inf"))
 
@@ -494,6 +574,7 @@ class TestOddTopologies(unittest.TestCase):
     """
     Tests that we give sensible results when we run on weird topologies.
     """
+
     def verify(self, ts):
         for r in [0.001, 1]:
             l1 = msprime.log_arg_likelihood(ts, r)

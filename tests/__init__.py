@@ -46,6 +46,7 @@ class SequenceEqualityMixin(object):
     Note: unittest.TestCase.assertSequenceEqual also fails to work with
     numpy arrays, and assertEqual works with ordinary lists/tuples anyway.
     """
+
     def assertEqual(self, it1, it2, msg=None):
         if isinstance(it1, np.ndarray):
             it1 = list(it1)
@@ -60,6 +61,7 @@ class PythonSparseTree(object):
     is tightly coupled with the PythonTreeSequence object below which updates
     the internal structures during iteration.
     """
+
     def __init__(self, num_nodes):
         self.num_nodes = num_nodes
         self.parent = [msprime.NULL_NODE for _ in range(num_nodes)]
@@ -174,8 +176,10 @@ class PythonSparseTree(object):
 
     def get_parent_dict(self):
         d = {
-            u: self.parent[u] for u in range(self.num_nodes)
-            if self.parent[u] != msprime.NULL_NODE}
+            u: self.parent[u]
+            for u in range(self.num_nodes)
+            if self.parent[u] != msprime.NULL_NODE
+        }
         return d
 
     def sites(self):
@@ -183,11 +187,12 @@ class PythonSparseTree(object):
 
     def __eq__(self, other):
         return (
-            self.get_parent_dict() == other.get_parent_dict() and
-            self.get_interval() == other.get_interval() and
-            self.roots == other.roots and
-            self.get_index() == other.get_index() and
-            list(self.sites()) == list(other.sites()))
+            self.get_parent_dict() == other.get_parent_dict()
+            and self.get_interval() == other.get_interval()
+            and self.roots == other.roots
+            and self.get_index() == other.get_index()
+            and list(self.sites()) == list(other.sites())
+        )
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -217,6 +222,7 @@ class PythonTreeSequence(object):
     """
     A python implementation of the TreeSequence object.
     """
+
     def __init__(self, tree_sequence, breakpoints=None):
         self._tree_sequence = tree_sequence
         self._num_samples = tree_sequence.get_num_samples()
@@ -224,26 +230,45 @@ class PythonTreeSequence(object):
         self._sites = []
 
         def make_mutation(id_):
-            site, node, derived_state, parent, metadata = tree_sequence.get_mutation(id_)
+            site, node, derived_state, parent, metadata = tree_sequence.get_mutation(
+                id_
+            )
             return msprime.Mutation(
-                id_=id_, site=site, node=node, derived_state=derived_state,
-                parent=parent, metadata=metadata)
+                id_=id_,
+                site=site,
+                node=node,
+                derived_state=derived_state,
+                parent=parent,
+                metadata=metadata,
+            )
+
         for j in range(tree_sequence.get_num_sites()):
-            pos, ancestral_state, ll_mutations, id_, metadata = tree_sequence.get_site(j)
-            self._sites.append(msprime.Site(
-                id_=id_, position=pos, ancestral_state=ancestral_state,
-                mutations=[make_mutation(ll_mut) for ll_mut in ll_mutations],
-                metadata=metadata))
+            pos, ancestral_state, ll_mutations, id_, metadata = tree_sequence.get_site(
+                j
+            )
+            self._sites.append(
+                msprime.Site(
+                    id_=id_,
+                    position=pos,
+                    ancestral_state=ancestral_state,
+                    mutations=[make_mutation(ll_mut) for ll_mut in ll_mutations],
+                    metadata=metadata,
+                )
+            )
 
     def edge_diffs(self):
         M = self._tree_sequence.get_num_edges()
         sequence_length = self._tree_sequence.get_sequence_length()
         edges = [msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
         time = [self._tree_sequence.get_node(edge.parent)[1] for edge in edges]
-        in_order = sorted(range(M), key=lambda j: (
-            edges[j].left, time[j], edges[j].parent, edges[j].child))
-        out_order = sorted(range(M), key=lambda j: (
-            edges[j].right, -time[j], -edges[j].parent, -edges[j].child))
+        in_order = sorted(
+            range(M),
+            key=lambda j: (edges[j].left, time[j], edges[j].parent, edges[j].child),
+        )
+        out_order = sorted(
+            range(M),
+            key=lambda j: (edges[j].right, -time[j], -edges[j].parent, -edges[j].child),
+        )
         j = 0
         k = 0
         left = 0
@@ -269,17 +294,29 @@ class PythonTreeSequence(object):
     def trees(self):
         M = self._tree_sequence.get_num_edges()
         sequence_length = self._tree_sequence.get_sequence_length()
-        edges = [
-            msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
+        edges = [msprime.Edge(*self._tree_sequence.get_edge(j)) for j in range(M)]
         t = [
             self._tree_sequence.get_node(j)[1]
-            for j in range(self._tree_sequence.get_num_nodes())]
+            for j in range(self._tree_sequence.get_num_nodes())
+        ]
         in_order = sorted(
-            range(M), key=lambda j: (
-                edges[j].left, t[edges[j].parent], edges[j].parent, edges[j].child))
+            range(M),
+            key=lambda j: (
+                edges[j].left,
+                t[edges[j].parent],
+                edges[j].parent,
+                edges[j].child,
+            ),
+        )
         out_order = sorted(
-            range(M), key=lambda j: (
-                edges[j].right, -t[edges[j].parent], -edges[j].parent, -edges[j].child))
+            range(M),
+            key=lambda j: (
+                edges[j].right,
+                -t[edges[j].parent],
+                -edges[j].parent,
+                -edges[j].child,
+            ),
+        )
         j = 0
         k = 0
         N = self._tree_sequence.get_num_nodes()
@@ -432,6 +469,7 @@ class PythonTreeSequence(object):
             st.index += 1
             # Add in all the sites
             st.site_list = [
-                site for site in self._sites if st.left <= site.position < st.right]
+                site for site in self._sites if st.left <= site.position < st.right
+            ]
             yield st
             st.left = st.right
