@@ -1060,7 +1060,7 @@ class TestDemographyTrajectories(unittest.TestCase):
                 msprime.PopulationConfiguration(initial_size=1e2),
             ],
             demographic_events=[],
-            migration_matrix=[[0],],
+            migration_matrix=[[0]],
         )
         steps = np.linspace(0, 10, 11)
         # Test when num_pops != len(num_samples), we throw error

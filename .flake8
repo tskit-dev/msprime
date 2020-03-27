@@ -1,10 +1,6 @@
 [flake8]
-max-line-length = 89
-exclude = 
-    .circleci
-    build
-    data
-    docs
-    env
-    lib
-    requirements
+# Based directly on Black's recommendations:
+# https://black.readthedocs.io/en/stable/the_black_code_style.html#line-length
+max-line-length = 81
+select = A,C,E,F,W,B,B950
+ignore = E203, E501, W503
