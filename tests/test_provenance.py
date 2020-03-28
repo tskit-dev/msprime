@@ -193,11 +193,35 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.start_time, 0)
         self.assertEqual(decoded.parameters.end_time, 100)
         self.assertEqual(decoded.parameters.keep, False)
-        self.assertEqual(decoded.parameters.model['alphabet'], 0)
         self.assertEqual(
             decoded.parameters.model['__class__'],
-            'msprime.mutations.InfiniteSites'
+            'msprime.mutations.BinaryMutations'
         )
+
+    def test_mutate_model(self):
+        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.mutate(ts, model=msprime.JukesCantor())
+        decoded = self.decode(ts.provenance(1).record)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "mutate")
+        self.assertEqual(
+            decoded.parameters.model['__class__'],
+            'msprime.mutations.JukesCantor'
+        )
+
+    def test_mutate_map(self):
+        ts = msprime.simulate(5, random_seed=1)
+        rate_map = msprime.MutationMap(position=[0, 0.5, 1], rate=[0, 1, 0])
+        ts = msprime.mutate(ts, rate=rate_map)
+        decoded = self.decode(ts.provenance(1).record)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "mutate")
+        self.assertEqual(
+            decoded.parameters.rate['__class__'],
+            'msprime.mutations.MutationMap'
+        )
+        self.assertEqual(decoded.parameters.rate["position"], rate_map.position)
+        self.assertEqual(decoded.parameters.rate["rate"], rate_map.rate)
 
     def test_mutate_numpy(self):
         ts = msprime.simulate(5, random_seed=1)

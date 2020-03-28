@@ -87,12 +87,6 @@ ran_inc_beta(gsl_rng *r, double a, double b, double x)
     }
 }
 
-static bool
-doubles_almost_equal(double a, double b, double eps)
-{
-    return (fabs(a) < eps && fabs(b) < eps) || gsl_fcmp(a, b, eps) == 0;
-}
-
 static int
 cmp_individual(const void *a, const void *b) {
     const segment_t *ia = (const segment_t *) a;

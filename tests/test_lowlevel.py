@@ -44,6 +44,25 @@ def uniform_recombination_map(L=1, rate=0, discrete=True):
     return _msprime.RecombinationMap([0, L], [rate, 0], discrete)
 
 
+def get_mutation_model(model=0):
+    """
+    Returns a simple mutation model instance.
+    """
+    if model == 0:
+        alleles = [b"0", b"1"]
+        root_distribution = [1, 0]
+        transition_matrix = [[0, 1], [1, 0]]
+    elif model == 1:
+        alleles = [b"A", b"C", b"T", b"G"]
+        root_distribution = [0.25, 0.25, 0.25, 0.25]
+        transition_matrix = np.zeros((4, 4))
+        transition_matrix[:, 0] = 1
+    return _msprime.MutationModel(
+        alleles=alleles,
+        root_distribution=root_distribution,
+        transition_matrix=transition_matrix)
+
+
 def get_simulation_model(name="hudson", reference_size=0.25, **kwargs):
     """
     Returns simulation model dictionary suitable for passing to the low-level API.
@@ -2072,62 +2091,148 @@ class TestIntervalMap(unittest.TestCase):
             self.assertTrue(np.array_equal(value, im.value))
 
 
+class TestMutationModel(unittest.TestCase):
+    """
+    Tests for the mutation model class.
+    """
+    def test_constructor(self):
+        self.assertRaises(TypeError, _msprime.MutationModel)
+        self.assertRaises(TypeError, _msprime.MutationModel, [])
+        self.assertRaises(TypeError, _msprime.MutationModel, [], [])
+
+        for bad_type in [None, "x", 123]:
+            self.assertRaises(TypeError, _msprime.MutationModel, bad_type, [], [])
+
+    def test_bad_matrix(self):
+        alleles = [b"0", b"1"]
+        dist = [1, 0]
+        bad_matrixes = [
+            [],
+            [[], []],
+            [[0, 1], [0]],
+            [[0, 1], [0, 0], [0, 0]],
+            ["wwer"],
+            None,
+            {},
+            [{}, {}],
+        ]
+        for bad_matrix in bad_matrixes:
+            with self.assertRaises(ValueError):
+                _msprime.MutationModel(alleles, dist, bad_matrix)
+
+    def test_bad_lengths(self):
+        for num_alleles in [2, 4, 6]:
+            alleles = [str(j).encode() for j in range(num_alleles)]
+            distribution = np.zeros(num_alleles)
+            matrix = np.zeros((num_alleles, num_alleles))
+            self.assertRaises(ValueError, _msprime.MutationModel, alleles, [], matrix)
+            self.assertRaises(
+                ValueError, _msprime.MutationModel, alleles, distribution[:-1], matrix)
+            self.assertRaises(
+                ValueError, _msprime.MutationModel, alleles, distribution, [])
+            self.assertRaises(
+                ValueError, _msprime.MutationModel, alleles, distribution,
+                matrix[:, :-1])
+            self.assertRaises(
+                ValueError, _msprime.MutationModel, alleles, distribution,
+                matrix[:-1, :-1])
+
+    def test_bad_alleles(self):
+        for alleles in [["A", "B"], [b"0", b"1", "2"], [b"x", None]]:
+            n = len(alleles)
+            distribution = np.zeros(n)
+            matrix = np.zeros((n, n))
+            with self.assertRaises(TypeError):
+                _msprime.MutationModel(alleles, distribution, matrix)
+
+        for alleles in [[], [b"a"], [b"asdfsadg"]]:
+            n = len(alleles)
+            distribution = np.zeros(n)
+            matrix = np.zeros((n, n))
+            with self.assertRaises(_msprime.LibraryError):
+                _msprime.MutationModel(alleles, distribution, matrix)
+
+    def test_good_alleles(self):
+        for n in range(2, 10):
+            alleles = [f"{j}".encode() for j in range(n)]
+            dist = np.zeros(n)
+            dist[0] = 1
+            matrix = np.zeros((n, n))
+            matrix[:, 0] = 1
+            mm = _msprime.MutationModel(alleles, dist, matrix)
+            self.assertEqual(mm.get_num_alleles(), len(alleles))
+            self.assertEqual(mm.alleles, alleles)
+            self.assertTrue(np.array_equal(mm.root_distribution, dist))
+            self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
+
+    def test_multichar_alleles(self):
+        for n in range(2, 10):
+            alleles = [b"x" * j for j in range(n)]
+            dist = np.zeros(n)
+            dist[:] = 1 / n
+            matrix = np.zeros((n, n))
+            matrix[:] = 1 / n
+            mm = _msprime.MutationModel(alleles, dist, matrix)
+            self.assertEqual(mm.alleles, alleles)
+            self.assertTrue(np.array_equal(mm.root_distribution, dist))
+            self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
+
+    def test_bad_probabilities(self):
+        alleles = [b"0", b"1"]
+        matrix = np.zeros((2, 2))
+        matrix[:] = 0.5
+        for bad_root in [[1, 1], [-1, 2], [0, 100]]:
+            with self.assertRaises(_msprime.LibraryError):
+                _msprime.MutationModel(alleles, bad_root, matrix)
+
+        matrix[:] = 1
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.MutationModel(alleles, [0, 1], matrix)
+        matrix[:] = -1
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.MutationModel(alleles, [0, 1], matrix)
+        matrix = [[0, 0], [1, 1]]
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.MutationModel(alleles, [0, 1], matrix)
+
+
 class TestMutationGenerator(unittest.TestCase):
     """
     Tests for the mutation generator class.
     """
     def test_basic_constructor(self):
-        self.assertRaises(TypeError, _msprime.MutationGenerator)
-        self.assertRaises(TypeError, _msprime.MutationGenerator, [])
         imap = _msprime.IntervalMap([0, 1], [0, 0])
-        mg = _msprime.MutationGenerator(_msprime.RandomGenerator(1), imap)
-        self.assertEqual(mg.alphabet, 0)
+        model = get_mutation_model()
+        self.assertRaises(TypeError, _msprime.MutationGenerator)
+        self.assertRaises(TypeError, _msprime.MutationGenerator, imap)
+        _msprime.MutationGenerator(_msprime.RandomGenerator(1), imap, model)
 
     def test_rng(self):
+        imap = _msprime.IntervalMap([0, 1], [0, 0])
         for bad_type in ["x", {}, None]:
             self.assertRaises(
                 TypeError, _msprime.MutationGenerator, random_generator=bad_type,
-                rate=[0], position=[0])
+                rate_map=imap, model=get_mutation_model())
 
     def test_mutation_map(self):
         rng = _msprime.RandomGenerator(1)
         for bad_type in ["x", {}, None, [[], []]]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, rng, rate_map=bad_type)
+                TypeError, _msprime.MutationGenerator, rng, rate_map=bad_type,
+                model=get_mutation_model())
 
-    def test_time_interval(self):
+    def test_model(self):
         rng = _msprime.RandomGenerator(1)
         imap = _msprime.IntervalMap([0, 1], [0, 0])
-        for bad_type in ["x", {}, None]:
-            with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, imap, start_time=bad_type)
-            with self.assertRaises(TypeError):
-                _msprime.MutationGenerator(rng, imap, end_time=bad_type)
-        for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
-            with self.assertRaises(_msprime.LibraryError):
-                _msprime.MutationGenerator(
-                    rng, imap, start_time=start_time, end_time=end_time)
-
-    def test_alphabet(self):
-        rng = _msprime.RandomGenerator(1)
-        rate_map = _msprime.IntervalMap([0, 1], [2, 0])
-        for bad_type in ["x", {}, None]:
+        for bad_type in ["x", {}, None, [[], []]]:
             self.assertRaises(
-                TypeError, _msprime.MutationGenerator, random_generator=rng,
-                rate_map=rate_map, alphabet=bad_type)
-        for bad_value in [-1, 2, 10**6]:
-            self.assertRaises(
-                ValueError, _msprime.MutationGenerator, random_generator=rng,
-                rate_map=rate_map, alphabet=bad_value)
-        for alphabet in [0, 1]:
-            mg = _msprime.MutationGenerator(
-                random_generator=rng, rate_map=rate_map, alphabet=alphabet)
-            self.assertEqual(alphabet, mg.alphabet)
+                TypeError, _msprime.MutationGenerator, rng, rate_map=imap,
+                model=bad_type)
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)
         imap = _msprime.IntervalMap([0, 1], [1, 0])
-        mutgen = _msprime.MutationGenerator(rng, imap)
+        mutgen = _msprime.MutationGenerator(rng, imap, get_mutation_model())
         tables = _msprime.LightweightTableCollection(1)
         for bad_type in [None, [], {}]:
             self.assertRaises(TypeError, mutgen.generate, bad_type)
@@ -2136,10 +2241,24 @@ class TestMutationGenerator(unittest.TestCase):
             tables = _msprime.LightweightTableCollection(1)
             mutgen.generate(tables)
 
+    def test_time_interval(self):
+        rng = _msprime.RandomGenerator(1)
+        imap = _msprime.IntervalMap([0, 1], [0, 0])
+        mutgen = _msprime.MutationGenerator(rng, imap, get_mutation_model())
+        tables = _msprime.LightweightTableCollection(1)
+        for bad_type in ["x", {}, None]:
+            with self.assertRaises(TypeError):
+                mutgen.generate(tables, start_time=bad_type)
+            with self.assertRaises(TypeError):
+                mutgen.generate(tables, end_time=bad_type)
+        for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
+            with self.assertRaises(_msprime.LibraryError):
+                mutgen.generate(tables, start_time=start_time, end_time=end_time)
+
     def verify_block_size(self, tables):
         rng = _msprime.RandomGenerator(1)
         rate_map = _msprime.IntervalMap([0, tables.sequence_length], [2, 0])
-        mutgen = _msprime.MutationGenerator(rng, rate_map)
+        mutgen = _msprime.MutationGenerator(rng, rate_map, get_mutation_model(1))
         ll_tables = _msprime.LightweightTableCollection()
         ll_tables.fromdict(tables.asdict())
         mutgen.generate(ll_tables, keep=True)
@@ -2152,6 +2271,8 @@ class TestMutationGenerator(unittest.TestCase):
         tables.sites.add_row(0, "a")
         for j in range(8192):
             tables.mutations.add_row(0, node=0, derived_state="b")
+        tables.build_index()
+        tables.compute_mutation_parents()
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_ancestral_state(self):
@@ -2220,7 +2341,7 @@ class TestLikelihood(unittest.TestCase):
             rng, tables, store_full_arg=True)
         sim.run()
         rate_map = _msprime.IntervalMap(position=[0, L], value=[2, 0])
-        mutgen = _msprime.MutationGenerator(rng, rate_map)
+        mutgen = _msprime.MutationGenerator(rng, rate_map, get_mutation_model())
         mutgen.generate(tables)
         t = tskit.TableCollection.fromdict(tables.asdict())
         self.assertGreater(len(t.edges), 10)

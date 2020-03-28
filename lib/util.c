@@ -25,6 +25,8 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <gsl/gsl_math.h>
+
 #include <tskit/core.h>
 #include "util.h"
 
@@ -193,6 +195,23 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_PSI:
             ret = "Bad PSI. Must have 0 < PSI <= 1";
             break;
+        case MSP_ERR_UNKNOWN_ALLELE:
+            ret = "Existing allele(s) incompatible with mutation model alphabet.";
+            break;
+        case MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER:
+            ret = "Tree sequence contains mutations that would descend from "
+                "existing mutations: finite site mutations must be generated on "
+                "older time periods first.";
+            break;
+        case MSP_ERR_INSUFFICIENT_ALLELES:
+            ret = "Must have at least two alleles.";
+            break;
+        case MSP_ERR_BAD_ROOT_PROBABILITIES:
+            ret = "Root probabilities must be nonnegative and sum to one.";
+            break;
+        case MSP_ERR_BAD_TRANSITION_MATRIX:
+            ret = "Each row of the transition matrix must be nonnegative and sum to one.";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                 "report!";
@@ -212,7 +231,7 @@ msp_set_tsk_error(int err)
 bool
 msp_is_tsk_error(int err)
 {
-    return !(err & (1 << MSP_TSK_ERR_BIT));
+    return (err < 0) && !(err & (1 << MSP_TSK_ERR_BIT));
 }
 
 const char *
@@ -261,4 +280,10 @@ msp_binary_interval_search(double query, const double *values, size_t n_values)
         }
     }
     return l;
+}
+
+bool
+doubles_almost_equal(double a, double b, double eps)
+{
+    return (fabs(a) < eps && fabs(b) < eps) || gsl_fcmp(a, b, eps) == 0;
 }

@@ -762,6 +762,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     msp_t msp;
     recomb_map_t recomb_map;
     interval_map_t mut_map;
+    mutation_model_t mut_model;
     mutgen_t mutgen;
     tsk_table_collection_t tables;
     tsk_treeseq_t tree_seq;
@@ -780,7 +781,11 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
-    ret = mutgen_alloc(&mutgen, rng, &mut_map, mutation_params.alphabet, 0);
+    ret = mutation_model_factory(&mut_model, mutation_params.alphabet);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    ret = mutgen_alloc(&mutgen, rng, &mut_map, &mut_model, 0);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
@@ -847,6 +852,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     msp_free(&msp);
     recomb_map_free(&recomb_map);
     interval_map_free(&mut_map);
+    mutation_model_free(&mut_model);
     mutgen_free(&mutgen);
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);

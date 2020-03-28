@@ -27,7 +27,6 @@ import inspect
 import json
 import logging
 import math
-import random
 import sys
 import os
 import warnings
@@ -35,7 +34,9 @@ import warnings
 import tskit
 import numpy as np
 
+from . import utils
 from . import provenance
+from . import mutations
 import _msprime
 
 from _msprime import NODE_IS_CA_EVENT  # NOQA
@@ -47,8 +48,6 @@ from _msprime import NODE_IS_CEN_EVENT  # NOQA
 # NOTE: Using these classes directly from client code is undocumented
 # and may be removed in future versions.
 from _msprime import RandomGenerator
-from _msprime import MutationGenerator
-from _msprime import IntervalMap
 
 # Make sure the GSL error handler is turned off so that we can be sure that
 # we don't abort on errors. This can be reset by using the function
@@ -63,48 +62,6 @@ logger = logging.getLogger(__name__)
 Sample = collections.namedtuple(
     "Sample",
     ["population", "time"])
-
-
-# Some machinery here for generating default random seeds. We need a map
-# indexed by process ID here because we cannot use a global variable
-# to store the state across multiple processes. Copy-on-write semantics
-# for child processes means that they inherit the state of the parent
-# process, so if we just keep a global variable without indexing by
-# PID, child processes will share the same random generator as the
-# parent.
-
-_seed_rng_map = {}
-
-
-def _get_seed_rng():
-    return _seed_rng_map.get(os.getpid(), None)
-
-
-def _clear_seed_rng():
-    _seed_rng_map.pop(os.getpid(), None)
-
-
-def _get_random_seed():
-    global _seed_rng_map
-    pid = os.getpid()
-    if pid not in _seed_rng_map:
-        # If we don't provide a seed to Random(), Python will seed either
-        # from a system source of randomness (i.e., /dev/urandom) or the
-        # current time if this is not available. Thus, our seed rng should
-        # be unique, even across different processes.
-        _seed_rng_map[pid] = random.Random()
-    return _seed_rng_map[pid].randint(1, 2**32 - 1)
-
-
-def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
-    """
-    Returns true if the specified pair of numbers are equal to
-    within the specified tolerances.
-
-    The signature and implementation are taken from PEP 485,
-    https://www.python.org/dev/peps/pep-0485/
-    """
-    return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
 def model_factory(model, reference_size=1):
@@ -321,7 +278,7 @@ def simulator_factory(
     sim.gene_conversion_track_length = gene_conversion_track_length
     rng = random_generator
     if rng is None:
-        rng = RandomGenerator(_get_random_seed())
+        rng = RandomGenerator(utils.get_random_seed())
     sim.random_generator = rng
     if population_configurations is not None:
         sim.set_population_configurations(population_configurations)
@@ -486,7 +443,7 @@ def simulate(
 
     seed = random_seed
     if random_seed is None:
-        seed = _get_random_seed()
+        seed = utils.get_random_seed()
     seed = int(seed)
     rng = RandomGenerator(seed)
 
@@ -550,12 +507,10 @@ def simulate(
                 "Cannot specify mutation rate combined with a non-zero "
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead")
-        rate_map = IntervalMap(
-            position=[0, sim.sequence_length],
-            value=[mutation_rate, 0]
-        )
-        mutation_generator = MutationGenerator(rng, rate_map)
-
+    # TODO when the ``discrete`` parameter is added here, pass it through
+    # to make it a property of the mutation generator.
+    mutation_generator = mutations._simple_mutation_generator(
+        mutation_rate, sim.sequence_length, sim.random_generator)
     if replicate_index is not None and random_seed is None:
         raise ValueError("Cannot specify replicate_index without random_seed as this "
                          "has the same effect as not specifying replicate_index i.e. a "
@@ -2073,7 +2028,7 @@ class DemographyDebugger(object):
             events = []
             while (
                     event_index < len(demographic_events) and
-                    almost_equal(
+                    utils.almost_equal(
                         demographic_events[event_index].time,
                         start_time, abs_tol=abs_tol)):
                 events.append(demographic_events[event_index])
