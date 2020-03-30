@@ -210,7 +210,9 @@ recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
     double left_bound, mass_to_next_recomb;
 
     left_bound = self->discrete ? start + 1 : start;
-    mass_to_next_recomb = gsl_ran_exponential(rng, 1.0);
+    do {
+        mass_to_next_recomb = gsl_ran_exponential(rng, 1.0);
+    } while (mass_to_next_recomb == 0.0);
 
     return recomb_map_shift_by_mass(self, left_bound, mass_to_next_recomb);
 }
