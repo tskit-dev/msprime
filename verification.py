@@ -2249,17 +2249,13 @@ class SimulationVerifier(object):
                 empirical_rho.append(ts.num_breakpoints)
         empirical_rho.sort()
         empirical_theta.sort()
-        pyplot.plot(empirical_rho, empirical_theta)
-        pyplot.plot(empirical_theta, empirical_theta, color='red')  
-        pyplot.xlabel('breakpoint number')
-        pyplot.ylabel('segregating site number')
-        pyplot.axis('square')
+        empirical_rho=np.array(empirical_rho)
+        empirical_theta=np.array(empirical_theta)
+        plot_qq(empirical_theta,empirical_rho)
         path = os.path.join(basedir, f"{name}_growth={growth_rate}_rec_check.png")
         print("Writing", path)
         pyplot.savefig(path)
-        pyplot.close('all')	
-	
-
+        pyplot.close('all')
 
     def run_hudson_breakpoints(self):
         basedir = "tmp__NOBACKUP__/hudson_breakpoints"
