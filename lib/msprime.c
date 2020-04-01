@@ -4415,7 +4415,6 @@ msp_run_sweep(msp_t *self)
             total_rate = sweep_pop_tot_rate;
             event_prob *= 1.0 - total_rate;
             curr_step++;
-            /* JK->Andy: is this what it means when the total_rate goes to 0? */
             sweep_over = total_rate == 0;
         }
         if (sweep_over) {
@@ -6216,7 +6215,6 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
     x = trajectory.end_frequency;
     t = simulator->time;
     num_steps = 0;
-
     while (x > trajectory.start_frequency) {
         if (num_steps + 1 >= max_steps) {
             max_steps *= 2;
@@ -6242,9 +6240,6 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         num_steps++;
     }
     assert(num_steps < max_steps); /* num_steps + 1 above guarantees this */
-    /* JK: question to Andy: Does this bookending make sense?
-     * Seemed logical that we'd always have at least two steps
-     */
     time[num_steps] = t;
     allele_frequency[num_steps] = trajectory.start_frequency;
     num_steps++;
@@ -6556,7 +6551,7 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
 
     /* Numerical instability occurs for values above 2 - 0.0005. */
     if (alpha <= 1.0 || alpha >= 2.0) {
-        ret = MSP_ERR_BAD_ALPHA;
+        ret = MSP_ERR_BAD_BETA_MODEL_ALPHA;
         goto out;
     }
 
@@ -6630,8 +6625,8 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
         ret = MSP_ERR_BAD_SWEEP_POSITION;
         goto out;
     }
-    if (start_frequency < 0.0 || start_frequency > 1.0
-            || end_frequency < 0.0 || end_frequency > 1.0) {
+    if (start_frequency <= 0.0 || start_frequency >= 1.0
+            || end_frequency <= 0.0 || end_frequency >= 1.0) {
         ret = MSP_ERR_BAD_ALLELE_FREQUENCY;
         goto out;
     }
@@ -6643,7 +6638,10 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
         ret = MSP_ERR_BAD_TIME_DELTA;
         goto out;
     }
-    /* TODO any limitations on alpha? */
+    if (alpha <= 0) {
+        ret = MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA;
+        goto out;
+    }
 
     ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP, reference_size);
     if (ret != 0) {
@@ -6654,8 +6652,9 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
     model->params.sweep.print_state = genic_selection_print_state;
     trajectory->start_frequency = start_frequency;
     trajectory->end_frequency = end_frequency;
-    /* JK: question for Andy: what are the dimensions of alpha? Does it
-     * need to be rescaled into generations? */
+    /* FIXME alpha must be rescaled here. See
+     * https://github.com/tskit-dev/msprime/issues/941
+     */
     trajectory->alpha = alpha;
     /* dt value is expressed in generations for consistency; translate to
      * model time. */

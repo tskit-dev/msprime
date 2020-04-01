@@ -125,7 +125,7 @@ def model_factory(model, reference_size=1):
         "smc": SmcApproxCoalescent(reference_size),
         "smc_prime": SmcPrimeApproxCoalescent(reference_size),
         "dtwf": DiscreteTimeWrightFisher(reference_size),
-        "wf_ped": WrightFisherPedigree(reference_size)
+        "wf_ped": WrightFisherPedigree(reference_size),
     }
     if model is None:
         model_instance = StandardCoalescent(reference_size)
@@ -583,7 +583,8 @@ class Simulator(object):
     Class to simulate trees under a variety of population models.
     """
     def __init__(
-            self, samples, recombination_map, model="hudson", Ne=0.25, from_ts=None):
+            self, samples, recombination_map, model="hudson", Ne=0.25,
+            from_ts=None):
         if from_ts is None:
             if len(samples) < 2:
                 raise ValueError("Sample size must be >= 2")
@@ -1957,10 +1958,13 @@ class SweepGenicSelection(ParametricSimulationModel):
     # TODO document
     name = "sweep_genic_selection"
 
-    # TODO: sensible defaults for some of these params?
     def __init__(
-            self, position, start_frequency, end_frequency, alpha, dt,
-            reference_size=1):
+            self, position, start_frequency, end_frequency,
+            alpha, dt=None, reference_size=1):
+        # We might want to have a default dt value that depends on the other
+        # parameters.
+        if dt is None:
+            dt = 0.01
         self.reference_size = reference_size
         self.position = position
         self.start_frequency = start_frequency

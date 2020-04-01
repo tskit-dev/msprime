@@ -69,21 +69,22 @@
 #define MSP_ERR_BAD_TIME_DELTA                                      -31
 #define MSP_ERR_BAD_ALLELE_FREQUENCY                                -32
 #define MSP_ERR_BAD_TRAJECTORY_START_END                            -33
-#define MSP_ERR_EVENTS_DURING_SWEEP                                 -34
-#define MSP_ERR_UNSUPPORTED_OPERATION                               -35
-#define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -36
-#define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -37
-#define MSP_ERR_BAD_PROPORTION                                      -38
-#define MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES                            -39
-#define MSP_ERR_BAD_PEDIGREE_ID                                     -40
-#define MSP_ERR_BAD_ALPHA                                           -41
-#define MSP_ERR_BAD_TRUNCATION_POINT                                -42
-#define MSP_ERR_BAD_MUTATION_MAP_RATE                               -43
-#define MSP_ERR_INCOMPATIBLE_MUTATION_MAP                           -44
-#define MSP_ERR_INSUFFICIENT_INTERVALS                              -45
-#define MSP_ERR_INTERVAL_MAP_START_NON_ZERO                         -46
-#define MSP_ERR_NEGATIVE_INTERVAL_POSITION                          -47
-#define MSP_ERR_INTERVAL_POSITIONS_UNSORTED                         -48
+#define MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA                     -34
+#define MSP_ERR_EVENTS_DURING_SWEEP                                 -35
+#define MSP_ERR_UNSUPPORTED_OPERATION                               -36
+#define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -37
+#define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -38
+#define MSP_ERR_BAD_PROPORTION                                      -39
+#define MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES                            -40
+#define MSP_ERR_BAD_PEDIGREE_ID                                     -41
+#define MSP_ERR_BAD_BETA_MODEL_ALPHA                                -42
+#define MSP_ERR_BAD_TRUNCATION_POINT                                -43
+#define MSP_ERR_BAD_MUTATION_MAP_RATE                               -44
+#define MSP_ERR_INCOMPATIBLE_MUTATION_MAP                           -45
+#define MSP_ERR_INSUFFICIENT_INTERVALS                              -46
+#define MSP_ERR_INTERVAL_MAP_START_NON_ZERO                         -47
+#define MSP_ERR_NEGATIVE_INTERVAL_POSITION                          -48
+#define MSP_ERR_INTERVAL_POSITIONS_UNSORTED                         -49
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

@@ -458,6 +458,71 @@ class SimulationVerifier(object):
             self._run_mutation_discoal_stats(key, command_line)
         self._instances[key] = f
 
+    def run_sweep_comparison(self, key, args):
+        """
+        does a comparison of sweep model vs discoal
+        """
+        # This is broken currently: https://github.com/tskit-dev/msprime/issues/942
+        # Skip noisily
+        print("Skipping sweep comparison due to known bug.")
+        return
+
+        # TODO We should be parsing the args string here to derive these values
+        # from the input. There's no point in having it as a parameter otherwise.
+        df = pd.DataFrame()
+        refsize = 1e4
+        seqlen = 1e4
+        nreps = 1000
+        mod = msprime.SweepGenicSelection(
+            reference_size=refsize,
+            position=np.floor(seqlen/2),
+            start_frequency=1.0 / (2 * refsize),
+            end_frequency=1.0 - (1.0 / (2 * refsize)),
+            alpha=1000.0,
+            dt=1.0/(40 * refsize)
+        )
+        mu = 2.5e-4
+        rho = 2.5e-4
+        data = collections.defaultdict(list)
+        replicates = msprime.simulate(
+            10,
+            model=mod,
+            length=seqlen,
+            recombination_rate=rho,
+            mutation_rate=mu,
+            num_replicates=nreps,
+            # Change to Hudson after sweep finishes
+            demographic_events=[msprime.SimulationModelChange()])
+        for ts in replicates:
+            data["pi"].append(ts.diversity(span_normalise=False))
+            data["D"].append(ts.Tajimas_D())
+            data["ss"].append(ts.segregating_sites(span_normalise=False))
+        data["pi"] = np.array(data["pi"]).flatten()
+        data["D"] = np.array(data["D"]).flatten()
+        data["ss"] = np.array(data["ss"]).flatten()
+        df = pd.DataFrame.from_dict(data)
+        df = df.fillna(0)
+        df_d = self._run_discoal_mutation_stats(args)
+        df_df = df_d[["pi", "D", "ss"]]
+        print("msp pi mean: ", df['pi'].mean())
+        print("discoal pi mean: ", df_df['pi'].mean())
+        print("msp ss mean: ", df['ss'].mean())
+        print("discoal ss mean: ", df_df['ss'].mean())
+        print("msp D mean: ", df['D'].mean())
+        print("discoal D mean: ", df_df['D'].mean())
+        print(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
+        self._plot_stats(key, "mutation", df, df_df)
+
+    def add_sweep_vs_discoal_instance(self):
+        """
+        Checks sweeps against discoal.
+        """
+        def f():
+            self.run_sweep_comparison("sweep",
+                                      "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a \
+                                      500 -x 0.5 -N 10000")
+        self._instances["sweep"] = f
+
     def get_pairwise_coalescence_time(self, cmd, R):
         # print("\t", " ".join(cmd))
         output = subprocess.check_output(cmd)
@@ -2746,17 +2811,17 @@ def run_tests(args):
         "15 1000 100 -t 5.0")
     verifier.add_discoal_instance(
         "discoal-size-change1",
-        "15 1000 100 -t 10.0 -en 0.1 0 2.0")
+        "10 10000 100 -t 10.0 -en 0.1 0 2.0")
     verifier.add_discoal_instance(
         "discoal-size-change2",
-        "15 1000 100 -t 10.0 -en 0.1 0 0.1")
+        "10 10000 100 -t 10.0 -en 0.1 0 0.1")
     verifier.add_discoal_instance(
         "discoal-size-change3",
-        "50 1000 100 -t 10.0 -en 0.01 0 0.01")
+        "10 10000 100 -t 10.0 -en 0.01 0 0.01")
     verifier.add_discoal_instance(
         "discoal-size-change4",
-        "50 1000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0")
-
+        "10 10000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0")
+    verifier.add_sweep_vs_discoal_instance()
     # Add some random instances.
     verifier.add_random_instance("random1")
     verifier.add_random_instance(
