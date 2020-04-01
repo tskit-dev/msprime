@@ -462,28 +462,41 @@ class SimulationVerifier(object):
         """
         does a comparison of sweep model vs discoal
         """
+        # This is broken currently: https://github.com/tskit-dev/msprime/issues/942
+        # Skip noisily
+        print("Skipping sweep comparison due to known bug.")
+        return
+
+        # TODO We should be parsing the args string here to derive these values
+        # from the input. There's no point in having it as a parameter otherwise.
         df = pd.DataFrame()
         refsize = 1e4
-        nreps = 1000
-        mod = msprime.SweepGenicSelection(refsize)
-        mod.start_frequency = 1.0 / (2 * refsize)
-        mod.end_frequency = 1.0 - (1.0 / (2 * refsize))
-        mod.alpha = 1000.0
-        mod.dt = 1.0/(40 * refsize)
         seqlen = 1e4
+        nreps = 1000
+        mod = msprime.SweepGenicSelection(
+            reference_size=refsize,
+            position=np.floor(seqlen/2),
+            start_frequency=1.0 / (2 * refsize),
+            end_frequency=1.0 - (1.0 / (2 * refsize)),
+            alpha=1000.0,
+            dt=1.0/(40 * refsize)
+        )
         mu = 2.5e-4
         rho = 2.5e-4
-        mod.position = np.floor(seqlen/2)
         data = collections.defaultdict(list)
-        replicates = msprime.simulate(10,  model=mod, length=seqlen,
-                                      num_labels=2, recombination_rate=rho,
-                                      num_replicates=nreps)
-        for x in replicates:
-            ts = msprime.simulate(from_ts=x, recombination_rate=rho)
-            tsm = msprime.mutate(ts, rate=mu)
-            data["pi"].append(tsm.diversity(span_normalise=False))
-            data["D"].append(tsm.Tajimas_D())
-            data["ss"].append(tsm.segregating_sites(span_normalise=False))
+        replicates = msprime.simulate(
+            10,
+            model=mod,
+            length=seqlen,
+            recombination_rate=rho,
+            mutation_rate=mu,
+            num_replicates=nreps,
+            # Change to Hudson after sweep finishes
+            demographic_events=[msprime.SimulationModelChange()])
+        for ts in replicates:
+            data["pi"].append(ts.diversity(span_normalise=False))
+            data["D"].append(ts.Tajimas_D())
+            data["ss"].append(ts.segregating_sites(span_normalise=False))
         data["pi"] = np.array(data["pi"]).flatten()
         data["D"] = np.array(data["D"]).flatten()
         data["ss"] = np.array(data["ss"]).flatten()

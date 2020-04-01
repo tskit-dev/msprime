@@ -3362,7 +3362,7 @@ test_beta_coalescent_bad_parameters(void)
 
     for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
         ret = msp_set_simulation_model_beta(&msp, 1, alphas[j], 1);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_ALPHA);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_BETA_MODEL_ALPHA);
     }
     for (j = 0; j < sizeof(truncation_points) / sizeof(*truncation_points); j++) {
         ret = msp_set_simulation_model_beta(&msp, 1, 1.5, truncation_points[j]);
@@ -4598,7 +4598,6 @@ verify_simple_genic_selection_trajectory(
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 0.25, 0.5, start_frequency, end_frequency, alpha, dt);
-    printf("%d\n",ret);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4701,7 +4700,7 @@ test_sweep_genic_selection_bad_parameters(void)
 
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 1.0, 0.5, 0.1, 0.9, -666, 0.1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALPHA);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA);
     /* The incorrect number of populations was specified */
     ret = msp_set_dimensions(&msp, 2, 2);
     CU_ASSERT_EQUAL(ret, 0);

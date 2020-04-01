@@ -126,7 +126,6 @@ def model_factory(model, reference_size=1):
         "smc_prime": SmcPrimeApproxCoalescent(reference_size),
         "dtwf": DiscreteTimeWrightFisher(reference_size),
         "wf_ped": WrightFisherPedigree(reference_size),
-        "sweep_genic_selection": SweepGenicSelection(reference_size)
     }
     if model is None:
         model_instance = StandardCoalescent(reference_size)
@@ -1956,16 +1955,16 @@ class DiracCoalescent(ParametricSimulationModel):
 
 
 class SweepGenicSelection(ParametricSimulationModel):
-    """
-    Class representing a model with a single selective sweep
-    in the population history. Sweep ends (looking forward in time)
-    at the time of sampling
-    """
+    # TODO document
     name = "sweep_genic_selection"
 
     def __init__(
-            self, position=2, start_frequency=0.001, end_frequency=0.999,
-            alpha=1000, dt=0.01, reference_size=1):
+            self, position, start_frequency, end_frequency,
+            alpha, dt=None, reference_size=1):
+        # We might want to have a default dt value that depends on the other
+        # parameters.
+        if dt is None:
+            dt = 0.01
         self.reference_size = reference_size
         self.position = position
         self.start_frequency = start_frequency

@@ -4415,15 +4415,6 @@ msp_run_sweep(msp_t *self)
             total_rate = sweep_pop_tot_rate;
             event_prob *= 1.0 - total_rate;
             curr_step++;
-            /* sanity check print statement */
-            //printf("p: %g p_coal_b: %g p_coal_B: %g p_rec_b: %g p_rec_B: %g total_rate: %g event_prob: %g event_rand:%g\n", allele_frequency[curr_step],p_coal_b, 
-            //        p_coal_B, p_rec_b, p_rec_B, total_rate, event_prob, event_rand);
-           // printf("curr_step: %ld num_steps: %ld\n", curr_step, num_steps);
-            //printf("sweep_pop_sizes: %g %g pop_size: %g\n", sweep_pop_sizes[0], sweep_pop_sizes[1], pop_size);
-            /* JK->Andy: is this what it means when the total_rate goes to 0? */
-            /* AK-> JK: it means that all of the alleles have coalesced onto a
-             * background and we can stop the structured phase of the
-             * simulation */
             sweep_over = total_rate == 0;
         }
         if (sweep_over) {
@@ -6249,10 +6240,6 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         num_steps++;
     }
     assert(num_steps < max_steps); /* num_steps + 1 above guarantees this */
-    /* JK: question to Andy: Does this bookending make sense?
-     * Seemed logical that we'd always have at least two steps
-     */
-    /* fine by me */
     time[num_steps] = t;
     allele_frequency[num_steps] = trajectory.start_frequency;
     num_steps++;
@@ -6564,7 +6551,7 @@ msp_set_simulation_model_beta(msp_t *self, double reference_size, double alpha,
 
     /* Numerical instability occurs for values above 2 - 0.0005. */
     if (alpha <= 1.0 || alpha >= 2.0) {
-        ret = MSP_ERR_BAD_ALPHA;
+        ret = MSP_ERR_BAD_BETA_MODEL_ALPHA;
         goto out;
     }
 
@@ -6652,7 +6639,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
         goto out;
     }
     if (alpha <= 0) {
-        ret = MSP_ERR_BAD_ALPHA;
+        ret = MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA;
         goto out;
     }
 
@@ -6665,10 +6652,9 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
     model->params.sweep.print_state = genic_selection_print_state;
     trajectory->start_frequency = start_frequency;
     trajectory->end_frequency = end_frequency;
-    /* JK: question for Andy: what are the dimensions of alpha? Does it
-     * need to be rescaled into generations? */
-    /* AK: so alpha in discoal is scaled selection coefficient 2Ns
-     * i believe that for msprime we need to alter this to fit time change */
+    /* FIXME alpha must be rescaled here. See
+     * https://github.com/tskit-dev/msprime/issues/941
+     */
     trajectory->alpha = alpha;
     /* dt value is expressed in generations for consistency; translate to
      * model time. */

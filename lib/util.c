@@ -139,6 +139,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRAJECTORY_START_END:
             ret = "Start frequency must be less than end frequency";
             break;
+        case MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA:
+            ret = "alpha must be > 0";
+            break;
         case MSP_ERR_EVENTS_DURING_SWEEP:
             ret = "Demographic and sampling events during a sweep "
                 "are not supported";
@@ -163,7 +166,7 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_PROPORTION:
             ret = "Proportion values must have 0 <= x <= 1";
             break;
-        case MSP_ERR_BAD_ALPHA:
+        case MSP_ERR_BAD_BETA_MODEL_ALPHA:
             ret = "Bad alpha. Must have 1 < alpha < 2";
             break;
         case MSP_ERR_BAD_TRUNCATION_POINT:

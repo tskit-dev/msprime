@@ -626,6 +626,11 @@ class TestSweepGenicSelection(unittest.TestCase):
     """
     Tests for the single sweep model.
     """
+    def test_default_dt(self):
+        model = msprime.SweepGenicSelection(
+            position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=0.1)
+        self.assertEqual(model.dt, 0.01)
+
     def test_incorrect_num_labels(self):
         model = msprime.SweepGenicSelection(
             position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=0.1,
