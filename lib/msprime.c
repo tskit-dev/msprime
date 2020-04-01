@@ -6428,6 +6428,9 @@ msp_set_simulation_model(msp_t *self, int model, double reference_size)
         if (ret != 0) {
             goto out;
         }
+        if (self->model.free != NULL) {
+            self->model.free(&self->model);
+        }
     }
     self->model.type = model;
     self->model.reference_size = reference_size;
