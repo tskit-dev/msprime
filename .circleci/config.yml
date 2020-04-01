@@ -10,44 +10,85 @@ jobs:
       - restore_cache:
           key: msprime-{{ .Branch }}
       - run:
+          name: Checkout submodules
+          command: |
+            git submodule update --init --recursive
+            # Write out the status for debugging purposes. Are we checked out at tags?
+            git submodule status --recursive
+      - run:
           name: Install dependencies and set path
           command: |
             sudo apt-get update
-            sudo apt-get install libgsl0-dev libhdf5-serial-dev libcunit1-dev libconfig-dev
+            sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
             pip install --user -r requirements/development.txt
+            pip install --user meson twine
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
           key: msprime-{{ .Branch }}
           paths:
             - "/home/circleci/.local"
+
       - run:
-          name: Compile
+          name: Lint Python
           command: |
-            CFLAGS=--coverage python setup.py build_ext --inplace
-            make -C lib debian-tests
+            flake8
+
+      - run:
+          name: Compile Python
+          command: |
+            CFLAGS="--coverage -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-field-initializers" \
+              python setup.py build_ext --inplace
+
       - run:
           name: Run highlevel tests and upload coverage
           command: |
-            flake8 --max-line-length 89 setup.py msprime tests
             nosetests -v --with-coverage --cover-package msprime \
               --cover-branches --cover-erase --cover-xml --cover-inclusive tests
             codecov -X gcov -F python
             rm .coverage
+
+      - run:
+          name: Compile C with gcc
+          command: |
+            CFLAGS=--coverage meson lib/ build-gcc && cd build-gcc && ninja
+
       - run:
           name: Run the low-level tests.
           command: |
-            ./lib/tests
-            ./lib/simulation_tests
+            cd build-gcc
+            ./tests
+
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
           command: |
             gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
-            find ./lib -type f -name '*.gcno' -exec gcov -pb -o ./lib {} +
+            cd build-gcc
+            # TODO should be able to do this with 'find', but it's tricky and opaque.
+            gcov -pb ./msprime@sta/fenwick.c.gcno ../lib/fenwick.c
+            gcov -pb ./msprime@sta/msprime.c.gcno ../lib/msprime.c
+            gcov -pb ./msprime@sta/mutgen.c.gcno ../lib/mutgen.c
+            gcov -pb ./msprime@sta/object_heap.c.gcno ../lib/object_heap.c
+            gcov -pb ./msprime@sta/recomb_map.c.gcno ../lib/recomb_map.c
+            gcov -pb ./msprime@sta/interval_map.c.gcno ../lib/interval_map.c
+            gcov -pb ./msprime@sta/util.c.gcno ../lib/util.c
+            gcov -pb ./msprime@sta/likelihood.c.gcno ../lib/likelihood.c
+            cd ..
             codecov -X gcov -F C
+
       - run:
           name: Make sure the docs build.
           command: make -C docs
       - run:
           name: Make sure we can build a distribution tarball.
-          command: python setup.py sdist
+          command: |
+            python setup.py sdist
+            python setup.py check
+            python -m twine check dist/*.tar.gz
+      - run:
+          name: Install from the distribution tarball
+          command: |
+            python -m venv venv
+            source venv/bin/activate
+            pip install --upgrade setuptools pip
+            pip install dist/*.tar.gz

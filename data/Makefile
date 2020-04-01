@@ -1,4 +1,13 @@
-all: scrm ms 
+all: scrm ms msHOT slim
+
+slim:
+	rm -fR SLiM*
+	wget http://benhaller.com/slim/SLiM.zip
+	unzip SLiM.zip
+	mkdir SLiM/build
+	# Arbitrarily using 4 threads to build here..
+	cd SLiM/build && cmake .. && make -j 4
+	cp SLiM/build/slim ./
 
 scrm:
 	wget https://github.com/scrm/scrm/releases/download/v1.7.2/scrm-src.tar.gz
@@ -12,5 +21,16 @@ ms:
 	cp msdir/ms_summary_stats ./
 	cp msdir/sample_stats ./
 
+msHOT:
+	make -C msHOTdir
+	cp msHOTdir/msHOT ./
+	cp msHOTdir/msHOT_summary_stats ./
+
+discoal:
+	wget https://github.com/kern-lab/discoal/archive/v0.1.4.tar.gz
+	tar -xf v0.1.4.tar.gz
+	cd discoal-0.1.4/ && make 
+	cp discoal-0.1.4/discoal ./
+
 clean:
-	rm -fR scrm* ms ms_summary_stats sample_stats
+	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats discoal* v0.1.4.tar.gz*

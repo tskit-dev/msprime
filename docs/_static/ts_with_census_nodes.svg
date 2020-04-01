@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg baseProfile="full" height="200" version="1.1" width="800" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <g id="tree_0">
+      <g fill="none" id="edges" stroke="black">
+        <path d="M 61.0 35.176255815431134 V 30.0 H 95.0" id="edge_0_9"/>
+        <path d="M 61.0 61.18923495843269 V 35.176255815431134 H 61.0" id="edge_0_5"/>
+        <path d="M 44.0 140.0 V 61.18923495843269 H 61.0" id="edge_0_1"/>
+        <path d="M 78.0 140.0 V 61.18923495843269 H 61.0" id="edge_0_3"/>
+        <path d="M 129.0 35.176255815431134 V 30.0 H 95.0" id="edge_0_12"/>
+        <path d="M 129.0 90.73101938631363 V 35.176255815431134 H 129.0" id="edge_0_4"/>
+        <path d="M 112.0 140.0 V 90.73101938631363 H 129.0" id="edge_0_0"/>
+        <path d="M 146.0 140.0 V 90.73101938631363 H 129.0" id="edge_0_2"/>
+      </g>
+      <g id="symbols">
+        <g class="nodes">
+          <circle cx="95.0" cy="30.0" id="node_0_14" r="3"/>
+          <circle cx="61.0" cy="35.176255815431134" id="node_0_9" r="3"/>
+          <circle cx="61.0" cy="61.18923495843269" id="node_0_5" r="3"/>
+          <circle cx="44.0" cy="140.0" id="node_0_1" r="3"/>
+          <circle cx="78.0" cy="140.0" id="node_0_3" r="3"/>
+          <circle cx="129.0" cy="35.176255815431134" id="node_0_12" r="3"/>
+          <circle cx="129.0" cy="90.73101938631363" id="node_0_4" r="3"/>
+          <circle cx="112.0" cy="140.0" id="node_0_0" r="3"/>
+          <circle cx="146.0" cy="140.0" id="node_0_2" r="3"/>
+        </g>
+        <g class="mutations" fill="red"/>
+      </g>
+      <g font-size="14" id="labels">
+        <g class="nodes">
+          <g text-anchor="start">
+            <text x="134.0" y="30.176255815431134">12</text>
+          </g>
+          <g text-anchor="middle">
+            <text x="95.0" y="25.0">14</text>
+            <text x="44.0" y="160.0">1</text>
+            <text x="78.0" y="160.0">3</text>
+            <text x="112.0" y="160.0">0</text>
+            <text x="146.0" y="160.0">2</text>
+          </g>
+          <g text-anchor="end">
+            <text x="56.0" y="30.176255815431134">9</text>
+            <text x="56.0" y="56.18923495843269">5</text>
+            <text x="124.0" y="85.73101938631363">4</text>
+          </g>
+        </g>
+        <g class="mutations" font-style="italic">
+          <g text-anchor="start"/>
+          <g text-anchor="end"/>
+        </g>
+      </g>
+    </g>
+    <g id="tree_1">
+      <g fill="none" id="edges" stroke="black">
+        <path d="M 44.0 35.176255815431134 V 30.0 H 73.75" id="edge_1_10"/>
+        <path d="M 44.0 140.0 V 35.176255815431134 H 44.0" id="edge_1_3"/>
+        <path d="M 103.5 35.176255815431134 V 30.0 H 73.75" id="edge_1_13"/>
+        <path d="M 103.5 51.214709608992834 V 35.176255815431134 H 103.5" id="edge_1_6"/>
+        <path d="M 78.0 140.0 V 51.214709608992834 H 103.5" id="edge_1_1"/>
+        <path d="M 129.0 90.73101938631363 V 51.214709608992834 H 103.5" id="edge_1_4"/>
+        <path d="M 112.0 140.0 V 90.73101938631363 H 129.0" id="edge_1_0"/>
+        <path d="M 146.0 140.0 V 90.73101938631363 H 129.0" id="edge_1_2"/>
+      </g>
+      <g id="symbols">
+        <g class="nodes">
+          <circle cx="73.75" cy="30.0" id="node_1_14" r="3"/>
+          <circle cx="44.0" cy="35.176255815431134" id="node_1_10" r="3"/>
+          <circle cx="44.0" cy="140.0" id="node_1_3" r="3"/>
+          <circle cx="103.5" cy="35.176255815431134" id="node_1_13" r="3"/>
+          <circle cx="103.5" cy="51.214709608992834" id="node_1_6" r="3"/>
+          <circle cx="78.0" cy="140.0" id="node_1_1" r="3"/>
+          <circle cx="129.0" cy="90.73101938631363" id="node_1_4" r="3"/>
+          <circle cx="112.0" cy="140.0" id="node_1_0" r="3"/>
+          <circle cx="146.0" cy="140.0" id="node_1_2" r="3"/>
+        </g>
+        <g class="mutations" fill="red"/>
+      </g>
+      <g font-size="14" id="labels">
+        <g class="nodes">
+          <g text-anchor="start">
+            <text x="108.5" y="30.176255815431134">13</text>
+            <text x="134.0" y="85.73101938631363">4</text>
+          </g>
+          <g text-anchor="middle">
+            <text x="73.75" y="25.0">14</text>
+            <text x="44.0" y="160.0">3</text>
+            <text x="78.0" y="160.0">1</text>
+            <text x="112.0" y="160.0">0</text>
+            <text x="146.0" y="160.0">2</text>
+          </g>
+          <g text-anchor="end">
+            <text x="39.0" y="30.176255815431134">10</text>
+            <text x="98.5" y="46.214709608992834">6</text>
+          </g>
+        </g>
+        <g class="mutations" font-style="italic">
+          <g text-anchor="start"/>
+          <g text-anchor="end"/>
+        </g>
+      </g>
+    </g>
+    <g id="tree_2">
+      <g fill="none" id="edges" stroke="black">
+        <path d="M 61.0 35.176255815431134 V 30.0 H 95.0" id="edge_2_13"/>
+        <path d="M 61.0 51.214709608992834 V 35.176255815431134 H 61.0" id="edge_2_6"/>
+        <path d="M 44.0 140.0 V 51.214709608992834 H 61.0" id="edge_2_1"/>
+        <path d="M 78.0 140.0 V 51.214709608992834 H 61.0" id="edge_2_0"/>
+        <path d="M 129.0 35.176255815431134 V 30.0 H 95.0" id="edge_2_11"/>
+        <path d="M 129.0 43.586495834035034 V 35.176255815431134 H 129.0" id="edge_2_7"/>
+        <path d="M 112.0 140.0 V 43.586495834035034 H 129.0" id="edge_2_2"/>
+        <path d="M 146.0 140.0 V 43.586495834035034 H 129.0" id="edge_2_3"/>
+      </g>
+      <g id="symbols">
+        <g class="nodes">
+          <circle cx="95.0" cy="30.0" id="node_2_14" r="3"/>
+          <circle cx="61.0" cy="35.176255815431134" id="node_2_13" r="3"/>
+          <circle cx="61.0" cy="51.214709608992834" id="node_2_6" r="3"/>
+          <circle cx="44.0" cy="140.0" id="node_2_1" r="3"/>
+          <circle cx="78.0" cy="140.0" id="node_2_0" r="3"/>
+          <circle cx="129.0" cy="35.176255815431134" id="node_2_11" r="3"/>
+          <circle cx="129.0" cy="43.586495834035034" id="node_2_7" r="3"/>
+          <circle cx="112.0" cy="140.0" id="node_2_2" r="3"/>
+          <circle cx="146.0" cy="140.0" id="node_2_3" r="3"/>
+        </g>
+        <g class="mutations" fill="red"/>
+      </g>
+      <g font-size="14" id="labels">
+        <g class="nodes">
+          <g text-anchor="start">
+            <text x="134.0" y="30.176255815431134">11</text>
+          </g>
+          <g text-anchor="middle">
+            <text x="95.0" y="25.0">14</text>
+            <text x="44.0" y="160.0">1</text>
+            <text x="78.0" y="160.0">0</text>
+            <text x="112.0" y="160.0">2</text>
+            <text x="146.0" y="160.0">3</text>
+          </g>
+          <g text-anchor="end">
+            <text x="56.0" y="30.176255815431134">13</text>
+            <text x="56.0" y="46.214709608992834">6</text>
+            <text x="124.0" y="38.586495834035034">7</text>
+          </g>
+        </g>
+        <g class="mutations" font-style="italic">
+          <g text-anchor="start"/>
+          <g text-anchor="end"/>
+        </g>
+      </g>
+    </g>
+    <g id="tree_3">
+      <g fill="none" id="edges" stroke="black">
+        <path d="M 61.0 72.9818431091519 V 30.0 H 95.0" id="edge_3_8"/>
+        <path d="M 61.0 83.23589023354155 V 72.9818431091519 H 61.0" id="edge_3_6"/>
+        <path d="M 44.0 140.0 V 83.23589023354155 H 61.0" id="edge_3_1"/>
+        <path d="M 78.0 140.0 V 83.23589023354155 H 61.0" id="edge_3_0"/>
+        <path d="M 129.0 72.9818431091519 V 30.0 H 95.0" id="edge_3_11"/>
+        <path d="M 129.0 78.35885753886026 V 72.9818431091519 H 129.0" id="edge_3_7"/>
+        <path d="M 112.0 140.0 V 78.35885753886026 H 129.0" id="edge_3_2"/>
+        <path d="M 146.0 140.0 V 78.35885753886026 H 129.0" id="edge_3_3"/>
+      </g>
+      <g id="symbols">
+        <g class="nodes">
+          <circle cx="95.0" cy="30.0" id="node_3_15" r="3"/>
+          <circle cx="61.0" cy="72.9818431091519" id="node_3_8" r="3"/>
+          <circle cx="61.0" cy="83.23589023354155" id="node_3_6" r="3"/>
+          <circle cx="44.0" cy="140.0" id="node_3_1" r="3"/>
+          <circle cx="78.0" cy="140.0" id="node_3_0" r="3"/>
+          <circle cx="129.0" cy="72.9818431091519" id="node_3_11" r="3"/>
+          <circle cx="129.0" cy="78.35885753886026" id="node_3_7" r="3"/>
+          <circle cx="112.0" cy="140.0" id="node_3_2" r="3"/>
+          <circle cx="146.0" cy="140.0" id="node_3_3" r="3"/>
+        </g>
+        <g class="mutations" fill="red"/>
+      </g>
+      <g font-size="14" id="labels">
+        <g class="nodes">
+          <g text-anchor="start">
+            <text x="134.0" y="67.9818431091519">11</text>
+          </g>
+          <g text-anchor="middle">
+            <text x="95.0" y="25.0">15</text>
+            <text x="44.0" y="160.0">1</text>
+            <text x="78.0" y="160.0">0</text>
+            <text x="112.0" y="160.0">2</text>
+            <text x="146.0" y="160.0">3</text>
+          </g>
+          <g text-anchor="end">
+            <text x="56.0" y="67.9818431091519">8</text>
+            <text x="56.0" y="78.23589023354155">6</text>
+            <text x="124.0" y="73.35885753886026">7</text>
+          </g>
+        </g>
+        <g class="mutations" font-style="italic">
+          <g text-anchor="start"/>
+          <g text-anchor="end"/>
+        </g>
+      </g>
+    </g>
+  </defs>
+  <use x="20" xlink:href="#tree_0" y="15"/>
+  <use x="210.0" xlink:href="#tree_1" y="15"/>
+  <use x="400.0" xlink:href="#tree_2" y="15"/>
+  <use x="590.0" xlink:href="#tree_3" y="15"/>
+  <line stroke="black" x1="20" x2="780" y1="180" y2="180"/>
+  <line stroke="black" x1="20" x2="20" y1="175" y2="185"/>
+  <text font-size="14" font-weight="bold" text-anchor="middle" x="20" y="200">0.00</text>
+  <line stroke="black" x1="210.0" x2="210.0" y1="175" y2="185"/>
+  <text font-size="14" font-weight="bold" text-anchor="middle" x="210.0" y="200">263.22</text>
+  <line stroke="black" x1="400.0" x2="400.0" y1="175" y2="185"/>
+  <text font-size="14" font-weight="bold" text-anchor="middle" x="400.0" y="200">677.81</text>
+  <line stroke="black" x1="590.0" x2="590.0" y1="175" y2="185"/>
+  <text font-size="14" font-weight="bold" text-anchor="middle" x="590.0" y="200">938.66</text>
+  <line stroke="black" x1="780.0" x2="780.0" y1="175" y2="185"/>
+  <text font-size="14" font-weight="bold" text-anchor="middle" x="780.0" y="200">1000.00</text>
+</svg>

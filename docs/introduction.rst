@@ -29,19 +29,8 @@ scenarios. The library is a reimplementation of Hudson's seminal
    in Python, which is both simpler and far more efficient.
 
 3. ``msprime`` does not use Newick trees for interchange as they
-   are extremely inefficient in terms of the time required to
-   generate and parse, as well as the space required to store them.
-   Instead, we use a :ref:`well_defined <sec_hdf5_file_format>` format using the
-   powerful `HDF5 <https://www.hdfgroup.org/HDF5/>`_ standard. This
-   format allows us to store genealogical data very concisely,
-   particularly for large sample sizes.
-
-
-The ``msprime`` library has also evolved to support data
-from external sources, and can work with data conforming to
-the :ref:`sec_interchange` definitions. In the near future, the
-efficient algorithms and data structures used to process tree
-sequence data will be moved into a new library, provisiononally
-called ``tskit``. Once this transition is complete, ``msprime``
-will depend on this library, and will become primarily concerned
-with simulating backwards-in-time population processes.
+   are extremely inefficient in terms of storage space and the
+   time needed to generate and parse them. Instead, we use the
+   `tskit library <https://tskit.readthedocs.io/en/stable/index.html>`_
+   which allows us to store and process very large scale simulation
+   results efficiently.

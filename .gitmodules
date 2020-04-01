@@ -1,0 +1,6 @@
+[submodule "lib/tskit"]
+	path = lib/subprojects/git-submodules/tskit
+	url = https://github.com/tskit-dev/tskit.git
+[submodule "lib/subprojects/git-submodules/kastore"]
+	path = lib/subprojects/git-submodules/kastore
+	url = https://github.com/tskit-dev/kastore.git

@@ -6,7 +6,11 @@ API Documentation
 
 This is the API documentation for ``msprime``, and provides detailed information
 on the Python programming interface. See the :ref:`sec_tutorial` for an
-introduction to using this API to run simulations and analyse the results.
+introduction to using this API to run simulations.
+See the `tskit documentation <https://tskit.readthedocs.io/en/stable>`_ for
+information on how to use the
+`tskit Python API <https://tskit.readthedocs.io/en/stable/python-api.html>`_
+to analyse simulation results.
 
 ****************
 Simulation model
@@ -14,45 +18,58 @@ Simulation model
 
 The simulation model in ``msprime`` closely follows the classical ``ms``
 program. Unlike ``ms``, however, time is measured in generations rather than
-"coalescent units". Internally the same simulation algorithm is used, but
-``msprime`` provides a translation layer to allow the user input times and
-rates in generations. Similarly, the times associated with the trees produced
-by ``msprime`` are in measured generations. To enable this translation from
-generations into coalescent units and vice-versa, a reference effective
-population size must be provided, which is given by the ``Ne`` parameter in the
-:func:`.simulate` function. (Note that we assume diploid population sizes
-thoughout, since we scale by :math:`4 N_e`.) Population sizes for individual
-demes and for past demographic events are defined as absolute values, **not**
+in units of :math:`4 N_e` generations, i.e., "coalescent units".
+This means that when simulating a population with diploid effective size :math:`N_e`,
+the mean time to coalescence between two samples
+in an ``msprime`` simulation will be around :math:`2 N_e`,
+while in an ``ms`` simulation, the mean time will be around :math:`0.5`.
+Internally, ``msprime`` uses the same algorithm as ``ms``,
+and so the ``Ne`` parameter to the :func:`.simulate` function
+still acts as a time scaling, and can be set to ``0.5`` to match many theoretical results,
+or to ``0.25`` to match ``ms``. Population sizes for each
+subpopulation and for past demographic events are also defined as absolute values, **not**
 scaled by ``Ne``. All migration rates and growth rates are also per generation.
 
-When running simulations we define the length in bases :math:`L` of the
-sequence in question using the ``length`` parameter. This defines the
-coordinate space within which trees and mutations are defined. :math:`L` is a
-continuous value, and coordinates can take any value from :math:`0` to
-:math:`L`. Mutations occur in an infinite sites process along this sequence,
+When running simulations we define the length :math:`L` of the sequence in
+question using the ``length`` parameter. This defines the coordinate space
+within which trees and mutations are defined. :math:`L` is a continuous value,
+so units are arbitrary, and coordinates can take any continuous value from :math:`0` up to
+(but not including) :math:`L`. (So, although we recommend setting the units of length to be
+analogous to "bases", events can occur at fractional positions.)
+Mutations occur in an infinite sites process along this sequence,
 and mutation rates are specified per generation, per unit of sequence length.
 Thus, given the per-generation mutation rate :math:`\mu`, the rate of mutation
 over the entire sequence in coalescent time units is :math:`\theta = 4 N_e \mu
 L`. It is important to remember these scaling factors when comparing with
 analytical results!
 
-Similarly, recombination rates are per base, per generation in ``msprime``.
-Thus, given the per generation crossover rate :math:`r`, the overall rate
-of recombination between the ends of the sequence in coalescent time units
-is :math:`\rho = 4 N_e r L`. Recombination events occur in a continuous
-coordinate space, so that breakpoints do not necessarily occur at integer
-locations. However, the underlying recombination model is finite, and the
-behaviour of a small number of loci can be modelled using the
-:class:`RecombinationMap` class. However, this is considered an advanced
+Similarly, recombination rates are per unit of sequence length and per
+generation in ``msprime``. Thus, given the per generation crossover rate
+:math:`r`, the overall rate of recombination between the ends of the sequence
+in coalescent time units is :math:`\rho = 4 N_e r L`. Although breakpoints do
+not necessarily occur at integer locations, the underlying recombination model
+is finite, and the behaviour of a small number of loci can be modelled using
+the :class:`.RecombinationMap` class. However, this is considered an advanced
 feature and the majority of cases should be well served with the default
 recombination model and number of loci.
 
-Population structure is modelled by specifying a fixed number of demes
+For gene conversion there are two parameters. The gene conversion rate determines the initiation
+and is again per unit of sequence length and per generation in ``msprime``.
+Thus, given the per generation gene conversion rate :math:`g`, the overall rate of
+gene conversion initiation between the ends of the sequence is :math:`\rho = 4 N_e g L` in
+coalescent time units. The second parameter :math:`track\_len` is the expected track length
+of a gene conversion. At each gene conversion initiation site the track of the conversion
+extends to the right and the length of the track is geometric distributed with parameter
+:math:`1/track\_len`. Currently recombination maps for gene conversion are not supported.
+However, recombination (with or without recombination maps) and a constant gene conversion
+rate along the genome can be combined in ``msprime``.
+
+Population structure is modelled by specifying a fixed number of subpopulations
 :math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
 migration rates. Each element of the matrix :math:`M_{j,k}` defines
 the fraction of population :math:`j` that consists of migrants from
 population :math:`k` in each generation.
-Each deme has an initial absolute population size :math:`s`
+Each subpopulation has an initial absolute population size :math:`s`
 and a per generation exponential growth rate :math:`\alpha`. The size of a
 given population at time :math:`t` in the past (measured in generations) is
 therefore given by :math:`s e^{-\alpha t}`. Demographic events that occur in
@@ -63,10 +80,15 @@ configuration at a particular time in the past.
     migration rates is different to :program:`ms`, which states these
     rates over the entire region and in coalescent time units. The
     motivation for this is to allow the user change the size of the simulated
-    region without having to rescale the recombination and mutation rates,
+    region without having to rescale the recombination, gene conversion, and mutation rates,
     and to also allow users directly state times and rates in units of
     generations. However, the ``mspms`` command line application is
     fully :program:`ms` compatible.
+    If recombination and gene conversion are combined the gene conversion
+    rate in :program:`ms` is determined by the ratio :math:`f`, which corresponds to
+    setting :math:`g = f r`. In ``msprime`` the gene conversion rate :math:`g` is
+    set independently and does not depend on the recombination rate. However,
+    ``mspms`` mimics the :program:`ms` behaviour.
 
 *******************
 Running simulations
@@ -75,39 +97,41 @@ Running simulations
 The :func:`.simulate` function provides the primary interface to running
 coalescent simulations in msprime.
 
-.. autofunction:: msprime.simulate
+.. autofunction:: msprime.simulate()
 
-++++++++++++++++++++
+********************
 Population structure
-++++++++++++++++++++
+********************
 
 Population structure is modelled in ``msprime`` by specifying a fixed number of
-demes, with the migration rates between those demes defined by a migration
-matrix. Each deme has an ``initial_size`` that defines its absolute size at
+subpopulations, with the migration rates between those subpopulations defined by a migration
+matrix. Each subpopulation has an ``initial_size`` that defines its absolute diploid size at
 time zero and a per-generation ``growth_rate`` which specifies the exponential
-growth rate of the sub-population. We must also define the size of the sample
-to draw from each deme. The number of populations and their initial
+growth rate of the sub-population. We must also define the number of genomes to
+sample from each subpopulation. The number of populations and their initial
 configuration is defined using the ``population_configurations`` parameter to
 :func:`.simulate`, which takes a list of :class:`.PopulationConfiguration`
 instances. Population IDs are zero indexed, and correspond to their position in
 the list.
 
 Samples are drawn sequentially from populations in increasing order of
-population ID. For example, if we specified an overall sample size of 5, and
-specify that 2 samples are drawn from population 0 and 3 from population 1,
-then individuals 0 and 1 will be initially located in population 0, and
-individuals 2, 3 and 4 will be drawn from population 2.
+population ID. For example, if we specified an overall sample size of 6, and
+specify that 2 samples are drawn from population 0 and 4 from population 1,
+then samples 0 and 1 will be initially located in population 0, and
+samples 2, 3, 4, and 5 will be drawn from population 2.
 
 Given :math:`N` populations, migration matrices are specified using an :math:`N
-\times N` matrix of deme-to-deme migration rates. See the documentation for
-:func:`.simulate` and the `Simulation model`_ section for more details on the
-migration rates.
+\times N` matrix of between-subpopulation migration rates. See the
+documentation for :func:`.simulate` and the `Simulation model`_ section for
+more details on the migration rates.
 
 .. autoclass:: msprime.PopulationConfiguration
 
-++++++++++++++++++
+.. _sec_api_demographic_events:
+
+******************
 Demographic Events
-++++++++++++++++++
+******************
 
 Demographic events change some aspect of the population configuration
 at some time in the past, and are specified using the ``demographic_events``
@@ -117,9 +141,14 @@ that are currently supported. Note that all times are measured in
 generations, all sizes are absolute (i.e., *not* relative to :math:`N_e`),
 and all rates are per-generation.
 
+Model change events are also considered to be demographic events;
+see the :ref:`sec_api_simulation_models_change_events` section for details.
+
 .. autoclass:: msprime.PopulationParametersChange
 .. autoclass:: msprime.MigrationRateChange
 .. autoclass:: msprime.MassMigration
+.. autoclass:: msprime.CensusEvent
+
 
 ++++++++++++++++++++++++++++
 Debugging demographic models
@@ -131,428 +160,322 @@ Debugging demographic models
 .. autoclass:: msprime.DemographyDebugger
     :members:
 
-++++++++++++++++++++++++++++
+****************************
 Variable recombination rates
-++++++++++++++++++++++++++++
+****************************
 
 .. autoclass:: msprime.RecombinationMap
     :members:
 
+.. _sec_api_simulation_models:
 
-************************
-Using simulation results
-************************
+*****************
+Simulation models
+*****************
 
-The :class:`.TreeSequence` class represents a sequence of correlated trees
-output by a simulation. The :class:`.SparseTree` class represents a single
-tree in this sequence.
-These classes are the interfaces used to interact with the trees
-and mutational information stored in a tree sequence returned from a simulation.
-There are also methods for loading data into these objects, either from the native
-format using :func:`msprime.load`, or from another sources
-using :func:`msprime.load_text` or :func:`msprime.load_tables`.
+The default simulation model in ``msprime`` is the standard coalescent with recombination
+model. We also support a number of different models, which are documented in this section.
 
-+++++++++++++++++
-Top level-classes
-+++++++++++++++++
+Simulations models are specified using the ``model`` parameter to
+:func:`.simulate`. This parameter can either take the form of a
+string describing the model (e.g. ``model="dtwf"``) or an instance of a
+model definition class (e.g ``model=msprime.DiscreteTimeWrightFisher(1000)``).
+The available models are documented in the following subsections.
 
+A key element of simulation models in ``msprime`` is the concept
+of a "reference population size". The ``Ne`` argument to
+:func:`simulate` can also be used to define this parameter
+when combined with a string shorthand for a model.
 
-.. autoclass:: msprime.TreeSequence()
-    :members:
+.. code-block:: python
 
-.. autoclass:: msprime.SparseTree()
-    :members:
+    msprime.simulate(10, Ne=1000, model="dtwf")
 
+and
 
-+++++++++
-Constants
-+++++++++
+.. code-block:: python
 
-These constants are used in :class:`.TreeSequence` and :class:`.SparseTree`
-instances to define special values of various variables.
+    msprime.simulate(10, model=msprime.DiscreteTimeWrightFisher(1000))
 
-.. data:: msprime.NULL_NODE == -1
+define the same simulation.
 
-    Special reserved value, representing the null node. If the parent of a
-    given node is null, then this node is either a root (the ancestor of
-    one or more samples), or the node is not present in the current tree.
-
-.. data:: msprime.NULL_POPULATION == -1
-
-    Special reserved value, representing the null population ID. This value is
-    returned if the population associated with a particular node is not
-    defined, or population information was not available in the underlying tree
-    sequence.
-
-.. data:: msprime.NULL_MUTATION == -1
-
-    Special reserved value, representing the null mutation ID. If there is a
-    single mutation at a site, or if a mutation at a given site does not have
-    an ancestal mutations it inherited from, this is the value returned by
-    ``mutation.parent``. See also :class:`.Mutation`.
+.. note:: When ``Ne`` and an instance of :class:`.SimulationModel` with
+    ``reference_size`` set are both provided as arguments to :func:`.simulate`,
+    the ``Ne`` parameter is ignored.
 
 
-.. data:: msprime.FORWARD == 1
+.. todo:: Add a discussion of population sizes here, describing
+    what Ne/model.reference_size really means, and how it interacts
+    with the individual population sizes.
 
-    Constant representing the forward direction of travel (i.e.,
-    increasing coordinate values).
+.. JK: Commented this discussion out as it seemed likely to confuse. We
+.. definitely need to give a thorough description of what's actually
+.. going on somewhere though.
 
-.. data:: msprime.REVERSE == -1
+.. Simulation models such as the coalescent are defined
+.. in terms of "scaled time". Time in the standard diploid coalescent
+.. is measured in units of :math:`N_e` generations, and
+.. one of the ways in which msprime tries to make life easier for
+.. users is to automatically convert times and rates to and
+.. from units of generations. Thus, a key responsibility for a simulation model is to
+.. convert times specified by users in generations into "model time"
+.. (in which the simulation is performed) and to tranlate the
+.. simulated model times back into generations. This is what the
+.. reference population size associated with a model is used for
+.. and fundamentally what it means.
 
-    Constant representing the reverse direction of travel (i.e.,
-    decreasing coordinate values).
+.. The situation is somewhat confused by the sizes associated
+.. with specific populations using, e.g., the
+.. :class:`.PopulationConfiguration` class. In coalescent models, these
+.. sizes are used to compute rates of coalescence, and have no direct
+.. relationship to the model's reference population size. Thus, we may
+.. have several populations, all of which have different sizes and none
+.. equal to the model's reference population size.
+.. The model's reference population size is used to scale all times
+.. and rates, irrespective of the sizes of the various individual
+.. populations.
 
+.. The situation for the :class:`.DiscreteTimeWrightFisher` model
+.. is different. In this case, there is no concept of rescaling time
+.. as time is always measured in generations. Therefore, in this case the
+.. reference population size has no function and is just used as a
+.. shortcut for specifying individual population sizes.
+
+We are often interested in simulating mixtures of models: for example,
+using the :class:`.DiscreteTimeWrightFisher` model to simulate the
+recent past and then using the standard coalescent to complete the
+simulation of the ancient past. This can be achieved using the
+:class:`.SimulationModelChange` event. See the
+:ref:`sec_tutorial_hybrid_simulations` for an example of this
+approach.
+
++++++++++++++++++++++++++++++
+Coalescent and approximations
++++++++++++++++++++++++++++++
+
+.. autoclass:: msprime.StandardCoalescent
+
+.. autoclass:: msprime.SmcApproxCoalescent
+
+.. autoclass:: msprime.SmcPrimeApproxCoalescent
+
++++++++++++++++++++++++++++
+Discrete time Wright-Fisher
++++++++++++++++++++++++++++
+
+Msprime provides the option to perform discrete-time Wright-Fisher simulations
+for scenarios when the coalescent model is not appropriate, including large
+sample sizes, multiple chromosomes, or recent migration.
+
+To use this option, set the flag ``model="dtwf"`` as in the following example::
+
+    >>> tree_sequence = msprime.simulate(
+    ...     sample_size=6, Ne=1000, length=1e4, recombination_rate=2e-8,
+    ...     model="dtwf")
+
+
+All other parameters can be set as usual.
+
+.. autoclass:: msprime.DiscreteTimeWrightFisher
+
+
+.. _sec_api_simulation_models_selective_sweeps:
+
+++++++++++++++++
+Selective sweeps
+++++++++++++++++
+
+.. todo:: Document the selective sweep models.
+
+
+.. _sec_api_simulation_models_change_events:
 
 ++++++++++++++++++++++++
-Simple container classes
+Simulation model changes
 ++++++++++++++++++++++++
 
-These classes are simple shallow containers representing the entities defined
-in the :ref:`sec_data_model`. These classes are not intended to be instantiated
-directly, but are the return types for the various iterators provided by the
-:class:`.TreeSequence` and :class:`.SparseTree` classes.
-
-.. autoclass:: msprime.Node()
-    :members:
-
-.. autoclass:: msprime.Edge()
-    :members:
-
-.. autoclass:: msprime.Site()
-    :members:
-
-.. autoclass:: msprime.Mutation()
-    :members:
-
-.. autoclass:: msprime.Variant()
-    :members:
-
-.. autoclass:: msprime.Migration()
-    :members:
-
-++++++++++++
-Loading data
-++++++++++++
-
-There are several methods for loading data into a :class:`.TreeSequence`
-instance. The simplest and most convenient is the use the :func:`msprime.load`
-function to load a :ref:`HDF ancestry file <sec_hdf5_file_format>`. For small
-scale data and debugging, it is often convenient to use the
-:func:`msprime.load_text` to read data in the :ref:`text file format
-<sec_text_file_format>`. The :func:`msprime.load_tables` function efficiently
-loads large volumes of data using the :ref:`Tables API <sec_tables_api>`.
-
-
-.. autofunction:: msprime.load
-
-.. autofunction:: msprime.load_text
-
-.. autofunction:: msprime.load_tables
-
-
-**********************
-Calculating statistics
-**********************
-
-The ``msprime`` API provides methods for efficiently calculating
-population genetics statistics from a given :class:`.TreeSequence`.
-
-.. autoclass:: msprime.LdCalculator(tree_sequence)
-    :members:
-
-
-.. _sec_tables_api:
-
-***********
-Tables API
-***********
-
-The :ref:`tables API <sec_binary_interchange>` provides an efficient way of working
-with and interchanging :ref:`tree sequence data <sec_data_model>`. Each table
-class (e.g, :class:`.NodeTable`, :class:`.EdgeTable`) has a specific set of
-columns with fixed types, and a set of methods for setting and getting the data
-in these columns. The number of rows in the table ``t`` is given by ``len(t)``.
-Each table supports accessing the data either by row or column. To access the
-row ``j`` in table ``t`` simply use ``t[j]``. The value returned by such an
-access is an instance of :func:`collections.namedtuple`, and therefore supports
-either positional or named attribute access. To access the data in
-a column, we can use standard attribute access which will return a numpy array
-of the data. For example::
-
-    >>> import msprime
-    >>> t = msprime.EdgeTable()
-    >>> t.add_row(left=0, right=1, parent=10, child=11)
-    0
-    >>> t.add_row(left=1, right=2, parent=9, child=11)
-    1
-    >>> print(t)
-    id      left            right           parent  child
-    0       0.00000000      1.00000000      10      11
-    1       1.00000000      2.00000000      9       11
-    >>> t[0]
-    EdgeTableRow(left=0.0, right=1.0, parent=10, child=11)
-    >>> t[-1]
-    EdgeTableRow(left=1.0, right=2.0, parent=9, child=11)
-    >>> t.left
-    array([ 0.,  1.])
-    >>> t.parent
-    array([10,  9], dtype=int32)
-    >>> len(t)
-    2
-    >>>
-
-Tables also support the :mod:`pickle` protocol, and so can be easily
-serialised and deserialised (for example, when performing parallel
-computations using the :mod:`multiprocessing` module). ::
-
-    >>> serialised = pickle.dumps(t)
-    >>> t2 = pickle.loads(serialised)
-    >>> print(t2)
-    id      left            right           parent  child
-    0       0.00000000      1.00000000      10      11
-    1       1.00000000      2.00000000      9       11
-
-However, pickling will not be as efficient as storing tables
-in the native :ref:`HDF5 format <sec_hdf5_file_format>`.
-
-Tables support the equality operator ``==`` based on the data
-held in the columns::
-
-    >>> t == t2
-    True
-    >>> t is t2
-    False
-    >>> t2.add_row(0, 1, 2, 3)
-    2
-    >>> print(t2)
-    id      left            right           parent  child
-    0       0.00000000      1.00000000      10      11
-    1       1.00000000      2.00000000      9       11
-    2       0.00000000      1.00000000      2       3
-    >>> t == t2
-    False
-
-
-
-.. _sec_tables_api_text_columns:
-
-++++++++++++
-Text columns
-++++++++++++
-
-As described in the :ref:`sec_encoding_ragged_columns`, working with
-variable length columns is somewhat more involved. Columns
-encoding text data store the **encoded bytes** of the flattened
-strings, and the offsets into this column in two separate
-arrays.
-
-Consider the following example::
-
-    >>> t = msprime.SiteTable()
-    >>> t.add_row(0, "A")
-    >>> t.add_row(1, "BB")
-    >>> t.add_row(2, "")
-    >>> t.add_row(3, "CCC")
-    >>> print(t)
-    id      position        ancestral_state metadata
-    0       0.00000000      A
-    1       1.00000000      BB
-    2       2.00000000
-    3       3.00000000      CCC
-    >>> t[0]
-    SiteTableRow(position=0.0, ancestral_state='A', metadata=b'')
-    >>> t[1]
-    SiteTableRow(position=1.0, ancestral_state='BB', metadata=b'')
-    >>> t[2]
-    SiteTableRow(position=2.0, ancestral_state='', metadata=b'')
-    >>> t[3]
-    SiteTableRow(position=3.0, ancestral_state='CCC', metadata=b'')
-
-Here we create a :class:`.SiteTable` and add four rows, each with a different
-``ancestral_state``. We can then access this information from each
-row in a straightforward manner. Working with the data in the columns
-is a little trickier, however::
-
-    >>> t.ancestral_state
-    array([65, 66, 66, 67, 67, 67], dtype=int8)
-    >>> t.ancestral_state_offset
-    array([0, 1, 3, 3, 6], dtype=uint32)
-    >>> msprime.unpack_strings(t.ancestral_state, t.ancestral_state_offset)
-    ['A', 'BB', '', 'CCC']
-
-Here, the ``ancestral_state`` array is the UTF8 encoded bytes of the flattened
-strings, and the ``ancestral_state_offset`` is the offset into this array
-for each row. The :func:`.unpack_strings` function, however, is a convient
-way to recover the original strings from this encoding. We can also use the
-:func:`.pack_strings` to insert data using this approach::
-
-    >>> a, off = msprime.pack_strings(["0", "12", ""])
-    >>> t.set_columns(position=[0, 1, 2], ancestral_state=a, ancestral_state_offset=off)
-    >>> print(t)
-    id      position        ancestral_state metadata
-    0       0.00000000      0
-    1       1.00000000      12
-    2       2.00000000
-
-When inserting many rows with standard infinite sites mutations (i.e.,
-ancestral state is "0"), it is more efficient to construct the
-numpy arrays directly than to create a list of strings and use
-:func:`.pack_strings`. When doing this, it is important to note that
-it is the **encoded** byte values that are stored; by default, we
-use UTF8 (which corresponds to ASCII for simple printable characters).::
-
-    >>> t_s = msprime.SiteTable()
-    >>> m = 10
-    >>> a = ord("0") + np.zeros(m, dtype=np.int8)
-    >>> off = np.arange(m + 1, dtype=np.uint32)
-    >>> t_s.set_columns(position=np.arange(m), ancestral_state=a, ancestral_state_offset=off)
-    >>> print(t_s)
-    id      position        ancestral_state metadata
-    0       0.00000000      0
-    1       1.00000000      0
-    2       2.00000000      0
-    3       3.00000000      0
-    4       4.00000000      0
-    5       5.00000000      0
-    6       6.00000000      0
-    7       7.00000000      0
-    8       8.00000000      0
-    9       9.00000000      0
-    >>> t_s.ancestral_state
-    array([48, 48, 48, 48, 48, 48, 48, 48, 48, 48], dtype=int8)
-    >>> t_s.ancestral_state_offset
-    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10], dtype=uint32)
-
-Here we create 10 sites at regular positions, each with ancestral state equal to
-"0". Note that we use ``ord("0")`` to get the ASCII code for "0" (48), and create
-10 copies of this by adding it to an array of zeros.
-
-Mutations can be handled similarly::
-
-    >>> t_m = msprime.MutationTable()
-    >>> site = np.arange(m, dtype=np.int32)
-    >>> d = ord("1") + np.zeros(m, dtype=np.int8)
-    >>> off = np.arange(m + 1, dtype=np.uint32)
-    >>> node = np.zeros(m, dtype=np.int32)
-    >>> t_m.set_columns(site=site, node=node, derived_state=d, derived_state_offset=off)
-    >>> print(t_m)
-    id      site    node    derived_state   parent  metadata
-    0       0       0       1       -1
-    1       1       0       1       -1
-    2       2       0       1       -1
-    3       3       0       1       -1
-    4       4       0       1       -1
-    5       5       0       1       -1
-    6       6       0       1       -1
-    7       7       0       1       -1
-    8       8       0       1       -1
-    9       9       0       1       -1
-    >>>
-
-
-.. _sec_tables_api_binary_columns:
-
-++++++++++++++
-Binary columns
-++++++++++++++
-
-Columns storing binary data take the same approach as
-:ref:`sec_tables_api_text_columns` to encoding
-:ref:`variable length data <sec_encoding_ragged_columns>`.
-The difference between the two is
-only raw :class:`bytes` values are accepted: no character encoding or
-decoding is done on the data. Consider the following example::
-
-
-    >>> t = msprime.NodeTable()
-    >>> t.add_row(metadata=b"raw bytes")
-    >>> t.add_row(metadata=pickle.dumps({"x": 1.1}))
-    >>> t[0].metadata
-    b'raw bytes'
-    >>> t[1].metadata
-    b'\x80\x03}q\x00X\x01\x00\x00\x00xq\x01G?\xf1\x99\x99\x99\x99\x99\x9as.'
-    >>> pickle.loads(t[1].metadata)
-    {'x': 1.1}
-    >>> print(t)
-    id      flags   population      time    metadata
-    0       0       -1      0.00000000000000        cmF3IGJ5dGVz
-    1       0       -1      0.00000000000000        gAN9cQBYAQAAAHhxAUc/8ZmZmZmZmnMu
-    >>> t.metadata
-    array([ 114,   97,  119,   32,   98,  121,  116,  101,  115, -128,    3,
-            125,  113,    0,   88,    1,    0,    0,    0,  120,  113,    1,
-             71,   63,  -15, -103, -103, -103, -103, -103, -102,  115,   46], dtype=int8)
-    >>> t.metadata_offset
-    array([ 0,  9, 33], dtype=uint32)
-
-
-Here we add two rows to a :class:`.NodeTable`, with different
-:ref:`metadata <sec_metadata_definition>`. The first row contains a simple
-byte string, and the second contains a Python dictionary serialised using
-:mod:`pickle`. We then show several different (and seemingly incompatible!)
-different views on the same data.
-
-When we access the data in a row (e.g., ``t[0].metadata``) we are returned
-a Python bytes object containing precisely the bytes that were inserted.
-The pickled dictionary is encoded in 24 bytes containing unprintable
-characters, and when we unpickle it using :func:`pickle.loads`, we obtain
-the original dictionary.
-
-When we print the table, however, we see some data which is seemingly
-unrelated to the original contents. This is because the binary data is
-`base64 encoded <https://en.wikipedia.org/wiki/Base64>`_ to ensure
-that it is print-safe (and doesn't break your terminal). (See the
-:ref:`sec_metadata_definition` section for more information on the
-use of base64 encoding.).
-
-Finally, when we print the ``metadata`` column, we see the raw byte values
-encoded as signed integers. As for :ref:`sec_tables_api_text_columns`,
-the ``metadata_offset`` column encodes the offsets into this array. So, we
-see that the metadata value is 9 bytes long and the second is 24.
-
-The :func:`pack_bytes` and :func:`unpack_bytes` functions are also useful
-for encoding data in these columns.
-
-+++++++++++++
-Table classes
-+++++++++++++
-
-.. autoclass:: msprime.NodeTable
-    :members:
-
-.. autoclass:: msprime.EdgeTable
-    :members:
-
-.. autoclass:: msprime.MigrationTable
-    :members:
-
-.. autoclass:: msprime.SiteTable
-    :members:
-
-.. autoclass:: msprime.MutationTable
-    :members:
-
-.. autoclass:: msprime.ProvenanceTable
-
-+++++++++++++++
-Table functions
-+++++++++++++++
-
-.. autofunction:: msprime.sort_tables
-
-.. autofunction:: msprime.simplify_tables
-
-.. autofunction:: msprime.parse_nodes
-
-.. autofunction:: msprime.parse_edges
-
-.. autofunction:: msprime.parse_sites
-
-.. autofunction:: msprime.parse_mutations
-
-.. autofunction:: msprime.pack_strings
-
-.. autofunction:: msprime.unpack_strings
-
-.. autofunction:: msprime.pack_bytes
-
-.. autofunction:: msprime.unpack_bytes
+.. todo:: Describe the subtleties of how simulation model changes work
+    along with how times are computed.
+
+.. autoclass:: msprime.SimulationModelChange
+
+
+.. _sec_api_simulate_from:
+
+*********************************************
+Initialising simulations from a tree sequence
+*********************************************
+
+By default ``msprime`` simulations are initialised by specifying a set of samples,
+using the ``sample_size`` or  ``samples`` parameters to :func:`.simulate`. This
+initialises the simulation with segments of ancestral material covering the
+whole sequence. Simulation then proceeds backwards in time until a most recent
+common ancestor has been found at all points along this sequence. We can
+also start simulations from different initial conditions by using the
+``from_ts`` argument to :func:`.simulate`. Informally, we take an 'unfinished'
+tree sequence as a parameter to simulate, initialise the simulation
+from the state of this tree sequence and then run the simulation until
+coalescence. The returned tree sequence is then the result of taking the
+input tree sequence and completing the trees using the coalescent.
+
+This is useful for forwards-time simulators such as
+`SLiM <https://messerlab.org/slim/>`_ that can output tree sequences. By running
+forward-time simulation for a certain number of generations we obtain a
+tree sequence, but these trees may not have had sufficient time to
+reach a most recent common ancestor. By using the ``from_ts`` argument
+to :func:`.simulate` we can combine the best of both forwards- and
+backwards-time simulators. The recent past can be simulated forwards
+in time and the ancient past by the coalescent. The coalescent
+simulation is initialised by the root segments of the
+input tree sequence, ensuring that the minimal amount of ancestral
+material possible is simulated.
+
+Please see the :ref:`tutorial <sec_tutorial_simulate_from>` for an example of how to use this
+feature with a simple forwards-time Wright-Fisher simulator
+
+++++++++++++++++++
+Input requirements
+++++++++++++++++++
+
+Any tree sequence can be provided as input to this process, but there is a
+specific topological requirement that must be met for the simulations to be
+statistically correct. To ensure that ancestral segments are correctly associated within chromosomes
+when constructing the initial conditions for the coalescent simulation,
+forward-time simulators **must** retain the nodes corresponding to the
+initial generation. Furthermore, for every sample in the final generation
+(i.e. the extant population at the present time) there must be a path
+to one of the founder population nodes. (Please see the :ref:`tutorial <sec_tutorial_simulate_from>`
+for further explanation of this point and an example.)
+
++++++++++++++++++++++++++++++
+Recombination map limitations
++++++++++++++++++++++++++++++
+
+Because of the way that ``msprime`` handles recombination internally, care must
+be taken when specifying recombination when using the ``from_ts`` argument.
+If recombination positions are generated in the same way in both the initial
+tree sequence and the coalescent simulation, then everything should work.
+However, the fine scale details of the underlying recombination model matter,
+so matching nonuniform recombination maps between simulators may not be
+possible at present. (To make it work, we must ensure that every recombination
+breakpoint in ``from_ts`` matches exactly to a possible recombination
+breakpoint in msprime's recombination map, which is not guaranteed because of
+msprime's discrete recombination model.)
+
+One case in which it is guaranteed to work is if ``from_ts`` has integer
+coordinates, and we want to simulate a coalescent with a uniform recombination
+rate. In this case, to have a uniform recombination rate ``r`` use::
+
+    L = int(from_ts.sequence_length)
+    recomb_map = msprime.RecombinationMap.uniform_map(L, r, L)
+    final_ts = mpsrime.simulate(from_ts=from_ts, recomb_map=recomb_map)
+
+
+.. _sec_api_node_flags:
+
+**********
+Node flags
+**********
+
+For standard coalescent simulations, all samples are marked with the
+:data:`tskit.NODE_IS_SAMPLE` flag; internal nodes all have a flags value of 0.
+When using the ``record_full_arg`` argument to :func:`.simulate`, the following
+flags values are defined:
+
+.. data:: msprime.NODE_IS_RE_EVENT
+
+    The node is an ARG recombination event. Each recombination event is marked
+    with two nodes, one identifying the individual providing the genetic
+    material to the left of the breakpoint and the other providing the genetic
+    material the right.
+
+.. data:: msprime.NODE_IS_CA_EVENT
+
+    The node is an ARG common ancestor event that did not result in
+    marginal coalescence.
+
+.. data:: msprime.NODE_IS_MIG_EVENT
+
+    The node is an ARG migration event identifying the individual that migrated.
+    Can be used in combination with the ``record_migrations`` argument to
+    :func:`.simulate`.
+
+.. data:: msprime.NODE_IS_CEN_EVENT
+
+    The node was created by a :class:`msprime.CensusEvent`.
+
+
+********************
+Simulating mutations
+********************
+
+When running coalescent simulations it's usually most convenient to use the
+``mutation_rate`` argument to the :func:`.simulate` function to throw neutral
+mutations down on the trees. However, sometimes we wish to throw mutations
+down on an existing tree sequence: for example, if we want to see the outcome
+of different random mutational processes on top of a single simulated topology,
+or if we have obtained the tree sequence from another program and wish to
+overlay neutral mutations on this tree sequence.
+
+.. autoclass:: msprime.InfiniteSites
+
+.. data:: msprime.BINARY == 0
+
+    The binary mutation alphabet where ancestral states are always "0" and
+    derived states "1".
+
+.. data:: msprime.NUCLEOTIDES == 1
+
+    The nucleotides mutation alphabet in which ancestral and derived states are
+    chosen from the characters "A", "C", "G" and "T".
+
+.. autofunction:: msprime.mutate
+
+*********************************
+Evaluating sampling probabilities
+*********************************
+
+``msprime`` provides the capability to evaluate the sampling probabilities:
+that of a stored tree sequence for a given diploid effective population size
+:math:`N_e` and per-link, per-generation recombination probability :math:`r`
+under the standard ancestral recombination graph; and that of a pattern of
+mutations given a tree sequence and per-site, per-generation mutation 
+probability :math:`\mu` under the infinite sites model.
+
+Specifically, the methods assume that each pair of lineages merges at rate
+:math:`1 / (2 N_e)`, and each link which separates ancestral material splits
+at rate :math:`r`. The number of mutations has a conditional Poisson
+distribution with mean :math:`T \mu`, where :math:`T` is the total branch
+length in the tree sequence, and each mutation further contributes a factor of
+:math:`l / T`, where :math:`l` is the branch length on which the mutation could
+have happened such that it appears on all of the lineages on which it is
+observed. Branch lengths must be stored in generations.
+
+For both methods, the full history of the sample must be encoded into the tree
+sequence. If the tree sequence is a realisation from the :func:`.simulate`
+function, then the ``record_full_arg`` setting must have been used to store
+recombination events, as well as coancestor events without marginal
+coalescences. Sampling probabilities of tree sequences from other sources can
+also be evaluated provided they contain the same information in the same
+format.
+
+.. autofunction:: msprime.log_arg_likelihood
+
+.. autofunction:: msprime.unnormalised_log_mutation_likelihood
+
+.. warning:: As the name suggests, the
+    :func:`.unnormalised_log_mutation_likelihood` function returns the
+    probability of the pattern of mutations given the underlying tree sequence
+    and per-site, per-generation mutation probability only up to a
+    combinatorial factor which depends on the configuration of mutations, but
+    not on the tree sequence or other parameters. As such, it is only
+    appropriate for use as a relative likelihood function. In contrast, the
+    :func:`.log_arg_likelihood` function returns the exact probability of the
+    tree sequence given the effective population size and per-link,
+    per-generation recombination probabilty.
+
+A recombination probability of zero is a permitted argument, and will return
+a finite log likelihood if there are no break points in the tree sequence, and
+a numerican representation of negative infinity, `-float("inf")`, if there are
+one or more breakpoints. Zero mutation probabilities are also permitted, and
+handled similarly.

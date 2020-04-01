@@ -59,7 +59,7 @@ object_heap_add_block(object_heap_t *self, char *mem_block)
     self->top = self->block_size;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 object_heap_expand(object_heap_t *self)
 {
     int ret = -1;
@@ -71,7 +71,7 @@ object_heap_expand(object_heap_t *self)
         goto out;
     }
     self->mem_blocks = p;
-    p = malloc(self->block_size * self->object_size);
+    p = calloc(self->block_size, self->object_size);
     if (p == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -85,7 +85,7 @@ object_heap_expand(object_heap_t *self)
     free(self->heap);
     self->heap = NULL;
     self->size += self->block_size;
-    self->heap = malloc(self->size * sizeof(void *));
+    self->heap = calloc(self->size, sizeof(void *));
     if (self->heap == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -99,7 +99,7 @@ out:
 /*
  * Returns the jth object in the memory buffers.
  */
-inline void * WARN_UNUSED
+inline void * MSP_WARN_UNUSED
 object_heap_get_object(object_heap_t *self, size_t index)
 {
     void *ret = NULL;
@@ -113,13 +113,13 @@ object_heap_get_object(object_heap_t *self, size_t index)
     return ret;
 }
 
-inline int WARN_UNUSED
+inline int MSP_WARN_UNUSED
 object_heap_empty(object_heap_t *self)
 {
     return self->top == 0;
 }
 
-inline void * WARN_UNUSED
+inline void * MSP_WARN_UNUSED
 object_heap_alloc_object(object_heap_t *self)
 {
     void *ret = NULL;
@@ -139,7 +139,7 @@ object_heap_free_object(object_heap_t *self, void *obj)
     self->top++;
 }
 
-int WARN_UNUSED
+int MSP_WARN_UNUSED
 object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
         void (*init_object)(void **, size_t))
 {
@@ -151,13 +151,13 @@ object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
     self->object_size = object_size;
     self->init_object = init_object;
     self->num_blocks = 1;
-    self->heap = malloc(self->size * sizeof(void *));
-    self->mem_blocks = malloc(sizeof(void *));
+    self->heap = calloc(self->size, sizeof(void *));
+    self->mem_blocks = calloc(1, sizeof(void *));
     if (self->heap == NULL || self->mem_blocks == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    self->mem_blocks[0] = malloc(self->size * self->object_size);
+    self->mem_blocks[0] = calloc(self->size, self->object_size);
     if (self->mem_blocks[0] == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;

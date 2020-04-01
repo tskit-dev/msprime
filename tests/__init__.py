@@ -19,16 +19,11 @@
 """
 Common code for the msprime test cases.
 """
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-
 import random
 import unittest
-import base64
 
+import numpy as np
 import msprime
-from .simplify import *  # NOQA
 
 NULL_NODE = -1
 
@@ -42,6 +37,21 @@ class MsprimeTestCase(unittest.TestCase):
     """
     Superclass of all tests msprime simulator test cases.
     """
+
+
+class SequenceEqualityMixin(object):
+    """
+    Overwrites unittest.TestCase.assertEqual to work with numpy arrays.
+
+    Note: unittest.TestCase.assertSequenceEqual also fails to work with
+    numpy arrays, and assertEqual works with ordinary lists/tuples anyway.
+    """
+    def assertEqual(self, it1, it2, msg=None):
+        if isinstance(it1, np.ndarray):
+            it1 = list(it1)
+        if isinstance(it2, np.ndarray):
+            it2 = list(it2)
+        unittest.TestCase.assertEqual(self, it1, it2, msg=msg)
 
 
 class PythonSparseTree(object):
@@ -74,6 +84,7 @@ class PythonSparseTree(object):
         ret.site_list = list(sparse_tree.sites())
         ret.index = sparse_tree.get_index()
         ret.left_root = sparse_tree.left_root
+        ret.sparse_tree = sparse_tree
         for u in range(ret.num_nodes):
             ret.parent[u] = sparse_tree.parent(u)
             ret.left_child[u] = sparse_tree.left_child(u)
@@ -181,21 +192,24 @@ class PythonSparseTree(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def newick(self, precision=0, time_scale=0):
-        # We only support 0 branch lengths here because this information isn't
-        # immediately available.
-        assert time_scale == 0 and precision == 0
-        assert len(self.roots) == 1
-        return self._build_newick(self.left_root) + ";"
+    def newick(self, root=None, precision=16, node_labels=None):
+        if node_labels is None:
+            node_labels = {u: str(u + 1) for u in self.sparse_tree.leaves()}
+        if root is None:
+            root = self.left_root
+        return self._build_newick(root, precision, node_labels) + ";"
 
-    def _build_newick(self, node):
+    def _build_newick(self, node, precision, node_labels):
+        label = node_labels.get(node, "")
         if self.left_child[node] == msprime.NULL_NODE:
-            s = "{0}".format(node + 1)
+            s = label
         else:
             s = "("
             for child in self.children(node):
-                s += self._build_newick(child) + ":0,"
-            s = s[:-1] + ")"
+                branch_length = self.sparse_tree.branch_length(child)
+                subtree = self._build_newick(child, precision, node_labels)
+                s += subtree + ":{0:.{1}f},".format(branch_length, precision)
+            s = s[:-1] + label + ")"
         return s
 
 
@@ -421,209 +435,3 @@ class PythonTreeSequence(object):
                 site for site in self._sites if st.left <= site.position < st.right]
             yield st
             st.left = st.right
-
-
-class PythonRecombinationMap(object):
-    """
-    A Python implementation of the RecombinationMap interface.
-    """
-    def __init__(self, positions, rates, num_loci):
-        assert len(positions) == len(rates)
-        assert len(positions) >= 2
-        assert sorted(positions) == positions
-        assert positions[0] == 0
-        assert positions[-1] == 1
-        self._positions = positions
-        self._rates = rates
-        self._num_loci = num_loci
-
-    def get_total_recombination_rate(self):
-        """
-        Returns the effective recombination rate for this genetic map.
-        This is the weighted mean of the rates across all intervals.
-        """
-        x = self._positions
-        effective_rate = 0
-        for j in range(len(x) - 1):
-            length = (x[j + 1] - x[j])
-            effective_rate += self._rates[j] * length
-        return effective_rate
-
-    def physical_to_genetic(self, x):
-        if self.get_total_recombination_rate() == 0:
-            ret = x
-        else:
-            s = 0
-            last_phys_x = 0
-            j = 1
-            while j < len(self._positions) - 1 and x > self._positions[j]:
-                phys_x = self._positions[j]
-                rate = self._rates[j - 1]
-                s += (phys_x - last_phys_x) * rate
-                j += 1
-                last_phys_x = phys_x
-            rate = self._rates[j - 1]
-            s += (x - last_phys_x) * rate
-            ret = 0
-            if self.get_total_recombination_rate() > 0:
-                ret = s / self.get_total_recombination_rate()
-        return ret * self._num_loci
-
-    def genetic_to_physical(self, v):
-        if self.get_total_recombination_rate() == 0:
-            return v / self._num_loci
-        # v is expressed in [0, m]. Rescale it back into the range
-        # (0, total_mass).
-        u = (v / self._num_loci) * self.get_total_recombination_rate()
-        s = 0
-        last_phys_x = 0
-        rate = self._rates[0]
-        j = 1
-        while j < len(self._positions) and s < u:
-            phys_x = self._positions[j]
-            rate = self._rates[j - 1]
-            s += (phys_x - last_phys_x) * rate
-            j += 1
-            last_phys_x = phys_x
-        y = last_phys_x - (s - u) / rate
-        return y
-
-
-class MRCACalculator(object):
-    """
-    Class to that allows us to compute the nearest common ancestor of arbitrary
-    nodes in an oriented forest.
-
-    This is an implementation of Schieber and Vishkin's nearest common ancestor
-    algorithm from TAOCP volume 4A, pg.164-167 [K11]_. Preprocesses the
-    input tree into a sideways heap in O(n) time and processes queries for the
-    nearest common ancestor between an arbitary pair of nodes in O(1) time.
-
-    :param oriented_forest: the input oriented forest
-    :type oriented_forest: list of integers
-    """
-    LAMBDA = 0
-
-    def __init__(self, oriented_forest):
-        # We turn this oriened forest into a 1 based array by adding 1
-        # to everything
-        converted = [0] + [x + 1 for x in oriented_forest]
-        self.__preprocess(converted)
-
-    def __preprocess(self, oriented_forest):
-        """
-        Preprocess the oriented forest, so that we can answer mrca queries
-        in constant time.
-        """
-        n = len(oriented_forest)
-        child = [self.LAMBDA for i in range(n)]
-        parent = [self.LAMBDA for i in range(n)]
-        sib = [self.LAMBDA for i in range(n)]
-        self.__lambda = [0 for i in range(n)]
-        self.__pi = [0 for i in range(n)]
-        self.__tau = [0 for i in range(n)]
-        self.__beta = [0 for i in range(n)]
-        self.__alpha = [0 for i in range(n)]
-        for u in range(n):
-            v = oriented_forest[u]
-            sib[u] = child[v]
-            child[v] = u
-            parent[u] = v
-        p = child[self.LAMBDA]
-        n = 0
-        self.__lambda[0] = -1
-        while p != self.LAMBDA:
-            notDone = True
-            while notDone:
-                n += 1
-                self.__pi[p] = n
-                self.__tau[n] = self.LAMBDA
-                self.__lambda[n] = 1 + self.__lambda[n >> 1]
-                if child[p] != self.LAMBDA:
-                    p = child[p]
-                else:
-                    notDone = False
-            self.__beta[p] = n
-            notDone = True
-            while notDone:
-                self.__tau[self.__beta[p]] = parent[p]
-                if sib[p] != self.LAMBDA:
-                    p = sib[p]
-                    notDone = False
-                else:
-                    p = parent[p]
-                    if p != self.LAMBDA:
-                        h = self.__lambda[n & -self.__pi[p]]
-                        self.__beta[p] = ((n >> h) | 1) << h
-                    else:
-                        notDone = False
-        # Begin the second traversal
-        self.__lambda[0] = self.__lambda[n]
-        self.__pi[self.LAMBDA] = 0
-        self.__beta[self.LAMBDA] = 0
-        self.__alpha[self.LAMBDA] = 0
-        p = child[self.LAMBDA]
-        while p != self.LAMBDA:
-            notDone = True
-            while notDone:
-                a = (
-                    self.__alpha[parent[p]] |
-                    (self.__beta[p] & -self.__beta[p])
-                )
-                self.__alpha[p] = a
-                if child[p] != self.LAMBDA:
-                    p = child[p]
-                else:
-                    notDone = False
-            notDone = True
-            while notDone:
-                if sib[p] != self.LAMBDA:
-                    p = sib[p]
-                    notDone = False
-                else:
-                    p = parent[p]
-                    notDone = p != self.LAMBDA
-
-    def get_mrca(self, x, y):
-        """
-        Returns the most recent common ancestor of the nodes x and y,
-        or -1 if the nodes belong to different trees.
-
-        :param x: the first node
-        :param y: the second node
-        :return: the MRCA of nodes x and y
-        """
-        # WE need to rescale here because SV expects 1-based arrays.
-        return self._sv_mrca(x + 1, y + 1) - 1
-
-    def _sv_mrca(self, x, y):
-        if self.__beta[x] <= self.__beta[y]:
-            h = self.__lambda[self.__beta[y] & -self.__beta[x]]
-        else:
-            h = self.__lambda[self.__beta[x] & -self.__beta[y]]
-        k = self.__alpha[x] & self.__alpha[y] & -(1 << h)
-        h = self.__lambda[k & -k]
-        j = ((self.__beta[x] >> h) | 1) << h
-        if j == self.__beta[x]:
-            xhat = x
-        else:
-            ell = self.__lambda[self.__alpha[x] & ((1 << h) - 1)]
-            xhat = self.__tau[((self.__beta[x] >> ell) | 1) << ell]
-        if j == self.__beta[y]:
-            yhat = y
-        else:
-            ell = self.__lambda[self.__alpha[y] & ((1 << h) - 1)]
-            yhat = self.__tau[((self.__beta[y] >> ell) | 1) << ell]
-        if self.__pi[xhat] <= self.__pi[yhat]:
-            z = xhat
-        else:
-            z = yhat
-        return z
-
-
-def base64_encode(metadata):
-    """
-    Returns the specified metadata bytes object encoded as an ASCII-safe
-    string.
-    """
-    return base64.b64encode(metadata).decode('utf8')

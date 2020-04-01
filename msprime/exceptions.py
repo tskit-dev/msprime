@@ -21,7 +21,37 @@ Exceptions defined in mprime.
 """
 
 
-class DuplicatePositionsError(Exception):
+class MsprimeException(Exception):
+    """
+    Superclass of all exceptions thrown.
+    """
+
+
+class DuplicatePositionsError(MsprimeException):
     """
     Duplicate positions in the list of sites.
+    """
+
+
+class FileFormatError(MsprimeException):
+    """
+    Some file format error was detected.
+    """
+
+
+class VersionTooNewError(FileFormatError):
+    """
+    The version of the file is too new and cannot be read by the library.
+    """
+
+
+class VersionTooOldError(FileFormatError):
+    """
+    The version of the file is too old and cannot be read by the library.
+    """
+
+
+class ProvenanceValidationError(MsprimeException):
+    """
+    A JSON document did non validate against the provenance schema.
     """

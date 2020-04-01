@@ -24,20 +24,11 @@ import pkg_resources
 
 from unittest.mock import MagicMock
 
-_table_classes = [
-    "NodeTable", "EdgeTable", "MigrationTable", "SiteTable", "MutationTable",
-    "ProvenanceTable"]
-
 
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
-        # To get the documentation to build correctly for the table classes
-        # we need to jump through this hoop.
-        if name in _table_classes:
-            return MagicMock
-        else:
-            return MagicMock()
+        return MagicMock()
 
 MOCK_MODULES = ["_msprime"]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
@@ -73,7 +64,7 @@ def patched_make_field(self, types, domain, items, env):
             # inconsistencies later when references are resolved
             fieldtype = types.pop(fieldarg)
             if len(fieldtype) == 1 and isinstance(fieldtype[0], nodes.Text):
-                typename = u''.join(n.astext() for n in fieldtype)
+                typename = ''.join(n.astext() for n in fieldtype)
                 par.extend(self.make_xrefs(self.typerolename, domain, typename,
                                            addnodes.literal_emphasis))
             else:
@@ -113,6 +104,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
     'sphinxarg.ext',
+    'sphinx_issues',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -130,9 +122,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'msprime'
-copyright = u'2015-2017, Jerome Kelleher'
-author = u'Jerome Kelleher'
+project = 'msprime'
+copyright = '2015-2019, Jerome Kelleher'
+author = 'Jerome Kelleher'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -309,8 +301,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  (master_doc, 'msprime.tex', u'msprime Documentation',
-   u'Jerome Kelleher', 'manual'),
+  (master_doc, 'msprime.tex', 'msprime Documentation',
+   'Jerome Kelleher', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -339,7 +331,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'msprime', u'msprime Documentation',
+    (master_doc, 'msprime', 'msprime Documentation',
      [author], 1)
 ]
 
@@ -353,7 +345,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'msprime', u'msprime Documentation',
+  (master_doc, 'msprime', 'msprime Documentation',
    author, 'msprime', 'One line description of project.',
    'Miscellaneous'),
 ]
@@ -372,6 +364,11 @@ texinfo_documents = [
 
 intersphinx_mapping = {
     'https://docs.python.org/3/': None,
-    # Disabling numpy lookup as scipy.org not reachable.
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
+    'tskit': ('https://tskit.readthedocs.io/en/stable', None),
+    'stdpopsim': ('https://stdpopsim.readthedocs.io/en/stable', None),
 }
+
+# Github repo
+issues_github_path = "tskit-dev/msprime"
+

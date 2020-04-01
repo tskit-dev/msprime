@@ -26,9 +26,9 @@ Contents:
    tutorial
    api
    cli
-   interchange
    development
    CITATION
+   changelog
 
 Indices and tables
 ==================

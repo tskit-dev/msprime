@@ -1,3 +1,284 @@
+***************************
+[UPCOMING.X.X] - XXXX-XX-XX
+***************************
+
+**New features**:
+
+- Complete provenance recording of all arguments to simulate and mutate.
+  Adds argument record_provenance to simulate, which allows recording of
+  provenances to be disabled, for example when they are large.
+  (:user:`benjeffery` :pr:`914`).
+
+- Add replicate_index to simulate, allowing output of a single tree sequence
+  from a set of replicates. (:user:`benjeffery` :pr:`914`).
+
+********************
+[0.7.4] - 2019-12-05
+********************
+
+**Bug fixes**:
+
+- Fix error in mspms output of tree spans. In previous versions, the length of
+  genome spanned by trees in the newick output was incorrect in certain situations
+  (specifically, when "invisible" recombinations are present so that two or more
+  identical trees are printed out). Thanks to :user:`fbaumdicker` for spotting
+  the problem. (:user:`jeromekelleher`, :pr:`837`, :issue:`836`)
+
+- Fix assertion tripped when we have very low recombination rates in the DTWF
+  model. Thanks to :user:`terhorst` for the bug report.
+  (:user:`jeromekelleher`, :pr:`833`, :issue:`831`).
+
+- Fix bug in memory allocation when simulating mutations on a tree sequence
+  that already contains many mutations. Thanks to :user:`santaci` for the
+  bug report. (:user:`jeromekelleher`, :user:`petrelharp`, :pr:`838`,
+  :issue:`806`)
+
+**New features**:
+
+- Add the new Census event, which allows us to place nodes on all extant
+  branches at a given time (:user:`gtsambos` :pr:`799`).
+
+- Improved error reporting for input parameters, in particular
+  demographic events (:pr:`829`).
+
+**Documentation**:
+
+- Improved container documentation (:user:`agladstein`, :pr:`822`, :issue:`809`).
+
+- Improved developer docs for macs (:user:`gtsambos`, :user:`molpopgen`, :pr:`805`).
+
+- Clarify meaning of migration matrix (:user:`petrelharp`, :pr:`830`).
+
+********************
+[0.7.3] - 2019-08-03
+********************
+
+**Bug fixes**:
+
+- Support for SMC models coupled with the record_full_arg feature was
+  erroneously removed in a previous version (:issue:`795`). The feature
+  has been resinstated (:pr:`796`).
+
+********************
+[0.7.2] - 2019-07-30
+********************
+
+**Breaking changes**
+
+- The random trajectory has been changed slightly to improve handling
+  of ancient sampling events (:pr:`782`). Thus, simulations for a given
+  random seed will not be identical to previous versions, if ancient
+  samples are used.
+
+**New features**
+
+- Automated Docker builds (:user:`agladstein`; :pr:`661`)
+- Add mean coalescence time to DemographyDebugger (:user:`petrelharp`; :pr:`779`).
+- Improve MassMigration descriptions in DemographyDebugger
+  (:user:`marianne-aspbury`; :pr:`791`).
+
+**Bug fixes**:
+
+- In very, very, very rare cases it was possible to generate a
+  zero waiting time until the next coalescent event, leading to
+  zero branch lengths in the output tree sequence and an error
+  being raised (:user:`molpopgen`, :user:`DL42`, :user:`jeromekelleher`;
+  :issue:`783`, :pr:`785`).
+
+********************
+[0.7.1] - 2019-06-08
+********************
+
+**New features**
+
+- Discrete Time Wright-Fisher simulation model (:user:`DomNelson`).
+- SMC/SMC' simulation models (:user:`jeromekelleher`).
+- Mixed simulation models (:user:`jeromekelleher`).
+- Specify ``end_time`` to allow early-finish for simulations (:user:`jeromekelleher`).
+- Calculation of historical coalescence rates in the DemographyDebugger
+  (:user:`jgallowa07`, :user:`petrelharp`).
+- Additional information on population sizes in DemographyDebugger
+  (:user:`andrewkern`).
+- Remove support for Python 2 (:user:`hugovk`).
+- Allow specifying metadata for populations (:user:`jeromekelleher`).
+
+**Bug fixes**:
+
+- Various minor bug and doc fixes from :user:`hyanwong`, :user:`petrelharp`,
+  :user:`brianzhang01`, :user:`mufernando` and :user:`andrewkern`.
+
+
+**********************
+[0.7.1b1] - 2019-05-31
+**********************
+
+Early release making DTWF code available to beta testers.
+
+********************
+[0.7.0] - 2019-02-19
+********************
+
+Separation of tskit from msprime. Msprime is now solely dedicated to simulating
+the coalescent, and all infrastucture for working with succinct tree sequences
+is now provided by tskit. To ensure compatability, msprime now imports code
+from tskit under the old names, which should ensure that all code continues
+to work without changes.
+
+**New features**
+
+- Ability to record the full ARG (:user:`jerekoskela`; :issue:`665`)
+
+**Bug fixes**:
+
+- Fix deprecation warning (:issue:`695`).
+
+
+**********************
+[0.7.0a1] - 2019-01-14
+**********************
+
+Alpha release for testing the tskit/msprime split.
+
+********************
+[0.6.2] - 2018-12-04
+********************
+
+Minor bugfix release.
+
+**New features**:
+- Add provenance recording option to simplify (#601)
+- Minor performance improvement (#598)
+
+**Bug fixes**:
+
+- Fix performance regression in replication (#608)
+
+
+********************
+[0.6.1] - 2018-08-25
+********************
+
+Significant features for integration with forwards-time simulators plus
+improvements and bugfixes.
+
+**Breaking changes**:
+
+- Change in the semantics of how populations are treated by simplify. By
+  default, populations that are not referenced will now be removed from the
+  data model. This can be avoided by setting ``filter_populations=False``.
+
+- Simplify now raises an error if called on a set of tables that contain
+  one or more migrations.
+
+**New features**:
+
+- The simulate() function now supports a ``from_ts`` argument allowing
+  msprime to complete the ancestry in tree sequences generated by
+  forward simulations (#503, #541, #572, #581).
+
+- Add start_time and end_time parameters to the ``mutate`` function (#508).
+
+- Add ``reduce_to_site_topology`` argument to simplify. This allows us to
+  find the minimal tree sequence that would be visible from a given set
+  of sites, and is also a useful compression method if we are only interested
+  in the observed sequences. (#545, #307).
+
+- Simplify generalised to support individuals, and the ``filter_populations``,
+  ``filter_individuals`` and ``filter_sites`` parameters added to allow
+  filtering of unreferenced objects from the data model. (#567).
+
+- Default random seeds are now generated from a sequence initialised by
+  a system source of randomness (#534). Random seeds should also be safely generated
+  across multiple processes.
+
+- Full text I/0 support for Individuals and Populations (#498, #555)
+
+- Substantially improved performance in ``msprime.load`` for large tables
+  and significant refactoring of C code (#559, #567, #569).
+
+- Improved performance of generating genotypes (#580).
+
+- Formal schema for tree sequence provenance (#566, #583).
+
+- Many updates to documentation.
+
+**Bug fixes**:
+
+- Throw a more intelligle error during simulation if a topology is produced
+  where the time of a parent is equal to the time of the child. (#570, #87).
+
+- Pickle supported in the TableCollection object. (#574, #577).
+
+**Deprecated**:
+
+- The ``filter_zero_mutation_sites`` parameter for simplify has been deprecated
+  in favour of ``filter_sites``.
+
+********************
+[0.6.0] - 2018-06-20
+********************
+
+This release is focused on ensuring interoperability with the forthcoming SLiM
+3.0 release, which has support for outputting tree sequences in msprime's
+.trees format. The release represents a substantial step towards the goal of
+separating the ``tskit`` code from ``msprime``. It removes the troublesome HDF5
+dependency in favour of the much simpler ``kastore`` library.
+
+The principle new features are the mutate() function which allows us to easily
+add mutations to any tree sequence, preliminary support for Individuals and
+Populations within the data model, and the addition of the new TableCollection
+object as the central structure in the Tables API.
+
+**Breaking changes**:
+
+- Files stored in the HDF5 format will need to upgraded using the
+  ``msp upgrade`` command.
+
+**New features**:
+
+- The mutate function (#507).
+
+- Removed HDF5 library dependency. Now use the embedded kastore library
+  for storing data.
+
+- Numpy and h5py are now install time dependencies, solving some installation
+  headaches.
+
+- The new TableCollection type  gives much tighter integration with the
+  low-level library. Functions like sort_tables and simplify_tables are
+  now methods of this class. The load_tables function has been replaced
+  by TableCollection.tree_sequence. These functions still work, but are
+  deprecated.
+
+- Preliminary support for Individual and Population types in the Tables
+  API and for TreeSequences.
+
+- Add 'root' argument to SparseTree.newick and support for arbitrary
+  node labels (#510).
+
+- Larger numbers of alleles now supported via 16-bit genotypes (#466).
+
+- Substantially improved simplify performance when there is a large
+  number of sites (#453).
+
+
+**Bug fixes**:
+
+- Fix bug in tree drawing with many roots (#486)
+
+- Fix segfault in accessing trees with zero roots (#515)
+
+- Fix bug where DemographyDebugger was modifying the input sample sizes (#407)
+
+
+**Deprecated**:
+
+- sort_tables is deprecated in favour of TableCollection.sort().
+
+- simplify_tables is deprecated in favour of TableCollection.simplify().
+
+- load_tables is deprecated in favour of TableCollection.tree_sequence().
+
 ********************
 [0.5.0] - 2018-02-26
 ********************
@@ -167,12 +448,12 @@ upcoming functionality.
 - Similarly, the undocumented ``variants`` method has some major changes:
 
   1. The returned tuple has two new values, ``node`` and ``index``
-    in the middle of the tuple (but see the point above about using
-    named attributes).
+     in the middle of the tuple (but see the point above about using
+     named attributes).
 
   2. The returned genotypes are by default numpy arrays. To revert
-    to the old behaviour of returning Python bytes objects, use the
-    ``as_bytes`` argument to the ``variants()`` method.
+     to the old behaviour of returning Python bytes objects, use the
+     ``as_bytes`` argument to the ``variants()`` method.
 
 **New features**:
 

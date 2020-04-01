@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -25,29 +25,11 @@
 #include <errno.h>
 #include <assert.h>
 
-#include <hdf5.h>
-
+#include <tskit/core.h>
 #include "util.h"
 
-#define MSP_HDF5_ERR_MSG_SIZE 1024
-
-static char _hdf5_error[MSP_HDF5_ERR_MSG_SIZE];
-
-static herr_t
-hdf5_error_walker(unsigned n, const H5E_error2_t *err_desc, void *client_data)
-{
-    /* We only copy the message from the first element in the error stack */
-    if (_hdf5_error[0] == '\0') {
-        snprintf(_hdf5_error, MSP_HDF5_ERR_MSG_SIZE,
-                "HDF5 Error: %d: %d:'%s'",
-                (int) err_desc->maj_num, (int) err_desc->min_num,
-                err_desc->desc);
-    }
-    return 0;
-}
-
-const char *
-msp_strerror(int err)
+static const char *
+msp_strerror_internal(int err)
 {
     const char *ret = "Unknown error";
 
@@ -61,14 +43,8 @@ msp_strerror(int err)
         case MSP_ERR_GENERIC:
             ret = "Generic error; please file a bug report";
             break;
-        case MSP_ERR_FILE_FORMAT:
-            ret = "File format error";
-            break;
         case MSP_ERR_BAD_STATE:
             ret = "Bad simulator state. Initialise or reset must be called.";
-            break;
-        case MSP_ERR_BUFFER_OVERFLOW:
-            ret = "Supplied buffer if too small";
             break;
         case MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS:
             ret = "Demographic events must be time sorted.";
@@ -76,23 +52,11 @@ msp_strerror(int err)
         case MSP_ERR_POPULATION_OVERFLOW:
             ret = "Population Overflow occurred.";
             break;
-        case MSP_ERR_LINKS_OVERFLOW:
-            ret = "Links Overflow occurred.";
-            break;
         case MSP_ERR_OUT_OF_BOUNDS:
-            ret = "Array index out of bounds";
-            break;
-        case MSP_ERR_BAD_ORDERING:
-            ret = "Bad record ordering requested";
-            break;
-        case MSP_ERR_BAD_MUTATION:
-            ret = "Bad mutation provided";
+            ret = "Object reference out of bounds";
             break;
         case MSP_ERR_BAD_PARAM_VALUE:
             ret = "Bad parameter value provided";
-            break;
-        case MSP_ERR_UNSUPPORTED_OPERATION:
-            ret = "Operation cannot be performed in current configuration";
             break;
         case MSP_ERR_BAD_POPULATION_CONFIGURATION:
             ret = "Bad population configuration provided.";
@@ -100,8 +64,8 @@ msp_strerror(int err)
         case MSP_ERR_BAD_POPULATION_SIZE:
             ret = "Bad population size provided. Must be > 0.";
             break;
-        case MSP_ERR_BAD_POPULATION_ID:
-            ret = "Bad population id provided.";
+        case MSP_ERR_POPULATION_OUT_OF_BOUNDS:
+            ret = "Population ID out of bounds.";
             break;
         case MSP_ERR_BAD_MIGRATION_MATRIX:
             ret = "Bad migration matrix provided.";
@@ -127,158 +91,101 @@ msp_strerror(int err)
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
             break;
-        case MSP_ERR_ZERO_RECORDS:
-            ret = "At least one record must be supplied";
-            break;
-        case MSP_ERR_EDGES_NOT_SORTED_PARENT_TIME:
-            ret = "Edges must be listed in (time[parent], child, left) order;"
-                " time[parent] order violated";
-            break;
-        case MSP_ERR_EDGES_NONCONTIGUOUS_PARENTS:
-            ret = "All edges for a given parent must be contiguous";
-            break;
-        case MSP_ERR_EDGES_NOT_SORTED_CHILD:
-            ret = "Edges must be listed in (time[parent], child, left) order;"
-                " child order violated";
-            break;
-        case MSP_ERR_EDGES_NOT_SORTED_LEFT:
-            ret = "Edges must be listed in (time[parent], child, left) order;"
-                " left order violated";
-            break;
-        case MSP_ERR_NULL_PARENT:
-            ret = "Edge in parent is null.";
-            break;
-        case MSP_ERR_NULL_CHILD:
-            ret = "Edge in parent is null.";
-            break;
-        case MSP_ERR_BAD_NODE_TIME_ORDERING:
-            ret = "time[parent] must be greater than time[child]";
-            break;
-        case MSP_ERR_BAD_EDGE_INTERVAL:
-            ret = "Bad edge interval where right <= left";
-            break;
-        case MSP_ERR_DUPLICATE_EDGES:
-            ret = "Duplicate edges provided.";
-            break;
-        case MSP_ERR_CANNOT_SIMPLIFY:
-            ret = "Cannot simplify the tree sequence; no output records.";
-            break;
         case MSP_ERR_BAD_SAMPLES:
             ret = "Bad sample configuration provided.";
-            break;
-        case MSP_ERR_FILE_VERSION_TOO_OLD:
-            ret = "HDF5 file version too old. Please upgrade using the "
-                "'msp upgrade' command";
-            break;
-        case MSP_ERR_FILE_VERSION_TOO_NEW:
-            ret = "HDF5 file version is too new for this version of msprime. "
-                "Please upgrade msprime to the latest version.";
-            break;
-        case MSP_ERR_DUPLICATE_SAMPLE:
-            ret = "Duplicate value provided in tracked leaf list.";
-            break;
-        case MSP_ERR_REFCOUNT_NONZERO:
-            ret = "Cannot change the state of the tree sequence when "
-                "other objects reference it. Make sure all trees are freed first.";
             break;
         case MSP_ERR_BAD_MODEL:
             ret = "Model error. Either a bad model, or the requested operation "
                 "is not supported for the current model";
             break;
-        case MSP_ERR_NOT_INITIALISED:
-            ret = "object not initialised. Please file a bug report.";
+        case MSP_ERR_INCOMPATIBLE_FROM_TS:
+            ret = "The specified tree sequence is not a compatible starting point "
+                "for the current simulation";
             break;
-        case MSP_ERR_DUPLICATE_MUTATION_NODES:
-            ret = "Cannot have more than one mutation at a node for a given site.";
+        case MSP_ERR_BAD_START_TIME_FROM_TS:
+            ret = "The specified start_time and from_ts are not compatible. All "
+                "node times in the tree sequence must be <= start_time.";
             break;
-        case MSP_ERR_NONBINARY_MUTATIONS_UNSUPPORTED:
-            ret = "Only binary mutations are supported for this operation.";
+        case MSP_ERR_BAD_START_TIME:
+            ret = "start_time must be >= 0.";
             break;
-        case MSP_ERR_INCONSISTENT_MUTATIONS:
-            ret = "Inconsistent mutations: state already equal to derived state.";
+        case MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME:
+            ret = "demographic event time must be >= start_time.";
             break;
-        case MSP_ERR_COORDINATE_NOT_FOUND:
-            ret = "Coordinate not found.";
+        case MSP_ERR_RECOMB_MAP_TOO_COARSE:
+            ret = "The specified recombination map is cannot translate the coordinates"
+                "for the specified tree sequence. It is either too coarse (num_loci "
+                "is too small) or contains zero recombination rates. Please either "
+                "increase the number of loci or recombination rate";
             break;
-        case MSP_ERR_BAD_NODES_ARRAY:
-            ret = "Malformed nodes array.";
+        case MSP_ERR_TIME_TRAVEL:
+            ret = "The simulation model supplied resulted in a parent node having "
+                "a time value <= to its child. This can occur either as a result "
+                "of multiple bottlenecks happening at the same time or because of "
+                "numerical imprecision with very small population sizes.";
             break;
-        case MSP_ERR_BAD_CHILDREN_ARRAY:
-            ret = "Malformed array of children.";
+        case MSP_ERR_INTEGRATION_FAILED:
+            ret = "GSL numerical integration failed. Please check the stderr for details.";
             break;
-        case MSP_ERR_SITE_OUT_OF_BOUNDS:
-            ret = "Site out of bounds";
+        case MSP_ERR_BAD_SWEEP_POSITION:
+            ret = "Sweep position must be between 0 and sequence length.";
             break;
-        case MSP_ERR_NODE_OUT_OF_BOUNDS:
-            ret = "Node out of bounds";
+        case MSP_ERR_BAD_TIME_DELTA:
+            ret = "Time delta values must be > 0.";
             break;
-        case MSP_ERR_LENGTH_MISMATCH:
-            ret = "Mismatch in stored total column length and sum of row lengths";
+        case MSP_ERR_BAD_ALLELE_FREQUENCY:
+            ret = "Allele frequency values must be between 0 and 1.";
             break;
-        case MSP_ERR_NON_SINGLE_CHAR_MUTATION:
-            ret = "Only single char mutations supported.";
+        case MSP_ERR_BAD_TRAJECTORY_START_END:
+            ret = "Start frequency must be less than end frequency";
             break;
-        case MSP_ERR_UNSORTED_SITES:
-            ret = "Sites must be provided in strictly increasing position order.";
+        case MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA:
+            ret = "alpha must be > 0";
             break;
-        case MSP_ERR_BAD_SITE_POSITION:
-            ret = "Sites positions must be between 0 and sequence_length";
+        case MSP_ERR_EVENTS_DURING_SWEEP:
+            ret = "Demographic and sampling events during a sweep "
+                "are not supported";
             break;
-        case MSP_ERR_UNSORTED_MUTATIONS:
-            ret = "Mutations must be provided in non-decreasing site order";
+        case MSP_ERR_UNSUPPORTED_OPERATION:
+            ret = "Current simulation configuration is not supported.";
             break;
-        case MSP_ERR_EDGESETS_FOR_PARENT_NOT_ADJACENT:
-            ret = "All edges for a given parent must be adjacent.";
+        case MSP_ERR_DTWF_ZERO_POPULATION_SIZE:
+            ret = "Population size has decreased to zero individuals.";
             break;
-        case MSP_ERR_BAD_EDGESET_CONTRADICTORY_CHILDREN:
-            ret = "Bad edges: contradictory children for a given parent over "
-                "an interval.";
+        case MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK:
+            ret = "Bottleneck events are not supported in the DTWF model. "
+                "They can be implemented as population size changes.";
             break;
-        case MSP_ERR_BAD_EDGESET_OVERLAPPING_PARENT:
-            ret = "Bad edges: multiple definitions of a given parent over an interval";
+        case MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES:
+            ret = "The number of haploid lineages denoted by sample_size must "
+                "be divisible by ploidy (default 2)";
             break;
-        case MSP_ERR_MULTIROOT_NEWICK:
-            ret = "Newick output not supported for trees with > 1 roots.";
+        case MSP_ERR_BAD_PEDIGREE_ID:
+            ret = "Individual IDs in pedigrees must be strictly > 0.";
             break;
-        case MSP_ERR_BAD_SEQUENCE_LENGTH:
-            ret = "Sequence length must be > 0.";
+        case MSP_ERR_BAD_PROPORTION:
+            ret = "Proportion values must have 0 <= x <= 1";
             break;
-        case MSP_ERR_RIGHT_GREATER_SEQ_LENGTH:
-            ret = "Right coordinate > sequence length.";
+        case MSP_ERR_BAD_BETA_MODEL_ALPHA:
+            ret = "Bad alpha. Must have 1 < alpha < 2";
             break;
-        case MSP_ERR_MUTATION_OUT_OF_BOUNDS:
-            ret = "mutation ID out of bounds";
+        case MSP_ERR_BAD_TRUNCATION_POINT:
+            ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
             break;
-        case MSP_ERR_MUTATION_PARENT_DIFFERENT_SITE:
-            ret = "Specified parent mutation is at a different site.";
+        case MSP_ERR_BAD_MUTATION_MAP_RATE:
+            ret = "Bad mutation rate; must be >= 0.";
             break;
-        case MSP_ERR_MUTATION_PARENT_EQUAL:
-            ret = "Parent mutation refers to itself.";
+        case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
+            ret = "Mutation map is not compatible with specified tables.";
             break;
-        case MSP_ERR_MUTATION_PARENT_AFTER_CHILD:
-            ret = "Parent mutation ID must be < current ID.";
+        case MSP_ERR_INSUFFICIENT_INTERVALS:
+            ret = "At least one interval must be specified.";
             break;
-        case MSP_ERR_BAD_OFFSET:
-            ret = "Bad offset provided in input array.";
+        case MSP_ERR_INTERVAL_MAP_START_NON_ZERO:
+            ret = "The first interval must start with zero";
             break;
-        case MSP_ERR_TOO_MANY_ALLELES:
-            ret = "Cannot have more than 255 alleles.";
-            break;
-        case MSP_ERR_IO:
-            if (errno != 0) {
-                ret = strerror(errno);
-            } else {
-                ret = "Unspecified IO error";
-            }
-            break;
-        case MSP_ERR_HDF5:
-            _hdf5_error[0] = '\0';
-            if (H5Ewalk2(H5E_DEFAULT, H5E_WALK_UPWARD, hdf5_error_walker, NULL)
-                    != 0) {
-                ret = "Eek! Error handling HDF5 error.";
-                goto out;
-            }
-            ret = _hdf5_error;
+        case MSP_ERR_INTERVAL_POSITIONS_UNSORTED:
+            ret = "Interval positions must be listed in increasing order";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
@@ -287,6 +194,30 @@ msp_strerror(int err)
     }
 out:
     return ret;
+}
+
+int
+msp_set_tsk_error(int err)
+{
+    /* Flip this bit. As the error is negative, this sets the bit to 0 */
+    return err ^ (1 << MSP_TSK_ERR_BIT);
+}
+
+bool
+msp_is_tsk_error(int err)
+{
+    return !(err & (1 << MSP_TSK_ERR_BIT));
+}
+
+const char *
+msp_strerror(int err)
+{
+    if (msp_is_tsk_error(err)) {
+        err ^= (1 << MSP_TSK_ERR_BIT);
+        return tsk_strerror(err);
+    } else {
+        return msp_strerror_internal(err);
+    }
 }
 
 void
@@ -299,104 +230,29 @@ __msp_safe_free(void **ptr) {
     }
 }
 
-/* Block allocator. Simple allocator when we lots of chunks of memory
- * and don't need to free them individually.
+/* Find the `index` of the interval within `values` the `query` fits, such that
+ * values[index-1] < query <= values[index]
+ * Will find the leftmost such index
+ * Assumes `values` are sorted
  */
-
-void
-block_allocator_print_state(block_allocator_t *self, FILE *out)
+size_t
+msp_binary_interval_search(double query, const double *values, size_t n_values)
 {
-    fprintf(out, "Block allocator%p::\n", (void *) self);
-    fprintf(out, "\ttop = %d\n", (int) self->top);
-    fprintf(out, "\tchunk_size = %d\n", (int) self->chunk_size);
-    fprintf(out, "\tnum_chunks = %d\n", (int) self->num_chunks);
-    fprintf(out, "\ttotal_allocated = %d\n", (int) self->total_allocated);
-    fprintf(out, "\ttotal_size = %d\n", (int) self->total_size);
-}
-
-int WARN_UNUSED
-block_allocator_reset(block_allocator_t *self)
-{
-    int ret = 0;
-
-    self->top = 0;
-    self->current_chunk = 0;
-    self->total_allocated = 0;
-    return ret;
-}
-
-int WARN_UNUSED
-block_allocator_alloc(block_allocator_t *self, size_t chunk_size)
-{
-    int ret = 0;
-
-    assert(chunk_size > 0);
-    memset(self, 0, sizeof(block_allocator_t));
-    self->chunk_size = chunk_size;
-    self->top = 0;
-    self->current_chunk = 0;
-    self->total_allocated = 0;
-    self->total_size = 0;
-    self->num_chunks = 0;
-    self->mem_chunks = malloc(sizeof(char *));
-    if (self->mem_chunks == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+    if (n_values == 0) {
+        return 0;
     }
-    self->mem_chunks[0] = malloc(chunk_size);
-    if (self->mem_chunks[0] == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    self->num_chunks = 1;
-    self->total_size = chunk_size + sizeof(void *);
-out:
-    return ret;
-}
+    size_t l = 0;
+    size_t r = n_values - 1;
+    size_t m;
 
-void * WARN_UNUSED
-block_allocator_get(block_allocator_t *self, size_t size)
-{
-    void *ret = NULL;
-    void *p;
+    while (l < r) {
+        m = (l + r) / 2UL;
 
-    assert(size < self->chunk_size);
-    if ((self->top + size) > self->chunk_size) {
-        if (self->current_chunk == (self->num_chunks - 1)) {
-            p = realloc(self->mem_chunks, (self->num_chunks + 1) * sizeof(void *));
-            if (p == NULL) {
-                goto out;
-            }
-            self->mem_chunks = p;
-            p = malloc(self->chunk_size);
-            if (p == NULL) {
-                goto out;
-            }
-            self->mem_chunks[self->num_chunks] = p;
-            self->num_chunks++;
-            self->total_size += self->chunk_size + sizeof(void *);
-        }
-        self->current_chunk++;
-        self->top = 0;
-    }
-    ret = self->mem_chunks[self->current_chunk] + self->top;
-    self->top += size;
-    self->total_allocated += size;
-out:
-    return ret;
-}
-
-void
-block_allocator_free(block_allocator_t *self)
-{
-    size_t j;
-
-    for (j = 0; j < self->num_chunks; j++) {
-        if (self->mem_chunks[j] != NULL) {
-            free(self->mem_chunks[j]);
+        if (values[m] < query) {
+            l = m + 1;
+        } else {
+            r = m;
         }
     }
-    if (self->mem_chunks != NULL) {
-        free(self->mem_chunks);
-    }
+    return l;
 }

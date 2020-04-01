@@ -1,3 +1,4 @@
-six
-setuptools_scm 
+setuptools_scm
 sphinx-argparse
+sphinx-issues
+tskit

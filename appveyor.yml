@@ -1,31 +1,32 @@
 environment:
   matrix:
-    - PYTHON: "C:\\Miniconda35-x64"
+    # Only using the latest version of Python here as builds are slow.
+    - PYTHON_VERSION: "3.7"
 
-    - PYTHON: "C:\\Miniconda35"
-
-    - PYTHON: "C:\\Miniconda36-x64"
-
-    - PYTHON: "C:\\Miniconda36"
+init:
+  - cmd: SET PYTHON=C:\\Miniconda37-x64
+  - cmd: ECHO Using %PYTHON%
 
 install:
-  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - cmd: SET PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%
+  - cmd: git submodule update --init --recursive
+  # We have symlinks in the repo, which need to be treated specially on Windows.
+  - cmd: git config core.symlinks true
+  - cmd: git reset --hard
+  - cmd: conda config --add channels conda-forge
+  - cmd: conda create --yes -n testenv python=%PYTHON_VERSION%
+  - cmd: activate testenv
+  - cmd: conda install --yes --file=requirements\conda-minimal.txt
+  - cmd: conda info -a
+  - cmd: python --version
 
-build: false
-
-test_script:
-  - "conda config --add channels conda-forge"
-  - "conda install --yes --file=requirements/conda-minimal.txt"
-  - "pip install svgwrite"  # svgwrite isn't available in conda
-  - "pip install PyVCF"  
-  - "pip install newick"  
-  - "pip install python_jsonschema_objects"
-
-  # There seems to be an issue here, where we're not using the correct 
-  # version of Python.
-  - "SET MSP_CONDA_PREFIX=%PYTHON%"
-  - "python setup.py build_ext --inplace"
-  - "nosetests -vs"
+build_script:
+  - cmd: SET MSP_CONDA_PREFIX=%PYTHON%\envs\testenv
+  
+  - cmd: python setup.py build_ext --inplace
+  - cmd: python -m pip install newick
+  - cmd: python -m pip install python_jsonschema_objects
+  - cmd: python -m nose
 
 after_test:
-  - "python setup.py bdist_wheel"
+  - cmd: python setup.py bdist_wheel
