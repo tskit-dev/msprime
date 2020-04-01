@@ -2076,12 +2076,9 @@ msp_init_segments_and_compute_breakpoint(msp_t *self, label_id_t label, segment_
     t = fenwick_get_cumulative_sum(tree, y->id);
     x = y->prev;
 
-    k = recomb_map_mass_to_position(&self->recomb_map, y->right_mass - (t - h));
-
-    /* Reject if fallen directly on y left when not allowed to */
-    if (k == y->left && y->prev == NULL) {
-      return msp_init_segments_and_compute_breakpoint(self, label, x_ret, y_ret);
-    }
+    do {
+        k = recomb_map_mass_to_position(&self->recomb_map, y->right_mass - (t - h));
+    } while (y->left >= k && y->prev == NULL);
 
     *x_ret = x;
     *y_ret = y;
