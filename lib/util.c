@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2020 University of Oxford
+** Copyright (C) 2015-2019 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -169,20 +169,11 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRUNCATION_POINT:
             ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
             break;
-        case MSP_ERR_BAD_MUTATION_MAP_RATE:
-            ret = "Bad mutation rate; must be >= 0.";
+        case MSP_ERR_BAD_C:
+            ret = "Bad C. Must have 0 < C ";
             break;
-        case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
-            ret = "Mutation map is not compatible with specified tables.";
-            break;
-        case MSP_ERR_INSUFFICIENT_INTERVALS:
-            ret = "At least one interval must be specified.";
-            break;
-        case MSP_ERR_INTERVAL_MAP_START_NON_ZERO:
-            ret = "The first interval must start with zero";
-            break;
-        case MSP_ERR_INTERVAL_POSITIONS_UNSORTED:
-            ret = "Interval positions must be listed in increasing order";
+        case MSP_ERR_BAD_PSI:
+            ret = "Bad PSI. Must have 0 < PSI <= 1";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
@@ -192,6 +183,7 @@ msp_strerror_internal(int err)
 out:
     return ret;
 }
+
 
 int
 msp_set_tsk_error(int err)
@@ -233,7 +225,7 @@ __msp_safe_free(void **ptr) {
  * Assumes `values` are sorted
  */
 size_t
-msp_binary_interval_search(double query, const double *values, size_t n_values)
+msp_binary_interval_search(double query, double *values, size_t n_values)
 {
     if (n_values == 0) {
         return 0;
