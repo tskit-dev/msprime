@@ -3218,9 +3218,12 @@ msp_reset_from_samples(msp_t *self)
     node_id_t u;
     tsk_id_t tsk_ind;
 
-    tsk_table_collection_clear(self->tables);
+    tsk_population_table_clear(&self->tables->populations);
+    tsk_edge_table_clear(&self->tables->edges);
+    tsk_node_table_clear(&self->tables->nodes);
+    tsk_migration_table_clear(&self->tables->migrations);
 
-    self->tables->sequence_length = recomb_map_get_sequence_length(&self->recomb_map);
+    self->tables->sequence_length = self->recomb_map.sequence_length;
     for (j = 0; j < self->num_populations; j++) {
         ret = tsk_population_table_add_row(&self->tables->populations, NULL, 0);
         if (ret < 0) {
@@ -5725,26 +5728,27 @@ msp_std_common_ancestor_event(msp_t *self, population_id_t population_id,
 static double
 dirac_model_time_to_generations(simulation_model_t *model, double t)
 {
-    return 4 * model->reference_size * t;
+    return 4 * gsl_pow_2(model->reference_size) * t / (1+ (model->params.dirac_coalescent.c * gsl_pow_2(model->params.dirac_coalescent.psi))) ;
 }
 
 static double
 dirac_generations_to_model_time(simulation_model_t *model, double g)
 {
-    return g /(4 * model->reference_size);
+
+    return g * (1+ (model->params.dirac_coalescent.c * gsl_pow_2(model->params.dirac_coalescent.psi))) /(4 * gsl_pow_2(model->reference_size));
 }
 
 static double
 dirac_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    return rate * 4 * model->reference_size;
+     return rate * 4 * model->reference_size / (1+ (model->params.dirac_coalescent.c * gsl_pow_2(model->params.dirac_coalescent.psi)));
+
 }
 
 static double
 dirac_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    // This works for comparing dirac kingman case ... but why 4Ne^2
-    return rate / ( 4 * gsl_pow_2(model->reference_size));
+    return rate *(1+ (model->params.dirac_coalescent.c * gsl_pow_2(model->params.dirac_coalescent.psi))) / ( 4 * model->reference_size);
 }
 
 double
@@ -5766,8 +5770,6 @@ compute_falling_factorial_log(unsigned int m)
 double
 compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
 {
-    unsigned int l, m;
-    double r[5], r_max;
     double ret = 0;
     double b = num_ancestors;
 
@@ -5775,31 +5777,7 @@ compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
     assert(psi > 0);
     assert(psi < 1);
     assert(c >= 0);
-
-    m = GSL_MIN(num_ancestors, 4);
-    /* An underflow error occurs because of the large exponent (b-l). We use the
-     * LSE trick to approximate this calculation. For details, see at
-     * https://en.wikipedia.org/wiki/LogSumExp
-     */
-    r[0] = b * gsl_sf_log(1 - psi);
-    r_max = r[0];
-    for (l = 1; l <= m; l++){
-        r[l] = gsl_sf_lnchoose(num_ancestors, l)
-                + compute_falling_factorial_log(l)
-                + l * gsl_sf_log(psi / 4.0)
-                + (b - l) * gsl_sf_log(1 - psi);
-        r_max = GSL_MAX(r_max, r[l]);
-    }
-
-    for (l = 0; l <= m; l++)  {
-        ret += exp(r[l] - r_max);
-    }
-    ret = exp(r_max + log(ret));
-
-    ret = 1 - ret;
-    ret *= c;
-    ret += b * (b - 1) / 2;
-
+    ret = b * (b - 1) / 2 + c;
     return ret;
 }
 
@@ -5818,7 +5796,7 @@ msp_dirac_get_common_ancestor_waiting_time(msp_t *self, population_id_t pop_id,
 {
     population_t *pop = &self->populations[pop_id];
     unsigned int n = (unsigned int) avl_count(&pop->ancestors[label]);
-    double lambda = msp_dirac_compute_coalescence_rate(self, n) * 2;
+    double lambda = msp_dirac_compute_coalescence_rate(self, n);
 
     return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
@@ -5832,8 +5810,9 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
     avl_node_t *x_node, *y_node;
     segment_t *x, *y;
 
-    ancestors = &self->populations[pop_id].ancestors[label];
-    if (gsl_rng_uniform(self->rng) < (1 / (1.0 + self->model.params.dirac_coalescent.c))) {
+ancestors = &self->populations[pop_id].ancestors[label];
+n = avl_count(ancestors);
+if (gsl_rng_uniform(self->rng) < (gsl_sf_choose(n, 2) / (gsl_sf_choose(n, 2) + self->model.params.dirac_coalescent.c))) {
         /* Choose x and y */
         n = avl_count(ancestors);
         j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
@@ -5874,9 +5853,6 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
         /* If no coalescence has occured, we need to signal this back to the calling
          * function so that the event can be 'cancelled'. This is done by returning 1.
          */
-        if (max_pot_size < 2){
-            ret = 1;
-        }
     }
 out:
     return ret;
@@ -6525,15 +6501,34 @@ int
 msp_set_simulation_model_dirac(msp_t *self, double reference_size, double psi, double c)
 {
     int ret = 0;
+/* If N is finite :
 
-    /* TODO bounds check psi: what are legal values? */
+    if (psi <= (1/reference_size) || psi > ((reference_size-2)/(reference_size)) {
+        ret = MSP_ERR_BAD_PSI;
+        goto out;
+    }
+
+    if (c < 0.0 || c > (reference_size/log(reference_size)) ) {
+        ret = MSP_ERR_BAD_C;
+        goto out;
+    } 
+ However we assume to be in the limit where N is infinite, hence :
+	*/
+    if (psi <= 0 || psi > 1.0) {
+        ret = MSP_ERR_BAD_PSI;
+        goto out;
+    }
+
+    if (c < 0.0 ) {
+        ret = MSP_ERR_BAD_C;
+        goto out;
+    }
     ret = msp_set_simulation_model(self, MSP_MODEL_DIRAC, reference_size);
     if (ret != 0) {
         goto out;
     }
     self->model.params.dirac_coalescent.psi = psi;
     self->model.params.dirac_coalescent.c = c;
-
     self->model.model_time_to_generations = dirac_model_time_to_generations;
     self->model.generations_to_model_time = dirac_generations_to_model_time;
     self->model.generation_rate_to_model_rate = dirac_generation_rate_to_model_rate;
