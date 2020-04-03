@@ -1117,19 +1117,19 @@ class RecombinationMap(object):
         return self._ll_recombination_map
 
     def physical_to_genetic(self, physical_x):
-        raise ValueError("Genetic space is no longer supported")
+        return self._ll_recombination_map.position_to_mass(physical_x)
 
     def physical_to_discrete_genetic(self, physical_x):
-        raise ValueError("Genetic space is no longer supported")
+        raise ValueError("Discrete genetic space is no longer supported")
 
     def genetic_to_physical(self, genetic_x):
-        raise ValueError("Genetic space is no longer supported")
+        return self._ll_recombination_map.mass_to_position(genetic_x)
 
     def get_total_recombination_rate(self):
         return self._ll_recombination_map.get_total_recombination_rate()
 
     def get_per_locus_recombination_rate(self):
-        raise ValueError("Genetic space is no longer supported")
+        raise ValueError("Genetic loci are no longer supported")
 
     def get_size(self):
         return self._ll_recombination_map.get_size()

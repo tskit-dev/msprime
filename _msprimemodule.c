@@ -2194,6 +2194,50 @@ out:
 }
 
 static PyObject *
+RecombinationMap_position_to_mass(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double position;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &position)) {
+        goto out;
+    }
+    if (position < 0) {
+        PyErr_SetString(PyExc_ValueError, "Position must be >= 0");
+        goto out;
+    }
+
+    ret = Py_BuildValue("d", recomb_map_position_to_mass(self->recomb_map, position));
+out:
+    return ret;
+}
+
+static PyObject *
+RecombinationMap_mass_to_position(RecombinationMap *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    double mass;
+
+    if (RecombinationMap_check_recomb_map(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "d", &mass)) {
+        goto out;
+    }
+    if (mass < 0) {
+        PyErr_SetString(PyExc_ValueError, "Recombination mass must be >= 0");
+        goto out;
+    }
+
+    ret = Py_BuildValue("d", recomb_map_mass_to_position(self->recomb_map, mass));
+out:
+    return ret;
+}
+
+static PyObject *
 RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -2312,6 +2356,12 @@ static PyMethodDef RecombinationMap_methods[] = {
     {"get_total_recombination_rate",
         (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},
+    {"position_to_mass",
+        (PyCFunction) RecombinationMap_position_to_mass, METH_VARARGS,
+        "Returns the cumulative recombination mass corresponding to the given position"},
+    {"mass_to_position",
+        (PyCFunction) RecombinationMap_mass_to_position, METH_VARARGS,
+        "Returns the position corresponding to the given cumulative recombination mass"},
     {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
         "Returns the number of physical  positions in this map."},
     {"get_sequence_length", (PyCFunction) RecombinationMap_get_sequence_length, METH_NOARGS,
