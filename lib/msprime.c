@@ -5777,7 +5777,7 @@ compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
     assert(psi > 0);
     assert(psi < 1);
     assert(c >= 0);
-    ret = b * (b - 1) / 2 + c;
+    ret = 2*( b * (b - 1) / 2 + c);
     return ret;
 }
 
