@@ -3882,11 +3882,47 @@ out:
     return ret;
 }
 
-/* List structure for collecting segments by parent */
-typedef struct _segment_list_t {
+// AVL tree item and linked list to store a sparse record of parents
+typedef struct _parent_record_t {
+    struct _parent_record_t *next;
+    uint32_t parent;
     avl_node_t *node;
-    struct _segment_list_t *next;
-} segment_list_t;
+} parent_record_t;
+
+static parent_record_t*
+parent_record_alloc(avl_node_t* node, uint32_t parent)
+{
+    parent_record_t* self = malloc(sizeof(parent_record_t));
+    if (self == NULL) return NULL;
+    self->node = node;
+    self->parent = parent;
+    self->next = NULL;
+    return self;
+}
+
+// to be used within avl_free_tree
+static void
+parent_record_free(void* self)
+{
+    parent_record_t *link;
+    for(link = self; link;) {
+        self = link;
+        link = link->next;
+        free(self);
+    }
+}
+
+// Comparison operator for the parent record within avl tree
+static int
+parent_record_cmp(const void *a, const void *b) {
+    const uint32_t pa = ((const parent_record_t *) a)->parent;
+    const uint32_t pb = ((const parent_record_t *) b)->parent;
+    
+    int ret = 0;
+    if      (pa < pb) { ret = -1; }
+    else if (pa > pb) { ret = 1;  }
+    return ret;
+}
 
 /* Performs a single generation under the Wright Fisher model */
 static int MSP_WARN_UNUSED
@@ -3895,15 +3931,16 @@ msp_dtwf_generation(msp_t *self)
     int ret = 0;
     int ix;
     unsigned int segments_to_merge;
-    uint32_t N, i, j, k, p;
-    size_t segment_mem_offset;
+    uint32_t N, i, j, parent_ix;
+
     population_t *pop;
     segment_t *x, *ind1, *ind2;
     segment_t *u[2];
-    segment_list_t **parents = NULL;
-    segment_list_t *segment_mem = NULL;
-    segment_list_t *s;
-    avl_node_t *a, *node;
+    
+    avl_tree_t *parent_records = NULL;
+    parent_record_t *pr, *pr_head;
+    
+    avl_node_t *a, *node, *pr_node;
     avl_tree_t Q[2];
     /* Only support single structured coalescent label for now. */
     label_id_t label = 0;
@@ -3931,31 +3968,44 @@ msp_dtwf_generation(msp_t *self)
         }
 
         // Allocate memory for linked list of offspring per parent
-        parents = calloc(N, sizeof(segment_list_t *));
-        segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
-        if (parents == NULL || segment_mem == NULL){
+        parent_records = malloc(sizeof(avl_tree_t));
+        if (parent_records == NULL){
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        // Iterate through ancestors and draw parents
-        segment_mem_offset = 0;
+        avl_init_tree(parent_records, parent_record_cmp, parent_record_free);
+
+        
+        // Iterate through ancestors and draw parents        
         for (a = pop->ancestors[label].head; a != NULL; a = a->next) {
-            s = segment_mem + segment_mem_offset;
-            segment_mem_offset++;
-            p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
-            if (parents[p] != NULL) {
-                self->num_ca_events++;
+        
+            parent_ix = (uint32_t) gsl_rng_uniform_int(self->rng, N);
+
+            pr = parent_record_alloc(a, parent_ix);
+            if (pr == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
             }
-            s->next = parents[p];
-            s->node = a;
-            parents[p] = s;
+            node = avl_search(parent_records, pr);
+
+            if (node == NULL) {
+                avl_insert(parent_records, pr);
+            } else {
+                self->num_ca_events ++;
+                pr_head = (parent_record_t*)(node->item);
+                // prepend pr to 
+                pr->next = pr_head;
+                node->item = pr;
+            }
         }
 
-        // Iterate through offspring of parent k, adding to avl_tree
-        for (k = 0; k < N; k++) {
-            for (s = parents[k]; s != NULL; s = s->next) {
-                node = s->node;
-                x = (segment_t *) node->item;
+        // iterate parent records avl tree
+        for(pr_node = parent_records->head; pr_node; pr_node = pr_node->next) {
+            // iterate offspring linked list
+            for(pr = pr_node->item; pr; pr = pr->next) {
+                node = pr->node;
+                x = (segment_t *)node->item;
+
                 // Recombine ancestor
                 // TODO Should this be the recombination rate going foward from x.left?
                 if (recomb_map_get_total_recombination_rate(&self->recomb_map) > 0) {
@@ -4009,14 +4059,11 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
         }
-        free(parents);
-        free(segment_mem);
-        segment_mem = NULL;
-        parents = NULL;
     }
 out:
-    msp_safe_free(parents);
-    msp_safe_free(segment_mem);
+    // there is no msp_safe_free analogue with for a custom free function
+    if (parent_records) avl_free_tree(parent_records);
+    
     return ret;
 }
 
