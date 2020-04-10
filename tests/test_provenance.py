@@ -228,17 +228,16 @@ class TestParseProvenance(unittest.TestCase):
             tables = ts.tables
             tables.provenances.clear()
             tables.provenances.add_row(json.dumps(prov))
-            command, prov = msprime.provenance.parse_provenance(tables.tree_sequence())
+            command, prov = msprime.provenance.parse_provenance(
+                tables.tree_sequence().provenance(0), None
+            )
 
-    def test_parse_index(self):
-        ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(ts)
-        command, prov = msprime.provenance.parse_provenance(ts)
+    def test_current_ts(self):
+        ts1 = msprime.simulate(5, random_seed=1)
+        ts2 = msprime.mutate(ts1)
+        command, prov = msprime.provenance.parse_provenance(ts2.provenance(1), ts1)
         self.assertEquals(command, 'mutate')
-        command, prov = msprime.provenance.parse_provenance(ts, 0)
-        self.assertEquals(command, 'simulate')
-        command, prov = msprime.provenance.parse_provenance(ts, 1)
-        self.assertEquals(command, 'mutate')
+        self.assertEquals(prov['tree_sequence'], ts1)
 
 
 class TestRoundTrip(unittest.TestCase):
@@ -255,10 +254,10 @@ class TestRoundTrip(unittest.TestCase):
 
     def verify(self, ts, recurse=True):
         recreated = None
-        for i, _ in enumerate(ts.provenances()):
-            command, parsed_prov = msprime.provenance.parse_provenance(ts, i)
-            if recreated is not None and command != 'simulate':
-                parsed_prov["tree_sequence"] = recreated
+        for provenance in ts.provenances():
+            command, parsed_prov = msprime.provenance.parse_provenance(
+                provenance, recreated
+            )
             recreated = getattr(msprime, command)(**parsed_prov)
         self.verify_equal(ts, recreated)
         # We verify again to check that the recreated provenace is also good.

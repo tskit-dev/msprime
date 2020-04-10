@@ -162,8 +162,7 @@ def mutate(
     argspec = inspect.getargvalues(inspect.currentframe())
     parameters = {
         "command": "mutate",
-        **{arg: argspec.locals[arg] for arg in argspec.args
-           if arg not in ["tree_sequence"]}
+        **{arg: argspec.locals[arg] for arg in argspec.args}
     }
     parameters['random_seed'] = seed
     encoded_provenance = provenance.json_encode_provenance(
