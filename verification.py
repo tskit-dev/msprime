@@ -2081,7 +2081,9 @@ class SimulationVerifier(object):
 
     def compare_xi_dirac_sfs(self, sample_size, psi, c, sfs, num_replicates=1000):
         """
-        Runs simulations of the xi dirac model and compares to the expected SFS.
+        Runs simulations of the xi dirac model and compares to the expected normalized SFS.
+        It compares the observed E[Bi]/E[B] vs the expected  E[Bi]/E[B], where Bi is the branch length having i leaves
+        and B is the total branch length 
         """
         print("running SFS for", sample_size, psi, c)
         reps = msprime.simulate(
@@ -2090,6 +2092,7 @@ class SimulationVerifier(object):
 
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
+        tot_bl_sum = [0] 
         for j, ts in enumerate(reps):
             for tree in ts.trees():
                 tot_bl = 0.0
@@ -2101,39 +2104,58 @@ class SimulationVerifier(object):
                         tot_bl = tot_bl + tree.branch_length(node)
 
                 for xi in range(sample_size - 1):
-                    rescaled_x = tbl[xi]/tot_bl
-                    data["total_branch_length"].append(rescaled_x)
+                    rescaled_x = tbl[xi]
+                    data["total_branch_length"].append(rescaled_x/tot_bl)
                     tbl_sum[xi] = tbl_sum[xi] + rescaled_x
+                tot_bl_sum[0] = tot_bl_sum[0] + tot_bl
                 data["num_leaves"].extend(range(1, sample_size))
 
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_psi={}.png".format(sample_size, psi))
+        f = os.path.join(basedir, "n={}_psi={}_c={}.png".format(sample_size, psi, c))
 
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey")
         ax.set_xlabel("num leaves")
         l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
         l2 = ax.plot(
-            np.arange(sample_size - 1), [x/num_replicates for x in tbl_sum],
+            np.arange(sample_size - 1), [(x/num_replicates)/(tot_bl_sum[0]/num_replicates) for x in tbl_sum],
             "--", linewidth=3)
         ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
     def run_xi_dirac_expected_sfs(self):
+        """
+        For c=1000 we compare to the expected normalized SFS for c tending to infinity (to check convergence).  
+        """
         self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=3, psi=0.01, c=1, sfs=[0.666667, 0.333333])
+            num_replicates=50000, sample_size=10, psi=0.1, c=10000, sfs=[0.36939374, 0.17057448, 0.11408360, 0.08571572, 0.06874076, 0.05749423, 0.04958115, 0.04390987, 0.04050644])
         self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=3, psi=0.99, c=1,
-            sfs=[0.6722604, 0.3277396])
+            num_replicates=50000, sample_size=10, psi=0.3, c=10000, sfs=[0.39876239, 0.15840021, 0.10834860, 0.08165271, 0.06562863, 0.05508280, 0.04777344, 0.04280604, 0.04154517])
         self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=4, psi=0.01, c=1,
-            sfs=[0.5457826, 0.2728913, 0.1813261])
+            num_replicates=50000, sample_size=10, psi=0.5, c=10000, sfs=[0.42603419, 0.14512841, 0.10505636, 0.07956441, 0.06368639, 0.05328134, 0.04595869, 0.04078814, 0.04050205])
         self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=4, psi=0.99, c=1,
-            sfs=[0.5611642, 0.2747103, 0.1641255])
+            num_replicates=50000, sample_size=10, psi=0.9, c=10000, sfs=[0.47543921, 0.11338801, 0.10691661, 0.08342993, 0.06358921, 0.05162311, 0.04334855, 0.03416865, 0.02809671])
+
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.1, c=1, sfs=[0.35352303, 0.17672997, 0.11781921, 0.08836481, 0.07069227, 0.05891075, 0.05049574, 0.04418514, 0.03927908])
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.3, c=1, sfs=[0.35430737, 0.17650201, 0.11762438, 0.08822363, 0.07058696, 0.05883259, 0.05044232, 0.04416277, 0.03931799])
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.5, c=1, sfs=[0.35655911, 0.17596878, 0.11711820, 0.08785514, 0.07030139, 0.05860142, 0.05025410, 0.04402755, 0.03931431])
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.9, c=1, sfs=[0.36443828, 0.17490683, 0.11614708, 0.08717119, 0.06965759, 0.05790491, 0.04939935, 0.04279132, 0.03758346])
+
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.1, c=10, sfs=[0.35385062, 0.17661522, 0.11773706, 0.08830646, 0.07064941, 0.05887993, 0.05047626, 0.04418035, 0.03930470])
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.3, c=10, sfs=[0.36053858, 0.17456975, 0.11610005, 0.08713599, 0.06977685, 0.05822906, 0.05002797, 0.04398723, 0.03963453])
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.5, c=10, sfs=[0.37556917, 0.17015781, 0.11285655, 0.08495119, 0.06808802, 0.05683977, 0.04886055, 0.04309158, 0.03958537])
+        self.compare_xi_dirac_sfs(
+            num_replicates=50000, sample_size=10, psi=0.9, c=10, sfs=[0.41154361, 0.15908770, 0.10852899, 0.08341563, 0.06647774, 0.05471783, 0.04592602, 0.03818041, 0.03212207])
 
         # MORE, NEED TO CHECK THESE VALUES
 
