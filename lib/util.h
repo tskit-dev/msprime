@@ -85,6 +85,8 @@
 #define MSP_ERR_INTERVAL_MAP_START_NON_ZERO                         -47
 #define MSP_ERR_NEGATIVE_INTERVAL_POSITION                          -48
 #define MSP_ERR_INTERVAL_POSITIONS_UNSORTED                         -49
+#define MSP_ERR_BAD_C                                               -50
+#define MSP_ERR_BAD_PSI                                             -51
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13
