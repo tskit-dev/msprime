@@ -149,6 +149,31 @@ see the :ref:`sec_api_simulation_models_change_events` section for details.
 .. autoclass:: msprime.MassMigration
 .. autoclass:: msprime.CensusEvent
 
++++++++++++++++++++++
+Parsing species trees
++++++++++++++++++++++
+
+Species trees hold information about the sequence and the times at which species
+diverged from each other. Viewed backwards in time, divergence events are equivalent
+to mass migration events in which all lineages from one population move to another
+population. The history of a set of populations can thus be modelled according to
+a given species tree. To faciliate the specification of the model, 
+:func:`.parse_species_tree` parses a species tree and returns the mass migration
+events corresponding to all species divergence events in the tree, together with
+population configurations that specify population sizes and names.
+
+When species trees are estimated with a program like `StarBEAST
+<https://academic.oup.com/mbe/article/34/8/2101/3738283>`_ they can further
+contain estimates on the population sizes of extant and ancestral species.
+:func:`.parse_starbeast` parses species trees estimated with StarBEAST and uses
+these estimates to define the population configurations.
+
+Note that when the species tree has branch lengths not in units of generations but
+in units of years or millions of years (which is common), a generation time in years
+is required for parsing.
+
+.. autofunction:: msprime.parse_species_tree()
+.. autofunction:: msprime.parse_starbeast()
 
 ++++++++++++++++++++++++++++
 Debugging demographic models

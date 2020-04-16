@@ -27,24 +27,66 @@ import msprime
 
 def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     """
-    Method to parse species trees produced by the program TreeAnnotator
-    based on posterior tree distributions generated with StarBEAST
-    (https://academic.oup.com/mbe/article/34/8/2101/3738283).
-    Species trees produced by TreeAnnotator are written in Nexus
-    (https://en.wikipedia.org/wiki/Nexus_file) format.
+    This function parses a species tree produced by the program `TreeAnnotator
+    <https://www.beast2.org/treeannotator>`_
+    based on a posterior tree distribution generated with `StarBEAST
+    <https://academic.oup.com/mbe/article/34/8/2101/3738283>`_  and defines a
+    simulation model according to the species tree. Species trees produced by
+    TreeAnnotator are written in `Nexus
+    <https://en.wikipedia.org/wiki/Nexus_file>`_ format and are rooted,
+    bifurcating, and ultrametric. Branch lengths usually are in units of millions
+    of years, but the use of other units is permitted by StarBEAST (and thus
+    TreeAnnotator). This function allows branch length units of millions of years
+    or years. Leaves must be named and the tree must include information on
+    population sizes of leaf and ancestral species in the form of annotation with
+    the "dmv" tag, which is the case for trees written by TreeAnnotator based on
+    StarBEAST posterior tree distributions.
 
-    Species trees written by TreeAnnotator are rooted, bi-furcating, and
-    ultrametric. Branch lengths usually are in units of millions
-    of years ("myr"), but the use of other units is permitted by
-    StarBEAST (and thus TreeAnnotator). Here, we allow only units of
-    millions of years ("myr") or years ("yr"). Leafs must be named and
-    the tree must include information on population sizes of leaf and
-    ancestral species in the form of annotation with the "dmv" tag,
-    which is the case for trees written by StarBEAST and TreeAnnotator.
-    However, to convert these "dmv" values into absolute population
-    sizes, a generation time is required and must be provided separately
-    to the tree.
+    After reading the input tree, this function defines a
+    :class:`.PopulationConfiguration` instance for each terminal node in the tree,
+    corresponding to extant species. These population configurations store the
+    species' name and population size, both according to information from the input
+    tree. Additionally, a :class:`.MassMigration` instance is defined for each
+    internal node, with the time of the mass migration set according to the age of
+    the node in the species tree. For each internal node, the left one of the two
+    descendant populations is arbitrarily selected as the destination in the mass
+    migration defined for that node. A :class:`.PopulationParametersChange`
+    instance is also added for each internal node to adjust the population
+    size of the destination population according to the information given in the
+    tree for the population size of the species that is ancestral to the node. Like
+    the mass migration event defined for the same node, the time of the population
+    parameter change is also set according to the age of the node.
+
+    :param str tree: The tree string in Nexus format, with named leaves, branch
+        lengths, and branch annotation. Typically, this string is the entire content
+        of a file written by TreeAnnotator.
+    :param float generation_time: The number of years per generation.
+    :param str branch_length_units: The units of time in which the species tree's
+        branch lengths are measured. Allowed branch length units are millions of
+        years, and years; these should be specified with the strings ``"myr"`` or
+        ``"yr"``, respectively. This defaults to ``"myr"``.
+    :return: A tuple of two lists of which the first contains
+        :class:`.PopulationConfiguration` instances and the second contains
+        :class:`.MassMigration` and :class:`.PopulationParametersChange` instances.
+        The population configurations specify the size of each population according
+        to the information from the input species tree and the species name
+        corresponding to each population. Species names are stored as metadata in
+        each :class:`.PopulationConfiguration` instance, with the metadata tag
+        "species_name". Sampling configurations and growth rates are not specified
+        in the population configurations. The list of population configurations is
+        ordered according to the order of the corresponding extant species in a
+        `post-order tree traversal
+        <https://en.wikipedia.org/wiki/Tree_traversal#Post-order_(LRN)>`_.
+        The list of mass migration events and population parameter changes is
+        ordered by the time of the events, from young to old events.
+    :rtype: (list, list)
+    :warning: This function does not modify migration matrices. When the population
+        configurations and mass migration events returned by this function are used
+        to simulate with the :func:`.simulate` function, it should be ensured that
+        migration rates to source populations of mass migration events are zero
+        after the mass migration (viewed backwards in time).
     """
+
     # Make sure that branch length units are either "myr" or "yr".
     allowed_branch_lenth_units = ["myr", "yr"]
     if branch_length_units not in allowed_branch_lenth_units:
@@ -67,23 +109,56 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
 
 def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None):
     """
-    Method to parse species trees in Newick
-    (https://en.wikipedia.org/wiki/Newick_format) format.
+    This function parses a species tree in
+    `Newick <https://en.wikipedia.org/wiki/Newick_format>`_ format and defines a
+    simulation model according to the species tree. The tree is assumed to be
+    rooted and ultrametric and branch lengths must be included and correspond to
+    time, either in units of millions of years, years, or generations. Leaves must
+    be named.
 
-    Trees are assumed to be rooted and ultrametric and branch lengths
-    must be included and correspond to time, either in units of millions
-    of years ("myr"), years ("yr"), or generations ("gen"; default).
-    Leafs must be named. An example for an accepted tree string in
-    Newick format is:
-    (((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)
-    The newick library (https://pypi.org/project/newick/) is used for
-    tree parsing. The tree string can end with a semi-colon, but this is
-    not required.
+    After reading the input tree, this function defines a
+    :class:`.PopulationConfiguration` instance for each terminal node in the tree,
+    corresponding to extant species. These population configurations store the
+    species' name and population size. The specified Ne is used as the size of all
+    populations. Additionally, one or more :class:`.MassMigration` instances are
+    defined for each internal node, with the time of the mass migration set
+    according to the age of the node in the species tree. :math:`n - 1` mass
+    migration events are defined for internal nodes with `n` descendants, meaning
+    that a single event is defined for bifurcating nodes. For each internal node,
+    the left-most of the descendant populations is arbitrarily selected as the
+    destination in all mass migrations defined for that node.
 
-    - An estimate of the effective population size Ne should be
-        specified.
-    - If and only if the branch lengths are not in units of
-        generations, the generation time should be specified.
+    :param str tree: The tree string in Newick format, with named leaves and branch
+        lengths.
+    :param float Ne: The effective population size.
+    :param str branch_length_units: The units of time in which the species tree's
+        branch lengths are measured. Allowed branch length units are millions of
+        years, years, and generations; these should be specified with the strings
+        ``"myr"``, ``"yr"``, or ``"gen"``, respectively. This defaults to
+        ``"gen"``.
+    :param float generation_time: The number of years per generation. If and only
+        if the branch lengths are not in units of generations, the generation time
+        must be specified. This defaults to `None`.
+    :type generation_time: float or None
+    :return: A tuple of two lists of which the first contains
+        :class:`.PopulationConfiguration` instances and the second contains
+        :class:`.MassMigration` instances. The population configurations specify
+        the size of each population and the species name corresponding to each
+        population. Species names are stored as metadata in each
+        :class:`.PopulationConfiguration` instance, with the metadata tag
+        "species_name". Sampling configurations and growth rates are not specified
+        in the population configurations. The list of population configurations is
+        ordered according to the order of the corresponding extant species in a
+        `post-order tree traversal
+        <https://en.wikipedia.org/wiki/Tree_traversal#Post-order_(LRN)>`_. The list
+        of mass migration events is ordered by the time of the events, from young
+        to old events.
+    :rtype: (list, list)
+    :warning: This function does not modify migration matrices. When the population
+        configurations and mass migration events returned by this function are used
+        to simulate with the :func:`.simulate` function, it should be ensured that
+        migration rates to source populations of mass migration events are zero
+        after the mass migration (viewed backwards in time).
     """
 
     # Make sure that branch length units are either "myr", "yr", or "gen".

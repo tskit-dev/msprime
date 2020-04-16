@@ -4,6 +4,9 @@
 
 **New features**:
 
+- Add functions to parse species trees and set up simulation models according
+  to the species tree. (:user:`mmatschiner` :issue:`893` :issue:`929` :issue:`931`)
+
 - Complete provenance recording of all arguments to simulate and mutate.
   Adds argument record_provenance to simulate, which allows recording of
   provenances to be disabled, for example when they are large.
