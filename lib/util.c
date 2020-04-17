@@ -187,6 +187,12 @@ msp_strerror_internal(int err)
         case MSP_ERR_INTERVAL_POSITIONS_UNSORTED:
             ret = "Interval positions must be listed in increasing order";
             break;
+        case MSP_ERR_BAD_C:
+            ret = "Bad C. Must have 0 < C ";
+            break;
+        case MSP_ERR_BAD_PSI:
+            ret = "Bad PSI. Must have 0 < PSI <= 1";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                 "report!";
