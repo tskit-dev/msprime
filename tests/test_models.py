@@ -265,12 +265,6 @@ class TestMultipleMergerModels(unittest.TestCase):
         # TODO real tests
         self.assertTrue(ts is not None)
 
-    def test_beta_coalescent_integration_fails(self):
-        model = msprime.BetaCoalescent(
-            reference_size=5, alpha=2 - 1e-9, truncation_point=1)
-        with self.assertRaises(_msprime.LibraryError):
-            msprime.simulate(sample_size=10, model=model)
-
     def test_dtwf(self):
         model = msprime.DiscreteTimeWrightFisher()
         ts = msprime.simulate(sample_size=10, model=model)
@@ -329,16 +323,10 @@ class TestDtwf(unittest.TestCase):
 
 class TestUnsupportedFullArg(unittest.TestCase):
     """
-    Full ARG recording isn't supported on anything except standard coalescent.
+    Full ARG recording isn't supported on the discrete time Wright-Fisher model
     """
     def test_dtwf(self):
         for model in [msprime.DiscreteTimeWrightFisher(10)]:
-            self.assertRaises(
-                _msprime.LibraryError, msprime.simulate, 10, model=model,
-                record_full_arg=True)
-
-    def test_multiple_mergers(self):
-        for model in [msprime.BetaCoalescent(10), msprime.DiracCoalescent(10)]:
             self.assertRaises(
                 _msprime.LibraryError, msprime.simulate, 10, model=model,
                 record_full_arg=True)
