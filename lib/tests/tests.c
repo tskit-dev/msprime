@@ -3301,7 +3301,7 @@ test_multiple_mergers_simulation(void)
     long seed = 10;
     bool store_full_arg[] = {true, false};
     /* These simulations can be slow, so just choose a few param combinations */
-    double beta_params[][2] = {{1.1, 0.5}, {1.9, 1}};
+    double beta_params[][2] = {{1.1, 0.5}, {1.99, 1}};
     /* TODO what are good psi parameters here? */
     double psi_params[][2] = {{0.9, 10}, {0.1, 1}};
     sample_t *samples = malloc(n * sizeof(sample_t));

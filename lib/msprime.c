@@ -5822,7 +5822,7 @@ out:
  **************************************************************/
 
 static double
-beta_model_time_to_generations(simulation_model_t *model, double t)
+beta_model_compute_timescale(simulation_model_t *model)
 {
     double alpha = model->params.beta_coalescent.alpha;
     double truncation_point = model->params.beta_coalescent.truncation_point;
@@ -5831,46 +5831,31 @@ beta_model_time_to_generations(simulation_model_t *model, double t)
     double timescale = exp(log(alpha) - alpha * log(m)
         - (alpha - 1) * log(reference_size))
         * gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
-    return 4 * timescale * t;
+    return timescale;
+}
+
+static double
+beta_model_time_to_generations(simulation_model_t *model, double t)
+{
+    return 4 * beta_model_compute_timescale(model) * t;
 }
 
 static double
 beta_generations_to_model_time(simulation_model_t *model, double g)
 {
-    double alpha = model->params.beta_coalescent.alpha;
-    double truncation_point = model->params.beta_coalescent.truncation_point;
-    double reference_size = model->reference_size;
-    double m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale = exp(log(alpha) - alpha * log(m)
-        - (alpha - 1) * log(reference_size))
-        * gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
-    return g / (4 * timescale);
+    return g / (4 * beta_model_compute_timescale(model));
 }
 
 static double
 beta_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    double alpha = model->params.beta_coalescent.alpha;
-    double truncation_point = model->params.beta_coalescent.truncation_point;
-    double reference_size = model->reference_size;
-    double m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale = exp(log(alpha) - alpha * log(m)
-        - (alpha - 1) * log(reference_size))
-        * gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
-    return rate * 4 * timescale;
+    return rate * 4 * beta_model_compute_timescale(model);
 }
 
 static double
 beta_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    double alpha = model->params.beta_coalescent.alpha;
-    double truncation_point = model->params.beta_coalescent.truncation_point;
-    double reference_size = model->reference_size;
-    double m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale = exp(log(alpha) - alpha * log(m)
-        - (alpha - 1) * log(reference_size))
-        * gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
-    return rate / (4 * timescale);
+    return rate / (4 * beta_model_compute_timescale(model));
 }
 
 static double

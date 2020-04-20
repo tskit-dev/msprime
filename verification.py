@@ -3058,7 +3058,8 @@ class SimulationVerifier(object):
         Adds a check that we get the right number of objects when we simplify
         a full arg.
         """
-        self._instances["multiple_merger_arg_recording"] = self.run_multiple_merger_arg_recording
+        self._instances["multiple_merger_arg_recording"] = \
+            self.run_multiple_merger_arg_recording
 
     def add_smc_num_trees_analytical_check(self):
         """
