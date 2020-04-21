@@ -37,26 +37,27 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     bifurcating, and ultrametric. Branch lengths usually are in units of millions
     of years, but the use of other units is permitted by StarBEAST (and thus
     TreeAnnotator). This function allows branch length units of millions of years
-    or years. Leafs must be named and the tree must include information on
+    or years. Leaves must be named and the tree must include information on
     population sizes of leaf and ancestral species in the form of annotation with
     the "dmv" tag, which is the case for trees written by TreeAnnotator based on
     StarBEAST posterior tree distributions.
 
-    After reading the input tree, this function defines a population configuration
-    for each terminal node in the tree, corresponding to extant species. These
-    population configurations store the species' name and population size, both
-    according to information from the input tree. Additionally, a mass migration
-    event is defined for each internal node, with the time of the mass migration
-    set according to the age of the node in the species tree. For each internal
-    node, the left one of the two descendant populations is arbitrarily selected as
-    the destination in the mass migration defined for that node. A population
-    parameter change is also added for each internal node to adjust the population
+    After reading the input tree, this function defines a
+    :class:`.PopulationConfiguration` instance for each terminal node in the tree,
+    corresponding to extant species. These population configurations store the
+    species' name and population size, both according to information from the input
+    tree. Additionally, a :class:`.MassMigration` instance is defined for each
+    internal node, with the time of the mass migration set according to the age of
+    the node in the species tree. For each internal node, the left one of the two
+    descendant populations is arbitrarily selected as the destination in the mass
+    migration defined for that node. A :class:`.PopulationParametersChange`
+    instance is also added for each internal node to adjust the population
     size of the destination population according to the information given in the
     tree for the population size of the species that is ancestral to the node. Like
     the mass migration event defined for the same node, the time of the population
     parameter change is also set according to the age of the node.
 
-    :param str tree: The tree string in Nexus format, with named leafs, branch
+    :param str tree: The tree string in Nexus format, with named leaves, branch
         lengths, and branch annotation. Typically, this string is the entire content
         of a file written by TreeAnnotator.
     :param float generation_time: The number of years per generation.
@@ -68,7 +69,7 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
         :class:`.PopulationConfiguration` instances and the second contains
         :class:`.MassMigration` and :class:`.PopulationParametersChange` instances.
         The population configurations specify the size of each population according
-        to the information from the input species tree and the species name 
+        to the information from the input species tree and the species name
         corresponding to each population. Species names are stored as metadata in
         each :class:`.PopulationConfiguration` instance, with the metadata tag
         "species_name". Sampling configurations and growth rates are not specified
@@ -112,21 +113,22 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
     `Newick <https://en.wikipedia.org/wiki/Newick_format>`_ format and defines a
     simulation model according to the species tree. The tree is assumed to be
     rooted and ultrametric and branch lengths must be included and correspond to
-    time, either in units of millions of years, years, or generations. Leafs must
+    time, either in units of millions of years, years, or generations. Leaves must
     be named.
 
-    After reading the input tree, this function defines a population configuration
-    for each terminal node in the tree, corresponding to extant species. These
-    population configurations store the species' name and population size. The
-    specified Ne is used as the size of all populations. Additionally, one or more
-    mass migration events are defined for each internal node, with the time of the
-    mass migration set according to the age of the node in the species tree. `n`-1
-    mass migration events are defined for internal nodes with `n` descendants,
-    meaning that a single event is defined for bifurcating nodes. For each internal
-    node, the left-most of the descendant populations is arbitrarily selected as
-    the destination in all mass migrations defined for that node.
+    After reading the input tree, this function defines a
+    :class:`.PopulationConfiguration` instance for each terminal node in the tree,
+    corresponding to extant species. These population configurations store the
+    species' name and population size. The specified Ne is used as the size of all
+    populations. Additionally, one or more :class:`.MassMigration` instances are
+    defined for each internal node, with the time of the mass migration set
+    according to the age of the node in the species tree. :math:`n - 1` mass
+    migration events are defined for internal nodes with `n` descendants, meaning
+    that a single event is defined for bifurcating nodes. For each internal node,
+    the left-most of the descendant populations is arbitrarily selected as the
+    destination in all mass migrations defined for that node.
 
-    :param str tree: The tree string in Newick format, with named leafs and branch
+    :param str tree: The tree string in Newick format, with named leaves and branch
         lengths.
     :param float Ne: The effective population size.
     :param str branch_length_units: The units of time in which the species tree's

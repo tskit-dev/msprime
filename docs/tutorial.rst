@@ -863,9 +863,9 @@ not ancestral to these census nodes.
 Advanced features
 *****************
 
----------------------
+*********************
 Parsing species trees
----------------------
+*********************
 
 Models used in ``msprime`` for simulation can be designed to approximate the
 diversification history of a group of diverging species, by defining, for each species
@@ -875,7 +875,7 @@ it is possible to parse a species tree and generate the set of mass migration ev
 automatically.
 
 To be parseable, a species tree must be encoded in
-`Newick <https://en.wikipedia.org/wiki/Newick_format>`_ format, with named leafs and
+`Newick <https://en.wikipedia.org/wiki/Newick_format>`_ format, with named leaves and
 branch lengths. One example of a parseable species tree in Newick format is
 ``(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)``. When visualized
 in a software like `FigTree <http://tree.bio.ed.ac.uk/software/figtree/>`_, this tree
@@ -896,45 +896,45 @@ can be generated:
 
 .. code-block:: python
 
-    >>> import msprime
-    >>> parsed_tuple = msprime.parse_species_tree(
-    ...     tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
-    ...     Ne=10000,
-    ...     branch_length_units="myr",
-    ...     generation_time=28)
+    import msprime
+    pop_configs, demographic_events = msprime.parse_species_tree(
+            tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
+            Ne=10000,
+            branch_length_units="myr",
+            generation_time=28)
 
 The above code stores a tuple of two lists in the variable ``parsed_tuple``:
 
 .. code-block:: python
 
-    >>> print(type(parsed_tuple[0]))
-    <class 'list'>
-    >>> print(type(parsed_tuple[1]))
-    <class 'list'>
+    print(type(pop_configs))
+    # <class 'list'>
+    print(type(demographic_events))
+    # <class 'list'>
 
 The first of these two lists contains instances of :class:`.PopulationConfiguration` and
 the second contains instances of :class:`.MassMigration`:
 
 .. code-block:: python
 
-    >>> print(type(parsed_tuple[0][0]))
-    <class 'msprime.simulations.PopulationConfiguration'>
-    >>> print(type(parsed_tuple[1][0]))
-    <class 'msprime.simulations.MassMigration'>
+    print(type(pop_configs[0]))
+    # <class 'msprime.simulations.PopulationConfiguration'>
+    print(type(demographic_events[0]))
+    # <class 'msprime.simulations.MassMigration'>
 
 The mass migration events are ordered by the time of the event and they thus specify
 the sequence in which lineages are moved from source to destination populations:
 
 .. code-block:: python
 
-    >>> print(parsed_tuple[1][0])
-    Mass migration: Lineages moved with probability 1.0 backwards in time with source 1 & dest 0
+    print(demographic_events[0])
+    # Mass migration: Lineages moved with probability 1.0 backwards in time with source 1 & dest 0
                          (equivalent to migration from 0 to 1 forwards in time)
-    >>> print(parsed_tuple[1][1])
-    Mass migration: Lineages moved with probability 1.0 backwards in time with source 2 & dest 0
+    print(demographic_events[1])
+    # Mass migration: Lineages moved with probability 1.0 backwards in time with source 2 & dest 0
                          (equivalent to migration from 0 to 2 forwards in time)
-    >>> print(parsed_tuple[1][2])
-    Mass migration: Lineages moved with probability 1.0 backwards in time with source 3 & dest 0
+    print(demographic_events[2])
+    # Mass migration: Lineages moved with probability 1.0 backwards in time with source 3 & dest 0
                          (equivalent to migration from 0 to 3 forwards in time)
 
 The above output indicates that --- viewed backwards in time --- lineages from
@@ -948,14 +948,8 @@ population configurations in the form of metadata, with the "species_name" tag:
 
 .. code-block:: python
 
-    >>> print(parsed_tuple[0][0].metadata)
-    {'species_name': 'human'}
-    >>> print(parsed_tuple[0][1].metadata)
-    {'species_name': 'chimpanzee'}
-    >>> print(parsed_tuple[0][2].metadata)
-    {'species_name': 'gorilla'}
-    >>> print(parsed_tuple[0][3].metadata)
-    {'species_name': 'orangutan'}
+    print([pop_config.metadata for pop_config in pop_configs])
+    # [{'species_name': 'human'}, {'species_name': 'chimpanzee'}, {'species_name': 'gorilla'}, {'species_name': 'orangutan'}]
 
 As the above output shows, the information on the topology of the species tree is
 fully included in the set of population configurations and mass migration events.
@@ -968,14 +962,8 @@ The population configurations also define the population size:
 
 .. code-block:: python
 
-    >>> print(parsed_tuple[0][0].initial_size)
-    10000.0
-    >>> print(parsed_tuple[0][1].initial_size)
-    10000.0
-    >>> print(parsed_tuple[0][2].initial_size)
-    10000.0
-    >>> print(parsed_tuple[0][3].initial_size)
-    10000.0
+    print([pop_config.initial_size for pop_config in pop_configs])
+    # [10000.0, 10000.0, 10000.0, 10000.0]
 
 The population size is 10,000 because this value was specified for Ne when
 calling :func:`.parse_species_tree`. The growth rates are zero for all populations,
@@ -983,14 +971,8 @@ meaning that they all have constant population sizes:
 
 .. code-block:: python
 
-    >>> print(parsed_tuple[0][0].growth_rate)
-    0.0
-    >>> print(parsed_tuple[0][1].growth_rate)
-    0.0
-    >>> print(parsed_tuple[0][2].growth_rate)
-    0.0
-    >>> print(parsed_tuple[0][3].growth_rate)
-    0.0
+    print([pop_config.growth_rate for pop_config in pop_configs])
+    # [0.0, 0.0, 0.0, 0.0]
 
 To simulate under the model corresponding to the species tree, the population
 configurations and mass migration events are used as input for
@@ -998,191 +980,93 @@ configurations and mass migration events are used as input for
 
 .. code-block:: python
 
-    >>> for pop_conf in parsed_tuple[0]:
-    ...     pop_conf.sample_size = 2
-    >>> tree_sequence = msprime.simulate(
-    ...     population_configurations=parsed_tuple[0],
-    ...     demographic_events=parsed_tuple[1])
-    >>> tree = tree_sequence.first()
-    >>> print(tree.draw(format="unicode"))
-       14          
-     ┏━━┻━━━┓      
-     ┃     13      
-     ┃   ┏━━┻━━┓   
-     ┃   ┃    12   
-     ┃   ┃   ┏━┻━┓ 
-     ┃   ┃   ┃  11 
-     ┃   ┃   ┃  ┏┻┓
-    10   ┃   ┃  ┃ ┃
-    ┏┻┓  ┃   ┃  ┃ ┃
-    ┃ ┃  ┃   9  ┃ ┃
-    ┃ ┃  ┃  ┏┻┓ ┃ ┃
-    ┃ ┃  8  ┃ ┃ ┃ ┃
-    ┃ ┃ ┏┻┓ ┃ ┃ ┃ ┃
-    6 7 4 5 2 3 0 1
+    for pop_conf in parsed_tuple[0]:
+        pop_conf.sample_size = 2
+    tree_sequence = msprime.simulate(
+            samples=samples,
+            population_configurations=pop_configs,
+            demographic_events=demographic_events)
+    tree = tree_sequence.first()
+    print(tree.draw(format="unicode"))
+    #    14          
+    #  ┏━━┻━━━┓      
+    #  ┃     13      
+    #  ┃   ┏━━┻━━┓   
+    #  ┃   ┃    12   
+    #  ┃   ┃   ┏━┻━┓ 
+    #  ┃   ┃   ┃  11 
+    #  ┃   ┃   ┃  ┏┻┓
+    # 10   ┃   ┃  ┃ ┃
+    # ┏┻┓  ┃   ┃  ┃ ┃
+    # ┃ ┃  ┃   9  ┃ ┃
+    # ┃ ┃  ┃  ┏┻┓ ┃ ┃
+    # ┃ ┃  8  ┃ ┃ ┃ ┃
+    # ┃ ┃ ┏┻┓ ┃ ┃ ┃ ┃
+    # 6 7 4 5 2 3 0 1
 
-
-
-
----------------------
-Parsing species trees
----------------------
-
-Models used in ``msprime`` for simulation can be designed to approximate the
-diversification history of a group of diverging species, by defining, for each species
-divergence, a mass migration event at which all lineages from one population move
-into another population. To faciliate the specification of these mass migration events
-it is possible to parse a species tree and generate the set of mass migration events
-automatically.
-
-To be parseable, a species tree must be encoded in
-`Newick <https://en.wikipedia.org/wiki/Newick_format>`_ format, with named leafs and
-branch lengths. One example of a parseable species tree in Newick format is
-``(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)``. When visualized
-in a software like `FigTree <http://tree.bio.ed.ac.uk/software/figtree/>`_, this tree
-appears as shown below:
-
-.. image:: _static/primates.svg
-   :width: 400px
-   :alt: A species tree with branch lengths.
-
-In the above figure, numbers written on branches indicate the lengths of these branches.
-In this case, the units of the branch lengths are millions of years, which is common
-for species trees; however, trees with branch lengths in units of years or generations
-can also be parsed. When the branch lengths are in units of millions of years or in units
-of years (i.e., not in units of generations), a generation time in number of years must
-be provided so that the simulation model can be set up. In addition, a population size
-is required. With the species tree, a generation time, and the population size, the model
-can be generated:
+The correspondence between the model and the species tree can also be verified
+by using the demography debugger:
 
 .. code-block:: python
 
-    >>> import msprime
-    >>> parsed_tuple = msprime.parse_species_tree(
-    ...     tree="(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
-    ...     Ne=10000,
-    ...     branch_length_units="myr",
-    ...     generation_time=28)
+    dd = msprime.DemographyDebugger(
+        population_configurations=pop_configs,
+        demographic_events=demographic_events)
+    dd.print_history()
+    # Model =  hudson(reference_size=1)
+    # ================================
+    # Epoch: 0 -- 200000.0 generations
+    # ================================
+    #      start     end      growth_rate |     0        1        2        3    
+    #    -------- --------       -------- | -------- -------- -------- -------- 
+    # 0 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 1 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 2 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 3 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 
+    # Events @ generation 200000.0
+    #    - Mass migration: Lineages moved with probability 1.0 backwards in time with source 1 & dest 0
+    #                      (equivalent to migration from 0 to 1 forwards in time)
+    # =================================================
+    # Epoch: 200000.0 -- 307142.85714285716 generations
+    # =================================================
+    #      start     end      growth_rate |     0        1        2        3    
+    #    -------- --------       -------- | -------- -------- -------- -------- 
+    # 0 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 1 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 2 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 3 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 
+    # Events @ generation 307142.85714285716
+    #    - Mass migration: Lineages moved with probability 1.0 backwards in time with source 2 & dest 0
+    #                      (equivalent to migration from 0 to 2 forwards in time)
+    # =========================================================
+    # Epoch: 307142.85714285716 -- 642857.142857143 generations
+    # =========================================================
+    #      start     end      growth_rate |     0        1        2        3    
+    #    -------- --------       -------- | -------- -------- -------- -------- 
+    # 0 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 1 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 2 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 3 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 
+    # Events @ generation 642857.142857143
+    #    - Mass migration: Lineages moved with probability 1.0 backwards in time with source 3 & dest 0
+    #                      (equivalent to migration from 0 to 3 forwards in time)
+    # ==========================================
+    # Epoch: 642857.142857143 -- inf generations
+    # ==========================================
+    #      start     end      growth_rate |     0        1        2        3    
+    #    -------- --------       -------- | -------- -------- -------- -------- 
+    # 0 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 1 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 2 |  1e+04    1e+04               0 |     0        0        0        0    
+    # 3 |  1e+04    1e+04               0 |     0        0        0        0    
 
-The above code stores a tuple of two lists in the variable ``parsed_tuple``:
-
-.. code-block:: python
-
-    >>> print(type(parsed_tuple[0]))
-    <class 'list'>
-    >>> print(type(parsed_tuple[1]))
-    <class 'list'>
-
-The first of these two lists contains instances of :class:`.PopulationConfiguration` and
-the second contains instances of :class:`.MassMigration`:
-
-.. code-block:: python
-
-    >>> print(type(parsed_tuple[0][0]))
-    <class 'msprime.simulations.PopulationConfiguration'>
-    >>> print(type(parsed_tuple[1][0]))
-    <class 'msprime.simulations.MassMigration'>
-
-The mass migration events are ordered by the time of the event and they thus specify
-the sequence in which lineages are moved from source to destination populations:
-
-.. code-block:: python
-
-    >>> print(parsed_tuple[1][0])
-    Mass migration: Lineages moved with probability 1.0 backwards in time with source 1 & dest 0
-                         (equivalent to migration from 0 to 1 forwards in time)
-    >>> print(parsed_tuple[1][1])
-    Mass migration: Lineages moved with probability 1.0 backwards in time with source 2 & dest 0
-                         (equivalent to migration from 0 to 2 forwards in time)
-    >>> print(parsed_tuple[1][2])
-    Mass migration: Lineages moved with probability 1.0 backwards in time with source 3 & dest 0
-                         (equivalent to migration from 0 to 3 forwards in time)
-
-The above output indicates that --- viewed backwards in time --- lineages from
-populations 1, 2, and 3 are consecutively moved into population 0. Viewed forwards in
-time instead, this means that population 3 is the first to diverge, followed by
-population 2 and finally the divergence between populations 0 and 1. This
-sequence of divergences corresponds to the species tree if population 3 is orangutan
-and populations 2, 1, and 0 are gorilla, chimpanzee, and human, respectively. While
-the parsed species names are not used as population labels, they are included in the
-population configurations in the form of metadata, with the "species_name" tag:
-
-.. code-block:: python
-
-    >>> print(parsed_tuple[0][0].metadata)
-    {'species_name': 'human'}
-    >>> print(parsed_tuple[0][1].metadata)
-    {'species_name': 'chimpanzee'}
-    >>> print(parsed_tuple[0][2].metadata)
-    {'species_name': 'gorilla'}
-    >>> print(parsed_tuple[0][3].metadata)
-    {'species_name': 'orangutan'}
-
-As the above output shows, the information on the topology of the species tree is
-fully included in the set of population configurations and mass migration events.
-It also illustrates that it is always the left one (when viewed from the root
-towards the tips of the species tree in the tree figure above) of the two populations
-descending from a divergence event that is used as the destination population in
-mass migration events.
-
-The population configurations also define the population size:
-
-.. code-block:: python
-
-    >>> print(parsed_tuple[0][0].initial_size)
-    10000.0
-    >>> print(parsed_tuple[0][1].initial_size)
-    10000.0
-    >>> print(parsed_tuple[0][2].initial_size)
-    10000.0
-    >>> print(parsed_tuple[0][3].initial_size)
-    10000.0
-
-The population size is 10,000 because this value was specified for Ne when
-calling :func:`.parse_species_tree`. The growth rates are zero for all populations,
-meaning that they all have constant population sizes:
-
-.. code-block:: python
-
-    >>> print(parsed_tuple[0][0].growth_rate)
-    0.0
-    >>> print(parsed_tuple[0][1].growth_rate)
-    0.0
-    >>> print(parsed_tuple[0][2].growth_rate)
-    0.0
-    >>> print(parsed_tuple[0][3].growth_rate)
-    0.0
-
-To simulate under the model corresponding to the species tree, the population
-configurations and mass migration events are used as input for
-:func:`.simulate`:
-
-.. code-block:: python
-
-    >>> for pop_conf in parsed_tuple[0]:
-    ...     pop_conf.sample_size = 2
-    >>> tree_sequence = msprime.simulate(
-    ...     population_configurations=parsed_tuple[0],
-    ...     demographic_events=parsed_tuple[1])
-    >>> tree = tree_sequence.first()
-    >>> print(tree.draw(format="unicode"))
-       14          
-     ┏━━┻━━━┓      
-     ┃     13      
-     ┃   ┏━━┻━━┓   
-     ┃   ┃    12   
-     ┃   ┃   ┏━┻━┓ 
-     ┃   ┃   ┃  11 
-     ┃   ┃   ┃  ┏┻┓
-    10   ┃   ┃  ┃ ┃
-    ┏┻┓  ┃   ┃  ┃ ┃
-    ┃ ┃  ┃   9  ┃ ┃
-    ┃ ┃  ┃  ┏┻┓ ┃ ┃
-    ┃ ┃  8  ┃ ┃ ┃ ┃
-    ┃ ┃ ┏┻┓ ┃ ┃ ┃ ┃
-    6 7 4 5 2 3 0 1
-
-
+The epoch boundaries 200000, 307142.9, and 642857.1 correspond to the species
+divergence times 5.6, 8.6, and 18.0 after converting the branch length units
+of the species tree from millions of years to generations with the specified
+generation time of 28 years.
 
 
 ******************
