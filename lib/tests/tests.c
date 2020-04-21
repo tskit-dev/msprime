@@ -3116,107 +3116,6 @@ test_large_bottleneck_simulation(void)
     tsk_table_collection_free(&tables);
 }
 
-static void
-test_compute_falling_factorial(void)
-{
-    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(0), 0, 0.000000);
-    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(1), 1.386294, 0.000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(2), 2.484907, 0.000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(3), 3.178054, 0.000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_falling_factorial_log(4), 3.178054, 0.000001);
-}
-
-
-/* Because the beta coalescent uses allocated memory we must allocate a simulator.
- * This function hides this detail away for convenience. */
-static double
-compute_beta_coalescence_rate(unsigned int num_ancestors, double alpha)
-{
-    int ret;
-    msp_t msp;
-    unsigned int n = 10;
-    double value;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
-    tsk_table_collection_t tables;
-
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    /* TODO is truncation_point arbitrary here? */
-    ret = msp_set_simulation_model_beta(&msp, 1, alpha, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = msp_beta_compute_coalescence_rate(&msp, num_ancestors, &value);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    msp_free(&msp);
-    recomb_map_free(&recomb_map);
-    tsk_table_collection_free(&tables);
-    free(samples);
-    gsl_rng_free(rng);
-    return value;
-}
-
-static void
-test_compute_beta_coalescence_rate(void)
-{
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.01), 225.6396, 0.001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.5), 1140.782, 1140.782*1e-3);
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(100, 1.8), 2815.267, 0.1);
-
-    // Pairwise coalescent, alpha is irrelevant
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.1), 1.0, 0.000000);
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.5), 1.0, 0.000000);
-    CU_ASSERT_DOUBLE_EQUAL(compute_beta_coalescence_rate(2, 1.9), 1.0, 0.000000);
-}
-
-static int
-compute_beta_coalescence_rate_fails(unsigned int num_ancestors, double alpha)
-{
-    int ret;
-    msp_t msp;
-    unsigned int n = 10;
-    double value;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
-    tsk_table_collection_t tables;
-
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_simulation_model_beta(&msp, 1, alpha, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = msp_beta_compute_coalescence_rate(&msp, num_ancestors, &value);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTEGRATION_FAILED);
-
-    msp_free(&msp);
-    recomb_map_free(&recomb_map);
-    free(samples);
-    gsl_rng_free(rng);
-    tsk_table_collection_free(&tables);
-    return 0;
-}
-
 #define check_time_change(msp, t) \
     do { \
         const double tol = 1e-4; \
@@ -3393,19 +3292,6 @@ test_beta_coalescent_bad_parameters(void)
 }
 
 static void
-test_gsl_error_handling_beta_coalescent(void)
-{
-    FILE *old_stderr = stderr;
-    gsl_error_handler_t *old_handler;
-    old_handler = gsl_set_error_handler_off();
-    /* Redirect stderr to avoid spamming output */
-    stderr = _devnull;
-    compute_beta_coalescence_rate_fails(1000, 2 - DBL_EPSILON);
-    gsl_set_error_handler(old_handler);
-    stderr = old_stderr;
-}
-
-static void
 test_multiple_mergers_simulation(void)
 {
     int ret;
@@ -3415,7 +3301,7 @@ test_multiple_mergers_simulation(void)
     long seed = 10;
     bool store_full_arg[] = {true, false};
     /* These simulations can be slow, so just choose a few param combinations */
-    double beta_params[][2] = {{1.1, 0.5}, {1.9, 1}};
+    double beta_params[][2] = {{1.1, 0.5}, {1.99, 1}};
     /* TODO what are good psi parameters here? */
     double psi_params[][2] = {{0.9, 10}, {0.1, 1}};
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -3464,10 +3350,10 @@ test_multiple_mergers_simulation(void)
                 msp_print_state(msp, _devnull);
 
                 ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-                if (store_full_arg[k]) {
+                //if (store_full_arg[k]) {
                     /* Can't support this for now. */
-                    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-                } else {
+                //    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
+                //} else {
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
                     CU_ASSERT_TRUE(msp_is_completed(msp));
                     CU_ASSERT_TRUE(msp->time > 0);
@@ -3479,7 +3365,7 @@ test_multiple_mergers_simulation(void)
                     }
                     CU_ASSERT_EQUAL_FATAL(ret, 0);
                     CU_ASSERT_TRUE(msp_is_completed(msp));
-                }
+                //}
                 ret = msp_free(msp);
                 CU_ASSERT_EQUAL(ret, 0);
             }
@@ -5079,12 +4965,9 @@ main(int argc, char **argv)
         {"test_gene_conversion_simulation", test_gene_conversion_simulation},
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
-        {"test_compute_falling_factorial", test_compute_falling_factorial},
-        {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
         {"test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters},
         {"test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters},
         {"test_model_time_change_consistency", test_model_time_change_consistency},
-        {"test_gsl_error_handling_beta_coalescent", test_gsl_error_handling_beta_coalescent},
         {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
         {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
         {"test_simple_recombination_map", test_simple_recomb_map},

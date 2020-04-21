@@ -22,6 +22,7 @@
 #include <float.h>
 
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_minmax.h>
 
 #include "msprime.h"
 

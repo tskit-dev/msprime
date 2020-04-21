@@ -589,6 +589,106 @@ class SimulationVerifier(object):
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
+    def run_multiple_merger_arg_recording(self):
+        basedir = "tmp__NOBACKUP__/mmc_arg_recording"
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+
+        ts_node_counts = np.array([])
+        arg_node_counts = np.array([])
+        ts_tree_counts = np.array([])
+        arg_tree_counts = np.array([])
+        ts_edge_counts = np.array([])
+        arg_edge_counts = np.array([])
+
+        reps = 10000
+        leaves = 100
+        rho = 2
+
+        for i in range(reps):
+            ts = msprime.simulate(
+                sample_size=leaves,
+                recombination_rate=rho,
+                random_seed=i+1,
+                model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1))
+            ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
+            ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
+            ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
+            arg = msprime.simulate(
+                sample_size=leaves,
+                recombination_rate=rho,
+                random_seed=i + 1,
+                model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1),
+                record_full_arg=True)
+            arg = arg.simplify()
+            arg_node_counts = np.append(arg_node_counts, arg.num_nodes)
+            arg_tree_counts = np.append(arg_tree_counts, arg.num_trees)
+            arg_edge_counts = np.append(arg_edge_counts, arg.num_edges)
+
+        pp_ts = sm.ProbPlot(ts_node_counts)
+        pp_arg = sm.ProbPlot(arg_node_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "beta_nodes.png")
+        pyplot.savefig(f, dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_tree_counts)
+        pp_arg = sm.ProbPlot(arg_tree_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "beta_trees.png")
+        pyplot.savefig(f, dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_edge_counts)
+        pp_arg = sm.ProbPlot(arg_edge_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "beta_edges.png")
+        pyplot.savefig(f, dpi=72)
+
+        ts_node_counts = np.array([])
+        arg_node_counts = np.array([])
+        ts_tree_counts = np.array([])
+        arg_tree_counts = np.array([])
+        ts_edge_counts = np.array([])
+        arg_edge_counts = np.array([])
+
+        for i in range(reps):
+            ts = msprime.simulate(
+                sample_size=leaves,
+                recombination_rate=rho,
+                random_seed=i+1,
+                model=msprime.DiracCoalescent(psi=0.9, c=1))
+            ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
+            ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
+            ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
+            arg = msprime.simulate(
+                sample_size=leaves,
+                recombination_rate=rho,
+                random_seed=i + 1,
+                model=msprime.DiracCoalescent(psi=0.9, c=1),
+                record_full_arg=True)
+            arg = arg.simplify()
+            arg_node_counts = np.append(arg_node_counts, arg.num_nodes)
+            arg_tree_counts = np.append(arg_tree_counts, arg.num_trees)
+            arg_edge_counts = np.append(arg_edge_counts, arg.num_edges)
+
+        pp_ts = sm.ProbPlot(ts_node_counts)
+        pp_arg = sm.ProbPlot(arg_node_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "dirac_nodes.png")
+        pyplot.savefig(f, dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_tree_counts)
+        pp_arg = sm.ProbPlot(arg_tree_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "dirac_trees.png")
+        pyplot.savefig(f, dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_edge_counts)
+        pp_arg = sm.ProbPlot(arg_edge_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        f = os.path.join(basedir, "dirac_edges.png")
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
+
     def run_pairwise_island_model(self):
         """
         Runs the check for the pairwise coalscence times for within
@@ -2176,7 +2276,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_psi={}_c={}_.png".format(sample_size, psi, c))
+        f = os.path.join(basedir, "n={}_psi={}_c={}.png".format(sample_size, psi, c))
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey")
         ax.set_xlabel("num leaves")
@@ -2223,7 +2323,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_psi={}_c{}_=.png".format(sample_size, psi, c))
+        f = os.path.join(basedir, "n={}_psi={}_c={}.png".format(sample_size, psi, c))
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey")
         ax.set_xlabel("num leaves")
@@ -2795,13 +2895,13 @@ class SimulationVerifier(object):
 
     def add_hudson_breakpoints(self):
         """
-        Adds a check for xi_beta recombination breakpoints
+        Adds a check for hudson recombination breakpoints
         """
         self._instances["hudson_breakpoints"] = self.run_hudson_breakpoints
 
     def add_hudson_recombination(self):
         """
-        Adds a check for xi_beta recombination breakpoints
+        Adds a check for hudson recombination breakpoints
         """
         self._instances["hudson_recombinations"] = self.run_Hudson_recombinations
 
@@ -2952,6 +3052,14 @@ class SimulationVerifier(object):
         a full arg.
         """
         self._instances["arg_recording"] = self.run_arg_recording
+
+    def add_multiple_merger_arg_recording_check(self):
+        """
+        Adds a check that we get the right number of objects when we simplify
+        a full arg.
+        """
+        self._instances["multiple_merger_arg_recording"] = \
+            self.run_multiple_merger_arg_recording
 
     def add_smc_num_trees_analytical_check(self):
         """
@@ -3279,6 +3387,7 @@ def run_tests(args):
 
     # ARG recording
     verifier.add_arg_recording_check()
+    verifier.add_multiple_merger_arg_recording_check()
 
     # Simulate-from checks.
     verifier.add_simulate_from_single_locus_check()
