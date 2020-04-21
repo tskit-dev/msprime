@@ -5706,41 +5706,39 @@ msp_std_common_ancestor_event(msp_t *self, population_id_t population_id,
 
 /**************************************************************
  * Dirac coalescent
- *
- * TODO provide backround and documentation.
  **************************************************************/
 
 static double
 dirac_model_time_to_generations(simulation_model_t *model, double t)
 {
-    double x = 1 + (model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi));
-    return 4 * gsl_pow_2(model->reference_size) * t / x;
+    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
+               model->params.dirac_coalescent.psi);
+    return 4 * gsl_pow_2(model->reference_size) * t * x;
 }
 
 static double
 dirac_generations_to_model_time(simulation_model_t *model, double g)
 {
 
-    double x = 1 + (model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi));
-    return g * x / (4 * gsl_pow_2(model->reference_size));
+    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
+               model->params.dirac_coalescent.psi);
+    return g / (4 * gsl_pow_2(model->reference_size) * x);
 }
 
 static double
 dirac_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    double x = 1 + (model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi));
-    return rate * 4 * model->reference_size / x;
+    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
+               model->params.dirac_coalescent.psi);
+    return rate * 4 * model->reference_size * x;
 }
 
 static double
 dirac_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    double x = 1 + (model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi));
-    return rate * x / ( 4 * model->reference_size);
+    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
+               model->params.dirac_coalescent.psi);
+    return rate / (4 * model->reference_size * x);
 }
 
 static double
@@ -5822,9 +5820,8 @@ beta_model_compute_timescale(simulation_model_t *model)
     double truncation_point = model->params.beta_coalescent.truncation_point;
     double reference_size = model->reference_size;
     double m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale = exp(log(alpha) - alpha * log(m)
-        - (alpha - 1) * log(reference_size))
-        * gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
+    double timescale = exp(alpha * log(m) + (alpha - 1) * log(reference_size)
+        - log(alpha)) / gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
     return timescale;
 }
 
