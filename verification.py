@@ -2146,7 +2146,9 @@ class SimulationVerifier(object):
 
     def compare_xi_dirac_sfs(self, sample_size, psi, c, sfs, num_replicates=1000):
         """
-        Runs simulations of the xi dirac model and compares to the expected SFS.
+        Runs simulations of the xi dirac model and calculates
+        E[Bi/B] (Bi branch length having i leaves and B total branch length)
+        and compares to the expected SFS.
         """
         print("running SFS for", sample_size, psi, c)
         reps = msprime.simulate(
@@ -2174,8 +2176,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_psi={}.png".format(sample_size, psi))
-
+        f = os.path.join(basedir, "n={}_psi={}_c={}_.png".format(sample_size, psi, c))
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey")
         ax.set_xlabel("num leaves")
@@ -2187,27 +2188,295 @@ class SimulationVerifier(object):
         pyplot.savefig(f, dpi=72)
         pyplot.close('all')
 
+    def compare_normalised_xi_dirac_sfs(
+            self, sample_size, psi, c, sfs, num_replicates=1000):
+        """
+        Runs simulations of the xi dirac model and calculates
+        E[Bi]/E[B] (Bi branch length having i leaves and B total branch length)
+        and compares to the expected SFS.
+        """
+        print("running SFS for", sample_size, psi, c)
+        reps = msprime.simulate(
+            sample_size, num_replicates=num_replicates,
+            model=msprime.DiracCoalescent(psi=psi, c=c))
+
+        data = collections.defaultdict(list)
+        tbl_sum = [0] * (sample_size - 1)
+        tot_bl_sum = [0]
+        for j, ts in enumerate(reps):
+            for tree in ts.trees():
+                tot_bl = 0.0
+                tbl = [0] * (sample_size - 1)
+                for node in tree.nodes():
+                    if tree.parent(node) != msprime.NULL_NODE:
+                        tbl[tree.num_samples(node)-1] = tbl[
+                            tree.num_samples(node)-1] + tree.branch_length(node)
+                        tot_bl = tot_bl + tree.branch_length(node)
+
+                for xi in range(sample_size - 1):
+                    rescaled_x = tbl[xi]
+                    data["total_branch_length"].append(rescaled_x/tot_bl)
+                    tbl_sum[xi] = tbl_sum[xi] + rescaled_x
+                tot_bl_sum[0] = tot_bl_sum[0] + tot_bl
+                data["num_leaves"].extend(range(1, sample_size))
+
+        basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        f = os.path.join(basedir, "n={}_psi={}_c{}_=.png".format(sample_size, psi, c))
+        ax = sns.violinplot(
+            data=data, x="num_leaves", y="total_branch_length", color="grey")
+        ax.set_xlabel("num leaves")
+        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
+        l2 = ax.plot(
+            np.arange(sample_size - 1),
+            [(x/num_replicates)/(tot_bl_sum[0]/num_replicates) for x in tbl_sum],
+            "--", linewidth=3)
+        ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
+
     def run_xi_dirac_expected_sfs(self):
-        self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=3, psi=0.01, c=1, sfs=[0.666667, 0.333333])
-        self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=3, psi=0.99, c=1,
-            sfs=[0.6722604, 0.3277396])
-        self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=4, psi=0.01, c=1,
-            sfs=[0.5457826, 0.2728913, 0.1813261])
-        self.compare_xi_dirac_sfs(
-            num_replicates=5000, sample_size=4, psi=0.99, c=1,
-            sfs=[0.5611642, 0.2747103, 0.1641255])
 
-        # MORE, NEED TO CHECK THESE VALUES
-
-        self.compare_xi_dirac_sfs(
-            num_replicates=1000,
-            sample_size=13, psi=0.5, c=1,
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.1,
+            c=1,
             sfs=[
-                0.418425, 0.121938, 0.092209, 0.070954, 0.056666, 0.047179,
-                0.040545, 0.035631, 0.031841, 0.028832, 0.026796, 0.028985])
+                0.35352303,
+                0.17672997,
+                0.11781921,
+                0.08836481,
+                0.07069227,
+                0.05891075,
+                0.05049574,
+                0.04418514,
+                0.03927908,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.3,
+            c=1,
+            sfs=[
+                0.35430737,
+                0.17650201,
+                0.11762438,
+                0.08822363,
+                0.07058696,
+                0.05883259,
+                0.05044232,
+                0.04416277,
+                0.03931799,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.5,
+            c=1,
+            sfs=[
+                0.35655911,
+                0.17596878,
+                0.11711820,
+                0.08785514,
+                0.07030139,
+                0.05860142,
+                0.05025410,
+                0.04402755,
+                0.03931431,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.9,
+            c=1,
+            sfs=[
+                0.36443828,
+                0.17490683,
+                0.11614708,
+                0.08717119,
+                0.06965759,
+                0.05790491,
+                0.04939935,
+                0.04279132,
+                0.03758346,
+            ],
+        )
+
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=3,
+            psi=0.1,
+            c=10,
+            sfs=[0.6667343, 0.3332657],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=3,
+            psi=0.3,
+            c=10,
+            sfs=[0.6682113, 0.3317887],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=3,
+            psi=0.5,
+            c=10,
+            sfs=[0.6721853, 0.3278147],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=3,
+            psi=0.9,
+            c=10,
+            sfs=[0.6852703, 0.3147297],
+        )
+
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.1,
+            c=10,
+            sfs=[
+                0.35385062,
+                0.17661522,
+                0.11773706,
+                0.08830646,
+                0.07064941,
+                0.05887993,
+                0.05047626,
+                0.04418035,
+                0.03930470,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.3,
+            c=10,
+            sfs=[
+                0.36053858,
+                0.17456975,
+                0.11610005,
+                0.08713599,
+                0.06977685,
+                0.05822906,
+                0.05002797,
+                0.04398723,
+                0.03963453,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.5,
+            c=10,
+            sfs=[
+                0.37556917,
+                0.17015781,
+                0.11285655,
+                0.08495119,
+                0.06808802,
+                0.05683977,
+                0.04886055,
+                0.04309158,
+                0.03958537,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.9,
+            c=10,
+            sfs=[
+                0.41154361,
+                0.15908770,
+                0.10852899,
+                0.08341563,
+                0.06647774,
+                0.05471783,
+                0.04592602,
+                0.03818041,
+                0.03212207,
+            ],
+        )
+
+        ##########################################################################
+        # Compare SFS when c=10000 to the expected SFS whetre c tend to infinity #
+        ##########################################################################
+
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.1,
+            c=10000,
+            sfs=[
+                0.36939374,
+                0.17057448,
+                0.11408360,
+                0.08571572,
+                0.06874076,
+                0.05749423,
+                0.04958115,
+                0.04390987,
+                0.04050644,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.3,
+            c=10000,
+            sfs=[
+                0.39876239,
+                0.15840021,
+                0.10834860,
+                0.08165271,
+                0.06562863,
+                0.05508280,
+                0.04777344,
+                0.04280604,
+                0.04154517,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.5,
+            c=10000,
+            sfs=[
+                0.42603419,
+                0.14512841,
+                0.10505636,
+                0.07956441,
+                0.06368639,
+                0.05328134,
+                0.04595869,
+                0.04078814,
+                0.04050205,
+            ],
+        )
+        self.compare_normalised_xi_dirac_sfs(
+            num_replicates=10000,
+            sample_size=10,
+            psi=0.9,
+            c=10000,
+            sfs=[
+                0.47543921,
+                0.11338801,
+                0.10691661,
+                0.08342993,
+                0.06358921,
+                0.05162311,
+                0.04334855,
+                0.03416865,
+                0.02809671,
+            ],
+        )
 
     def add_xi_dirac_expected_sfs(self):
         """
@@ -2222,7 +2491,7 @@ class SimulationVerifier(object):
         print("running SFS for", sample_size, alpha)
         reps = msprime.simulate(
             sample_size, num_replicates=num_replicates,
-            model=msprime.BetaCoalescent(alpha=alpha, truncation_point=1000))
+            model=msprime.BetaCoalescent(alpha=alpha, truncation_point=1))
 
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
@@ -2246,13 +2515,57 @@ class SimulationVerifier(object):
         if not os.path.exists(basedir):
             os.mkdir(basedir)
         f = os.path.join(basedir, "n={}_alpha={}.png".format(sample_size, alpha))
-
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey")
         ax.set_xlabel("num leaves")
         l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
         l2 = ax.plot(
             np.arange(sample_size - 1), [x/num_replicates for x in tbl_sum],
+            "--", linewidth=3)
+        ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
+        pyplot.savefig(f, dpi=72)
+        pyplot.close('all')
+
+    def compare_normalized_xi_beta_sfs(
+            self, sample_size, alpha, sfs, num_replicates=1000):
+        """
+        Runs simulations of the xi beta model and compares to the expected SFS.
+        """
+        print("running SFS for", sample_size, alpha)
+        reps = msprime.simulate(
+            sample_size, num_replicates=num_replicates,
+            model=msprime.BetaCoalescent(alpha=alpha, truncation_point=1))
+
+        data = collections.defaultdict(list)
+        tbl_sum = [0] * (sample_size - 1)
+        tot_bl_sum = [0]
+        for j, ts in enumerate(reps):
+            for tree in ts.trees():
+                tot_bl = 0.0
+                tbl = [0] * (sample_size - 1)
+                for node in tree.nodes():
+                    if tree.parent(node) != msprime.NULL_NODE:
+                        tbl[tree.num_samples(node)-1] = tbl[
+                            tree.num_samples(node)-1] + tree.branch_length(node)
+                        tot_bl = tot_bl + tree.branch_length(node)
+
+                for xi in range(sample_size - 1):
+                    rescaled_x = tbl[xi]
+                    data["total_branch_length"].append(rescaled_x/tot_bl)
+                    tbl_sum[xi] = tbl_sum[xi] + rescaled_x
+                tot_bl_sum[0] = tot_bl_sum[0] + tot_bl
+                data["num_leaves"].extend(range(1, sample_size))
+        basedir = os.path.join("tmp__NOBACKUP__", "xi_beta_expected_sfs")
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        f = os.path.join(basedir, "n={}_alpha={}.png".format(sample_size, alpha))
+        ax = sns.violinplot(
+            data=data, x="num_leaves", y="total_branch_length", color="grey")
+        ax.set_xlabel("num leaves")
+        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
+        l2 = ax.plot(
+            np.arange(sample_size - 1),
+            [(x/num_replicates)/(tot_bl_sum[0]/num_replicates) for x in tbl_sum],
             "--", linewidth=3)
         ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
         pyplot.savefig(f, dpi=72)
@@ -2285,6 +2598,43 @@ class SimulationVerifier(object):
         pyplot.savefig(path)
         pyplot.close('all')
 
+    def verify_recombination(
+            self, basedir, name, sample_size, Ne, r, L, model, growth_rate=0):
+        """
+        Verifies that the number of recombination equals the number of mutation.
+        """
+        if not os.path.exists(basedir):
+            os.mkdir(basedir)
+        empirical_theta = []
+        empirical_rho = []
+        for i in range(1, 500):
+            ts = msprime.simulate(
+                Ne=Ne, recombination_rate=r, mutation_rate=r, length=L,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        sample_size=sample_size, initial_size=Ne,
+                        growth_rate=growth_rate)],
+                model=model)
+            empirical_theta.append(ts.get_num_sites())
+            ts = msprime.simulator_factory(
+                Ne=Ne, recombination_rate=r, length=L,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        sample_size=sample_size, initial_size=Ne,
+                        growth_rate=growth_rate)],
+                model=model)
+            ts.run()
+            empirical_rho.append(ts.num_breakpoints)
+        empirical_rho.sort()
+        empirical_theta.sort()
+        empirical_rho = np.array(empirical_rho)
+        empirical_theta = np.array(empirical_theta)
+        plot_qq(empirical_theta, empirical_rho)
+        path = os.path.join(basedir, f"{name}_growth={growth_rate}_rec_check.png")
+        print("Writing", path)
+        pyplot.savefig(path)
+        pyplot.close('all')
+
     def run_hudson_breakpoints(self):
         basedir = "tmp__NOBACKUP__/hudson_breakpoints"
         self.verify_breakpoint_distribution(
@@ -2302,7 +2652,7 @@ class SimulationVerifier(object):
 
     def run_xi_beta_breakpoints(self):
         basedir = "tmp__NOBACKUP__/xi_beta_breakpoints"
-        for alpha in [1.01, 1.3, 1.6, 1.9]:
+        for alpha in [1.1, 1.3, 1.6, 1.9]:
             self.verify_breakpoint_distribution(
                 basedir, f"n=100_alpha={alpha}", sample_size=100, Ne=10**4, r=1e-8,
                 L=10**6, model=msprime.BetaCoalescent(alpha=alpha))
@@ -2316,7 +2666,7 @@ class SimulationVerifier(object):
     def run_xi_dirac_breakpoints(self):
         basedir = "tmp__NOBACKUP__/xi_dirac_breakpoints"
         for psi in [0.1, 0.3, 0.6, 0.9]:
-            for c in [0.9, 0.5]:
+            for c in [1, 10]:
                 self.verify_breakpoint_distribution(
                     basedir, f"n=100_psi={psi}_c={c}",
                     sample_size=100, Ne=10**4, r=1e-8,
@@ -2328,6 +2678,29 @@ class SimulationVerifier(object):
                     sample_size=100, Ne=10**4, r=1e-7,
                     L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c),
                     growth_rate=0.05)
+
+    def run_xi_beta_recombinations(self):
+        basedir = "tmp__NOBACKUP__/xi_beta_recombinations"
+        for alpha in [1.1, 1.3, 1.5, 1.9]:
+            self.verify_recombination(
+                basedir, f"n=100_alpha={alpha}", sample_size=100, Ne=10000, r=1e-8,
+                L=10**6, model=msprime.BetaCoalescent(alpha=alpha))
+
+    def run_xi_dirac_recombinations(self):
+        basedir = "tmp__NOBACKUP__/xi_dirac_recombinations"
+        for psi in [0.1, 0.3, 0.5, 0.9]:
+            for c in [1, 10, 100]:
+                self.verify_recombination(
+                    basedir, f"n=100_psi={psi}_c={c}",
+                    sample_size=100, Ne=10000, r=1e-8,
+                    L=10**6, model=msprime.DiracCoalescent(psi=psi, c=c))
+
+    def run_Hudson_recombinations(self):
+        basedir = "tmp__NOBACKUP__/hudson_recombinations"
+        self.verify_recombination(
+            basedir, f"n=100_hudson",
+            sample_size=100, Ne=10000, r=1e-8,
+            L=10**6, model="hudson")
 
     def run_cont_discrete_comparison(self, key, model,
                                      discrete_recomb_map,
@@ -2426,11 +2799,23 @@ class SimulationVerifier(object):
         """
         self._instances["hudson_breakpoints"] = self.run_hudson_breakpoints
 
+    def add_hudson_recombination(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["hudson_recombinations"] = self.run_Hudson_recombinations
+
     def add_xi_beta_breakpoints(self):
         """
         Adds a check for xi_beta recombination breakpoints
         """
         self._instances["xi_beta_breakpoints"] = self.run_xi_beta_breakpoints
+
+    def add_xi_beta_recombination(self):
+        """
+        Adds a check for xi_beta recombination breakpoints
+        """
+        self._instances["xi_beta_recombinations"] = self.run_xi_beta_recombinations
 
     def add_xi_dirac_breakpoints(self):
         """
@@ -2438,30 +2823,81 @@ class SimulationVerifier(object):
         """
         self._instances["xi_dirac_breakpoints"] = self.run_xi_dirac_breakpoints
 
+    def add_xi_dirac_recombination(self):
+        """
+        Adds a check for xi_dirac recombination breakpoints
+        """
+        self._instances["xi_dirac_recombinations"] = self.run_xi_dirac_recombinations
+
     def run_xi_beta_expected_sfs(self):
-        self.compare_xi_beta_sfs(
-            num_replicates=5000,
-            sample_size=3, alpha=1.01, sfs=[0.681653, 0.318347])
 
-        self.compare_xi_beta_sfs(
-            num_replicates=5000,
-            sample_size=3, alpha=1.8, sfs=[0.6694913, 0.3305087])
+        self.compare_normalized_xi_beta_sfs(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.1,
+            sfs=[
+                0.40838865,
+                0.15645421,
+                0.10765060,
+                0.08178884,
+                0.06548874,
+                0.05455910,
+                0.04672861,
+                0.04082172,
+                0.03811953,
+            ],
+        )
 
-        self.compare_xi_beta_sfs(
-            num_replicates=5000,
-            sample_size=4, alpha=1.01, sfs=[0.5684275, 0.2576535, 0.1739190])
+        self.compare_normalized_xi_beta_sfs(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.3,
+            sfs=[
+                0.39612917,
+                0.16173072,
+                0.10932728,
+                0.08270507,
+                0.06630221,
+                0.05534012,
+                0.04754038,
+                0.04182775,
+                0.03909731,
+            ],
+        )
 
-        self.compare_xi_beta_sfs(
-            num_replicates=5000,
-            sample_size=4, alpha=1.8, sfs=[0.5501309, 0.2691312, 0.1807379])
+        self.compare_normalized_xi_beta_sfs(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.5,
+            sfs=[
+                0.38395732,
+                0.16650213,
+                0.11136301,
+                0.08395003,
+                0.06731437,
+                0.05622960,
+                0.04837457,
+                0.04268961,
+                0.03961935,
+            ],
+        )
 
-        # MORE
-
-        self.compare_xi_beta_sfs(
-            num_replicates=1000,
-            sample_size=13, alpha=1.01,
-            sfs=[0.400253, 0.134518, 0.093954, 0.072698, 0.058500, 0.048636,
-                 0.041617, 0.036404, 0.032334, 0.028913, 0.026112, 0.026060])
+        self.compare_normalized_xi_beta_sfs(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.9,
+            sfs=[
+                0.35961114,
+                0.17486018,
+                0.11638771,
+                0.08734266,
+                0.06992360,
+                0.05832611,
+                0.05007349,
+                0.04396363,
+                0.03951149,
+            ],
+        )
 
     def add_xi_beta_expected_sfs(self):
         """
@@ -2858,8 +3294,6 @@ def run_tests(args):
     # Add XiDirac checks against standard coalescent.
     verifier.add_xi_dirac_vs_hudson_single_locus()
     verifier.add_xi_dirac_vs_hudson_recombination()
-    verifier.add_xi_dirac_expected_sfs()
-    verifier.add_xi_beta_expected_sfs()
 
     # DTWF checks against coalescent.
     verifier.add_dtwf_vs_coalescent_single_locus()
@@ -2915,6 +3349,15 @@ def run_tests(args):
     # Check Xi coalesesent recombination breakpoint distributions
     verifier.add_xi_beta_breakpoints()
     verifier.add_xi_dirac_breakpoints()
+
+    # Check mutation and recombination have same distributions when they have same rate
+    verifier.add_xi_beta_recombination()
+    verifier.add_xi_dirac_recombination()
+    verifier.add_hudson_recombination()
+    # Check SFS of Xi coalescent
+
+    verifier.add_xi_dirac_expected_sfs()
+    verifier.add_xi_beta_expected_sfs()
 
     # DTWF checks against SLiM
     # TODO: Add back multi-pop tests of DTWF vs. SLiM when full diploid

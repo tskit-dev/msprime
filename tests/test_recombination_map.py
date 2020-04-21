@@ -25,10 +25,182 @@ import tempfile
 import os
 import gzip
 import warnings
+import random
+import math
 
 import numpy as np
 
 import msprime
+
+
+class PythonRecombinationMap(object):
+    """
+    A Python implementation of the RecombinationMap interface.
+    """
+    def __init__(self, positions, rates, discrete=False):
+        assert len(positions) == len(rates)
+        assert len(positions) >= 2
+        assert sorted(positions) == positions
+        assert positions[0] == 0
+        self._positions = positions
+        self._sequence_length = positions[-1]
+        self._rates = rates
+        self._discrete = discrete
+        self._cumulative = np.insert(np.cumsum(np.diff(positions) * rates[:-1]), 0, 0)
+
+    def get_total_recombination_rate(self):
+        """
+        Returns the effective recombination rate for this genetic map.
+        This is the weighted mean of the rates across all intervals.
+        """
+        return self._cumulative[-1]
+
+    def _genetic_to_physical_zero_rate(self, v):
+        """
+        If we have a zero recombination rate throughout then everything except
+        L maps to 0.
+        """
+        if v >= self.get_total_recombination_rate():
+            return self._sequence_length
+
+        return 0
+
+    def physical_to_genetic(self, x):
+        return np.interp(x, self._positions, self._cumulative)
+
+    def genetic_to_physical(self, v):
+        if self.get_total_recombination_rate() == 0:
+            return self._genetic_to_physical_zero_rate(v)
+        if v == 0:
+            return self._positions[0]
+
+        index = np.searchsorted(self._cumulative, v) - 1
+        y = self._positions[index] + (v - self._cumulative[index]) / self._rates[index]
+        return math.floor(y) if self._discrete else y
+
+
+class TestCoordinateConversion(unittest.TestCase):
+    """
+    Tests that we convert coordinates correctly.
+    """
+
+    def verify_coordinate_conversion(self, positions, rates, discrete=False):
+        """
+        Verifies coordinate conversions by the specified RecombinationMap
+        instance.
+        """
+        L = positions[-1]
+        rm = msprime.RecombinationMap(positions, rates, discrete=discrete)
+        other_rm = PythonRecombinationMap(positions, rates, discrete=discrete)
+
+        self.assertEqual(
+            rm.get_total_recombination_rate(),
+            other_rm.get_total_recombination_rate())
+        num_random_trials = 10
+        num_systematic_trials = 10
+        values = [L * random.random() for j in range(num_random_trials)]
+        for j in range(num_systematic_trials):
+            values.append(L * j / num_systematic_trials)
+        values += positions
+        for x in values:
+            # x is a physical coordinate
+            y = rm.physical_to_genetic(x)
+            self.assertAlmostEqual(y, other_rm.physical_to_genetic(x), delta=1e-10)
+            self.assertTrue(0 <= y <= rm.get_total_recombination_rate())
+            # Check if we can round trip approximately in real coordinates.
+            xp = rm.genetic_to_physical(y)
+            self.assertAlmostEqual(x, xp)
+            # The different implementations might differ by very small amounts.
+            self.assertAlmostEqual(xp, other_rm.genetic_to_physical(y))
+
+    def test_zero_rate_two_intervals(self):
+        # When we have a zero rate in some interval we no longer have a
+        # bijective function, since all the physical coordinates in this
+        # interval map to a single genetic coordinate.
+        positions = [0, 0.25, 0.5, 0.75, 1]
+        rates = [200, 0, 200, 0, 0]
+        maps = [
+            msprime.RecombinationMap(positions, rates),
+            PythonRecombinationMap(positions, rates)]
+        for rm in maps:
+            total_recomb = rm.get_total_recombination_rate()
+            self.assertEqual(100, total_recomb)
+            # Between 0 and 0.25 and 0.5 and 0.75 we should be able to map 1-1
+            # in physical coordinates.
+            for x in [0, 0.125, 0.25, 0.50001, 0.66, 0.74999]:
+                y = rm.physical_to_genetic(x)
+                self.assertTrue(0 <= y <= total_recomb)
+                z = rm.genetic_to_physical(y)
+                self.assertAlmostEqual(x, z)
+
+    def test_zero_rate_start(self):
+        positions = [0, 50, 100]
+        rates = [0, 1, 0]
+        maps = [
+            msprime.RecombinationMap(positions, rates, discrete=True),
+            PythonRecombinationMap(positions, rates, discrete=True)]
+        for rm in maps:
+            # Anything <= 50 maps to 0
+            for x in [0, 10, 49, 50]:
+                self.assertEqual(0, rm.physical_to_genetic(x))
+            self.assertEqual(0, rm.genetic_to_physical(0))
+            # values > 50 should map to x - 50
+            for x in [51, 55, 99, 100]:
+                genetic_x = x - 50
+                self.assertEqual(genetic_x, rm.physical_to_genetic(x))
+                self.assertEqual(rm.genetic_to_physical(genetic_x), x)
+
+    def test_zero_rate_end(self):
+        positions = [0, 50, 100]
+        rates = [1, 0, 0]
+        maps = [
+            msprime.RecombinationMap(positions, rates),
+            PythonRecombinationMap(positions, rates)]
+        for rm in maps:
+            # Anything < 50 maps to x
+            for x in [0, 10, 49]:
+                self.assertEqual(x, rm.physical_to_genetic(x))
+                self.assertEqual(x, rm.genetic_to_physical(x))
+            # values >= 50 should map to 50
+            for x in [50, 51, 55, 99, 100]:
+                self.assertEqual(50, rm.physical_to_genetic(x))
+            self.assertEqual(50, rm.genetic_to_physical(50))
+
+    def test_one_rate(self):
+        for rate in [0.1, 1.0, 10]:
+            for L in [0.1, 1, 10, 1024, 1e6]:
+                positions = [0, L]
+                rates = [rate, 0]
+                rm = msprime.RecombinationMap(positions, rates)
+                self.assertEqual(rate * L, rm.get_total_recombination_rate())
+                self.verify_coordinate_conversion(positions, rates)
+
+    def test_simple_map(self):
+        positions = [0, 0.25, 0.5, 0.75, 1]
+        rates = [0.125, 0.25, 0.5, 0.75, 0]
+        self.verify_coordinate_conversion(positions, rates)
+
+    def test_random_map(self):
+        for size in [2, 3, 4, 100]:
+            positions = [0] + sorted(
+                random.random() for _ in range(size - 2)) + [1]
+            rates = [random.random() for _ in range(size - 1)] + [0]
+            self.verify_coordinate_conversion(positions, rates)
+
+    def test_simple_examples(self):
+        rm = msprime.RecombinationMap([0, 0.9, 1], [2, 1, 0])
+        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
+        rm = msprime.RecombinationMap([0, 0.5, 0.6, 1], [2, 1, 2, 0])
+        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
+
+    def test_integer_round_trip(self):
+        for L in [1, 10, 100]:
+            maps = [
+                msprime.RecombinationMap.uniform_map(L, 1, discrete=True),
+                PythonRecombinationMap([0, L], [1, 0], discrete=True)]
+            for rm in maps:
+                for x in range(L + 1):
+                    self.assertAlmostEqual(x, rm.genetic_to_physical(x))
 
 
 class TestConstructorAndGetters(unittest.TestCase):
@@ -48,9 +220,7 @@ class TestConstructorAndGetters(unittest.TestCase):
     def test_unsupported_methods(self):
         recomb_map = msprime.RecombinationMap([0, 10], [.2, 0])
         self.assertRaises(ValueError, recomb_map.get_num_loci)
-        self.assertRaises(ValueError, recomb_map.physical_to_genetic, 8)
         self.assertRaises(ValueError, recomb_map.physical_to_discrete_genetic, 8)
-        self.assertRaises(ValueError, recomb_map.genetic_to_physical, 8)
         self.assertRaises(ValueError, recomb_map.get_per_locus_recombination_rate)
 
     def test_total_recombination_rate(self):

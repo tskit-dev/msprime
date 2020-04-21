@@ -3127,30 +3127,6 @@ test_compute_falling_factorial(void)
 }
 
 
-static void
-test_compute_dirac_coalescence_rate(void)
-{
-    // compute_dirac_coalescence_rate(unsigned int num_ancestors, double psi, double c)
-
-    // Falls to Kingman coalescent
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0), 1.0, 0.000000);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(3, 0.1, 0), 3.0, 0.000000);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(4, 0.1, 0), 6.0, 0.000000);
-
-    // Pairwise coalescent, λ_2 = 1 + cψ^2 /4
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 0.1), 1.00025, 0.000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 1.0), 1.0025, 0.000001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(2, 0.1, 10.0), 1.025, 0.000001);
-
-    // Other cases, check against lambdab r code
-    // PASS when e = 1e-5, FAIL when e = 1e-6, in particular with low psi
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(10, 0.001, 0.5), 45.00001, 0.00001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(10, 0.001, 50), 45.00056, 0.00001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(10, 0.01, 0.5), 45.00055, 0.00001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(100, 0.99, 50.0), 5000.0, 0.00001);
-    CU_ASSERT_DOUBLE_EQUAL(compute_dirac_coalescence_rate(101, 0.51, 5.0), 5055.0, 0.00001);
-}
-
 /* Because the beta coalescent uses allocated memory we must allocate a simulator.
  * This function hides this detail away for convenience. */
 static double
@@ -3337,6 +3313,46 @@ test_model_time_change_consistency(void)
 }
 
 static void
+test_dirac_coalescent_bad_parameters(void)
+{
+    int j;
+    int ret;
+    msp_t msp;
+    unsigned int n = 10;
+    double cs[] = {-1};
+    double psis[] = {-1e6, 1e6};
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < sizeof(cs) / sizeof(*cs); j++) {
+        ret = msp_set_simulation_model_dirac(&msp, 1, 0.1 ,cs[j]);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_C);
+    }
+    for (j = 0; j < sizeof(psis) / sizeof(*psis); j++) {
+        ret = msp_set_simulation_model_dirac(&msp, 1, psis[j] , 10);
+        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PSI);
+    }
+
+    msp_free(&msp);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+    free(samples);
+    gsl_rng_free(rng);
+}
+
+static void
 test_beta_coalescent_bad_parameters(void)
 {
     int j;
@@ -3394,14 +3410,14 @@ test_multiple_mergers_simulation(void)
 {
     int ret;
     size_t j, k, o, p;
-    uint32_t n = 100;
+    uint32_t n = 10;
     uint32_t m = 100;
     long seed = 10;
     bool store_full_arg[] = {true, false};
     /* These simulations can be slow, so just choose a few param combinations */
     double beta_params[][2] = {{1.1, 0.5}, {1.9, 1}};
     /* TODO what are good psi parameters here? */
-    double psi_params[][2] = {{0.5, 1}, };
+    double psi_params[][2] = {{0.9, 10}, {0.1, 1}};
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -5064,8 +5080,8 @@ main(int argc, char **argv)
         {"test_simulation_replicates", test_simulation_replicates},
         {"test_bottleneck_simulation", test_bottleneck_simulation},
         {"test_compute_falling_factorial", test_compute_falling_factorial},
-        {"test_compute_dirac_coalescence_rate", test_compute_dirac_coalescence_rate},
         {"test_compute_beta_coalescence_rate", test_compute_beta_coalescence_rate},
+        {"test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters},
         {"test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters},
         {"test_model_time_change_consistency", test_model_time_change_consistency},
         {"test_gsl_error_handling_beta_coalescent", test_gsl_error_handling_beta_coalescent},
