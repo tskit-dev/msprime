@@ -57,6 +57,41 @@ def get_example_tables():
     return tables
 
 
+class TestEncodingMatchesTskit(unittest.TestCase):
+    """
+    Checks that the dict encoding that we have matches what we have in
+    tskit.
+    """
+    def test_top_keys_match(self):
+        tables = get_example_tables()
+        d1 = tables.asdict()
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d1)
+        d2 = lwt.asdict()
+        self.assertEqual(d1.keys(), d2.keys())
+
+    def test_table_columns_match(self):
+        tables = get_example_tables()
+        d1 = tables.asdict()
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d1)
+        d2 = lwt.asdict()
+        tables = [
+            "individuals",
+            "nodes",
+            "edges",
+            "migrations",
+            "sites",
+            "mutations",
+            "populations",
+            "provenances",
+        ]
+        for table_name in tables:
+            t1 = d1[table_name]
+            t2 = d2[table_name]
+            self.assertEqual(t1.keys(), t2.keys())
+
+
 class TestRoundTrip(unittest.TestCase):
     """
     Tests if we can do a simple round trip on simulated data.
