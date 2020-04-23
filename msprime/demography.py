@@ -79,6 +79,14 @@ class Demography:
     migration_matrix = attr.ib(default=None)
     events = attr.ib(factory=list)
 
+    def __attrs_post_init__(self):
+        if self.migration_matrix is None:
+            N = self.num_populations
+            self.migration_matrix = np.zeros((N, N))
+
+        # Sort demographic events by time.
+        self.events.sort(key=lambda de: de.time)
+
     @property
     def num_populations(self):
         return len(self.populations)
