@@ -19,13 +19,14 @@
 """
 Test cases for likelihood functions in msprime.
 """
+import collections
 import math
 import unittest
-import collections
 
-import msprime
 import numpy as np
 import tskit
+
+import msprime
 
 # Python implementations of the likelihood calculations
 

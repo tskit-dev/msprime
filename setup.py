@@ -16,13 +16,13 @@
 # You should have received a copy of the GNU General Public License
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
-import subprocess
-import platform
-import os
 import os.path
+import platform
+import subprocess
 from warnings import warn
 
-from setuptools import setup, Extension
+from setuptools import Extension
+from setuptools import setup
 from setuptools.command.build_ext import build_ext
 
 

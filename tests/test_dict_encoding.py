@@ -8,11 +8,11 @@ that no errors are introduced into the code over time.
 """
 import unittest
 
-import msprime
 import numpy as np
+import tskit
 
 import _msprime as c_module
-import tskit
+import msprime
 
 
 def get_example_tables():

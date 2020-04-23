@@ -20,19 +20,19 @@
 Test cases for demographic events in msprime.
 """
 import itertools
+import json
 import math
+import random
 import tempfile
 import unittest
-import json
-import random
 from unittest import mock
 
 import numpy as np
 import scipy.linalg
 import tskit
 
-import msprime
 import _msprime
+import msprime
 
 
 class TestTimeTravelErrors(unittest.TestCase):

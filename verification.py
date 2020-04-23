@@ -2,6 +2,8 @@
 Script to automate verification of the msprime simulator against
 known statistical results and benchmark programs such as Hudson's ms.
 """
+import argparse
+import ast
 import collections
 import math
 import os
@@ -10,27 +12,25 @@ import subprocess
 import sys
 import tempfile
 import time
-import ast
 
+import dendropy
+import matplotlib
+import numpy as np
+import pandas as pd
 import scipy.special
 import scipy.stats
-import pandas as pd
-import numpy as np
-import matplotlib
+import seaborn as sns
+import tqdm
+from matplotlib import lines as mlines
+from matplotlib import pyplot
+
+import msprime
+import msprime.cli as cli
 
 # Force matplotlib to not use any Xwindows backend.
 # Note this must be done before importing statsmodels.
-matplotlib.use("Agg")  # NOQA
-from matplotlib import pyplot
-from matplotlib import lines as mlines
-import seaborn as sns
-import statsmodels.api as sm
-import dendropy
-import tqdm
-import argparse
-
-import msprime.cli as cli
-import msprime
+matplotlib.use("Agg")
+import statsmodels.api as sm  # noqa: E402
 
 
 def flatten(l):

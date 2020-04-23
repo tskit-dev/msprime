@@ -19,20 +19,20 @@
 """
 Test cases for the high level interface to msprime.
 """
-import unittest
-import json
-import itertools
 import functools
+import itertools
+import json
+import unittest
 
+import attr
 import numpy as np
 import scipy.stats as stats
 import tskit
-import attr
 
-import msprime
 import _msprime
-from tests import tsutil
+import msprime
 import tests.wright_fisher as wf
+from tests import tsutil
 
 
 class TestMutateProvenance(unittest.TestCase):

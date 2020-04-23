@@ -20,13 +20,13 @@
 Tests for the recombination map functionality, mapping continuous physical
 coordinates to discrete genetic loci and vice versa.
 """
-import unittest
-import tempfile
-import os
 import gzip
-import warnings
-import random
 import math
+import os
+import random
+import tempfile
+import unittest
+import warnings
 
 import numpy as np
 

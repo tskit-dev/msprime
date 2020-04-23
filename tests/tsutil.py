@@ -23,8 +23,8 @@ import json
 import random
 
 import numpy as np
-
 import tskit.provenance as provenance
+
 import msprime
 
 

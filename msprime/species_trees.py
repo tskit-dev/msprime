@@ -19,8 +19,9 @@
 """
 Module responsible for parsing species trees.
 """
-import newick
 import re
+
+import newick
 
 import msprime
 

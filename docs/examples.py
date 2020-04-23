@@ -1,24 +1,23 @@
 """
 The examples used in the tutorial section.
 """
-import os
-import sys
 import math
+import os
+import random
+import sys
+import threading
+
+import matplotlib.collections
+import matplotlib.pyplot as pyplot
 import numpy as np
 import scipy.stats
-import matplotlib
-import random
 import tqdm
-import threading
 
 sys.path.insert(0, os.path.abspath(".."))
 import msprime  # noqa: E402
 
-
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use("Agg")
-import matplotlib.pyplot as pyplot  # noqa: E402
-import matplotlib.collections  # noqa: E402
 
 
 def segregating_sites_example(n, theta, num_replicates):

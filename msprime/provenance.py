@@ -23,8 +23,8 @@ of various dependencies and the OS.
 import base64
 import importlib
 import json
-import marshal
 import logging
+import marshal
 import types
 
 import numpy
