@@ -569,7 +569,7 @@ class TestBasicFunctionality(unittest.TestCase):
             self.verify_simulation_completed(final_ts)
 
 
-class BaseEquivalanceMixin(object):
+class BaseEquivalanceMixin:
     """
     Check that it's equivalent to send a from_ts with no topology to running
     a straight simulation.

@@ -559,7 +559,7 @@ def simulate(
         )
 
 
-class Simulator(object):
+class Simulator:
     """
     Class to simulate trees under a variety of population models.
     """
@@ -892,7 +892,7 @@ class Simulator(object):
             self.ll_sim.reset()
 
 
-class RecombinationMap(object):
+class RecombinationMap:
     """
     A RecombinationMap represents the changing rates of recombination
     along a chromosome. This is defined via two lists of numbers:
@@ -1168,7 +1168,7 @@ class RecombinationMap(object):
         }
 
 
-class PopulationConfiguration(object):
+class PopulationConfiguration:
     """
     The initial configuration of a population (or deme) in a simulation.
 
@@ -1218,7 +1218,7 @@ class PopulationConfiguration(object):
         return ret
 
 
-class Pedigree(object):
+class Pedigree:
     """
     Class representing a pedigree for simulations.
 
@@ -1492,9 +1492,7 @@ class Pedigree(object):
         n_cols = max(col_nums) + 1
 
         if max(np.diff(col_nums)) > 1:
-            raise ValueError(
-                "Non-sequential columns in pedigree format: {}".format(col_nums)
-            )
+            raise ValueError(f"Non-sequential columns in pedigree format: {col_nums}")
 
         pedarray = np.zeros((self.num_individuals, n_cols))
         pedarray[:, cols["individual"]] = self.individual
@@ -1551,7 +1549,7 @@ class Pedigree(object):
         }
 
 
-class DemographicEvent(object):
+class DemographicEvent:
     """
     Superclass of demographic events that occur during simulations.
     """
@@ -1625,11 +1623,11 @@ class PopulationParametersChange(DemographicEvent):
         return ret
 
     def __str__(self):
-        s = "Population parameter change for {}: ".format(self.population)
+        s = f"Population parameter change for {self.population}: "
         if self.initial_size is not None:
-            s += "initial_size -> {} ".format(self.initial_size)
+            s += f"initial_size -> {self.initial_size} "
         if self.growth_rate is not None:
-            s += "growth_rate -> {} ".format(self.growth_rate)
+            s += f"growth_rate -> {self.growth_rate} "
         return s
 
 
@@ -1663,7 +1661,7 @@ class MigrationRateChange(DemographicEvent):
 
     def __str__(self):
         if self.matrix_index is None:
-            ret = "Migration rate change to {} everywhere".format(self.rate)
+            ret = f"Migration rate change to {self.rate} everywhere"
         else:
             ret = "Migration rate change for {} to {}".format(
                 self.matrix_index, self.rate
@@ -1764,7 +1762,7 @@ class SimulationModelChange(DemographicEvent):
         }
 
     def __str__(self):
-        return "Population model changes to {}".format(self.model)
+        return f"Population model changes to {self.model}"
 
 
 class SimpleBottleneck(DemographicEvent):
@@ -1850,7 +1848,7 @@ class CensusEvent(DemographicEvent):
         return "Census event"
 
 
-class SimulationModel(object):
+class SimulationModel:
     """
     Abstract superclass of all simulation models.
     """
@@ -1864,7 +1862,7 @@ class SimulationModel(object):
         return {"name": self.name, "reference_size": self.reference_size}
 
     def __str__(self):
-        return "{}(reference_size={})".format(self.name, self.reference_size)
+        return f"{self.name}(reference_size={self.reference_size})"
 
     def asdict(self):
         return {
@@ -2007,7 +2005,7 @@ class SweepGenicSelection(ParametricSimulationModel):
         self.dt = dt
 
 
-class PopulationParameters(object):
+class PopulationParameters:
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
@@ -2022,7 +2020,7 @@ class PopulationParameters(object):
         return repr(self.__dict__)
 
 
-class Epoch(object):
+class Epoch:
     """
     Represents a single epoch in the simulation within which the state
     of the demographic parameters are constant.
@@ -2060,7 +2058,7 @@ def _matrix_exponential(A):
     return np.real_if_close(B, tol=1000)
 
 
-class DemographyDebugger(object):
+class DemographyDebugger:
     """
     A class to facilitate debugging of population parameters and migration
     rates in the past.
@@ -2223,10 +2221,10 @@ class DemographyDebugger(object):
         print("Model = ", self.simulation_model, file=output)
         for epoch in self.epochs:
             if len(epoch.demographic_events) > 0:
-                print("Events @ generation {}".format(epoch.start_time), file=output)
+                print(f"Events @ generation {epoch.start_time}", file=output)
             for event in epoch.demographic_events:
                 print("   -", event, file=output)
-            s = "Epoch: {} -- {} generations".format(epoch.start_time, epoch.end_time)
+            s = f"Epoch: {epoch.start_time} -- {epoch.end_time} generations"
             print("=" * len(s), file=output)
             print(s, file=output)
             print("=" * len(s), file=output)

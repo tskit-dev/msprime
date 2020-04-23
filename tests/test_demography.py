@@ -1654,7 +1654,7 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(ts.num_populations, 3)
 
 
-class MigrationRecordsMixin(object):
+class MigrationRecordsMixin:
     """
     Tests that migrations happen where they should for simple models.
     """
@@ -1927,7 +1927,7 @@ class TestFullArgMigration(unittest.TestCase):
             self.verify_two_pops_full_arg(ts)
 
 
-class TimeUnitsMixin(object):
+class TimeUnitsMixin:
     """
     Tests for time conversion between generations and coalescent
     units.
@@ -2232,7 +2232,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 self.assertEqual(d, dp)
 
 
-class HistoricalSamplingMixin(object):
+class HistoricalSamplingMixin:
     """
     Tests to make sure historical sampling works correctly.
     """
@@ -2439,7 +2439,7 @@ class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMi
         self.assertEqual(time[2], 1.2)
 
 
-class EndTimeMixin(object):
+class EndTimeMixin:
     """
     Tests for the max_time parameter.
     """

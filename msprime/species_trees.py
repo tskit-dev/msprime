@@ -92,7 +92,7 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     allowed_branch_lenth_units = ["myr", "yr"]
     if branch_length_units not in allowed_branch_lenth_units:
         err = "The specified units for branch lengths ("
-        err += '"{}") are not accepted. '.format(branch_length_units)
+        err += f'"{branch_length_units}") are not accepted. '
         err += 'Accepted units are "myr" (millions of years) or "yr" (years).'
         raise ValueError(err)
 
@@ -168,7 +168,7 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
     if branch_length_units not in allowed_branch_lenth_units:
         err = "The specified units for branch lengths ("
-        err += '"{}") are not accepted. '.format(branch_length_units)
+        err += f'"{branch_length_units}") are not accepted. '
         err += 'Accepted units are "myr" (millions of years), "yr" (years), '
         err += 'and "gen" (generations).'
         raise ValueError(err)
@@ -194,7 +194,7 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
     else:
         if generation_time is None:
             err = "With branch lengths in units of "
-            err += '"{}", a generation time must be '.format(branch_length_units)
+            err += f'"{branch_length_units}", a generation time must be '
             err += "specified additionally."
             raise ValueError(err)
 

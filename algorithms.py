@@ -14,7 +14,7 @@ import tskit
 import msprime
 
 
-class FenwickTree(object):
+class FenwickTree:
     """
     A Fenwick Tree to represent cumulative frequency tables over
     integers. Each index from 1 to max_index initially has a
@@ -110,7 +110,7 @@ class FenwickTree(object):
         return j + 1
 
 
-class Segment(object):
+class Segment:
     """
     A class representing a single segment. Each segment has a left
     and right, denoting the loci over which it spans, a node and a
@@ -149,7 +149,7 @@ class Segment(object):
         )
 
 
-class Population(object):
+class Population:
     """
     Class representing a population in the simulation.
     """
@@ -298,8 +298,7 @@ class Population(object):
         Iterates over all ancestors in a population.
         """
         for ancestors in self._ancestors:
-            for ancestor in ancestors:
-                yield ancestor
+            yield from ancestors
 
     def find_indv(self, indv):
         """
@@ -308,7 +307,7 @@ class Population(object):
         return self._ancestors[indv.label].index(indv)
 
 
-class Pedigree(object):
+class Pedigree:
     """
     Class representing a pedigree for use with the DTWF model, as implemented
     in C library
@@ -439,7 +438,7 @@ class Pedigree(object):
             print(s)
 
 
-class Individual(object):
+class Individual:
     """
     Class representing a diploid individual in the DTWF model. Trying to make
     arbitrary ploidy possible at some point in the future.
@@ -467,7 +466,7 @@ class Individual(object):
 
         parents_str = ",".join(parents)
 
-        return "(ID: {}, time: {}, parents: {})".format(self.id, self.time, parents_str)
+        return f"(ID: {self.id}, time: {self.time}, parents: {parents_str})"
 
     def __repr__(self):
         return self.__str__()
@@ -486,7 +485,7 @@ class Individual(object):
         return sum([len(s) for s in self.segments])
 
 
-class TrajectorySimulator(object):
+class TrajectorySimulator:
     """
     Class to simulate an allele frequency trajectory on which to condition
     the coalescent simulation.
@@ -538,7 +537,7 @@ class TrajectorySimulator(object):
         return self._allele_freqs, self._times
 
 
-class RecombinationMap(object):
+class RecombinationMap:
     def __init__(self, positions, rates, discrete):
         self.positions = positions
         self.rates = rates
@@ -610,7 +609,7 @@ class RecombinationMap(object):
         return left
 
 
-class OverlapCounter(object):
+class OverlapCounter:
     def __init__(self, seq_length):
         self.seq_length = seq_length
         self.overlaps = self._make_segment(0, seq_length, 0)
@@ -670,7 +669,7 @@ class OverlapCounter(object):
         return seg
 
 
-class Simulator(object):
+class Simulator:
     """
     A reference implementation of the multi locus simulation algorithm.
     """
@@ -1734,7 +1733,7 @@ class Simulator(object):
             u = x
             s = ""
             while u is not None:
-                s += "({}-{}->{}({}))".format(u.left, u.right, u.node, u.index)
+                s += f"({u.left}-{u.right}->{u.node}({u.index}))"
                 u = u.next
             print(s)
 

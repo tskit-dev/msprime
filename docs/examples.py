@@ -33,7 +33,7 @@ def segregating_sites_example(n, theta, num_replicates):
     )
     print("              mean              variance")
     print("Observed      {}\t\t{}".format(np.mean(S), np.var(S)))
-    print("Analytical    {:.5f}\t\t{:.5f}".format(S_mean_a, S_var_a))
+    print(f"Analytical    {S_mean_a:.5f}\t\t{S_var_a:.5f}")
 
 
 def migration_example():
@@ -96,7 +96,7 @@ def multi_locus_example():
     j = 0
     for tree in tree_sequence.trees():
         print(tree.get_interval(), str(tree), sep="\t")
-        tree.draw("_static/simple-tree-sequence-{}.svg".format(j))
+        tree.draw(f"_static/simple-tree-sequence-{j}.svg")
         j += 1
 
 
@@ -114,7 +114,7 @@ def mutations_example():
     j = 0
     for tree in tree_sequence.trees():
         print(tree.get_interval(), list(tree.mutations()), sep="\t")
-        tree.draw("_static/mutations-tree-sequence-{}.svg".format(j))
+        tree.draw(f"_static/mutations-tree-sequence-{j}.svg")
         j += 1
 
     for tree in tree_sequence.trees():
@@ -427,7 +427,7 @@ def simulate_from_example():
     num_loci = 2
     wf_ts = wright_fisher(10, 5, L=num_loci, random_seed=3)
     for tree in wf_ts.trees():
-        tree.draw(path="_static/simulate_from_wf_{}.svg".format(tree.index))
+        tree.draw(path=f"_static/simulate_from_wf_{tree.index}.svg")
 
     recomb_map = msprime.RecombinationMap.uniform_map(num_loci, 1, num_loci)
     coalesced_ts = msprime.simulate(
@@ -435,7 +435,7 @@ def simulate_from_example():
     )
 
     for tree in coalesced_ts.trees():
-        tree.draw(path="_static/simulate_from_coalesced_{}.svg".format(tree.index))
+        tree.draw(path=f"_static/simulate_from_coalesced_{tree.index}.svg")
 
     final_ts = coalesced_ts.simplify()
 

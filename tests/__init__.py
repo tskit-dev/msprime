@@ -40,7 +40,7 @@ class MsprimeTestCase(unittest.TestCase):
     """
 
 
-class SequenceEqualityMixin(object):
+class SequenceEqualityMixin:
     """
     Overwrites unittest.TestCase.assertEqual to work with numpy arrays.
 
@@ -56,7 +56,7 @@ class SequenceEqualityMixin(object):
         unittest.TestCase.assertEqual(self, it1, it2, msg=msg)
 
 
-class PythonSparseTree(object):
+class PythonSparseTree:
     """
     Presents the same interface as the SparseTree object for testing. This
     is tightly coupled with the PythonTreeSequence object below which updates
@@ -160,8 +160,7 @@ class PythonSparseTree(object):
                 node_list = iter([i for level in node_list for i in level])
             else:
                 raise ValueError("order not supported")
-            for v in node_list:
-                yield v
+            yield from node_list
 
     def get_interval(self):
         return self.left, self.right
@@ -219,7 +218,7 @@ class PythonSparseTree(object):
         return s
 
 
-class PythonTreeSequence(object):
+class PythonTreeSequence:
     """
     A python implementation of the TreeSequence object.
     """

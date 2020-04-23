@@ -76,7 +76,7 @@ PLoS Comput Biol 12(5): e1004842. doi: 10.1371/journal.pcbi.1004842
 def positive_int(value):
     int_value = int(float(value))
     if int_value <= 0:
-        msg = "{} in an invalid postive integer value".format(value)
+        msg = f"{value} in an invalid postive integer value"
         raise argparse.ArgumentTypeError(msg)
     return int_value
 
@@ -120,7 +120,7 @@ def get_single_seed(seeds):
     for s in seeds:
         # Colon separate the values to ensure that we don't have
         # collisions in situations like 1:23:45, 12:3:45.
-        m.update("{}:".format(s).encode())
+        m.update(f"{s}:".encode())
     # Now take the integer value of this modulo 2^32, as this is
     # the largest seed value we'll accept.
     return int(m.hexdigest(), 16) % (2 ** 32)
@@ -166,7 +166,7 @@ def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
     return msprime.RecombinationMap(positions, rates, discrete=True)
 
 
-class SimulationRunner(object):
+class SimulationRunner:
     """
     Class to run msprime simulation and output the results.
     """
@@ -334,7 +334,7 @@ def convert_int(value, parser):
     try:
         return int(value)
     except ValueError:
-        parser.error("invalid int value '{}'".format(value))
+        parser.error(f"invalid int value '{value}'")
 
 
 def convert_float(value, parser):
@@ -345,7 +345,7 @@ def convert_float(value, parser):
     try:
         return float(value)
     except ValueError:
-        parser.error("invalid float value '{}'".format(value))
+        parser.error(f"invalid float value '{value}'")
 
 
 def convert_population_id(parser, population_id, num_populations):
@@ -705,7 +705,7 @@ def make_load_file_action(next_parser):
                     # note parses with 'next_parser' *not* with parser that is
                     # passed in
                     next_parser.parse_args(f.read().split(), namespace)
-            except IOError as ioe:
+            except OSError as ioe:
                 parser.error(ioe)
 
     return LoadFromFile
@@ -980,10 +980,7 @@ def get_mspms_parser(error_handler=None):
         "num_replicates", type=positive_int, help="Number of independent replicates"
     )
     init_parser.add_argument(
-        "-V",
-        "--version",
-        action="version",
-        version="%(prog)s {}".format(msprime.__version__),
+        "-V", "--version", action="version", version=f"%(prog)s {msprime.__version__}",
     )
     init_parser.add_argument(
         "-f",
@@ -1050,7 +1047,7 @@ def run_dump_variants(args):
     tree_sequence = tskit.load(args.tree_sequence)
     for variant in tree_sequence.variants(as_bytes=True):
         print(variant.position, end="\t")
-        print("{}".format(variant.genotypes.decode()))
+        print(f"{variant.genotypes.decode()}")
 
 
 def run_dump_nodes(args):
@@ -1099,7 +1096,7 @@ def run_dump_macs(args):
     tree_sequence = tskit.load(args.tree_sequence)
     n = tree_sequence.get_sample_size()
     m = tree_sequence.get_sequence_length()
-    print("COMMAND:\tnot_macs {} {}".format(n, m))
+    print(f"COMMAND:\tnot_macs {n} {m}")
     print("SEED:\tASEED")
     for variant in tree_sequence.variants(as_bytes=True):
         print(
@@ -1107,7 +1104,7 @@ def run_dump_macs(args):
             variant.index,
             variant.position / m,
             0.0,
-            "{}".format(variant.genotypes.decode()),
+            f"{variant.genotypes.decode()}",
             sep="\t",
         )
 
@@ -1129,10 +1126,7 @@ def get_msp_parser():
         description="Command line interface for msprime.", epilog=msprime_citation_text
     )
     top_parser.add_argument(
-        "-V",
-        "--version",
-        action="version",
-        version="%(prog)s {}".format(msprime.__version__),
+        "-V", "--version", action="version", version=f"%(prog)s {msprime.__version__}",
     )
     subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True

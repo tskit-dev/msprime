@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # msprime documentation build configuration file, created by
 # sphinx-quickstart on Mon Jun  1 16:13:14 2015.
